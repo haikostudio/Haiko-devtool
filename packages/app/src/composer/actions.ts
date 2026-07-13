@@ -173,6 +173,10 @@ export async function dispatchComposerAgentMessage(
 ): Promise<void> {
   const wirePayload = splitComposerAttachmentsForSubmit(input.attachments);
   const messageId = generateMessageId();
+  // Encode/compress attachments before showing the optimistic message so an
+  // oversized-attachment rejection surfaces as a send error instead of leaving
+  // a ghost message in the stream (and never blows the transport with a 1009).
+  const imagesData = await input.encodeImages(wirePayload.images);
   const userMessage = buildOptimisticUserMessage({
     id: messageId,
     text: input.text,
@@ -181,7 +185,6 @@ export async function dispatchComposerAgentMessage(
     attachments: wirePayload.attachments,
   });
   appendUserMessageToStream(input.agentId, userMessage, input.stream);
-  const imagesData = await input.encodeImages(wirePayload.images);
   await input.client.sendAgentMessage(input.agentId, input.text, {
     messageId,
     images: imagesData ?? [],
