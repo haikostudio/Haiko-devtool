@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { createClientChannel, createDaemonChannel, Transport } from "./encrypted-channel.js";
+import {
+  createClientChannel,
+  createDaemonChannel,
+  EncryptedMessageTooLargeError,
+  Transport,
+} from "./encrypted-channel.js";
 import { generateKeyPair, exportPublicKey } from "./crypto.js";
+
+/** Cloudflare closes a relayed WebSocket message larger than this with code 1009. */
+const CLOUDFLARE_MESSAGE_LIMIT_BYTES = 1024 * 1024;
 
 /**
  * Creates a pair of connected mock transports.
@@ -268,5 +276,90 @@ describe("EncryptedChannel", () => {
     await waitForAsyncDelivery();
 
     expect(daemonTransport.close).toHaveBeenCalledWith(1008, "E2EE re-handshake key mismatch");
+  });
+
+  it("round-trips messages larger than the relay frame ceiling via chunking", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    const daemonMessages: (string | ArrayBuffer)[] = [];
+    const clientMessages: (string | ArrayBuffer)[] = [];
+
+    let clientOpenedResolve: (() => void) | null = null;
+    const clientOpened = new Promise<void>((resolve) => {
+      clientOpenedResolve = resolve;
+    });
+
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair, {
+      onmessage: (data) => daemonMessages.push(data),
+    });
+    const clientChannel = await createClientChannel(clientTransport, daemonPubKeyB64, {
+      onmessage: (data) => clientMessages.push(data),
+      onopen: () => clientOpenedResolve?.(),
+    });
+    const daemonChannel = await daemonChannelPromise;
+    await clientOpened;
+
+    // ~3 MB — comfortably over the 1 MiB single-frame ceiling, so it must chunk.
+    const bigFromClient = "A".repeat(3_000_000);
+    (clientTransport.send as ReturnType<typeof vi.fn>).mockClear();
+    await clientChannel.send(bigFromClient);
+    await waitForAsyncDelivery();
+
+    // Delivered whole and intact on the other side.
+    expect(daemonMessages).toEqual([bigFromClient]);
+
+    // The wire carried several frames, each safely under Cloudflare's ceiling.
+    const frames = (clientTransport.send as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(frames.length).toBeGreaterThan(1);
+    for (const frame of frames) {
+      expect(typeof frame).toBe("string");
+      expect((frame as string).length).toBeLessThan(CLOUDFLARE_MESSAGE_LIMIT_BYTES);
+      expect(JSON.parse(frame as string).type).toBe("e2ee_chunk");
+    }
+
+    // The reverse direction chunks too (daemon -> client).
+    const bigFromDaemon = "B".repeat(3_000_000);
+    await daemonChannel.send(bigFromDaemon);
+    await waitForAsyncDelivery();
+    expect(clientMessages).toEqual([bigFromDaemon]);
+
+    // A small message still rides as a single opaque ciphertext frame.
+    (clientTransport.send as ReturnType<typeof vi.fn>).mockClear();
+    await clientChannel.send("tiny");
+    await waitForAsyncDelivery();
+    const smallFrames = (clientTransport.send as ReturnType<typeof vi.fn>).mock.calls;
+    expect(smallFrames.length).toBe(1);
+    expect((smallFrames[0][0] as string).startsWith("{")).toBe(false);
+    expect(daemonMessages).toEqual([bigFromClient, "tiny"]);
+  });
+
+  it("throws instead of blowing the transport when the peer cannot reassemble", async () => {
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    const transport: Transport = {
+      send: vi.fn(),
+      close: vi.fn(),
+      onmessage: null,
+      onclose: null,
+      onerror: null,
+    };
+
+    const channel = await createClientChannel(transport, daemonPubKeyB64);
+
+    // Simulate an old daemon that acknowledges without advertising chunk support.
+    transport.onmessage?.('{"type":"e2ee_ready"}');
+    await waitForAsyncDelivery();
+    expect(channel.isOpen()).toBe(true);
+
+    (transport.send as ReturnType<typeof vi.fn>).mockClear();
+    await expect(channel.send("C".repeat(3_000_000))).rejects.toBeInstanceOf(
+      EncryptedMessageTooLargeError,
+    );
+    // Nothing oversized was pushed onto the wire.
+    expect(transport.send).not.toHaveBeenCalled();
   });
 });
