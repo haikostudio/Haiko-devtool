@@ -26,13 +26,34 @@ that. An earlier custom picker was dropped during the July 2026 rebase.
 
 ## Keeping in sync
 
-### Automatic (weekly scheduled agent)
+### Automatic (weekly systemd timer)
 
-A scheduled routine runs weekly. It invokes `ops/sync-upstream.sh` and, if that
-reports a conflict, resolves it (the custom layer wins for
-`packages/relay`, `packages/app/src/attachments`, `ops/`, and the self-host CI
-workflow), re-verifies with `build:web`, and reports back. See the `schedule`
-skill / the routine named **sync-paseo-upstream**.
+A systemd timer on the VPS runs the sync every **Monday 04:17** local time:
+
+- `paseo-sync-upstream.timer` → `paseo-sync-upstream.service`
+  (installed in `/etc/systemd/system/`, unit sources kept in `/home/paseo/`).
+- Runs as user `paseo`, `Persistent=true` (catches up a missed run after downtime).
+- Logs append to `/home/paseo/paseo-sync.log`; full journal via
+  `journalctl -u paseo-sync-upstream`.
+
+Useful commands:
+
+```bash
+systemctl list-timers paseo-sync-upstream.timer   # when it next fires
+sudo systemctl start paseo-sync-upstream.service  # run now
+tail -f /home/paseo/paseo-sync.log                # watch output
+```
+
+On a **clean** rebase the timer syncs and pushes unattended. On a **conflict** the
+script aborts (non-zero, logged) and leaves the tree clean — resolve it manually
+or ask Claude to (custom layer wins for `packages/relay`,
+`packages/app/src/attachments`, `ops/`, and the self-host CI workflow; take
+upstream elsewhere), then re-run.
+
+> A remote/cloud scheduled agent (the `schedule` skill) can't be used here: those
+> agents run in Anthropic's cloud with no access to this VPS, `/root/paseo`, the
+> local `gh` credentials, or `sudo`. The sync is inherently a local-VPS operation,
+> hence the systemd timer.
 
 ### Manual
 
