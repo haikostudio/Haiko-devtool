@@ -473,7 +473,12 @@ export class EncryptedChannel {
   private async handleChunkFrame(msg: E2EEChunkMessage): Promise<void> {
     let entry = this.incomingChunks.get(msg.id);
     if (!entry) {
-      entry = { total: msg.n, parts: Array.from({ length: msg.n }, () => undefined), received: 0, chars: 0 };
+      entry = {
+        total: msg.n,
+        parts: Array.from({ length: msg.n }, () => undefined),
+        received: 0,
+        chars: 0,
+      };
       this.incomingChunks.set(msg.id, entry);
     }
     if (entry.total !== msg.n || msg.i >= entry.total) {

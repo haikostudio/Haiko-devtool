@@ -30,27 +30,41 @@ const MIME_TYPES = new Map([
 
 function command(cmd, args, options = {}) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { encoding: "utf8", timeout: 120_000, maxBuffer: 1024 * 1024, ...options }, (error, stdout, stderr) => {
-      resolve({
-        ok: !error,
-        code: error?.code ?? 0,
-        stdout: stdout.trimEnd(),
-        stderr: stderr.trimEnd(),
-      });
-    });
+    execFile(
+      cmd,
+      args,
+      { encoding: "utf8", timeout: 120_000, maxBuffer: 1024 * 1024, ...options },
+      (error, stdout, stderr) => {
+        resolve({
+          ok: !error,
+          code: error?.code ?? 0,
+          stdout: stdout.trimEnd(),
+          stderr: stderr.trimEnd(),
+        });
+      },
+    );
   });
 }
 
 function output(cmd, args, options = {}) {
   try {
-    return execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], ...options }).trim();
+    return execFileSync(cmd, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      ...options,
+    }).trim();
   } catch {
     return "";
   }
 }
 
 function publicIp() {
-  return output("bash", ["-lc", "ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1"]) || "127.0.0.1";
+  return (
+    output("bash", [
+      "-lc",
+      "ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1",
+    ]) || "127.0.0.1"
+  );
 }
 
 function parseUnit(unitName) {
@@ -108,18 +122,19 @@ function configSignature(project) {
 function isProjectConfigReady(project) {
   if (!fs.existsSync(path.join(UNIT_DIR, project.unit))) return false;
   const caddy = fs.existsSync(CADDYFILE) ? fs.readFileSync(CADDYFILE, "utf8") : "";
-  if (!caddy.includes(`/${project.slug}*`) || !caddy.includes(`127.0.0.1:${project.port}`)) return false;
+  if (!caddy.includes(`/${project.slug}*`) || !caddy.includes(`127.0.0.1:${project.port}`))
+    return false;
 
   const previous = readConfigState();
   const current = configSignature(project);
   return Boolean(
     previous &&
-      previous.version === current.version &&
-      previous.slug === current.slug &&
-      previous.unit === current.unit &&
-      previous.scriptMtime === current.scriptMtime &&
-      previous.unitMtime === current.unitMtime &&
-      previous.caddyMtime === current.caddyMtime,
+    previous.version === current.version &&
+    previous.slug === current.slug &&
+    previous.unit === current.unit &&
+    previous.scriptMtime === current.scriptMtime &&
+    previous.unitMtime === current.unitMtime &&
+    previous.caddyMtime === current.caddyMtime,
   );
 }
 
@@ -213,7 +228,15 @@ function resolveProject(slug) {
 }
 
 async function journal(unit, lines = 120) {
-  const result = await command("journalctl", ["-u", unit, "-n", String(lines), "--no-pager", "-o", "short-iso"]);
+  const result = await command("journalctl", [
+    "-u",
+    unit,
+    "-n",
+    String(lines),
+    "--no-pager",
+    "-o",
+    "short-iso",
+  ]);
   return result.stdout || result.stderr || "";
 }
 
@@ -377,7 +400,9 @@ const server = http.createServer((req, res) => {
 
 const terminalServer = new WebSocketServer({ noServer: true });
 const TERMINAL_REPLAY_LIMIT = 200_000;
-const TERMINAL_IDLE_TTL_MS = Number(process.env.PROJECT_LAUNCHER_TERMINAL_IDLE_TTL_MS ?? 30 * 60 * 1000);
+const TERMINAL_IDLE_TTL_MS = Number(
+  process.env.PROJECT_LAUNCHER_TERMINAL_IDLE_TTL_MS ?? 30 * 60 * 1000,
+);
 const terminalSessions = new Map();
 
 function terminalIntro(project) {
@@ -390,7 +415,9 @@ function terminalIntro(project) {
   const logs = output("journalctl", ["-u", project.unit, "-n", "120", "--no-pager", "-o", "cat"]);
   const notableLogs = logs
     .split("\n")
-    .filter((line) => /(error|failed|fail|oom|killed|refused|cannot|warning|warn|exception|traceback)/i.test(line))
+    .filter((line) =>
+      /(error|failed|fail|oom|killed|refused|cannot|warning|warn|exception|traceback)/i.test(line),
+    )
     .slice(-12);
 
   return [
@@ -452,7 +479,10 @@ function createProjectTerminalSession(project, cols, rows) {
 
   term.onExit(({ exitCode, signal }) => {
     session.exited = true;
-    recordAndBroadcast("exit", `\r\n[Project Launcher] Terminal termine: code=${exitCode} signal=${signal ?? ""}\r\n`);
+    recordAndBroadcast(
+      "exit",
+      `\r\n[Project Launcher] Terminal termine: code=${exitCode} signal=${signal ?? ""}\r\n`,
+    );
     terminalSessions.delete(project.slug);
     for (const client of session.clients) {
       client.close();
@@ -466,19 +496,21 @@ function createProjectTerminalSession(project, cols, rows) {
 
 function getProjectTerminalSession(project, cols, rows) {
   const existing = terminalSessions.get(project.slug);
-  if (existing && existing.project.workingDirectory === project.workingDirectory && !existing.exited) {
+  if (
+    existing &&
+    existing.project.workingDirectory === project.workingDirectory &&
+    !existing.exited
+  ) {
     try {
       existing.term.resize(cols, rows);
-    } catch {
-    }
+    } catch {}
     return existing;
   }
 
   if (existing && !existing.exited) {
     try {
       existing.term.kill();
-    } catch {
-    }
+    } catch {}
     terminalSessions.delete(project.slug);
   }
 
@@ -496,13 +528,11 @@ function terminateProjectTerminalSession(slug) {
   }
   try {
     session.term.kill("SIGTERM");
-  } catch {
-  }
+  } catch {}
   setTimeout(() => {
     try {
       session.term.kill("SIGKILL");
-    } catch {
-    }
+    } catch {}
   }, 1000);
 }
 
@@ -526,7 +556,12 @@ function startProjectTerminal(ws, project, url) {
   try {
     session = getProjectTerminalSession(project, cols, rows);
   } catch (error) {
-    ws.send(JSON.stringify({ type: "error", data: `Impossible de lancer le terminal: ${error.message}\r\n` }));
+    ws.send(
+      JSON.stringify({
+        type: "error",
+        data: `Impossible de lancer le terminal: ${error.message}\r\n`,
+      }),
+    );
     ws.close();
     return;
   }
@@ -540,7 +575,12 @@ function startProjectTerminal(ws, project, url) {
   if (session.replay) {
     ws.send(JSON.stringify({ type: "data", data: session.replay }));
   }
-  ws.send(JSON.stringify({ type: "data", data: `\r\n[Project Launcher] Terminal attache a ${project.slug}\r\n` }));
+  ws.send(
+    JSON.stringify({
+      type: "data",
+      data: `\r\n[Project Launcher] Terminal attache a ${project.slug}\r\n`,
+    }),
+  );
 
   ws.on("message", (payload) => {
     let message;

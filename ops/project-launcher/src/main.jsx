@@ -1,6 +1,18 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, ExternalLink, FileText, Loader2, Play, Power, RefreshCw, RotateCcw, Server, SquareTerminal, X } from "lucide-react";
+import {
+  Activity,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Play,
+  Power,
+  RefreshCw,
+  RotateCcw,
+  Server,
+  SquareTerminal,
+  X,
+} from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { Badge } from "./components/ui/badge";
@@ -105,7 +117,9 @@ function ProjectTerminal({ project, token, onClose }) {
       cols: String(terminal.cols),
       rows: String(terminal.rows),
     });
-    const socket = new WebSocket(`${protocol}//${window.location.host}/project-launcher/terminal?${query.toString()}`);
+    const socket = new WebSocket(
+      `${protocol}//${window.location.host}/project-launcher/terminal?${query.toString()}`,
+    );
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
@@ -135,8 +149,7 @@ function ProjectTerminal({ project, token, onClose }) {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
         }
-      } catch {
-      }
+      } catch {}
     };
     const observer = new ResizeObserver(sendSize);
     observer.observe(containerRef.current);
@@ -194,10 +207,14 @@ function App() {
     ? activeWorkspaceTab.slice("terminal:".length)
     : "";
   const terminalProjects = React.useMemo(
-    () => Array.from(terminalSlugs).map((slug) => projects.find((project) => project.slug === slug)).filter(Boolean),
+    () =>
+      Array.from(terminalSlugs)
+        .map((slug) => projects.find((project) => project.slug === slug))
+        .filter(Boolean),
     [projects, terminalSlugs],
   );
-  const debugProject = terminalProjects.find((project) => project.slug === activeTerminalSlug) || null;
+  const debugProject =
+    terminalProjects.find((project) => project.slug === activeTerminalSlug) || null;
 
   const api = React.useCallback(
     async (path, options = {}) => {
@@ -252,7 +269,9 @@ function App() {
         `Port: ${selected.port}`,
         `URL: ${selected.hostUrl || selected.pathUrl}`,
         `Status: ${statusLabel(selected)} / ${selected.subState}`,
-      ].filter(Boolean).join("\n"),
+      ]
+        .filter(Boolean)
+        .join("\n"),
     );
   }, [selected, terminal]);
 
@@ -338,9 +357,17 @@ function App() {
                   <Server className="h-5 w-5 text-primary" />
                   <h1 className="truncate text-lg font-semibold">Project Launcher</h1>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{projects.length} projets systemd</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {projects.length} projets systemd
+                </p>
               </div>
-              <Button variant="outline" size="icon" onClick={() => refresh()} disabled={loading} aria-label="Rafraichir">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => refresh()}
+                disabled={loading}
+                aria-label="Rafraichir"
+              >
                 <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
               </Button>
             </div>
@@ -379,7 +406,9 @@ function App() {
                       }}
                       className={[
                         "w-full cursor-pointer rounded-lg border p-3 text-left transition-colors",
-                        isSelected ? "border-primary/45 bg-accent" : "border-transparent hover:border-border hover:bg-accent/60",
+                        isSelected
+                          ? "border-primary/45 bg-accent"
+                          : "border-transparent hover:border-border hover:bg-accent/60",
                       ].join(" ")}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -417,7 +446,11 @@ function App() {
                               }}
                               aria-label={`Stopper ${project.slug}`}
                             >
-                              {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+                              {isBusy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Power className="h-4 w-4" />
+                              )}
                             </Button>
                           ) : (
                             <Button
@@ -432,14 +465,20 @@ function App() {
                               }}
                               aria-label={`Lancer ${project.slug}`}
                             >
-                              {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                              {isBusy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Play className="h-4 w-4" />
+                              )}
                             </Button>
                           )}
                         </div>
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-2">
                         <Badge variant={statusTone(project)}>{statusLabel(project)}</Badge>
-                        <span className="truncate text-xs text-muted-foreground">{project.unitFileState}</span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {project.unitFileState}
+                        </span>
                       </div>
                     </div>
                   );
@@ -454,41 +493,75 @@ function App() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
-                  <h2 className="truncate text-xl font-semibold">{selected?.slug || "Aucun projet"}</h2>
-                  {selected ? <Badge variant={statusTone(selected)}>{statusLabel(selected)}</Badge> : null}
+                  <h2 className="truncate text-xl font-semibold">
+                    {selected?.slug || "Aucun projet"}
+                  </h2>
+                  {selected ? (
+                    <Badge variant={statusTone(selected)}>{statusLabel(selected)}</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-1 truncate text-sm text-muted-foreground">
-                  {selected ? `${selected.workingDirectory} · ${selected.unit}` : "Les projets apparaitront ici."}
+                  {selected
+                    ? `${selected.workingDirectory} · ${selected.unit}`
+                    : "Les projets apparaitront ici."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => openProjectTerminal()} disabled={!selected}>
+                <Button
+                  variant="outline"
+                  onClick={() => openProjectTerminal()}
+                  disabled={!selected}
+                >
                   <SquareTerminal className="h-4 w-4" />
                   Terminal
                 </Button>
-                <Button variant="outline" onClick={() => logs()} disabled={!selected || Boolean(busySlug)}>
+                <Button
+                  variant="outline"
+                  onClick={() => logs()}
+                  disabled={!selected || Boolean(busySlug)}
+                >
                   <FileText className="h-4 w-4" />
                   Logs
                 </Button>
                 {isRunning(selected) ? (
                   <>
-                    <Button variant="outline" onClick={() => run("restart")} disabled={!selected || Boolean(busySlug)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => run("restart")}
+                      disabled={!selected || Boolean(busySlug)}
+                    >
                       <RotateCcw className="h-4 w-4" />
                       Restart
                     </Button>
-                    <Button variant="destructive" onClick={() => run("stop")} disabled={!selected || Boolean(busySlug)}>
+                    <Button
+                      variant="destructive"
+                      onClick={() => run("stop")}
+                      disabled={!selected || Boolean(busySlug)}
+                    >
                       <Power className="h-4 w-4" />
                       Stop
                     </Button>
                   </>
                 ) : (
-                  <Button variant="default" onClick={() => run("start")} disabled={!selected || Boolean(busySlug)}>
+                  <Button
+                    variant="default"
+                    onClick={() => run("start")}
+                    disabled={!selected || Boolean(busySlug)}
+                  >
                     <Play className="h-4 w-4" />
                     Play
                   </Button>
                 )}
-                <Button variant="secondary" asChild className={!selected ? "pointer-events-none opacity-45" : ""}>
-                  <a href={selected?.hostUrl || selected?.pathUrl || "#"} target="_blank" rel="noreferrer">
+                <Button
+                  variant="secondary"
+                  asChild
+                  className={!selected ? "pointer-events-none opacity-45" : ""}
+                >
+                  <a
+                    href={selected?.hostUrl || selected?.pathUrl || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     <ExternalLink className="h-4 w-4" />
                     Ouvrir
                   </a>
@@ -499,7 +572,10 @@ function App() {
 
           <section className="grid min-h-0 overflow-hidden grid-cols-[minmax(0,1fr)_300px] gap-0 max-xl:grid-cols-1">
             <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-terminal">
-              <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border bg-panel px-2" role="tablist">
+              <div
+                className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border bg-panel px-2"
+                role="tablist"
+              >
                 <button
                   type="button"
                   role="tab"
@@ -527,7 +603,9 @@ function App() {
                       onClick={() => setActiveWorkspaceTab(tabId)}
                       className={[
                         "flex h-10 max-w-[220px] shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium transition-colors",
-                        active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                        active
+                          ? "border-primary text-foreground"
+                          : "border-transparent text-muted-foreground hover:text-foreground",
                       ].join(" ")}
                     >
                       <SquareTerminal className="h-4 w-4 shrink-0" />
@@ -545,7 +623,11 @@ function App() {
                     </pre>
                   </ScrollArea>
                 ) : debugProject ? (
-                  <ProjectTerminal project={debugProject} token={token} onClose={() => closeProjectTerminal(debugProject)} />
+                  <ProjectTerminal
+                    project={debugProject}
+                    token={token}
+                    onClose={() => closeProjectTerminal(debugProject)}
+                  />
                 ) : (
                   <div className="flex h-full items-center justify-center p-5 text-sm text-muted-foreground">
                     Terminal indisponible.
@@ -581,7 +663,9 @@ function App() {
                   <Separator />
                   <div className="space-y-1">
                     <span className="text-muted-foreground">Run script</span>
-                    <span className="block break-all font-mono text-xs">{selected?.runScript || "-"}</span>
+                    <span className="block break-all font-mono text-xs">
+                      {selected?.runScript || "-"}
+                    </span>
                   </div>
                   <Separator />
                   <div className="flex justify-between gap-3">
