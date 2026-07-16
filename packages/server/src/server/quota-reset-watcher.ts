@@ -101,6 +101,10 @@ export class QuotaResetWatcher {
 
   start(): void {
     if (this.timer) return;
+    this.logger.info(
+      { pollIntervalMs: this.pollIntervalMs, quietHours: this.quietHours },
+      "Quota keep-alive watcher started",
+    );
     this.timer = setInterval(() => {
       void this.tick().catch((err) => {
         this.logger.debug({ err }, "Quota reset watcher tick failed");
