@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { ChevronLeft, ChevronRight, Folder, Plus, Trash2 } from "lucide-react-native";
@@ -10,12 +10,12 @@ import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
 import { Button } from "@/components/ui/button";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { buildTasksRoute } from "@/utils/host-routes";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedFolder = withUnistyles(Folder);
@@ -33,6 +33,10 @@ interface ProjectEntry {
 
 function rowItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.rowItem, (hovered || pressed) && styles.rowItemHovered];
+}
+
+function railItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.railItem, (hovered || pressed) && styles.railItemHovered];
 }
 
 function useProjectEntries(): ProjectEntry[] {
@@ -79,8 +83,17 @@ function useProjectEntries(): ProjectEntry[] {
   }, [hosts, sessions]);
 }
 
+function selectProject(entry: ProjectEntry): void {
+  router.setParams({ host: entry.serverId, project: entry.projectId, folder: undefined });
+}
+
+function selectFolder(folderId: string): void {
+  router.setParams({ folder: folderId });
+}
+
 export function TasksScreen() {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const params = useLocalSearchParams<{ host?: string; project?: string; folder?: string }>();
   const serverId = typeof params.host === "string" && params.host ? params.host : null;
   const projectId = typeof params.project === "string" && params.project ? params.project : null;
@@ -96,40 +109,104 @@ export function TasksScreen() {
       null,
     [projects, serverId, projectId],
   );
+  const sortedFolders = useMemo(
+    () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
+    [boardHandle.board],
+  );
   const selectedFolder = useMemo(
-    () => boardHandle.board?.folders.find((folder) => folder.id === folderId) ?? null,
-    [boardHandle.board, folderId],
+    () => sortedFolders.find((folder) => folder.id === folderId) ?? null,
+    [sortedFolders, folderId],
   );
 
+  // One-page desktop layout: keep a project and a folder selected at all times
+  // so the three panes are always populated.
+  const firstProject = projects[0] ?? null;
+  const firstFolderId = sortedFolders[0]?.id ?? null;
+  useEffect(() => {
+    if (isCompact) {
+      return;
+    }
+    if (!projectId && firstProject) {
+      selectProject(firstProject);
+      return;
+    }
+    if (projectId && boardHandle.board && !selectedFolder && firstFolderId) {
+      selectFolder(firstFolderId);
+    }
+  }, [isCompact, projectId, firstProject, boardHandle.board, selectedFolder, firstFolderId]);
+
   let title = t("tasks.title");
-  if (selectedFolder) {
+  if (selectedFolder && isCompact) {
     title = `${t("tasks.title")} · ${selectedFolder.name}`;
-  } else if (selectedProject) {
+  } else if (selectedProject && isCompact) {
     title = `${t("tasks.title")} · ${selectedProject.displayName}`;
   }
 
-  let body: React.ReactNode;
+  return (
+    <View style={styles.container}>
+      <MenuHeader title={title} />
+      {isCompact ? (
+        <CompactFlow
+          serverId={serverId}
+          projectId={projectId}
+          folderId={folderId}
+          projects={projects}
+          supportsTasksBoard={supportsTasksBoard}
+          boardHandle={boardHandle}
+        />
+      ) : (
+        <DesktopLayout
+          serverId={serverId}
+          projectId={projectId}
+          folderId={selectedFolder?.id ?? null}
+          projects={projects}
+          folders={sortedFolders}
+          supportsTasksBoard={supportsTasksBoard}
+          boardHandle={boardHandle}
+        />
+      )}
+    </View>
+  );
+}
+
+type BoardHandle = ReturnType<typeof useTaskBoard>;
+
+// ---------------------------------------------------------------------------
+// Desktop: one-page three-pane layout — projects rail | folders rail | board.
+// ---------------------------------------------------------------------------
+
+function DesktopLayout({
+  serverId,
+  projectId,
+  folderId,
+  projects,
+  folders,
+  supportsTasksBoard,
+  boardHandle,
+}: {
+  serverId: string | null;
+  projectId: string | null;
+  folderId: string | null;
+  projects: ProjectEntry[];
+  folders: TaskFolder[];
+  supportsTasksBoard: boolean;
+  boardHandle: BoardHandle;
+}) {
+  const { t } = useTranslation();
+
+  let boardArea: React.ReactNode;
   if (!serverId || !projectId) {
-    body = <ProjectPicker projects={projects} />;
+    boardArea = <CenteredNote text={projects.length === 0 ? t("tasks.noProjects") : ""} />;
   } else if (!supportsTasksBoard) {
-    body = (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>{t("tasks.updateHost")}</Text>
-      </View>
-    );
+    boardArea = <CenteredNote text={t("tasks.updateHost")} />;
   } else if (boardHandle.error) {
-    body = (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>{boardHandle.error}</Text>
-      </View>
-    );
+    boardArea = <CenteredNote text={boardHandle.error} />;
   } else if (!folderId) {
-    body = <FolderList serverId={serverId} projectId={projectId} boardHandle={boardHandle} />;
+    boardArea = <CenteredNote text={t("tasks.noFolders")} />;
   } else {
-    body = (
-      <BoardView
-        serverId={serverId}
-        projectId={projectId}
+    boardArea = (
+      <BoardContent
+        key={`${serverId}:${projectId}:${folderId}`}
         folderId={folderId}
         boardHandle={boardHandle}
       />
@@ -137,66 +214,82 @@ export function TasksScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <MenuHeader title={title} />
-      {body}
+    <View style={styles.desktopRow}>
+      <ProjectsRail projects={projects} serverId={serverId} projectId={projectId} />
+      {serverId && projectId && supportsTasksBoard ? (
+        <FoldersRail folders={folders} folderId={folderId} boardHandle={boardHandle} />
+      ) : null}
+      <View style={styles.boardArea}>{boardArea}</View>
     </View>
   );
 }
 
-function clearTasksSelection() {
-  router.setParams({ host: undefined, project: undefined, folder: undefined });
-}
-
-function ProjectPicker({ projects }: { projects: ProjectEntry[] }) {
+function ProjectsRail({
+  projects,
+  serverId,
+  projectId,
+}: {
+  projects: ProjectEntry[];
+  serverId: string | null;
+  projectId: string | null;
+}) {
   const { t } = useTranslation();
   return (
-    <ScrollView contentContainerStyle={styles.listContent}>
-      <Text style={styles.sectionLabel}>{t("tasks.pickProject")}</Text>
-      {projects.length === 0 ? <Text style={styles.emptyText}>{t("tasks.noProjects")}</Text> : null}
-      {projects.map((entry) => (
-        <ProjectRow key={`${entry.serverId}:${entry.projectId}`} entry={entry} />
-      ))}
-    </ScrollView>
+    <View style={styles.rail}>
+      <Text style={styles.railHeader}>{t("tasks.pickProject")}</Text>
+      <ScrollView style={styles.railScroll} contentContainerStyle={styles.railContent}>
+        {projects.length === 0 ? (
+          <Text style={styles.railEmptyText}>{t("tasks.noProjects")}</Text>
+        ) : null}
+        {projects.map((entry) => (
+          <ProjectRailItem
+            key={`${entry.serverId}:${entry.projectId}`}
+            entry={entry}
+            selected={entry.serverId === serverId && entry.projectId === projectId}
+          />
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
-const ProjectRow = memo(function ProjectRow({ entry }: { entry: ProjectEntry }) {
+const ProjectRailItem = memo(function ProjectRailItem({
+  entry,
+  selected,
+}: {
+  entry: ProjectEntry;
+  selected: boolean;
+}) {
   const handlePress = useCallback(() => {
-    router.setParams({ host: entry.serverId, project: entry.projectId, folder: undefined });
-  }, [entry.serverId, entry.projectId]);
+    selectProject(entry);
+  }, [entry]);
   return (
     <Pressable
-      style={rowItemStyle}
+      style={selected ? styles.railItemSelected : railItemStyle}
       onPress={handlePress}
       testID={`tasks-project-${entry.projectId}`}
     >
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{entry.displayName}</Text>
-        <Text style={styles.rowSubtitle}>{entry.hostLabel}</Text>
-      </View>
-      <ThemedChevronRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      <Text
+        style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
+        numberOfLines={1}
+      >
+        {entry.displayName}
+      </Text>
     </Pressable>
   );
 });
 
-type BoardHandle = ReturnType<typeof useTaskBoard>;
-
-function FolderList({
-  serverId,
-  projectId,
+function FoldersRail({
+  folders,
+  folderId,
   boardHandle,
 }: {
-  serverId: string;
-  projectId: string;
+  folders: TaskFolder[];
+  folderId: string | null;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
   const [newFolderName, setNewFolderName] = useState("");
-  const folders = useMemo(
-    () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
-    [boardHandle.board],
-  );
   const taskCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const task of boardHandle.board?.tasks ?? []) {
@@ -215,74 +308,76 @@ function FolderList({
   }, [newFolderName, boardHandle]);
 
   return (
-    <ScrollView contentContainerStyle={styles.listContent}>
-      <Pressable
-        style={styles.backRow}
-        onPress={clearTasksSelection}
-        testID="tasks-back-to-projects"
-      >
-        <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
-      </Pressable>
-      <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
-      {folders.map((folder) => (
-        <FolderRow
-          key={folder.id}
-          folder={folder}
-          serverId={serverId}
-          projectId={projectId}
-          taskCount={taskCounts.get(folder.id) ?? 0}
-          onDeleteFolder={boardHandle.deleteFolder}
-        />
-      ))}
-      {folders.length === 0 && !boardHandle.isLoading ? (
-        <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
-      ) : null}
-      <View style={styles.newFolderRow}>
-        <View style={styles.newFolderInput}>
-          <AdaptiveTextInput
-            value={newFolderName}
-            onChangeText={setNewFolderName}
-            placeholder={t("tasks.newFolderPlaceholder")}
-            onSubmitEditing={handleCreateFolder}
-            testID="tasks-new-folder-input"
+    <View style={styles.rail}>
+      <Text style={styles.railHeader}>{t("tasks.folders")}</Text>
+      <ScrollView style={styles.railScroll} contentContainerStyle={styles.railContent}>
+        {folders.length === 0 && !boardHandle.isLoading ? (
+          <Text style={styles.railEmptyText}>{t("tasks.noFolders")}</Text>
+        ) : null}
+        {folders.map((folder) => (
+          <FolderRailItem
+            key={folder.id}
+            folder={folder}
+            selected={folder.id === folderId}
+            taskCount={taskCounts.get(folder.id) ?? 0}
+            onDeleteFolder={boardHandle.deleteFolder}
           />
-        </View>
-        <Button leftIcon={Plus} onPress={handleCreateFolder} testID="tasks-new-folder-submit">
+        ))}
+      </ScrollView>
+      <View style={styles.railFooter}>
+        <AdaptiveTextInput
+          value={newFolderName}
+          onChangeText={setNewFolderName}
+          placeholder={t("tasks.newFolderPlaceholder")}
+          onSubmitEditing={handleCreateFolder}
+          testID="tasks-new-folder-input"
+        />
+        <Button
+          leftIcon={Plus}
+          variant="secondary"
+          onPress={handleCreateFolder}
+          testID="tasks-new-folder-submit"
+        >
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
-const FolderRow = memo(function FolderRow({
+const FolderRailItem = memo(function FolderRailItem({
   folder,
-  serverId,
-  projectId,
+  selected,
   taskCount,
   onDeleteFolder,
 }: {
   folder: TaskFolder;
-  serverId: string;
-  projectId: string;
+  selected: boolean;
   taskCount: number;
   onDeleteFolder: (folderId: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const handleOpen = useCallback(() => {
-    router.push(buildTasksRoute({ host: serverId, project: projectId, folder: folder.id }));
-  }, [serverId, projectId, folder.id]);
+  const handlePress = useCallback(() => {
+    selectFolder(folder.id);
+  }, [folder.id]);
   const handleDelete = useCallback(() => {
     void onDeleteFolder(folder.id);
   }, [onDeleteFolder, folder.id]);
-
   return (
-    <Pressable style={rowItemStyle} onPress={handleOpen} testID={`tasks-folder-${folder.id}`}>
+    <Pressable
+      style={selected ? styles.railItemSelected : railItemStyle}
+      onPress={handlePress}
+      testID={`tasks-folder-${folder.id}`}
+    >
       <ThemedFolder size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{folder.name}</Text>
-        <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
+      <View style={styles.railItemBody}>
+        <Text
+          style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
+          numberOfLines={1}
+        >
+          {folder.name}
+        </Text>
+        <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
       <Pressable
         onPress={handleDelete}
@@ -297,17 +392,22 @@ const FolderRow = memo(function FolderRow({
   );
 });
 
-function BoardView({
-  serverId,
-  projectId,
-  folderId,
-  boardHandle,
-}: {
-  serverId: string;
-  projectId: string;
-  folderId: string;
-  boardHandle: BoardHandle;
-}) {
+function CenteredNote({ text }: { text: string }) {
+  if (!text) {
+    return <View style={styles.centered} />;
+  }
+  return (
+    <View style={styles.centered}>
+      <Text style={styles.emptyText}>{text}</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared board content: add-task row + kanban columns + detail sheet.
+// ---------------------------------------------------------------------------
+
+function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle: BoardHandle }) {
   const { t } = useTranslation();
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
@@ -335,10 +435,6 @@ function BoardView({
   const handleCloseDetail = useCallback(() => {
     setDetailTaskId(null);
   }, []);
-
-  const handleBackToFolders = useCallback(() => {
-    router.push(buildTasksRoute({ host: serverId, project: projectId }));
-  }, [serverId, projectId]);
 
   const handleCancelNewTask = useCallback(() => {
     setNewTaskColumn(null);
@@ -395,17 +491,9 @@ function BoardView({
 
   return (
     <View style={styles.boardContainer}>
-      <Pressable
-        style={styles.backRow}
-        onPress={handleBackToFolders}
-        testID="tasks-back-to-folders"
-      >
-        <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        <Text style={styles.rowSubtitle}>{t("tasks.folders")}</Text>
-      </Pressable>
       {newTaskColumn ? (
         <View style={styles.newTaskRow}>
-          <View style={styles.newFolderInput}>
+          <View style={styles.flexInput}>
             <AdaptiveTextInput
               value={newTaskTitle}
               onChangeText={setNewTaskTitle}
@@ -443,10 +531,282 @@ function BoardView({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Compact (phone): keep the drill-down flow — projects → folders → board.
+// ---------------------------------------------------------------------------
+
+function CompactFlow({
+  serverId,
+  projectId,
+  folderId,
+  projects,
+  supportsTasksBoard,
+  boardHandle,
+}: {
+  serverId: string | null;
+  projectId: string | null;
+  folderId: string | null;
+  projects: ProjectEntry[];
+  supportsTasksBoard: boolean;
+  boardHandle: BoardHandle;
+}) {
+  const { t } = useTranslation();
+  if (!serverId || !projectId) {
+    return <CompactProjectPicker projects={projects} />;
+  }
+  if (!supportsTasksBoard) {
+    return <CenteredNote text={t("tasks.updateHost")} />;
+  }
+  if (boardHandle.error) {
+    return <CenteredNote text={boardHandle.error} />;
+  }
+  if (!folderId) {
+    return <CompactFolderList boardHandle={boardHandle} />;
+  }
+  return (
+    <View style={styles.compactBoardWrap}>
+      <Pressable
+        style={styles.backRow}
+        onPress={clearFolderSelection}
+        testID="tasks-back-to-folders"
+      >
+        <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        <Text style={styles.rowSubtitle}>{t("tasks.folders")}</Text>
+      </Pressable>
+      <BoardContent folderId={folderId} boardHandle={boardHandle} />
+    </View>
+  );
+}
+
+function clearFolderSelection() {
+  router.setParams({ folder: undefined });
+}
+
+function clearTasksSelection() {
+  router.setParams({ host: undefined, project: undefined, folder: undefined });
+}
+
+function CompactProjectPicker({ projects }: { projects: ProjectEntry[] }) {
+  const { t } = useTranslation();
+  return (
+    <ScrollView contentContainerStyle={styles.listContent}>
+      <Text style={styles.sectionLabel}>{t("tasks.pickProject")}</Text>
+      {projects.length === 0 ? <Text style={styles.emptyText}>{t("tasks.noProjects")}</Text> : null}
+      {projects.map((entry) => (
+        <CompactProjectRow key={`${entry.serverId}:${entry.projectId}`} entry={entry} />
+      ))}
+    </ScrollView>
+  );
+}
+
+const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: ProjectEntry }) {
+  const handlePress = useCallback(() => {
+    selectProject(entry);
+  }, [entry]);
+  return (
+    <Pressable
+      style={rowItemStyle}
+      onPress={handlePress}
+      testID={`tasks-project-${entry.projectId}`}
+    >
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{entry.displayName}</Text>
+        <Text style={styles.rowSubtitle}>{entry.hostLabel}</Text>
+      </View>
+      <ThemedChevronRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+    </Pressable>
+  );
+});
+
+function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
+  const { t } = useTranslation();
+  const [newFolderName, setNewFolderName] = useState("");
+  const folders = useMemo(
+    () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
+    [boardHandle.board],
+  );
+  const taskCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const task of boardHandle.board?.tasks ?? []) {
+      counts.set(task.folderId, (counts.get(task.folderId) ?? 0) + 1);
+    }
+    return counts;
+  }, [boardHandle.board]);
+
+  const handleCreateFolder = useCallback(() => {
+    const name = newFolderName.trim();
+    if (!name) {
+      return;
+    }
+    setNewFolderName("");
+    void boardHandle.createFolder(name);
+  }, [newFolderName, boardHandle]);
+
+  return (
+    <ScrollView contentContainerStyle={styles.listContent}>
+      <Pressable
+        style={styles.backRow}
+        onPress={clearTasksSelection}
+        testID="tasks-back-to-projects"
+      >
+        <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
+      </Pressable>
+      <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
+      {folders.map((folder) => (
+        <CompactFolderRow
+          key={folder.id}
+          folder={folder}
+          taskCount={taskCounts.get(folder.id) ?? 0}
+          onDeleteFolder={boardHandle.deleteFolder}
+        />
+      ))}
+      {folders.length === 0 && !boardHandle.isLoading ? (
+        <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
+      ) : null}
+      <View style={styles.newFolderRow}>
+        <View style={styles.flexInput}>
+          <AdaptiveTextInput
+            value={newFolderName}
+            onChangeText={setNewFolderName}
+            placeholder={t("tasks.newFolderPlaceholder")}
+            onSubmitEditing={handleCreateFolder}
+            testID="tasks-new-folder-input"
+          />
+        </View>
+        <Button leftIcon={Plus} onPress={handleCreateFolder} testID="tasks-new-folder-submit">
+          {t("tasks.actions.addFolder")}
+        </Button>
+      </View>
+    </ScrollView>
+  );
+}
+
+const CompactFolderRow = memo(function CompactFolderRow({
+  folder,
+  taskCount,
+  onDeleteFolder,
+}: {
+  folder: TaskFolder;
+  taskCount: number;
+  onDeleteFolder: (folderId: string) => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  const handleOpen = useCallback(() => {
+    selectFolder(folder.id);
+  }, [folder.id]);
+  const handleDelete = useCallback(() => {
+    void onDeleteFolder(folder.id);
+  }, [onDeleteFolder, folder.id]);
+
+  return (
+    <Pressable style={rowItemStyle} onPress={handleOpen} testID={`tasks-folder-${folder.id}`}>
+      <ThemedFolder size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      <View style={styles.rowText}>
+        <Text style={styles.rowTitle}>{folder.name}</Text>
+        <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
+      </View>
+      <Pressable
+        onPress={handleDelete}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.actions.delete")}
+        testID={`tasks-folder-delete-${folder.id}`}
+      >
+        <ThemedTrash size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      </Pressable>
+    </Pressable>
+  );
+});
+
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface0,
+  },
+  // --- Desktop three-pane layout ---
+  desktopRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  rail: {
+    width: 240,
+    borderRightWidth: 1,
+    borderRightColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  railHeader: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    paddingHorizontal: theme.spacing[3],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+  },
+  railScroll: {
+    flex: 1,
+  },
+  railContent: {
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+    gap: 2,
+  },
+  railItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.borderRadius.lg,
+  },
+  railItemHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  railItemSelected: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface3,
+  },
+  railItemBody: {
+    flex: 1,
+    gap: 1,
+  },
+  railItemTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    flexShrink: 1,
+  },
+  railItemTitleSelected: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    flexShrink: 1,
+  },
+  railItemSubtitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  railEmptyText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    textAlign: "center",
+    paddingVertical: theme.spacing[4],
+  },
+  railFooter: {
+    padding: theme.spacing[2],
+    gap: theme.spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  boardArea: {
+    flex: 1,
+    paddingTop: theme.spacing[3],
   },
   boardContainer: {
     flex: 1,
@@ -457,6 +817,11 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     alignItems: "center",
     padding: theme.spacing[6],
+  },
+  // --- Compact drill-down ---
+  compactBoardWrap: {
+    flex: 1,
+    gap: theme.spacing[1],
   },
   listContent: {
     padding: theme.spacing[4],
@@ -525,7 +890,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
   },
-  newFolderInput: {
+  flexInput: {
     flex: 1,
   },
 }));
