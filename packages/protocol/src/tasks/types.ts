@@ -59,6 +59,8 @@ export type KanbanTask = z.infer<typeof KanbanTaskSchema>;
 export const TaskFolderSchema = z.object({
   id: z.string(),
   name: z.string(),
+  // Accent color for the folder card, hex string (e.g. "#f97316").
+  color: z.string().optional(),
   order: z.number().int(),
   createdAt: z.string(),
 });

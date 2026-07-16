@@ -249,6 +249,13 @@ export const ar: TranslationResources = {
     noFolders: "لا توجد مجلدات — أنشئ واحدًا أدناه.",
     newFolderPlaceholder: "اسم المجلد الجديد",
     newTaskPlaceholder: "عنوان المهمة",
+    newTaskDescriptionPlaceholder: "الوصف (اختياري)",
+    folderModal: {
+      title: "مجلد جديد",
+      nameField: "الاسم",
+      colorField: "اللون",
+      create: "إنشاء",
+    },
     taskCount: "{{count}} مهمة",
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {

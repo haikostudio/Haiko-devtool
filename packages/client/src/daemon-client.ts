@@ -4212,7 +4212,10 @@ export class DaemonClient {
     });
   }
 
-  async tasksFolderCreate(input: { projectId: string; name: string }, requestId?: string) {
+  async tasksFolderCreate(
+    input: { projectId: string; name: string; color?: string },
+    requestId?: string,
+  ) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.create.response">({
       requestId,
       message: { type: "tasks.folder.create.request", ...input },
@@ -4220,7 +4223,7 @@ export class DaemonClient {
   }
 
   async tasksFolderUpdate(
-    input: { projectId: string; folderId: string; name?: string; order?: number },
+    input: { projectId: string; folderId: string; name?: string; color?: string; order?: number },
     requestId?: string,
   ) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.update.response">({

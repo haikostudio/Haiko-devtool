@@ -40,6 +40,7 @@ export function KanbanBoard({
   onMoveTask,
   onPressTask,
   onAddTask,
+  columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
@@ -121,6 +122,7 @@ export function KanbanBoard({
             column={column}
             label={labels[column]}
             tasks={tasks}
+            extras={columnExtras?.column === column ? columnExtras.node : null}
             onAddTask={onAddTask}
             onPressTask={onPressTask}
           />
@@ -141,12 +143,14 @@ const DroppableColumn = memo(function DroppableColumn({
   column,
   label,
   tasks,
+  extras,
   onAddTask,
   onPressTask,
 }: {
   column: TaskColumn;
   label: string;
   tasks: KanbanTask[];
+  extras: React.ReactNode;
   onAddTask: KanbanBoardProps["onAddTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
 }) {
@@ -175,12 +179,13 @@ const DroppableColumn = memo(function DroppableColumn({
         </Pressable>
       </View>
       <div ref={setNodeRef} style={webColumnBodyStyle}>
+        {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <SortableTaskCard key={task.id} task={task} onPressTask={onPressTask} />
           ))}
         </SortableContext>
-        {tasks.length === 0 ? (
+        {tasks.length === 0 && !extras ? (
           <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
         ) : null}
       </div>
@@ -204,11 +209,21 @@ const SortableTaskCard = memo(function SortableTaskCard({
       transition: transition ?? undefined,
       opacity: isDragging ? 0.4 : 1,
       cursor: "grab",
+      touchAction: "none",
     }),
     [transform, transition, isDragging],
   );
   return (
-    <div ref={setNodeRef} style={wrapperStyle} {...attributes} {...listeners}>
+    // touchAction none is required for PointerSensor drags on touch devices,
+    // and RNW's Pressable inside must not own the pointerdown, so listeners
+    // live on this wrapper.
+    <div
+      ref={setNodeRef}
+      style={wrapperStyle}
+      {...attributes}
+      {...listeners}
+      data-testid={`tasks-drag-${task.id}`}
+    >
       <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
     </div>
   );

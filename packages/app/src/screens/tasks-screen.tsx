@@ -6,8 +6,9 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader } from "@/components/headers/menu-header";
-import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
+import { FolderCreateModal } from "@/components/tasks/folder-create-modal";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
+import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
 import { Button } from "@/components/ui/button";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -295,7 +296,7 @@ function FoldersRail({
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
-  const [newFolderName, setNewFolderName] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
   const taskCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const task of boardHandle.board?.tasks ?? []) {
@@ -304,14 +305,18 @@ function FoldersRail({
     return counts;
   }, [boardHandle.board]);
 
-  const handleCreateFolder = useCallback(() => {
-    const name = newFolderName.trim();
-    if (!name) {
-      return;
-    }
-    setNewFolderName("");
-    void boardHandle.createFolder(name);
-  }, [newFolderName, boardHandle]);
+  const handleOpenModal = useCallback(() => {
+    setModalVisible(true);
+  }, []);
+  const handleCloseModal = useCallback(() => {
+    setModalVisible(false);
+  }, []);
+  const handleCreateFolder = useCallback(
+    (input: { name: string; color: string }) => {
+      void boardHandle.createFolder(input);
+    },
+    [boardHandle],
+  );
 
   return (
     <View style={styles.rail}>
@@ -331,22 +336,20 @@ function FoldersRail({
         ))}
       </ScrollView>
       <View style={styles.railFooter}>
-        <AdaptiveTextInput
-          value={newFolderName}
-          onChangeText={setNewFolderName}
-          placeholder={t("tasks.newFolderPlaceholder")}
-          onSubmitEditing={handleCreateFolder}
-          testID="tasks-new-folder-input"
-        />
         <Button
           leftIcon={Plus}
           variant="secondary"
-          onPress={handleCreateFolder}
-          testID="tasks-new-folder-submit"
+          onPress={handleOpenModal}
+          testID="tasks-new-folder-open"
         >
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
+      <FolderCreateModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onCreate={handleCreateFolder}
+      />
     </View>
   );
 }
@@ -375,7 +378,7 @@ const FolderRailItem = memo(function FolderRailItem({
       onPress={handlePress}
       testID={`tasks-folder-${folder.id}`}
     >
-      <ThemedFolder size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      <FolderColorMark color={folder.color} />
       <View style={styles.railItemBody}>
         <Text
           style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
@@ -398,6 +401,17 @@ const FolderRailItem = memo(function FolderRailItem({
   );
 });
 
+const FolderColorMark = memo(function FolderColorMark({ color }: { color?: string }) {
+  const dotStyle = useMemo(
+    () => (color ? [styles.folderColorDot, { backgroundColor: color }] : null),
+    [color],
+  );
+  if (!dotStyle) {
+    return <ThemedFolder size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
+  }
+  return <View style={dotStyle} />;
+});
+
 function CenteredNote({ text }: { text: string }) {
   if (!text) {
     return <View style={styles.centered} />;
@@ -414,10 +428,8 @@ function CenteredNote({ text }: { text: string }) {
 // ---------------------------------------------------------------------------
 
 function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle: BoardHandle }) {
-  const { t } = useTranslation();
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
 
   const detailTask = useMemo(
     () =>
@@ -446,16 +458,33 @@ function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle
     setNewTaskColumn(null);
   }, []);
 
-  const handleCreateTask = useCallback(() => {
-    const taskTitle = newTaskTitle.trim();
-    if (!taskTitle || !newTaskColumn) {
-      return;
-    }
-    const targetColumn = newTaskColumn;
-    setNewTaskTitle("");
-    setNewTaskColumn(null);
-    void boardHandle.createTask({ folderId, title: taskTitle, column: targetColumn });
-  }, [newTaskTitle, newTaskColumn, folderId, boardHandle]);
+  const handleCreateTask = useCallback(
+    ({ title, description }: { title: string; description: string }) => {
+      if (!newTaskColumn) {
+        return;
+      }
+      const targetColumn = newTaskColumn;
+      setNewTaskColumn(null);
+      void boardHandle.createTask({
+        folderId,
+        title,
+        ...(description ? { description } : {}),
+        column: targetColumn,
+      });
+    },
+    [newTaskColumn, folderId, boardHandle],
+  );
+
+  const columnExtras = useMemo(
+    () =>
+      newTaskColumn
+        ? {
+            column: newTaskColumn,
+            node: <NewTaskCard onSubmit={handleCreateTask} onCancel={handleCancelNewTask} />,
+          }
+        : null,
+    [newTaskColumn, handleCreateTask, handleCancelNewTask],
+  );
 
   const handleSaveTask = useCallback(
     ({
@@ -497,32 +526,13 @@ function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle
 
   return (
     <View style={styles.boardContainer}>
-      {newTaskColumn ? (
-        <View style={styles.newTaskRow}>
-          <View style={styles.flexInput}>
-            <AdaptiveTextInput
-              value={newTaskTitle}
-              onChangeText={setNewTaskTitle}
-              placeholder={t("tasks.newTaskPlaceholder")}
-              onSubmitEditing={handleCreateTask}
-              autoFocus
-              testID="tasks-new-task-input"
-            />
-          </View>
-          <Button onPress={handleCreateTask} testID="tasks-new-task-submit">
-            {t("tasks.actions.add")}
-          </Button>
-          <Button variant="ghost" onPress={handleCancelNewTask}>
-            {t("common.actions.cancel")}
-          </Button>
-        </View>
-      ) : null}
       <KanbanBoard
         board={boardHandle.board}
         folderId={folderId}
         onMoveTask={handleMoveTask}
         onPressTask={handlePressTask}
         onAddTask={setNewTaskColumn}
+        columnExtras={columnExtras}
       />
       <TaskDetailSheet
         task={detailTask}
@@ -626,7 +636,7 @@ const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: Pr
 
 function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
   const { t } = useTranslation();
-  const [newFolderName, setNewFolderName] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
   const folders = useMemo(
     () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
     [boardHandle.board],
@@ -639,14 +649,18 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
     return counts;
   }, [boardHandle.board]);
 
-  const handleCreateFolder = useCallback(() => {
-    const name = newFolderName.trim();
-    if (!name) {
-      return;
-    }
-    setNewFolderName("");
-    void boardHandle.createFolder(name);
-  }, [newFolderName, boardHandle]);
+  const handleOpenModal = useCallback(() => {
+    setModalVisible(true);
+  }, []);
+  const handleCloseModal = useCallback(() => {
+    setModalVisible(false);
+  }, []);
+  const handleCreateFolder = useCallback(
+    (input: { name: string; color: string }) => {
+      void boardHandle.createFolder(input);
+    },
+    [boardHandle],
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
@@ -671,19 +685,15 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
         <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
       ) : null}
       <View style={styles.newFolderRow}>
-        <View style={styles.flexInput}>
-          <AdaptiveTextInput
-            value={newFolderName}
-            onChangeText={setNewFolderName}
-            placeholder={t("tasks.newFolderPlaceholder")}
-            onSubmitEditing={handleCreateFolder}
-            testID="tasks-new-folder-input"
-          />
-        </View>
-        <Button leftIcon={Plus} onPress={handleCreateFolder} testID="tasks-new-folder-submit">
+        <Button leftIcon={Plus} onPress={handleOpenModal} testID="tasks-new-folder-open">
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
+      <FolderCreateModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        onCreate={handleCreateFolder}
+      />
     </ScrollView>
   );
 }
@@ -707,7 +717,7 @@ const CompactFolderRow = memo(function CompactFolderRow({
 
   return (
     <Pressable style={rowItemStyle} onPress={handleOpen} testID={`tasks-folder-${folder.id}`}>
-      <ThemedFolder size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      <FolderColorMark color={folder.color} />
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{folder.name}</Text>
         <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
@@ -797,6 +807,11 @@ const styles = StyleSheet.create((theme) => ({
   railItemSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+  },
+  folderColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: theme.borderRadius.full,
   },
   railEmptyText: {
     color: theme.colors.foregroundMuted,

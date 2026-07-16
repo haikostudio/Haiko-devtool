@@ -113,12 +113,13 @@ export class TaskBoardService {
 
   // ---- Folders ----
 
-  async createFolder(projectId: string, name: string): Promise<TaskFolder> {
+  async createFolder(projectId: string, name: string, color?: string): Promise<TaskFolder> {
     let created: TaskFolder | null = null;
     const board = await this.store.mutate(projectId, (current) => {
       created = {
         id: generateTaskEntityId(),
         name: name.trim(),
+        ...(color ? { color } : {}),
         order: current.folders.length,
         createdAt: new Date().toISOString(),
       };
@@ -134,7 +135,7 @@ export class TaskBoardService {
   async updateFolder(
     projectId: string,
     folderId: string,
-    changes: { name?: string; order?: number },
+    changes: { name?: string; color?: string; order?: number },
   ): Promise<TaskFolder> {
     let updated: TaskFolder | null = null;
     const board = await this.store.mutate(projectId, (current) => {
@@ -145,6 +146,7 @@ export class TaskBoardService {
       updated = {
         ...folder,
         ...(changes.name !== undefined ? { name: changes.name.trim() } : {}),
+        ...(changes.color !== undefined ? { color: changes.color } : {}),
         ...(changes.order !== undefined ? { order: changes.order } : {}),
       };
       const others = current.folders.filter((entry) => entry.id !== folderId);

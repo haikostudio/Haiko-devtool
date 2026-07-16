@@ -252,6 +252,13 @@ export const ja: TranslationResources = {
     noFolders: "フォルダーがありません — 下で作成できます。",
     newFolderPlaceholder: "新しいフォルダー名",
     newTaskPlaceholder: "タスクのタイトル",
+    newTaskDescriptionPlaceholder: "説明（任意）",
+    folderModal: {
+      title: "新しいフォルダー",
+      nameField: "名前",
+      colorField: "カラー",
+      create: "作成",
+    },
     taskCount: "{{count}} 件のタスク",
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {

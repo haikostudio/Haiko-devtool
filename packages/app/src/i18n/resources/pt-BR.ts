@@ -253,6 +253,13 @@ export const ptBR: TranslationResources = {
     noFolders: "Nenhuma pasta — crie uma abaixo.",
     newFolderPlaceholder: "Nome da nova pasta",
     newTaskPlaceholder: "Título da tarefa",
+    newTaskDescriptionPlaceholder: "Descrição (opcional)",
+    folderModal: {
+      title: "Nova pasta",
+      nameField: "Nome",
+      colorField: "Cor",
+      create: "Criar",
+    },
     taskCount: "{{count}} tarefa(s)",
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {

@@ -249,6 +249,13 @@ export const zhCN: TranslationResources = {
     noFolders: "还没有文件夹 — 在下方创建一个。",
     newFolderPlaceholder: "新文件夹名称",
     newTaskPlaceholder: "任务标题",
+    newTaskDescriptionPlaceholder: "描述（可选）",
+    folderModal: {
+      title: "新建文件夹",
+      nameField: "名称",
+      colorField: "颜色",
+      create: "创建",
+    },
     taskCount: "{{count}} 个任务",
     updateHost: "请更新主机以使用任务功能。",
     columns: {

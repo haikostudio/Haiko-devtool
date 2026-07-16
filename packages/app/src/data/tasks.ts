@@ -13,7 +13,7 @@ export interface TaskBoardHandle {
   board: TaskBoard | null;
   isLoading: boolean;
   error: string | null;
-  createFolder: (name: string) => Promise<void>;
+  createFolder: (input: { name: string; color?: string }) => Promise<void>;
   renameFolder: (folderId: string, name: string) => Promise<void>;
   deleteFolder: (folderId: string) => Promise<void>;
   createTask: (input: {
@@ -120,9 +120,9 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   }, [getClient, projectId]);
 
   const createFolder = useCallback(
-    async (name: string) => {
+    async (input: { name: string; color?: string }) => {
       const { client, projectId: project } = requireContext();
-      await client.tasksFolderCreate({ projectId: project, name });
+      await client.tasksFolderCreate({ projectId: project, ...input });
     },
     [requireContext],
   );

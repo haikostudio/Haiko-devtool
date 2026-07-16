@@ -28,6 +28,7 @@ export const TasksFolderCreateRequestSchema = z.object({
   requestId: z.string(),
   projectId: z.string(),
   name: z.string().min(1),
+  color: z.string().optional(),
 });
 
 export const TasksFolderUpdateRequestSchema = z.object({
@@ -36,6 +37,7 @@ export const TasksFolderUpdateRequestSchema = z.object({
   projectId: z.string(),
   folderId: z.string(),
   name: z.string().min(1).optional(),
+  color: z.string().optional(),
   order: z.number().int().optional(),
 });
 

@@ -34,6 +34,7 @@ export function KanbanBoard({
   onMoveTask,
   onPressTask,
   onAddTask,
+  columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
@@ -52,6 +53,7 @@ export function KanbanBoard({
           label={labels[column]}
           labels={labels}
           tasks={tasks}
+          extras={columnExtras?.column === column ? columnExtras.node : null}
           onMoveTask={onMoveTask}
           onPressTask={onPressTask}
           onAddTask={onAddTask}
@@ -66,6 +68,7 @@ const BoardColumn = memo(function BoardColumn({
   label,
   labels,
   tasks,
+  extras,
   onMoveTask,
   onPressTask,
   onAddTask,
@@ -74,6 +77,7 @@ const BoardColumn = memo(function BoardColumn({
   label: string;
   labels: Record<TaskColumn, string>;
   tasks: KanbanTask[];
+  extras: React.ReactNode;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
   onAddTask: KanbanBoardProps["onAddTask"];
@@ -104,6 +108,7 @@ const BoardColumn = memo(function BoardColumn({
         contentContainerStyle={styles.columnContent}
         showsVerticalScrollIndicator={false}
       >
+        {extras}
         {tasks.map((task) => (
           <BoardCardRow
             key={task.id}
@@ -113,7 +118,7 @@ const BoardColumn = memo(function BoardColumn({
             onPressTask={onPressTask}
           />
         ))}
-        {tasks.length === 0 ? (
+        {tasks.length === 0 && !extras ? (
           <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
         ) : null}
       </ScrollView>

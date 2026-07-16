@@ -253,6 +253,13 @@ export const es: TranslationResources = {
     noFolders: "Sin carpetas — crea una abajo.",
     newFolderPlaceholder: "Nombre de la carpeta",
     newTaskPlaceholder: "Título de la tarea",
+    newTaskDescriptionPlaceholder: "Descripción (opcional)",
+    folderModal: {
+      title: "Nueva carpeta",
+      nameField: "Nombre",
+      colorField: "Color",
+      create: "Crear",
+    },
     taskCount: "{{count}} tarea(s)",
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {

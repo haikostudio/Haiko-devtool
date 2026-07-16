@@ -253,6 +253,13 @@ export const fr: TranslationResources = {
     noFolders: "Aucun dossier — créez-en un ci-dessous.",
     newFolderPlaceholder: "Nom du nouveau dossier",
     newTaskPlaceholder: "Titre de la tâche",
+    newTaskDescriptionPlaceholder: "Description (optionnelle)",
+    folderModal: {
+      title: "Nouveau dossier",
+      nameField: "Nom",
+      colorField: "Couleur",
+      create: "Créer",
+    },
     taskCount: "{{count}} tâche(s)",
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {

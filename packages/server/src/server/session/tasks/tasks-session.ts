@@ -120,7 +120,11 @@ export class TasksSession {
     request: Extract<SessionInboundMessage, { type: "tasks.folder.create.request" }>,
   ): Promise<void> {
     try {
-      const folder = await this.taskBoardService.createFolder(request.projectId, request.name);
+      const folder = await this.taskBoardService.createFolder(
+        request.projectId,
+        request.name,
+        request.color,
+      );
       this.host.emit({
         type: "tasks.folder.create.response",
         payload: { requestId: request.requestId, folder, error: null },
@@ -136,6 +140,7 @@ export class TasksSession {
     try {
       const folder = await this.taskBoardService.updateFolder(request.projectId, request.folderId, {
         ...(request.name !== undefined ? { name: request.name } : {}),
+        ...(request.color !== undefined ? { color: request.color } : {}),
         ...(request.order !== undefined ? { order: request.order } : {}),
       });
       this.host.emit({

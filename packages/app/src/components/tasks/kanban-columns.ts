@@ -39,4 +39,6 @@ export interface KanbanBoardProps {
   onMoveTask: (input: { taskId: string; column: TaskColumn; index: number }) => void;
   onPressTask: (task: KanbanTask) => void;
   onAddTask: (column: TaskColumn) => void;
+  // Node rendered at the top of one column's body (inline new-task draft).
+  columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
 }

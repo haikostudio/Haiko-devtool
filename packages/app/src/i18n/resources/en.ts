@@ -248,6 +248,13 @@ export const en = {
     noFolders: "No folders yet — create one below.",
     newFolderPlaceholder: "New folder name",
     newTaskPlaceholder: "Task title",
+    newTaskDescriptionPlaceholder: "Description (optional)",
+    folderModal: {
+      title: "New folder",
+      nameField: "Name",
+      colorField: "Color",
+      create: "Create",
+    },
     taskCount: "{{count}} task(s)",
     updateHost: "Update the host to use Tasks.",
     columns: {

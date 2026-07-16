@@ -251,6 +251,13 @@ export const ru: TranslationResources = {
     noFolders: "Папок нет — создайте ниже.",
     newFolderPlaceholder: "Имя новой папки",
     newTaskPlaceholder: "Название задачи",
+    newTaskDescriptionPlaceholder: "Описание (необязательно)",
+    folderModal: {
+      title: "Новая папка",
+      nameField: "Название",
+      colorField: "Цвет",
+      create: "Создать",
+    },
     taskCount: "Задач: {{count}}",
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
