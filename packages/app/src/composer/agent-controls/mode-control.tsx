@@ -551,7 +551,8 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.semibold,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    paddingHorizontal: theme.spacing[2],
+    // Aligns with the ComboboxItem row content (item margin + padding = spacing[4]).
+    paddingHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[1],
   },
   tooltipRow: {

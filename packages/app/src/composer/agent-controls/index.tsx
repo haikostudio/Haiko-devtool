@@ -1059,46 +1059,48 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         onClose={handleCloseSheet}
         testID="agent-options-sheet"
       >
-        {hasContext ? (
-          <View style={styles.drawerSection}>
-            <Text style={styles.drawerSectionTitle}>{t("agentControls.context.title")}</Text>
-            <View style={styles.drawerContextRow}>{contextMeter}</View>
-          </View>
-        ) : null}
+        <View style={styles.drawerBody}>
+          {hasContext ? (
+            <View style={styles.drawerSection}>
+              <Text style={styles.drawerSectionTitle}>{t("agentControls.context.title")}</Text>
+              <View style={styles.drawerContextRow}>{contextMeter}</View>
+            </View>
+          ) : null}
 
-        {hasExtras ? <View style={styles.drawerSection}>{compactExtras}</View> : null}
+          {hasExtras ? compactExtras : null}
 
-        {hasThinking ? (
-          <View style={styles.drawerSection}>
-            <Text style={styles.drawerSectionTitle}>{t("agentControls.thinking.title")}</Text>
-            {comboboxThinkingOptions.map((option) => (
-              <View key={option.id}>
-                {renderThinkingOption({
-                  option,
-                  selected: option.id === selectedThinkingOptionId,
-                  active: false,
-                  onPress: () => handleSelectThinkingOption(option.id),
-                })}
-              </View>
-            ))}
-          </View>
-        ) : null}
+          {hasThinking ? (
+            <View style={styles.drawerSection}>
+              <Text style={styles.drawerSectionTitle}>{t("agentControls.thinking.title")}</Text>
+              {comboboxThinkingOptions.map((option) => (
+                <View key={option.id}>
+                  {renderThinkingOption({
+                    option,
+                    selected: option.id === selectedThinkingOptionId,
+                    active: false,
+                    onPress: () => handleSelectThinkingOption(option.id),
+                  })}
+                </View>
+              ))}
+            </View>
+          ) : null}
 
-        {hasFeatures ? (
-          <View style={styles.drawerSection}>
-            <Text style={styles.drawerSectionTitle}>{t("agentControls.features.title")}</Text>
-            {(features ?? []).map((feature) => (
-              <SheetFeatureItem
-                key={`feature-${feature.id}`}
-                feature={feature}
-                disabled={disabled}
-                openSelector={openSelector}
-                handleOpenChange={handleOpenChange}
-                onSetFeature={onSetFeature}
-              />
-            ))}
-          </View>
-        ) : null}
+          {hasFeatures ? (
+            <View style={styles.drawerSection}>
+              <Text style={styles.drawerSectionTitle}>{t("agentControls.features.title")}</Text>
+              {(features ?? []).map((feature) => (
+                <SheetFeatureItem
+                  key={`feature-${feature.id}`}
+                  feature={feature}
+                  disabled={disabled}
+                  openSelector={openSelector}
+                  handleOpenChange={handleOpenChange}
+                  onSetFeature={onSetFeature}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
       </AdaptiveModalSheet>
     </>
   );
@@ -1834,9 +1836,15 @@ const styles = StyleSheet.create((theme) => ({
   sheetSection: {
     gap: theme.spacing[2],
   },
+  // Pull the content up so it sits close under the header instead of the sheet's
+  // large default top padding, and space the sections evenly.
+  drawerBody: {
+    marginTop: -theme.spacing[4],
+    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[2],
+  },
   drawerSection: {
     gap: theme.spacing[1],
-    marginBottom: theme.spacing[4],
   },
   drawerSectionTitle: {
     color: theme.colors.foregroundMuted,
@@ -1844,14 +1852,15 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.semibold,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    paddingHorizontal: theme.spacing[2],
+    // Aligns with the ComboboxItem row content (item margin + padding = spacing[4]).
+    paddingHorizontal: theme.spacing[4],
     marginBottom: theme.spacing[1],
   },
   drawerContextRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[1],
   },
   sheetSelect: {
     flexDirection: "row",
