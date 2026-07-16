@@ -14,12 +14,24 @@ function emptyBoard(projectId: string): TaskBoard {
   return { version: 1, projectId, folders: [], tasks: [] };
 }
 
-function sanitizeProjectId(projectId: string): string {
+function validateProjectId(projectId: string): string {
   const trimmed = projectId.trim();
-  if (!trimmed || trimmed.includes("/") || trimmed.includes("\\") || trimmed.includes("..")) {
+  if (!trimmed) {
     throw new Error(`Invalid project id: ${projectId}`);
   }
   return trimmed;
+}
+
+/**
+ * Derive a filesystem-safe, collision-free file name from a project id.
+ * Project ids are opaque logical keys — local ones are plain slugs, but remote
+ * ones look like `remote:github.com/owner/repo`, full of `/` and `:` that must
+ * never reach the path. base64url yields only `[A-Za-z0-9_-]`, so there is no
+ * path separator or `..` to escape the tasks dir, and the mapping is a bijection
+ * so two distinct project ids can never share a board file.
+ */
+function projectIdToFileName(projectId: string): string {
+  return Buffer.from(validateProjectId(projectId), "utf-8").toString("base64url");
 }
 
 /**
@@ -34,7 +46,7 @@ export class TaskBoardStore {
   constructor(private readonly dir: string) {}
 
   private filePath(projectId: string): string {
-    return join(this.dir, `${sanitizeProjectId(projectId)}.json`);
+    return join(this.dir, `${projectIdToFileName(projectId)}.json`);
   }
 
   async getBoard(projectId: string): Promise<TaskBoard> {
@@ -50,7 +62,7 @@ export class TaskBoardStore {
   }
 
   async mutate(projectId: string, updater: BoardUpdater): Promise<TaskBoard> {
-    return this.serializeMutation(sanitizeProjectId(projectId), async () => {
+    return this.serializeMutation(validateProjectId(projectId), async () => {
       const current = await this.getBoard(projectId);
       const next = TaskBoardSchema.parse(await updater(current));
       if (next.projectId !== current.projectId) {

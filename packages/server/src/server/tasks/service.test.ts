@@ -38,6 +38,18 @@ describe("TaskBoardService", () => {
     expect(board.tasks[0]?.column).toBe("backlog");
   });
 
+  test("supports remote project ids with slashes and colons", async () => {
+    const projectId = "remote:github.com/haikostudio/brain";
+    const folder = await service.createFolder(projectId, "Auth");
+    await service.createTask(projectId, { folderId: folder.id, title: "Add login" });
+
+    const reloaded = new TaskBoardService({ store: new TaskBoardStore(dir), logger });
+    const board = await reloaded.getBoard(projectId);
+    expect(board.projectId).toBe(projectId);
+    expect(board.folders).toHaveLength(1);
+    expect(board.tasks).toHaveLength(1);
+  });
+
   test("moveTask re-packs orders and stamps manualOverrideAt on manual moves", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const a = await service.createTask("proj-1", { folderId: folder.id, title: "Task AAA long" });
