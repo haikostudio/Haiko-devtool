@@ -109,6 +109,7 @@ interface SidebarLabels {
 
 interface MobileSidebarProps extends SidebarSharedProps {
   insetsTop: number;
+  insetsBottom: number;
   closeSidebar: () => void;
   handleViewMoreNavigate: () => void;
   handleViewSchedulesNavigate: () => void;
@@ -256,6 +257,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
         <MobileSidebar
           {...sharedProps}
           insetsTop={insets.top}
+          insetsBottom={insets.bottom}
           closeSidebar={showMobileAgent}
           handleOpenProject={handleOpenProjectMobile}
           handleHome={handleHomeMobile}
@@ -551,6 +553,7 @@ function MobileSidebar({
   handleAddHost,
   handleOpenHostSettings,
   insetsTop,
+  insetsBottom,
   closeSidebar,
   handleViewMoreNavigate,
   handleViewSchedulesNavigate,
@@ -575,15 +578,13 @@ function MobileSidebar({
     closeSidebar();
   }, [closeSidebar]);
 
-  // The bottom safe-area inset is intentionally NOT applied here: the footer
-  // toolbar sits flush at the bottom edge on mobile. Adding paddingBottom left a
-  // dead empty band below the footer that read as a doubled safe area.
   const mobileSidebarInsetStyle = useMemo(
     () => ({
       paddingTop: insetsTop,
+      paddingBottom: insetsBottom,
       backgroundColor: theme.colors.surfaceSidebar,
     }),
-    [insetsTop, theme.colors.surfaceSidebar],
+    [insetsTop, insetsBottom, theme.colors.surfaceSidebar],
   );
 
   return (
