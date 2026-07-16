@@ -202,7 +202,13 @@ function DesktopLayout({
   } else if (boardHandle.error) {
     boardArea = <CenteredNote text={boardHandle.error} />;
   } else if (!folderId) {
-    boardArea = <CenteredNote text={t("tasks.noFolders")} />;
+    // Only show the "no folders" note once the board has actually loaded and is
+    // empty. While it's still loading — or folders exist but the auto-select
+    // effect hasn't picked one yet — show nothing so the note doesn't flash on
+    // project open.
+    const boardLoaded = boardHandle.board !== null;
+    const hasFolders = (boardHandle.board?.folders.length ?? 0) > 0;
+    boardArea = <CenteredNote text={boardLoaded && !hasFolders ? t("tasks.noFolders") : ""} />;
   } else {
     boardArea = (
       <BoardContent

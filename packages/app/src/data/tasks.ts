@@ -57,6 +57,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   useEffect(() => {
     if (!serverId || !projectId) {
       setBoard(null);
+      setError(null);
       return;
     }
     const client = getHostRuntimeStore().getClient(serverId);
@@ -66,6 +67,9 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     }
     let disposed = false;
     const subscriptionId = createSubscriptionId();
+    // Drop the previous project's board so its folders/tasks don't linger while
+    // the new subscription loads (otherwise stale content flashes on switch).
+    setBoard(null);
     setIsLoading(true);
     setError(null);
     const unsubscribePush = client.on("tasks.board.update", (message) => {
