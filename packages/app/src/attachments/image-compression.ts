@@ -57,6 +57,11 @@ export class AttachmentTooLargeError extends Error {
   }
 }
 
+/** How many raw bytes a base64 budget of `chars` characters can hold (~3/4 ratio). */
+function base64CharsToBytes(chars: number): number {
+  return Math.floor((chars * 3) / 4);
+}
+
 /** Approximate decoded byte length of a base64 string (ignoring any data-URL prefix). */
 export function base64Bytes(base64: string): number {
   const comma = base64.indexOf(",");
@@ -92,19 +97,67 @@ export interface BudgetAttachment {
   mimeType: string;
 }
 
+interface BudgetEntry extends EncodedAttachment {
+  id: string;
+  compressible: boolean;
+}
+
+const totalChars = (entries: readonly BudgetEntry[]): number =>
+  entries.reduce((sum, entry) => sum + entry.data.length, 0);
+
 /**
- * Encodes attachments to base64, compressing any that exceed the per-image
- * trigger, then enforces the total budget. Throws {@link AttachmentTooLargeError}
- * if the total is still over budget so the caller never sends an oversized frame.
+ * Compresses one entry toward `targetBytes` in place, keeping the result only if
+ * it is actually smaller. Preview URL is always released. Failures are logged and
+ * leave the entry untouched. Returns whether the entry shrank.
+ */
+async function compressEntry(
+  entry: BudgetEntry,
+  targetBytes: number,
+  deps: EncodeBudgetDeps,
+): Promise<boolean> {
+  const url = await deps.resolvePreviewUrl(entry.id);
+  try {
+    const compressed = await deps.compress({ url, mimeType: entry.mimeType, targetBytes });
+    if (compressed && compressed.data.length < entry.data.length) {
+      entry.data = compressed.data;
+      entry.mimeType = compressed.mimeType;
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.warn("[attachments] Image compression failed; sending original", {
+      id: entry.id,
+      error,
+    });
+    return false;
+  } finally {
+    await deps.releasePreviewUrl?.(entry.id, url);
+  }
+}
+
+/**
+ * Encodes attachments to base64 and guarantees the total stays under the send
+ * budget so an oversized frame is never emitted (which would kill the socket).
  *
- * Per-attachment encode failures are logged and skipped (matching prior behavior);
- * only the budget guard throws.
+ * Strategy — the goal is that the user never hits a hard "too large" wall for
+ * ordinary (compressible) screenshots, no matter how many they attach:
+ *  1. Proactively compress any single image over the per-image trigger toward the
+ *     comfortable per-image target, to keep frames small even when they'd fit.
+ *  2. If the total still exceeds the budget, split the budget evenly across the
+ *     compressible images and drive each below its share, repeating until the sum
+ *     fits. Equal shares guarantee the sum lands under budget once every oversized
+ *     image reaches its share — the compressor can hit far smaller targets than any
+ *     realistic share, so this converges in one or two passes.
+ *
+ * Only genuinely incompressible content (gif/svg) that alone exceeds the budget
+ * can still trip {@link AttachmentTooLargeError} — unreachable for jpeg/png/webp
+ * screenshots. Per-attachment encode failures are logged and skipped.
  */
 export async function encodeAttachmentsToBudget(
   attachments: readonly BudgetAttachment[],
   deps: EncodeBudgetDeps,
 ): Promise<EncodedAttachment[]> {
-  const results: EncodedAttachment[] = [];
+  const entries: BudgetEntry[] = [];
 
   for (const attachment of attachments) {
     let data: string;
@@ -117,41 +170,50 @@ export async function encodeAttachmentsToBudget(
       });
       continue;
     }
+    entries.push({
+      id: attachment.id,
+      data,
+      mimeType: attachment.mimeType,
+      compressible: isCompressibleImage(attachment.mimeType),
+    });
+  }
 
-    let mimeType = attachment.mimeType;
-
-    if (
-      data.length > IMAGE_COMPRESS_TRIGGER_BASE64_CHARS &&
-      isCompressibleImage(attachment.mimeType)
-    ) {
-      const url = await deps.resolvePreviewUrl(attachment.id);
-      try {
-        const compressed = await deps.compress({
-          url,
-          mimeType: attachment.mimeType,
-          targetBytes: IMAGE_COMPRESS_TARGET_BYTES,
-        });
-        if (compressed && compressed.data.length < data.length) {
-          data = compressed.data;
-          mimeType = compressed.mimeType;
-        }
-      } catch (error) {
-        console.warn("[attachments] Image compression failed; sending original", {
-          id: attachment.id,
-          error,
-        });
-      } finally {
-        await deps.releasePreviewUrl?.(attachment.id, url);
-      }
+  // 1. Proactive per-image compression for anything over the trigger.
+  for (const entry of entries) {
+    if (entry.compressible && entry.data.length > IMAGE_COMPRESS_TRIGGER_BASE64_CHARS) {
+      await compressEntry(entry, IMAGE_COMPRESS_TARGET_BYTES, deps);
     }
-
-    results.push({ data, mimeType });
   }
 
-  const totalChars = results.reduce((sum, entry) => sum + entry.data.length, 0);
-  if (totalChars > MAX_TOTAL_ATTACHMENT_BASE64_CHARS) {
-    throw new AttachmentTooLargeError(totalChars, MAX_TOTAL_ATTACHMENT_BASE64_CHARS);
+  // 2. Distribute the budget across compressible images until the sum fits.
+  const MAX_BUDGET_PASSES = 4;
+  for (let pass = 0; pass < MAX_BUDGET_PASSES; pass++) {
+    if (totalChars(entries) <= MAX_TOTAL_ATTACHMENT_BASE64_CHARS) break;
+
+    const compressibles = entries.filter((entry) => entry.compressible);
+    if (compressibles.length === 0) break;
+
+    const fixedChars = entries
+      .filter((entry) => !entry.compressible)
+      .reduce((sum, entry) => sum + entry.data.length, 0);
+    const shareChars = Math.floor(
+      Math.max(0, MAX_TOTAL_ATTACHMENT_BASE64_CHARS - fixedChars) / compressibles.length,
+    );
+    const shareBytes = Math.max(1, base64CharsToBytes(shareChars));
+
+    let shrankAny = false;
+    for (const entry of compressibles) {
+      if (entry.data.length <= shareChars) continue;
+      if (await compressEntry(entry, shareBytes, deps)) shrankAny = true;
+    }
+    // Compressor made no further progress — stop before looping forever.
+    if (!shrankAny) break;
   }
 
-  return results;
+  const total = totalChars(entries);
+  if (total > MAX_TOTAL_ATTACHMENT_BASE64_CHARS) {
+    throw new AttachmentTooLargeError(total, MAX_TOTAL_ATTACHMENT_BASE64_CHARS);
+  }
+
+  return entries.map(({ data, mimeType }) => ({ data, mimeType }));
 }

@@ -102,6 +102,28 @@ describe("encodeAttachmentsToBudget", () => {
     expect(result).toEqual([{ data: small, mimeType: "image/gif" }]);
   });
 
+  it("compresses several large images to fit within the total budget instead of throwing", async () => {
+    // Two big screenshots that together blow the budget; a realistic compressor
+    // that honors the requested target must bring the sum back under budget.
+    const big = "x".repeat(Math.ceil(MAX_TOTAL_ATTACHMENT_BASE64_CHARS * 0.7));
+    const compress = vi.fn(async ({ targetBytes }: { targetBytes: number }) => ({
+      data: "z".repeat(Math.floor((targetBytes * 4) / 3)),
+      mimeType: "image/jpeg",
+    }));
+
+    const result = await encodeAttachmentsToBudget(
+      [att("a", "image/png"), att("b", "image/png")],
+      deps({ encodeBase64: async () => big, compress }),
+    );
+
+    const total = result.reduce((sum, entry) => sum + entry.data.length, 0);
+    expect(total).toBeLessThanOrEqual(MAX_TOTAL_ATTACHMENT_BASE64_CHARS);
+    expect(result).toHaveLength(2);
+    for (const entry of result) {
+      expect(entry.mimeType).toBe("image/jpeg");
+    }
+  });
+
   it("throws AttachmentTooLargeError when still over budget after compression", async () => {
     const big = "x".repeat(MAX_TOTAL_ATTACHMENT_BASE64_CHARS + 100_000);
     await expect(
