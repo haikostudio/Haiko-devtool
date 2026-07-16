@@ -219,6 +219,21 @@ export const ru: TranslationResources = {
   dashboard: {
     title: "Панель",
     empty: "Нет активных агентов",
+    stats: {
+      agentsToday: "Агентов сегодня",
+      tokensIn: "Токены вход (30 дн)",
+      tokensOut: "Токены выход (30 дн)",
+      estimatedCost: "Оценка затрат (30 дн)",
+      activityTitle: "Активность по проектам",
+      modeDays: "Дни",
+      modeHours: "Часы",
+      otherProjects: "Прочие",
+      empty: "Пока нет данных — статистика накапливается по мере работы агентов.",
+      columnProject: "Проект",
+      columnAgents: "Агенты",
+      columnTokens: "Токены",
+      columnCost: "Стоимость",
+    },
     buckets: {
       needsInput: "Требуется ввод",
       failed: "Ошибка",

@@ -900,6 +900,81 @@ export const SidebarOrderSetRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Cross-device workspace UI session state: the open tabs (with their targets),
+// their order, the focused tab, and the drafts referenced by draft tabs. The
+// daemon persists and rebroadcasts this per workspace OPAQUELY — only the app
+// interprets tab targets and draft records. Kept permissive (opaque records) on
+// purpose so new tab kinds and draft shapes need no protocol change. Pure
+// structural declaration — normalization happens in explicit app consumers.
+export const WorkspaceUiTabSchema = z.object({
+  tabId: z.string(),
+  target: z.record(z.string(), z.unknown()),
+  createdAt: z.number(),
+});
+
+export const WorkspaceUiDraftSchema = z.object({
+  input: z.object({
+    text: z.string(),
+    attachments: z.array(z.record(z.string(), z.unknown())),
+  }),
+  lifecycle: z.string(),
+  updatedAt: z.number(),
+  version: z.number(),
+});
+
+export const WorkspaceUiStateSchema = z.object({
+  tabs: z.array(WorkspaceUiTabSchema),
+  order: z.array(z.string()),
+  focusedTabId: z.string().nullable(),
+  drafts: z.record(z.string(), WorkspaceUiDraftSchema),
+  // Monotonic per-workspace revision, bumped on every local edit. Last-write-wins
+  // conflict resolution compares this across devices.
+  revision: z.number(),
+});
+export type WorkspaceUiState = z.infer<typeof WorkspaceUiStateSchema>;
+export type WorkspaceUiTab = z.infer<typeof WorkspaceUiTabSchema>;
+export type WorkspaceUiDraft = z.infer<typeof WorkspaceUiDraftSchema>;
+
+export const WorkspaceUiStateGetRequestSchema = z.object({
+  type: z.literal("session.uiState.get.request"),
+  requestId: z.string(),
+});
+
+export const WorkspaceUiStateSetRequestSchema = z.object({
+  type: z.literal("session.uiState.set.request"),
+  // Opaque workspace identity; the daemon keys stored UI state by this value.
+  workspaceId: z.string(),
+  state: WorkspaceUiStateSchema,
+  requestId: z.string(),
+});
+
+// Draft image-attachment byte transfer, gated by the same sessionUiStateSync
+// feature. Bytes for a draft image live only on the device that pasted them; the
+// daemon stores them (keyed by attachment id) so other devices can materialize
+// them locally. Base64 payloads — draft images are small; no binary framing.
+export const DraftAttachmentPutRequestSchema = z.object({
+  type: z.literal("session.draftAttachment.put.request"),
+  id: z.string(),
+  mimeType: z.string(),
+  fileName: z.string().nullable().optional(),
+  dataBase64: z.string(),
+  requestId: z.string(),
+});
+
+export const DraftAttachmentGetRequestSchema = z.object({
+  type: z.literal("session.draftAttachment.get.request"),
+  id: z.string(),
+  requestId: z.string(),
+});
+
+export const UsageStatsFetchRequestSchema = z.object({
+  type: z.literal("stats.usage.fetch.request"),
+  // Number of days of history to return, counting back from today (inclusive).
+  // Daemon defaults to 30 when omitted.
+  days: z.number().int().min(1).max(90).optional(),
+  requestId: z.string(),
+});
+
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("set_voice_mode"),
   enabled: z.boolean(),
@@ -1546,6 +1621,87 @@ export const SidebarOrderGetResponseSchema = z.object({
 export const SidebarOrderSetResponseSchema = z.object({
   type: z.literal("settings.sidebarOrder.set.response"),
   payload: z.object({
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const WorkspaceUiStateGetResponseSchema = z.object({
+  type: z.literal("session.uiState.get.response"),
+  payload: z.object({
+    // Every workspace's UI state, keyed by opaque workspaceId.
+    states: z.record(z.string(), WorkspaceUiStateSchema),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const WorkspaceUiStateSetResponseSchema = z.object({
+  type: z.literal("session.uiState.set.response"),
+  payload: z.object({
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const DraftAttachmentPutResponseSchema = z.object({
+  type: z.literal("session.draftAttachment.put.response"),
+  payload: z.object({
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const DraftAttachmentGetResponseSchema = z.object({
+  type: z.literal("session.draftAttachment.get.response"),
+  payload: z.object({
+    id: z.string(),
+    found: z.boolean(),
+    mimeType: z.string().nullable(),
+    fileName: z.string().nullable().optional(),
+    dataBase64: z.string().nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+// One project's aggregated usage within a bucket (an hour, or a whole day).
+// `key` is the canonical project identity (the agent cwd at record time);
+// `name` is a display name derived when the usage was recorded.
+export const UsageStatsProjectBucketSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cachedInputTokens: z.number(),
+  costUsd: z.number(),
+  turns: z.number(),
+  agentCount: z.number(),
+});
+
+export const UsageStatsHourBucketSchema = z.object({
+  // 0-23, daemon-local time.
+  hour: z.number().int(),
+  projects: z.array(UsageStatsProjectBucketSchema),
+});
+
+export const UsageStatsDaySchema = z.object({
+  // YYYY-MM-DD, daemon-local time.
+  date: z.string(),
+  // Day-level aggregate per project; agentCount is deduped across the day.
+  projects: z.array(UsageStatsProjectBucketSchema),
+  hours: z.array(UsageStatsHourBucketSchema),
+});
+
+export const UsageStatsFetchResponseSchema = z.object({
+  type: z.literal("stats.usage.fetch.response"),
+  payload: z.object({
+    days: z.array(UsageStatsDaySchema),
     success: z.boolean(),
     error: z.string().nullable(),
     requestId: z.string(),
@@ -2226,6 +2382,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   WorkspacePinSetRequestSchema,
   SidebarOrderGetRequestSchema,
   SidebarOrderSetRequestSchema,
+  WorkspaceUiStateGetRequestSchema,
+  WorkspaceUiStateSetRequestSchema,
+  DraftAttachmentPutRequestSchema,
+  DraftAttachmentGetRequestSchema,
+  UsageStatsFetchRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2566,10 +2727,14 @@ export const ServerInfoStatusPayloadSchema = z
         projectCreateDirectory: z.boolean().optional(),
         // COMPAT(sidebarOrderSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
         sidebarOrderSync: z.boolean().optional(),
+        // COMPAT(sessionUiStateSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        sessionUiStateSync: z.boolean().optional(),
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
         brainMemory: z.boolean().optional(),
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
         tasksBoard: z.boolean().optional(),
+        // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
+        usageStats: z.boolean().optional(),
       })
       .optional(),
   })
@@ -2674,6 +2839,17 @@ export const SidebarOrderChangedStatusPayloadSchema = z
   })
   .passthrough();
 
+// Broadcast to all connected clients whenever a workspace's daemon-persisted UI
+// state (tabs/order/focus/drafts) changes, so other devices update live.
+// Passthrough keeps forward-compat.
+export const WorkspaceUiStateChangedStatusPayloadSchema = z
+  .object({
+    status: z.literal("session_ui_state_changed"),
+    workspaceId: z.string(),
+    state: WorkspaceUiStateSchema,
+  })
+  .passthrough();
+
 export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   AgentCreatedStatusPayloadSchema,
   AgentCreateFailedStatusPayloadSchema,
@@ -2683,6 +2859,7 @@ export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   RestartRequestedStatusPayloadSchema,
   DaemonConfigChangedStatusPayloadSchema,
   SidebarOrderChangedStatusPayloadSchema,
+  WorkspaceUiStateChangedStatusPayloadSchema,
 ]);
 
 export type KnownStatusPayload = z.infer<typeof KnownStatusPayloadSchema>;
@@ -4607,6 +4784,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   WorkspacePinSetResponseSchema,
   SidebarOrderGetResponseSchema,
   SidebarOrderSetResponseSchema,
+  WorkspaceUiStateGetResponseSchema,
+  WorkspaceUiStateSetResponseSchema,
+  DraftAttachmentPutResponseSchema,
+  DraftAttachmentGetResponseSchema,
+  UsageStatsFetchResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -4786,6 +4968,10 @@ export type WorkspacePinSetResponse = z.infer<typeof WorkspacePinSetResponseSche
 export type WorkspacePinSetResponsePayload = z.infer<typeof WorkspacePinSetResponsePayloadSchema>;
 export type SidebarOrderGetResponse = z.infer<typeof SidebarOrderGetResponseSchema>;
 export type SidebarOrderSetResponse = z.infer<typeof SidebarOrderSetResponseSchema>;
+export type UsageStatsProjectBucket = z.infer<typeof UsageStatsProjectBucketSchema>;
+export type UsageStatsHourBucket = z.infer<typeof UsageStatsHourBucketSchema>;
+export type UsageStatsDay = z.infer<typeof UsageStatsDaySchema>;
+export type UsageStatsFetchResponse = z.infer<typeof UsageStatsFetchResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
@@ -4920,6 +5106,7 @@ export type ProjectRemoveRequest = z.infer<typeof ProjectRemoveRequestSchema>;
 export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSchema>;
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
 export type SidebarOrderGetRequest = z.infer<typeof SidebarOrderGetRequestSchema>;
+export type UsageStatsFetchRequest = z.infer<typeof UsageStatsFetchRequestSchema>;
 export type SidebarOrderSetRequest = z.infer<typeof SidebarOrderSetRequestSchema>;
 export type SidebarOrderChangedStatusPayload = z.infer<
   typeof SidebarOrderChangedStatusPayloadSchema

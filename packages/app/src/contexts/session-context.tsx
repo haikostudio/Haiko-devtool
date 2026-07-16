@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useClientActivity } from "@/hooks/use-client-activity";
 import { useSidebarOrderSync } from "@/hooks/use-sidebar-order-sync";
+import { useSessionUiStateSync } from "@/hooks/use-session-ui-state-sync";
 import { usePushTokenRegistration } from "@/hooks/use-push-token-registration";
 import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
 import { refreshAgentInitializationTimeout } from "@/hooks/use-agent-initialization";
@@ -522,6 +523,11 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   // Keep the sidebar project/workspace order in sync with the daemon so the
   // order matches across devices (PWA, desktop, mobile).
   useSidebarOrderSync(serverId, client, isConnected);
+
+  // Keep per-workspace UI session state (open tabs, order, focus, and draft
+  // "New agent" content + config) in sync with the daemon so a draft created on
+  // one device appears on all the others.
+  useSessionUiStateSync(serverId, client, isConnected);
 
   // Zustand store actions
   const initializeSession = useSessionStore((state) => state.initializeSession);

@@ -7,6 +7,8 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
 import { SidebarOrderStore } from "./sidebar-order-store.js";
+import { SessionUiStateStore } from "./session-ui-state-store.js";
+import { DraftAttachmentStore } from "./draft-attachment-store.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type pino from "pino";
@@ -29,6 +31,7 @@ import {
   type ServerCapabilities,
   type WSOutboundMessage,
   type SidebarOrder,
+  type WorkspaceUiState,
   wrapSessionMessage,
 } from "./messages.js";
 import { asUint8Array, decodeBinaryFrame } from "@getpaseo/protocol/binary-frames/index";
@@ -437,6 +440,8 @@ export class VoiceAssistantWebSocketServer {
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly paseoHome: string;
   private readonly sidebarOrderStore: SidebarOrderStore;
+  private readonly sessionUiStateStore: SessionUiStateStore;
+  private readonly draftAttachmentStore: DraftAttachmentStore;
   private readonly worktreesRoot: string | undefined;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
@@ -608,6 +613,19 @@ export class VoiceAssistantWebSocketServer {
     this.sidebarOrderStore.onChange((order) => {
       this.broadcastSidebarOrderChanged(order);
     });
+
+    this.sessionUiStateStore = new SessionUiStateStore(
+      join(paseoHome, "ui-state.json"),
+      this.logger,
+    );
+    this.sessionUiStateStore.onChange(({ workspaceId, state }) => {
+      this.broadcastSessionUiStateChanged(workspaceId, state);
+    });
+
+    this.draftAttachmentStore = new DraftAttachmentStore(
+      join(paseoHome, "draft-attachments"),
+      this.logger,
+    );
 
     const pushLogger = this.logger.child({ module: "push" });
     this.pushTokenStore = new PushTokenStore(pushLogger, join(paseoHome, "push-tokens.json"));
@@ -1075,6 +1093,9 @@ export class VoiceAssistantWebSocketServer {
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
       sidebarOrderStore: this.sidebarOrderStore,
+      sessionUiStateStore: this.sessionUiStateStore,
+      draftAttachmentStore: this.draftAttachmentStore,
+      usageStatsStore: this.agentManager.getUsageStatsStore(),
       chatService: this.chatService,
       loopService: this.loopService,
       scheduleService: this.scheduleService,
@@ -1324,10 +1345,14 @@ export class VoiceAssistantWebSocketServer {
         projectCreateDirectory: true,
         // COMPAT(sidebarOrderSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
         sidebarOrderSync: true,
+        // COMPAT(sessionUiStateSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        sessionUiStateSync: true,
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
         brainMemory: !!this.brainMemory,
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
         tasksBoard: !!this.taskBoardService,
+        // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
+        usageStats: !!this.agentManager.getUsageStatsStore(),
       },
     };
   }
@@ -1361,6 +1386,15 @@ export class VoiceAssistantWebSocketServer {
       wrapSessionMessage({
         type: "status",
         payload: { status: "sidebar_order_changed", order },
+      }),
+    );
+  }
+
+  private broadcastSessionUiStateChanged(workspaceId: string, state: WorkspaceUiState): void {
+    this.broadcast(
+      wrapSessionMessage({
+        type: "status",
+        payload: { status: "session_ui_state_changed", workspaceId, state },
       }),
     );
   }

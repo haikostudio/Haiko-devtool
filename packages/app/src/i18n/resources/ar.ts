@@ -217,6 +217,21 @@ export const ar: TranslationResources = {
   dashboard: {
     title: "لوحة القيادة",
     empty: "لا توجد وكلاء نشطون",
+    stats: {
+      agentsToday: "الوكلاء اليوم",
+      tokensIn: "رموز الإدخال (30 يومًا)",
+      tokensOut: "رموز الإخراج (30 يومًا)",
+      estimatedCost: "التكلفة التقديرية (30 يومًا)",
+      activityTitle: "النشاط حسب المشروع",
+      modeDays: "أيام",
+      modeHours: "ساعات",
+      otherProjects: "أخرى",
+      empty: "لا يوجد استخدام مسجل بعد — تتراكم الإحصاءات مع عمل الوكلاء.",
+      columnProject: "المشروع",
+      columnAgents: "الوكلاء",
+      columnTokens: "الرموز",
+      columnCost: "التكلفة",
+    },
     buckets: {
       needsInput: "بحاجة إلى إدخال",
       failed: "فشل",

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -9,7 +9,9 @@ import { MenuHeader } from "@/components/headers/menu-header";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { AgentList } from "@/components/agent-list";
+import { UsageStatsSection } from "@/components/usage-stats-section";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
+import { useUsageStats } from "@/hooks/use-usage-stats";
 import type { Theme } from "@/styles/theme";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 
@@ -31,13 +33,19 @@ export function DashboardScreen() {
 function DashboardScreenContent() {
   const { t } = useTranslation();
   const { agents, isInitialLoad, isRevalidating, refreshAll } = useAggregatedAgents();
+  const {
+    days: usageDays,
+    isSupported: usageSupported,
+    refresh: refreshUsageStats,
+  } = useUsageStats();
 
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
   const handleRefresh = useCallback(() => {
     setIsManualRefresh(true);
     refreshAll();
-  }, [refreshAll]);
+    refreshUsageStats();
+  }, [refreshAll, refreshUsageStats]);
 
   // refreshAll() is fire-and-forget, so clear the pull-to-refresh spinner once
   // the runtime finishes revalidating (mirrors the sidebar's manual-refresh gate).
@@ -51,6 +59,11 @@ function DashboardScreenContent() {
     router.navigate(buildOpenProjectRoute());
   }, []);
 
+  const statsHeader = useMemo(
+    () => (usageSupported && usageDays !== null ? <UsageStatsSection days={usageDays} /> : null),
+    [usageSupported, usageDays],
+  );
+
   return (
     <View style={styles.container}>
       <MenuHeader title={t("dashboard.title")} />
@@ -60,12 +73,15 @@ function DashboardScreenContent() {
         </View>
       ) : null}
       {!isInitialLoad && agents.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>{t("dashboard.empty")}</Text>
-          <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
-            {t("common.actions.back")}
-          </Button>
-        </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {statsHeader}
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>{t("dashboard.empty")}</Text>
+            <Button variant="ghost" leftIcon={ChevronLeft} onPress={handleBack}>
+              {t("common.actions.back")}
+            </Button>
+          </View>
+        </ScrollView>
       ) : null}
       {!isInitialLoad && agents.length > 0 ? (
         <AgentList
@@ -76,6 +92,7 @@ function DashboardScreenContent() {
           onRefresh={handleRefresh}
           showAttentionIndicator
           showHostColumn
+          listHeaderComponent={statsHeader}
         />
       ) : null}
     </View>

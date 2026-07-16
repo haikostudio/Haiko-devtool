@@ -220,6 +220,22 @@ export const ptBR: TranslationResources = {
   dashboard: {
     title: "Painel",
     empty: "Nenhum agente ativo",
+    stats: {
+      agentsToday: "Agentes hoje",
+      tokensIn: "Tokens entrada (30 d)",
+      tokensOut: "Tokens saída (30 d)",
+      estimatedCost: "Custo est. (30 d)",
+      activityTitle: "Atividade por projeto",
+      modeDays: "Dias",
+      modeHours: "Horas",
+      otherProjects: "Outros",
+      empty:
+        "Nenhum uso registrado ainda — as estatísticas se acumulam conforme os agentes trabalham.",
+      columnProject: "Projeto",
+      columnAgents: "Agentes",
+      columnTokens: "Tokens",
+      columnCost: "Custo",
+    },
     buckets: {
       needsInput: "Requer ação",
       failed: "Falhou",

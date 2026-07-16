@@ -217,6 +217,21 @@ export const zhCN: TranslationResources = {
   dashboard: {
     title: "仪表板",
     empty: "没有活动的代理",
+    stats: {
+      agentsToday: "今日代理",
+      tokensIn: "输入令牌（30天）",
+      tokensOut: "输出令牌（30天）",
+      estimatedCost: "估算成本（30天）",
+      activityTitle: "按项目的活动",
+      modeDays: "天",
+      modeHours: "小时",
+      otherProjects: "其他",
+      empty: "尚无使用记录 — 统计数据会随着代理工作而积累。",
+      columnProject: "项目",
+      columnAgents: "代理",
+      columnTokens: "令牌",
+      columnCost: "成本",
+    },
     buckets: {
       needsInput: "需要输入",
       failed: "失败",

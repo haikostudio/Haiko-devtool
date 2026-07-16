@@ -220,6 +220,21 @@ export const ja: TranslationResources = {
   dashboard: {
     title: "ダッシュボード",
     empty: "アクティブなエージェントはありません",
+    stats: {
+      agentsToday: "本日のエージェント",
+      tokensIn: "入力トークン（30日）",
+      tokensOut: "出力トークン（30日）",
+      estimatedCost: "推定コスト（30日）",
+      activityTitle: "プロジェクト別アクティビティ",
+      modeDays: "日",
+      modeHours: "時間",
+      otherProjects: "その他",
+      empty: "まだ使用記録がありません。エージェントの作業に応じて統計が蓄積されます。",
+      columnProject: "プロジェクト",
+      columnAgents: "エージェント",
+      columnTokens: "トークン",
+      columnCost: "コスト",
+    },
     buckets: {
       needsInput: "入力が必要",
       failed: "失敗",

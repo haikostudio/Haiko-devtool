@@ -90,6 +90,8 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   SidebarOrder,
+  WorkspaceUiState,
+  UsageStatsDay,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2004,6 +2006,76 @@ export class DaemonClient {
     await this.sendNamespacedCorrelatedSessionRequest<"settings.sidebarOrder.set.response">({
       requestId,
       message: { type: "settings.sidebarOrder.set.request", order },
+    });
+  }
+
+  async getWorkspaceUiStates(requestId?: string): Promise<Record<string, WorkspaceUiState>> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "session.uiState.get.response",
+      Record<string, WorkspaceUiState>
+    >({
+      requestId,
+      message: { type: "session.uiState.get.request" },
+      selectPayload: (payload) => payload.states,
+    });
+  }
+
+  async setWorkspaceUiState(
+    workspaceId: string,
+    state: WorkspaceUiState,
+    requestId?: string,
+  ): Promise<void> {
+    await this.sendNamespacedCorrelatedSessionRequest<"session.uiState.set.response">({
+      requestId,
+      message: { type: "session.uiState.set.request", workspaceId, state },
+    });
+  }
+
+  async putDraftAttachment(
+    input: { id: string; mimeType: string; fileName?: string | null; dataBase64: string },
+    requestId?: string,
+  ): Promise<void> {
+    await this.sendNamespacedCorrelatedSessionRequest<"session.draftAttachment.put.response">({
+      requestId,
+      message: {
+        type: "session.draftAttachment.put.request",
+        id: input.id,
+        mimeType: input.mimeType,
+        fileName: input.fileName ?? null,
+        dataBase64: input.dataBase64,
+      },
+    });
+  }
+
+  async getDraftAttachment(
+    id: string,
+    requestId?: string,
+  ): Promise<{ mimeType: string; fileName: string | null; dataBase64: string } | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "session.draftAttachment.get.response",
+      { mimeType: string; fileName: string | null; dataBase64: string } | null
+    >({
+      requestId,
+      message: { type: "session.draftAttachment.get.request", id },
+      selectPayload: (payload) =>
+        payload.found && payload.dataBase64 !== null && payload.mimeType !== null
+          ? {
+              mimeType: payload.mimeType,
+              fileName: payload.fileName ?? null,
+              dataBase64: payload.dataBase64,
+            }
+          : null,
+    });
+  }
+
+  async fetchUsageStats(days?: number, requestId?: string): Promise<UsageStatsDay[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "stats.usage.fetch.response",
+      UsageStatsDay[]
+    >({
+      requestId,
+      message: { type: "stats.usage.fetch.request", days },
+      selectPayload: (payload) => payload.days,
     });
   }
 

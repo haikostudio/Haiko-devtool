@@ -216,6 +216,21 @@ export const en = {
   dashboard: {
     title: "Dashboard",
     empty: "No active agents",
+    stats: {
+      agentsToday: "Agents today",
+      tokensIn: "Tokens in (30d)",
+      tokensOut: "Tokens out (30d)",
+      estimatedCost: "Est. cost (30d)",
+      activityTitle: "Activity by project",
+      modeDays: "Days",
+      modeHours: "Hours",
+      otherProjects: "Other",
+      empty: "No usage recorded yet — stats build up as your agents work.",
+      columnProject: "Project",
+      columnAgents: "Agents",
+      columnTokens: "Tokens",
+      columnCost: "Cost",
+    },
     buckets: {
       needsInput: "Needs input",
       failed: "Failed",

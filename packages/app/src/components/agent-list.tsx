@@ -37,6 +37,7 @@ interface AgentListProps {
   selectedAgentId?: string;
   onAgentSelect?: () => void;
   listFooterComponent?: ReactElement | null;
+  listHeaderComponent?: ReactElement | null;
   showAttentionIndicator?: boolean;
   showHostColumn?: boolean;
   /** How to bucket the rows into sections. Defaults to recency ("date"). */
@@ -446,6 +447,7 @@ export function AgentList({
   selectedAgentId,
   onAgentSelect,
   listFooterComponent,
+  listHeaderComponent,
   showAttentionIndicator = true,
   showHostColumn = false,
   groupBy = "date",
@@ -610,6 +612,7 @@ export function AgentList({
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeaderComponent}
         ListFooterComponent={listFooterComponent}
         refreshControl={refreshControl}
       />

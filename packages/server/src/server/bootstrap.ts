@@ -103,6 +103,8 @@ import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
+import { UsageStatsStore } from "./stats/usage-stats-store.js";
+import { runClaudeTranscriptBackfill } from "./stats/claude-transcript-backfill.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
 import {
@@ -766,10 +768,15 @@ export async function createPaseoDaemon(
     extraClients: config.agentClients,
   });
   const initialAgentManagerState = providerSnapshotManager.getAgentManagerProviderState();
+  const usageStatsStore = new UsageStatsStore(
+    path.join(config.paseoHome, "stats", "usage"),
+    logger,
+  );
   const agentManager = new AgentManager({
     clients: initialAgentManagerState.clients,
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
+    usageStatsStore,
     appendSystemPrompt: config.appendSystemPrompt,
     onWorkspaceStateMayHaveChanged: ({ cwd }) => {
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
@@ -783,6 +790,15 @@ export async function createPaseoDaemon(
     agentManager,
     agentStorage,
   );
+  // One-shot historical usage backfill from Claude Code transcripts; runs in
+  // the background and is a no-op once the marker file exists.
+  void runClaudeTranscriptBackfill({
+    store: usageStatsStore,
+    markerFilePath: path.join(config.paseoHome, "stats", "claude-backfill.json"),
+    logger,
+  }).catch((error) => {
+    logger.warn({ err: error }, "Claude Code usage backfill failed");
+  });
   await agentStorage.initialize();
   logger.info({ elapsed: elapsed() }, "Agent storage initialized");
   await bootstrapWorkspaceRegistries({

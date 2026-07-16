@@ -19,6 +19,7 @@ import {
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
   type SidebarOrder,
+  type WorkspaceUiState,
 } from "./messages.js";
 import type {
   TerminalManager,
@@ -133,6 +134,9 @@ import {
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
 import { SidebarOrderStore } from "./sidebar-order-store.js";
+import { SessionUiStateStore } from "./session-ui-state-store.js";
+import { DraftAttachmentStore } from "./draft-attachment-store.js";
+import type { UsageStatsStore } from "./stats/usage-stats-store.js";
 import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import { VoiceSession } from "./session/voice/voice-session.js";
@@ -438,6 +442,9 @@ export interface SessionOptions {
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
   sidebarOrderStore?: SidebarOrderStore;
+  sessionUiStateStore?: SessionUiStateStore;
+  draftAttachmentStore?: DraftAttachmentStore;
+  usageStatsStore?: UsageStatsStore;
   filesystem?: SessionFileSystem;
   chatService: FileBackedChatService;
   scheduleService: ScheduleService;
@@ -552,6 +559,36 @@ function describeRegistryTransition(record: ArchivedRecordSnapshot | null): Regi
  * It owns all state management, orchestration logic, and message processing.
  * Session has no knowledge of WebSockets - it only emits and receives messages.
  */
+interface SessionServiceFallbackInputs {
+  sidebarOrderStore?: SidebarOrderStore;
+  sessionUiStateStore?: SessionUiStateStore;
+  draftAttachmentStore?: DraftAttachmentStore;
+  filesystem?: SessionFileSystem;
+  github?: GitHubService;
+  renameCurrentBranch?: typeof renameCurrentBranchDefault;
+  paseoHome: string;
+  logger: pino.Logger;
+}
+
+// Default-construct optional session services; kept out of the constructor so
+// its complexity budget stays spent on real branching, not `??` fallbacks.
+function resolveSessionServiceFallbacks(inputs: SessionServiceFallbackInputs) {
+  return {
+    sidebarOrderStore:
+      inputs.sidebarOrderStore ??
+      new SidebarOrderStore(join(inputs.paseoHome, "sidebar-order.json"), inputs.logger),
+    sessionUiStateStore:
+      inputs.sessionUiStateStore ??
+      new SessionUiStateStore(join(inputs.paseoHome, "ui-state.json"), inputs.logger),
+    draftAttachmentStore:
+      inputs.draftAttachmentStore ??
+      new DraftAttachmentStore(join(inputs.paseoHome, "draft-attachments"), inputs.logger),
+    filesystem: inputs.filesystem ?? nodeSessionFileSystem,
+    github: inputs.github ?? createGitHubService(),
+    renameCurrentBranch: inputs.renameCurrentBranch ?? renameCurrentBranchDefault,
+  };
+}
+
 export class Session {
   private readonly clientId: string;
   private appVersion: string | null;
@@ -570,6 +607,9 @@ export class Session {
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
   private readonly sidebarOrderStore: SidebarOrderStore;
+  private readonly sessionUiStateStore: SessionUiStateStore;
+  private readonly draftAttachmentStore: DraftAttachmentStore;
+  private readonly usageStatsStore: UsageStatsStore | undefined;
   private readonly filesystem: SessionFileSystem;
   private readonly github: GitHubService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
@@ -637,6 +677,9 @@ export class Session {
       projectRegistry,
       workspaceRegistry,
       sidebarOrderStore,
+      sessionUiStateStore,
+      draftAttachmentStore,
+      usageStatsStore,
       filesystem,
       chatService,
       scheduleService,
@@ -703,11 +746,23 @@ export class Session {
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
-    this.sidebarOrderStore =
-      sidebarOrderStore ?? new SidebarOrderStore(join(paseoHome, "sidebar-order.json"), logger);
-    this.filesystem = filesystem ?? nodeSessionFileSystem;
-    this.github = github ?? createGitHubService();
-    this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
+    const fallbacks = resolveSessionServiceFallbacks({
+      sidebarOrderStore,
+      sessionUiStateStore,
+      draftAttachmentStore,
+      filesystem,
+      github,
+      renameCurrentBranch,
+      paseoHome,
+      logger,
+    });
+    this.sidebarOrderStore = fallbacks.sidebarOrderStore;
+    this.sessionUiStateStore = fallbacks.sessionUiStateStore;
+    this.draftAttachmentStore = fallbacks.draftAttachmentStore;
+    this.usageStatsStore = usageStatsStore;
+    this.filesystem = fallbacks.filesystem;
+    this.github = fallbacks.github;
+    this.renameCurrentBranch = fallbacks.renameCurrentBranch;
     this.workspaceGitService = workspaceGitService;
     this.gitMutation = createGitMutationService({
       workspaceGitService: this.workspaceGitService,
@@ -1712,6 +1767,22 @@ export class Session {
         return this.handleSidebarOrderGetRequest(msg.requestId);
       case "settings.sidebarOrder.set.request":
         return this.handleSidebarOrderSetRequest(msg.order, msg.requestId);
+      case "session.uiState.get.request":
+        return this.handleWorkspaceUiStateGetRequest(msg.requestId);
+      case "session.uiState.set.request":
+        return this.handleWorkspaceUiStateSetRequest(msg.workspaceId, msg.state, msg.requestId);
+      case "session.draftAttachment.put.request":
+        return this.handleDraftAttachmentPutRequest({
+          id: msg.id,
+          mimeType: msg.mimeType,
+          fileName: msg.fileName ?? null,
+          dataBase64: msg.dataBase64,
+          requestId: msg.requestId,
+        });
+      case "session.draftAttachment.get.request":
+        return this.handleDraftAttachmentGetRequest(msg.id, msg.requestId);
+      case "stats.usage.fetch.request":
+        return this.handleUsageStatsFetchRequest(msg.days, msg.requestId);
       default:
         return undefined;
     }
@@ -2529,6 +2600,160 @@ export class Session {
         payload: {
           success: false,
           error: getErrorMessageOr(error, "Failed to save sidebar order"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleWorkspaceUiStateGetRequest(requestId: string): Promise<void> {
+    try {
+      const states = await this.sessionUiStateStore.getAll();
+      this.emit({
+        type: "session.uiState.get.response",
+        payload: { states, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: session.uiState.get.request error",
+      );
+      this.emit({
+        type: "session.uiState.get.response",
+        payload: {
+          states: {},
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read workspace UI state"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleWorkspaceUiStateSetRequest(
+    workspaceId: string,
+    state: WorkspaceUiState,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      // Persisting notifies the store's change listeners, which broadcast
+      // session_ui_state_changed to every connected client (this one included).
+      await this.sessionUiStateStore.setWorkspace(workspaceId, state);
+      this.emit({
+        type: "session.uiState.set.response",
+        payload: { success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: session.uiState.set.request error",
+      );
+      this.emit({
+        type: "session.uiState.set.response",
+        payload: {
+          success: false,
+          error: getErrorMessageOr(error, "Failed to save workspace UI state"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleDraftAttachmentPutRequest(input: {
+    id: string;
+    mimeType: string;
+    fileName: string | null;
+    dataBase64: string;
+    requestId: string;
+  }): Promise<void> {
+    try {
+      await this.draftAttachmentStore.put({
+        id: input.id,
+        mimeType: input.mimeType,
+        fileName: input.fileName,
+        dataBase64: input.dataBase64,
+      });
+      this.emit({
+        type: "session.draftAttachment.put.response",
+        payload: { success: true, error: null, requestId: input.requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId: input.requestId },
+        "session: session.draftAttachment.put.request error",
+      );
+      this.emit({
+        type: "session.draftAttachment.put.response",
+        payload: {
+          success: false,
+          error: getErrorMessageOr(error, "Failed to store draft attachment"),
+          requestId: input.requestId,
+        },
+      });
+    }
+  }
+
+  private async handleDraftAttachmentGetRequest(id: string, requestId: string): Promise<void> {
+    try {
+      const record = await this.draftAttachmentStore.get(id);
+      this.emit({
+        type: "session.draftAttachment.get.response",
+        payload: {
+          id,
+          found: record !== null,
+          mimeType: record?.mimeType ?? null,
+          fileName: record?.fileName ?? null,
+          dataBase64: record?.dataBase64 ?? null,
+          success: true,
+          error: null,
+          requestId,
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: session.draftAttachment.get.request error",
+      );
+      this.emit({
+        type: "session.draftAttachment.get.response",
+        payload: {
+          id,
+          found: false,
+          mimeType: null,
+          fileName: null,
+          dataBase64: null,
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read draft attachment"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleUsageStatsFetchRequest(
+    days: number | undefined,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      if (!this.usageStatsStore) {
+        throw new Error("Usage stats are not available on this daemon");
+      }
+      const statsDays = await this.usageStatsStore.query({ days: days ?? 30 });
+      this.emit({
+        type: "stats.usage.fetch.response",
+        payload: { days: statsDays, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: stats.usage.fetch.request error",
+      );
+      this.emit({
+        type: "stats.usage.fetch.response",
+        payload: {
+          days: [],
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read usage stats"),
           requestId,
         },
       });

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import {
   AGENT_LIFECYCLE_STATUSES,
@@ -44,6 +44,7 @@ import {
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
+import type { UsageStatsStore } from "../stats/usage-stats-store.js";
 import {
   InMemoryAgentTimelineStore,
   type SeedAgentTimelineOptions,
@@ -242,6 +243,7 @@ export interface AgentManagerOptions {
   onAgentAttention?: AgentAttentionCallback;
   onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   durableTimelineStore?: AgentTimelineStore;
+  usageStatsStore?: UsageStatsStore;
   terminalManager?: TerminalManager | null;
   mcpBaseUrl?: string;
   mcpAuthToken?: string;
@@ -562,6 +564,7 @@ export class AgentManager {
   private readonly idFactory: () => string;
   private readonly registry?: AgentStorage;
   private readonly durableTimelineStore?: AgentTimelineStore;
+  private readonly usageStatsStore?: UsageStatsStore;
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
@@ -582,6 +585,7 @@ export class AgentManager {
     this.idFactory = options?.idFactory ?? (() => randomUUID());
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
+    this.usageStatsStore = options?.usageStatsStore;
     this.onAgentAttention = options?.onAgentAttention;
     this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
@@ -607,6 +611,10 @@ export class AgentManager {
       providerDefinitions: options.providerDefinitions ?? {},
       clients: options.clients ?? {},
     });
+  }
+
+  getUsageStatsStore(): UsageStatsStore | undefined {
+    return this.usageStatsStore;
   }
 
   private configurePaseoTools(options: AgentManagerOptions): void {
@@ -3244,6 +3252,7 @@ export class AgentManager {
         return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
+        this.recordUsageStats(agent, event.usage, false);
         this.emitState(agent);
         return undefined;
       case "mode_changed":
@@ -3305,6 +3314,32 @@ export class AgentManager {
       default:
         return undefined;
     }
+  }
+
+  /**
+   * Feed provider-reported cumulative usage into the persisted usage stats.
+   * The store turns cumulative counters into deltas; internal agents (hidden
+   * helpers) are excluded so stats reflect user-visible work only.
+   */
+  private recordUsageStats(
+    agent: ActiveManagedAgent,
+    usage: AgentUsage | undefined,
+    countTurn: boolean,
+  ): void {
+    if (!this.usageStatsStore || agent.internal) {
+      return;
+    }
+    if (!usage && !countTurn) {
+      return;
+    }
+    this.usageStatsStore.noteAgentUsage({
+      agentId: agent.id,
+      projectKey: agent.cwd,
+      projectName: basename(agent.cwd),
+      usage: usage ?? {},
+      timestamp: new Date(),
+      countTurn,
+    });
   }
 
   private onStreamThreadStarted(agent: ActiveManagedAgent): void {
@@ -3373,6 +3408,7 @@ export class AgentManager {
       "agent.manager.turn.completed",
     );
     agent.lastUsage = event.usage;
+    this.recordUsageStats(agent, event.usage, true);
     agent.lastError = undefined;
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
