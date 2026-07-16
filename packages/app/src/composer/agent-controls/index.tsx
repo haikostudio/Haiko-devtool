@@ -1838,10 +1838,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   // Pull the content up so it sits close under the header instead of the sheet's
   // large default top padding, and space the sections evenly.
-  // Nudge up under the header (without clipping the first row), and keep the
-  // sections compact.
+  // No negative top margin: the sheet header keeps its divider and the content
+  // starts cleanly below it. Sections stay compact.
   drawerBody: {
-    marginTop: -theme.spacing[2],
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[2],
   },
