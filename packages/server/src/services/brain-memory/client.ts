@@ -234,6 +234,69 @@ export function injectBrainContext(blob: string, portee: BrainPortee, userText: 
   ].join("\n");
 }
 
+// Must mirror injectBrainContext exactly: opening tag with portee, blob, closing
+// tag, one-line note, blank line, then the user's own text.
+const BRAIN_CONTEXT_ENVELOPE_PATTERN =
+  /^<contexte_memoire source="cerveau" portee="(projet|global|apercu)">\n([\s\S]*?)\n<\/contexte_memoire>\nNote: [^\n]*\n\n([\s\S]*)$/;
+
+const REJECTED_RECALL_LINE_PATTERN = /^⛔ \(piste écartée(?: — (.+?))?\) ([\s\S]*)$/;
+
+export interface ParsedBrainContextEnvelope {
+  portee: BrainPortee;
+  memories: { texte: string; rejete?: boolean; motif?: string }[];
+  userText: string;
+}
+
+/**
+ * Reverse of injectBrainContext. Provider transcripts echo the prompt the
+ * daemon actually sent — including the injected block — so any user message
+ * rebuilt from a transcript (live echo, history replay after a refresh or
+ * daemon restart) must be split back into the user's own text plus a
+ * reconstructed brain_context pill instead of showing the raw XML.
+ */
+export function parseBrainContextEnvelope(text: string): ParsedBrainContextEnvelope | null {
+  const match = BRAIN_CONTEXT_ENVELOPE_PATTERN.exec(text);
+  if (!match) {
+    return null;
+  }
+  return {
+    portee: match[1] as BrainPortee,
+    memories: parseRecallBlob(match[2] ?? ""),
+    userText: match[3] ?? "",
+  };
+}
+
+/**
+ * Best-effort reverse of formatRecall: each "- " / "⛔ " line starts a memory;
+ * other lines are continuations of the previous one (memory texts may span
+ * lines, and the blob may be truncated mid-entry at MAX_BLOB_CHARS).
+ */
+function parseRecallBlob(blob: string): { texte: string; rejete?: boolean; motif?: string }[] {
+  const memories: { texte: string; rejete?: boolean; motif?: string }[] = [];
+  for (const line of blob.split("\n")) {
+    if (line.startsWith("- ")) {
+      memories.push({ texte: line.slice(2) });
+      continue;
+    }
+    const rejected = REJECTED_RECALL_LINE_PATTERN.exec(line);
+    if (rejected) {
+      memories.push({
+        texte: rejected[2] ?? "",
+        rejete: true,
+        ...(rejected[1] ? { motif: rejected[1] } : {}),
+      });
+      continue;
+    }
+    const last = memories[memories.length - 1];
+    if (last) {
+      last.texte = `${last.texte}\n${line}`;
+    } else if (line.trim()) {
+      memories.push({ texte: line });
+    }
+  }
+  return memories.filter((memory) => memory.texte.trim().length > 0);
+}
+
 /** Convert a memory list into the wire shape for the brain_context timeline item. */
 export function toTimelineMemories(
   resultats: BrainSouvenir[],

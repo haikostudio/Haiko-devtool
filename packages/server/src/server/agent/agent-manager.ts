@@ -64,6 +64,7 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
@@ -507,17 +508,55 @@ function buildExplicitTimelineSeedForRegister(
   };
 }
 
+/**
+ * Provider transcripts contain the prompt the daemon actually dispatched —
+ * including the injected <contexte_memoire> block. Split such a user_message
+ * back into the user's own text, and on history replay (where the daemon's own
+ * brain_context rows were wiped) reconstruct the yellow pill in front of it.
+ * The live echo path must NOT reconstruct: the real pill was already appended
+ * before dispatch, so it only strips.
+ */
+function unwrapBrainContextUserMessage(
+  item: AgentTimelineItem,
+  options: { reconstructPill: boolean },
+): AgentTimelineItem[] {
+  if (item.type !== "user_message") {
+    return [item];
+  }
+  const parsed = parseBrainContextEnvelope(item.text);
+  if (!parsed || !parsed.userText.trim()) {
+    return [item];
+  }
+  const stripped: AgentTimelineItem = { ...item, text: parsed.userText };
+  if (!options.reconstructPill) {
+    return [stripped];
+  }
+  return [
+    {
+      type: "brain_context",
+      query: parsed.userText.slice(0, 500),
+      portee: parsed.portee,
+      count: parsed.memories.length,
+      memories: parsed.memories,
+      status: "done",
+    },
+    stripped,
+  ];
+}
+
 function buildImportedTimelineRows(entries: readonly ImportedTimelineEntry[]): AgentTimelineRow[] {
   const rows: AgentTimelineRow[] = [];
   for (const entry of entries) {
     if (entry.item.type === "user_message" && isSystemInjectedEnvelope(entry.item.text)) {
       continue;
     }
-    rows.push({
-      seq: rows.length + 1,
-      timestamp: entry.timestamp ?? new Date().toISOString(),
-      item: limitAgentTimelineItemContent(entry.item),
-    });
+    for (const item of unwrapBrainContextUserMessage(entry.item, { reconstructPill: true })) {
+      rows.push({
+        seq: rows.length + 1,
+        timestamp: entry.timestamp ?? new Date().toISOString(),
+        item: limitAgentTimelineItemContent(item),
+      });
+    }
   }
   return rows;
 }
@@ -3019,7 +3058,9 @@ export class AgentManager {
         if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
           continue;
         }
-        historyEvents.push(event);
+        for (const item of unwrapBrainContextUserMessage(event.item, { reconstructPill: true })) {
+          historyEvents.push({ ...event, item });
+        }
       } else if (event.type === "provider_subagent") {
         providerSubagentEvents.push(event);
       }
@@ -3080,11 +3121,13 @@ export class AgentManager {
         if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
           continue;
         }
-        this.recordTimeline(
-          agent.id,
-          event.item,
-          event.timestamp ? { timestamp: event.timestamp } : undefined,
-        );
+        for (const item of unwrapBrainContextUserMessage(event.item, { reconstructPill: true })) {
+          this.recordTimeline(
+            agent.id,
+            item,
+            event.timestamp ? { timestamp: event.timestamp } : undefined,
+          );
+        }
       }
     } catch {
       // ignore history failures
@@ -3370,17 +3413,23 @@ export class AgentManager {
     }
 
     if (options?.fromHistory) {
-      this.recordTimeline(
-        agent.id,
-        event.item,
-        event.timestamp ? { timestamp: event.timestamp } : undefined,
-      );
+      for (const item of unwrapBrainContextUserMessage(event.item, { reconstructPill: true })) {
+        this.recordTimeline(
+          agent.id,
+          item,
+          event.timestamp ? { timestamp: event.timestamp } : undefined,
+        );
+      }
       flags.shouldDispatchEvent = false;
       flags.shouldNotifyWaiters = false;
       return;
     }
 
-    this.recordAndDispatchTimelineItem(agent.id, event.item, event.provider, event.turnId);
+    // Live echo of the just-dispatched prompt: strip the injected block only —
+    // the real brain_context pill was appended before dispatch.
+    const strippedItem =
+      unwrapBrainContextUserMessage(event.item, { reconstructPill: false })[0] ?? event.item;
+    this.recordAndDispatchTimelineItem(agent.id, strippedItem, event.provider, event.turnId);
     if (event.item.type === "user_message") {
       agent.lastUserMessageAt = new Date();
       this.emitState(agent);

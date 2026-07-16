@@ -4,6 +4,7 @@ import {
   BrainMemoryClient,
   formatRecall,
   injectBrainContext,
+  parseBrainContextEnvelope,
   toTimelineMemories,
 } from "./client.js";
 
@@ -43,6 +44,49 @@ describe("injectBrainContext", () => {
 
   it("returns the text unchanged when the blob is empty", () => {
     expect(injectBrainContext("", "projet", "ma question")).toBe("ma question");
+  });
+});
+
+describe("parseBrainContextEnvelope", () => {
+  it("round-trips injectBrainContext back into user text + memories", () => {
+    const blob = formatRecall([
+      { texte: "un fait utile" },
+      { texte: "une piste écartée", statut: "rejete", motif: "trop risqué" },
+    ]);
+    const injected = injectBrainContext(blob, "global", "vas'y relance le daemon");
+    const parsed = parseBrainContextEnvelope(injected);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.portee).toBe("global");
+    expect(parsed?.userText).toBe("vas'y relance le daemon");
+    expect(parsed?.memories).toEqual([
+      { texte: "un fait utile" },
+      { texte: "une piste écartée", rejete: true, motif: "trop risqué" },
+    ]);
+  });
+
+  it("keeps multi-line memory texts attached to their entry", () => {
+    const blob = formatRecall([{ texte: "ligne 1\nligne 2" }, { texte: "autre" }]);
+    const injected = injectBrainContext(blob, "projet", "question");
+    const parsed = parseBrainContextEnvelope(injected);
+    expect(parsed?.memories).toEqual([{ texte: "ligne 1\nligne 2" }, { texte: "autre" }]);
+  });
+
+  it("preserves multi-line user text after the envelope", () => {
+    const injected = injectBrainContext("- souvenir", "projet", "ligne A\n\nligne B");
+    expect(parseBrainContextEnvelope(injected)?.userText).toBe("ligne A\n\nligne B");
+  });
+
+  it("parses a rejected lead without motif", () => {
+    const blob = formatRecall([{ texte: "écartée", statut: "rejete" }]);
+    const injected = injectBrainContext(blob, "projet", "q");
+    expect(parseBrainContextEnvelope(injected)?.memories).toEqual([
+      { texte: "écartée", rejete: true },
+    ]);
+  });
+
+  it("returns null for plain user text and for user text mentioning the tag inline", () => {
+    expect(parseBrainContextEnvelope("juste une question")).toBeNull();
+    expect(parseBrainContextEnvelope("parle-moi de <contexte_memoire> stp")).toBeNull();
   });
 });
 
