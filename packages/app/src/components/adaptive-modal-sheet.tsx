@@ -612,6 +612,10 @@ export function AdaptiveModalSheet({
         enablePanDownToClose
         backgroundComponent={SheetBackground}
         handleIndicatorStyle={handleIndicatorStyle}
+        // Cap the sheet at the safe-area top so `keyboardBehavior="extend"` stops
+        // below the status bar instead of sliding the header under the notch/clock
+        // when the keyboard opens.
+        topInset={insets.top}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         accessible={false}

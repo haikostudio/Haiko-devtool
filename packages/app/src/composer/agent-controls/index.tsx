@@ -984,6 +984,11 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
 
   const handleOpenOptions = useCallback(() => handleOpenSheet("options"), [handleOpenSheet]);
 
+  const drawerBodyStyle = useMemo(
+    () => [styles.drawerBody, !hasContext && styles.drawerBodyNoContext],
+    [hasContext],
+  );
+
   const renderModelTrigger = useCallback(
     ({
       selectedModelLabel,
@@ -1059,7 +1064,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         onClose={handleCloseSheet}
         testID="agent-options-sheet"
       >
-        <View style={styles.drawerBody}>
+        <View style={drawerBodyStyle}>
           {hasContext ? (
             <View style={styles.drawerContextRow}>
               <Text style={styles.drawerContextLabel}>{t("agentControls.context.saturation")}</Text>
@@ -1843,6 +1848,12 @@ const styles = StyleSheet.create((theme) => ({
   drawerBody: {
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[2],
+  },
+  // Without a leading context row, the first section title sits flush under the
+  // header divider and reads as glued to it. Add breathing room so the section
+  // header stands apart, matching the space the context row used to provide.
+  drawerBodyNoContext: {
+    paddingTop: theme.spacing[2],
   },
   drawerSection: {
     gap: theme.spacing[1],

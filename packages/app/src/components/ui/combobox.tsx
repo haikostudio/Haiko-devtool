@@ -32,6 +32,7 @@ import {
   BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, File, Folder, Search } from "lucide-react-native";
 import {
   flip,
@@ -950,6 +951,7 @@ interface MobileBodyProps {
 }
 
 function MobileComboboxBody(props: MobileBodyProps): ReactElement {
+  const insets = useSafeAreaInsets();
   const renderBackdrop = useCallback(
     (backdropProps: React.ComponentProps<typeof BottomSheetBackdrop>) => (
       <BottomSheetBackdrop
@@ -992,6 +994,10 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
       enablePanDownToClose
       backgroundComponent={ComboboxSheetBackground}
       handleIndicatorStyle={props.handleIndicatorStyle}
+      // Cap the sheet at the safe-area top so the handle and header stay below
+      // the status bar/notch instead of sliding under the clock at the tall snap
+      // point (and when `keyboardBehavior="extend"` grows the sheet).
+      topInset={insets.top}
       keyboardBehavior="extend"
       keyboardBlurBehavior="none"
       presentation={props.presentation}

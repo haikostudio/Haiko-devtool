@@ -11,13 +11,13 @@ open-source upstream while keeping a thin custom layer on top.
 
 The branch is **upstream `origin/main` + a thin custom layer** (5 commits):
 
-| Commit | What |
-| --- | --- |
-| `Add project autostart and launcher infrastructure` | `ops/project-autostart`, `ops/project-launcher` |
-| `ci: add self-host web build workflow` | `.github/workflows/build-web-selfhost.yml` |
-| `fix(attachments): compress oversized images…` | client-side image compression + send-budget guard |
-| `feat(relay): self-host chunking + e2ee…` | relay chunking for >1 MiB payloads (Cloudflare 1009) |
-| `style: apply oxfmt…` | formatting of the above |
+| Commit                                              | What                                                 |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| `Add project autostart and launcher infrastructure` | `ops/project-autostart`, `ops/project-launcher`      |
+| `ci: add self-host web build workflow`              | `.github/workflows/build-web-selfhost.yml`           |
+| `fix(attachments): compress oversized images…`      | client-side image compression + send-budget guard    |
+| `feat(relay): self-host chunking + e2ee…`           | relay chunking for >1 MiB payloads (Cloudflare 1009) |
+| `style: apply oxfmt…`                               | formatting of the above                              |
 
 Everything else comes from upstream. The **GitHub repo picker is intentionally
 NOT custom** — upstream ships its own (`project.add`,
