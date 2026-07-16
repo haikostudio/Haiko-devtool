@@ -39,6 +39,9 @@ export interface BrainSouvenir {
   score?: number;
 }
 
+// "apercu" is no longer emitted (the overview tier injected unrelated noise on
+// every recall miss) but stays in the wire enum: persisted timeline items may
+// still carry it.
 export type BrainPortee = "projet" | "global" | "apercu";
 
 export interface BrainRecallResult {
@@ -57,17 +60,6 @@ export interface BrainMemoryClientOptions {
   /** Allow falling back to the whole (unscoped) brain when the project scope is empty. */
   globalFallback?: boolean;
 }
-
-// Broad queries covering the main axes of a personal memory — the Cerveau's
-// global map (/v1/carte) is NOT project-scoped, so the "summary of my memory"
-// overview is built here: several broad scoped searches, aggregated + deduped.
-const OVERVIEW_QUERIES = [
-  "profil de l'utilisateur, qui il est, informations personnelles",
-  "préférences, goûts, habitudes",
-  "projets en cours, objectifs",
-  "travail, activité professionnelle",
-  "événements récents, décisions prises",
-] as const;
 
 export class BrainMemoryClient {
   private readonly logger: Logger;
@@ -134,53 +126,10 @@ export class BrainMemoryClient {
   }
 
   /**
-   * Broad overview of the scoped memory: aggregates several wide searches.
-   * Deduped by id. Empty list if the memory is empty or on error.
-   */
-  private async overview(options?: {
-    projet?: string;
-    perQuery?: number;
-    includeGlobal?: boolean;
-  }): Promise<BrainSouvenir[]> {
-    const perQuery = options?.perQuery ?? 4;
-    const scopes: (string | undefined)[] = [options?.projet];
-    if (options?.includeGlobal && options?.projet) {
-      scopes.push(undefined); // global after the scope → client's memories first
-    }
-    const jobs: { q: string; projet: string | undefined }[] = [];
-    for (const projet of scopes) {
-      for (const q of OVERVIEW_QUERIES) {
-        jobs.push({ q, projet });
-      }
-    }
-    // Bounded concurrency: too many parallel searches bring the Cerveau's rerank
-    // to its knees (everything then times out). 3 at a time stays well under.
-    const batches = await runWithConcurrency(
-      jobs,
-      3,
-      (job) => this.search(job.q, { k: perQuery, projet: job.projet }),
-      this.logger,
-    );
-    const seen = new Set<string>();
-    const out: BrainSouvenir[] = [];
-    for (const batch of batches) {
-      for (const s of batch) {
-        const sid = s.id ?? (s.texte ?? "").slice(0, 80);
-        if (seen.has(sid)) {
-          continue;
-        }
-        seen.add(sid);
-        out.push(s);
-      }
-    }
-    return out;
-  }
-
-  /**
-   * Recall relevant memories — ALWAYS returns context if the memory is not empty.
-   * Three progressive tiers (like a person: precise memory → broader → general
-   * knowledge): scoped search → global fallback if empty → overview if nothing
-   * matched semantically (meta questions like "summarize your memory").
+   * Recall relevant memories for a prompt: scoped search, then a global
+   * fallback if the project scope is empty. A miss stays a miss — injecting
+   * broad "overview" memories on unrelated prompts is pure noise (the agent can
+   * still call the memory MCP tool for meta questions like "résume ta mémoire").
    */
   async recall(
     query: string,
@@ -197,17 +146,6 @@ export class BrainMemoryClient {
       resultats = await this.search(query, { k, projet: undefined, session: options?.session });
       if (resultats.length > 0) {
         portee = "global";
-      }
-    }
-    if (resultats.length === 0) {
-      const overview = await this.overview({
-        projet: options?.projet,
-        perQuery: 4,
-        includeGlobal: this.globalFallback,
-      });
-      resultats = overview.slice(0, Math.max(k, 8));
-      if (resultats.length > 0) {
-        portee = "apercu";
       }
     }
     return {
@@ -313,29 +251,4 @@ export function toTimelineMemories(
     }
   }
   return out;
-}
-
-async function runWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<R>,
-  logger: Logger,
-): Promise<R[]> {
-  const results: R[] = Array.from({ length: items.length });
-  let cursor = 0;
-  async function pump(): Promise<void> {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      try {
-        results[index] = await worker(items[index]);
-      } catch (err) {
-        logger.debug({ err }, "cerveau: overview sub-search failed");
-        results[index] = [] as unknown as R;
-      }
-    }
-  }
-  const pumps = Array.from({ length: Math.min(limit, Math.max(items.length, 1)) }, () => pump());
-  await Promise.all(pumps);
-  return results;
 }

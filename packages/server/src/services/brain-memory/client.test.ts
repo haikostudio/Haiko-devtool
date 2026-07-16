@@ -99,9 +99,23 @@ describe("BrainMemoryClient.recall", () => {
       fetch: fetchMock as unknown as typeof fetch,
     });
     const result = await client.recall("q", { projet: "paseo" });
-    // Only the scoped search + the overview attempt (which also returns empty).
     expect(result.count).toBe(0);
     expect(result.blob).toBe("");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a full miss injects nothing — no broad overview searches", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ resultats: [] }));
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("question technique sans souvenir", { projet: "paseo" });
+    expect(result.count).toBe(0);
+    expect(result.blob).toBe("");
+    // Scoped search + global fallback only — never the old "aperçu" fan-out.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("is best-effort: a throwing fetch yields empty context", async () => {
