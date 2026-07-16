@@ -42,6 +42,33 @@ import {
   ScheduleUpdateResponseSchema,
 } from "./schedule/rpc-schemas.js";
 import {
+  TasksBoardGetRequestSchema,
+  TasksBoardSubscribeRequestSchema,
+  TasksBoardUnsubscribeRequestSchema,
+  TasksFolderCreateRequestSchema,
+  TasksFolderUpdateRequestSchema,
+  TasksFolderDeleteRequestSchema,
+  TasksTaskCreateRequestSchema,
+  TasksTaskUpdateRequestSchema,
+  TasksTaskMoveRequestSchema,
+  TasksTaskDeleteRequestSchema,
+  TasksTaskEstimateRequestSchema,
+  TasksTaskRunNowRequestSchema,
+  TasksBoardGetResponseSchema,
+  TasksBoardSubscribeResponseSchema,
+  TasksBoardUnsubscribeResponseSchema,
+  TasksFolderCreateResponseSchema,
+  TasksFolderUpdateResponseSchema,
+  TasksFolderDeleteResponseSchema,
+  TasksTaskCreateResponseSchema,
+  TasksTaskUpdateResponseSchema,
+  TasksTaskMoveResponseSchema,
+  TasksTaskDeleteResponseSchema,
+  TasksTaskEstimateResponseSchema,
+  TasksTaskRunNowResponseSchema,
+  TasksBoardUpdateMessageSchema,
+} from "./tasks/rpc-schemas.js";
+import {
   LoopRunRequestSchema,
   LoopListRequestSchema,
   LoopInspectRequestSchema,
@@ -2319,6 +2346,18 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectRequestSchema,
   LoopLogsRequestSchema,
   LoopStopRequestSchema,
+  TasksBoardGetRequestSchema,
+  TasksBoardSubscribeRequestSchema,
+  TasksBoardUnsubscribeRequestSchema,
+  TasksFolderCreateRequestSchema,
+  TasksFolderUpdateRequestSchema,
+  TasksFolderDeleteRequestSchema,
+  TasksTaskCreateRequestSchema,
+  TasksTaskUpdateRequestSchema,
+  TasksTaskMoveRequestSchema,
+  TasksTaskDeleteRequestSchema,
+  TasksTaskEstimateRequestSchema,
+  TasksTaskRunNowRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -2529,6 +2568,8 @@ export const ServerInfoStatusPayloadSchema = z
         sidebarOrderSync: z.boolean().optional(),
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
         brainMemory: z.boolean().optional(),
+        // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
+        tasksBoard: z.boolean().optional(),
       })
       .optional(),
   })
@@ -4644,6 +4685,19 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   LoopInspectResponseSchema,
   LoopLogsResponseSchema,
   LoopStopResponseSchema,
+  TasksBoardGetResponseSchema,
+  TasksBoardSubscribeResponseSchema,
+  TasksBoardUnsubscribeResponseSchema,
+  TasksFolderCreateResponseSchema,
+  TasksFolderUpdateResponseSchema,
+  TasksFolderDeleteResponseSchema,
+  TasksTaskCreateResponseSchema,
+  TasksTaskUpdateResponseSchema,
+  TasksTaskMoveResponseSchema,
+  TasksTaskDeleteResponseSchema,
+  TasksTaskEstimateResponseSchema,
+  TasksTaskRunNowResponseSchema,
+  TasksBoardUpdateMessageSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
 ]);

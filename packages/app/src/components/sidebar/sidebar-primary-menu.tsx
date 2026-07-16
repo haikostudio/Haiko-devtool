@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Menu,
   Plus,
+  SquareKanban,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -34,6 +35,7 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedHistory = withUnistyles(History);
 const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedLayoutDashboard = withUnistyles(LayoutDashboard);
+const ThemedSquareKanban = withUnistyles(SquareKanban);
 
 const newWorkspaceLeadingIcon = (
   <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
@@ -47,6 +49,9 @@ const sessionsLeadingIcon = (
 const schedulesLeadingIcon = (
   <ThemedCalendarClock size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
+const tasksLeadingIcon = (
+  <ThemedSquareKanban size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+);
 
 interface SidebarPrimaryMenuProps {
   menuLabel: string;
@@ -54,10 +59,12 @@ interface SidebarPrimaryMenuProps {
   dashboardLabel: string;
   sessionsLabel: string;
   schedulesLabel: string;
+  tasksLabel: string;
   newWorkspaceKeys: ShortcutKey[][] | null;
   onViewDashboard: () => void;
   onViewSessions: () => void;
   onViewSchedules: () => void;
+  onViewTasks: () => void;
   /** Runs before navigating to the new-workspace screen (e.g. closing the mobile sidebar). */
   onBeforeNavigate?: () => void;
   testID?: string;
@@ -73,10 +80,12 @@ export function SidebarPrimaryMenu({
   dashboardLabel,
   sessionsLabel,
   schedulesLabel,
+  tasksLabel,
   newWorkspaceKeys,
   onViewDashboard,
   onViewSessions,
   onViewSchedules,
+  onViewTasks,
   onBeforeNavigate,
   testID,
 }: SidebarPrimaryMenuProps) {
@@ -161,6 +170,9 @@ export function SidebarPrimaryMenu({
           onSelect={onViewDashboard}
         >
           {dashboardLabel}
+        </DropdownMenuItem>
+        <DropdownMenuItem testID="sidebar-tasks" leading={tasksLeadingIcon} onSelect={onViewTasks}>
+          {tasksLabel}
         </DropdownMenuItem>
         <DropdownMenuItem
           testID="sidebar-sessions"

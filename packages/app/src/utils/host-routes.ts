@@ -423,6 +423,21 @@ export function buildSchedulesRoute() {
   return "/schedules" as const;
 }
 
+export function buildTasksRoute(params?: { host?: string; project?: string; folder?: string }) {
+  const query = new URLSearchParams();
+  if (params?.host) {
+    query.set("host", params.host);
+  }
+  if (params?.project) {
+    query.set("project", params.project);
+  }
+  if (params?.folder) {
+    query.set("folder", params.folder);
+  }
+  const suffix = query.toString();
+  return suffix ? (`/tasks?${suffix}` as const) : ("/tasks" as const);
+}
+
 export function buildOpenProjectRoute() {
   return "/open-project" as const;
 }

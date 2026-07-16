@@ -886,6 +886,7 @@ function RootStack() {
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="sessions" />
         <Stack.Screen name="schedules" />
+        <Stack.Screen name="tasks" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />

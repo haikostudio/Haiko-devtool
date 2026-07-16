@@ -119,6 +119,12 @@ import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
 import { QuotaResetWatcher } from "./quota-reset-watcher.js";
 import { ScheduleService } from "./schedule/service.js";
+import { ProviderUsageService } from "../services/quota-fetcher/service.js";
+import { TaskBoardStore } from "./tasks/store.js";
+import { TaskBoardService } from "./tasks/service.js";
+import { AgentTaskSyncService } from "./tasks/agent-sync.js";
+import { TaskEstimator } from "./tasks/estimator.js";
+import { TaskScheduler } from "./tasks/scheduler.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -1086,6 +1092,41 @@ export async function createPaseoDaemon(
   logger.info({ elapsed: elapsed() }, "Schedule service initialized");
   const quotaResetWatcher = new QuotaResetWatcher({ agentManager, logger });
   quotaResetWatcher.start();
+  const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
+  const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
+  const agentTaskSync = new AgentTaskSyncService({
+    agentManager,
+    workspaceRegistry,
+    taskBoardService,
+    logger,
+  });
+  agentTaskSync.start();
+  const taskEstimator = new TaskEstimator({
+    agentManager,
+    createAgent,
+    taskBoardService,
+    projectRegistry,
+    logger,
+  });
+  const taskScheduler = new TaskScheduler({
+    taskBoardService,
+    taskEstimator,
+    projectRegistry,
+    agentManager,
+    createAgent,
+    createPaseoWorktreeWorkspace: async (input) => {
+      const result = await createPaseoWorktreeForTools(input);
+      await emitWorkspaceUpdatesExternal([result.workspace.workspaceId]);
+      return result;
+    },
+    providerUsageService: new ProviderUsageService({ logger }),
+    logger,
+  });
+  taskBoardService.setOnTaskScheduled((projectId, taskId) => {
+    taskEstimator.requestEstimate(projectId, taskId);
+  });
+  taskScheduler.start();
+  logger.info({ elapsed: elapsed() }, "Task board services initialized");
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");
   const persistedRecords = await agentStorage.list();
   logger.info(
@@ -1392,6 +1433,7 @@ export async function createPaseoDaemon(
               browserToolsBroker,
               config.brainMemory,
             );
+            wsServer.setTasksServices({ taskBoardService, taskEstimator, taskScheduler });
 
             if (relayEnabled) {
               const offer = await createConnectionOfferV2({
@@ -1465,6 +1507,8 @@ export async function createPaseoDaemon(
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
     quotaResetWatcher.stop();
+    taskScheduler.stop();
+    agentTaskSync.stop();
     await relayTransport?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();

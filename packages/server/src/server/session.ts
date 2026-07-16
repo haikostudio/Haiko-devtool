@@ -146,6 +146,10 @@ import {
   createGitMetadataGenerator,
 } from "./session/checkout/git-metadata-generator.js";
 import { ChatScheduleLoopSession } from "./session/chat/chat-schedule-loop-session.js";
+import { TasksSession } from "./session/tasks/tasks-session.js";
+import type { TaskBoardService } from "./tasks/service.js";
+import type { TaskEstimator } from "./tasks/estimator.js";
+import type { TaskScheduler } from "./tasks/scheduler.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
@@ -438,6 +442,9 @@ export interface SessionOptions {
   chatService: FileBackedChatService;
   scheduleService: ScheduleService;
   loopService: LoopService;
+  taskBoardService?: TaskBoardService;
+  taskEstimator?: TaskEstimator | null;
+  taskScheduler?: TaskScheduler | null;
   checkoutDiffManager: CheckoutDiffManager;
   github?: GitHubService;
   createAgentMcpTransport?: AgentMcpTransportFactory;
@@ -602,6 +609,7 @@ export class Session {
   private readonly voiceSession: VoiceSession;
   private readonly checkoutSession: CheckoutSession;
   private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
+  private readonly tasksSession: TasksSession | null;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
@@ -633,6 +641,9 @@ export class Session {
       chatService,
       scheduleService,
       loopService,
+      taskBoardService,
+      taskEstimator,
+      taskScheduler,
       checkoutDiffManager,
       github,
       renameCurrentBranch,
@@ -768,6 +779,17 @@ export class Session {
       clientId: this.clientId,
       logger: this.sessionLogger,
     });
+    this.tasksSession = taskBoardService
+      ? new TasksSession({
+          host: {
+            emit: (msg) => this.emit(msg),
+          },
+          taskBoardService,
+          taskEstimator: taskEstimator ?? null,
+          taskScheduler: taskScheduler ?? null,
+          logger: this.sessionLogger,
+        })
+      : null;
     this.providerCatalogSession = new ProviderCatalogSession({
       host: {
         emit: (msg) => this.emit(msg),
@@ -1408,6 +1430,7 @@ export class Session {
       this.dispatchProviderMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
       this.dispatchChatScheduleLoopMessage(msg) ??
+      this.dispatchTasksMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
   }
@@ -1785,6 +1808,41 @@ export class Session {
         return this.chatScheduleLoopSession.handleScheduleRunOnceRequest(msg);
       case "schedule/update":
         return this.chatScheduleLoopSession.handleScheduleUpdateRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchTasksMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    const tasksSession = this.tasksSession;
+    if (!tasksSession) {
+      return undefined;
+    }
+    switch (msg.type) {
+      case "tasks.board.get.request":
+        return tasksSession.handleBoardGetRequest(msg);
+      case "tasks.board.subscribe.request":
+        return tasksSession.handleBoardSubscribeRequest(msg);
+      case "tasks.board.unsubscribe.request":
+        return tasksSession.handleBoardUnsubscribeRequest(msg);
+      case "tasks.folder.create.request":
+        return tasksSession.handleFolderCreateRequest(msg);
+      case "tasks.folder.update.request":
+        return tasksSession.handleFolderUpdateRequest(msg);
+      case "tasks.folder.delete.request":
+        return tasksSession.handleFolderDeleteRequest(msg);
+      case "tasks.task.create.request":
+        return tasksSession.handleTaskCreateRequest(msg);
+      case "tasks.task.update.request":
+        return tasksSession.handleTaskUpdateRequest(msg);
+      case "tasks.task.move.request":
+        return tasksSession.handleTaskMoveRequest(msg);
+      case "tasks.task.delete.request":
+        return tasksSession.handleTaskDeleteRequest(msg);
+      case "tasks.task.estimate.request":
+        return tasksSession.handleTaskEstimateRequest(msg);
+      case "tasks.task.run_now.request":
+        return tasksSession.handleTaskRunNowRequest(msg);
       default:
         return undefined;
     }
@@ -6134,6 +6192,7 @@ export class Session {
       this.unsubscribeTerminalWorkspaceContributionEvents = null;
     }
     this.providerCatalogSession.dispose();
+    this.tasksSession?.dispose();
 
     await this.voiceSession.cleanup();
 

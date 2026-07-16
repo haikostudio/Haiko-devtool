@@ -14,6 +14,9 @@ import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js
 import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
+import type { TaskBoardService } from "./tasks/service.js";
+import type { TaskEstimator } from "./tasks/estimator.js";
+import type { TaskScheduler } from "./tasks/scheduler.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
@@ -468,6 +471,9 @@ export class VoiceAssistantWebSocketServer {
   private readonly providerUsageService: ProviderUsageService;
   private readonly brainMemory: BrainMemoryClient | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
+  private taskBoardService: TaskBoardService | null = null;
+  private taskEstimator: TaskEstimator | null = null;
+  private taskScheduler: TaskScheduler | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
   private acceptingConnections = true;
@@ -1072,6 +1078,9 @@ export class VoiceAssistantWebSocketServer {
       chatService: this.chatService,
       loopService: this.loopService,
       scheduleService: this.scheduleService,
+      taskBoardService: this.taskBoardService ?? undefined,
+      taskEstimator: this.taskEstimator,
+      taskScheduler: this.taskScheduler,
       checkoutDiffManager: this.checkoutDiffManager,
       github: this.github,
       workspaceGitService: this.workspaceGitService,
@@ -1252,6 +1261,16 @@ export class VoiceAssistantWebSocketServer {
     );
   }
 
+  public setTasksServices(services: {
+    taskBoardService: TaskBoardService;
+    taskEstimator: TaskEstimator | null;
+    taskScheduler: TaskScheduler | null;
+  }): void {
+    this.taskBoardService = services.taskBoardService;
+    this.taskEstimator = services.taskEstimator;
+    this.taskScheduler = services.taskScheduler;
+  }
+
   private buildServerInfoStatusPayload(): ServerInfoStatusPayload {
     return {
       status: "server_info",
@@ -1307,6 +1326,8 @@ export class VoiceAssistantWebSocketServer {
         sidebarOrderSync: true,
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
         brainMemory: !!this.brainMemory,
+        // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
+        tasksBoard: !!this.taskBoardService,
       },
     };
   }

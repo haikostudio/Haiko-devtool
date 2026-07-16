@@ -4115,6 +4115,124 @@ export class DaemonClient {
     });
   }
 
+  // ============================================================================
+  // Tasks board (per-project kanban)
+  // ============================================================================
+
+  async tasksBoardGet(projectId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.get.response">({
+      requestId,
+      message: { type: "tasks.board.get.request", projectId },
+    });
+  }
+
+  async tasksBoardSubscribe(projectId: string, subscriptionId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.subscribe.response">({
+      requestId,
+      message: { type: "tasks.board.subscribe.request", projectId, subscriptionId },
+    });
+  }
+
+  async tasksBoardUnsubscribe(subscriptionId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.unsubscribe.response">({
+      requestId,
+      message: { type: "tasks.board.unsubscribe.request", subscriptionId },
+    });
+  }
+
+  async tasksFolderCreate(input: { projectId: string; name: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.create.response">({
+      requestId,
+      message: { type: "tasks.folder.create.request", ...input },
+    });
+  }
+
+  async tasksFolderUpdate(
+    input: { projectId: string; folderId: string; name?: string; order?: number },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.update.response">({
+      requestId,
+      message: { type: "tasks.folder.update.request", ...input },
+    });
+  }
+
+  async tasksFolderDelete(input: { projectId: string; folderId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.delete.response">({
+      requestId,
+      message: { type: "tasks.folder.delete.request", ...input },
+    });
+  }
+
+  async tasksTaskCreate(
+    input: {
+      projectId: string;
+      folderId: string;
+      title: string;
+      description?: string;
+      tags?: string[];
+      column?: "backlog" | "scheduled" | "in_progress" | "done";
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.create.response">({
+      requestId,
+      message: { type: "tasks.task.create.request", ...input },
+    });
+  }
+
+  async tasksTaskUpdate(
+    input: {
+      projectId: string;
+      taskId: string;
+      title?: string;
+      description?: string | null;
+      tags?: string[];
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.update.response">({
+      requestId,
+      message: { type: "tasks.task.update.request", ...input },
+    });
+  }
+
+  async tasksTaskMove(
+    input: {
+      projectId: string;
+      taskId: string;
+      column: "backlog" | "scheduled" | "in_progress" | "done";
+      index: number;
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.move.response">({
+      requestId,
+      message: { type: "tasks.task.move.request", ...input },
+    });
+  }
+
+  async tasksTaskDelete(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.delete.response">({
+      requestId,
+      message: { type: "tasks.task.delete.request", ...input },
+    });
+  }
+
+  async tasksTaskEstimate(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.estimate.response">({
+      requestId,
+      message: { type: "tasks.task.estimate.request", ...input },
+    });
+  }
+
+  async tasksTaskRunNow(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.run_now.response">({
+      requestId,
+      message: { type: "tasks.task.run_now.request", ...input },
+    });
+  }
+
   async listCommands(options: ListCommandsOptions): Promise<ListCommandsPayload>;
   async listCommands(agentId: string, requestId?: string): Promise<ListCommandsPayload>;
   async listCommands(

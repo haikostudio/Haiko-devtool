@@ -46,6 +46,7 @@ import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import {
   buildDashboardRoute,
+  buildTasksRoute,
   buildOpenProjectRoute,
   buildSchedulesRoute,
   buildSessionsRoute,
@@ -98,6 +99,7 @@ interface SidebarLabels {
   options: string;
   addHost: string;
   dashboard: string;
+  tasks: string;
 }
 
 interface MobileSidebarProps extends SidebarSharedProps {
@@ -107,6 +109,7 @@ interface MobileSidebarProps extends SidebarSharedProps {
   handleViewDashboardNavigate: () => void;
   handleViewMoreNavigate: () => void;
   handleViewSchedulesNavigate: () => void;
+  handleViewTasksNavigate: () => void;
 }
 
 interface DesktopSidebarProps extends SidebarSharedProps {
@@ -117,6 +120,7 @@ interface DesktopSidebarProps extends SidebarSharedProps {
   handleViewDashboard: () => void;
   handleViewMore: () => void;
   handleViewSchedules: () => void;
+  handleViewTasks: () => void;
 }
 
 export const LeftSidebar = memo(function LeftSidebar({
@@ -224,6 +228,10 @@ export const LeftSidebar = memo(function LeftSidebar({
     router.push(buildSchedulesRoute());
   }, []);
 
+  const handleViewTasksNavigate = useCallback(() => {
+    router.push(buildTasksRoute());
+  }, []);
+
   const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const labels = useMemo(
     (): SidebarLabels => ({
@@ -240,6 +248,7 @@ export const LeftSidebar = memo(function LeftSidebar({
       options: t("sidebar.actions.options"),
       addHost: t("settings.addHost"),
       dashboard: t("dashboard.title"),
+      tasks: t("tasks.title"),
     }),
     [t],
   );
@@ -279,6 +288,7 @@ export const LeftSidebar = memo(function LeftSidebar({
           handleViewDashboardNavigate={handleViewDashboardNavigate}
           handleViewMoreNavigate={handleViewMoreNavigate}
           handleViewSchedulesNavigate={handleViewSchedulesNavigate}
+          handleViewTasksNavigate={handleViewTasksNavigate}
         />
       </RetainedPanelActivity>
     );
@@ -299,6 +309,7 @@ export const LeftSidebar = memo(function LeftSidebar({
         handleViewDashboard={handleViewDashboardNavigate}
         handleViewMore={handleViewMoreNavigate}
         handleViewSchedules={handleViewSchedulesNavigate}
+        handleViewTasks={handleViewTasksNavigate}
       />
     </RetainedPanelActivity>
   );
@@ -453,6 +464,7 @@ function MobileSidebar({
   handleViewDashboardNavigate,
   handleViewMoreNavigate,
   handleViewSchedulesNavigate,
+  handleViewTasksNavigate,
 }: MobileSidebarProps) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
@@ -471,6 +483,11 @@ function MobileSidebar({
     closeSidebar();
     handleViewSchedulesNavigate();
   }, [closeSidebar, handleViewSchedulesNavigate]);
+
+  const handleViewTasks = useCallback(() => {
+    closeSidebar();
+    handleViewTasksNavigate();
+  }, [closeSidebar, handleViewTasksNavigate]);
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -500,10 +517,12 @@ function MobileSidebar({
             dashboardLabel={labels.dashboard}
             sessionsLabel={labels.sessions}
             schedulesLabel={labels.schedules}
+            tasksLabel={labels.tasks}
             newWorkspaceKeys={newWorkspaceKeys}
             onViewDashboard={handleViewDashboard}
             onViewSessions={handleViewMore}
             onViewSchedules={handleViewSchedules}
+            onViewTasks={handleViewTasks}
             onBeforeNavigate={closeSidebar}
             testID="sidebar-primary-menu"
           />
@@ -592,6 +611,7 @@ function DesktopSidebar({
   handleViewDashboard,
   handleViewMore,
   handleViewSchedules,
+  handleViewTasks,
 }: DesktopSidebarProps) {
   const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
@@ -700,10 +720,12 @@ function DesktopSidebar({
               dashboardLabel={labels.dashboard}
               sessionsLabel={labels.sessions}
               schedulesLabel={labels.schedules}
+              tasksLabel={labels.tasks}
               newWorkspaceKeys={newWorkspaceKeys}
               onViewDashboard={handleViewDashboard}
               onViewSessions={handleViewMore}
               onViewSchedules={handleViewSchedules}
+              onViewTasks={handleViewTasks}
               testID="sidebar-primary-menu"
             />
           </View>
