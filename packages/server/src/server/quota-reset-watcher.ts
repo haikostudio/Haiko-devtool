@@ -20,6 +20,23 @@ const KEEPALIVE_PROMPT =
   "Automated quota keep-alive: this throwaway request restarts your Claude 5-hour " +
   'usage window. Reply with a single word ("OK") and take no other action.';
 
+/**
+ * Overnight window during which the loop pauses so it stops burning the cycle.
+ * With the default 01:00–06:00, the last keep-alive lands before 01:00, so its
+ * 5-hour window always lapses before 06:00; when the loop resumes at 06:00 it
+ * fires immediately and re-anchors a fresh window to the morning.
+ */
+const DEFAULT_QUIET_HOURS: QuietHours = { startHour: 1, endHour: 6, timeZone: "Europe/Paris" };
+
+export interface QuietHours {
+  /** Local hour (0-23) at which the loop stops firing, inclusive. */
+  startHour: number;
+  /** Local hour (0-23) at which the loop resumes, exclusive. */
+  endHour: number;
+  /** IANA timezone the hours are interpreted in. */
+  timeZone: string;
+}
+
 /** Starts a fresh throwaway Claude conversation to restart the 5-hour window. */
 export type KeepAliveRunner = (params: { cwd: string }) => Promise<void>;
 
@@ -30,6 +47,8 @@ export interface QuotaResetWatcherOptions {
   providerUsageService?: ProviderUsageService;
   pollIntervalMs?: number;
   refireCooldownMs?: number;
+  /** Overnight pause window. Defaults to 01:00–06:00 Europe/Paris. */
+  quietHours?: QuietHours;
   now?: () => number;
   /** Injected for tests; defaults to the throwaway-agent runner. */
   runKeepAlive?: KeepAliveRunner;
@@ -53,6 +72,7 @@ export class QuotaResetWatcher {
   private readonly providerUsageService: ProviderUsageService;
   private readonly pollIntervalMs: number;
   private readonly refireCooldownMs: number;
+  private readonly quietHours: QuietHours;
   private readonly now: () => number;
   private readonly runKeepAlive: KeepAliveRunner;
 
@@ -69,6 +89,7 @@ export class QuotaResetWatcher {
     this.logger = options.logger.child({ module: "quota-reset-watcher" });
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.refireCooldownMs = options.refireCooldownMs ?? DEFAULT_REFIRE_COOLDOWN_MS;
+    this.quietHours = options.quietHours ?? DEFAULT_QUIET_HOURS;
     this.providerUsageService =
       options.providerUsageService ??
       // Keep the cache short so we notice a lapsed window within roughly one
@@ -98,6 +119,13 @@ export class QuotaResetWatcher {
 
   /** Exposed for tests: run a single poll synchronously. */
   async tick(): Promise<void> {
+    // Overnight pause: don't fire during quiet hours. We leave lastFireAtMs
+    // untouched so that when the loop resumes it fires promptly on the first
+    // lapsed window and re-anchors a fresh window to the morning.
+    if (this.isQuietTime(this.now())) {
+      return;
+    }
+
     const usage = await this.providerUsageService.listUsage();
     const claude = usage.providers.find((p) => p.providerId === CLAUDE_PROVIDER_ID);
     // The provider only reports usable data when Claude is authenticated. When
@@ -129,6 +157,26 @@ export class QuotaResetWatcher {
     const cwd = this.pickCwd();
     this.logger.info({ cwd }, "Claude 5-hour window lapsed — restarting the countdown");
     await this.runKeepAlive({ cwd });
+  }
+
+  /** True when the given instant falls inside the configured quiet hours. */
+  private isQuietTime(nowMs: number): boolean {
+    const { startHour, endHour, timeZone } = this.quietHours;
+    if (startHour === endHour) {
+      return false;
+    }
+    const hour =
+      Number(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone,
+          hour: "numeric",
+          hour12: false,
+        }).format(new Date(nowMs)),
+      ) % 24;
+    // Handle same-day windows (1–6) and wrap-around windows (23–6) alike.
+    return startHour < endHour
+      ? hour >= startHour && hour < endHour
+      : hour >= startHour || hour < endHour;
   }
 
   /**

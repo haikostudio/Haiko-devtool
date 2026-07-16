@@ -57,10 +57,14 @@ function makeWatcher(options?: {
     logger,
     now: options?.now,
     refireCooldownMs: 10 * 60_000,
+    // Interpret quiet hours in UTC so tests can pick unambiguous instants.
+    quietHours: { startHour: 1, endHour: 6, timeZone: "UTC" },
     runKeepAlive,
   });
   return { watcher, runKeepAlive, setUsage: (usage) => (current = usage) };
 }
+
+const utc = (iso: string): number => Date.parse(iso);
 
 describe("QuotaResetWatcher", () => {
   it("does nothing while a window is still counting down", async () => {
@@ -71,14 +75,14 @@ describe("QuotaResetWatcher", () => {
   });
 
   it("restarts the countdown once the window lapses", async () => {
-    let nowMs = 0;
+    let nowMs = utc("2026-07-16T09:00:00Z");
     const h = makeWatcher({ now: () => nowMs });
 
-    h.setUsage(claudeUsage(new Date(3_600_000).toISOString()));
+    h.setUsage(claudeUsage("2026-07-16T10:00:00Z"));
     await h.watcher.tick();
     expect(h.runKeepAlive).not.toHaveBeenCalled();
 
-    nowMs = 3_600_001;
+    nowMs = utc("2026-07-16T10:00:01Z");
     await h.watcher.tick();
     expect(h.runKeepAlive).toHaveBeenCalledTimes(1);
     // Runs in the most recent Claude agent's directory.
@@ -93,34 +97,36 @@ describe("QuotaResetWatcher", () => {
   });
 
   it("does not fire again until the cooldown elapses", async () => {
-    let nowMs = 0;
+    let nowMs = utc("2026-07-16T09:00:00Z");
     const h = makeWatcher({ now: () => nowMs });
     h.setUsage(claudeUsage(null));
 
     await h.watcher.tick();
     expect(h.runKeepAlive).toHaveBeenCalledTimes(1);
 
-    nowMs = 60_000;
+    nowMs = utc("2026-07-16T09:01:00Z");
     await h.watcher.tick();
     expect(h.runKeepAlive).toHaveBeenCalledTimes(1);
 
-    nowMs = 11 * 60_000;
+    nowMs = utc("2026-07-16T09:11:00Z");
     await h.watcher.tick();
     expect(h.runKeepAlive).toHaveBeenCalledTimes(2);
   });
 
   it("clears its fired state once a fresh window appears", async () => {
-    let nowMs = 0;
+    let nowMs = utc("2026-07-16T09:00:00Z");
     const h = makeWatcher({ now: () => nowMs });
     h.setUsage(claudeUsage(null));
     await h.watcher.tick();
     expect(h.runKeepAlive).toHaveBeenCalledTimes(1);
 
-    nowMs = 120_000;
-    h.setUsage(claudeUsage(new Date(nowMs + 5 * 3_600_000).toISOString()));
+    // Fresh window registered, 5 hours out → active, state resets.
+    nowMs = utc("2026-07-16T09:02:00Z");
+    h.setUsage(claudeUsage("2026-07-16T14:02:00Z"));
     await h.watcher.tick();
 
-    nowMs = 120_000 + 5 * 3_600_000 + 1;
+    // Window lapses again mid-afternoon → fires immediately (state cleared).
+    nowMs = utc("2026-07-16T14:02:01Z");
     h.setUsage(claudeUsage(null));
     await h.watcher.tick();
     expect(h.runKeepAlive).toHaveBeenCalledTimes(2);
@@ -131,6 +137,37 @@ describe("QuotaResetWatcher", () => {
     h.setUsage(claudeUsage(null, "unavailable"));
     await h.watcher.tick();
     expect(h.runKeepAlive).not.toHaveBeenCalled();
+  });
+
+  it("does not fire during the overnight quiet hours", async () => {
+    // 02:30 UTC is inside the 01:00–06:00 quiet window.
+    const h = makeWatcher({ now: () => utc("2026-07-16T02:30:00Z") });
+    h.setUsage(claudeUsage(null));
+    await h.watcher.tick();
+    expect(h.runKeepAlive).not.toHaveBeenCalled();
+  });
+
+  it("resumes and re-anchors a fresh window when quiet hours end", async () => {
+    let nowMs = utc("2026-07-16T02:30:00Z");
+    const h = makeWatcher({ now: () => nowMs });
+    h.setUsage(claudeUsage(null));
+
+    // Quiet: nothing happens.
+    await h.watcher.tick();
+    expect(h.runKeepAlive).not.toHaveBeenCalled();
+
+    // 06:00 UTC: quiet hours over, lapsed window → fire immediately.
+    nowMs = utc("2026-07-16T06:00:00Z");
+    await h.watcher.tick();
+    expect(h.runKeepAlive).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps firing outside quiet hours", async () => {
+    // 09:00 UTC is well outside 01:00–06:00.
+    const h = makeWatcher({ now: () => utc("2026-07-16T09:00:00Z") });
+    h.setUsage(claudeUsage(null));
+    await h.watcher.tick();
+    expect(h.runKeepAlive).toHaveBeenCalledTimes(1);
   });
 
   it("falls back to the home directory when no Claude agent is loaded", async () => {
