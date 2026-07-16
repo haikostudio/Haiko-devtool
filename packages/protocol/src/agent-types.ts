@@ -336,6 +336,27 @@ export interface CompactionTimelineItem {
   preTokens?: number;
 }
 
+/**
+ * Recall performed by the daemon against the external "Cerveau" memory service
+ * before the prompt is dispatched to the agent. Rendered as a distinct (yellow)
+ * pill in the chat so the user sees what was looked up and what came back.
+ */
+export interface BrainContextMemory {
+  texte: string;
+  rejete?: boolean;
+  motif?: string;
+}
+
+export interface BrainContextTimelineItem {
+  [key: string]: unknown;
+  type: "brain_context";
+  query: string;
+  portee: "projet" | "global" | "apercu";
+  count: number;
+  memories: BrainContextMemory[];
+  status?: "loading" | "done";
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -343,7 +364,8 @@ export type AgentTimelineItem =
   | ToolCallTimelineItem
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
-  | CompactionTimelineItem;
+  | CompactionTimelineItem
+  | BrainContextTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

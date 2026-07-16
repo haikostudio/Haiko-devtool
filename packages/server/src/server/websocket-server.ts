@@ -67,6 +67,7 @@ import {
   type WebSocketRuntimeDiagnosticSnapshot,
 } from "./websocket/runtime-metrics.js";
 import { ProviderUsageService } from "../services/quota-fetcher/service.js";
+import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { getProcessMemoryDiagnostics, getProcessUptimeSeconds } from "./process-diagnostics.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -465,6 +466,7 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
+  private readonly brainMemory: BrainMemoryClient | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
@@ -524,6 +526,12 @@ export class VoiceAssistantWebSocketServer {
     },
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
+    brainMemoryConfig?: {
+      enabled: boolean;
+      baseUrl: string;
+      apiKey: string | null;
+      globalFallback: boolean;
+    },
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -609,6 +617,16 @@ export class VoiceAssistantWebSocketServer {
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
     });
+
+    this.brainMemory =
+      brainMemoryConfig?.enabled && brainMemoryConfig.apiKey
+        ? new BrainMemoryClient({
+            logger: this.logger,
+            apiKey: brainMemoryConfig.apiKey,
+            baseUrl: brainMemoryConfig.baseUrl,
+            globalFallback: brainMemoryConfig.globalFallback,
+          })
+        : null;
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
     this.startRuntimeMetricsInterval();
@@ -1066,6 +1084,7 @@ export class VoiceAssistantWebSocketServer {
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
+      brainMemory: this.brainMemory,
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
@@ -1286,6 +1305,8 @@ export class VoiceAssistantWebSocketServer {
         projectCreateDirectory: true,
         // COMPAT(sidebarOrderSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
         sidebarOrderSync: true,
+        // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        brainMemory: !!this.brainMemory,
       },
     };
   }

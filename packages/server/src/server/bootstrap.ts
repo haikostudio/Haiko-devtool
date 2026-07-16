@@ -366,6 +366,12 @@ export interface PaseoDaemonConfig {
     enabled: boolean;
     distDir: string | null;
   };
+  brainMemory?: {
+    enabled: boolean;
+    baseUrl: string;
+    apiKey: string | null;
+    globalFallback: boolean;
+  };
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
   openai?: PaseoOpenAIConfig;
@@ -1384,6 +1390,7 @@ export async function createPaseoDaemon(
               },
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
+              config.brainMemory,
             );
 
             if (relayEnabled) {

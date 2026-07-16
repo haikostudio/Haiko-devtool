@@ -155,6 +155,18 @@ const FeatureWebUiSchema = z
   })
   .strict();
 
+// External "Cerveau" long-term memory service (REST). When enabled and keyed,
+// the daemon recalls relevant memories before each prompt and notes the
+// exchange afterwards. See services/brain-memory/client.ts.
+const FeatureBrainMemorySchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    baseUrl: z.string().trim().min(1).optional(),
+    apiKey: z.string().min(1).optional(),
+    globalFallback: z.boolean().optional(),
+  })
+  .strict();
+
 const StructuredGenerationProviderConfigSchema = z
   .object({
     provider: z.string().min(1),
@@ -307,6 +319,7 @@ export const PersistedConfigSchema = z
         dictation: FeatureDictationSchema.optional(),
         voiceMode: FeatureVoiceModeSchema.optional(),
         webUi: FeatureWebUiSchema.optional(),
+        brainMemory: FeatureBrainMemorySchema.optional(),
       })
       .strict()
       .optional(),

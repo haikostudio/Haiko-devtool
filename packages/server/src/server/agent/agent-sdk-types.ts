@@ -366,6 +366,16 @@ export interface CompactionTimelineItem {
   preTokens?: number;
 }
 
+export interface BrainContextTimelineItem {
+  [key: string]: unknown;
+  type: "brain_context";
+  query: string;
+  portee: "projet" | "global" | "apercu";
+  count: number;
+  memories: { texte: string; rejete?: boolean; motif?: string }[];
+  status?: "loading" | "done";
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -373,7 +383,8 @@ export type AgentTimelineItem =
   | ToolCallTimelineItem
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
-  | CompactionTimelineItem;
+  | CompactionTimelineItem
+  | BrainContextTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

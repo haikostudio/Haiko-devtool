@@ -22,6 +22,7 @@ import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import { hashDaemonPassword } from "./auth.js";
 import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
+import { DEFAULT_BRAIN_BASE_URL } from "../services/brain-memory/client.js";
 
 const DEFAULT_PORT = 6767;
 const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
@@ -306,6 +307,25 @@ function resolveWebUiConfig(
   };
 }
 
+function resolveBrainMemoryConfig(
+  env: NodeJS.ProcessEnv,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): PaseoDaemonConfig["brainMemory"] {
+  const persistedBrain = persisted.features?.brainMemory;
+  const enabled =
+    parseBooleanEnv(env.PASEO_BRAIN_MEMORY_ENABLED) ?? persistedBrain?.enabled ?? false;
+  const apiKey = env.PASEO_BRAIN_MEMORY_API_KEY?.trim() || persistedBrain?.apiKey?.trim() || null;
+  const baseUrl =
+    env.PASEO_BRAIN_MEMORY_BASE_URL?.trim() ||
+    persistedBrain?.baseUrl?.trim() ||
+    DEFAULT_BRAIN_BASE_URL;
+  const globalFallback =
+    parseBooleanEnv(env.PASEO_BRAIN_MEMORY_GLOBAL_FALLBACK) ??
+    persistedBrain?.globalFallback ??
+    true;
+  return { enabled, baseUrl, apiKey, globalFallback };
+}
+
 function resolveVoiceLlmConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
@@ -473,6 +493,7 @@ export function loadConfig(
   });
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const webUi = resolveWebUiConfig(paseoHome, env, options?.cli, persisted);
+  const brainMemory = resolveBrainMemoryConfig(env, persisted);
 
   const { openai, speech } = resolveSpeechConfig({
     paseoHome,
@@ -511,6 +532,7 @@ export function loadConfig(
     relayPublicUseTls: relay.publicUseTls,
     serviceProxy,
     webUi,
+    brainMemory,
     appBaseUrl,
     auth: resolveAuthConfig(env, persisted),
     openai,

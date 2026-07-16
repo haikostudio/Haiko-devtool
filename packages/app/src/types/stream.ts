@@ -79,7 +79,8 @@ export type StreamItem =
   | ToolCallItem
   | TodoListItem
   | ActivityLogItem
-  | CompactionItem;
+  | CompactionItem
+  | BrainContextItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -188,6 +189,24 @@ export interface CompactionItem {
   status: "loading" | "completed";
   trigger?: "auto" | "manual";
   preTokens?: number;
+}
+
+export interface BrainContextMemoryEntry {
+  texte: string;
+  rejete?: boolean;
+  motif?: string;
+}
+
+/** Cerveau recall performed by the daemon before dispatching the prompt. */
+export interface BrainContextItem {
+  kind: "brain_context";
+  id: string;
+  timestamp: Date;
+  query: string;
+  portee: "projet" | "global" | "apercu";
+  count: number;
+  memories: BrainContextMemoryEntry[];
+  status?: "loading" | "done";
 }
 
 export interface TodoEntry {
@@ -872,6 +891,23 @@ function reduceTimelineEvent(
     }
     case "compaction":
       return finalizeActiveThoughts(reduceTimelineCompaction(state, item, timestamp));
+    case "brain_context": {
+      const brainItem: BrainContextItem = {
+        kind: "brain_context",
+        id: createTimelineId("brain_context", item.query, timestamp),
+        timestamp,
+        query: item.query,
+        portee: item.portee,
+        count: item.count,
+        memories: (item.memories ?? []).map((memory) => ({
+          texte: memory.texte,
+          rejete: memory.rejete,
+          motif: memory.motif,
+        })),
+        status: item.status,
+      };
+      return finalizeActiveThoughts([...state, brainItem]);
+    }
     default:
       return state;
   }
@@ -977,6 +1013,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "todo_list";
     case "error":
       return "activity_log";
+    case "brain_context":
+      return "brain_context";
     default:
       return null;
   }

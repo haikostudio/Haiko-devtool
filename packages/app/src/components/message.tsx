@@ -46,6 +46,7 @@ import {
   Scissors,
   MicVocal,
   FileSymlink,
+  BrainCircuit,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
@@ -62,7 +63,7 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
-import type { TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import type { BrainContextItem, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -2233,6 +2234,141 @@ export const CompactionMarker = memo(function CompactionMarker({
       </View>
       <View style={compactionStylesheet.line} />
     </View>
+  );
+});
+
+interface BrainContextPillProps {
+  item: BrainContextItem;
+}
+
+const BRAIN_COLOR = "#fbbf24";
+
+const BRAIN_PORTEE_LABELS: Record<BrainContextItem["portee"], string> = {
+  projet: "projet",
+  global: "cerveau global",
+  apercu: "aperçu global",
+};
+
+const brainContextStylesheet = StyleSheet.create((theme) => ({
+  pressable: {
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
+    marginBottom: theme.spacing[1],
+    backgroundColor: "rgba(251, 191, 36, 0.15)",
+  },
+  content: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: 10,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
+  },
+  iconContainer: {
+    flexShrink: 0,
+    height: 20,
+    justifyContent: "center",
+  },
+  textContainer: {
+    flex: 1,
+  },
+  headerText: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    color: BRAIN_COLOR,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  metaText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  memoriesContainer: {
+    marginTop: theme.spacing[2],
+    gap: theme.spacing[1],
+  },
+  memoryText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  memoryTextRejected: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+}));
+
+export const BrainContextPill = memo(function BrainContextPill({ item }: BrainContextPillProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasMemories = item.memories.length > 0;
+  const handlePress = useCallback(() => {
+    if (hasMemories) {
+      setIsExpanded((prev) => !prev);
+    }
+  }, [hasMemories]);
+  const portee = BRAIN_PORTEE_LABELS[item.portee] ?? item.portee;
+  let chevron: ReactNode = null;
+  if (hasMemories) {
+    chevron = isExpanded ? (
+      <ChevronDown size={12} color="#71717a" />
+    ) : (
+      <ChevronRight size={12} color="#71717a" />
+    );
+  }
+  return (
+    <Pressable
+      onPress={handlePress}
+      disabled={!hasMemories}
+      style={brainContextStylesheet.pressable}
+    >
+      <View style={brainContextStylesheet.content}>
+        <View style={brainContextStylesheet.row}>
+          <View style={brainContextStylesheet.iconContainer}>
+            {item.status === "loading" ? (
+              <ActivityIndicator size="small" color={BRAIN_COLOR} />
+            ) : (
+              <BrainCircuit size={16} color={BRAIN_COLOR} />
+            )}
+          </View>
+          <View style={brainContextStylesheet.textContainer}>
+            <Text style={brainContextStylesheet.headerText} selectable>
+              Cerveau · {item.query}
+            </Text>
+            <View style={brainContextStylesheet.detailsRow}>
+              <Text style={brainContextStylesheet.metaText}>
+                {item.count} souvenir{item.count > 1 ? "s" : ""} ({portee})
+              </Text>
+              {chevron}
+            </View>
+            {isExpanded && hasMemories && (
+              <View style={brainContextStylesheet.memoriesContainer}>
+                {item.memories.map((memory) => (
+                  <Text
+                    key={`${item.id}:${memory.texte}`}
+                    style={
+                      memory.rejete
+                        ? brainContextStylesheet.memoryTextRejected
+                        : brainContextStylesheet.memoryText
+                    }
+                    selectable
+                  >
+                    {memory.rejete
+                      ? `⛔ ${memory.motif ? `(${memory.motif}) ` : ""}${memory.texte}`
+                      : `• ${memory.texte}`}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </Pressable>
   );
 });
 

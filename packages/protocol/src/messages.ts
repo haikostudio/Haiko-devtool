@@ -598,6 +598,21 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     trigger: z.enum(["auto", "manual"]).optional(),
     preTokens: z.number().optional(),
   }),
+  // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
+  z.object({
+    type: z.literal("brain_context"),
+    query: z.string(),
+    portee: z.enum(["projet", "global", "apercu"]),
+    count: z.number(),
+    memories: z.array(
+      z.object({
+        texte: z.string(),
+        rejete: z.boolean().optional(),
+        motif: z.string().optional(),
+      }),
+    ),
+    status: z.enum(["loading", "done"]).optional(),
+  }),
 ]);
 
 export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
@@ -2512,6 +2527,8 @@ export const ServerInfoStatusPayloadSchema = z
         projectCreateDirectory: z.boolean().optional(),
         // COMPAT(sidebarOrderSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
         sidebarOrderSync: z.boolean().optional(),
+        // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        brainMemory: z.boolean().optional(),
       })
       .optional(),
   })

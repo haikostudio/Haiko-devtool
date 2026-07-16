@@ -36,6 +36,7 @@ import {
   ToolCall,
   TodoListCard,
   CompactionMarker,
+  BrainContextPill,
   MessageOuterSpacingProvider,
   type InlinePathTarget,
 } from "@/components/message";
@@ -841,6 +842,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
                 preTokens={item.preTokens}
               />
             );
+
+          case "brain_context":
+            return <BrainContextPill item={item} />;
 
           default:
             return null;

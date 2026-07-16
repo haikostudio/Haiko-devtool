@@ -194,6 +194,8 @@ import {
   type GitHubService,
 } from "../services/github-service.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
+import type { BrainMemoryClient } from "../services/brain-memory/client.js";
+import { injectBrainContext, toTimelineMemories } from "../services/brain-memory/client.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -452,6 +454,7 @@ export interface SessionOptions {
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  brainMemory?: BrainMemoryClient | null;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -583,6 +586,7 @@ export class Session {
   } | null = null;
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
+  private readonly brainMemory: BrainMemoryClient | null;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   private readonly getDaemonTcpPort: (() => number | null) | null;
@@ -641,6 +645,7 @@ export class Session {
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
+      brainMemory,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -864,6 +869,7 @@ export class Session {
       logger: this.sessionLogger,
     });
     this.providerSnapshotManager = providerSnapshotManager;
+    this.brainMemory = brainMemory ?? null;
     this.serviceProxy = serviceProxy ?? null;
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
     this.workspaceSetupSnapshots = workspaceSetupSnapshots ?? new Map();
@@ -5736,6 +5742,116 @@ export class Session {
     }
   }
 
+  /**
+   * Resolve the Cerveau project scope for an agent: the human project name if
+   * the agent belongs to a registered workspace, else the last path segment of
+   * its working directory. Best-effort — returns undefined on any failure.
+   */
+  private async resolveBrainProjectScope(agentId: string): Promise<string | undefined> {
+    try {
+      const agent = await this.agentStorage.get(agentId);
+      if (!agent) {
+        return undefined;
+      }
+      if (agent.workspaceId) {
+        const workspace = await this.workspaceRegistry.get(agent.workspaceId);
+        if (workspace) {
+          const project = await this.projectRegistry.get(workspace.projectId);
+          if (project) {
+            return resolveProjectDisplayName(project);
+          }
+        }
+      }
+      const segments = agent.cwd.replace(/\\/g, "/").split("/").filter(Boolean);
+      return segments[segments.length - 1] ?? undefined;
+    } catch (err) {
+      this.sessionLogger.debug({ err, agentId }, "brain: project scope resolution failed");
+      return undefined;
+    }
+  }
+
+  /**
+   * Recall relevant memories from the Cerveau, surface them as a yellow
+   * brain_context timeline item, and return the prompt augmented with the recall
+   * block. Entirely best-effort: a Cerveau outage returns the text unchanged and
+   * never blocks the prompt.
+   */
+  private async recallAndInjectBrainContext(
+    agentId: string,
+    text: string,
+    projet: string | undefined,
+  ): Promise<string> {
+    const brain = this.brainMemory;
+    if (!brain || !text.trim()) {
+      return text;
+    }
+    let recall: Awaited<ReturnType<BrainMemoryClient["recall"]>>;
+    try {
+      recall = await brain.recall(text, { projet });
+    } catch (err) {
+      this.sessionLogger.debug({ err, agentId }, "brain: recall failed");
+      return text;
+    }
+    if (recall.count === 0) {
+      return text;
+    }
+    try {
+      await this.agentManager.appendTimelineItem(agentId, {
+        type: "brain_context",
+        query: text.slice(0, 500),
+        portee: recall.portee,
+        count: recall.count,
+        memories: toTimelineMemories(recall.resultats),
+        status: "done",
+      });
+    } catch (err) {
+      this.sessionLogger.debug({ err, agentId }, "brain: timeline emit failed");
+    }
+    return injectBrainContext(recall.blob, recall.portee, text);
+  }
+
+  /**
+   * After the next turn ends, note the exchange back into the Cerveau so it keeps
+   * learning. One-shot subscription mirroring the auto-archive terminal listener.
+   */
+  private scheduleBrainNote(agentId: string, userText: string, projet: string | undefined): void {
+    const brain = this.brainMemory;
+    if (!brain || !userText.trim()) {
+      return;
+    }
+    const unsubscribe = this.agentManager.subscribe(
+      (event) => {
+        if (event.type !== "agent_stream") {
+          return;
+        }
+        const eventType = event.event.type;
+        if (
+          eventType !== "turn_completed" &&
+          eventType !== "turn_failed" &&
+          eventType !== "turn_canceled"
+        ) {
+          return;
+        }
+        unsubscribe();
+        void (async () => {
+          const finalText =
+            eventType === "turn_completed"
+              ? ((await this.agentManager.getLastAssistantMessage(agentId)) ?? "")
+              : "";
+          const note = finalText
+            ? `Utilisateur: ${userText}\n\nAssistant: ${finalText}`
+            : `Utilisateur: ${userText}`;
+          await brain.note(note, {
+            source: "paseo-daemon",
+            projet,
+            discussionId: agentId,
+          });
+        })();
+      },
+      { agentId, replayState: false },
+    );
+  }
+
   private async handleSendAgentMessageRequest(
     msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
   ): Promise<void> {
@@ -5756,7 +5872,17 @@ export class Session {
     try {
       const agentId = resolved.agentId;
 
-      const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
+      // Cerveau memory: recall relevant context before dispatching (shown as a
+      // yellow pill), inject it into the prompt, and note the exchange after the
+      // turn ends. All best-effort — a Cerveau outage never blocks the prompt.
+      let promptText = msg.text;
+      if (this.brainMemory) {
+        const projet = await this.resolveBrainProjectScope(agentId);
+        promptText = await this.recallAndInjectBrainContext(agentId, msg.text, projet);
+        this.scheduleBrainNote(agentId, msg.text, projet);
+      }
+
+      const prompt = buildAgentPrompt(promptText, msg.images, msg.attachments);
       this.sessionLogger.trace(
         {
           agentId,
