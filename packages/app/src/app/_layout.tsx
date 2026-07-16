@@ -75,6 +75,7 @@ import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-acti
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useLeftEdgePeek } from "@/hooks/use-left-edge-peek";
 import { KeyboardShiftProvider } from "@/hooks/use-keyboard-shift-style";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -581,10 +582,17 @@ function SidebarChrome({
   const isOpen = usePanelStore((state) =>
     selectIsAgentListOpen(state, { isCompact: isCompactLayout }),
   );
-  const active = visible && isOpen;
+  const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
+  // When the sidebar is collapsed on desktop, reveal it as an overlay while the
+  // pointer hugs the left edge. Disabled once the sidebar is pinned open.
+  const peek = useLeftEdgePeek({
+    enabled: mounted && !isCompactLayout && !isOpen,
+    sidebarWidth,
+  });
+  const active = (visible && isOpen) || peek;
   return (
     <SidebarModelProvider active={active}>
-      {mounted ? <LeftSidebar active={active} /> : null}
+      {mounted ? <LeftSidebar active={active} overlay={peek} /> : null}
       <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
     </SidebarModelProvider>
   );

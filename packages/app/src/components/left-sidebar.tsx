@@ -11,7 +11,12 @@ import {
   type PressableStateCallbackType,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
@@ -107,12 +112,21 @@ interface MobileSidebarProps extends SidebarSharedProps {
 interface DesktopSidebarProps extends SidebarSharedProps {
   insetsTop: number;
   active: boolean;
+  /** Float over the content (left-edge peek) instead of being pinned in-flow. */
+  overlay: boolean;
   handleViewDashboard: () => void;
   handleViewMore: () => void;
   handleViewSchedules: () => void;
 }
 
-export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boolean }) {
+export const LeftSidebar = memo(function LeftSidebar({
+  active,
+  overlay = false,
+}: {
+  active: boolean;
+  /** Desktop only: render floating over the content instead of pinned in-flow. */
+  overlay?: boolean;
+}) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -276,6 +290,7 @@ export const LeftSidebar = memo(function LeftSidebar({ active }: { active: boole
         {...sharedProps}
         insetsTop={insets.top}
         active={active}
+        overlay={overlay}
         handleOpenProject={handleOpenProjectDesktop}
         handleHome={handleHomeDesktop}
         handleSettings={handleSettingsDesktop}
@@ -573,6 +588,7 @@ function DesktopSidebar({
   handleOpenHostSettings,
   insetsTop,
   active,
+  overlay,
   handleViewDashboard,
   handleViewMore,
   handleViewSchedules,
@@ -620,13 +636,33 @@ function DesktopSidebar({
     width: resizeWidth.value,
   }));
 
+  // Overlay (left-edge peek) entrance: slide + fade in. Held at 0 while pinned so
+  // the transform is a no-op and doesn't disturb the in-flow sidebar.
+  const overlayActive = useSharedValue(overlay ? 1 : 0);
+  const overlayProgress = useSharedValue(overlay ? 1 : 0);
+  useEffect(() => {
+    overlayActive.value = overlay ? 1 : 0;
+    overlayProgress.value = overlay ? withTiming(1, { duration: 160 }) : 0;
+  }, [overlay, overlayActive, overlayProgress]);
+  const overlayAnimatedStyle = useAnimatedStyle(() => {
+    if (overlayActive.value === 0) {
+      return { transform: [{ translateX: 0 }], opacity: 1 };
+    }
+    return {
+      transform: [{ translateX: -(1 - overlayProgress.value) * resizeWidth.value }],
+      opacity: overlayProgress.value,
+    };
+  });
+
   const desktopSidebarStyle = useMemo(
     () => [
       staticStyles.desktopSidebar,
       !active && staticStyles.desktopSidebarHidden,
+      overlay && staticStyles.desktopSidebarOverlay,
       resizeAnimatedStyle,
+      overlayAnimatedStyle,
     ],
-    [active, resizeAnimatedStyle],
+    [active, overlay, resizeAnimatedStyle, overlayAnimatedStyle],
   );
   const desktopSidebarBorderStyle = useMemo(
     () => [styles.desktopSidebarBorder, { flex: 1, paddingTop: insetsTop }],
@@ -782,6 +818,17 @@ const staticStyles = RNStyleSheet.create({
   },
   desktopSidebarHidden: {
     display: "none",
+  },
+  // Left-edge peek: float over the content instead of taking flex space.
+  desktopSidebarOverlay: {
+    position: "absolute" as const,
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 30,
+    // Lift the floating panel off the content beneath it.
+    ...(isWeb ? { boxShadow: "2px 0 16px rgba(0, 0, 0, 0.28)" } : {}),
+    elevation: 16,
   },
 });
 
