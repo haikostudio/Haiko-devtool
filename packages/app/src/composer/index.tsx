@@ -239,13 +239,15 @@ function renderContextWindowMeter(
 function resolveContextWindowPlacement(
   meter: ReactElement | null,
   isMobile: boolean,
-): { beforeVoiceContent: ReactNode; footerInlineContent: ReactNode } {
+): { beforeVoiceContent: ReactNode; footerInlineContent: ReactNode; drawerContent: ReactNode } {
   if (isMobile) {
-    return { beforeVoiceContent: null, footerInlineContent: meter };
+    // Compact: the meter lives inside the agent-controls options drawer, not the footer.
+    return { beforeVoiceContent: null, footerInlineContent: null, drawerContent: meter };
   }
   return {
     beforeVoiceContent: <View style={styles.contextWindowMeterSlot}>{meter}</View>,
     footerInlineContent: null,
+    drawerContent: null,
   };
 }
 
@@ -255,10 +257,11 @@ interface RenderLeftContentArgs {
   serverId: string;
   focusInput: () => void;
   isCompactLayout: boolean;
+  contextMeter: ReactNode;
 }
 
 function renderLeftContent(args: RenderLeftContentArgs): ReactElement {
-  const { agentControls, agentId, serverId, focusInput, isCompactLayout } = args;
+  const { agentControls, agentId, serverId, focusInput, isCompactLayout, contextMeter } = args;
   if (resolveAgentControlsMode(agentControls) === "draft" && agentControls) {
     return <DraftAgentControls {...agentControls} isCompactLayout={isCompactLayout} />;
   }
@@ -268,6 +271,7 @@ function renderLeftContent(args: RenderLeftContentArgs): ReactElement {
       serverId={serverId}
       onDropdownClose={focusInput}
       isCompactLayout={isCompactLayout}
+      contextMeter={contextMeter}
     />
   );
 }
@@ -1706,7 +1710,7 @@ export function Composer({
       contextWindowPending,
     ],
   );
-  const { beforeVoiceContent, footerInlineContent } = useMemo(
+  const { beforeVoiceContent, footerInlineContent, drawerContent } = useMemo(
     () => resolveContextWindowPlacement(contextWindowMeter, isCompactLayout),
     [contextWindowMeter, isCompactLayout],
   );
@@ -1790,8 +1794,9 @@ export function Composer({
         serverId,
         focusInput,
         isCompactLayout,
+        contextMeter: drawerContent,
       }),
-    [agentControls, agentId, focusInput, isCompactLayout, serverId],
+    [agentControls, agentId, focusInput, isCompactLayout, serverId, drawerContent],
   );
 
   const handleAttachButtonRef = useCallback((node: View | null) => {

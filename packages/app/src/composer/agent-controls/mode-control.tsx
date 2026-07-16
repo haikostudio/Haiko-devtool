@@ -44,10 +44,11 @@ import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
 import type { AgentMode, AgentProvider } from "@getpaseo/protocol/agent-types";
 import { getModeVisuals, type AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 
-export type AgentModeControlPlacement = "toolbar" | "footer";
+export type AgentModeControlPlacement = "toolbar" | "footer" | "drawer";
 
 function shouldRenderForPlacement(placement: AgentModeControlPlacement, isCompact: boolean) {
-  return placement === "footer" ? isCompact : !isCompact;
+  // "toolbar" is the desktop inline chip; "footer"/"drawer" are the compact placements.
+  return placement === "toolbar" ? !isCompact : isCompact;
 }
 
 interface ModeIconProps {
@@ -109,6 +110,73 @@ interface AgentModeControlViewProps {
   selectedModeId: string | null | undefined;
   onSelectMode: (modeId: string) => void;
   disabled?: boolean;
+}
+
+function AgentModeControlSectionRow({
+  mode,
+  selected,
+  onSelectMode,
+  provider,
+  providerDefinitions,
+  iconColor,
+}: {
+  mode: AgentMode;
+  selected: boolean;
+  onSelectMode: (modeId: string) => void;
+  provider: string;
+  providerDefinitions: AgentProviderDefinition[];
+  iconColor: string;
+}) {
+  const option = useMemo<ComboboxOption>(
+    () => ({ id: mode.id, label: formatAgentModeLabel(mode) }),
+    [mode],
+  );
+  const handlePress = useCallback(() => onSelectMode(mode.id), [onSelectMode, mode.id]);
+  return (
+    <ModeComboboxOption
+      option={option}
+      selected={selected}
+      active={false}
+      onPress={handlePress}
+      provider={provider}
+      providerDefinitions={providerDefinitions}
+      iconColor={iconColor}
+    />
+  );
+}
+
+function AgentModeControlSection({
+  provider,
+  providerDefinitions,
+  modeOptions,
+  selectedModeId,
+  onSelectMode,
+}: AgentModeControlViewProps) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const selectedMode = useMemo(() => {
+    if (modeOptions.length === 0) return null;
+    return modeOptions.find((m) => m.id === selectedModeId) ?? modeOptions[0];
+  }, [modeOptions, selectedModeId]);
+
+  if (!selectedMode) return null;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{t("agentControls.mode.title")}</Text>
+      {modeOptions.map((mode) => (
+        <AgentModeControlSectionRow
+          key={mode.id}
+          mode={mode}
+          selected={mode.id === selectedMode.id}
+          onSelectMode={onSelectMode}
+          provider={provider}
+          providerDefinitions={providerDefinitions}
+          iconColor={theme.colors.foreground}
+        />
+      ))}
+    </View>
+  );
 }
 
 function normalizeSearchQuery(value: string): string {
@@ -352,6 +420,19 @@ export const AgentModeControl = memo(function AgentModeControl({
   if (!slice || availableModes.length === 0) return null;
   if (!shouldRenderForPlacement(placement, isCompact)) return null;
 
+  if (placement === "drawer") {
+    return (
+      <AgentModeControlSection
+        provider={slice.provider}
+        providerDefinitions={providerDefinitions}
+        modeOptions={availableModes}
+        selectedModeId={slice.currentModeId}
+        onSelectMode={handleSelectMode}
+        disabled={!client}
+      />
+    );
+  }
+
   return (
     <AgentModeControlView
       provider={slice.provider}
@@ -389,6 +470,18 @@ export function DraftAgentModeControl({
   const isCompact = isCompactLayout ?? isCompactFormFactor;
   if (!selectedProvider || modeOptions.length === 0) return null;
   if (!shouldRenderForPlacement(placement, isCompact)) return null;
+  if (placement === "drawer") {
+    return (
+      <AgentModeControlSection
+        provider={selectedProvider}
+        providerDefinitions={providerDefinitions}
+        modeOptions={modeOptions}
+        selectedModeId={selectedMode}
+        onSelectMode={onSelectMode}
+        disabled={disabled}
+      />
+    );
+  }
   return (
     <AgentModeControlView
       provider={selectedProvider}
@@ -424,6 +517,18 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+  },
+  section: {
+    gap: theme.spacing[1],
+  },
+  sectionTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingHorizontal: theme.spacing[2],
+    marginBottom: theme.spacing[1],
   },
   tooltipRow: {
     flexDirection: "row",

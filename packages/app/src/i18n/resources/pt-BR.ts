@@ -163,6 +163,13 @@ export const ptBR: TranslationResources = {
       searchPlaceholder: "Buscar modos...",
       selectWithValue: "Selecionar modo do agente ({{value}})",
     },
+    options: {
+      title: "Opções",
+      open: "Abrir opções do agente",
+    },
+    context: {
+      title: "Contexto",
+    },
     hints: {
       thinking: "Modo de raciocínio",
       model: "Alterar modelo",

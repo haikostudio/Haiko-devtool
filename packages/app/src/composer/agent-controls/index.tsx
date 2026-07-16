@@ -20,7 +20,14 @@ import {
 } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
-import { Brain, ListTodo, Settings2, ShieldCheck, Zap } from "lucide-react-native";
+import {
+  Brain,
+  EllipsisVertical,
+  ListTodo,
+  Settings2,
+  ShieldCheck,
+  Zap,
+} from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -95,6 +102,10 @@ interface ControlledAgentControlsProps {
   isRetryingModelProvider?: boolean;
   /** Extra elements rendered inline with the agent controls (desktop only). */
   desktopExtras?: ReactNode;
+  /** Extra elements rendered inside the compact options drawer (mode section). */
+  compactExtras?: ReactNode;
+  /** Context-window meter rendered inside the compact options drawer. */
+  contextMeter?: ReactNode;
   modelSelectorServerId?: string | null;
   isCompactLayout?: boolean;
 }
@@ -132,6 +143,8 @@ interface AgentControlsProps {
   serverId: string;
   onDropdownClose?: () => void;
   isCompactLayout?: boolean;
+  /** Context-window meter shown inside the compact options drawer. */
+  contextMeter?: ReactNode;
 }
 
 function findOptionLabel(
@@ -190,7 +203,7 @@ function shortModelLabel(label: string): string {
   return i === -1 ? label : label.slice(i + 1);
 }
 
-type ActiveSheet = "thinking" | "features" | null;
+type ActiveSheet = "thinking" | "features" | "options" | null;
 
 function resolveHasAnyControl({
   providerOptions,
@@ -410,6 +423,8 @@ function ControlledAgentControls({
   onRetryModelProvider,
   isRetryingModelProvider = false,
   desktopExtras,
+  compactExtras,
+  contextMeter,
   modelSelectorServerId = null,
   isCompactLayout,
 }: ControlledAgentControlsProps) {
@@ -454,7 +469,10 @@ function ControlledAgentControls({
     canSelectModel,
     thinkingOptions,
     features,
-    hasDesktopExtras: desktopExtras !== null && desktopExtras !== undefined,
+    hasDesktopExtras:
+      desktopExtras !== null && desktopExtras !== undefined
+        ? true
+        : compactExtras !== null && compactExtras !== undefined,
   });
 
   const modelDisabled = disabled;
@@ -650,9 +668,12 @@ function ControlledAgentControls({
           handleCloseSheet={handleCloseSheet}
           handleSheetModelSelect={handleSheetModelSelect}
           handleSelectThinkingAndClose={handleSelectThinkingAndClose}
+          onSelectThinkingOption={onSelectThinkingOption}
           handleOpenChange={handleOpenChange}
           renderThinkingOption={renderThinkingOption}
           modelSelectorServerId={modelSelectorServerId}
+          compactExtras={compactExtras}
+          contextMeter={contextMeter}
         />
       )}
     </View>
@@ -896,6 +917,7 @@ interface SheetAgentControlsContentProps {
   handleCloseSheet: () => void;
   handleSheetModelSelect: (providerId: string, modelId: string) => void;
   handleSelectThinkingAndClose: (thinkingOptionId: string) => void;
+  onSelectThinkingOption?: (thinkingOptionId: string) => void;
   handleOpenChange: (selector: AgentControlSelector) => (nextOpen: boolean) => void;
   renderThinkingOption: (args: {
     option: ComboboxOption;
@@ -904,6 +926,8 @@ interface SheetAgentControlsContentProps {
     onPress: () => void;
   }) => ReactElement;
   modelSelectorServerId: string | null;
+  compactExtras?: ReactNode;
+  contextMeter?: ReactNode;
 }
 
 function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
@@ -924,7 +948,6 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     disabled,
     isModelLoading,
     canSelectModel,
-    canSelectThinking,
     modelSelectorProviders,
     modelDisabled,
     comboboxThinkingOptions,
@@ -934,33 +957,27 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     handleOpenSheet,
     handleCloseSheet,
     handleSheetModelSelect,
-    handleSelectThinkingAndClose,
+    onSelectThinkingOption,
     handleOpenChange,
     renderThinkingOption,
     modelSelectorServerId,
+    compactExtras,
+    contextMeter,
   } = props;
-
-  const thinkingAnchorRef = useRef<View | null>(null);
 
   const hasThinking = comboboxThinkingOptions.length > 0;
   const hasFeatures = Boolean(features && features.length > 0);
-  const featuresSheetHeader = useMemo<SheetHeader>(
-    () => ({ title: t("agentControls.features.title") }),
+  const hasExtras = compactExtras !== null && compactExtras !== undefined;
+  const hasContext = contextMeter !== null && contextMeter !== undefined;
+  // Everything the user circled — mode, thinking, features, context — collapses
+  // behind a single kebab that opens one bottom drawer.
+  const hasOptions = hasThinking || hasFeatures || hasExtras || hasContext;
+  const optionsSheetHeader = useMemo<SheetHeader>(
+    () => ({ title: t("agentControls.options.title") }),
     [t],
   );
 
-  const handleOpenThinking = useCallback(() => handleOpenSheet("thinking"), [handleOpenSheet]);
-  const handleOpenFeatures = useCallback(() => handleOpenSheet("features"), [handleOpenSheet]);
-  const handleThinkingSheetOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (nextOpen) {
-        handleOpenSheet("thinking");
-      } else {
-        handleCloseSheet();
-      }
-    },
-    [handleCloseSheet, handleOpenSheet],
-  );
+  const handleOpenOptions = useCallback(() => handleOpenSheet("options"), [handleOpenSheet]);
 
   const renderModelTrigger = useCallback(
     ({
@@ -983,17 +1000,16 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
     [ProviderIcon, theme.iconSize.lg, theme.colors.foregroundMuted],
   );
 
-  const thinkingButtonStyle = makeBadgePressableStyle(
-    styles.modeIconBadge,
-    styles.disabledBadge,
-    disabled || !canSelectThinking,
-    activeSheet === "thinking",
-  );
-  const featuresButtonStyle = makeBadgePressableStyle(
+  const optionsButtonStyle = makeBadgePressableStyle(
     styles.modeIconBadge,
     styles.disabledBadge,
     disabled,
-    activeSheet === "features",
+    activeSheet === "options",
+  );
+
+  const handleSelectThinkingOption = useCallback(
+    (thinkingOptionId: string) => onSelectThinkingOption?.(thinkingOptionId),
+    [onSelectThinkingOption],
   );
 
   return (
@@ -1019,63 +1035,65 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         />
       ) : null}
 
-      {hasThinking ? (
+      {hasOptions ? (
         <Pressable
-          ref={thinkingAnchorRef}
-          onPress={handleOpenThinking}
-          disabled={disabled || !canSelectThinking}
-          style={thinkingButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t("agentControls.thinking.select")}
-          testID="agent-controls-thinking"
-        >
-          <Brain size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
-        </Pressable>
-      ) : null}
-
-      {hasFeatures ? (
-        <Pressable
-          onPress={handleOpenFeatures}
+          onPress={handleOpenOptions}
           disabled={disabled}
-          style={featuresButtonStyle}
+          style={optionsButtonStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("agentControls.features.open")}
-          testID="agent-controls-features"
+          accessibilityLabel={t("agentControls.options.open")}
+          testID="agent-controls-options"
         >
-          <Settings2 size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
+          <EllipsisVertical size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
         </Pressable>
-      ) : null}
-
-      {hasThinking ? (
-        <Combobox
-          options={comboboxThinkingOptions}
-          value={selectedThinkingOptionId ?? ""}
-          onSelect={handleSelectThinkingAndClose}
-          searchable={false}
-          title={t("agentControls.thinking.title")}
-          open={activeSheet === "thinking"}
-          onOpenChange={handleThinkingSheetOpenChange}
-          anchorRef={thinkingAnchorRef}
-          renderOption={renderThinkingOption}
-        />
       ) : null}
 
       <AdaptiveModalSheet
-        header={featuresSheetHeader}
-        visible={activeSheet === "features"}
+        header={optionsSheetHeader}
+        visible={activeSheet === "options"}
         onClose={handleCloseSheet}
-        testID="agent-features-sheet"
+        testID="agent-options-sheet"
       >
-        {(features ?? []).map((feature) => (
-          <SheetFeatureItem
-            key={`feature-${feature.id}`}
-            feature={feature}
-            disabled={disabled}
-            openSelector={openSelector}
-            handleOpenChange={handleOpenChange}
-            onSetFeature={onSetFeature}
-          />
-        ))}
+        {hasContext ? (
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>{t("agentControls.context.title")}</Text>
+            <View style={styles.drawerContextRow}>{contextMeter}</View>
+          </View>
+        ) : null}
+
+        {hasExtras ? <View style={styles.drawerSection}>{compactExtras}</View> : null}
+
+        {hasThinking ? (
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>{t("agentControls.thinking.title")}</Text>
+            {comboboxThinkingOptions.map((option) => (
+              <View key={option.id}>
+                {renderThinkingOption({
+                  option,
+                  selected: option.id === selectedThinkingOptionId,
+                  active: false,
+                  onPress: () => handleSelectThinkingOption(option.id),
+                })}
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {hasFeatures ? (
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>{t("agentControls.features.title")}</Text>
+            {(features ?? []).map((feature) => (
+              <SheetFeatureItem
+                key={`feature-${feature.id}`}
+                feature={feature}
+                disabled={disabled}
+                openSelector={openSelector}
+                handleOpenChange={handleOpenChange}
+                onSetFeature={onSetFeature}
+              />
+            ))}
+          </View>
+        ) : null}
       </AdaptiveModalSheet>
     </>
   );
@@ -1364,6 +1382,7 @@ export const AgentControls = memo(function AgentControls({
   serverId,
   onDropdownClose,
   isCompactLayout,
+  contextMeter,
 }: AgentControlsProps) {
   const { preferences, updatePreferences } = useFormPreferences();
   const agent = useSessionStore(
@@ -1551,6 +1570,19 @@ export const AgentControls = memo(function AgentControls({
     [serverId, agentId, isCompactLayout],
   );
 
+  // Compact: the mode selector moves into the options drawer as an inline list.
+  const modeSection = useMemo(
+    () => (
+      <AgentModeControl
+        serverId={serverId}
+        agentId={agentId}
+        placement="drawer"
+        isCompactLayout={isCompactLayout}
+      />
+    ),
+    [serverId, agentId, isCompactLayout],
+  );
+
   if (!agent) {
     return null;
   }
@@ -1576,6 +1608,8 @@ export const AgentControls = memo(function AgentControls({
       onDropdownClose={onDropdownClose}
       disabled={!client}
       desktopExtras={modeChip}
+      compactExtras={modeSection}
+      contextMeter={contextMeter}
       modelSelectorServerId={serverId}
       isCompactLayout={isCompactLayout}
     />
@@ -1797,6 +1831,25 @@ const styles = StyleSheet.create((theme) => ({
   },
   sheetSection: {
     gap: theme.spacing[2],
+  },
+  drawerSection: {
+    gap: theme.spacing[1],
+    marginBottom: theme.spacing[4],
+  },
+  drawerSectionTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    paddingHorizontal: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  drawerContextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
   },
   sheetSelect: {
     flexDirection: "row",

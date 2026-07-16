@@ -14,7 +14,6 @@ import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { Composer } from "@/composer";
-import { AgentModeControl } from "@/composer/agent-controls/mode-control";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
@@ -1479,18 +1478,9 @@ function ActiveAgentComposer({
     [insets.bottom, composerKeyboardStyle],
   );
 
-  const composerFooter = useMemo(
-    () =>
-      isCompactComposerLayout ? (
-        <AgentModeControl
-          serverId={serverId}
-          agentId={agentId}
-          placement="footer"
-          isCompactLayout={isCompactComposerLayout}
-        />
-      ) : undefined,
-    [isCompactComposerLayout, serverId, agentId],
-  );
+  // The compact mode selector now lives inside the composer's options drawer
+  // (grouped behind the kebab), so there is no dedicated footer control anymore.
+  const composerFooter = undefined;
 
   return (
     <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>

@@ -163,6 +163,13 @@ export const ja: TranslationResources = {
       searchPlaceholder: "モードを検索...",
       selectWithValue: "エージェントモードを選択（{{value}}）",
     },
+    options: {
+      title: "オプション",
+      open: "エージェントのオプションを開く",
+    },
+    context: {
+      title: "コンテキスト",
+    },
     hints: {
       thinking: "思考モード",
       model: "モデルを変更",

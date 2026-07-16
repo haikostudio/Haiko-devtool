@@ -163,6 +163,13 @@ export const ru: TranslationResources = {
       searchPlaceholder: "Режимы поиска...",
       selectWithValue: "Выберите режим агента ({{value}})",
     },
+    options: {
+      title: "Параметры",
+      open: "Открыть параметры агента",
+    },
+    context: {
+      title: "Контекст",
+    },
     hints: {
       thinking: "Режим мышления",
       model: "Изменить модель",

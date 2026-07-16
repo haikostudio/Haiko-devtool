@@ -163,6 +163,13 @@ export const ar: TranslationResources = {
       searchPlaceholder: "أوضاع البحث...",
       selectWithValue: "حدد وضع الوكيل ({{value}})",
     },
+    options: {
+      title: "خيارات",
+      open: "فتح خيارات الوكيل",
+    },
+    context: {
+      title: "السياق",
+    },
     hints: {
       thinking: "وضع التفكير",
       model: "تغيير النموذج",

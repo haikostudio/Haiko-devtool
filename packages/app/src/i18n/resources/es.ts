@@ -163,6 +163,13 @@ export const es: TranslationResources = {
       searchPlaceholder: "Modos de búsqueda...",
       selectWithValue: "Seleccione el modo de agente ({{value}})",
     },
+    options: {
+      title: "Opciones",
+      open: "Abrir opciones del agente",
+    },
+    context: {
+      title: "Contexto",
+    },
     hints: {
       thinking: "Modo de pensamiento",
       model: "Cambiar modelo",

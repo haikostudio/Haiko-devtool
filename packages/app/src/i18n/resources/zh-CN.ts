@@ -163,6 +163,13 @@ export const zhCN: TranslationResources = {
       searchPlaceholder: "搜索 modes...",
       selectWithValue: "选择 Agent mode（{{value}}）",
     },
+    options: {
+      title: "选项",
+      open: "打开 Agent 选项",
+    },
+    context: {
+      title: "上下文",
+    },
     hints: {
       thinking: "Thinking mode",
       model: "切换 Model",

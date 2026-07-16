@@ -161,6 +161,13 @@ export const en = {
       searchPlaceholder: "Search modes...",
       selectWithValue: "Select agent mode ({{value}})",
     },
+    options: {
+      title: "Options",
+      open: "Open agent options",
+    },
+    context: {
+      title: "Context",
+    },
     hints: {
       thinking: "Thinking mode",
       model: "Change model",
