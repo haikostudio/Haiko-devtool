@@ -117,6 +117,7 @@ import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./worksp
 import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
+import { QuotaResetWatcher } from "./quota-reset-watcher.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -1077,6 +1078,8 @@ export async function createPaseoDaemon(
     }
   });
   logger.info({ elapsed: elapsed() }, "Schedule service initialized");
+  const quotaResetWatcher = new QuotaResetWatcher({ agentManager, logger });
+  quotaResetWatcher.start();
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");
   const persistedRecords = await agentStorage.list();
   logger.info(
@@ -1454,6 +1457,7 @@ export async function createPaseoDaemon(
     terminalManager.killAll();
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
+    quotaResetWatcher.stop();
     await relayTransport?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();
