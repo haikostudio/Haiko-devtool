@@ -48,7 +48,12 @@ import {
 } from "@/hooks/use-form-preferences";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
-import { DraftAgentModeControl, AgentModeControl } from "@/composer/agent-controls/mode-control";
+import {
+  DraftAgentModeControl,
+  AgentModeControl,
+  AgentModeDrawerSection,
+  useAgentModeController,
+} from "@/composer/agent-controls/mode-control";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
@@ -1571,16 +1576,13 @@ export const AgentControls = memo(function AgentControls({
   );
 
   // Compact: the mode selector moves into the options drawer as an inline list.
+  // The controller is resolved here (inside the provider tree) because it uses
+  // toast/form-preference contexts; the drawer renders a pure section that is
+  // safe to mount inside the bottom-sheet portal.
+  const modeController = useAgentModeController(serverId, agentId);
   const modeSection = useMemo(
-    () => (
-      <AgentModeControl
-        serverId={serverId}
-        agentId={agentId}
-        placement="drawer"
-        isCompactLayout={isCompactLayout}
-      />
-    ),
-    [serverId, agentId, isCompactLayout],
+    () => <AgentModeDrawerSection controller={modeController} />,
+    [modeController],
   );
 
   if (!agent) {

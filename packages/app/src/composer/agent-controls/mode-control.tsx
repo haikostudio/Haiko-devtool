@@ -357,14 +357,25 @@ interface AgentModeControlProps {
   isCompactLayout?: boolean;
 }
 
-export const AgentModeControl = memo(function AgentModeControl({
-  serverId,
-  agentId,
-  placement,
-  isCompactLayout,
-}: AgentModeControlProps) {
-  const isCompactFormFactor = useIsCompactFormFactor();
-  const isCompact = isCompactLayout ?? isCompactFormFactor;
+interface AgentModeController {
+  provider: string;
+  providerDefinitions: AgentProviderDefinition[];
+  modeOptions: AgentMode[];
+  selectedModeId: string | null | undefined;
+  onSelectMode: (modeId: string) => void;
+  disabled: boolean;
+}
+
+/**
+ * Resolves the agent's mode state + a persist/select handler. Consumes app
+ * contexts (toast, form preferences, provider snapshot), so it must run inside
+ * the provider tree — never inside a bottom-sheet/portal. Callers render the
+ * resulting data with a pure view/section that is safe to mount in a portal.
+ */
+export function useAgentModeController(
+  serverId: string,
+  agentId: string,
+): AgentModeController | null {
   const slice = useSessionStore(
     useShallow((state) => {
       const agent = state.sessions[serverId]?.agents?.get(agentId);
@@ -418,31 +429,44 @@ export const AgentModeControl = memo(function AgentModeControl({
   );
 
   if (!slice || availableModes.length === 0) return null;
+
+  return {
+    provider: slice.provider,
+    providerDefinitions,
+    modeOptions: availableModes,
+    selectedModeId: slice.currentModeId,
+    onSelectMode: handleSelectMode,
+    disabled: !client,
+  };
+}
+
+/**
+ * Pure presentational mode list for the options drawer. Safe to render inside a
+ * portal — resolve the data with {@link useAgentModeController} in the parent.
+ */
+export function AgentModeDrawerSection({ controller }: { controller: AgentModeController | null }) {
+  if (!controller) return null;
+  return <AgentModeControlSection {...controller} />;
+}
+
+export const AgentModeControl = memo(function AgentModeControl({
+  serverId,
+  agentId,
+  placement,
+  isCompactLayout,
+}: AgentModeControlProps) {
+  const isCompactFormFactor = useIsCompactFormFactor();
+  const isCompact = isCompactLayout ?? isCompactFormFactor;
+  const controller = useAgentModeController(serverId, agentId);
+
+  if (!controller) return null;
   if (!shouldRenderForPlacement(placement, isCompact)) return null;
 
   if (placement === "drawer") {
-    return (
-      <AgentModeControlSection
-        provider={slice.provider}
-        providerDefinitions={providerDefinitions}
-        modeOptions={availableModes}
-        selectedModeId={slice.currentModeId}
-        onSelectMode={handleSelectMode}
-        disabled={!client}
-      />
-    );
+    return <AgentModeControlSection {...controller} />;
   }
 
-  return (
-    <AgentModeControlView
-      provider={slice.provider}
-      providerDefinitions={providerDefinitions}
-      modeOptions={availableModes}
-      selectedModeId={slice.currentModeId}
-      onSelectMode={handleSelectMode}
-      disabled={!client}
-    />
-  );
+  return <AgentModeControlView {...controller} />;
 });
 
 export interface DraftAgentModeControlProps {
