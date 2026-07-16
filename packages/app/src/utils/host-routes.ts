@@ -411,6 +411,10 @@ export function buildHostSessionsRoute(serverId: string) {
   return `${base}/sessions` as const;
 }
 
+export function buildDashboardRoute() {
+  return "/dashboard" as const;
+}
+
 export function buildSessionsRoute() {
   return "/sessions" as const;
 }

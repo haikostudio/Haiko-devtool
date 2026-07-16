@@ -214,6 +214,17 @@ export const ar: TranslationResources = {
       unarchive: "إلغاء الأرشفة",
     },
   },
+  dashboard: {
+    title: "لوحة القيادة",
+    empty: "لا توجد وكلاء نشطون",
+    buckets: {
+      needsInput: "بحاجة إلى إدخال",
+      failed: "فشل",
+      attention: "جاهز للمراجعة",
+      running: "قيد العمل",
+      done: "تم",
+    },
+  },
   sessions: {
     title: "السجل",
     empty: "لا توجد جلسات بعد",
@@ -798,6 +809,8 @@ export const ar: TranslationResources = {
       home: "بيت",
       settings: "إعدادات",
       closeSidebar: "إغلاق الشريط الجانبي",
+      menu: "القائمة",
+      options: "خيارات",
     },
     help: {
       trigger: "المساعدة والدعم",

@@ -217,6 +217,17 @@ export const ja: TranslationResources = {
       unarchive: "アーカイブ解除",
     },
   },
+  dashboard: {
+    title: "ダッシュボード",
+    empty: "アクティブなエージェントはありません",
+    buckets: {
+      needsInput: "入力が必要",
+      failed: "失敗",
+      attention: "レビュー待ち",
+      running: "作業中",
+      done: "完了",
+    },
+  },
   sessions: {
     title: "履歴",
     empty: "セッションがまだありません",
@@ -810,6 +821,8 @@ export const ja: TranslationResources = {
       home: "ホーム",
       settings: "設定",
       closeSidebar: "サイドバーを閉じる",
+      menu: "メニュー",
+      options: "オプション",
     },
     help: {
       trigger: "ヘルプとサポート",

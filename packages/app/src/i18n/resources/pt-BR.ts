@@ -217,6 +217,17 @@ export const ptBR: TranslationResources = {
       unarchive: "Desarquivar",
     },
   },
+  dashboard: {
+    title: "Painel",
+    empty: "Nenhum agente ativo",
+    buckets: {
+      needsInput: "Requer ação",
+      failed: "Falhou",
+      attention: "Pronto para revisar",
+      running: "Trabalhando",
+      done: "Concluído",
+    },
+  },
   sessions: {
     title: "Histórico de agentes",
     empty: "Nenhuma sessão ainda",
@@ -816,6 +827,8 @@ export const ptBR: TranslationResources = {
       home: "Início",
       settings: "Configurações",
       closeSidebar: "Fechar barra lateral",
+      menu: "Menu",
+      options: "Opções",
     },
     help: {
       trigger: "Ajuda e suporte",

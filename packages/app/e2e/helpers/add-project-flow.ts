@@ -58,6 +58,8 @@ export async function openAddProjectFlow(
   page: Page,
   expectedPage: "host" | "method" = "method",
 ): Promise<void> {
+  // Add project now lives inside the sidebar options (⋮) menu, so open it first.
+  await page.getByTestId("sidebar-options").click();
   await page.getByTestId("sidebar-add-project").click();
   await expect(addProjectFlow(page)).toBeVisible({ timeout: 30_000 });
   await expectAddProjectPage(page, expectedPage);

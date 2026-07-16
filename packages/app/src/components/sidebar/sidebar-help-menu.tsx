@@ -76,12 +76,14 @@ function HostVersionHint({ host }: { host: HostProfile }) {
   );
 }
 
-export function SidebarHelpMenu() {
+// The Help section's menu items, rendered without the surrounding DropdownMenu /
+// trigger so they can be embedded inside another menu (the sidebar options menu)
+// as well as the standalone Help dropdown.
+export function SidebarHelpMenuItems() {
   const { t } = useTranslation();
   const isCompactLayout = useIsCompactFormFactor();
   const openAppDiagnostic = useAppDiagnosticStore((state) => state.open);
   const setShortcutsDialogOpen = useKeyboardShortcutsStore((state) => state.setShortcutsDialogOpen);
-  const [open, setOpen] = useState(false);
   const showKeyboardShortcuts = !isNative && !isCompactLayout;
   const version = formatVersionWithPrefix(resolveAppVersion());
   const hosts = useHosts();
@@ -101,6 +103,65 @@ export function SidebarHelpMenu() {
   const openChangelog = useCallback(() => {
     void openExternalUrl(CHANGELOG_URL);
   }, []);
+
+  return (
+    <>
+      <DropdownMenuLabel>{t("sidebar.help.sectionHelp")}</DropdownMenuLabel>
+      {showKeyboardShortcuts ? (
+        <DropdownMenuItem
+          testID="sidebar-help-shortcuts"
+          leading={shortcutsLeadingIcon}
+          onSelect={openKeyboardShortcuts}
+        >
+          {t("sidebar.help.shortcuts")}
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem
+        testID="sidebar-help-changelog"
+        leading={changelogLeadingIcon}
+        onSelect={openChangelog}
+      >
+        {t("sidebar.help.whatsNew")}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        testID="sidebar-help-diagnostics"
+        leading={diagnosticLeadingIcon}
+        onSelect={openAppDiagnostic}
+      >
+        {t("sidebar.help.diagnostics")}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel>{t("sidebar.help.reportIssue")}</DropdownMenuLabel>
+      <DropdownMenuItem
+        testID="sidebar-help-discord"
+        leading={discordLeadingIcon}
+        onSelect={openDiscord}
+      >
+        {t("sidebar.help.discord")}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        testID="sidebar-help-github"
+        leading={githubLeadingIcon}
+        onSelect={openGitHubIssue}
+      >
+        {t("sidebar.help.github")}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <View style={styles.versionList}>
+        <DropdownMenuHint style={styles.versionHint} testID="sidebar-help-version">
+          {t("sidebar.help.version", { version })}
+        </DropdownMenuHint>
+        {hosts.map((host) => (
+          <HostVersionHint key={host.serverId} host={host} />
+        ))}
+      </View>
+    </>
+  );
+}
+
+export function SidebarHelpMenu() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -127,55 +188,7 @@ export function SidebarHelpMenu() {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent side="top" align="end" offset={8} width={280} testID="sidebar-help-menu">
-        <DropdownMenuLabel>{t("sidebar.help.sectionHelp")}</DropdownMenuLabel>
-        {showKeyboardShortcuts ? (
-          <DropdownMenuItem
-            testID="sidebar-help-shortcuts"
-            leading={shortcutsLeadingIcon}
-            onSelect={openKeyboardShortcuts}
-          >
-            {t("sidebar.help.shortcuts")}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          testID="sidebar-help-changelog"
-          leading={changelogLeadingIcon}
-          onSelect={openChangelog}
-        >
-          {t("sidebar.help.whatsNew")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID="sidebar-help-diagnostics"
-          leading={diagnosticLeadingIcon}
-          onSelect={openAppDiagnostic}
-        >
-          {t("sidebar.help.diagnostics")}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>{t("sidebar.help.reportIssue")}</DropdownMenuLabel>
-        <DropdownMenuItem
-          testID="sidebar-help-discord"
-          leading={discordLeadingIcon}
-          onSelect={openDiscord}
-        >
-          {t("sidebar.help.discord")}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          testID="sidebar-help-github"
-          leading={githubLeadingIcon}
-          onSelect={openGitHubIssue}
-        >
-          {t("sidebar.help.github")}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <View style={styles.versionList}>
-          <DropdownMenuHint style={styles.versionHint} testID="sidebar-help-version">
-            {t("sidebar.help.version", { version })}
-          </DropdownMenuHint>
-          {hosts.map((host) => (
-            <HostVersionHint key={host.serverId} host={host} />
-          ))}
-        </View>
+        <SidebarHelpMenuItems />
       </DropdownMenuContent>
     </DropdownMenu>
   );

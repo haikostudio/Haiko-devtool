@@ -217,6 +217,17 @@ export const es: TranslationResources = {
       unarchive: "Desarchivar",
     },
   },
+  dashboard: {
+    title: "Panel",
+    empty: "No hay agentes activos",
+    buckets: {
+      needsInput: "Requiere acción",
+      failed: "Fallido",
+      attention: "Listo para revisar",
+      running: "Trabajando",
+      done: "Hecho",
+    },
+  },
   sessions: {
     title: "Historial",
     empty: "Aún no hay sesiones",
@@ -825,6 +836,8 @@ export const es: TranslationResources = {
       home: "Hogar",
       settings: "Ajustes",
       closeSidebar: "Cerrar barra lateral",
+      menu: "Menú",
+      options: "Opciones",
     },
     help: {
       trigger: "Ayuda y soporte",

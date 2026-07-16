@@ -213,6 +213,17 @@ export const en = {
       unarchive: "Unarchive",
     },
   },
+  dashboard: {
+    title: "Dashboard",
+    empty: "No active agents",
+    buckets: {
+      needsInput: "Needs input",
+      failed: "Failed",
+      attention: "Ready to review",
+      running: "Working",
+      done: "Done",
+    },
+  },
   sessions: {
     title: "History",
     empty: "No sessions yet",
@@ -805,6 +816,8 @@ export const en = {
       home: "Home",
       settings: "Settings",
       closeSidebar: "Close sidebar",
+      menu: "Menu",
+      options: "Options",
     },
     help: {
       trigger: "Help and support",

@@ -23,6 +23,11 @@ import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useQueryClient } from "@tanstack/react-query";
 import { agentHistoryQueryKey } from "@/hooks/agent-history-query-key";
+import {
+  deriveAgentStateBucket,
+  type WorkspaceStateBucket,
+} from "@getpaseo/protocol/agent-state-bucket";
+import { STATUS_BUCKET_ORDER } from "@/hooks/sidebar-status-view-model";
 
 interface AgentListProps {
   agents: AggregatedAgent[];
@@ -34,6 +39,8 @@ interface AgentListProps {
   listFooterComponent?: ReactElement | null;
   showAttentionIndicator?: boolean;
   showHostColumn?: boolean;
+  /** How to bucket the rows into sections. Defaults to recency ("date"). */
+  groupBy?: "date" | "status";
 }
 
 type DateSectionKey = "today" | "yesterday" | "thisWeek" | "thisMonth" | "older";
@@ -47,7 +54,7 @@ const DATE_SECTION_ORDER = [
 ] as const satisfies readonly DateSectionKey[];
 
 type FlatListItem =
-  | { type: "header"; key: string; section: DateSectionKey }
+  | { type: "header"; key: string; label: string }
   | { type: "agent"; key: string; agent: AggregatedAgent };
 
 function deriveDateSectionKey(lastActivityAt: Date): DateSectionKey {
@@ -91,6 +98,80 @@ function formatDateSectionLabel(t: TFunction, section: DateSectionKey): string {
     case "older":
       return t("agentList.dateSections.older");
   }
+}
+
+function formatStatusBucketLabel(t: TFunction, bucket: WorkspaceStateBucket): string {
+  switch (bucket) {
+    case "needs_input":
+      return t("dashboard.buckets.needsInput");
+    case "failed":
+      return t("dashboard.buckets.failed");
+    case "attention":
+      return t("dashboard.buckets.attention");
+    case "running":
+      return t("dashboard.buckets.running");
+    case "done":
+      return t("dashboard.buckets.done");
+  }
+}
+
+function buildDateSectionItems(agents: AggregatedAgent[], t: TFunction): FlatListItem[] {
+  const buckets = new Map<DateSectionKey, AggregatedAgent[]>();
+  for (const agent of agents) {
+    const section = deriveDateSectionKey(agent.lastActivityAt);
+    const existing = buckets.get(section) ?? [];
+    existing.push(agent);
+    buckets.set(section, existing);
+  }
+
+  const result: FlatListItem[] = [];
+  for (const section of DATE_SECTION_ORDER) {
+    const data = buckets.get(section);
+    if (!data || data.length === 0) {
+      continue;
+    }
+    result.push({
+      type: "header",
+      key: `header:${section}`,
+      label: formatDateSectionLabel(t, section),
+    });
+    for (const agent of data) {
+      result.push({ type: "agent", key: `${agent.serverId}:${agent.id}`, agent });
+    }
+  }
+  return result;
+}
+
+function buildStatusSectionItems(agents: AggregatedAgent[], t: TFunction): FlatListItem[] {
+  const buckets = new Map<WorkspaceStateBucket, AggregatedAgent[]>();
+  for (const agent of agents) {
+    const bucket = deriveAgentStateBucket({
+      status: agent.status,
+      pendingPermissionCount: agent.pendingPermissionCount,
+      requiresAttention: agent.requiresAttention,
+      attentionReason: agent.attentionReason,
+    });
+    const existing = buckets.get(bucket) ?? [];
+    existing.push(agent);
+    buckets.set(bucket, existing);
+  }
+
+  const result: FlatListItem[] = [];
+  for (const bucket of STATUS_BUCKET_ORDER) {
+    const data = buckets.get(bucket);
+    if (!data || data.length === 0) {
+      continue;
+    }
+    result.push({
+      type: "header",
+      key: `header:${bucket}`,
+      label: `${formatStatusBucketLabel(t, bucket)} · ${data.length}`,
+    });
+    for (const agent of data) {
+      result.push({ type: "agent", key: `${agent.serverId}:${agent.id}`, agent });
+    }
+  }
+  return result;
 }
 
 function SessionBadge({
@@ -367,6 +448,7 @@ export function AgentList({
   listFooterComponent,
   showAttentionIndicator = true,
   showHostColumn = false,
+  groupBy = "date",
 }: AgentListProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -453,35 +535,18 @@ export function AgentList({
     setActionAgent(null);
   }, [actionAgent, actionClient, archiveAgent]);
 
-  const flatItems = useMemo((): FlatListItem[] => {
-    const buckets = new Map<DateSectionKey, AggregatedAgent[]>();
-    for (const agent of agents) {
-      const section = deriveDateSectionKey(agent.lastActivityAt);
-      const existing = buckets.get(section) ?? [];
-      existing.push(agent);
-      buckets.set(section, existing);
-    }
-
-    const result: FlatListItem[] = [];
-    for (const section of DATE_SECTION_ORDER) {
-      const data = buckets.get(section);
-      if (!data || data.length === 0) {
-        continue;
-      }
-      result.push({ type: "header", key: `header:${section}`, section });
-      for (const agent of data) {
-        result.push({ type: "agent", key: `${agent.serverId}:${agent.id}`, agent });
-      }
-    }
-    return result;
-  }, [agents]);
+  const flatItems = useMemo(
+    (): FlatListItem[] =>
+      groupBy === "status" ? buildStatusSectionItems(agents, t) : buildDateSectionItems(agents, t),
+    [agents, groupBy, t],
+  );
 
   const renderItem: ListRenderItem<FlatListItem> = useCallback(
     ({ item }) => {
       if (item.type === "header") {
         return (
           <View style={styles.sectionHeading}>
-            <Text style={styles.sectionTitle}>{formatDateSectionLabel(t, item.section)}</Text>
+            <Text style={styles.sectionTitle}>{item.label}</Text>
           </View>
         );
       }
@@ -504,7 +569,6 @@ export function AgentList({
       selectedAgentId,
       showAttentionIndicator,
       showHostColumn,
-      t,
     ],
   );
 

@@ -214,6 +214,17 @@ export const zhCN: TranslationResources = {
       unarchive: "取消归档",
     },
   },
+  dashboard: {
+    title: "仪表板",
+    empty: "没有活动的代理",
+    buckets: {
+      needsInput: "需要输入",
+      failed: "失败",
+      attention: "待审查",
+      running: "运行中",
+      done: "完成",
+    },
+  },
   sessions: {
     title: "历史",
     empty: "还没有会话",
@@ -793,6 +804,8 @@ export const zhCN: TranslationResources = {
       home: "首页",
       settings: "设置",
       closeSidebar: "关闭侧边栏",
+      menu: "菜单",
+      options: "选项",
     },
     help: {
       trigger: "帮助与支持",

@@ -217,6 +217,17 @@ export const fr: TranslationResources = {
       unarchive: "Désarchiver",
     },
   },
+  dashboard: {
+    title: "Tableau de bord",
+    empty: "Aucun agent actif",
+    buckets: {
+      needsInput: "Action requise",
+      failed: "Échec",
+      attention: "À relire",
+      running: "En cours",
+      done: "Terminé",
+    },
+  },
   sessions: {
     title: "Historique",
     empty: "Aucune séance pour l'instant",
@@ -824,6 +835,8 @@ export const fr: TranslationResources = {
       home: "Maison",
       settings: "Paramètres",
       closeSidebar: "Fermer la barre latérale",
+      menu: "Menu",
+      options: "Options",
     },
     help: {
       trigger: "Aide et assistance",

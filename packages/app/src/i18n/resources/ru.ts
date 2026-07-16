@@ -216,6 +216,17 @@ export const ru: TranslationResources = {
       unarchive: "Разархивировать",
     },
   },
+  dashboard: {
+    title: "Панель",
+    empty: "Нет активных агентов",
+    buckets: {
+      needsInput: "Требуется ввод",
+      failed: "Ошибка",
+      attention: "Готово к проверке",
+      running: "В работе",
+      done: "Готово",
+    },
+  },
   sessions: {
     title: "История",
     empty: "Сеансов пока нет",
@@ -817,6 +828,8 @@ export const ru: TranslationResources = {
       home: "Дом",
       settings: "Настройки",
       closeSidebar: "Закрыть боковую панель",
+      menu: "Меню",
+      options: "Опции",
     },
     help: {
       trigger: "Помощь и поддержка",
