@@ -42,6 +42,8 @@ export interface StreamEdgeSlotProps {
 export interface StreamViewportHandle {
   scrollToBottom: (reason?: BottomAnchorLocalRequest["reason"]) => void;
   prepareForViewportChange: () => void;
+  /** Scroll the viewport so the given stream item lands near the top. Web-only for now. */
+  scrollToItem?: (itemId: string) => void;
 }
 
 export interface StreamSegmentRenderers {
@@ -70,6 +72,8 @@ export interface StreamRenderInput {
   isAuthoritativeHistoryReady: boolean;
   onNearBottomChange: (value: boolean) => void;
   onNearHistoryStart: () => void;
+  /** Fired on every viewport scroll event; drives transient chrome like the magic scrollbar. */
+  onScrollActivity?: () => void;
   isLoadingOlderHistory: boolean;
   hasOlderHistory: boolean;
   scrollEnabled: boolean;

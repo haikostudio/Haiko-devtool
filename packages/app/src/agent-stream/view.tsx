@@ -73,6 +73,8 @@ import {
   type TurnContentStrategy,
 } from "./turn-footer";
 import { layoutStream, type StreamLayoutItem } from "./layout";
+import { StreamMagicScrollbar } from "./magic-scrollbar";
+import type { StreamMagicScrollbarEntry } from "./magic-scrollbar-types";
 import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
@@ -266,6 +268,7 @@ const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
+const MAGIC_SCROLLBAR_IDLE_HIDE_MS = 1400;
 
 function buildChatHistoryAttachment(input: {
   draftId: string;
@@ -351,6 +354,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [isMobile],
     );
     const [isNearBottom, setIsNearBottom] = useState(true);
+    // Magic scrollbar visibility: slides in on scroll activity, hides after a
+    // short idle delay; on desktop it also stays out while the pane is hovered.
+    const [magicScrollbarActive, setMagicScrollbarActive] = useState(false);
+    const [isPaneHovered, setIsPaneHovered] = useState(false);
+    const magicScrollbarIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
       new Set(),
     );
@@ -408,9 +416,31 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     useEffect(() => {
       setIsNearBottom(true);
+      setMagicScrollbarActive(false);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
     }, [agentId]);
+
+    const handleScrollActivity = useCallback(() => {
+      setMagicScrollbarActive(true);
+      if (magicScrollbarIdleTimerRef.current) {
+        clearTimeout(magicScrollbarIdleTimerRef.current);
+      }
+      magicScrollbarIdleTimerRef.current = setTimeout(() => {
+        setMagicScrollbarActive(false);
+      }, MAGIC_SCROLLBAR_IDLE_HIDE_MS);
+    }, []);
+    useEffect(() => {
+      return () => {
+        if (magicScrollbarIdleTimerRef.current) {
+          clearTimeout(magicScrollbarIdleTimerRef.current);
+        }
+      };
+    }, []);
+    // Non-bubbling pointer events on a plain View (docs/hover.md); they never
+    // fire on native, where the magic scrollbar renders null anyway.
+    const handlePanePointerEnter = useCallback(() => setIsPaneHovered(true), []);
+    const handlePanePointerLeave = useCallback(() => setIsPaneHovered(false), []);
 
     const handleInlinePathPress = useStableEvent(
       (target: InlinePathTarget, disposition: OpenFileDisposition) => {
@@ -585,6 +615,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         isMobileBreakpoint: isMobile,
       });
     }, [context.status, isMobile, projectedToolCalls.head, projectedToolCalls.tail]);
+    // One dot per user message for the magic scrollbar. Web-only affordance
+    // (the native component renders null); on web the segments are already in
+    // visual top-to-bottom order.
+    const magicScrollbarEntries = useMemo<StreamMagicScrollbarEntry[]>(() => {
+      const { historyVirtualized, historyMounted, liveHead } = baseRenderModel.segments;
+      const entries: StreamMagicScrollbarEntry[] = [];
+      for (const items of [historyVirtualized, historyMounted, liveHead]) {
+        for (const item of items) {
+          if (item.kind === "user_message" && item.text.trim().length > 0) {
+            entries.push({ id: item.id, text: item.text });
+          }
+        }
+      }
+      return entries;
+    }, [baseRenderModel.segments]);
     const streamLayout = useMemo(
       () =>
         layoutStream({
@@ -617,6 +662,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const scrollToBottom = useCallback(() => {
       viewportRef.current?.scrollToBottom("jump-to-bottom");
+    }, []);
+
+    const jumpToStreamItem = useCallback((itemId: string) => {
+      viewportRef.current?.scrollToItem?.(itemId);
     }, []);
 
     const setInlineDetailsExpanded = useCallback(
@@ -1016,7 +1065,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     return (
       <ToolCallSheetProvider>
-        <View style={stylesheet.container}>
+        <View
+          style={stylesheet.container}
+          onPointerEnter={handlePanePointerEnter}
+          onPointerLeave={handlePanePointerLeave}
+        >
           <MessageOuterSpacingProvider disableOuterSpacing>
             {streamRenderStrategy.render({
               agentId,
@@ -1031,6 +1084,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isAuthoritativeHistoryReady,
               onNearBottomChange: setIsNearBottom,
               onNearHistoryStart: loadOlder,
+              onScrollActivity: handleScrollActivity,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
               scrollEnabled: streamScrollEnabled,
@@ -1054,6 +1108,13 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
+          {magicScrollbarEntries.length >= 2 ? (
+            <StreamMagicScrollbar
+              entries={magicScrollbarEntries}
+              visible={magicScrollbarActive || (!isMobile && isPaneHovered)}
+              onJumpToEntry={jumpToStreamItem}
+            />
+          ) : null}
         </View>
       </ToolCallSheetProvider>
     );
