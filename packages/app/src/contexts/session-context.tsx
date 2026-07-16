@@ -4,6 +4,7 @@ import { AppState } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useClientActivity } from "@/hooks/use-client-activity";
+import { useSidebarOrderSync } from "@/hooks/use-sidebar-order-sync";
 import { usePushTokenRegistration } from "@/hooks/use-push-token-registration";
 import { clearArchiveAgentPending } from "@/hooks/use-archive-agent";
 import { refreshAgentInitializationTimeout } from "@/hooks/use-agent-initialization";
@@ -517,6 +518,10 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   const queryClient = useQueryClient();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const toast = useToast();
+
+  // Keep the sidebar project/workspace order in sync with the daemon so the
+  // order matches across devices (PWA, desktop, mobile).
+  useSidebarOrderSync(serverId, client, isConnected);
 
   // Zustand store actions
   const initializeSession = useSessionStore((state) => state.initializeSession);

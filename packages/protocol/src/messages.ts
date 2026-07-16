@@ -838,6 +838,26 @@ export const WorkspacePinSetRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Shared sidebar-order shape: the ordered list of project keys, plus the ordered
+// list of workspace keys per project. Pure structural declaration — normalization
+// (dedupe/trim) happens in explicit consumers, never in the wire schema.
+export const SidebarOrderSchema = z.object({
+  projectOrder: z.array(z.string()),
+  workspaceOrderByProject: z.record(z.string(), z.array(z.string())),
+});
+export type SidebarOrder = z.infer<typeof SidebarOrderSchema>;
+
+export const SidebarOrderGetRequestSchema = z.object({
+  type: z.literal("settings.sidebarOrder.get.request"),
+  requestId: z.string(),
+});
+
+export const SidebarOrderSetRequestSchema = z.object({
+  type: z.literal("settings.sidebarOrder.set.request"),
+  order: SidebarOrderSchema,
+  requestId: z.string(),
+});
+
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("set_voice_mode"),
   enabled: z.boolean(),
@@ -1469,6 +1489,25 @@ export const WorkspacePinSetResponsePayloadSchema = z.object({
 export const WorkspacePinSetResponseSchema = z.object({
   type: z.literal("workspace.pin.set.response"),
   payload: WorkspacePinSetResponsePayloadSchema,
+});
+
+export const SidebarOrderGetResponseSchema = z.object({
+  type: z.literal("settings.sidebarOrder.get.response"),
+  payload: z.object({
+    order: SidebarOrderSchema,
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const SidebarOrderSetResponseSchema = z.object({
+  type: z.literal("settings.sidebarOrder.set.response"),
+  payload: z.object({
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
 });
 
 export const SetVoiceModeResponseMessageSchema = z.object({
@@ -2143,6 +2182,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   ProjectRemoveRequestSchema,
   WorkspaceTitleSetRequestSchema,
   WorkspacePinSetRequestSchema,
+  SidebarOrderGetRequestSchema,
+  SidebarOrderSetRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2469,6 +2510,8 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceGithubRepositorySearch: z.boolean().optional(),
         // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
         projectCreateDirectory: z.boolean().optional(),
+        // COMPAT(sidebarOrderSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        sidebarOrderSync: z.boolean().optional(),
       })
       .optional(),
   })
@@ -2564,6 +2607,15 @@ export const DaemonConfigChangedStatusPayloadSchema = z
   })
   .passthrough();
 
+// Broadcast to all connected clients whenever the daemon-persisted sidebar order
+// changes, so other devices update live. Passthrough keeps forward-compat.
+export const SidebarOrderChangedStatusPayloadSchema = z
+  .object({
+    status: z.literal("sidebar_order_changed"),
+    order: SidebarOrderSchema,
+  })
+  .passthrough();
+
 export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   AgentCreatedStatusPayloadSchema,
   AgentCreateFailedStatusPayloadSchema,
@@ -2572,6 +2624,7 @@ export const KnownStatusPayloadSchema = z.discriminatedUnion("status", [
   ShutdownRequestedStatusPayloadSchema,
   RestartRequestedStatusPayloadSchema,
   DaemonConfigChangedStatusPayloadSchema,
+  SidebarOrderChangedStatusPayloadSchema,
 ]);
 
 export type KnownStatusPayload = z.infer<typeof KnownStatusPayloadSchema>;
@@ -4494,6 +4547,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ProjectRemoveResponseSchema,
   WorkspaceTitleSetResponseSchema,
   WorkspacePinSetResponseSchema,
+  SidebarOrderGetResponseSchema,
+  SidebarOrderSetResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -4658,6 +4713,8 @@ export type WorkspaceTitleSetResponsePayload = z.infer<
 >;
 export type WorkspacePinSetResponse = z.infer<typeof WorkspacePinSetResponseSchema>;
 export type WorkspacePinSetResponsePayload = z.infer<typeof WorkspacePinSetResponsePayloadSchema>;
+export type SidebarOrderGetResponse = z.infer<typeof SidebarOrderGetResponseSchema>;
+export type SidebarOrderSetResponse = z.infer<typeof SidebarOrderSetResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
@@ -4791,6 +4848,11 @@ export type ProjectRenameRequest = z.infer<typeof ProjectRenameRequestSchema>;
 export type ProjectRemoveRequest = z.infer<typeof ProjectRemoveRequestSchema>;
 export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSchema>;
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
+export type SidebarOrderGetRequest = z.infer<typeof SidebarOrderGetRequestSchema>;
+export type SidebarOrderSetRequest = z.infer<typeof SidebarOrderSetRequestSchema>;
+export type SidebarOrderChangedStatusPayload = z.infer<
+  typeof SidebarOrderChangedStatusPayloadSchema
+>;
 export type SetAgentModeRequestMessage = z.infer<typeof SetAgentModeRequestMessageSchema>;
 export type SetAgentModelRequestMessage = z.infer<typeof SetAgentModelRequestMessageSchema>;
 export type SetAgentThinkingRequestMessage = z.infer<typeof SetAgentThinkingRequestMessageSchema>;

@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+export interface SidebarOrderSnapshot {
+  projectOrder: string[];
+  workspaceOrderByProject: Record<string, string[]>;
+}
+
 interface SidebarOrderStoreState {
   projectOrder: string[];
   workspaceOrderByProject: Record<string, string[]>;
@@ -9,6 +14,10 @@ interface SidebarOrderStoreState {
   setProjectOrder: (keys: string[]) => void;
   getWorkspaceOrder: (projectKey: string) => string[];
   setWorkspaceOrder: (projectKey: string, keys: string[]) => void;
+  // Daemon-sync helpers: read the full order to push, and replace the full order
+  // when the daemon (or another device) is the authority. See use-sidebar-order-sync.
+  getSnapshot: () => SidebarOrderSnapshot;
+  hydrateFromRemote: (order: SidebarOrderSnapshot) => void;
 }
 
 interface SidebarOrderPersistedState {
@@ -131,6 +140,16 @@ export const useSidebarOrderStore = create<SidebarOrderStoreState>()(
             [scope]: normalized,
           },
         }));
+      },
+      getSnapshot: () => ({
+        projectOrder: get().projectOrder,
+        workspaceOrderByProject: get().workspaceOrderByProject,
+      }),
+      hydrateFromRemote: (order) => {
+        set({
+          projectOrder: normalizeKeys(order.projectOrder),
+          workspaceOrderByProject: normalizeWorkspaceOrderByProject(order.workspaceOrderByProject),
+        });
       },
     }),
     {

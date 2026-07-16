@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
+import { SidebarOrderStore } from "./sidebar-order-store.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type pino from "pino";
@@ -24,6 +25,7 @@ import {
   type ServerCapabilityState,
   type ServerCapabilities,
   type WSOutboundMessage,
+  type SidebarOrder,
   wrapSessionMessage,
 } from "./messages.js";
 import { asUint8Array, decodeBinaryFrame } from "@getpaseo/protocol/binary-frames/index";
@@ -430,6 +432,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly workspaceAutoName: WorkspaceAutoName;
   private readonly downloadTokenStore: DownloadTokenStore;
   private readonly paseoHome: string;
+  private readonly sidebarOrderStore: SidebarOrderStore;
   private readonly worktreesRoot: string | undefined;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
@@ -582,6 +585,14 @@ export class VoiceAssistantWebSocketServer {
       );
       this.agentManager.updateProviderRegistry(nextAgentManagerState);
       this.broadcastDaemonConfigChanged(config);
+    });
+
+    this.sidebarOrderStore = new SidebarOrderStore(
+      join(paseoHome, "sidebar-order.json"),
+      this.logger,
+    );
+    this.sidebarOrderStore.onChange((order) => {
+      this.broadcastSidebarOrderChanged(order);
     });
 
     const pushLogger = this.logger.child({ module: "push" });
@@ -1039,6 +1050,7 @@ export class VoiceAssistantWebSocketServer {
       agentStorage: this.agentStorage,
       projectRegistry: this.projectRegistry,
       workspaceRegistry: this.workspaceRegistry,
+      sidebarOrderStore: this.sidebarOrderStore,
       chatService: this.chatService,
       loopService: this.loopService,
       scheduleService: this.scheduleService,
@@ -1272,6 +1284,8 @@ export class VoiceAssistantWebSocketServer {
         workspaceGithubRepositorySearch: true,
         // COMPAT(projectCreateDirectory): added in v0.1.108, remove gate after 2027-01-15.
         projectCreateDirectory: true,
+        // COMPAT(sidebarOrderSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        sidebarOrderSync: true,
       },
     };
   }
@@ -1298,6 +1312,15 @@ export class VoiceAssistantWebSocketServer {
 
   private broadcastCapabilitiesUpdate(): void {
     this.broadcast(this.createServerInfoMessage());
+  }
+
+  private broadcastSidebarOrderChanged(order: SidebarOrder): void {
+    this.broadcast(
+      wrapSessionMessage({
+        type: "status",
+        payload: { status: "sidebar_order_changed", order },
+      }),
+    );
   }
 
   private broadcastDaemonConfigChanged(config: MutableDaemonConfig): void {

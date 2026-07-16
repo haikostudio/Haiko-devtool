@@ -89,6 +89,7 @@ import type {
   PaseoConfigRaw,
   PaseoConfigRevision,
   WorkspaceCreateRequest,
+  SidebarOrder,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -1985,6 +1986,24 @@ export class DaemonClient {
         cwd,
       },
       responseType: "open_project_response",
+    });
+  }
+
+  async getSidebarOrder(requestId?: string): Promise<SidebarOrder> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "settings.sidebarOrder.get.response",
+      SidebarOrder
+    >({
+      requestId,
+      message: { type: "settings.sidebarOrder.get.request" },
+      selectPayload: (payload) => payload.order,
+    });
+  }
+
+  async setSidebarOrder(order: SidebarOrder, requestId?: string): Promise<void> {
+    await this.sendNamespacedCorrelatedSessionRequest<"settings.sidebarOrder.set.response">({
+      requestId,
+      message: { type: "settings.sidebarOrder.set.request", order },
     });
   }
 

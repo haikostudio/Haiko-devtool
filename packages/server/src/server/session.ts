@@ -1,7 +1,7 @@
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
 import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
-import { basename, normalize, resolve, sep } from "path";
+import { basename, join, normalize, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
 import {
@@ -18,6 +18,7 @@ import {
   type ProjectPlacementPayload,
   type WorkspaceSetupSnapshot,
   type WorkspaceDescriptorPayload,
+  type SidebarOrder,
 } from "./messages.js";
 import type {
   TerminalManager,
@@ -131,6 +132,7 @@ import {
   type ProjectRegistry,
   type WorkspaceRegistry,
 } from "./workspace-registry.js";
+import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import { VoiceSession } from "./session/voice/voice-session.js";
@@ -429,6 +431,7 @@ export interface SessionOptions {
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
   workspaceRegistry: WorkspaceRegistry;
+  sidebarOrderStore?: SidebarOrderStore;
   filesystem?: SessionFileSystem;
   chatService: FileBackedChatService;
   scheduleService: ScheduleService;
@@ -556,6 +559,7 @@ export class Session {
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
+  private readonly sidebarOrderStore: SidebarOrderStore;
   private readonly filesystem: SessionFileSystem;
   private readonly github: GitHubService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
@@ -620,6 +624,7 @@ export class Session {
       agentStorage,
       projectRegistry,
       workspaceRegistry,
+      sidebarOrderStore,
       filesystem,
       chatService,
       scheduleService,
@@ -682,6 +687,8 @@ export class Session {
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
+    this.sidebarOrderStore =
+      sidebarOrderStore ?? new SidebarOrderStore(join(paseoHome, "sidebar-order.json"), logger);
     this.filesystem = filesystem ?? nodeSessionFileSystem;
     this.github = github ?? createGitHubService();
     this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
@@ -1390,6 +1397,7 @@ export class Session {
       this.dispatchAgentConfigMessage(msg) ??
       this.dispatchCheckoutMessage(msg) ??
       this.dispatchWorkspaceAndProjectMessage(msg) ??
+      this.dispatchSettingsMessage(msg) ??
       this.dispatchWorkspaceFileMessage(msg) ??
       this.dispatchProviderMessage(msg) ??
       this.dispatchTerminalMessage(msg) ??
@@ -1664,6 +1672,17 @@ export class Session {
         return this.handleWorkspaceTitleSetRequest(msg.workspaceId, msg.title, msg.requestId);
       case "workspace.pin.set.request":
         return this.handleWorkspacePinSetRequest(msg.workspaceId, msg.pinned, msg.requestId);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchSettingsMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    switch (msg.type) {
+      case "settings.sidebarOrder.get.request":
+        return this.handleSidebarOrderGetRequest(msg.requestId);
+      case "settings.sidebarOrder.set.request":
+        return this.handleSidebarOrderSetRequest(msg.order, msg.requestId);
       default:
         return undefined;
     }
@@ -2397,6 +2416,58 @@ export class Session {
         },
       });
       emitResponse(false, null, getErrorMessageOr(error, "Failed to pin workspace"));
+    }
+  }
+
+  private async handleSidebarOrderGetRequest(requestId: string): Promise<void> {
+    try {
+      const order = await this.sidebarOrderStore.get();
+      this.emit({
+        type: "settings.sidebarOrder.get.response",
+        payload: { order, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: settings.sidebarOrder.get.request error",
+      );
+      this.emit({
+        type: "settings.sidebarOrder.get.response",
+        payload: {
+          order: { projectOrder: [], workspaceOrderByProject: {} },
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read sidebar order"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleSidebarOrderSetRequest(
+    order: SidebarOrder,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      // Persisting notifies the store's change listeners, which broadcast
+      // sidebar_order_changed to every connected client (this one included).
+      await this.sidebarOrderStore.set(order);
+      this.emit({
+        type: "settings.sidebarOrder.set.response",
+        payload: { success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: settings.sidebarOrder.set.request error",
+      );
+      this.emit({
+        type: "settings.sidebarOrder.set.response",
+        payload: {
+          success: false,
+          error: getErrorMessageOr(error, "Failed to save sidebar order"),
+          requestId,
+        },
+      });
     }
   }
 
