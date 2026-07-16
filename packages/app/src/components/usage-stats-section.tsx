@@ -131,13 +131,13 @@ function bucketSegments(
 
 function buildDayBars(days: UsageStatsDay[], series: SeriesProject[]): ChartBar[] {
   const window = days.slice(-DAYS_WINDOW);
-  return window.map((day, index) => {
+  return window.map((day) => {
     const { segments, total } = bucketSegments(day.projects, series);
     const dayOfMonth = Number.parseInt(day.date.slice(8, 10), 10);
     return {
       key: day.date,
       label: String(dayOfMonth),
-      showLabel: window.length <= 7 || index % 2 === window.length % 2,
+      showLabel: true,
       total,
       segments,
     };
@@ -164,7 +164,7 @@ function buildHourBars(days: UsageStatsDay[], series: SeriesProject[], now: Date
     bars.push({
       key: `${dateKey}:${slot.getHours()}`,
       label: `${slot.getHours()}h`,
-      showLabel: slot.getHours() % 4 === 0,
+      showLabel: true,
       total,
       segments,
     });
