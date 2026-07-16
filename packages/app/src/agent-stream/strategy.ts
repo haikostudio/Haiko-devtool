@@ -74,6 +74,11 @@ export interface StreamRenderInput {
   onNearHistoryStart: () => void;
   /** Fired on every viewport scroll event; drives transient chrome like the magic scrollbar. */
   onScrollActivity?: () => void;
+  /**
+   * Reports the user message currently at the top of the viewport (the turn
+   * being read). Web-only for now; feeds the magic scrollbar's active dot.
+   */
+  onActiveItemChange?: (itemId: string | null) => void;
   isLoadingOlderHistory: boolean;
   hasOlderHistory: boolean;
   scrollEnabled: boolean;

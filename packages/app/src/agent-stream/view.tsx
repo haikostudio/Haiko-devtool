@@ -358,6 +358,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // short idle delay; on desktop it also stays out while the pane is hovered.
     const [magicScrollbarActive, setMagicScrollbarActive] = useState(false);
     const [isPaneHovered, setIsPaneHovered] = useState(false);
+    const [activeStreamItemId, setActiveStreamItemId] = useState<string | null>(null);
     const magicScrollbarIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
       new Set(),
@@ -417,6 +418,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     useEffect(() => {
       setIsNearBottom(true);
       setMagicScrollbarActive(false);
+      setActiveStreamItemId(null);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
     }, [agentId]);
@@ -1085,6 +1087,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               onNearBottomChange: setIsNearBottom,
               onNearHistoryStart: loadOlder,
               onScrollActivity: handleScrollActivity,
+              onActiveItemChange: setActiveStreamItemId,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
               scrollEnabled: streamScrollEnabled,
@@ -1112,6 +1115,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             <StreamMagicScrollbar
               entries={magicScrollbarEntries}
               visible={magicScrollbarActive || (!isMobile && isPaneHovered)}
+              activeEntryId={activeStreamItemId}
               onJumpToEntry={jumpToStreamItem}
             />
           ) : null}

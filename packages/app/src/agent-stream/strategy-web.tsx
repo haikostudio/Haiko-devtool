@@ -22,6 +22,7 @@ type ScrollBehaviorLike = "auto" | "smooth";
 const WEB_BOTTOM_SETTLE_TIMEOUT_MS = 200;
 const SCROLL_TO_ITEM_TOP_MARGIN_PX = 12;
 const SCROLL_TO_ITEM_SETTLE_MS = 180;
+const ACTIVE_ITEM_MAX_OFFSET_PX = 160;
 const USER_SCROLL_DELTA_EPSILON = 1;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
@@ -109,6 +110,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     onNearBottomChange,
     onNearHistoryStart,
     onScrollActivity,
+    onActiveItemChange,
     isLoadingOlderHistory,
     hasOlderHistory,
     scrollEnabled,
@@ -271,6 +273,89 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     syncNearBottom(scrollContainer, onNearBottomChange);
   }, [onNearBottomChange]);
 
+  const lastActiveItemIdRef = useRef<string | null | undefined>(undefined);
+
+  // The active turn is the last user message whose top has crossed the upper
+  // part of the viewport. Mounted rows are measured through their DOM anchors;
+  // unmounted virtualized rows sit entirely outside the mounted window, so
+  // being before that window means "above the viewport".
+  const computeActiveUserItem = useCallback(() => {
+    if (!onActiveItemChange) {
+      return;
+    }
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) {
+      return;
+    }
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const activationY =
+      containerRect.top + Math.min(ACTIVE_ITEM_MAX_OFFSET_PX, scrollContainer.clientHeight * 0.3);
+
+    const anchorTops = new Map<string, number>();
+    scrollContainer.querySelectorAll("[data-stream-item-id]").forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+      const id = node.getAttribute("data-stream-item-id");
+      if (!id) {
+        return;
+      }
+      let rect = node.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0 && node.firstElementChild) {
+        rect = node.firstElementChild.getBoundingClientRect();
+      }
+      anchorTops.set(id, rect.top);
+    });
+
+    const firstMountedVirtualIndex = rowVirtualizer.getVirtualItems()[0]?.index ?? null;
+    let activeId: string | null = null;
+    let firstUserId: string | null = null;
+    const considerReached = (id: string, reached: boolean) => {
+      if (firstUserId === null) {
+        firstUserId = id;
+      }
+      if (reached) {
+        activeId = id;
+      }
+    };
+
+    segments.historyVirtualized.forEach((item, index) => {
+      if (item.kind !== "user_message") {
+        return;
+      }
+      const top = anchorTops.get(item.id);
+      if (top !== undefined) {
+        considerReached(item.id, top <= activationY);
+        return;
+      }
+      considerReached(
+        item.id,
+        firstMountedVirtualIndex !== null && index < firstMountedVirtualIndex,
+      );
+    });
+    for (const segment of [segments.historyMounted, segments.liveHead]) {
+      for (const item of segment) {
+        if (item.kind !== "user_message") {
+          continue;
+        }
+        const top = anchorTops.get(item.id);
+        considerReached(item.id, top !== undefined && top <= activationY);
+      }
+    }
+
+    const nextActiveId = activeId ?? firstUserId;
+    if (lastActiveItemIdRef.current !== nextActiveId) {
+      lastActiveItemIdRef.current = nextActiveId;
+      onActiveItemChange(nextActiveId);
+    }
+  }, [
+    onActiveItemChange,
+    rowVirtualizer,
+    segments.historyMounted,
+    segments.historyVirtualized,
+    segments.liveHead,
+  ]);
+
   const handleDomScroll = useCallback(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) {
@@ -303,6 +388,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
+    computeActiveUserItem();
     if (
       historyStartReadyRef.current &&
       hasOlderHistory &&
@@ -312,6 +398,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     }
   }, [
     cancelPendingStickToBottom,
+    computeActiveUserItem,
     hasOlderHistory,
     onNearHistoryStart,
     onScrollActivity,
@@ -432,7 +519,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
   useEffect(() => {
     updateScrollMetrics();
+    computeActiveUserItem();
   }, [
+    computeActiveUserItem,
     segments.historyMounted.length,
     segments.historyVirtualized.length,
     segments.liveHead.length,

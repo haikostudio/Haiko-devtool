@@ -13,5 +13,7 @@ export interface StreamMagicScrollbarProps {
    * Hovering the rail itself keeps it open regardless of this flag.
    */
   visible: boolean;
+  /** User message currently at the top of the viewport (the turn being read). */
+  activeEntryId?: string | null;
   onJumpToEntry: (entryId: string) => void;
 }

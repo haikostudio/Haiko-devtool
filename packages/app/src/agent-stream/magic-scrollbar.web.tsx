@@ -7,9 +7,11 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
@@ -34,13 +36,49 @@ const positionStyles = RNStyleSheet.create({
     right: 12,
     width: RAIL_WIDTH,
   },
+  ping: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
 });
+
+// Radar ping behind the active dot, HaikoMail-style. Transform/opacity live on
+// the Animated.View; the theme color lives on the inner Unistyles View.
+function ActiveDotPing() {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = 0;
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 1600, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+    return () => {
+      cancelAnimation(pulse);
+    };
+  }, [pulse]);
+  const pingStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 * (1 - pulse.value),
+    transform: [{ scale: 0.6 + pulse.value * 1.6 }],
+  }));
+  const style = useMemo(() => [positionStyles.ping, pingStyle], [pingStyle]);
+  return (
+    <Animated.View style={style} pointerEvents="none">
+      <View style={styles.pingFill} />
+    </Animated.View>
+  );
+}
 
 interface MagicScrollbarDotProps {
   entryId: string;
   label: string;
   top: number;
   isHovered: boolean;
+  isActive: boolean;
+  showPing: boolean;
   testID: string;
   onHoverChange: (entryId: string, hovered: boolean) => void;
   onJump: (entryId: string) => void;
@@ -54,6 +92,8 @@ const MagicScrollbarDot = memo(function MagicScrollbarDot({
   label,
   top,
   isHovered,
+  isActive,
+  showPing,
   testID,
   onHoverChange,
   onJump,
@@ -68,6 +108,15 @@ const MagicScrollbarDot = memo(function MagicScrollbarDot({
   );
   const handlePress = useCallback(() => onJump(entryId), [entryId, onJump]);
   const hitStyle = useMemo(() => [styles.dotHit, inlineUnistylesStyle({ top })], [top]);
+  const dotStyle = useMemo(() => {
+    if (isHovered) {
+      return [styles.dot, styles.dotHovered];
+    }
+    if (isActive) {
+      return [styles.dot, styles.dotActive];
+    }
+    return styles.dot;
+  }, [isActive, isHovered]);
 
   return (
     <View style={hitStyle} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
@@ -78,7 +127,8 @@ const MagicScrollbarDot = memo(function MagicScrollbarDot({
         style={styles.dotPressable}
         testID={testID}
       >
-        <View style={isHovered ? hoveredDotStyle : styles.dot} />
+        {showPing ? <ActiveDotPing /> : null}
+        <View style={dotStyle} />
       </Pressable>
     </View>
   );
@@ -94,6 +144,7 @@ const MagicScrollbarDot = memo(function MagicScrollbarDot({
 export function StreamMagicScrollbar({
   entries,
   visible,
+  activeEntryId = null,
   onJumpToEntry,
 }: StreamMagicScrollbarProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -159,6 +210,36 @@ export function StreamMagicScrollbar({
     }
   }, [displayedEntries, hoveredId]);
 
+  // When downsampling dropped the active message's dot, highlight the nearest
+  // displayed dot instead so the rail always shows a reading position.
+  const effectiveActiveId = useMemo(() => {
+    if (!activeEntryId) {
+      return null;
+    }
+    if (displayedEntries.some((entry) => entry.id === activeEntryId)) {
+      return activeEntryId;
+    }
+    const indexById = new Map(entries.map((entry, index) => [entry.id, index] as const));
+    const activeIndex = indexById.get(activeEntryId);
+    if (activeIndex === undefined) {
+      return null;
+    }
+    let nearestId: string | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const entry of displayedEntries) {
+      const index = indexById.get(entry.id);
+      if (index === undefined) {
+        continue;
+      }
+      const distance = Math.abs(index - activeIndex);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestId = entry.id;
+      }
+    }
+    return nearestId;
+  }, [activeEntryId, displayedEntries, entries]);
+
   const dotCenterForIndex = useCallback(
     (index: number) =>
       RAIL_INSET_VERTICAL +
@@ -207,6 +288,8 @@ export function StreamMagicScrollbar({
                 label={entry.text}
                 top={dotCenterForIndex(index) - DOT_HIT_SIZE / 2}
                 isHovered={hoveredId === entry.id}
+                isActive={effectiveActiveId === entry.id}
+                showPing={effectiveActiveId === entry.id && show}
                 testID={`magic-scrollbar-dot-${index}`}
                 onHoverChange={handleDotHoverChange}
                 onJump={onJumpToEntry}
@@ -263,6 +346,18 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.accent,
     opacity: 1,
   },
+  dotActive: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: theme.colors.accent,
+    opacity: 1,
+  },
+  pingFill: {
+    flex: 1,
+    borderRadius: DOT_HIT_SIZE / 2,
+    backgroundColor: theme.colors.accent,
+  },
   tooltip: {
     position: "absolute",
     right: RAIL_WIDTH + 10,
@@ -281,5 +376,3 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 18,
   },
 }));
-
-const hoveredDotStyle = [styles.dot, styles.dotHovered];
