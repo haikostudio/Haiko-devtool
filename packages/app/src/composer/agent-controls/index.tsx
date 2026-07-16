@@ -1061,9 +1061,9 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
       >
         <View style={styles.drawerBody}>
           {hasContext ? (
-            <View style={styles.drawerSection}>
-              <Text style={styles.drawerSectionTitle}>{t("agentControls.context.title")}</Text>
-              <View style={styles.drawerContextRow}>{contextMeter}</View>
+            <View style={styles.drawerContextRow}>
+              <Text style={styles.drawerContextLabel}>{t("agentControls.context.saturation")}</Text>
+              {contextMeter}
             </View>
           ) : null}
 
@@ -1859,8 +1859,14 @@ const styles = StyleSheet.create((theme) => ({
   drawerContextRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[1],
+  },
+  drawerContextLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
   },
   sheetSelect: {
     flexDirection: "row",

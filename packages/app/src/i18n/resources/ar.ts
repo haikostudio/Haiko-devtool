@@ -169,6 +169,7 @@ export const ar: TranslationResources = {
     },
     context: {
       title: "السياق",
+      saturation: "تشبع السياق",
     },
     hints: {
       thinking: "وضع التفكير",

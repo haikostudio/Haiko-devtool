@@ -169,6 +169,7 @@ export const zhCN: TranslationResources = {
     },
     context: {
       title: "上下文",
+      saturation: "上下文占用",
     },
     hints: {
       thinking: "Thinking mode",

@@ -169,6 +169,7 @@ export const ja: TranslationResources = {
     },
     context: {
       title: "コンテキスト",
+      saturation: "コンテキスト使用率",
     },
     hints: {
       thinking: "思考モード",

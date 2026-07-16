@@ -170,6 +170,7 @@ export const fr: TranslationResources = {
     },
     context: {
       title: "Contexte",
+      saturation: "Saturation du contexte",
     },
     hints: {
       thinking: "Mode réflexion",

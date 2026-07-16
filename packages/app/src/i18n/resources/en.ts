@@ -167,6 +167,7 @@ export const en = {
     },
     context: {
       title: "Context",
+      saturation: "Context saturation",
     },
     hints: {
       thinking: "Thinking mode",

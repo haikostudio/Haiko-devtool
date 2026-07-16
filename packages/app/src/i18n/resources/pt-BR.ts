@@ -169,6 +169,7 @@ export const ptBR: TranslationResources = {
     },
     context: {
       title: "Contexto",
+      saturation: "Saturação do contexto",
     },
     hints: {
       thinking: "Modo de raciocínio",

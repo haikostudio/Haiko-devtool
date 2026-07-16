@@ -169,6 +169,7 @@ export const ru: TranslationResources = {
     },
     context: {
       title: "Контекст",
+      saturation: "Насыщение контекста",
     },
     hints: {
       thinking: "Режим мышления",
