@@ -6,9 +6,21 @@ pre-commit:
       exclude:
         - "package-lock.json"
         - "**/package-lock.json"
+        # Owned by the `changelog` job below, which regenerates + formats it.
+        # Checking it here races that job (it may not be formatted yet).
+        - "packages/app/src/generated/changelog-data.ts"
       run: npm run format:check:files -- {staged_files}
     - name: lint
       glob: "*.{js,jsx,ts,tsx}"
+      exclude:
+        - "packages/app/src/generated/changelog-data.ts"
       run: npm run lint -- {staged_files}
     - name: typecheck
       run: npm run typecheck
+    # Refresh the changelog snapshot the app displays on every commit, so new
+    # work shows up on the Changelog page without any manual edit. Generates
+    # from `git log --all` (all branches), formats its own output, and stages it
+    # into this commit. Self-contained: {staged_files} is snapshotted at hook
+    # start, so this never races the format/lint jobs above.
+    - name: changelog
+      run: npm run generate:changelog --workspace=@getpaseo/app && npm run format:files -- packages/app/src/generated/changelog-data.ts && git add packages/app/src/generated/changelog-data.ts

@@ -43,15 +43,73 @@ function parseReleases(markdown) {
   return releases;
 }
 
+// Conventional-commit type -> changelog section. Types not listed here (chore,
+// docs, test, build, ci, style, ...) are treated as noise and left out of the
+// synthesized "Unreleased" section.
+const TYPE_SECTIONS = new Map([
+  ["feat", "Added"],
+  ["fix", "Fixed"],
+  ["perf", "Improved"],
+  ["refactor", "Improved"],
+]);
+const SECTION_ORDER = ["Added", "Improved", "Fixed"];
+const CONVENTIONAL = /^(\w+)(?:\([^)]*\))?!?:\s*(.+)$/;
+
+/**
+ * Build an "Unreleased" release from commits newer than the newest dated
+ * release, grouped by conventional-commit type. Returns null when there is
+ * nothing to show. This is what makes the Releases tab reflect work-in-progress
+ * automatically on every build — no manual CHANGELOG.md edit required.
+ */
+function synthesizeUnreleased(releases, commits) {
+  const since = releases[0]?.date ?? null;
+  const buckets = new Map(SECTION_ORDER.map((section) => [section, []]));
+  for (const commit of commits) {
+    // Compare on the date part only; commits on/before the last release day are
+    // considered released. This over-includes same-day post-release commits at
+    // worst, which is acceptable for a "what's next" preview.
+    if (since && commit.date.slice(0, 10) <= since) continue;
+    const match = commit.subject.match(CONVENTIONAL);
+    const section = match && TYPE_SECTIONS.get(match[1].toLowerCase());
+    if (!section) continue;
+    const message = match[2].trim();
+    buckets.get(section).push(message.charAt(0).toUpperCase() + message.slice(1));
+  }
+  const parts = [];
+  for (const section of SECTION_ORDER) {
+    const items = buckets.get(section);
+    if (items.length === 0) continue;
+    parts.push(`### ${section}\n\n${items.map((item) => `- ${item}`).join("\n")}`);
+  }
+  if (parts.length === 0) return null;
+  return {
+    version: "Unreleased",
+    date: commits[0].date.slice(0, 10),
+    markdown: parts.join("\n\n"),
+  };
+}
+
 /** Read recent commits via git. Tolerates missing git / shallow clones by returning []. */
 function readCommits() {
   const SEP = "\x1f";
   const format = ["%H", "%h", "%aI", "%an", "%s"].join(SEP);
   let raw;
   try {
+    // --all walks every branch/ref, not just the checked-out HEAD, so the
+    // changelog reflects work on ANY branch the moment it's committed — no need
+    // to be on (or merge into) a specific branch first. --date-order keeps the
+    // newest commits first regardless of which branch they came from. Each
+    // commit appears once even when reachable from multiple refs.
     raw = execFileSync(
       "git",
-      ["log", `-n${MAX_COMMITS}`, "--no-merges", `--pretty=format:${format}`],
+      [
+        "log",
+        "--all",
+        "--date-order",
+        `-n${MAX_COMMITS}`,
+        "--no-merges",
+        `--pretty=format:${format}`,
+      ],
       { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
     );
   } catch (error) {
@@ -71,6 +129,8 @@ const releases = existsSync(changelogPath)
   ? parseReleases(readFileSync(changelogPath, "utf8"))
   : [];
 const commits = readCommits();
+const unreleased = synthesizeUnreleased(releases, commits);
+if (unreleased) releases.unshift(unreleased);
 const generatedAt = commits[0]?.date ?? releases[0]?.date ?? null;
 
 const banner =

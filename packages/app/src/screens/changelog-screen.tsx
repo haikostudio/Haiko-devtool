@@ -105,7 +105,11 @@ function ReleasesTab() {
       {CHANGELOG_RELEASES.map((release) => (
         <View key={release.version} style={styles.release}>
           <Text style={styles.releaseDate}>{formatDay(release.date)}</Text>
-          <Text style={styles.releaseTitle}>Paseo {release.version}</Text>
+          <Text style={styles.releaseTitle}>
+            {release.version === "Unreleased"
+              ? t("changelog.unreleased")
+              : `Paseo ${release.version}`}
+          </Text>
           <MarkdownRenderer text={release.markdown} />
         </View>
       ))}

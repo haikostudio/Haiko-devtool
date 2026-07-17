@@ -17,7 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         # Full history so generate-changelog-data.mjs can read the commit log for
-        # the changelog page's Commits tab (default shallow checkout gives 1 commit).
+        # the changelog page's Commits + Unreleased sections (default shallow
+        # checkout gives 1 commit).
         with:
           fetch-depth: 0
 
@@ -25,6 +26,12 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+
+      # generate-changelog-data.mjs runs `git log --all` so the changelog reflects
+      # work on ANY branch, not just the triggering one. checkout only brings down
+      # the triggering ref, so fetch every remote head here to make them visible.
+      - name: Fetch all branches
+        run: git fetch --no-tags --prune origin "+refs/heads/*:refs/remotes/origin/*"
 
       - name: Install dependencies
         run: npm ci
