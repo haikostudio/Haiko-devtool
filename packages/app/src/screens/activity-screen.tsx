@@ -3,6 +3,7 @@ import { FlatList, type ListRenderItem, Pressable, ScrollView, Text, View } from
 import { useIsFocused } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { ActivityProjectChart } from "@/components/activity-project-chart";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { getProviderIcon } from "@/components/provider-icons";
 import { useActivityLog, type AggregatedActivityEntry } from "@/data/activity";
@@ -86,6 +87,20 @@ function ActivityScreenContent() {
     [entries, activeFilter],
   );
 
+  // The chart summarizes every project, so it reads from the full log rather
+  // than the filtered view; tapping a bar drives the same filter as the chips.
+  const chartHeader = useMemo(
+    () => (
+      <ActivityProjectChart
+        entries={entries}
+        activeProject={activeFilter}
+        allProjectsValue={ALL_PROJECTS}
+        onSelectProject={handleSelect}
+      />
+    ),
+    [entries, activeFilter, handleSelect],
+  );
+
   return (
     <View style={styles.container}>
       <MenuHeader title={t("activity.title")} />
@@ -125,6 +140,7 @@ function ActivityScreenContent() {
           data={visibleEntries}
           renderItem={renderRow}
           keyExtractor={rowKey}
+          ListHeaderComponent={chartHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
