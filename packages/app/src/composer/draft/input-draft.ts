@@ -22,6 +22,10 @@ import {
   type ProviderSelectionState,
 } from "@/provider-selection/provider-selection";
 import { useDraftStore } from "@/stores/draft-store";
+import {
+  clearLiveComposerAttachmentIds,
+  setLiveComposerAttachmentIds,
+} from "@/attachments/live-attachment-refs";
 
 type AttachmentUpdater =
   | UserComposerAttachment[]
@@ -277,6 +281,23 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     },
     [adoptRemoteDraft],
   );
+
+  // Root the attachment GC on what this composer is actually holding, so a blob
+  // the user just pasted is never collected — even if the persisted draft record
+  // momentarily goes to an empty tombstone (e.g. a cross-device clear echo) while
+  // the focus guard keeps the attachment on screen.
+  useEffect(() => {
+    const ids = new Set<string>();
+    for (const attachment of attachments) {
+      if (attachment.kind === "image") {
+        ids.add(attachment.metadata.id);
+      }
+    }
+    setLiveComposerAttachmentIds(draftKey, ids);
+  }, [attachments, draftKey]);
+  useEffect(() => {
+    return () => clearLiveComposerAttachmentIds(draftKey);
+  }, [draftKey]);
 
   const lockedWorkingDir = composerOptions?.lockedWorkingDir?.trim() ?? "";
   useEffect(() => {

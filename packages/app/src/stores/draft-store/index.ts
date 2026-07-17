@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AttachmentMetadata } from "@/attachments/types";
+import { collectLiveComposerAttachmentIds } from "@/attachments/live-attachment-refs";
 import {
   garbageCollectAttachments,
   persistAttachmentFromDataUrl,
@@ -132,6 +133,11 @@ async function runAttachmentGc(): Promise<void> {
   for (const id of useDraftStore.getState().collectActiveAttachmentIds()) {
     referencedIds.add(id);
   }
+
+  // Blobs a live composer is still holding on screen must never be collected,
+  // even if the persisted draft record momentarily disagrees (e.g. a cross-device
+  // tombstone landing empty while the focused composer keeps a just-pasted image).
+  collectLiveComposerAttachmentIds(referencedIds);
 
   const pendingByDraftId = useCreateFlowStore.getState().pendingByDraftId;
   for (const pendingCreate of Object.values(pendingByDraftId)) {

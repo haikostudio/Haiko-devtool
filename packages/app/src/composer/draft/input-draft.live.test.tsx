@@ -629,6 +629,61 @@ describe("useAgentInputDraft live contract", () => {
     expect(getLatest().text).toBe("");
   });
 
+  it("registers held attachment ids as live GC roots so the blob is not collected", async () => {
+    const { collectLiveComposerAttachmentIds } = await import("@/attachments/live-attachment-refs");
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+    const image: AttachmentMetadata = {
+      id: "live-root-image",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "live-root-image",
+      createdAt: 1,
+    };
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:live-root" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      getLatest().setAttachments([{ kind: "image", metadata: image }]);
+    });
+
+    const liveIds = new Set<string>();
+    collectLiveComposerAttachmentIds(liveIds);
+    expect(liveIds.has("live-root-image")).toBe(true);
+
+    // Unmounting releases the root so the blob can later be collected normally.
+    await act(async () => {
+      root.unmount();
+    });
+    const afterUnmount = new Set<string>();
+    collectLiveComposerAttachmentIds(afterUnmount);
+    expect(afterUnmount.has("live-root-image")).toBe(false);
+  });
+
   it("keeps attachments the user just added while focused when a tombstone arrives", async () => {
     let latest: ReturnType<typeof useAgentInputDraft> | null = null;
     const image: AttachmentMetadata = {
