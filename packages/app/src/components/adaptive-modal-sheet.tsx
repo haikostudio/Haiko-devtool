@@ -9,9 +9,11 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { getOverlayRoot, OVERLAY_Z } from "../lib/overlay-root";
 import {
   BottomSheetBackdrop,
+  BottomSheetFooter,
   BottomSheetScrollView,
   BottomSheetTextInput,
   type BottomSheetBackgroundProps,
+  type BottomSheetFooterProps,
 } from "@gorhom/bottom-sheet";
 import Animated from "react-native-reanimated";
 import { ArrowLeft, Search, X } from "lucide-react-native";
@@ -218,6 +220,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[2],
+  },
+  // The compact footer floats over the scroll content (BottomSheetFooter), so
+  // it needs an opaque sheet-colored background.
+  footerCompact: {
+    backgroundColor: theme.colors.surface0,
   },
   adaptiveInputOutline: {
     ...createControlGeometry(theme).controlFocusRingColor,
@@ -517,6 +524,27 @@ export function AdaptiveModalSheet({
     ],
     [compactSafeAreaPadding.footerPaddingBottom],
   );
+  const compactFooterStyle = useMemo(
+    () => [
+      styles.footer,
+      styles.footerCompact,
+      compactSafeAreaPadding.footerPaddingBottom != null
+        ? { paddingBottom: compactSafeAreaPadding.footerPaddingBottom }
+        : null,
+    ],
+    [compactSafeAreaPadding.footerPaddingBottom],
+  );
+  // Pinned footer for the compact scrollable sheet: BottomSheetFooter tracks
+  // the sheet's animated position (and the keyboard), so the footer stays glued
+  // to the visible bottom edge instead of drifting when the sheet extends.
+  const renderCompactFooter = useCallback(
+    (footerProps: BottomSheetFooterProps) => (
+      <BottomSheetFooter {...footerProps}>
+        <View style={compactFooterStyle}>{footer}</View>
+      </BottomSheetFooter>
+    ),
+    [footer, compactFooterStyle],
+  );
   const handleIndicatorStyle = useMemo(
     () => ({ backgroundColor: theme.colors.palette.zinc[600] }),
     [theme.colors.palette.zinc],
@@ -620,20 +648,25 @@ export function AdaptiveModalSheet({
         keyboardBlurBehavior="restore"
         accessible={false}
         presentation={presentation}
+        footerComponent={footer && scrollable ? renderCompactFooter : undefined}
       >
         <SheetHeaderView header={header} onClose={onClose} testID={testID} />
         {scrollable ? (
+          // Padding lives on an inner View, NOT on contentContainerStyle:
+          // BottomSheetScrollView is not a Unistyles-remapped component, so a
+          // Unistyles style passed to contentContainerStyle is dropped on web
+          // (docs/unistyles.md, "Main Gotcha: contentContainerStyle").
           <BottomSheetScrollView
-            contentContainerStyle={bottomSheetContentStyle}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            enableFooterMarginAdjustment={Boolean(footer)}
           >
-            {children}
+            <View style={bottomSheetContentStyle}>{children}</View>
           </BottomSheetScrollView>
         ) : (
           <View style={bottomSheetStaticContentStyle}>{children}</View>
         )}
-        {footer ? <View style={footerStyle}>{footer}</View> : null}
+        {footer && !scrollable ? <View style={footerStyle}>{footer}</View> : null}
       </IsolatedBottomSheetModal>
     );
   }

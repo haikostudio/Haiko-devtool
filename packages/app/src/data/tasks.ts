@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TaskBoard, TaskColumn } from "@getpaseo/protocol/tasks/types";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
 export type { TaskBoard, TaskColumn };
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
@@ -54,13 +54,18 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     return getHostRuntimeStore().getClient(serverId);
   }, [serverId]);
 
+  // Reactive client: on a cold load straight onto the tasks screen the host
+  // connects after mount, and the subscription must re-run once the client
+  // appears instead of latching a permanent "not connected" error.
+  const liveClient = useHostRuntimeClient(serverId ?? "");
+
   useEffect(() => {
     if (!serverId || !projectId) {
       setBoard(null);
       setError(null);
       return;
     }
-    const client = getHostRuntimeStore().getClient(serverId);
+    const client = liveClient;
     if (!client) {
       setError("Host is not connected");
       return;
@@ -109,7 +114,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         // Socket may already be gone; the server also cleans up on disconnect.
       });
     };
-  }, [serverId, projectId]);
+  }, [serverId, projectId, liveClient]);
 
   const requireContext = useCallback(() => {
     const client = getClient();

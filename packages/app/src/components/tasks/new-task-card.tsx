@@ -2,8 +2,8 @@ import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { AdaptiveTextInput } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { FormTextInput } from "@/components/ui/form-field";
 
 interface NewTaskCardProps {
   onSubmit: (input: { title: string; description: string }) => void;
@@ -30,16 +30,16 @@ export function NewTaskCard({ onSubmit, onCancel }: NewTaskCardProps) {
 
   return (
     <View style={styles.card} testID="tasks-new-task-card">
-      <AdaptiveTextInput
-        value={title}
+      <FormTextInput
+        size="sm"
         onChangeText={setTitle}
         placeholder={t("tasks.newTaskPlaceholder")}
         onSubmitEditing={handleSubmit}
         autoFocus
         testID="tasks-new-task-title"
       />
-      <AdaptiveTextInput
-        value={description}
+      <FormTextInput
+        size="sm"
         onChangeText={setDescription}
         placeholder={t("tasks.newTaskDescriptionPlaceholder")}
         multiline

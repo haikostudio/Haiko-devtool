@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "@/components/ui/external-link";
+import { Field, FormTextInput } from "@/components/ui/form-field";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask } from "@/data/tasks";
 
 interface TaskDetailSheetProps {
@@ -25,8 +23,17 @@ interface TaskDetailSheetProps {
 /**
  * Edit sheet for a kanban card: title/description/tags plus the automation
  * surface (estimate details, schedule errors, re-estimate and run-now actions).
+ * Fresh mount per task (`key` on the inner form) so edits never leak between
+ * cards — see docs/forms.md lifecycle rule 1.
  */
-export function TaskDetailSheet({
+export function TaskDetailSheet(props: TaskDetailSheetProps) {
+  if (!props.task) {
+    return null;
+  }
+  return <TaskDetailSheetForm key={props.task.id} {...props} task={props.task} />;
+}
+
+function TaskDetailSheetForm({
   task,
   visible,
   onClose,
@@ -34,23 +41,17 @@ export function TaskDetailSheet({
   onDelete,
   onEstimate,
   onRunNow,
-}: TaskDetailSheetProps) {
+}: TaskDetailSheetProps & { task: KanbanTask }) {
   const { t } = useTranslation();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [tagsText, setTagsText] = useState("");
-  const taskId = task?.id ?? null;
-
-  useEffect(() => {
-    if (task && visible) {
-      setTitle(task.title);
-      setDescription(task.description ?? "");
-      setTagsText(task.tags.join(", "));
-    }
-  }, [task, visible]);
+  const isCompact = useIsCompactFormFactor();
+  const controlSize = isCompact ? "md" : "sm";
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description ?? "");
+  const [tagsText, setTagsText] = useState(task.tags.join(", "));
+  const taskId = task.id;
 
   const handleSave = useCallback(() => {
-    if (!taskId || !title.trim()) {
+    if (!title.trim()) {
       return;
     }
     onSave({
@@ -66,23 +67,17 @@ export function TaskDetailSheet({
   }, [taskId, title, description, tagsText, onSave, onClose]);
 
   const handleDelete = useCallback(() => {
-    if (taskId) {
-      onDelete(taskId);
-      onClose();
-    }
+    onDelete(taskId);
+    onClose();
   }, [taskId, onDelete, onClose]);
 
   const handleEstimate = useCallback(() => {
-    if (taskId) {
-      onEstimate(taskId);
-    }
+    onEstimate(taskId);
   }, [taskId, onEstimate]);
 
   const handleRunNow = useCallback(() => {
-    if (taskId) {
-      onRunNow(taskId);
-      onClose();
-    }
+    onRunNow(taskId);
+    onClose();
   }, [taskId, onRunNow, onClose]);
 
   const header = useMemo((): SheetHeader => ({ title: t("tasks.detail.title") }), [t]);
@@ -90,22 +85,19 @@ export function TaskDetailSheet({
   const footer = useMemo(
     () => (
       <View style={styles.footerRow}>
-        <Button variant="destructive" onPress={handleDelete}>
+        <Button style={styles.footerButton} variant="destructive" onPress={handleDelete}>
           {t("tasks.actions.delete")}
         </Button>
-        <View style={styles.footerSpacer} />
-        <Button variant="secondary" onPress={onClose}>
+        <Button style={styles.footerButton} variant="secondary" onPress={onClose}>
           {t("common.actions.cancel")}
         </Button>
-        <Button onPress={handleSave}>{t("tasks.actions.save")}</Button>
+        <Button style={styles.footerButton} onPress={handleSave}>
+          {t("tasks.actions.save")}
+        </Button>
       </View>
     ),
     [handleDelete, onClose, handleSave, t],
   );
-
-  if (!task) {
-    return null;
-  }
 
   return (
     <AdaptiveModalSheet
@@ -115,84 +107,88 @@ export function TaskDetailSheet({
       testID="task-detail-sheet"
       footer={footer}
     >
-      <View style={styles.content}>
-        <Text style={styles.fieldLabel}>{t("tasks.detail.titleField")}</Text>
-        <AdaptiveTextInput value={title} onChangeText={setTitle} testID="task-detail-title" />
-        <Text style={styles.fieldLabel}>{t("tasks.detail.descriptionField")}</Text>
-        <AdaptiveTextInput
-          value={description}
+      <Field label={t("tasks.detail.titleField")}>
+        <FormTextInput
+          size={controlSize}
+          initialValue={task.title}
+          onChangeText={setTitle}
+          testID="task-detail-title"
+        />
+      </Field>
+      <Field label={t("tasks.detail.descriptionField")}>
+        <FormTextInput
+          size={controlSize}
+          initialValue={task.description ?? ""}
           onChangeText={setDescription}
+          style={styles.multilineInput}
           multiline
           numberOfLines={4}
+          textAlignVertical="top"
           testID="task-detail-description"
         />
-        <Text style={styles.fieldLabel}>{t("tasks.detail.tagsField")}</Text>
-        <AdaptiveTextInput
-          value={tagsText}
+      </Field>
+      <Field label={t("tasks.detail.tagsField")}>
+        <FormTextInput
+          size={controlSize}
+          initialValue={task.tags.join(", ")}
           onChangeText={setTagsText}
           placeholder={t("tasks.detail.tagsPlaceholder")}
           testID="task-detail-tags"
         />
+      </Field>
 
-        <View style={styles.metaSection}>
-          {task.estimate ? (
-            <View style={styles.metaRow}>
-              <StatusBadge
-                label={t("tasks.card.quotaEstimate", {
-                  percent: Math.round(task.estimate.quotaPercent),
-                })}
-              />
-              <Text style={styles.metaText}>
-                {t("tasks.detail.estimateDetail", {
-                  tokens: task.estimate.tokens.toLocaleString(),
-                  confidence: task.estimate.confidence,
-                })}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.metaText}>{t("tasks.detail.noEstimate")}</Text>
-          )}
-          {task.estimate?.summary ? (
-            <Text style={styles.metaText}>{task.estimate.summary}</Text>
-          ) : null}
-          {task.schedule?.lastError ? (
-            <Text style={styles.errorText}>{task.schedule.lastError}</Text>
-          ) : null}
-          {task.links.prUrl ? (
-            <ExternalLink href={task.links.prUrl} label={t("tasks.detail.openPr")} />
-          ) : null}
-          {task.links.branch ? (
+      <View style={styles.metaSection}>
+        {task.estimate ? (
+          <View style={styles.metaRow}>
+            <StatusBadge
+              label={t("tasks.card.quotaEstimate", {
+                percent: Math.round(task.estimate.quotaPercent),
+              })}
+            />
             <Text style={styles.metaText}>
-              {t("tasks.detail.branch", { branch: task.links.branch })}
+              {t("tasks.detail.estimateDetail", {
+                tokens: task.estimate.tokens.toLocaleString(),
+                confidence: task.estimate.confidence,
+              })}
             </Text>
-          ) : null}
-        </View>
+          </View>
+        ) : (
+          <Text style={styles.metaText}>{t("tasks.detail.noEstimate")}</Text>
+        )}
+        {task.estimate?.summary ? (
+          <Text style={styles.metaText}>{task.estimate.summary}</Text>
+        ) : null}
+        {task.schedule?.lastError ? (
+          <Text style={styles.errorText}>{task.schedule.lastError}</Text>
+        ) : null}
+        {task.links.prUrl ? (
+          <ExternalLink href={task.links.prUrl} label={t("tasks.detail.openPr")} />
+        ) : null}
+        {task.links.branch ? (
+          <Text style={styles.metaText}>
+            {t("tasks.detail.branch", { branch: task.links.branch })}
+          </Text>
+        ) : null}
+      </View>
 
-        <View style={styles.actionsRow}>
-          <Button variant="outline" onPress={handleEstimate}>
-            {t("tasks.actions.reEstimate")}
-          </Button>
-          <Button variant="outline" onPress={handleRunNow}>
-            {t("tasks.actions.runNow")}
-          </Button>
-        </View>
+      <View style={styles.actionsRow}>
+        <Button variant="outline" onPress={handleEstimate}>
+          {t("tasks.actions.reEstimate")}
+        </Button>
+        <Button variant="outline" onPress={handleRunNow}>
+          {t("tasks.actions.runNow")}
+        </Button>
       </View>
     </AdaptiveModalSheet>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  content: {
-    gap: theme.spacing[2],
-    paddingBottom: theme.spacing[4],
-  },
-  fieldLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    marginTop: theme.spacing[2],
+  multilineInput: {
+    minHeight: 96,
   },
   metaSection: {
-    marginTop: theme.spacing[3],
+    marginTop: theme.spacing[2],
     gap: theme.spacing[2],
   },
   metaRow: {
@@ -211,14 +207,13 @@ const styles = StyleSheet.create((theme) => ({
   actionsRow: {
     flexDirection: "row",
     gap: theme.spacing[2],
-    marginTop: theme.spacing[3],
   },
   footerRow: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
+    gap: theme.spacing[3],
   },
-  footerSpacer: {
+  footerButton: {
     flex: 1,
   },
 }));

@@ -1,14 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import {
-  AdaptiveModalSheet,
-  AdaptiveTextInput,
-  type SheetHeader,
-} from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
+import { Field, FormTextInput } from "@/components/ui/form-field";
+import { useIsCompactFormFactor } from "@/constants/layout";
 
 // Accent palette for folder cards — mirrors the Paseo project-color range.
 export const FOLDER_COLORS = [
@@ -35,13 +33,19 @@ interface FolderCreateModalProps {
  */
 export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateModalProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  const controlSize = isCompact ? "md" : "sm";
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(FOLDER_COLORS[0]);
+  // The name input is native-owned (see AdaptiveTextInput); bump the reset key
+  // on every open so the field remounts empty instead of replaying old text.
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     if (visible) {
       setName("");
       setColor(FOLDER_COLORS[0]);
+      setResetKey((key) => key + 1);
     }
   }, [visible]);
 
@@ -59,11 +63,14 @@ export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateMo
   const footer = useMemo(
     () => (
       <View style={styles.footerRow}>
-        <View style={styles.footerSpacer} />
-        <Button variant="secondary" onPress={onClose}>
+        <Button style={styles.footerButton} variant="secondary" onPress={onClose}>
           {t("common.actions.cancel")}
         </Button>
-        <Button onPress={handleCreate} testID="tasks-folder-modal-create">
+        <Button
+          style={styles.footerButton}
+          onPress={handleCreate}
+          testID="tasks-folder-modal-create"
+        >
           {t("tasks.folderModal.create")}
         </Button>
       </View>
@@ -80,17 +87,21 @@ export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateMo
       desktopMaxWidth={420}
       testID="tasks-folder-modal"
     >
-      <View style={styles.content}>
-        <Text style={styles.fieldLabel}>{t("tasks.folderModal.nameField")}</Text>
-        <AdaptiveTextInput
-          value={name}
+      <Field label={t("tasks.folderModal.nameField")}>
+        <FormTextInput
+          size={controlSize}
+          resetKey={resetKey}
           onChangeText={setName}
           placeholder={t("tasks.newFolderPlaceholder")}
           onSubmitEditing={handleCreate}
-          autoFocus
+          // Desktop only: autofocusing inside the compact bottom sheet pops the
+          // keyboard at mount and keyboardBehavior="extend" desyncs the sheet
+          // from its footer on mobile web.
+          autoFocus={!isCompact}
           testID="tasks-folder-modal-name"
         />
-        <Text style={styles.fieldLabel}>{t("tasks.folderModal.colorField")}</Text>
+      </Field>
+      <Field label={t("tasks.folderModal.colorField")}>
         <View style={styles.swatchRow}>
           {FOLDER_COLORS.map((swatch) => (
             <ColorSwatch
@@ -101,7 +112,7 @@ export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateMo
             />
           ))}
         </View>
-      </View>
+      </Field>
     </AdaptiveModalSheet>
   );
 }
@@ -136,19 +147,11 @@ const ColorSwatch = memo(function ColorSwatch({
 });
 
 const styles = StyleSheet.create((theme) => ({
-  content: {
-    gap: theme.spacing[2],
-    paddingBottom: theme.spacing[4],
-  },
-  fieldLabel: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    marginTop: theme.spacing[2],
-  },
   swatchRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
   },
   swatch: {
     width: 32,
@@ -163,11 +166,11 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.foreground,
   },
   footerRow: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
+    gap: theme.spacing[3],
   },
-  footerSpacer: {
+  footerButton: {
     flex: 1,
   },
 }));

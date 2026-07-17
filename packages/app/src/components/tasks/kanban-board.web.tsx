@@ -16,8 +16,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { Plus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ScrollableKanbanBoard } from "./kanban-board-scrollable";
 import { TaskCard } from "./task-card";
 import { buildColumnModels, useColumnLabels, type KanbanBoardProps } from "./kanban-columns";
 
@@ -30,11 +32,22 @@ const POINTER_ACTIVATION = { activationConstraint: { distance: 6 } };
 function noopPressTask() {}
 
 /**
- * Web kanban board: multi-container drag-and-drop via dnd-kit. The drop target
- * (column + index) is resolved at drag end and sent as a single tasks.task.move
- * RPC; the server push then snaps the authoritative order.
+ * Web kanban board. Compact (phone-sized) web uses the shared scrollable
+ * board — dnd-kit's touch drag (touchAction: none) would swallow column and
+ * board scrolling on touch screens. Desktop web gets multi-container
+ * drag-and-drop via dnd-kit: the drop target (column + index) is resolved at
+ * drag end and sent as a single tasks.task.move RPC; the server push then
+ * snaps the authoritative order.
  */
-export function KanbanBoard({
+export function KanbanBoard(props: KanbanBoardProps) {
+  const isCompact = useIsCompactFormFactor();
+  if (isCompact) {
+    return <ScrollableKanbanBoard {...props} />;
+  }
+  return <DesktopKanbanBoard {...props} />;
+}
+
+function DesktopKanbanBoard({
   board,
   folderId,
   onMoveTask,
