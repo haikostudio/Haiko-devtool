@@ -9,19 +9,17 @@ import { useDraftStore } from "@/stores/draft-store";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 
-// Resolves the draft-store key for a tab whose composer carries a draft, so the
-// draft record travels in the synced snapshot. Both draft tabs (new-agent
-// composer) and agent tabs (message composer for an already-active agent) carry
-// one, keyed the exact way each composer reads it.
+// Resolves the draft-store key for a tab whose composer carries a synced draft.
+// Only NEW-agent draft tabs are synced. Active-agent message composers are NOT:
+// syncing them dragged the agent chat composer through the tombstone/upload/GC
+// pipeline, which stripped pasted images from the draft and deleted their blobs,
+// breaking image sending. That composer stays purely local.
 function getDraftKeyForTab(
   serverId: string,
   tab: { tabId: string; target: WorkspaceTabTarget },
 ): string | null {
   if (tab.target.kind === "draft") {
     return buildDraftStoreKey({ serverId, agentId: tab.tabId, draftId: tab.target.draftId });
-  }
-  if (tab.target.kind === "agent") {
-    return buildDraftStoreKey({ serverId, agentId: tab.target.agentId });
   }
   return null;
 }

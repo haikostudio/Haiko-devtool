@@ -57,7 +57,7 @@ describe("session ui state draft config sync", () => {
     useDraftStore.setState({ drafts: {}, createModalDraft: null });
   });
 
-  it("captures the composer draft of an already-active agent tab", () => {
+  it("does NOT capture the composer draft of an already-active agent tab", () => {
     useWorkspaceLayoutStore
       .getState()
       .openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "agent-1" });
@@ -79,7 +79,8 @@ describe("session ui state draft config sync", () => {
       workspaceId: WORKSPACE_ID,
       revision: 1,
     });
-    expect(built?.drafts[agentDraftKey]?.input.text).toBe("message in progress");
+    // Active-agent composers are intentionally NOT synced (it broke image send).
+    expect(built?.drafts[agentDraftKey]).toBeUndefined();
   });
 
   it("captures the draft agent config in the snapshot target.setup", () => {

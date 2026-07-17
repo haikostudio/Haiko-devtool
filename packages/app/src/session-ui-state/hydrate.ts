@@ -26,6 +26,13 @@ function hydrateDrafts(state: WorkspaceUiState): void {
   useDraftStore.setState((prev) => {
     const drafts = { ...prev.drafts };
     for (const [draftKey, record] of entries) {
+      // Only new-agent draft-tab composers are synced (buildDraftStoreKey ->
+      // "draft:..."). Never apply an "agent:..." record: active-agent message
+      // composers are intentionally local (syncing them broke image sending), and
+      // a daemon may still hold stale agent tombstones from before that revert.
+      if (!draftKey.startsWith("draft:")) {
+        continue;
+      }
       const existing = drafts[draftKey];
       // Last-write-wins per draft: keep the newer record so a stale broadcast
       // never clobbers freshly typed local text.
