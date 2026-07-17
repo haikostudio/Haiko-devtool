@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-17",
     markdown:
-      "### Added\n\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Remove duplicate ownership discovery\n- Close E2E logs after output drains\n- Wait for E2E bridge readiness\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Keep browser keyboard attachment idempotent\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Preserve active browser on repeated registration\n- Compare filesystem identities\n- Launch Electron E2E reliably on Linux\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Keep browser tabs connected across workspaces\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+      "### Added\n\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Remove duplicate ownership discovery\n- Close E2E logs after output drains\n- Wait for E2E bridge readiness\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Keep browser keyboard attachment idempotent\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Preserve active browser on repeated registration\n- Compare filesystem identities\n- Launch Electron E2E reliably on Linux\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Keep browser tabs connected across workspaces\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
   },
   {
     version: "0.1.108",
@@ -617,6 +617,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "ca41ab73232320e74518db4fdcd4604dc4627287",
+    shortHash: "ca41ab732",
+    date: "2026-07-17T12:15:14+02:00",
+    author: "haikostudio",
+    subject: "feat(app): auto-refresh changelog snapshot on every commit",
+  },
   {
     hash: "c05104d4f42b6ca80cf086fbab5f978f13c34cc6",
     shortHash: "c05104d4f",
@@ -2712,14 +2719,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "fix(app): stabilize project picker E2E selectors",
   },
-  {
-    hash: "aa656772ef64301e47c89c0935d524bf34339159",
-    shortHash: "aa656772e",
-    date: "2026-07-10T12:24:58+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs: add 0.1.105 changelog",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T10:06:16+00:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T12:15:14+02:00";

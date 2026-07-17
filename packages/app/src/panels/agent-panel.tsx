@@ -61,11 +61,6 @@ import {
   deriveRouteBottomAnchorRequest,
 } from "@/screens/agent/agent-ready-screen-bottom-anchor";
 import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
-import { buildDraftSetupEchoKey, getLocalDraftSetup } from "@/composer/draft/local-setup-echo";
-import {
-  normalizeWorkspaceDraftTabSetup,
-  workspaceDraftTabSetupsEqual,
-} from "@/workspace-tabs/identity";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
@@ -365,29 +360,6 @@ function DraftPanel() {
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "draft", "DraftPanel requires draft target");
 
-  // Draft text syncs in place inside the composer, but the agent config
-  // (target.setup: model/mode/thinking/features) lives in the mount-once form,
-  // so a REMOTE config change only takes effect on a fresh mount. Remount the
-  // composer when target.setup diverges from what this device's own composer last
-  // emitted (via the echo) — i.e. it changed on another device — but only while
-  // the text input is NOT focused, so it never interrupts active typing, and with
-  // autofocus suppressed so the keyboard does not pop on the receiving device.
-  // Local edits keep the echo equal to target.setup, so they never remount here.
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const [reseedCount, setReseedCount] = useState(0);
-  const setupEchoKey = buildDraftSetupEchoKey(serverId, target.draftId);
-  useEffect(() => {
-    if (isInputFocused) {
-      return;
-    }
-    const remoteSetup = normalizeWorkspaceDraftTabSetup(target.setup);
-    if (workspaceDraftTabSetupsEqual(getLocalDraftSetup(setupEchoKey) ?? undefined, remoteSetup)) {
-      return;
-    }
-    setReseedCount((count) => count + 1);
-  }, [isInputFocused, setupEchoKey, target.setup]);
-  const suppressAutoFocus = reseedCount > 0;
-
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
       const normalized = normalizeAgentSnapshot(agentSnapshot, serverId);
@@ -404,7 +376,6 @@ function DraftPanel() {
 
   return (
     <WorkspaceDraftAgentTab
-      key={`${target.draftId}:${reseedCount}`}
       serverId={serverId}
       workspaceId={workspaceId}
       tabId={tabId}
@@ -414,8 +385,6 @@ function DraftPanel() {
       onOpenWorkspaceFile={openFileInWorkspace}
       onCreated={handleCreated}
       onOpenImportSheet={openImportSheet}
-      onInputFocusChange={setIsInputFocused}
-      suppressAutoFocus={suppressAutoFocus}
     />
   );
 }
