@@ -14,6 +14,7 @@ import { ComposerImportPill } from "@/composer/draft/import-pill";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
+import { buildDraftSetupEchoKey, recordLocalDraftSetup } from "@/composer/draft/local-setup-echo";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -317,6 +318,12 @@ interface WorkspaceDraftAgentTabProps {
   onCreated: (snapshot: AgentSnapshotPayload) => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet?: () => void;
+  /** Reports composer text-input focus to the parent so it can defer disruptive
+   * cross-device re-seeding while the user is actively typing here. */
+  onInputFocusChange?: (focused: boolean) => void;
+  /** When true, skip auto-focusing the input on mount. Set by the parent for
+   * re-seed remounts (adopting a remote config) so the keyboard never pops. */
+  suppressAutoFocus?: boolean;
 }
 
 function resolveImportPillPress(
@@ -339,6 +346,8 @@ export function WorkspaceDraftAgentTab({
   onCreated,
   onOpenWorkspaceFile,
   onOpenImportSheet,
+  onInputFocusChange,
+  suppressAutoFocus = false,
 }: WorkspaceDraftAgentTabProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -412,6 +421,14 @@ export function WorkspaceDraftAgentTab({
       composerState.featureValues,
     ],
   );
+  // Record what this composer's own form currently represents so the draft panel
+  // can tell this device's local edits apart from remote updates (and not remount
+  // the composer for its own changes). Recorded even before hydration so a fresh
+  // mount seeded from a remote setup echoes immediately.
+  const setupEchoKey = buildDraftSetupEchoKey(serverId, draftId);
+  useEffect(() => {
+    recordLocalDraftSetup(setupEchoKey, composerSetup ?? null);
+  }, [setupEchoKey, composerSetup]);
   useEffect(() => {
     // Wait for the draft to hydrate first so we never overwrite a synced setup
     // with pre-hydration form defaults.
@@ -632,6 +649,17 @@ export function WorkspaceDraftAgentTab({
     focusInputRef.current = focus;
   }, []);
 
+  const notifyInputFocus = draftInput.notifyInputFocus;
+  const handleInputFocusChange = useCallback(
+    (focused: boolean) => {
+      // Feed both the in-place text adoption (hook) and the parent's config
+      // re-seed gate so neither overwrites the input while it is focused.
+      notifyInputFocus(focused);
+      onInputFocusChange?.(focused);
+    },
+    [notifyInputFocus, onInputFocusChange],
+  );
+
   const handleProviderSelectWithFocus = useCallback(
     (provider: Parameters<typeof composerState.setProviderFromUser>[0]) => {
       composerState.setProviderFromUser(provider);
@@ -783,9 +811,12 @@ export function WorkspaceDraftAgentTab({
           onChangeAttachments={draftInput.setAttachments}
           cwd={composerState.workingDir}
           clearDraft={draftInput.clear}
-          autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
+          autoFocus={
+            !suppressAutoFocus &&
+            shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })
+          }
           onFocusInput={handleFocusInputCallback}
-          onInputFocusChange={draftInput.notifyInputFocus}
+          onInputFocusChange={handleInputFocusChange}
           commandDraftConfig={composerState.commandDraftConfig}
           agentControls={composerAgentControls}
           footer={composerFooter}
