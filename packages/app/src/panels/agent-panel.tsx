@@ -1592,6 +1592,7 @@ function ActiveAgentComposer({
         clearDraft={agentInputDraft.clear}
         autoFocus={isPaneFocused}
         isSubmitLoading={isSubmitLoading}
+        onInputFocusChange={agentInputDraft.notifyInputFocus}
         onAttentionInputFocus={onAttentionInputFocus}
         onAttentionPromptSend={onAttentionPromptSend}
         onComposerHeightChange={onComposerHeightChange}

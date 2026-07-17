@@ -18,6 +18,8 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 import type { WorkspaceUiState } from "@getpaseo/protocol/messages";
 import { hydrateWorkspaceUiState } from "@/session-ui-state/hydrate";
 import { buildWorkspaceUiState } from "@/session-ui-state/snapshot";
+import { buildDraftStoreKey } from "@/stores/draft-keys";
+import { useDraftStore } from "@/stores/draft-store";
 import {
   buildWorkspaceTabPersistenceKey,
   collectAllTabs,
@@ -52,6 +54,32 @@ function draftSetup(target: unknown): WorkspaceDraftTabSetup {
 describe("session ui state draft config sync", () => {
   beforeEach(() => {
     useWorkspaceLayoutStore.setState({ layoutByWorkspace: {} });
+    useDraftStore.setState({ drafts: {}, createModalDraft: null });
+  });
+
+  it("captures the composer draft of an already-active agent tab", () => {
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "agent-1" });
+    const agentDraftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "agent-1" });
+    useDraftStore.setState((previous) => ({
+      drafts: {
+        ...previous.drafts,
+        [agentDraftKey]: {
+          input: { text: "message in progress", attachments: [] },
+          lifecycle: "active",
+          updatedAt: 10,
+          version: 1,
+        } as unknown as (typeof previous.drafts)[string],
+      },
+    }));
+
+    const built = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 1,
+    });
+    expect(built?.drafts[agentDraftKey]?.input.text).toBe("message in progress");
   });
 
   it("captures the draft agent config in the snapshot target.setup", () => {

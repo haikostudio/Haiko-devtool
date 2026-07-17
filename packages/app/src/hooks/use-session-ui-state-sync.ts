@@ -134,7 +134,7 @@ export function useSessionUiStateSync(
       return;
     }
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const flush = () => {
+    const flush = async () => {
       for (const workspaceId of listWorkspaceIdsForServer(serverId)) {
         const probe = buildWorkspaceUiState({ serverId, workspaceId, revision: 0 });
         if (!probe) {
@@ -146,12 +146,16 @@ export function useSessionUiStateSync(
         }
         lastSyncedRef.current.set(workspaceId, serialized);
         const state: WorkspaceUiState = { ...probe, revision: Date.now() };
-        void client.setWorkspaceUiState(workspaceId, state).then(
+        // Upload this device's draft image bytes BEFORE advertising the state, so
+        // a device that receives the broadcast can always fetch the bytes. Pushing
+        // first raced the upload: the receiver's materialize could run before the
+        // bytes existed on the daemon and, with no further draft change, never
+        // retried — leaving the image unviewable until the tab was reopened.
+        await uploadDraftImageBytes(client, state);
+        await client.setWorkspaceUiState(workspaceId, state).then(
           () => undefined,
           () => undefined,
         );
-        // Upload this device's draft image bytes so other devices can fetch them.
-        void uploadDraftImageBytes(client, state);
       }
     };
     const schedule = () => {
@@ -161,7 +165,9 @@ export function useSessionUiStateSync(
       if (timer) {
         clearTimeout(timer);
       }
-      timer = setTimeout(flush, PUSH_DEBOUNCE_MS);
+      timer = setTimeout(() => {
+        void flush().catch(() => undefined);
+      }, PUSH_DEBOUNCE_MS);
     };
     const unsubLayout = useWorkspaceLayoutStore.subscribe(schedule);
     const unsubDraft = useDraftStore.subscribe(schedule);

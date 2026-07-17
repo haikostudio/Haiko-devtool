@@ -9,10 +9,21 @@ import { useDraftStore } from "@/stores/draft-store";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 
-// The set of tab kinds that carry a draft; used to pull the draft record into
-// the synced snapshot so the composer text + config travel with the tab.
-function getDraftIdFromTarget(target: WorkspaceTabTarget): string | null {
-  return target.kind === "draft" ? target.draftId : null;
+// Resolves the draft-store key for a tab whose composer carries a draft, so the
+// draft record travels in the synced snapshot. Both draft tabs (new-agent
+// composer) and agent tabs (message composer for an already-active agent) carry
+// one, keyed the exact way each composer reads it.
+function getDraftKeyForTab(
+  serverId: string,
+  tab: { tabId: string; target: WorkspaceTabTarget },
+): string | null {
+  if (tab.target.kind === "draft") {
+    return buildDraftStoreKey({ serverId, agentId: tab.tabId, draftId: tab.target.draftId });
+  }
+  if (tab.target.kind === "agent") {
+    return buildDraftStoreKey({ serverId, agentId: tab.target.agentId });
+  }
+  return null;
 }
 
 /**
@@ -43,11 +54,10 @@ export function buildWorkspaceUiState(input: {
   const draftStore = useDraftStore.getState();
   const drafts: WorkspaceUiState["drafts"] = {};
   for (const tab of tabs) {
-    const draftId = getDraftIdFromTarget(tab.target);
-    if (!draftId) {
+    const draftKey = getDraftKeyForTab(input.serverId, tab);
+    if (!draftKey) {
       continue;
     }
-    const draftKey = buildDraftStoreKey({ serverId: input.serverId, agentId: tab.tabId, draftId });
     const record = draftStore.drafts[draftKey];
     if (!record) {
       continue;
