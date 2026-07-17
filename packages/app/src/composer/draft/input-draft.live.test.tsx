@@ -135,6 +135,40 @@ function seedRemoteDraft(draftKey: string, text: string, version: number): void 
   }));
 }
 
+// Writes a draft holding a single image attachment, mirroring how a synced draft
+// (and later its locally materialized bytes) looks in the store. Version/updatedAt
+// stay fixed so a metadata swap is not rejected as a stale write.
+function setImageDraft(
+  draftKey: string,
+  input: { text: string; id: string; storageKey: string },
+): void {
+  useDraftStore.setState((previous) => ({
+    drafts: {
+      ...previous.drafts,
+      [draftKey]: {
+        input: {
+          text: input.text,
+          attachments: [
+            {
+              kind: "image",
+              metadata: {
+                id: input.id,
+                mimeType: "image/png",
+                storageType: "web-indexeddb",
+                storageKey: input.storageKey,
+                createdAt: 1,
+              },
+            },
+          ],
+        },
+        lifecycle: "active",
+        updatedAt: 500,
+        version: 3,
+      } as unknown as DraftRecordForTest,
+    },
+  }));
+}
+
 beforeAll(async () => {
   const storage = new Map<string, string>();
 
@@ -532,6 +566,117 @@ describe("useAgentInputDraft live contract", () => {
     });
 
     expect(getLatest().text).toBe("from another device");
+  });
+
+  it("adopts a materialized image attachment (storageKey swap) into an open composer", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:image" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    // A remote image draft lands with the SENDER's storageKey (not resolvable
+    // locally yet).
+    await act(async () => {
+      setImageDraft("draft:image", { text: "look at this", id: "img-1", storageKey: "remote-key" });
+    });
+
+    expect(
+      (getLatest().attachments[0] as { metadata: { storageKey: string } }).metadata.storageKey,
+    ).toBe("remote-key");
+
+    // materializeDraftImageBytes persists the bytes locally and rewrites the
+    // attachment metadata to the local storageKey, preserving version/updatedAt.
+    await act(async () => {
+      setImageDraft("draft:image", { text: "look at this", id: "img-1", storageKey: "img-1" });
+    });
+
+    expect(
+      (getLatest().attachments[0] as { metadata: { storageKey: string } }).metadata.storageKey,
+    ).toBe("img-1");
+  });
+
+  it("adopts a materialized image attachment even while the input is focused (text stays deferred)", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:image-focused" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      setImageDraft("draft:image-focused", {
+        text: "caption",
+        id: "img-2",
+        storageKey: "remote-key",
+      });
+    });
+
+    // Focus the input, then a remote text change AND the image materialization
+    // arrive together.
+    await act(async () => {
+      getLatest().notifyInputFocus(true);
+    });
+
+    await act(async () => {
+      setImageDraft("draft:image-focused", {
+        text: "remote caption while typing",
+        id: "img-2",
+        storageKey: "img-2",
+      });
+    });
+
+    // The attachment (storageKey) is adopted even while focused, but the text is
+    // NOT yanked out from under the typing user.
+    expect(
+      (getLatest().attachments[0] as { metadata: { storageKey: string } }).metadata.storageKey,
+    ).toBe("img-2");
+    expect(getLatest().text).toBe("caption");
   });
 
   it("defers a remote draft change while the input is focused, then adopts it on blur", async () => {

@@ -202,14 +202,17 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
   }, [attachments, draftKey, text]);
 
   // Adopt a draft that changed in the store from outside this composer (a remote
-  // cross-device update applied via hydrateWorkspaceUiState) into the local
-  // input, in place. Skipped while the input is focused so it never yanks text
-  // out from under active typing; on blur we run it once to catch up. Our own
+  // cross-device update applied via hydrateWorkspaceUiState, or an image whose
+  // bytes were just materialized locally) into the local input, in place. Our own
   // saves keep the store equal to local state, so this is a no-op for them.
+  //
+  // Text is user content: never yank it out from under active typing, so text is
+  // adopted only while the input is NOT focused (on blur we run once to catch up).
+  // Attachments are NOT typed content — an attachment metadata swap (e.g. a
+  // materialized image's storageKey flipping from the sender's key to the local
+  // one) must apply even while the input is focused, otherwise a focused/open
+  // composer shows a broken image until it is closed and reopened.
   const adoptRemoteDraft = useCallback(() => {
-    if (inputFocusedRef.current) {
-      return;
-    }
     if (draftGenerationRef.current <= 0) {
       return;
     }
@@ -220,16 +223,20 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     if (!remote) {
       return;
     }
-    const sameText = remote.text === textRef.current;
-    const sameAttachments = areAttachmentsEqual({
-      left: remote.attachments,
-      right: attachmentsRef.current,
-    });
-    if (sameText && sameAttachments) {
+    if (
+      !areAttachmentsEqual({
+        left: remote.attachments,
+        right: attachmentsRef.current,
+      })
+    ) {
+      setAttachmentsState(remote.attachments);
+    }
+    if (inputFocusedRef.current) {
       return;
     }
-    setText(remote.text);
-    setAttachmentsState(remote.attachments);
+    if (remote.text !== textRef.current) {
+      setText(remote.text);
+    }
   }, [draftKey]);
 
   useEffect(() => {
