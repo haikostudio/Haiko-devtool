@@ -164,6 +164,11 @@ const FeatureBrainMemorySchema = z
     baseUrl: z.string().trim().min(1).optional(),
     apiKey: z.string().min(1).optional(),
     globalFallback: z.boolean().optional(),
+    // Curation layer (librarian recall filter + scribe distillation), on by
+    // default when brain memory is enabled. providerModel is the internal
+    // agent model, e.g. "claude/haiku".
+    curation: z.boolean().optional(),
+    providerModel: z.string().trim().min(1).optional(),
   })
   .strict();
 

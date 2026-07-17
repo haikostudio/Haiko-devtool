@@ -20,9 +20,9 @@ export interface ChangelogCommit {
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
   {
     version: "Unreleased",
-    date: "2026-07-17",
+    date: "2026-07-18",
     markdown:
-      "### Added\n\n- Running conversation-synthesis thread, content-width banner\n- Inline LLM task-intent triage from chat messages\n- Show project name + request duration in every task toast\n- Per-task run config, approval gate, quiet-hours scheduling, MCP task tools\n- Floating conversation-synthesis block per agent\n- Make keyboard shortcuts searchable\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Make project imports pluggable\n\n### Fixed\n\n- Preserve main session compatibility\n- Keep composer-held attachment blobs from being garbage collected\n- Enforce session scope boundaries\n- Reject imported port offsets\n- Refresh import availability previews\n- Expose remaining import errors\n- Tighten conductor service imports\n- Preserve conductor migration context\n- Report remaining import gaps\n- Inset transcript below the floating synthesis banner\n- Stop pasted image being cleared by a stale draft tombstone\n- Wait for import preview before setup callout\n- Keep project imports current and complete\n- Give release builds more memory\n- Handle remaining import edge cases\n- Update lockfile signatures and Nix hash [skip ci]\n- Close project import edge cases\n- Index shortcut modifier aliases\n- Harden conductor imports\n- Straddle toast status dot over the top-left corner\n- Pin toast status dot to the top-left corner\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Bound magic scrollbar above the composer on mobile\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Live-adopt remote draft text into an open composer\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+      "### Added\n\n- Brain memory curation — librarian filter, project fiche, scribe distillation\n- Running conversation-synthesis thread, content-width banner\n- Inline LLM task-intent triage from chat messages\n- Show project name + request duration in every task toast\n- Per-task run config, approval gate, quiet-hours scheduling, MCP task tools\n- Floating conversation-synthesis block per agent\n- Make keyboard shortcuts searchable\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Make project imports pluggable\n\n### Fixed\n\n- Give the attachment thumbnail image an explicit plain-object size\n- Tighten relay backpressure accounting\n- Bound stale websocket connections\n- Align thinking section scroll layout with other detail sections (#1884)\n- Stop syncing active-agent composer drafts (broke image send)\n- Keep composer-held attachment blobs from being garbage collected\n- Reject imported port offsets\n- Refresh import availability previews\n- Expose remaining import errors\n- Tighten conductor service imports\n- Preserve conductor migration context\n- Report remaining import gaps\n- Inset transcript below the floating synthesis banner\n- Stop pasted image being cleared by a stale draft tombstone\n- Wait for import preview before setup callout\n- Keep project imports current and complete\n- Give release builds more memory\n- Handle remaining import edge cases\n- Update lockfile signatures and Nix hash [skip ci]\n- Close project import edge cases\n- Index shortcut modifier aliases\n- Harden conductor imports\n- Straddle toast status dot over the top-left corner\n- Pin toast status dot to the top-left corner\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Bound magic scrollbar above the composer on mobile\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Live-adopt remote draft text into an open composer\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
   },
   {
     version: "0.1.108",
@@ -618,11 +618,54 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
-    hash: "bd0775dbae44acacc9a7ddbdc98a395f1fc85386",
-    shortHash: "bd0775dba",
-    date: "2026-07-17T19:58:51+02:00",
+    hash: "8a511df92719c282b9c3e5f481001edd3d98401a",
+    shortHash: "8a511df92",
+    date: "2026-07-18T00:11:54+02:00",
+    author: "haikostudio",
+    subject: "fix(app): give the attachment thumbnail image an explicit plain-object size",
+  },
+  {
+    hash: "8cf190e516f6a4c6e1ee4ea295803e5384aa17c0",
+    shortHash: "8cf190e51",
+    date: "2026-07-17T20:01:06+00:00",
     author: "Mohamed Boudra",
-    subject: "fix(server): preserve main session compatibility",
+    subject: "fix(server): tighten relay backpressure accounting",
+  },
+  {
+    hash: "5feaa01dc24c00b1d44ceed8bb695afab00f948d",
+    shortHash: "5feaa01dc",
+    date: "2026-07-17T19:38:48+00:00",
+    author: "Mohamed Boudra",
+    subject: "fix(server): bound stale websocket connections",
+  },
+  {
+    hash: "a1de743ef67dde4fe7c48d045a3714f65dfa5e90",
+    shortHash: "a1de743ef",
+    date: "2026-07-17T15:07:44-04:00",
+    author: "Slava Goltser",
+    subject: "fix(app): align thinking section scroll layout with other detail sections (#1884)",
+  },
+  {
+    hash: "27faeac81e1649e9fb7f7d6523cc9e0a45c32e9b",
+    shortHash: "27faeac81",
+    date: "2026-07-17T20:47:55+02:00",
+    author: "haikostudio",
+    subject: "fix(app): stop syncing active-agent composer drafts (broke image send)",
+  },
+  {
+    hash: "a414f8ea8572412cae498bcb62cac9429cc13bdf",
+    shortHash: "a414f8ea8",
+    date: "2026-07-17T20:20:57+02:00",
+    author: "Mohamed Boudra",
+    subject: "Connect your Paseo daemon to Hub (#2035)",
+  },
+  {
+    hash: "08681fb7018db176baad259043f6d4b40a5bc06e",
+    shortHash: "08681fb70",
+    date: "2026-07-17T20:04:03+02:00",
+    author: "haikostudio",
+    subject:
+      "feat(server): brain memory curation — librarian filter, project fiche, scribe distillation",
   },
   {
     hash: "2f44821d075def223c6ae9f565412e1c7cdea877",
@@ -644,13 +687,6 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     date: "2026-07-17T19:30:17+02:00",
     author: "Mohamed Boudra",
     subject: "Treat every added folder as an independent project (#2098)",
-  },
-  {
-    hash: "e25767680c8643fb703083310806566fd5a2aaf4",
-    shortHash: "e25767680",
-    date: "2026-07-17T19:26:45+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): enforce session scope boundaries",
   },
   {
     hash: "4d2acfbeb552e8730eff94bb7e5aec8344592965",
@@ -2685,42 +2721,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "fix(app): preserve workspace-root link tooltips",
   },
-  {
-    hash: "6c764f211a459fcdfed12b108b9f414f68255a11",
-    shortHash: "6c764f211",
-    date: "2026-07-11T11:12:28+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): stop updates after chat teardown (#1997)",
-  },
-  {
-    hash: "28a27b02d325b69f4685e776a2f28854b4cd6332",
-    shortHash: "28a27b02d",
-    date: "2026-07-11T09:39:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "Prevent Android chats from freezing or going blank (#1989)",
-  },
-  {
-    hash: "ac45b2f2aebf63cf4d9f66d7e842e73a9f88de36",
-    shortHash: "ac45b2f2a",
-    date: "2026-07-10T18:49:06+00:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): show Windows file links relative to workspace",
-  },
-  {
-    hash: "58fddee4776b7c8dfa731554cd09ba2fa472fe7c",
-    shortHash: "58fddee47",
-    date: "2026-07-10T15:35:59+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): scope browser webviews by host",
-  },
-  {
-    hash: "3a23e76cf330c23b1e6195aae9f593544a711035",
-    shortHash: "3a23e76cf",
-    date: "2026-07-10T15:15:29+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): retain browser keys across windows",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T19:58:51+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-18T00:11:54+02:00";

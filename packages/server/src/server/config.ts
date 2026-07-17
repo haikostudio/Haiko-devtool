@@ -323,7 +323,28 @@ function resolveBrainMemoryConfig(
     parseBooleanEnv(env.PASEO_BRAIN_MEMORY_GLOBAL_FALLBACK) ??
     persistedBrain?.globalFallback ??
     true;
-  return { enabled, baseUrl, apiKey, globalFallback };
+  return {
+    enabled,
+    baseUrl,
+    apiKey,
+    globalFallback,
+    ...resolveBrainCurationConfig(env, persisted),
+  };
+}
+
+// Split out of resolveBrainMemoryConfig to keep both under the complexity cap.
+function resolveBrainCurationConfig(
+  env: NodeJS.ProcessEnv,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): { curation: boolean; providerModel: string } {
+  const persistedBrain = persisted.features?.brainMemory;
+  const curation =
+    parseBooleanEnv(env.PASEO_BRAIN_MEMORY_CURATION) ?? persistedBrain?.curation ?? true;
+  const providerModel =
+    env.PASEO_BRAIN_MEMORY_PROVIDER_MODEL?.trim() ||
+    persistedBrain?.providerModel?.trim() ||
+    "claude/haiku";
+  return { curation, providerModel };
 }
 
 function resolveMessageTriageConfig(
