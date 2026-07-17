@@ -219,11 +219,14 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   details: {
-    gap: theme.spacing[1],
-    marginTop: theme.spacing[1],
+    gap: theme.spacing[3],
+    marginTop: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
   },
   detailRow: {
-    gap: 2,
+    gap: 3,
   },
   detailLabel: {
     fontSize: 10,
