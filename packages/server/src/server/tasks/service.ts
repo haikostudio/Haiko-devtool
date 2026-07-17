@@ -1,5 +1,13 @@
 import type pino from "pino";
-import type { KanbanTask, TaskBoard, TaskColumn, TaskFolder } from "@getpaseo/protocol/tasks/types";
+import type {
+  KanbanTask,
+  TaskApproval,
+  TaskBoard,
+  TaskColumn,
+  TaskFolder,
+  TaskRunConfig,
+  TaskSchedulePreference,
+} from "@getpaseo/protocol/tasks/types";
 import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
@@ -41,6 +49,10 @@ interface CreateTaskInput {
   column?: TaskColumn;
   origin?: KanbanTask["origin"];
   agentId?: string;
+  runConfig?: TaskRunConfig;
+  schedulePreference?: TaskSchedulePreference;
+  // "pending" gates the scheduler until the user approves (agent proposals).
+  approval?: TaskApproval;
 }
 
 interface MoveTaskInput {
@@ -68,6 +80,7 @@ export class TaskBoardService {
   private readonly logger: pino.Logger;
   private readonly listeners = new Map<string, Set<TaskBoardListener>>();
   private onTaskScheduled: ((projectId: string, taskId: string) => void) | null = null;
+  private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
 
   constructor(options: TaskBoardServiceOptions) {
     this.store = options.store;
@@ -76,6 +89,11 @@ export class TaskBoardService {
 
   setOnTaskScheduled(callback: (projectId: string, taskId: string) => void): void {
     this.onTaskScheduled = callback;
+  }
+
+  /** Fired when a task is created awaiting user approval (agent proposals). */
+  setOnTaskProposed(callback: (projectId: string, task: KanbanTask) => void): void {
+    this.onTaskProposed = callback;
   }
 
   subscribe(projectId: string, listener: TaskBoardListener): () => void {
@@ -227,6 +245,14 @@ export class TaskBoardService {
         order: siblings.length,
         origin: input.origin ?? "manual",
         normalizedTitle: normalizeTaskTitle(input.title),
+        ...(input.runConfig !== undefined ? { runConfig: input.runConfig } : {}),
+        ...(input.schedulePreference !== undefined
+          ? { schedulePreference: input.schedulePreference }
+          : {}),
+        ...(input.approval !== undefined ? { approval: input.approval } : {}),
+        ...(column === "scheduled"
+          ? { schedule: { state: "pending_estimate" as const, attempts: 0 } }
+          : {}),
         links: input.agentId
           ? { agentIds: [input.agentId], primaryAgentId: input.agentId }
           : { agentIds: [] },
@@ -242,6 +268,13 @@ export class TaskBoardService {
     if (column === "scheduled") {
       this.notifyScheduled(projectId, created);
     }
+    if (input.approval?.state === "pending" && this.onTaskProposed) {
+      try {
+        this.onTaskProposed(projectId, created);
+      } catch (error) {
+        this.logger.warn({ err: error, title: input.title }, "onTaskProposed callback failed");
+      }
+    }
     return created;
   }
 
@@ -252,6 +285,8 @@ export class TaskBoardService {
       title?: string;
       description?: string | null;
       tags?: string[];
+      runConfig?: TaskRunConfig | null;
+      schedulePreference?: TaskSchedulePreference | null;
     },
   ): Promise<KanbanTask> {
     const board = await this.mutateTask(projectId, taskId, (task) => {
@@ -268,9 +303,47 @@ export class TaskBoardService {
       if (changes.tags !== undefined) {
         updated.tags = changes.tags;
       }
+      if (changes.runConfig === null) {
+        delete updated.runConfig;
+      } else if (changes.runConfig !== undefined) {
+        updated.runConfig = changes.runConfig;
+      }
+      if (changes.schedulePreference === null) {
+        delete updated.schedulePreference;
+      } else if (changes.schedulePreference !== undefined) {
+        updated.schedulePreference = changes.schedulePreference;
+      }
       return updated;
     });
     return this.requireTask(board, taskId);
+  }
+
+  /**
+   * User approval of an agent-proposed task. If the task sits in "scheduled"
+   * without a schedule yet, arms it so the estimator/scheduler pick it up.
+   */
+  async approveTask(projectId: string, taskId: string): Promise<KanbanTask> {
+    let needsScheduleNotify = false;
+    const board = await this.mutateTask(projectId, taskId, (task) => {
+      if (task.approval?.state !== "pending") {
+        return task;
+      }
+      const now = new Date().toISOString();
+      const updated: KanbanTask = {
+        ...task,
+        approval: { ...task.approval, state: "approved", approvedAt: now },
+      };
+      if (task.column === "scheduled" && !task.schedule) {
+        updated.schedule = { state: "pending_estimate", attempts: 0 };
+        needsScheduleNotify = true;
+      }
+      return updated;
+    });
+    const task = this.requireTask(board, taskId);
+    if (needsScheduleNotify) {
+      this.notifyScheduled(projectId, task);
+    }
+    return task;
   }
 
   /**
@@ -301,6 +374,10 @@ export class TaskBoardService {
         column: input.column,
         updatedAt: now,
         ...(input.manual ? { manualOverrideAt: now } : {}),
+        // A user drag into "scheduled" is an implicit approval of the proposal.
+        ...(input.manual && input.column === "scheduled" && task.approval?.state === "pending"
+          ? { approval: { ...task.approval, state: "approved" as const, approvedAt: now } }
+          : {}),
         ...(enteringScheduled
           ? {
               schedule: {

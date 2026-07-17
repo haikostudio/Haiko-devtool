@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
-import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
+import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { Button } from "@/components/ui/button";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
@@ -282,6 +282,7 @@ function DesktopLayout({
     boardArea = (
       <BoardContent
         key={`${serverId}:${projectId}:${folderId}`}
+        serverId={serverId}
         folderId={folderId}
         boardHandle={boardHandle}
       />
@@ -522,7 +523,15 @@ function CenteredNote({ text }: { text: string }) {
 // Shared board content: add-task row + kanban columns + detail sheet.
 // ---------------------------------------------------------------------------
 
-function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle: BoardHandle }) {
+function BoardContent({
+  serverId,
+  folderId,
+  boardHandle,
+}: {
+  serverId: string | null;
+  folderId: string;
+  boardHandle: BoardHandle;
+}) {
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
 
@@ -582,18 +591,15 @@ function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle
   );
 
   const handleSaveTask = useCallback(
-    ({
-      taskId,
-      title,
-      description,
-      tags,
-    }: {
-      taskId: string;
-      title: string;
-      description: string;
-      tags: string[];
-    }) => {
-      void boardHandle.updateTask({ taskId, title, description: description || null, tags });
+    ({ taskId, title, description, tags, runConfig, schedulePreference }: TaskDetailSaveInput) => {
+      void boardHandle.updateTask({
+        taskId,
+        title,
+        description: description || null,
+        tags,
+        runConfig,
+        schedulePreference,
+      });
     },
     [boardHandle],
   );
@@ -619,6 +625,13 @@ function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle
     [boardHandle],
   );
 
+  const handleApproveTask = useCallback(
+    (taskId: string) => {
+      void boardHandle.approveTask(taskId);
+    },
+    [boardHandle],
+  );
+
   return (
     <View style={styles.boardContainer}>
       <KanbanBoard
@@ -630,6 +643,7 @@ function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle
         columnExtras={columnExtras}
       />
       <TaskDetailSheet
+        serverId={serverId}
         task={detailTask}
         visible={detailTask !== null}
         onClose={handleCloseDetail}
@@ -637,6 +651,7 @@ function BoardContent({ folderId, boardHandle }: { folderId: string; boardHandle
         onDelete={handleDeleteTask}
         onEstimate={handleEstimateTask}
         onRunNow={handleRunTaskNow}
+        onApprove={handleApproveTask}
       />
     </View>
   );
@@ -684,7 +699,7 @@ function CompactFlow({
         <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         <Text style={styles.rowSubtitle}>{t("tasks.folders")}</Text>
       </Pressable>
-      <BoardContent folderId={folderId} boardHandle={boardHandle} />
+      <BoardContent serverId={serverId} folderId={folderId} boardHandle={boardHandle} />
     </View>
   );
 }

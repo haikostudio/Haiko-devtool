@@ -15,15 +15,18 @@ const ESTIMATOR_PROVIDER_MODEL = "claude/haiku";
 const TaskEstimateResultSchema = z.object({
   tokens: z.number().int().nonnegative(),
   quotaPercent: z.number().min(0).max(100),
+  estimatedMinutes: z.number().int().nonnegative(),
   confidence: z.enum(["low", "medium", "high"]),
   summary: z.string(),
 });
 
 // Applied when the estimator agent fails or returns unparseable output, so a
-// scheduled task never sits in pending_estimate forever.
+// scheduled task never sits in pending_estimate forever. estimatedMinutes stays
+// above the scheduler's "light task" threshold so unknown work waits for quiet hours.
 const FALLBACK_ESTIMATE = {
   tokens: 200_000,
   quotaPercent: 10,
+  estimatedMinutes: 60,
   confidence: "low" as const,
   summary: "Estimation automatique indisponible — valeur par défaut prudente.",
 };
@@ -145,6 +148,7 @@ export class TaskEstimator {
       "Estime :",
       "- tokens : total de tokens (entrée+sortie) que l'agent d'exécution consommera probablement",
       "- quotaPercent : part (0-100) d'une fenêtre de 5h d'un abonnement Claude que cela représente",
+      "- estimatedMinutes : durée active estimée (en minutes) de l'exécution par l'agent (ex: 10, 45, 120)",
       "- confidence : low | medium | high",
       "- summary : justification en une phrase",
     ]

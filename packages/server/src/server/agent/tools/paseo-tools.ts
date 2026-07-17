@@ -65,7 +65,9 @@ import {
 } from "../lifecycle-command.js";
 import type { GitHubService } from "../../../services/github-service.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
-import type { WorkspaceRegistry } from "../../workspace-registry.js";
+import type { ProjectRegistry, WorkspaceRegistry } from "../../workspace-registry.js";
+import { resolveProjectDisplayName } from "../../workspace-registry.js";
+import type { TaskBoardService } from "../../tasks/service.js";
 import { WorktreeRequestError } from "../../worktree-errors.js";
 import {
   archiveCommand,
@@ -126,6 +128,9 @@ export interface PaseoToolHostDependencies {
   resolveCallerContext?: (callerAgentId: string) => VoiceCallerContext | null;
   enableVoiceTools?: boolean;
   voiceOnly?: boolean;
+  // Task board tools are registered only when both are provided.
+  taskBoardService?: TaskBoardService | null;
+  projectRegistry?: Pick<ProjectRegistry, "list" | "get"> | null;
   logger: Logger;
 }
 
@@ -2690,6 +2695,303 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       };
     },
   );
+
+  // ---- Task board tools ----
+  // Let any agent decompose work (an email, a spec) into kanban tasks. Tasks
+  // proposed for execution land in "scheduled" awaiting explicit USER approval;
+  // there is deliberately no approve tool — only the user can approve.
+  const taskBoardService = options.taskBoardService ?? null;
+  const projectRegistry = options.projectRegistry ?? null;
+  if (taskBoardService && projectRegistry) {
+    const taskRunConfigToolSchema = z.object({
+      provider: z
+        .string()
+        .min(1)
+        .describe('Agent provider id, e.g. "claude" or "codex". See list_providers/list_models.'),
+      model: z
+        .string()
+        .optional()
+        .describe('Provider model id, e.g. "claude-opus-4-8". Omit for the provider default.'),
+      thinkingOptionId: z
+        .string()
+        .optional()
+        .describe('Reasoning effort for the run: "low" | "medium" | "high" | "xhigh" | "max".'),
+      mode: z
+        .enum(["direct", "plan"])
+        .optional()
+        .describe(
+          '"plan": the agent only produces an implementation plan for the user to review. Default: "direct" (implement + PR).',
+        ),
+    });
+    const schedulePreferenceToolSchema = z
+      .enum(["auto", "asap", "off_peak"])
+      .describe(
+        'Launch timing: "auto" (light tasks anytime, heavy ones during quiet hours), "asap", or "off_peak" (always wait for quiet hours).',
+      );
+    const taskSummary = (task: {
+      id: string;
+      folderId: string;
+      title: string;
+      description?: string;
+      tags: string[];
+      column: string;
+      approval?: { state: string } | null;
+      runConfig?: unknown;
+      estimate?: { quotaPercent: number; estimatedMinutes?: number } | null;
+      links: { prUrl?: string | null };
+    }) => ({
+      id: task.id,
+      folderId: task.folderId,
+      title: task.title,
+      ...(task.description !== undefined ? { description: task.description } : {}),
+      tags: task.tags,
+      column: task.column,
+      ...(task.approval ? { approvalState: task.approval.state } : {}),
+      ...(task.runConfig ? { runConfig: task.runConfig } : {}),
+      ...(task.estimate
+        ? {
+            estimate: {
+              quotaPercent: task.estimate.quotaPercent,
+              ...(task.estimate.estimatedMinutes !== undefined
+                ? { estimatedMinutes: task.estimate.estimatedMinutes }
+                : {}),
+            },
+          }
+        : {}),
+      ...(task.links.prUrl ? { prUrl: task.links.prUrl } : {}),
+    });
+
+    registerTool(
+      "list_task_boards",
+      {
+        title: "List task boards",
+        description:
+          "List Paseo projects and their kanban task folders. Call this first to locate the right projectId/folder before creating tasks.",
+        inputSchema: {},
+        outputSchema: {
+          boards: z.array(
+            z.object({
+              projectId: z.string(),
+              displayName: z.string(),
+              rootPath: z.string(),
+              folders: z.array(
+                z.object({ id: z.string(), name: z.string(), taskCount: z.number().int() }),
+              ),
+            }),
+          ),
+        },
+      },
+      async () => {
+        const projects = await projectRegistry.list();
+        const boards = [];
+        for (const project of projects) {
+          if (project.archivedAt) {
+            continue;
+          }
+          const board = await taskBoardService.getBoard(project.projectId);
+          boards.push({
+            projectId: project.projectId,
+            displayName: resolveProjectDisplayName(project),
+            rootPath: project.rootPath,
+            folders: board.folders.map((folder) => ({
+              id: folder.id,
+              name: folder.name,
+              taskCount: board.tasks.filter((task) => task.folderId === folder.id).length,
+            })),
+          });
+        }
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ boards }),
+        };
+      },
+    );
+
+    registerTool(
+      "list_tasks",
+      {
+        title: "List tasks",
+        description: "List kanban tasks of a project, optionally filtered by folder or column.",
+        inputSchema: {
+          projectId: z.string(),
+          folderId: z.string().optional(),
+          column: z.enum(["backlog", "scheduled", "in_progress", "done"]).optional(),
+        },
+        outputSchema: {
+          tasks: z.array(
+            z.object({
+              id: z.string(),
+              folderId: z.string(),
+              title: z.string(),
+              description: z.string().optional(),
+              tags: z.array(z.string()),
+              column: z.string(),
+              approvalState: z.string().optional(),
+              runConfig: taskRunConfigToolSchema.optional(),
+              estimate: z
+                .object({
+                  quotaPercent: z.number(),
+                  estimatedMinutes: z.number().optional(),
+                })
+                .optional(),
+              prUrl: z.string().optional(),
+            }),
+          ),
+        },
+      },
+      async (args: { projectId: string; folderId?: string; column?: string }) => {
+        const board = await taskBoardService.getBoard(args.projectId);
+        const tasks = board.tasks
+          .filter((task) => (args.folderId ? task.folderId === args.folderId : true))
+          .filter((task) => (args.column ? task.column === args.column : true))
+          .map(taskSummary);
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ tasks }),
+        };
+      },
+    );
+
+    registerTool(
+      "create_task_folder",
+      {
+        title: "Create task folder",
+        description: "Create a kanban folder in a project's task board.",
+        inputSchema: {
+          projectId: z.string(),
+          name: z.string().min(1),
+          color: z.string().optional().describe('Accent hex color, e.g. "#3b82f6".'),
+        },
+        outputSchema: { folderId: z.string() },
+      },
+      async (args: { projectId: string; name: string; color?: string }) => {
+        const folder = await taskBoardService.createFolder(args.projectId, args.name, args.color);
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ folderId: folder.id }),
+        };
+      },
+    );
+
+    registerTool(
+      "create_task",
+      {
+        title: "Create task",
+        description:
+          "Create a kanban task in a project's board. Set runConfig (provider/model, thinkingOptionId, mode) to propose how it should run. " +
+          "With proposeRun=true the task lands in the Scheduled column AWAITING EXPLICIT USER APPROVAL — the scheduler never runs unapproved tasks and you cannot approve them yourself.",
+        inputSchema: {
+          projectId: z.string(),
+          folderId: z.string().optional().describe("Target folder id. Preferred when known."),
+          folderName: z
+            .string()
+            .optional()
+            .describe('Used when folderId is absent; created if missing. Defaults to "Agent".'),
+          title: z.string().min(1),
+          description: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          runConfig: taskRunConfigToolSchema.optional(),
+          schedulePreference: schedulePreferenceToolSchema.optional(),
+          proposeRun: z
+            .boolean()
+            .optional()
+            .describe("true: place in Scheduled awaiting user approval. false/absent: backlog."),
+        },
+        outputSchema: {
+          taskId: z.string(),
+          column: z.string(),
+          approvalState: z.string().optional(),
+        },
+      },
+      async (args: {
+        projectId: string;
+        folderId?: string;
+        folderName?: string;
+        title: string;
+        description?: string;
+        tags?: string[];
+        runConfig?: z.infer<typeof taskRunConfigToolSchema>;
+        schedulePreference?: z.infer<typeof schedulePreferenceToolSchema>;
+        proposeRun?: boolean;
+      }) => {
+        const folderId =
+          args.folderId ??
+          (await taskBoardService.ensureFolder(args.projectId, args.folderName ?? "Agent"));
+        const task = await taskBoardService.createTask(args.projectId, {
+          folderId,
+          title: args.title,
+          ...(args.description !== undefined ? { description: args.description } : {}),
+          ...(args.tags !== undefined ? { tags: args.tags } : {}),
+          ...(args.runConfig !== undefined ? { runConfig: args.runConfig } : {}),
+          ...(args.schedulePreference !== undefined
+            ? { schedulePreference: args.schedulePreference }
+            : {}),
+          // The proposing agent is recorded in approval.requestedBy, NOT in
+          // links: a linked agent would drag the card through agent-sync
+          // transitions while it is still awaiting user approval.
+          ...(args.proposeRun
+            ? {
+                column: "scheduled" as const,
+                approval: {
+                  state: "pending" as const,
+                  ...(callerAgentId ? { requestedBy: callerAgentId } : {}),
+                },
+              }
+            : {}),
+        });
+        return {
+          content: [],
+          structuredContent: ensureValidJson({
+            taskId: task.id,
+            column: task.column,
+            ...(task.approval ? { approvalState: task.approval.state } : {}),
+          }),
+        };
+      },
+    );
+
+    registerTool(
+      "update_task",
+      {
+        title: "Update task",
+        description:
+          "Update a kanban task's title, description, tags, runConfig, or schedulePreference.",
+        inputSchema: {
+          projectId: z.string(),
+          taskId: z.string(),
+          title: z.string().min(1).optional(),
+          description: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          runConfig: taskRunConfigToolSchema.optional(),
+          schedulePreference: schedulePreferenceToolSchema.optional(),
+        },
+        outputSchema: { success: z.boolean() },
+      },
+      async (args: {
+        projectId: string;
+        taskId: string;
+        title?: string;
+        description?: string;
+        tags?: string[];
+        runConfig?: z.infer<typeof taskRunConfigToolSchema>;
+        schedulePreference?: z.infer<typeof schedulePreferenceToolSchema>;
+      }) => {
+        await taskBoardService.updateTask(args.projectId, args.taskId, {
+          ...(args.title !== undefined ? { title: args.title } : {}),
+          ...(args.description !== undefined ? { description: args.description } : {}),
+          ...(args.tags !== undefined ? { tags: args.tags } : {}),
+          ...(args.runConfig !== undefined ? { runConfig: args.runConfig } : {}),
+          ...(args.schedulePreference !== undefined
+            ? { schedulePreference: args.schedulePreference }
+            : {}),
+        });
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ success: true }),
+        };
+      },
+    );
+  }
 
   return toCatalog();
 }

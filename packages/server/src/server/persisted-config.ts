@@ -262,6 +262,18 @@ export const PersistedConfigSchema = z
         enableTerminalAgentHooks: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
+        tasks: z
+          .object({
+            quietHours: z
+              .object({
+                startHour: z.number().int().min(0).max(23),
+                endHour: z.number().int().min(0).max(23),
+                timeZone: z.string().min(1),
+              })
+              .optional(),
+          })
+          .passthrough()
+          .optional(),
         cors: z
           .object({
             allowedOrigins: z.array(z.string()).optional(),

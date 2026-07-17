@@ -176,6 +176,10 @@ export class TasksSession {
         ...(request.description !== undefined ? { description: request.description } : {}),
         ...(request.tags !== undefined ? { tags: request.tags } : {}),
         ...(request.column !== undefined ? { column: request.column } : {}),
+        ...(request.runConfig !== undefined ? { runConfig: request.runConfig } : {}),
+        ...(request.schedulePreference !== undefined
+          ? { schedulePreference: request.schedulePreference }
+          : {}),
       });
       this.host.emit({
         type: "tasks.task.create.response",
@@ -194,6 +198,10 @@ export class TasksSession {
         ...(request.title !== undefined ? { title: request.title } : {}),
         ...(request.description !== undefined ? { description: request.description } : {}),
         ...(request.tags !== undefined ? { tags: request.tags } : {}),
+        ...(request.runConfig !== undefined ? { runConfig: request.runConfig } : {}),
+        ...(request.schedulePreference !== undefined
+          ? { schedulePreference: request.schedulePreference }
+          : {}),
       });
       this.host.emit({
         type: "tasks.task.update.response",
@@ -248,6 +256,20 @@ export class TasksSession {
       this.host.emit({
         type: "tasks.task.estimate.response",
         payload: { requestId: request.requestId, error: null },
+      });
+    } catch (error) {
+      this.emitRpcError(request, error);
+    }
+  }
+
+  async handleTaskApproveRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.approve.request" }>,
+  ): Promise<void> {
+    try {
+      const task = await this.taskBoardService.approveTask(request.projectId, request.taskId);
+      this.host.emit({
+        type: "tasks.task.approve.response",
+        payload: { requestId: request.requestId, task, error: null },
       });
     } catch (error) {
       this.emitRpcError(request, error);

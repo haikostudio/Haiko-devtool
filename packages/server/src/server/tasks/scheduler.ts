@@ -8,6 +8,7 @@ import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { CreatePaseoWorktreeWorkflowResult } from "../worktree-session.js";
 import type { ProviderUsageService } from "../../services/quota-fetcher/service.js";
+import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
 
@@ -18,6 +19,10 @@ const MAX_CONCURRENT_TASK_AGENTS = 2;
 const QUOTA_SAFETY_MARGIN_PCT = 10;
 const MAX_ATTEMPTS = 3;
 const PR_URL_PATTERN = /https:\/\/github\.com\/[^\s)]+\/pull\/\d+/;
+// "Light" tasks (below both thresholds) may launch outside quiet hours in
+// "auto" mode; anything heavier waits for the off-peak window.
+const LIGHT_TASK_MAX_QUOTA_PCT = 25;
+const LIGHT_TASK_MAX_MINUTES = 45;
 
 export const TASK_AGENT_LABEL = "paseo.task-id";
 
@@ -39,6 +44,10 @@ interface TaskSchedulerOptions {
   logger: pino.Logger;
   tickIntervalMs?: number;
   execGhPrViewUrl?: (cwd: string) => Promise<string | null>;
+  /** Off-peak window for heavy tasks. Defaults to 01:00–07:00 Europe/Paris. */
+  getQuietHours?: () => QuietHours;
+  /** Injected for tests. */
+  now?: () => number;
 }
 
 interface LaunchCandidate {
@@ -69,10 +78,16 @@ async function defaultGhPrViewUrl(cwd: string): Promise<string | null> {
  * implement, commit, push, and open a GitHub PR, and the resulting PR URL is
  * captured from the final message or via `gh pr view` in the worktree.
  *
- * The quota gate reads the Claude five_hour window and only launches when
- * remaining % covers the task estimate plus a safety margin, minus estimates
- * already reserved by in-flight launches. There are deliberately no quiet
- * hours here: the fresh post-reset window overnight is prime capacity.
+ * The quota gate reads the task provider's five_hour window and only launches
+ * when remaining % covers the task estimate plus a safety margin, minus
+ * estimates already reserved by in-flight launches.
+ *
+ * Two extra gates sit in front of the quota gate:
+ * - Approval: tasks with approval.state === "pending" (agent proposals) are
+ *   never launched — the user must approve first.
+ * - Timing: in "auto" mode, light tasks (small quota + short duration) launch
+ *   anytime, heavy ones wait for the quiet-hours window (user asleep, fresh
+ *   post-reset capacity). "asap" ignores the window, "off_peak" always waits.
  */
 export class TaskScheduler {
   private readonly taskBoardService: TaskBoardService;
@@ -87,6 +102,8 @@ export class TaskScheduler {
   private readonly logger: pino.Logger;
   private readonly tickIntervalMs: number;
   private readonly execGhPrViewUrl: (cwd: string) => Promise<string | null>;
+  private readonly getQuietHours: () => QuietHours;
+  private readonly now: () => number;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
   // taskId -> reserved quota percent for launches still in flight.
@@ -104,6 +121,8 @@ export class TaskScheduler {
     this.logger = options.logger.child({ module: "task-scheduler" });
     this.tickIntervalMs = options.tickIntervalMs ?? TICK_INTERVAL_MS;
     this.execGhPrViewUrl = options.execGhPrViewUrl ?? defaultGhPrViewUrl;
+    this.getQuietHours = options.getQuietHours ?? (() => DEFAULT_TASKS_QUIET_HOURS);
+    this.now = options.now ?? (() => Date.now());
   }
 
   start(): void {
@@ -131,6 +150,10 @@ export class TaskScheduler {
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
     }
+    if (task.approval?.state === "pending") {
+      // An explicit run-now is the strongest form of user approval.
+      await this.taskBoardService.approveTask(projectId, taskId);
+    }
     if (task.column !== "scheduled") {
       await this.taskBoardService.transitionTask(projectId, taskId, "scheduled");
     }
@@ -157,8 +180,16 @@ export class TaskScheduler {
         if (this.inFlight.has(candidate.task.id)) {
           continue;
         }
-        if (!candidate.runNow && !(await this.hasQuotaFor(candidate.task))) {
-          continue;
+        if (!candidate.runNow) {
+          if (!this.isWithinLaunchWindow(candidate.task)) {
+            await this.setWaitingReason(candidate, "quiet_hours");
+            continue;
+          }
+          if (!(await this.hasQuotaFor(candidate.task))) {
+            await this.setWaitingReason(candidate, "quota");
+            continue;
+          }
+          await this.setWaitingReason(candidate, undefined);
         }
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
@@ -196,7 +227,12 @@ export class TaskScheduler {
         }
         if (task.schedule.state === "pending_estimate") {
           // Re-arm after daemon restarts: the estimate request queue is in-memory.
+          // Also runs for approval-pending proposals so the cost is ready to review.
           this.taskEstimator.requestEstimate(project.projectId, task.id);
+          continue;
+        }
+        if (task.approval?.state === "pending") {
+          // Agent proposals never launch without explicit user approval.
           continue;
         }
         if (task.schedule.state !== "awaiting_slot" || !task.estimate) {
@@ -223,16 +259,64 @@ export class TaskScheduler {
     return candidates;
   }
 
+  /**
+   * Timing gate. Light tasks may run anytime in "auto" mode; heavy ones (or an
+   * explicit "off_peak" preference) wait for the quiet-hours window. Tasks
+   * whose estimate lacks a duration (pre-upgrade estimates) count as heavy.
+   */
+  private isWithinLaunchWindow(task: KanbanTask): boolean {
+    const preference = task.schedulePreference ?? "auto";
+    if (preference === "asap") {
+      return true;
+    }
+    const inQuietHours = isQuietTime(this.now(), this.getQuietHours());
+    if (preference === "off_peak") {
+      return inQuietHours;
+    }
+    const quotaPct = task.estimate?.quotaPercent ?? Number.POSITIVE_INFINITY;
+    const minutes = task.estimate?.estimatedMinutes ?? Number.POSITIVE_INFINITY;
+    const light = quotaPct < LIGHT_TASK_MAX_QUOTA_PCT && minutes < LIGHT_TASK_MAX_MINUTES;
+    return light || inQuietHours;
+  }
+
+  /** Records why an awaiting_slot task is held back; patches only on change. */
+  private async setWaitingReason(
+    candidate: LaunchCandidate,
+    reason: "quota" | "quiet_hours" | undefined,
+  ): Promise<void> {
+    if (candidate.task.schedule?.waitingReason === reason) {
+      return;
+    }
+    await this.taskBoardService
+      .patchTask(candidate.projectId, candidate.task.id, (current) => {
+        if (current.schedule?.state !== "awaiting_slot") {
+          return current;
+        }
+        const { waitingReason: _dropped, ...schedule } = current.schedule;
+        return {
+          ...current,
+          schedule: reason === undefined ? schedule : { ...schedule, waitingReason: reason },
+        };
+      })
+      .catch((error) => {
+        this.logger.warn(
+          { err: error, taskId: candidate.task.id },
+          "Failed to record task waiting reason",
+        );
+      });
+  }
+
   private async hasQuotaFor(task: KanbanTask): Promise<boolean> {
     const estimatePct = task.estimate?.quotaPercent;
     if (estimatePct === undefined) {
       return false;
     }
+    const providerId = task.runConfig?.provider ?? "claude";
     let remainingPct: number | null = null;
     try {
       const usage = await this.providerUsageService.listUsage();
-      const claude = usage.providers.find((provider) => provider.providerId === "claude");
-      const window = claude?.windows.find((entry) => entry.id === "five_hour");
+      const providerUsage = usage.providers.find((provider) => provider.providerId === providerId);
+      const window = providerUsage?.windows.find((entry) => entry.id === "five_hour");
       if (window) {
         remainingPct =
           window.remainingPct ??
@@ -276,9 +360,17 @@ export class TaskScheduler {
       const workspace = worktree.workspace;
       const branch = workspace.branch ?? branchName;
 
+      const runConfig = task.runConfig;
+      const planMode = runConfig?.mode === "plan";
+      let provider = "claude";
+      if (runConfig) {
+        provider = runConfig.model
+          ? `${runConfig.provider}/${runConfig.model}`
+          : runConfig.provider;
+      }
       const created = await this.createAgent({
         kind: "mcp",
-        provider: "claude",
+        provider,
         cwd: workspace.cwd,
         workspaceId: workspace.workspaceId,
         title: `Tâche : ${task.title}`,
@@ -287,6 +379,8 @@ export class TaskScheduler {
         promptFailure: "return-error",
         background: true,
         notifyOnFinish: false,
+        ...(runConfig?.thinkingOptionId ? { thinking: runConfig.thinkingOptionId } : {}),
+        ...(planMode ? { mode: "plan" } : {}),
       });
       const agent = created.snapshot;
       if (created.initialPromptError) {
@@ -312,10 +406,22 @@ export class TaskScheduler {
         },
       }));
 
-      const prompt = this.buildTaskPrompt({ task, branch });
+      const prompt = this.buildTaskPrompt({ task, branch, planMode });
       const result = await this.agentManager.runAgent(agent.id, prompt);
       if (result.canceled) {
         throw new Error("Task agent run was canceled");
+      }
+
+      if (planMode) {
+        // Plan runs produce no PR: the plan sits in the agent conversation and
+        // the user picks it up from there. The card stays in "in_progress".
+        await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
+          ...current,
+          schedule: null,
+          planReadyAt: new Date().toISOString(),
+        }));
+        this.logger.info({ taskId: task.id, agentId: agent.id }, "Task plan ready");
+        return;
       }
 
       const prUrl = await this.resolvePrUrl(result.finalText, workspace.cwd);
@@ -356,9 +462,9 @@ export class TaskScheduler {
     }
   }
 
-  private buildTaskPrompt(input: { task: KanbanTask; branch: string }): string {
-    const { task, branch } = input;
-    return [
+  private buildTaskPrompt(input: { task: KanbanTask; branch: string; planMode: boolean }): string {
+    const { task, branch, planMode } = input;
+    const header = [
       "Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree isolé.",
       "",
       `## Tâche`,
@@ -367,17 +473,26 @@ export class TaskScheduler {
       task.tags.length > 0 ? `Tags : ${task.tags.join(", ")}` : "",
       "",
       "## Instructions",
-      `1. Tu es déjà sur la branche dédiée \`${branch}\` dans un worktree isolé — n'en change pas.`,
-      "2. Implémente la tâche complètement, en respectant les conventions du dépôt.",
-      "3. Vérifie ton travail (typecheck, lint, tests ciblés pertinents s'ils existent).",
-      "4. Commite avec un message conventionnel clair, puis pousse la branche.",
-      '5. Crée une pull request GitHub : `gh pr create --title "..." --body "..."`.',
-      "6. Termine ta réponse finale par l'URL de la PR sur une ligne seule.",
-      "",
-      "Si la PR ne peut pas être créée (gh non authentifié, pas de remote), explique pourquoi dans ta réponse finale.",
-    ]
-      .filter((line) => line !== "")
-      .join("\n");
+    ];
+    const instructions = planMode
+      ? [
+          "1. Analyse la tâche et le dépôt, puis produis un PLAN D'IMPLÉMENTATION détaillé et actionnable :",
+          "   fichiers à modifier, approche retenue, étapes ordonnées, risques, tests à écrire.",
+          "2. NE modifie AUCUN fichier, ne commite pas, ne pousse pas, ne crée PAS de pull request.",
+          "3. Termine ta réponse par le plan complet en Markdown — l'utilisateur reprendra",
+          "   la main dans cette conversation pour décider de l'exécution.",
+        ]
+      : [
+          `1. Tu es déjà sur la branche dédiée \`${branch}\` dans un worktree isolé — n'en change pas.`,
+          "2. Implémente la tâche complètement, en respectant les conventions du dépôt.",
+          "3. Vérifie ton travail (typecheck, lint, tests ciblés pertinents s'ils existent).",
+          "4. Commite avec un message conventionnel clair, puis pousse la branche.",
+          '5. Crée une pull request GitHub : `gh pr create --title "..." --body "..."`.',
+          "6. Termine ta réponse finale par l'URL de la PR sur une ligne seule.",
+          "",
+          "Si la PR ne peut pas être créée (gh non authentifié, pas de remote), explique pourquoi dans ta réponse finale.",
+        ];
+    return [...header, ...instructions].filter((line) => line !== "").join("\n");
   }
 
   private async resolvePrUrl(finalText: string, worktreeCwd: string): Promise<string | null> {

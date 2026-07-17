@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 
 import { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import type { AgentManager } from "./agent/agent-manager.js";
+import { isQuietTime, type QuietHours } from "./quiet-hours.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
 /**
@@ -28,14 +29,7 @@ const KEEPALIVE_PROMPT =
  */
 const DEFAULT_QUIET_HOURS: QuietHours = { startHour: 1, endHour: 6, timeZone: "Europe/Paris" };
 
-export interface QuietHours {
-  /** Local hour (0-23) at which the loop stops firing, inclusive. */
-  startHour: number;
-  /** Local hour (0-23) at which the loop resumes, exclusive. */
-  endHour: number;
-  /** IANA timezone the hours are interpreted in. */
-  timeZone: string;
-}
+export type { QuietHours };
 
 /** Starts a fresh throwaway Claude conversation to restart the 5-hour window. */
 export type KeepAliveRunner = (params: { cwd: string }) => Promise<void>;
@@ -165,22 +159,7 @@ export class QuotaResetWatcher {
 
   /** True when the given instant falls inside the configured quiet hours. */
   private isQuietTime(nowMs: number): boolean {
-    const { startHour, endHour, timeZone } = this.quietHours;
-    if (startHour === endHour) {
-      return false;
-    }
-    const hour =
-      Number(
-        new Intl.DateTimeFormat("en-US", {
-          timeZone,
-          hour: "numeric",
-          hour12: false,
-        }).format(new Date(nowMs)),
-      ) % 24;
-    // Handle same-day windows (1–6) and wrap-around windows (23–6) alike.
-    return startHour < endHour
-      ? hour >= startHour && hour < endHour
-      : hour >= startHour || hour < endHour;
+    return isQuietTime(nowMs, this.quietHours);
   }
 
   /**

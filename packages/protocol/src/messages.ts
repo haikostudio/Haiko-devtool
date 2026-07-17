@@ -54,6 +54,7 @@ import {
   TasksTaskDeleteRequestSchema,
   TasksTaskEstimateRequestSchema,
   TasksTaskRunNowRequestSchema,
+  TasksTaskApproveRequestSchema,
   TasksBoardGetResponseSchema,
   TasksBoardSubscribeResponseSchema,
   TasksBoardUnsubscribeResponseSchema,
@@ -66,6 +67,7 @@ import {
   TasksTaskDeleteResponseSchema,
   TasksTaskEstimateResponseSchema,
   TasksTaskRunNowResponseSchema,
+  TasksTaskApproveResponseSchema,
   TasksBoardUpdateMessageSchema,
 } from "./tasks/rpc-schemas.js";
 import {
@@ -180,6 +182,19 @@ export const MutableDaemonConfigSchema = z
     enableTerminalAgentHooks: z.boolean().default(false),
     appendSystemPrompt: z.string().default(""),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    tasks: z
+      .object({
+        // Quiet-hours window used by the task scheduler for heavy tasks.
+        quietHours: z
+          .object({
+            startHour: z.number().int().min(0).max(23),
+            endHour: z.number().int().min(0).max(23),
+            timeZone: z.string().min(1),
+          })
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -195,6 +210,7 @@ export const MutableDaemonConfigPatchSchema = z
     enableTerminalAgentHooks: z.boolean().optional(),
     appendSystemPrompt: z.string().optional(),
     terminalProfiles: z.array(TerminalProfileSchema).optional(),
+    tasks: MutableDaemonConfigSchema.shape.tasks.optional(),
   })
   .partial()
   .passthrough();
@@ -2538,6 +2554,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskDeleteRequestSchema,
   TasksTaskEstimateRequestSchema,
   TasksTaskRunNowRequestSchema,
+  TasksTaskApproveRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -2752,6 +2769,8 @@ export const ServerInfoStatusPayloadSchema = z
         brainMemory: z.boolean().optional(),
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
         tasksBoard: z.boolean().optional(),
+        // COMPAT(tasksRunConfig): added in v0.1.110, drop the gate when floor >= v0.1.110.
+        tasksRunConfig: z.boolean().optional(),
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: z.boolean().optional(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -4900,6 +4919,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskDeleteResponseSchema,
   TasksTaskEstimateResponseSchema,
   TasksTaskRunNowResponseSchema,
+  TasksTaskApproveResponseSchema,
   TasksBoardUpdateMessageSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,

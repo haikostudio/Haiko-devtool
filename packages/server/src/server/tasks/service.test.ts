@@ -128,6 +128,102 @@ describe("TaskBoardService", () => {
     expect(snapshots[1]?.tasks).toHaveLength(1);
   });
 
+  test("createTask directly in scheduled arms the schedule and fires the estimate hook", async () => {
+    const scheduled: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Proposed by agent",
+      column: "scheduled",
+    });
+
+    expect(task.schedule?.state).toBe("pending_estimate");
+    expect(scheduled).toEqual([task.id]);
+  });
+
+  test("agent proposals stay pending and fire onTaskProposed", async () => {
+    const proposed: string[] = [];
+    service.setOnTaskProposed((projectId) => proposed.push(projectId));
+    const folder = await service.createFolder("proj-1", "Agent");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Traiter le mail client",
+      column: "scheduled",
+      runConfig: { provider: "claude", model: "claude-opus-4-8", mode: "plan" },
+      approval: { state: "pending", requestedBy: "agent-42" },
+    });
+
+    expect(task.approval?.state).toBe("pending");
+    expect(task.runConfig?.model).toBe("claude-opus-4-8");
+    expect(proposed).toEqual(["proj-1"]);
+  });
+
+  test("approveTask stamps approval and arms an unarmed scheduled task", async () => {
+    const scheduled: string[] = [];
+    const folder = await service.createFolder("proj-1", "Agent");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Needs approval",
+      column: "scheduled",
+      approval: { state: "pending" },
+    });
+    // Simulate a legacy/edge state where the schedule is missing.
+    await service.patchTask("proj-1", task.id, (current) => {
+      const { schedule: _schedule, ...rest } = current;
+      return rest as typeof current;
+    });
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+
+    const approved = await service.approveTask("proj-1", task.id);
+
+    expect(approved.approval?.state).toBe("approved");
+    expect(approved.approval?.approvedAt).toBeTruthy();
+    expect(approved.schedule?.state).toBe("pending_estimate");
+    expect(scheduled).toEqual([task.id]);
+  });
+
+  test("a manual drag into scheduled implicitly approves a pending proposal", async () => {
+    const folder = await service.createFolder("proj-1", "Agent");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Pending proposal",
+      approval: { state: "pending", requestedBy: "agent-42" },
+    });
+
+    const board = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "scheduled",
+      index: 0,
+      manual: true,
+    });
+
+    const moved = board.tasks.find((entry) => entry.id === task.id);
+    expect(moved?.approval?.state).toBe("approved");
+    expect(moved?.approval?.requestedBy).toBe("agent-42");
+  });
+
+  test("updateTask sets and clears runConfig and schedulePreference", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Configurable" });
+
+    const withConfig = await service.updateTask("proj-1", task.id, {
+      runConfig: { provider: "codex", model: "gpt-5.4", thinkingOptionId: "high" },
+      schedulePreference: "off_peak",
+    });
+    expect(withConfig.runConfig?.provider).toBe("codex");
+    expect(withConfig.schedulePreference).toBe("off_peak");
+
+    const cleared = await service.updateTask("proj-1", task.id, {
+      runConfig: null,
+      schedulePreference: null,
+    });
+    expect(cleared.runConfig ?? null).toBeNull();
+    expect(cleared.schedulePreference ?? null).toBeNull();
+  });
+
   test("deleteFolder removes its tasks", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     await service.createTask("proj-1", { folderId: folder.id, title: "Doomed task here" });

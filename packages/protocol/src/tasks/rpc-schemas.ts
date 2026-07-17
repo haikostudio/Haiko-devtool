@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { KanbanTaskSchema, TaskBoardSchema, TaskColumnSchema, TaskFolderSchema } from "./types.js";
+import {
+  KanbanTaskSchema,
+  TaskBoardSchema,
+  TaskColumnSchema,
+  TaskFolderSchema,
+  TaskRunConfigSchema,
+  TaskSchedulePreferenceSchema,
+} from "./types.js";
 
 // tasks.* RPC namespace — dotted names with .request/.response suffixes
 // (see docs/rpc-namespacing.md).
@@ -57,6 +64,8 @@ export const TasksTaskCreateRequestSchema = z.object({
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
   column: TaskColumnSchema.optional(),
+  runConfig: TaskRunConfigSchema.optional(),
+  schedulePreference: TaskSchedulePreferenceSchema.optional(),
 });
 
 export const TasksTaskUpdateRequestSchema = z.object({
@@ -67,6 +76,9 @@ export const TasksTaskUpdateRequestSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
+  // null clears the field.
+  runConfig: TaskRunConfigSchema.nullable().optional(),
+  schedulePreference: TaskSchedulePreferenceSchema.nullable().optional(),
 });
 
 export const TasksTaskMoveRequestSchema = z.object({
@@ -94,6 +106,13 @@ export const TasksTaskEstimateRequestSchema = z.object({
 
 export const TasksTaskRunNowRequestSchema = z.object({
   type: z.literal("tasks.task.run_now.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
+export const TasksTaskApproveRequestSchema = z.object({
+  type: z.literal("tasks.task.approve.request"),
   requestId: z.string(),
   projectId: z.string(),
   taskId: z.string(),
@@ -198,6 +217,15 @@ export const TasksTaskRunNowResponseSchema = z.object({
   type: z.literal("tasks.task.run_now.response"),
   payload: z.object({
     requestId: z.string(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskApproveResponseSchema = z.object({
+  type: z.literal("tasks.task.approve.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
     error: z.string().nullable(),
   }),
 });

@@ -45,7 +45,11 @@ import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspa
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { buildWorkspaceGitMetadataFromSnapshot } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
-import { createPushNotificationSender, type PushNotificationSender } from "./push/notifications.js";
+import {
+  createPushNotificationSender,
+  type PushNotificationSender,
+  type PushPayload,
+} from "./push/notifications.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
 import type { ServiceProxySubsystem } from "./service-proxy.js";
 import type { WorkspaceScriptRuntimeStore } from "./workspace-script-runtime-store.js";
@@ -1292,6 +1296,13 @@ export class VoiceAssistantWebSocketServer {
     this.taskScheduler = services.taskScheduler;
   }
 
+  /** Fire-and-forget push to all registered devices (task proposals, etc.). */
+  public sendPush(payload: PushPayload): void {
+    void this.pushNotificationSender.send(payload).catch((err) => {
+      this.logger.warn({ err }, "Failed to send push notification");
+    });
+  }
+
   private buildServerInfoStatusPayload(): ServerInfoStatusPayload {
     return {
       status: "server_info",
@@ -1351,6 +1362,8 @@ export class VoiceAssistantWebSocketServer {
         brainMemory: !!this.brainMemory,
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
         tasksBoard: !!this.taskBoardService,
+        // COMPAT(tasksRunConfig): added in v0.1.110, drop the gate when floor >= v0.1.110.
+        tasksRunConfig: !!this.taskBoardService,
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: !!this.agentManager.getUsageStatsStore(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.

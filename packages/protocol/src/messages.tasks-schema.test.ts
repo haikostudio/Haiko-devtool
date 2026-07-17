@@ -110,4 +110,85 @@ describe("tasks board schemas", () => {
       }).features,
     ).toEqual({ tasksBoard: true });
   });
+
+  test("parses run config, approval, schedule preference, and duration fields", () => {
+    const task = KanbanTaskSchema.parse({
+      ...board.tasks[0],
+      column: "scheduled",
+      estimate: {
+        tokens: 150000,
+        quotaPercent: 12,
+        estimatedMinutes: 30,
+        confidence: "medium",
+        model: "haiku",
+        estimatedAt: "2026-07-16T01:00:00.000Z",
+      },
+      schedule: { state: "awaiting_slot", attempts: 0, waitingReason: "quiet_hours" },
+      runConfig: {
+        provider: "claude",
+        model: "claude-opus-4-8",
+        thinkingOptionId: "high",
+        mode: "plan",
+      },
+      approval: { state: "pending", requestedBy: "agent-1", approvedAt: null },
+      schedulePreference: "off_peak",
+      planReadyAt: "2026-07-17T03:00:00.000Z",
+    });
+    expect(task.runConfig?.mode).toBe("plan");
+    expect(task.approval?.state).toBe("pending");
+    expect(task.estimate?.estimatedMinutes).toBe(30);
+    expect(task.schedule?.waitingReason).toBe("quiet_hours");
+    expect(task.schedulePreference).toBe("off_peak");
+  });
+
+  test("legacy tasks without the new fields still parse (both directions)", () => {
+    // A board written by an old daemon must parse in a new client, and a board
+    // with only legacy fields must parse in a new daemon.
+    const parsed = TaskBoardSchema.parse(board);
+    expect(parsed.tasks[0]?.runConfig ?? null).toBeNull();
+    expect(parsed.tasks[0]?.approval ?? null).toBeNull();
+    expect(parsed.tasks[0]?.schedulePreference).toBeUndefined();
+  });
+
+  test("routes tasks.task.approve.* through the session unions", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "tasks.task.approve.request",
+        requestId: "req-1",
+        projectId: "project-1",
+        taskId: "t1",
+      }),
+    ).toMatchObject({ type: "tasks.task.approve.request" });
+
+    expect(
+      SessionOutboundMessageSchema.parse({
+        type: "tasks.task.approve.response",
+        payload: { requestId: "req-1", task: board.tasks[0], error: null },
+      }),
+    ).toMatchObject({ type: "tasks.task.approve.response" });
+  });
+
+  test("routes tasks.task.create.request with runConfig through the inbound union", () => {
+    expect(
+      SessionInboundMessageSchema.parse({
+        type: "tasks.task.create.request",
+        requestId: "req-1",
+        projectId: "project-1",
+        folderId: "f1",
+        title: "Configured task",
+        runConfig: { provider: "codex", model: "gpt-5.4" },
+        schedulePreference: "asap",
+      }),
+    ).toMatchObject({ type: "tasks.task.create.request", schedulePreference: "asap" });
+  });
+
+  test("accepts the tasksRunConfig server_info feature flag", () => {
+    expect(
+      ServerInfoStatusPayloadSchema.parse({
+        status: "server_info",
+        serverId: "srv_test",
+        features: { tasksRunConfig: true },
+      }).features,
+    ).toEqual({ tasksRunConfig: true });
+  });
 });

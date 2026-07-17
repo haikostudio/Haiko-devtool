@@ -102,6 +102,7 @@ import type {
   AgentSessionConfig,
 } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
+import type { TaskRunConfig, TaskSchedulePreference } from "@getpaseo/protocol/tasks/types";
 import { isRelayClientWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
 import { terminalSubscriptionKey } from "@getpaseo/protocol/terminal-subscription-key";
 import {
@@ -4247,6 +4248,8 @@ export class DaemonClient {
       description?: string;
       tags?: string[];
       column?: "backlog" | "scheduled" | "in_progress" | "done";
+      runConfig?: TaskRunConfig;
+      schedulePreference?: TaskSchedulePreference;
     },
     requestId?: string,
   ) {
@@ -4263,6 +4266,8 @@ export class DaemonClient {
       title?: string;
       description?: string | null;
       tags?: string[];
+      runConfig?: TaskRunConfig | null;
+      schedulePreference?: TaskSchedulePreference | null;
     },
     requestId?: string,
   ) {
@@ -4305,6 +4310,13 @@ export class DaemonClient {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.run_now.response">({
       requestId,
       message: { type: "tasks.task.run_now.request", ...input },
+    });
+  }
+
+  async tasksTaskApprove(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.approve.response">({
+      requestId,
+      message: { type: "tasks.task.approve.request", ...input },
     });
   }
 

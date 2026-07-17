@@ -152,4 +152,24 @@ describe("AgentTaskSyncService", () => {
     board = await service.getBoard("proj-1");
     expect(board.tasks[0]?.column).toBe("backlog");
   });
+
+  test("never moves a task awaiting user approval", async () => {
+    const folder = await service.createFolder("proj-1", AGENT_SYNC_FOLDER_NAME);
+    const pending = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Implement the login form",
+      column: "scheduled",
+      approval: { state: "pending", requestedBy: "agent-1" },
+    });
+    // Dedupe links the emitting agent onto the existing card; the approval
+    // guard must still keep the card parked in "scheduled".
+    emitTodos([{ text: "Implement the login form", completed: true }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const board = await service.getBoard("proj-1");
+    const task = board.tasks.find((entry) => entry.id === pending.id);
+    expect(board.tasks).toHaveLength(1);
+    expect(task?.column).toBe("scheduled");
+    expect(task?.approval?.state).toBe("pending");
+  });
 });

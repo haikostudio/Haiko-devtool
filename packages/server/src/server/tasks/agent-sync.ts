@@ -177,7 +177,11 @@ export class AgentTaskSyncService {
       if (created) {
         this.syncedTaskCounts.set(agentId, count + 1);
       }
-      if (task.manualOverrideAt || task.schedule?.state === "running") {
+      if (
+        task.manualOverrideAt ||
+        task.schedule?.state === "running" ||
+        task.approval?.state === "pending"
+      ) {
         continue;
       }
       const targetColumn = item.completed ? "done" : "in_progress";
@@ -201,7 +205,11 @@ export class AgentTaskSyncService {
       if (!task.links.agentIds.includes(agentId)) {
         continue;
       }
-      if (task.manualOverrideAt || task.schedule?.state === "running") {
+      if (
+        task.manualOverrideAt ||
+        task.schedule?.state === "running" ||
+        task.approval?.state === "pending"
+      ) {
         continue;
       }
       const completed = todoState.get(task.normalizedTitle);
@@ -226,7 +234,11 @@ export class AgentTaskSyncService {
       if (!task.links.agentIds.includes(agent.id)) {
         continue;
       }
-      if (task.manualOverrideAt || task.schedule?.state === "running") {
+      if (
+        task.manualOverrideAt ||
+        task.schedule?.state === "running" ||
+        task.approval?.state === "pending"
+      ) {
         continue;
       }
       if (task.column === "backlog" || task.column === "scheduled") {

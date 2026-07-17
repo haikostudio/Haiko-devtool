@@ -14,14 +14,46 @@ export const TaskEstimateSchema = z.object({
   model: z.string(),
   estimatedAt: z.string(),
   summary: z.string().optional(),
+  // Estimated active agent runtime in minutes.
+  estimatedMinutes: z.number().int().nonnegative().optional(),
 });
 export type TaskEstimate = z.infer<typeof TaskEstimateSchema>;
+
+// Per-task execution configuration chosen by the user or a proposing agent.
+export const TaskRunConfigSchema = z.object({
+  // Agent provider id, e.g. "claude", "codex".
+  provider: z.string().min(1),
+  // Provider model id, e.g. "claude-opus-4-8", "gpt-5.4". Absent = provider default.
+  model: z.string().optional(),
+  // Provider thinking/effort option id, e.g. "low" | "medium" | "high" | "xhigh" | "max".
+  thinkingOptionId: z.string().optional(),
+  // "plan": the agent produces an implementation plan and stops (no PR). Absent = "direct".
+  mode: z.enum(["direct", "plan"]).optional(),
+});
+export type TaskRunConfig = z.infer<typeof TaskRunConfigSchema>;
+
+// Approval gate for agent-proposed tasks. Absent approval = approved (legacy tasks).
+export const TaskApprovalSchema = z.object({
+  state: z.enum(["pending", "approved"]),
+  // Agent that proposed the task (kept out of links to avoid agent-sync transitions).
+  requestedBy: z.string().optional(),
+  approvedAt: z.string().nullable().optional(),
+});
+export type TaskApproval = z.infer<typeof TaskApprovalSchema>;
+
+// Launch timing preference. "auto": light tasks run anytime, heavy ones wait for
+// quiet hours. "asap": ignore quiet hours. "off_peak": always wait for quiet hours.
+export const TaskSchedulePreferenceSchema = z.enum(["auto", "asap", "off_peak"]);
+export type TaskSchedulePreference = z.infer<typeof TaskSchedulePreferenceSchema>;
 
 export const TaskScheduleStateSchema = z.object({
   state: z.enum(["pending_estimate", "awaiting_slot", "launching", "running", "failed"]),
   attempts: z.number().int().nonnegative(),
   lastError: z.string().nullable().optional(),
   lastAttemptAt: z.string().optional(),
+  // Why an awaiting_slot task is not launching yet (display-only refinement; a new
+  // enum value in `state` would break old daemons parsing persisted boards).
+  waitingReason: z.enum(["quota", "quiet_hours"]).optional(),
 });
 export type TaskScheduleState = z.infer<typeof TaskScheduleStateSchema>;
 
@@ -48,6 +80,11 @@ export const KanbanTaskSchema = z.object({
   normalizedTitle: z.string(),
   estimate: TaskEstimateSchema.nullable().optional(),
   schedule: TaskScheduleStateSchema.nullable().optional(),
+  runConfig: TaskRunConfigSchema.nullable().optional(),
+  approval: TaskApprovalSchema.nullable().optional(),
+  schedulePreference: TaskSchedulePreferenceSchema.optional(),
+  // Set when a plan-mode run finished: the plan is ready in the linked agent.
+  planReadyAt: z.string().nullable().optional(),
   links: TaskLinksSchema,
   // Set on user-initiated column moves; suppresses agent-sync transitions afterwards.
   manualOverrideAt: z.string().nullable().optional(),

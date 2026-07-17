@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { TaskBoard, TaskColumn } from "@getpaseo/protocol/tasks/types";
+import { useTranslation } from "react-i18next";
+import type {
+  TaskBoard,
+  TaskColumn,
+  TaskRunConfig,
+  TaskSchedulePreference,
+} from "@getpaseo/protocol/tasks/types";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
-export type { TaskBoard, TaskColumn };
+export type { TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 function createSubscriptionId(): string {
@@ -28,11 +34,14 @@ export interface TaskBoardHandle {
     title?: string;
     description?: string | null;
     tags?: string[];
+    runConfig?: TaskRunConfig | null;
+    schedulePreference?: TaskSchedulePreference | null;
   }) => Promise<void>;
   moveTask: (input: { taskId: string; column: TaskColumn; index: number }) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   estimateTask: (taskId: string) => Promise<void>;
   runTaskNow: (taskId: string) => Promise<void>;
+  approveTask: (taskId: string) => Promise<void>;
 }
 
 /**
@@ -42,6 +51,7 @@ export interface TaskBoardHandle {
  * setBoard before the server push lands.
  */
 export function useTaskBoard(serverId: string | null, projectId: string | null): TaskBoardHandle {
+  const { t } = useTranslation();
   const [board, setBoard] = useState<TaskBoard | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +78,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     }
     const client = liveClient;
     if (!client) {
-      setError("Host is not connected");
+      setError(t("workspace.terminal.hostDisconnected"));
       return;
     }
     let disposed = false;
@@ -115,7 +125,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         // Socket may already be gone; the server also cleans up on disconnect.
       });
     };
-  }, [serverId, projectId, liveClient]);
+  }, [serverId, projectId, liveClient, t]);
 
   const requireContext = useCallback(() => {
     const client = getClient();
@@ -176,6 +186,8 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       title?: string;
       description?: string | null;
       tags?: string[];
+      runConfig?: TaskRunConfig | null;
+      schedulePreference?: TaskSchedulePreference | null;
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskUpdate({ projectId: project, ...input });
@@ -228,6 +240,17 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext],
   );
 
+  const approveTask = useCallback(
+    async (taskId: string) => {
+      const { client, projectId: project } = requireContext();
+      const payload = await client.tasksTaskApprove({ projectId: project, taskId });
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+    },
+    [requireContext],
+  );
+
   return useMemo(
     () => ({
       board,
@@ -243,6 +266,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       deleteTask,
       estimateTask,
       runTaskNow,
+      approveTask,
     }),
     [
       board,
@@ -258,6 +282,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       deleteTask,
       estimateTask,
       runTaskNow,
+      approveTask,
     ],
   );
 }

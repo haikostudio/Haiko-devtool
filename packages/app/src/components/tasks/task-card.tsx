@@ -34,7 +34,15 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
     onPress(task);
   }, [onPress, task]);
 
+  const approvalPending = task.approval?.state === "pending";
+
   const scheduleBadge = useMemo(() => {
+    if (approvalPending) {
+      return <StatusBadge label={t("tasks.approval.pending")} variant="warning" />;
+    }
+    if (task.planReadyAt) {
+      return <StatusBadge label={t("tasks.card.planReady")} variant="success" />;
+    }
     const state = task.schedule?.state;
     if (!state) {
       return null;
@@ -48,11 +56,16 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
     if (state === "pending_estimate") {
       return <StatusBadge label={t("tasks.schedule.estimating")} />;
     }
+    if (task.schedule?.waitingReason === "quiet_hours") {
+      return <StatusBadge label={t("tasks.schedule.awaitingWindow")} />;
+    }
     return <StatusBadge label={t("tasks.schedule.awaiting")} />;
-  }, [task.schedule?.state, t]);
+  }, [approvalPending, task.planReadyAt, task.schedule?.state, task.schedule?.waitingReason, t]);
+
+  const modelLabel = task.runConfig ? (task.runConfig.model ?? task.runConfig.provider) : null;
 
   const hasMetaRow = Boolean(
-    task.estimate || scheduleBadge || task.links.primaryAgentId || task.links.prUrl,
+    task.estimate || scheduleBadge || modelLabel || task.links.primaryAgentId || task.links.prUrl,
   );
 
   return (
@@ -83,6 +96,16 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
                 percent: Math.round(task.estimate.quotaPercent),
               })}
             </Text>
+          ) : null}
+          {task.estimate?.estimatedMinutes !== undefined ? (
+            <Text style={styles.estimateText}>
+              {t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })}
+            </Text>
+          ) : null}
+          {modelLabel ? (
+            <View style={styles.tagChip}>
+              <Text style={styles.tagText}>{modelLabel}</Text>
+            </View>
           ) : null}
           {scheduleBadge}
           {task.links.primaryAgentId ? (

@@ -115,7 +115,11 @@ import type { PaseoToolRuntimeContext } from "./agent/tools/types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
 import { bootstrapWorkspaceRegistries } from "./workspace-registry-bootstrap.js";
 import { WorkspaceReconciliationService } from "./workspace-reconciliation-service.js";
-import { FileBackedProjectRegistry, FileBackedWorkspaceRegistry } from "./workspace-registry.js";
+import {
+  FileBackedProjectRegistry,
+  FileBackedWorkspaceRegistry,
+  resolveProjectDisplayName,
+} from "./workspace-registry.js";
 import { FileBackedChatService } from "./chat/chat-service.js";
 import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
@@ -124,6 +128,8 @@ import { ScheduleService } from "./schedule/service.js";
 import { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import { TaskBoardStore } from "./tasks/store.js";
 import { TaskBoardService } from "./tasks/service.js";
+import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
+import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
@@ -146,7 +152,7 @@ import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
-import type { PushNotificationSender } from "./push/notifications.js";
+import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
@@ -356,6 +362,7 @@ export interface PaseoDaemonConfig {
   enableTerminalAgentHooks?: boolean;
   appendSystemPrompt?: string;
   terminalProfiles?: TerminalProfile[];
+  tasks?: MutableDaemonConfig["tasks"];
   staticDir: string;
   mcpDebug: boolean;
   isDev?: boolean;
@@ -486,6 +493,10 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
 
   if (config.terminalProfiles !== undefined) {
     initialConfig.terminalProfiles = config.terminalProfiles;
+  }
+
+  if (config.tasks !== undefined) {
+    initialConfig.tasks = config.tasks;
   }
 
   return initialConfig;
@@ -1137,9 +1148,24 @@ export async function createPaseoDaemon(
     },
     providerUsageService: new ProviderUsageService({ logger }),
     logger,
+    getQuietHours: () => daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,
   });
   taskBoardService.setOnTaskScheduled((projectId, taskId) => {
     taskEstimator.requestEstimate(projectId, taskId);
+  });
+  // Rebound to the live websocket server once it exists (see setTasksServices site).
+  let taskProposalPush: ((payload: PushPayload) => void) | null = null;
+  const taskProposalNotifier = new TaskProposalNotifier({
+    serverId,
+    getProjectName: async (projectId) => {
+      const project = await projectRegistry.get(projectId);
+      return project ? resolveProjectDisplayName(project) : null;
+    },
+    sendPush: (payload) => taskProposalPush?.(payload),
+    logger,
+  });
+  taskBoardService.setOnTaskProposed((projectId) => {
+    taskProposalNotifier.notifyProposed(projectId);
   });
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");
@@ -1181,6 +1207,8 @@ export async function createPaseoDaemon(
     callerAgentId: runtime.callerAgentId,
     enableVoiceTools: runtime.enableVoiceTools,
     voiceOnly: runtime.voiceOnly,
+    taskBoardService,
+    projectRegistry,
     resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
     resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
@@ -1450,6 +1478,10 @@ export async function createPaseoDaemon(
               config.brainMemory,
             );
             wsServer.setTasksServices({ taskBoardService, taskEstimator, taskScheduler });
+            {
+              const boundWsServer = wsServer;
+              taskProposalPush = (payload) => boundWsServer.sendPush(payload);
+            }
 
             if (relayEnabled) {
               const offer = await createConnectionOfferV2({

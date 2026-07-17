@@ -1916,6 +1916,8 @@ export class Session {
         return tasksSession.handleTaskEstimateRequest(msg);
       case "tasks.task.run_now.request":
         return tasksSession.handleTaskRunNowRequest(msg);
+      case "tasks.task.approve.request":
+        return tasksSession.handleTaskApproveRequest(msg);
       default:
         return undefined;
     }
