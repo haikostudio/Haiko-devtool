@@ -1,16 +1,22 @@
-import { memo, useCallback, useEffect, useState } from "react";
-import { type LayoutChangeEvent, Pressable, Text, View } from "react-native";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { type LayoutChangeEvent, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Ionicons } from "@expo/vector-icons";
+import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { useSessionStore } from "@/stores/session-store";
+import { formatTimeAgo } from "@/utils/time";
 
 /**
  * Minimalist floating block pinned to the top of an agent conversation. It gives
  * an at-a-glance read of what the agent is currently working on: a title, a
- * two-line synthesis, and (when expanded) the objective and current state.
+ * two-line synthesis, and (when expanded) the objective, the current state, and
+ * a scrollable thread of the previous syntheses ("fil conducteur") with the
+ * latest always on top.
  *
- * The content is regenerated server-side after each turn (see the daemon's
- * agent-synthesis-generator). When no synthesis exists yet, nothing renders.
+ * The content is regenerated server-side on each prompt and after each turn (see
+ * the daemon's agent-synthesis-generator), so it stays fresh across the whole
+ * discussion. When no synthesis exists yet, nothing renders. The card spans the
+ * same content column as the transcript (see MAX_CONTENT_WIDTH).
  */
 export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
   serverId,
@@ -41,11 +47,29 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
     const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
     return agent?.synthesis ?? null;
   });
+  const history = useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
+    return agent?.synthesisHistory ?? null;
+  });
   const title = useSessionStore((state) => {
     const session = state.sessions[serverId];
     const agent = session?.agents.get(agentId) ?? session?.agentDetails.get(agentId);
     return agent?.title ?? null;
   });
+
+  // Previous entries shown under the current one. The settled thread's head can
+  // duplicate the live synthesis (same updatedAt) once a turn has landed — drop
+  // it so the top card isn't repeated in the list.
+  const previous = useMemo(() => {
+    if (!history || history.length === 0) {
+      return [];
+    }
+    if (synthesis && history[0]?.updatedAt === synthesis.updatedAt) {
+      return history.slice(1);
+    }
+    return history;
+  }, [history, synthesis]);
 
   const hasSynthesis = Boolean(synthesis);
   useEffect(() => {
@@ -59,54 +83,86 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
   }
 
   const hasDetails = Boolean(synthesis.objective || synthesis.state);
+  const hasThread = previous.length > 0;
+  const expandable = hasDetails || hasThread;
 
   return (
     <View style={styles.host} pointerEvents="box-none" onLayout={handleLayout}>
-      <Pressable
-        style={styles.card}
-        onPress={hasDetails ? toggleExpanded : undefined}
-        accessibilityRole={hasDetails ? "button" : undefined}
-      >
-        <View style={styles.headerRow}>
-          <View style={styles.dot} />
-          {title ? (
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-          ) : null}
-          {hasDetails ? (
-            <Ionicons
-              name={expanded ? "chevron-up" : "chevron-down"}
-              size={14}
-              style={styles.chevron}
-            />
-          ) : null}
-        </View>
-
-        <Text style={styles.summary} numberOfLines={expanded ? undefined : 2}>
-          {synthesis.summary}
-        </Text>
-
-        {expanded && hasDetails ? (
-          <View style={styles.details}>
-            {synthesis.objective ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Objectif</Text>
-                <Text style={styles.detailValue}>{synthesis.objective}</Text>
-              </View>
+      <View style={styles.card}>
+        <Pressable
+          onPress={expandable ? toggleExpanded : undefined}
+          accessibilityRole={expandable ? "button" : undefined}
+        >
+          <View style={styles.headerRow}>
+            <View style={styles.dot} />
+            {title ? (
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
             ) : null}
-            {synthesis.state ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>État</Text>
-                <Text style={styles.detailValue}>{synthesis.state}</Text>
-              </View>
+            {expandable ? (
+              <Ionicons
+                name={expanded ? "chevron-up" : "chevron-down"}
+                size={14}
+                style={styles.chevron}
+              />
             ) : null}
           </View>
+
+          <Text style={styles.summary} numberOfLines={expanded ? undefined : 2}>
+            {synthesis.summary}
+          </Text>
+
+          {expanded && hasDetails ? (
+            <View style={styles.details}>
+              {synthesis.objective ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Objectif</Text>
+                  <Text style={styles.detailValue}>{synthesis.objective}</Text>
+                </View>
+              ) : null}
+              {synthesis.state ? (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>État</Text>
+                  <Text style={styles.detailValue}>{synthesis.state}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </Pressable>
+
+        {expanded && hasThread ? (
+          <View style={styles.thread}>
+            <Text style={styles.threadLabel}>Fil des synthèses</Text>
+            <ScrollView
+              style={styles.threadScroll}
+              contentContainerStyle={styles.threadContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              {previous.map((entry) => (
+                <View key={`${entry.updatedAt}::${entry.summary}`} style={styles.threadItem}>
+                  <Text style={styles.threadTime}>{formatEntryTime(entry.updatedAt)}</Text>
+                  <Text style={styles.threadSummary} numberOfLines={3}>
+                    {entry.summary}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
         ) : null}
-      </Pressable>
+      </View>
     </View>
   );
 });
+
+function formatEntryTime(updatedAt: string): string {
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return formatTimeAgo(date);
+}
 
 const styles = StyleSheet.create((theme) => ({
   host: {
@@ -115,11 +171,14 @@ const styles = StyleSheet.create((theme) => ({
     left: 0,
     right: 0,
     alignItems: "center",
+    paddingHorizontal: theme.spacing[3],
     zIndex: 30,
   },
   card: {
-    maxWidth: 560,
-    width: "94%",
+    // Match the transcript's content column so the banner reads as part of the
+    // conversation rather than a narrow floating pill.
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
     backgroundColor: theme.colors.surface1,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.border,
@@ -177,6 +236,39 @@ const styles = StyleSheet.create((theme) => ({
   detailValue: {
     flex: 1,
     fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
+  thread: {
+    marginTop: theme.spacing[2],
+    paddingTop: theme.spacing[2],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+    gap: theme.spacing[1],
+  },
+  threadLabel: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.foregroundMuted,
+    textTransform: "uppercase",
+  },
+  threadScroll: {
+    maxHeight: 220,
+  },
+  threadContent: {
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+  },
+  threadItem: {
+    gap: 2,
+  },
+  threadTime: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    opacity: 0.7,
+  },
+  threadSummary: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.3,
     color: theme.colors.foregroundMuted,
   },
 }));

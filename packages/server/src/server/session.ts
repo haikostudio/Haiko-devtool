@@ -1365,7 +1365,8 @@ export class Session {
     const storedRecord = await this.agentStorage.get(agent.id);
     const title = storedRecord?.title ?? null;
     const synthesis = storedRecord?.synthesis ?? null;
-    const payload = toAgentPayload(agent, { title, synthesis });
+    const synthesisHistory = storedRecord?.synthesisHistory ?? null;
+    const payload = toAgentPayload(agent, { title, synthesis, synthesisHistory });
     const storedUpdatedAt = storedRecord ? resolveStoredAgentPayloadUpdatedAt(storedRecord) : null;
     if (storedUpdatedAt) {
       const liveUpdatedAt = Date.parse(payload.updatedAt);
@@ -6218,10 +6219,15 @@ export class Session {
       // title-only — never touches the git branch.
       this.scheduleWorkspaceRenameFromMessage(agentId, msg.text);
 
-      // Keep the floating conversation-synthesis block fresh: after this turn
-      // ends, re-summarize what the agent is working on. Best-effort and async;
-      // a generation failure leaves the previous synthesis untouched.
-      this.scheduleSynthesisFromTurn(agentId, msg.text);
+      // Keep the floating conversation-synthesis block fresh: re-summarize the
+      // whole discussion twice per exchange so the banner tracks where we are.
+      // (1) Immediately on send, folding in the just-sent prompt, so the block
+      // updates the moment the user posts. This refreshes the live read only —
+      // it does not push a thread entry. (2) After the turn settles, push a
+      // per-turn entry onto the running "fil conducteur". Both best-effort and
+      // async; a generation failure leaves the previous synthesis untouched.
+      void this.regenerateSynthesis(agentId, { appendUserText: msg.text, pushHistory: false });
+      this.scheduleSynthesisFromTurn(agentId);
 
       if (dispatchResult.outOfBand) {
         this.emit({
@@ -6275,13 +6281,13 @@ export class Session {
 
   /**
    * After the next turn ends, regenerate the agent's conversation synthesis (the
-   * floating "what are we doing" block) from the latest exchange. One-shot
-   * subscription mirroring scheduleBrainNote. Entirely best-effort.
+   * floating "what are we doing" block) from the whole discussion and push it
+   * onto the running thread. One-shot subscription mirroring scheduleBrainNote.
+   * Entirely best-effort.
    */
-  private scheduleSynthesisFromTurn(agentId: string, userText: string): void {
+  private scheduleSynthesisFromTurn(agentId: string): void {
     const agent = this.agentManager.getAgent(agentId);
-    const cwd = agent?.cwd;
-    if (!cwd || !userText.trim()) {
+    if (!agent?.cwd) {
       return;
     }
     const unsubscribe = this.agentManager.subscribe(
@@ -6301,26 +6307,90 @@ export class Session {
         if (eventType !== "turn_completed") {
           return;
         }
-        void (async () => {
-          const assistant = (await this.agentManager.getLastAssistantMessage(agentId)) ?? "";
-          const transcript = assistant
-            ? `User: ${userText}\n\nAssistant: ${assistant}`
-            : `User: ${userText}`;
-          const synthesis = await generateAgentSynthesis({
-            agentManager: this.agentManager,
-            cwd,
-            providerSnapshotManager: this.providerSnapshotManager,
-            daemonConfig: this.readStructuredGenerationDaemonConfig(),
-            transcript,
-            logger: this.sessionLogger,
-          });
-          if (synthesis) {
-            await this.agentManager.setSynthesis(agentId, synthesis);
-          }
-        })();
+        void this.regenerateSynthesis(agentId, { pushHistory: true });
       },
       { agentId, replayState: false },
     );
+  }
+
+  /**
+   * Re-summarize the whole discussion and store it as the agent's conversation
+   * synthesis. Builds the source transcript from the full loaded timeline (tail
+   * capped inside the generator) so the block reflects the entire thread, not
+   * just the last exchange. `appendUserText` folds in a just-sent prompt that
+   * may not be on the timeline yet. `pushHistory` records a settled per-turn
+   * entry on the running thread. Entirely best-effort — failures leave the
+   * previous synthesis untouched.
+   */
+  private async regenerateSynthesis(
+    agentId: string,
+    options: { appendUserText?: string; pushHistory: boolean },
+  ): Promise<void> {
+    const agent = this.agentManager.getAgent(agentId);
+    const cwd = agent?.cwd;
+    if (!cwd) {
+      return;
+    }
+    const transcript = this.buildConversationTranscript(agentId, options.appendUserText);
+    if (!transcript.trim()) {
+      return;
+    }
+    const synthesis = await generateAgentSynthesis({
+      agentManager: this.agentManager,
+      cwd,
+      providerSnapshotManager: this.providerSnapshotManager,
+      daemonConfig: this.readStructuredGenerationDaemonConfig(),
+      transcript,
+      logger: this.sessionLogger,
+    });
+    if (synthesis) {
+      await this.agentManager.setSynthesis(agentId, synthesis, {
+        pushHistory: options.pushHistory,
+      });
+    }
+  }
+
+  /**
+   * Flatten the agent's loaded timeline into a plain User/Assistant transcript
+   * for synthesis. Contiguous same-role chunks (Claude streams assistant text
+   * in pieces) are merged. `appendUserText` is added as a trailing user turn
+   * when it isn't already the last user message on the timeline.
+   */
+  private buildConversationTranscript(agentId: string, appendUserText?: string): string {
+    let items: readonly { type: string; text?: string }[];
+    try {
+      items = this.agentManager.getTimeline(agentId);
+    } catch {
+      items = [];
+    }
+    const parts: { role: "User" | "Assistant"; text: string }[] = [];
+    const push = (role: "User" | "Assistant", raw: string | undefined): void => {
+      const text = raw?.trim();
+      if (!text) {
+        return;
+      }
+      const last = parts[parts.length - 1];
+      if (last && last.role === role) {
+        last.text += role === "Assistant" ? text : `\n${text}`;
+      } else {
+        parts.push({ role, text });
+      }
+    };
+    for (const item of items) {
+      if (item.type === "user_message") {
+        push("User", item.text);
+      } else if (item.type === "assistant_message") {
+        push("Assistant", item.text);
+      }
+    }
+    const trimmedAppend = appendUserText?.trim();
+    if (trimmedAppend) {
+      const last = parts[parts.length - 1];
+      if (!(last?.role === "User" && last.text.trim() === trimmedAppend)) {
+        push("User", trimmedAppend);
+      }
+    }
+    return parts.map((part) => `${part.role}: ${part.text}`).join("\n\n");
   }
 
   private scheduleWorkspaceRenameFromMessage(agentId: string, message: string): void {

@@ -788,6 +788,11 @@ export const AgentSnapshotPayloadSchema = z.object({
   title: z.string().nullable(),
   // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
   synthesis: AgentSynthesisSchema.nullable().optional(),
+  // COMPAT(agentSynthesisHistory): added in v0.1.X, drop the gate when floor >= v0.1.X.
+  // Running thread of settled per-turn syntheses, newest first. Powers the
+  // expandable "fil conducteur" under the floating synthesis banner. Purely
+  // additive on the wire — old clients ignore it, old daemons omit it.
+  synthesisHistory: z.array(AgentSynthesisSchema).optional(),
   labels: z.record(z.string(), z.string()).default({}),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),

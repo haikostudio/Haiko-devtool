@@ -77,6 +77,10 @@ import {
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
+// Cap on the running conversation-synthesis thread kept per agent (newest
+// first). Bounds the persisted record and the wire payload; the banner shows
+// the latest at the top and the rest as an expandable "fil conducteur".
+const MAX_SYNTHESIS_HISTORY = 40;
 const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: false,
   supportsSessionPersistence: true,
@@ -1587,10 +1591,23 @@ export class AgentManager {
 
   /**
    * Persist and broadcast the always-fresh conversation synthesis (the floating
-   * "what are we doing" block). Best-effort caller: regenerated after each turn.
-   * Pass `null` to clear it. Never touches the title or the git branch.
+   * "what are we doing" block). Best-effort caller: regenerated on each prompt
+   * and after each turn.
+   *
+   * - `synthesis` becomes the live/latest read (the collapsed banner text),
+   *   refreshed both when a prompt is sent and when a turn settles.
+   * - `pushHistory` prepends this synthesis to the running thread
+   *   (`synthesisHistory`, newest first, capped) — set it only for settled,
+   *   per-turn entries so the expandable "fil conducteur" stays meaningful.
+   *
+   * Pass `synthesis: null` to clear both the latest read and the thread. Never
+   * touches the title or the git branch.
    */
-  async setSynthesis(agentId: string, synthesis: AgentSynthesis | null): Promise<void> {
+  async setSynthesis(
+    agentId: string,
+    synthesis: AgentSynthesis | null,
+    options?: { pushHistory?: boolean },
+  ): Promise<void> {
     const agent = this.getAgent(agentId);
     if (!agent) {
       return;
@@ -1603,7 +1620,17 @@ export class AgentManager {
       return;
     }
     this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent, { synthesis });
+    // Only touch the history array when we clear it (null) or push a settled
+    // entry. Otherwise omit the key so the existing thread is preserved.
+    if (synthesis === null) {
+      await this.persistSnapshot(agent, { synthesis: null, synthesisHistory: null });
+    } else if (options?.pushHistory) {
+      const existing = this.registry ? (await this.registry.get(agentId))?.synthesisHistory : null;
+      const history = [synthesis, ...(existing ?? [])].slice(0, MAX_SYNTHESIS_HISTORY);
+      await this.persistSnapshot(agent, { synthesis, synthesisHistory: history });
+    } else {
+      await this.persistSnapshot(agent, { synthesis });
+    }
     this.emitState(agent, { persist: false });
   }
 
@@ -2980,7 +3007,12 @@ export class AgentManager {
 
   private async persistSnapshot(
     agent: ManagedAgent,
-    options?: { title?: string | null; synthesis?: AgentSynthesis | null; internal?: boolean },
+    options?: {
+      title?: string | null;
+      synthesis?: AgentSynthesis | null;
+      synthesisHistory?: AgentSynthesis[] | null;
+      internal?: boolean;
+    },
   ): Promise<void> {
     if (!this.registry) {
       return;

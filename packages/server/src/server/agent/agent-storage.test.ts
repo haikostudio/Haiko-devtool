@@ -270,6 +270,51 @@ describe("AgentStorage", () => {
     expect(updatedRecord?.lastStatus).toBe("running");
   });
 
+  test("applySnapshot stores, reloads, and preserves the synthesis thread", async () => {
+    const agentId = "agent-synthesis-thread";
+    const first = { summary: "Turn one", updatedAt: "2025-01-01T00:00:00.000Z" };
+    const second = { summary: "Turn two", updatedAt: "2025-01-01T00:05:00.000Z" };
+
+    await storage.applySnapshot(createManagedAgent({ id: agentId }), {
+      synthesis: second,
+      synthesisHistory: [second, first],
+    });
+
+    const record = await storage.get(agentId);
+    expect(record?.synthesis).toEqual(second);
+    expect(record?.synthesisHistory).toEqual([second, first]);
+
+    // Survives a reload from disk.
+    const reloaded = new AgentStorage(storagePath, logger);
+    const persisted = await reloaded.get(agentId);
+    expect(persisted?.synthesisHistory).toEqual([second, first]);
+
+    // A routine snapshot flush that doesn't mention synthesis must not clobber
+    // the existing thread.
+    await storage.applySnapshot(createManagedAgent({ id: agentId, lifecycle: "running" }));
+    const afterFlush = await storage.get(agentId);
+    expect(afterFlush?.synthesis).toEqual(second);
+    expect(afterFlush?.synthesisHistory).toEqual([second, first]);
+  });
+
+  test("applySnapshot clears the synthesis thread when synthesis is null", async () => {
+    const agentId = "agent-synthesis-clear";
+    const entry = { summary: "Something", updatedAt: "2025-01-02T00:00:00.000Z" };
+    await storage.applySnapshot(createManagedAgent({ id: agentId }), {
+      synthesis: entry,
+      synthesisHistory: [entry],
+    });
+
+    await storage.applySnapshot(createManagedAgent({ id: agentId }), {
+      synthesis: null,
+      synthesisHistory: null,
+    });
+
+    const record = await storage.get(agentId);
+    expect(record?.synthesis ?? null).toBeNull();
+    expect(record?.synthesisHistory ?? null).toBeNull();
+  });
+
   test("applySnapshot preserves archivedAt (soft-delete) status", async () => {
     const agentId = "agent-archived";
     await storage.applySnapshot(

@@ -111,6 +111,7 @@ export interface Agent {
   lastError?: string | null;
   title: string | null;
   synthesis?: AgentSynthesis | null;
+  synthesisHistory?: AgentSynthesis[] | null;
   cwd: string;
   workspaceId?: string;
   model: string | null;

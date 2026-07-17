@@ -43,7 +43,10 @@ const SynthesisSchema = z.object({
   state: z.string().max(120).optional().default(""),
 });
 
-const MAX_TRANSCRIPT_CHARS = 6_000;
+// The transcript now covers the whole discussion (built from the full loaded
+// timeline), so keep a generous tail window to preserve the running thread
+// while still bounding the generation cost.
+const MAX_TRANSCRIPT_CHARS = 14_000;
 
 function buildPrompt(transcript: string): string {
   const trimmed = transcript.slice(-MAX_TRANSCRIPT_CHARS);

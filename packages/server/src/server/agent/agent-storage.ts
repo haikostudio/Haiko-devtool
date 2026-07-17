@@ -48,6 +48,7 @@ const STORED_AGENT_SCHEMA = z.object({
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
   synthesis: AgentSynthesisSchema.nullable().optional(),
+  synthesisHistory: z.array(AgentSynthesisSchema).optional(),
   labels: z.record(z.string(), z.string()).default({}),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
@@ -91,6 +92,7 @@ export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
 interface ApplySnapshotOptions {
   title?: string | null;
   synthesis?: AgentSynthesis | null;
+  synthesisHistory?: AgentSynthesis[] | null;
   internal?: boolean;
 }
 
@@ -106,17 +108,36 @@ function resolveSnapshotOverrides(
 ): {
   title: string | null;
   synthesis: AgentSynthesis | null;
+  synthesisHistory: AgentSynthesis[] | null;
   createdAt?: string;
   internal?: boolean;
 } {
   const has = (key: keyof ApplySnapshotOptions): boolean =>
     options !== undefined && Object.prototype.hasOwnProperty.call(options, key);
   return {
-    title: has("title") ? (options?.title ?? null) : (existing?.title ?? null),
-    synthesis: has("synthesis") ? (options?.synthesis ?? null) : (existing?.synthesis ?? null),
+    title: resolveOverrideField(has("title"), options?.title, existing?.title),
+    synthesis: resolveOverrideField(has("synthesis"), options?.synthesis, existing?.synthesis),
+    synthesisHistory: resolveOverrideField(
+      has("synthesisHistory"),
+      options?.synthesisHistory,
+      existing?.synthesisHistory,
+    ),
     createdAt: existing?.createdAt,
     internal: has("internal") ? options?.internal : (agent.internal ?? existing?.internal),
   };
+}
+
+// Pick the override value when the caller explicitly provided the key, else fall
+// back to the existing stored value. Keeps resolveSnapshotOverrides flat.
+function resolveOverrideField<T>(
+  present: boolean,
+  optionValue: T | null | undefined,
+  existingValue: T | null | undefined,
+): T | null {
+  if (present) {
+    return optionValue ?? null;
+  }
+  return existingValue ?? null;
 }
 
 export class AgentStorage {
