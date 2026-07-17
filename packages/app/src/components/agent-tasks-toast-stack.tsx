@@ -272,12 +272,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusPip: {
     position: "absolute",
-    top: 6,
-    left: 6,
-    width: 8,
-    height: 8,
+    // Straddle the top-left corner: sit half outside the card, overlapping the
+    // border, above the toast content.
+    top: -5,
+    left: -5,
+    width: 12,
+    height: 12,
     borderRadius: theme.borderRadius.full,
-    zIndex: 1,
+    borderWidth: 2,
+    borderColor: theme.colors.surface0,
+    zIndex: 2,
   },
   statusPipNeedsInput: {
     backgroundColor: theme.colors.palette.amber[500],
