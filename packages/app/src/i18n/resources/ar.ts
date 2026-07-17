@@ -216,6 +216,7 @@ export const ar: TranslationResources = {
   },
   changelog: {
     title: "سجل التغييرات",
+    unreleased: "غير منشور",
     tabs: {
       releases: "الإصدارات",
       commits: "الالتزامات",
@@ -263,9 +264,11 @@ export const ar: TranslationResources = {
     newTaskDescriptionPlaceholder: "الوصف (اختياري)",
     folderModal: {
       title: "مجلد جديد",
+      editTitle: "تعديل المجلد",
       nameField: "الاسم",
       colorField: "اللون",
       create: "إنشاء",
+      save: "حفظ",
     },
     taskCount: "{{count}} مهمة",
     updateHost: "حدّث المضيف لاستخدام المهام.",
@@ -309,7 +312,9 @@ export const ar: TranslationResources = {
       runNow: "تشغيل الآن",
       add: "إضافة",
       save: "حفظ",
+      edit: "تعديل",
       delete: "حذف",
+      folderActions: "إجراءات المجلد",
     },
   },
   sessions: {

@@ -219,6 +219,7 @@ export const fr: TranslationResources = {
   },
   changelog: {
     title: "Journal des modifications",
+    unreleased: "Non publié",
     tabs: {
       releases: "Versions",
       commits: "Commits",
@@ -267,9 +268,11 @@ export const fr: TranslationResources = {
     newTaskDescriptionPlaceholder: "Description (optionnelle)",
     folderModal: {
       title: "Nouveau dossier",
+      editTitle: "Modifier le dossier",
       nameField: "Nom",
       colorField: "Couleur",
       create: "Créer",
+      save: "Enregistrer",
     },
     taskCount: "{{count}} tâche(s)",
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
@@ -313,7 +316,9 @@ export const fr: TranslationResources = {
       runNow: "Lancer maintenant",
       add: "Ajouter",
       save: "Enregistrer",
+      edit: "Modifier",
       delete: "Supprimer",
+      folderActions: "Actions du dossier",
     },
   },
   sessions: {

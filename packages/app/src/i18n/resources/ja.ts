@@ -219,6 +219,7 @@ export const ja: TranslationResources = {
   },
   changelog: {
     title: "変更履歴",
+    unreleased: "未リリース",
     tabs: {
       releases: "リリース",
       commits: "コミット",
@@ -266,9 +267,11 @@ export const ja: TranslationResources = {
     newTaskDescriptionPlaceholder: "説明（任意）",
     folderModal: {
       title: "新しいフォルダー",
+      editTitle: "フォルダーを編集",
       nameField: "名前",
       colorField: "カラー",
       create: "作成",
+      save: "保存",
     },
     taskCount: "{{count}} 件のタスク",
     updateHost: "タスクを使うにはホストを更新してください。",
@@ -312,7 +315,9 @@ export const ja: TranslationResources = {
       runNow: "今すぐ実行",
       add: "追加",
       save: "保存",
+      edit: "編集",
       delete: "削除",
+      folderActions: "フォルダー操作",
     },
   },
   sessions: {

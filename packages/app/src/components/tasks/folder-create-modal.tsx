@@ -24,17 +24,28 @@ interface FolderCreateModalProps {
   visible: boolean;
   onClose: () => void;
   onCreate: (input: { name: string; color: string }) => void;
+  /**
+   * When provided the dialog opens in edit mode: fields prefill from this
+   * folder, the title/submit labels switch, and onCreate carries the edits.
+   */
+  initialFolder?: { name: string; color?: string };
 }
 
 /**
- * "New folder" dialog: a name plus an accent color picked from a fixed
- * palette. The created folder appears as a card in the folders rail via the
- * board subscription push.
+ * "New folder" / "Edit folder" dialog: a name plus an accent color picked from
+ * a fixed palette. The created or edited folder appears as a card in the
+ * folders rail via the board subscription push.
  */
-export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateModalProps) {
+export function FolderCreateModal({
+  visible,
+  onClose,
+  onCreate,
+  initialFolder,
+}: FolderCreateModalProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const controlSize = isCompact ? "md" : "sm";
+  const isEditing = initialFolder !== undefined;
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(FOLDER_COLORS[0]);
   // The name input is native-owned (see AdaptiveTextInput); bump the reset key
@@ -43,11 +54,11 @@ export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateMo
 
   useEffect(() => {
     if (visible) {
-      setName("");
-      setColor(FOLDER_COLORS[0]);
+      setName(initialFolder?.name ?? "");
+      setColor(initialFolder?.color ?? FOLDER_COLORS[0]);
       setResetKey((key) => key + 1);
     }
-  }, [visible]);
+  }, [visible, initialFolder]);
 
   const handleCreate = useCallback(() => {
     const trimmed = name.trim();
@@ -58,7 +69,12 @@ export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateMo
     onClose();
   }, [name, color, onCreate, onClose]);
 
-  const header = useMemo((): SheetHeader => ({ title: t("tasks.folderModal.title") }), [t]);
+  const header = useMemo(
+    (): SheetHeader => ({
+      title: isEditing ? t("tasks.folderModal.editTitle") : t("tasks.folderModal.title"),
+    }),
+    [isEditing, t],
+  );
 
   const footer = useMemo(
     () => (
@@ -71,11 +87,11 @@ export function FolderCreateModal({ visible, onClose, onCreate }: FolderCreateMo
           onPress={handleCreate}
           testID="tasks-folder-modal-create"
         >
-          {t("tasks.folderModal.create")}
+          {isEditing ? t("tasks.folderModal.save") : t("tasks.folderModal.create")}
         </Button>
       </View>
     ),
-    [onClose, handleCreate, t],
+    [onClose, handleCreate, isEditing, t],
   );
 
   return (

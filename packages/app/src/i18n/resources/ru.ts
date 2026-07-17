@@ -218,6 +218,7 @@ export const ru: TranslationResources = {
   },
   changelog: {
     title: "История изменений",
+    unreleased: "Не выпущено",
     tabs: {
       releases: "Релизы",
       commits: "Коммиты",
@@ -265,9 +266,11 @@ export const ru: TranslationResources = {
     newTaskDescriptionPlaceholder: "Описание (необязательно)",
     folderModal: {
       title: "Новая папка",
+      editTitle: "Изменить папку",
       nameField: "Название",
       colorField: "Цвет",
       create: "Создать",
+      save: "Сохранить",
     },
     taskCount: "Задач: {{count}}",
     updateHost: "Обновите хост, чтобы использовать Задачи.",
@@ -311,7 +314,9 @@ export const ru: TranslationResources = {
       runNow: "Запустить сейчас",
       add: "Добавить",
       save: "Сохранить",
+      edit: "Изменить",
       delete: "Удалить",
+      folderActions: "Действия с папкой",
     },
   },
   sessions: {

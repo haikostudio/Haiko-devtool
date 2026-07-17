@@ -1,12 +1,27 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft, ChevronRight, Folder, Plus, Trash2 } from "lucide-react-native";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Folder,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { FolderCreateModal } from "@/components/tasks/folder-create-modal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet } from "@/components/tasks/task-detail-sheet";
@@ -19,10 +34,63 @@ import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const ThemedFolder = withUnistyles(Folder);
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const ThemedTrash = withUnistyles(Trash2);
+const ThemedKebab = withUnistyles(MoreVertical);
+const ThemedPencil = withUnistyles(Pencil);
+
+const MENU_ICON_SIZE = 16;
+const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
+const deleteLeading = <ThemedTrash size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
+
+// Reusable three-dots menu for a folder card: opens on the right of the card
+// and offers rename/edit + delete. The card's own onPress opens the folder on
+// the board; this trigger is a nested Pressable, so the responder system routes
+// the tap here and it never selects the folder underneath.
+const FolderKebabMenu = memo(function FolderKebabMenu({
+  folderId,
+  onEdit,
+  onDelete,
+}: {
+  folderId: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.actions.folderActions")}
+        testID={`tasks-folder-menu-${folderId}`}
+      >
+        <ThemedKebab size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" width={180}>
+        <DropdownMenuItem
+          leading={editLeading}
+          onSelect={onEdit}
+          testID={`tasks-folder-menu-edit-${folderId}`}
+        >
+          {t("tasks.actions.edit")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          leading={deleteLeading}
+          destructive
+          onSelect={onDelete}
+          testID={`tasks-folder-menu-delete-${folderId}`}
+        >
+          {t("tasks.actions.delete")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+});
 
 interface ProjectEntry {
   serverId: string;
@@ -296,7 +364,7 @@ function FoldersRail({
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
-  const [modalVisible, setModalVisible] = useState(false);
+  const folderModal = useFolderModal(boardHandle);
   const taskCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const task of boardHandle.board?.tasks ?? []) {
@@ -304,19 +372,6 @@ function FoldersRail({
     }
     return counts;
   }, [boardHandle.board]);
-
-  const handleOpenModal = useCallback(() => {
-    setModalVisible(true);
-  }, []);
-  const handleCloseModal = useCallback(() => {
-    setModalVisible(false);
-  }, []);
-  const handleCreateFolder = useCallback(
-    (input: { name: string; color: string }) => {
-      void boardHandle.createFolder(input);
-    },
-    [boardHandle],
-  );
 
   return (
     <View style={styles.rail}>
@@ -331,6 +386,7 @@ function FoldersRail({
             folder={folder}
             selected={folder.id === folderId}
             taskCount={taskCounts.get(folder.id) ?? 0}
+            onEditFolder={folderModal.openEdit}
             onDeleteFolder={boardHandle.deleteFolder}
           />
         ))}
@@ -339,36 +395,83 @@ function FoldersRail({
         <Button
           leftIcon={Plus}
           variant="secondary"
-          onPress={handleOpenModal}
+          onPress={folderModal.openCreate}
           testID="tasks-new-folder-open"
         >
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
-      <FolderCreateModal
-        visible={modalVisible}
-        onClose={handleCloseModal}
-        onCreate={handleCreateFolder}
-      />
+      {folderModal.element}
     </View>
   );
+}
+
+// Shared create/edit folder modal wiring: the folders rail and the compact
+// folder list both open the same FolderCreateModal in either mode.
+function useFolderModal(boardHandle: BoardHandle) {
+  const [mode, setMode] = useState<
+    { kind: "create" } | { kind: "edit"; folder: TaskFolder } | null
+  >(null);
+
+  const openCreate = useCallback(() => {
+    setMode({ kind: "create" });
+  }, []);
+  const openEdit = useCallback((folder: TaskFolder) => {
+    setMode({ kind: "edit", folder });
+  }, []);
+  const close = useCallback(() => {
+    setMode(null);
+  }, []);
+
+  const handleSubmit = useCallback(
+    (input: { name: string; color: string }) => {
+      if (mode?.kind === "edit") {
+        void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
+      } else {
+        void boardHandle.createFolder(input);
+      }
+    },
+    [mode, boardHandle],
+  );
+
+  const initialFolder = useMemo(
+    () =>
+      mode?.kind === "edit" ? { name: mode.folder.name, color: mode.folder.color } : undefined,
+    [mode],
+  );
+
+  const element = (
+    <FolderCreateModal
+      visible={mode !== null}
+      onClose={close}
+      onCreate={handleSubmit}
+      initialFolder={initialFolder}
+    />
+  );
+
+  return { openCreate, openEdit, element };
 }
 
 const FolderRailItem = memo(function FolderRailItem({
   folder,
   selected,
   taskCount,
+  onEditFolder,
   onDeleteFolder,
 }: {
   folder: TaskFolder;
   selected: boolean;
   taskCount: number;
+  onEditFolder: (folder: TaskFolder) => void;
   onDeleteFolder: (folderId: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const handlePress = useCallback(() => {
     selectFolder(folder.id);
   }, [folder.id]);
+  const handleEdit = useCallback(() => {
+    onEditFolder(folder);
+  }, [onEditFolder, folder]);
   const handleDelete = useCallback(() => {
     void onDeleteFolder(folder.id);
   }, [onDeleteFolder, folder.id]);
@@ -388,15 +491,7 @@ const FolderRailItem = memo(function FolderRailItem({
         </Text>
         <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
-      <Pressable
-        onPress={handleDelete}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t("tasks.actions.delete")}
-        testID={`tasks-folder-delete-${folder.id}`}
-      >
-        <ThemedTrash size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      </Pressable>
+      <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
   );
 });
@@ -636,7 +731,7 @@ const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: Pr
 
 function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
   const { t } = useTranslation();
-  const [modalVisible, setModalVisible] = useState(false);
+  const folderModal = useFolderModal(boardHandle);
   const folders = useMemo(
     () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
     [boardHandle.board],
@@ -648,19 +743,6 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
     }
     return counts;
   }, [boardHandle.board]);
-
-  const handleOpenModal = useCallback(() => {
-    setModalVisible(true);
-  }, []);
-  const handleCloseModal = useCallback(() => {
-    setModalVisible(false);
-  }, []);
-  const handleCreateFolder = useCallback(
-    (input: { name: string; color: string }) => {
-      void boardHandle.createFolder(input);
-    },
-    [boardHandle],
-  );
 
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
@@ -678,6 +760,7 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
           key={folder.id}
           folder={folder}
           taskCount={taskCounts.get(folder.id) ?? 0}
+          onEditFolder={folderModal.openEdit}
           onDeleteFolder={boardHandle.deleteFolder}
         />
       ))}
@@ -685,15 +768,11 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
         <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
       ) : null}
       <View style={styles.newFolderRow}>
-        <Button leftIcon={Plus} onPress={handleOpenModal} testID="tasks-new-folder-open">
+        <Button leftIcon={Plus} onPress={folderModal.openCreate} testID="tasks-new-folder-open">
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
-      <FolderCreateModal
-        visible={modalVisible}
-        onClose={handleCloseModal}
-        onCreate={handleCreateFolder}
-      />
+      {folderModal.element}
     </ScrollView>
   );
 }
@@ -701,16 +780,21 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
 const CompactFolderRow = memo(function CompactFolderRow({
   folder,
   taskCount,
+  onEditFolder,
   onDeleteFolder,
 }: {
   folder: TaskFolder;
   taskCount: number;
+  onEditFolder: (folder: TaskFolder) => void;
   onDeleteFolder: (folderId: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const handleOpen = useCallback(() => {
     selectFolder(folder.id);
   }, [folder.id]);
+  const handleEdit = useCallback(() => {
+    onEditFolder(folder);
+  }, [onEditFolder, folder]);
   const handleDelete = useCallback(() => {
     void onDeleteFolder(folder.id);
   }, [onDeleteFolder, folder.id]);
@@ -722,15 +806,7 @@ const CompactFolderRow = memo(function CompactFolderRow({
         <Text style={styles.rowTitle}>{folder.name}</Text>
         <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
-      <Pressable
-        onPress={handleDelete}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t("tasks.actions.delete")}
-        testID={`tasks-folder-delete-${folder.id}`}
-      >
-        <ThemedTrash size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      </Pressable>
+      <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
   );
 });

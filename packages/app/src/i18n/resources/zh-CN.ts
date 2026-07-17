@@ -216,6 +216,7 @@ export const zhCN: TranslationResources = {
   },
   changelog: {
     title: "更新日志",
+    unreleased: "未发布",
     tabs: {
       releases: "版本",
       commits: "提交",
@@ -263,9 +264,11 @@ export const zhCN: TranslationResources = {
     newTaskDescriptionPlaceholder: "描述（可选）",
     folderModal: {
       title: "新建文件夹",
+      editTitle: "编辑文件夹",
       nameField: "名称",
       colorField: "颜色",
       create: "创建",
+      save: "保存",
     },
     taskCount: "{{count}} 个任务",
     updateHost: "请更新主机以使用任务功能。",
@@ -309,7 +312,9 @@ export const zhCN: TranslationResources = {
       runNow: "立即运行",
       add: "添加",
       save: "保存",
+      edit: "编辑",
       delete: "删除",
+      folderActions: "文件夹操作",
     },
   },
   sessions: {

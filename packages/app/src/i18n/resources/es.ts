@@ -219,6 +219,7 @@ export const es: TranslationResources = {
   },
   changelog: {
     title: "Registro de cambios",
+    unreleased: "Sin publicar",
     tabs: {
       releases: "Versiones",
       commits: "Commits",
@@ -267,9 +268,11 @@ export const es: TranslationResources = {
     newTaskDescriptionPlaceholder: "Descripción (opcional)",
     folderModal: {
       title: "Nueva carpeta",
+      editTitle: "Editar carpeta",
       nameField: "Nombre",
       colorField: "Color",
       create: "Crear",
+      save: "Guardar",
     },
     taskCount: "{{count}} tarea(s)",
     updateHost: "Actualiza el host para usar Tareas.",
@@ -313,7 +316,9 @@ export const es: TranslationResources = {
       runNow: "Ejecutar ahora",
       add: "Añadir",
       save: "Guardar",
+      edit: "Editar",
       delete: "Eliminar",
+      folderActions: "Acciones de carpeta",
     },
   },
   sessions: {

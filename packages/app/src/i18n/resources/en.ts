@@ -215,6 +215,7 @@ export const en = {
   },
   changelog: {
     title: "Changelog",
+    unreleased: "Unreleased",
     tabs: {
       releases: "Releases",
       commits: "Commits",
@@ -262,9 +263,11 @@ export const en = {
     newTaskDescriptionPlaceholder: "Description (optional)",
     folderModal: {
       title: "New folder",
+      editTitle: "Edit folder",
       nameField: "Name",
       colorField: "Color",
       create: "Create",
+      save: "Save",
     },
     taskCount: "{{count}} task(s)",
     updateHost: "Update the host to use Tasks.",
@@ -308,7 +311,9 @@ export const en = {
       runNow: "Run now",
       add: "Add",
       save: "Save",
+      edit: "Edit",
       delete: "Delete",
+      folderActions: "Folder actions",
     },
   },
   sessions: {

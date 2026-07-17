@@ -219,6 +219,7 @@ export const ptBR: TranslationResources = {
   },
   changelog: {
     title: "Registro de alterações",
+    unreleased: "Não publicado",
     tabs: {
       releases: "Versões",
       commits: "Commits",
@@ -267,9 +268,11 @@ export const ptBR: TranslationResources = {
     newTaskDescriptionPlaceholder: "Descrição (opcional)",
     folderModal: {
       title: "Nova pasta",
+      editTitle: "Editar pasta",
       nameField: "Nome",
       colorField: "Cor",
       create: "Criar",
+      save: "Salvar",
     },
     taskCount: "{{count}} tarefa(s)",
     updateHost: "Atualize o host para usar Tarefas.",
@@ -313,7 +316,9 @@ export const ptBR: TranslationResources = {
       runNow: "Executar agora",
       add: "Adicionar",
       save: "Salvar",
+      edit: "Editar",
       delete: "Excluir",
+      folderActions: "Ações da pasta",
     },
   },
   sessions: {
