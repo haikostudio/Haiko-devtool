@@ -10,6 +10,7 @@ import {
   isDelegatedAgent,
   PARENT_AGENT_ID_LABEL,
 } from "@getpaseo/protocol/agent-labels";
+import type { AgentSynthesis } from "@getpaseo/protocol/messages";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -1584,6 +1585,28 @@ export class AgentManager {
     this.emitState(agent, { persist: false });
   }
 
+  /**
+   * Persist and broadcast the always-fresh conversation synthesis (the floating
+   * "what are we doing" block). Best-effort caller: regenerated after each turn.
+   * Pass `null` to clear it. Never touches the title or the git branch.
+   */
+  async setSynthesis(agentId: string, synthesis: AgentSynthesis | null): Promise<void> {
+    const agent = this.getAgent(agentId);
+    if (!agent) {
+      return;
+    }
+    if (
+      this.agentsAwaitingInitialSnapshotPersist.has(agent.id) &&
+      this.registry &&
+      (await this.registry.get(agent.id)) === null
+    ) {
+      return;
+    }
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent, { synthesis });
+    this.emitState(agent, { persist: false });
+  }
+
   async setLabels(agentId: string, labels: Record<string, string>): Promise<void> {
     const agent = this.requireAgent(agentId);
     await this.writeLabels(agent.id, labels);
@@ -2957,7 +2980,7 @@ export class AgentManager {
 
   private async persistSnapshot(
     agent: ManagedAgent,
-    options?: { title?: string | null; internal?: boolean },
+    options?: { title?: string | null; synthesis?: AgentSynthesis | null; internal?: boolean },
   ): Promise<void> {
     if (!this.registry) {
       return;

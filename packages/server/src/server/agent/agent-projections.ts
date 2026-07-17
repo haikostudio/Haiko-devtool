@@ -1,6 +1,7 @@
 import type {
   AgentListItemPayload,
   AgentSnapshotPayload,
+  AgentSynthesis,
   RecentProviderSessionDescriptorPayload,
 } from "../messages.js";
 import type { SerializableAgentConfig, StoredAgentRecord } from "./agent-storage.js";
@@ -24,6 +25,7 @@ export type { ManagedAgent };
 
 interface ProjectionOptions {
   title?: string | null;
+  synthesis?: AgentSynthesis | null;
   createdAt?: string;
   internal?: boolean;
 }
@@ -79,6 +81,7 @@ export function toStoredAgentRecord(
     lastActivityAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
+    synthesis: options?.synthesis ?? null,
     labels: agent.labels,
     lastStatus: agent.lifecycle,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
@@ -127,6 +130,7 @@ export function toAgentPayload(
     pendingPermissions: sanitizePendingPermissions(agent.pendingPermissions),
     persistence: sanitizePersistenceHandle(agent.persistence),
     title: options?.title ?? null,
+    synthesis: options?.synthesis ?? null,
     labels: agent.labels,
   };
 
@@ -230,6 +234,7 @@ export function buildStoredAgentPayload(
     pendingPermissions: [],
     persistence,
     title: record.title ?? null,
+    synthesis: record.synthesis ?? null,
     requiresAttention: record.requiresAttention ?? false,
     attentionReason: record.attentionReason ?? null,
     attentionTimestamp: record.attentionTimestamp ?? null,

@@ -1353,6 +1353,8 @@ export class VoiceAssistantWebSocketServer {
         tasksBoard: !!this.taskBoardService,
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: !!this.agentManager.getUsageStatsStore(),
+        // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        agentSynthesis: true,
       },
     };
   }

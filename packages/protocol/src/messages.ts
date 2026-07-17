@@ -723,6 +723,23 @@ const AgentRuntimeInfoSchema: z.ZodType<AgentRuntimeInfo> = z.object({
   extra: z.record(z.string(), z.unknown()).optional(),
 });
 
+// COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
+// A short, always-fresh read of what an agent conversation is currently about.
+// Regenerated server-side after each turn from the recent transcript. Purely
+// additive/optional on the wire — old clients ignore it, old daemons omit it.
+export const AgentSynthesisSchema = z.object({
+  // Two-line synthesis of what the conversation is doing right now.
+  summary: z.string(),
+  // What the agent is trying to achieve (one short line).
+  objective: z.string().nullable().optional(),
+  // Where things currently stand (one short line).
+  state: z.string().nullable().optional(),
+  // ISO timestamp of when this synthesis was generated.
+  updatedAt: z.string(),
+});
+
+export type AgentSynthesis = z.infer<typeof AgentSynthesisSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -745,6 +762,8 @@ export const AgentSnapshotPayloadSchema = z.object({
   lastUsage: AgentUsageSchema.optional(),
   lastError: z.string().optional(),
   title: z.string().nullable(),
+  // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
+  synthesis: AgentSynthesisSchema.nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
   requiresAttention: z.boolean().optional(),
   attentionReason: z.enum(["finished", "error", "permission"]).nullable().optional(),
@@ -2735,6 +2754,8 @@ export const ServerInfoStatusPayloadSchema = z
         tasksBoard: z.boolean().optional(),
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: z.boolean().optional(),
+        // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        agentSynthesis: z.boolean().optional(),
       })
       .optional(),
   })

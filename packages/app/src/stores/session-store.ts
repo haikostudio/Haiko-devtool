@@ -21,6 +21,7 @@ import type {
   AgentPersistenceHandle,
 } from "@getpaseo/protocol/agent-types";
 import type {
+  AgentSynthesis,
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
@@ -109,6 +110,7 @@ export interface Agent {
   lastUsage?: AgentUsage;
   lastError?: string | null;
   title: string | null;
+  synthesis?: AgentSynthesis | null;
   cwd: string;
   workspaceId?: string;
   model: string | null;

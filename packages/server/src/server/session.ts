@@ -218,6 +218,7 @@ import {
   type CreatePaseoWorktreeResult,
 } from "./paseo-worktree-service.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
+import { generateAgentSynthesis } from "./agent-synthesis-generator.js";
 import {
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
   createPaseoWorktreeWorkflow as createWorktreeWorkflow,
@@ -1358,7 +1359,8 @@ export class Session {
   private async buildAgentPayload(agent: ManagedAgent): Promise<AgentSnapshotPayload> {
     const storedRecord = await this.agentStorage.get(agent.id);
     const title = storedRecord?.title ?? null;
-    const payload = toAgentPayload(agent, { title });
+    const synthesis = storedRecord?.synthesis ?? null;
+    const payload = toAgentPayload(agent, { title, synthesis });
     const storedUpdatedAt = storedRecord ? resolveStoredAgentPayloadUpdatedAt(storedRecord) : null;
     if (storedUpdatedAt) {
       const liveUpdatedAt = Date.parse(payload.updatedAt);
@@ -6204,6 +6206,11 @@ export class Session {
       // title-only — never touches the git branch.
       this.scheduleWorkspaceRenameFromMessage(agentId, msg.text);
 
+      // Keep the floating conversation-synthesis block fresh: after this turn
+      // ends, re-summarize what the agent is working on. Best-effort and async;
+      // a generation failure leaves the previous synthesis untouched.
+      this.scheduleSynthesisFromTurn(agentId, msg.text);
+
       if (dispatchResult.outOfBand) {
         this.emit({
           type: "send_agent_message_response",
@@ -6252,6 +6259,56 @@ export class Session {
         },
       });
     }
+  }
+
+  /**
+   * After the next turn ends, regenerate the agent's conversation synthesis (the
+   * floating "what are we doing" block) from the latest exchange. One-shot
+   * subscription mirroring scheduleBrainNote. Entirely best-effort.
+   */
+  private scheduleSynthesisFromTurn(agentId: string, userText: string): void {
+    const agent = this.agentManager.getAgent(agentId);
+    const cwd = agent?.cwd;
+    if (!cwd || !userText.trim()) {
+      return;
+    }
+    const unsubscribe = this.agentManager.subscribe(
+      (event) => {
+        if (event.type !== "agent_stream") {
+          return;
+        }
+        const eventType = event.event.type;
+        if (
+          eventType !== "turn_completed" &&
+          eventType !== "turn_failed" &&
+          eventType !== "turn_canceled"
+        ) {
+          return;
+        }
+        unsubscribe();
+        if (eventType !== "turn_completed") {
+          return;
+        }
+        void (async () => {
+          const assistant = (await this.agentManager.getLastAssistantMessage(agentId)) ?? "";
+          const transcript = assistant
+            ? `User: ${userText}\n\nAssistant: ${assistant}`
+            : `User: ${userText}`;
+          const synthesis = await generateAgentSynthesis({
+            agentManager: this.agentManager,
+            cwd,
+            providerSnapshotManager: this.providerSnapshotManager,
+            daemonConfig: this.readStructuredGenerationDaemonConfig(),
+            transcript,
+            logger: this.sessionLogger,
+          });
+          if (synthesis) {
+            await this.agentManager.setSynthesis(agentId, synthesis);
+          }
+        })();
+      },
+      { agentId, replayState: false },
+    );
   }
 
   private scheduleWorkspaceRenameFromMessage(agentId: string, message: string): void {
