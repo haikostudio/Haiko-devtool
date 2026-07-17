@@ -328,6 +328,7 @@ export const ru: TranslationResources = {
   },
   agentList: {
     fallbackTitle: "Новая сессия",
+    runningFor: "Выполняется уже {{duration}}",
     dateSections: {
       recent: "Недавний",
       today: "Сегодня",

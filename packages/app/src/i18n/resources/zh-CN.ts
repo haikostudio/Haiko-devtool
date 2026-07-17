@@ -326,6 +326,7 @@ export const zhCN: TranslationResources = {
   },
   agentList: {
     fallbackTitle: "新会话",
+    runningFor: "已运行 {{duration}}",
     dateSections: {
       recent: "最近",
       today: "今天",

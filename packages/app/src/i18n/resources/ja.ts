@@ -329,6 +329,7 @@ export const ja: TranslationResources = {
   },
   agentList: {
     fallbackTitle: "新しいセッション",
+    runningFor: "{{duration}} 実行中",
     dateSections: {
       recent: "最近",
       today: "今日",

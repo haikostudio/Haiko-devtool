@@ -325,6 +325,7 @@ export const en = {
   },
   agentList: {
     fallbackTitle: "New session",
+    runningFor: "Running for {{duration}}",
     dateSections: {
       recent: "Recent",
       today: "Today",

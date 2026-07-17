@@ -330,6 +330,7 @@ export const ptBR: TranslationResources = {
   },
   agentList: {
     fallbackTitle: "Nova sessão",
+    runningFor: "Em execução há {{duration}}",
     dateSections: {
       recent: "Recentes",
       today: "Hoje",

@@ -330,6 +330,7 @@ export const es: TranslationResources = {
   },
   agentList: {
     fallbackTitle: "Nueva sesión",
+    runningFor: "En ejecución desde hace {{duration}}",
     dateSections: {
       recent: "Reciente",
       today: "Hoy",

@@ -326,6 +326,7 @@ export const ar: TranslationResources = {
   },
   agentList: {
     fallbackTitle: "جلسة جديدة",
+    runningFor: "قيد التشغيل منذ {{duration}}",
     dateSections: {
       recent: "مؤخرًا",
       today: "اليوم",

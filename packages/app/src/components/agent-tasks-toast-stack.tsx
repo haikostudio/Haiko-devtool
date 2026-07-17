@@ -1,15 +1,6 @@
-import { useCallback, useEffect, useMemo, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  makeMutable,
-  useAnimatedStyle,
-  useReducedMotion,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import {
@@ -23,7 +14,7 @@ import { SyncedLoader } from "@/components/synced-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
-import { formatMessageTimestamp } from "@/utils/time";
+import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { agentTaskToastKey, useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
 
 const ICON_SIZE = 16;
@@ -61,55 +52,6 @@ const BUCKET_GROUP_RANK: Record<WorkspaceStateBucket, number> = {
   done: 2,
 };
 
-// A single app-wide pulse value so every blinking border breathes in lockstep
-// (mirrors the SyncedLoader philosophy). Ref-counted so the animation only runs
-// while at least one pulsing toast is mounted.
-const borderPulse = makeMutable(1);
-let borderPulseCount = 0;
-
-function acquireBorderPulse(): void {
-  if (borderPulseCount === 0) {
-    borderPulse.value = withRepeat(
-      withTiming(0.35, { duration: 850, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
-    );
-  }
-  borderPulseCount += 1;
-}
-
-function releaseBorderPulse(): void {
-  borderPulseCount -= 1;
-  if (borderPulseCount <= 0) {
-    borderPulseCount = 0;
-    cancelAnimation(borderPulse);
-    borderPulse.value = 1;
-  }
-}
-
-function PulsingBorder({ colorStyle }: { colorStyle: StyleProp<ViewStyle> }): ReactElement {
-  const reduceMotion = useReducedMotion();
-
-  useEffect(() => {
-    if (reduceMotion) {
-      return;
-    }
-    acquireBorderPulse();
-    return releaseBorderPulse;
-  }, [reduceMotion]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: reduceMotion ? 1 : borderPulse.value,
-  }));
-
-  const borderStyle = useMemo(
-    () => [styles.pulseBorder, colorStyle, animatedStyle],
-    [colorStyle, animatedStyle],
-  );
-
-  return <Animated.View pointerEvents="none" style={borderStyle} />;
-}
-
 function TaskToastIcon({
   provider,
   bucket,
@@ -140,7 +82,7 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
   const { t } = useTranslation();
   const dismiss = useAgentTaskToastStore((state) => state.dismiss);
   const title = task.agent.title || t("agentList.fallbackTitle");
-  const pulseColorStyle = PULSE_BORDER_STYLE_BY_BUCKET[task.bucket];
+  const pipColorStyle = PIP_STYLE_BY_BUCKET[task.bucket];
 
   // Once a task is paused/finished it stops moving, so surface where it ran and when
   // it settled: project name + the finish time (falls back to last activity).
@@ -158,6 +100,37 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
     task.agent.attentionTimestamp,
     task.agent.lastActivityAt,
   ]);
+
+  // Live "running for Xs" counter. There's no server-provided run-start timestamp, so
+  // we stamp the moment this toast first observes the running state and tick every
+  // second while it lasts. The toast stays mounted for the whole run, so the stamp is
+  // stable; it resets whenever the task leaves the running state.
+  const isRunning = task.bucket === "running";
+  const runStartRef = useRef<number | null>(null);
+  const [elapsedTick, setElapsedTick] = useState(0);
+  useEffect(() => {
+    if (!isRunning) {
+      runStartRef.current = null;
+      return;
+    }
+    if (runStartRef.current === null) {
+      runStartRef.current = Date.now();
+    }
+    const id = setInterval(() => setElapsedTick((tick) => tick + 1), 1000);
+    return () => clearInterval(id);
+  }, [isRunning]);
+  const elapsedText = useMemo(() => {
+    if (!isRunning || runStartRef.current === null) {
+      return null;
+    }
+    // elapsedTick drives the recompute each second.
+    void elapsedTick;
+    return t("agentList.runningFor", {
+      duration: formatDuration(Date.now() - runStartRef.current),
+    });
+  }, [isRunning, elapsedTick, t]);
+
+  const subtitle = metaText ?? elapsedText;
 
   const handlePress = useCallback(() => {
     navigateToAgent({
@@ -181,15 +154,15 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
           onPress={handlePress}
           testID={`task-toast-${task.agent.serverId}-${task.agent.id}`}
         >
-          {pulseColorStyle ? <PulsingBorder colorStyle={pulseColorStyle} /> : null}
+          {pipColorStyle ? <View style={pipColorStyle} /> : null}
           <TaskToastIcon provider={task.agent.provider} bucket={task.bucket} />
           <View style={styles.textColumn}>
             <Text style={styles.title} numberOfLines={1}>
               {title}
             </Text>
-            {metaText ? (
+            {subtitle ? (
               <Text style={styles.meta} numberOfLines={1}>
-                {metaText}
+                {subtitle}
               </Text>
             ) : null}
           </View>
@@ -297,20 +270,22 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface1,
   },
-  pulseBorder: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: theme.borderWidth[2],
+  statusPip: {
+    width: 8,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
   },
-  pulseBorderNeedsInput: {
-    borderColor: theme.colors.palette.amber[500],
+  statusPipNeedsInput: {
+    backgroundColor: theme.colors.palette.amber[500],
   },
-  pulseBorderDone: {
-    borderColor: theme.colors.palette.green[500],
+  statusPipRunning: {
+    backgroundColor: theme.colors.palette.blue[500],
+  },
+  statusPipFailed: {
+    backgroundColor: theme.colors.palette.red[500],
+  },
+  statusPipDone: {
+    backgroundColor: theme.colors.palette.green[500],
   },
   iconWrapper: {
     width: ICON_SIZE,
@@ -376,14 +351,14 @@ const DOT_STYLE_BY_BUCKET: Record<WorkspaceStateBucket, StyleProp<ViewStyle>> = 
   done: null,
 };
 
-// Blinking border to tell states apart at a glance: amber while an agent waits for
-// the user, green once it has finished. Running/failed keep only their status dot.
-const PULSE_BORDER_STYLE_BY_BUCKET: Record<WorkspaceStateBucket, StyleProp<ViewStyle>> = {
-  needs_input: styles.pulseBorderNeedsInput,
-  attention: styles.pulseBorderDone,
-  done: styles.pulseBorderDone,
-  running: null,
-  failed: null,
+// A solid colored dot tells states apart at a glance: amber while an agent waits for
+// the user, blue while it runs, green once it has finished, red on failure.
+const PIP_STYLE_BY_BUCKET: Record<WorkspaceStateBucket, StyleProp<ViewStyle>> = {
+  needs_input: [styles.statusPip, styles.statusPipNeedsInput],
+  attention: [styles.statusPip, styles.statusPipDone],
+  done: [styles.statusPip, styles.statusPipDone],
+  running: [styles.statusPip, styles.statusPipRunning],
+  failed: [styles.statusPip, styles.statusPipFailed],
 };
 
 function taskToastPressableStyle({
