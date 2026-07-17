@@ -132,17 +132,25 @@ export function AttachmentLabel({ icon, title, subtitle }: AttachmentLabelProps)
   );
 }
 
+// expo-image is NOT a unistyles-aware component, so a react-native-unistyles
+// StyleSheet style does not resolve on it — its width/height were dropped and the
+// image collapsed to ~1px. Give it a PLAIN style object with explicit dimensions.
+const THUMBNAIL_IMAGE_STYLE = {
+  width: ATTACHMENT_CONTENT_HEIGHT,
+  height: ATTACHMENT_CONTENT_HEIGHT,
+} as const;
+
 /** Square image preview pill body. Uses expo-image (like the lightbox): the
  * react-native Image did not reliably render the IndexedDB blob: URLs that back
- * a cross-device–materialized attachment on web, leaving a blank placeholder even
- * though the full-size open worked. */
+ * a materialized attachment on web, leaving a blank placeholder even though the
+ * full-size open worked. */
 export function AttachmentThumbnail({ metadata }: { metadata: AttachmentMetadata }) {
   const uri = useAttachmentPreviewUrl(metadata);
   const source = useMemo(() => ({ uri: uri ?? "" }), [uri]);
   if (!uri) {
     return <View style={styles.thumbnailPlaceholder} />;
   }
-  return <ExpoImage source={source} style={styles.thumbnail} contentFit="cover" />;
+  return <ExpoImage source={source} style={THUMBNAIL_IMAGE_STYLE} contentFit="cover" />;
 }
 
 const ThemedX = withUnistyles(X);
@@ -183,10 +191,6 @@ const styles = StyleSheet.create((theme) => ({
   labelSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-  },
-  thumbnail: {
-    width: ATTACHMENT_CONTENT_HEIGHT,
-    height: ATTACHMENT_CONTENT_HEIGHT,
   },
   thumbnailPlaceholder: {
     width: ATTACHMENT_CONTENT_HEIGHT,
