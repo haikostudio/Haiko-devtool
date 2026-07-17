@@ -284,6 +284,9 @@ export const zhCN: TranslationResources = {
       save: "保存",
     },
     taskCount: "{{count}} 个任务",
+    foldersSummary: "{{folders}} 个文件夹 · {{tasks}} 个任务",
+    searchProjects: "搜索项目",
+    sortProjects: "排序项目",
     updateHost: "请更新主机以使用任务功能。",
     columns: {
       backlog: "待办",
@@ -307,6 +310,9 @@ export const zhCN: TranslationResources = {
       openPr: "打开 Pull Request",
       planReady: "计划已就绪",
       duration: "约{{minutes}}分钟",
+      deadlineDays: "{{count}} 天",
+      deadlineOverdue: "已逾期",
+      deadlineToday: "今天",
     },
     approval: {
       pending: "待确认",

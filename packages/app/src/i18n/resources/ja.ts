@@ -287,6 +287,9 @@ export const ja: TranslationResources = {
       save: "保存",
     },
     taskCount: "{{count}} 件のタスク",
+    foldersSummary: "{{folders}} フォルダ · {{tasks}} タスク",
+    searchProjects: "プロジェクトを検索",
+    sortProjects: "プロジェクトを並べ替え",
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
       backlog: "未着手",
@@ -310,6 +313,9 @@ export const ja: TranslationResources = {
       openPr: "プルリクエストを開く",
       planReady: "プラン完成",
       duration: "約{{minutes}}分",
+      deadlineDays: "残り{{count}}日",
+      deadlineOverdue: "期限切れ",
+      deadlineToday: "今日",
     },
     approval: {
       pending: "承認待ち",

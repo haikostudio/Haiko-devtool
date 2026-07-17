@@ -283,6 +283,9 @@ export const en = {
       save: "Save",
     },
     taskCount: "{{count}} task(s)",
+    foldersSummary: "{{folders}} folder(s) · {{tasks}} task(s)",
+    searchProjects: "Search projects",
+    sortProjects: "Sort projects",
     updateHost: "Update the host to use Tasks.",
     columns: {
       backlog: "To do",
@@ -306,6 +309,9 @@ export const en = {
       openPr: "Open pull request",
       planReady: "Plan ready",
       duration: "~{{minutes}} min",
+      deadlineDays: "{{count}}d",
+      deadlineOverdue: "overdue",
+      deadlineToday: "today",
     },
     approval: {
       pending: "Needs approval",

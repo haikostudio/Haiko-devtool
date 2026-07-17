@@ -288,6 +288,9 @@ export const ptBR: TranslationResources = {
       save: "Salvar",
     },
     taskCount: "{{count}} tarefa(s)",
+    foldersSummary: "{{folders}} pasta(s) · {{tasks}} tarefa(s)",
+    searchProjects: "Buscar projetos",
+    sortProjects: "Ordenar projetos",
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {
       backlog: "A fazer",
@@ -311,6 +314,9 @@ export const ptBR: TranslationResources = {
       openPr: "Abrir pull request",
       planReady: "Plano pronto",
       duration: "~{{minutes}} min",
+      deadlineDays: "{{count}} d",
+      deadlineOverdue: "atrasada",
+      deadlineToday: "hoje",
     },
     approval: {
       pending: "Aguardando aprovação",

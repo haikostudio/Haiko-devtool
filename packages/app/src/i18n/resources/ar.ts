@@ -284,6 +284,9 @@ export const ar: TranslationResources = {
       save: "حفظ",
     },
     taskCount: "{{count}} مهمة",
+    foldersSummary: "{{folders}} مجلد · {{tasks}} مهمة",
+    searchProjects: "بحث في المشاريع",
+    sortProjects: "ترتيب المشاريع",
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {
       backlog: "للإنجاز",
@@ -307,6 +310,9 @@ export const ar: TranslationResources = {
       openPr: "فتح طلب السحب",
       planReady: "الخطة جاهزة",
       duration: "~{{minutes}} دقيقة",
+      deadlineDays: "{{count}} ي",
+      deadlineOverdue: "متأخرة",
+      deadlineToday: "اليوم",
     },
     approval: {
       pending: "بانتظار الموافقة",

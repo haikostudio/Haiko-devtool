@@ -286,6 +286,9 @@ export const ru: TranslationResources = {
       save: "Сохранить",
     },
     taskCount: "Задач: {{count}}",
+    foldersSummary: "Папок: {{folders}} · задач: {{tasks}}",
+    searchProjects: "Поиск проектов",
+    sortProjects: "Сортировать проекты",
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
       backlog: "К выполнению",
@@ -309,6 +312,9 @@ export const ru: TranslationResources = {
       openPr: "Открыть pull request",
       planReady: "План готов",
       duration: "~{{minutes}} мин",
+      deadlineDays: "{{count}} дн",
+      deadlineOverdue: "просрочено",
+      deadlineToday: "сегодня",
     },
     approval: {
       pending: "Ожидает подтверждения",

@@ -288,6 +288,9 @@ export const fr: TranslationResources = {
       save: "Enregistrer",
     },
     taskCount: "{{count}} tâche(s)",
+    foldersSummary: "{{folders}} dossier(s) · {{tasks}} tâche(s)",
+    searchProjects: "Rechercher un projet",
+    sortProjects: "Trier les projets",
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {
       backlog: "À faire",
@@ -311,6 +314,9 @@ export const fr: TranslationResources = {
       openPr: "Ouvrir la pull request",
       planReady: "Plan prêt",
       duration: "~{{minutes}} min",
+      deadlineDays: "{{count}} j",
+      deadlineOverdue: "en retard",
+      deadlineToday: "aujourd'hui",
     },
     approval: {
       pending: "À confirmer",

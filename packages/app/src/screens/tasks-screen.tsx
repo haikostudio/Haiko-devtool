@@ -2,8 +2,10 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
+  ArrowDownAZ,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Folder,
   MoreVertical,
   Pencil,
@@ -15,6 +17,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader } from "@/components/headers/menu-header";
 import { FolderCreateModal } from "@/components/tasks/folder-create-modal";
+import { FormTextInput } from "@/components/ui/form-field";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +44,8 @@ const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const ThemedTrash = withUnistyles(Trash2);
 const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
+const ThemedClock = withUnistyles(Clock);
+const ThemedSortAz = withUnistyles(ArrowDownAZ);
 
 const MENU_ICON_SIZE = 16;
 const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
@@ -92,12 +97,16 @@ const FolderKebabMenu = memo(function FolderKebabMenu({
   );
 });
 
+type ProjectSortMode = "recent" | "name";
+
 interface ProjectEntry {
   serverId: string;
   hostLabel: string;
   projectId: string;
   displayName: string;
   rootPath: string;
+  /** Epoch ms of the most recent agent activity in this project (0 if none). */
+  lastActivityAt: number;
 }
 
 function rowItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
@@ -106,6 +115,23 @@ function rowItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolea
 
 function railItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.railItem, (hovered || pressed) && styles.railItemHovered];
+}
+
+function sortButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.sortButton, (hovered || pressed) && styles.sortButtonHovered];
+}
+
+// Most-recent-first, falling back to name so ties (and projects with no agent
+// activity) stay stable and readable.
+function compareByRecent(left: ProjectEntry, right: ProjectEntry): number {
+  if (left.lastActivityAt !== right.lastActivityAt) {
+    return right.lastActivityAt - left.lastActivityAt;
+  }
+  return left.displayName.localeCompare(right.displayName);
+}
+
+function compareByName(left: ProjectEntry, right: ProjectEntry): number {
+  return left.displayName.localeCompare(right.displayName);
 }
 
 function useProjectEntries(): ProjectEntry[] {
@@ -119,6 +145,24 @@ function useProjectEntries(): ProjectEntry[] {
       if (!session) {
         continue;
       }
+      // "Modification date" per project = the freshest agent activity in it.
+      // Agents don't carry a projectId directly, so bridge through the workspace
+      // they run in.
+      const projectByWorkspace = new Map<string, string>();
+      for (const workspace of session.workspaces.values()) {
+        projectByWorkspace.set(workspace.id, workspace.projectId);
+      }
+      const activityByProject = new Map<string, number>();
+      for (const agent of session.agents.values()) {
+        const projectId = agent.workspaceId ? projectByWorkspace.get(agent.workspaceId) : undefined;
+        if (!projectId) {
+          continue;
+        }
+        const at = agent.lastActivityAt.getTime();
+        if (at > (activityByProject.get(projectId) ?? 0)) {
+          activityByProject.set(projectId, at);
+        }
+      }
       for (const workspace of session.workspaces.values()) {
         const key = `${host.serverId}:${workspace.projectId}`;
         if (seen.has(key)) {
@@ -131,6 +175,7 @@ function useProjectEntries(): ProjectEntry[] {
           projectId: workspace.projectId,
           displayName: workspace.projectCustomName ?? workspace.projectDisplayName,
           rootPath: workspace.projectRootPath,
+          lastActivityAt: activityByProject.get(workspace.projectId) ?? 0,
         });
       }
       for (const project of session.emptyProjects.values()) {
@@ -145,10 +190,13 @@ function useProjectEntries(): ProjectEntry[] {
           projectId: project.projectId,
           displayName: project.projectCustomName ?? project.projectDisplayName,
           rootPath: project.projectRootPath,
+          lastActivityAt: activityByProject.get(project.projectId) ?? 0,
         });
       }
     }
-    return entries.sort((left, right) => left.displayName.localeCompare(right.displayName));
+    // Default order feeds the desktop auto-select (first = most recent). The
+    // rail re-sorts for display when the user toggles to alphabetical.
+    return entries.sort(compareByRecent);
   }, [hosts, sessions]);
 }
 
@@ -310,14 +358,57 @@ function ProjectsRail({
   projectId: string | null;
 }) {
   const { t } = useTranslation();
+  const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<ProjectSortMode>("recent");
+
+  const displayed = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const filtered = needle
+      ? projects.filter((entry) => entry.displayName.toLowerCase().includes(needle))
+      : projects;
+    return [...filtered].sort(sortMode === "name" ? compareByName : compareByRecent);
+  }, [projects, query, sortMode]);
+
+  const toggleSort = useCallback(() => {
+    setSortMode((prev) => (prev === "recent" ? "name" : "recent"));
+  }, []);
+
+  let emptyText: string | null = null;
+  if (projects.length === 0) {
+    emptyText = t("tasks.noProjects");
+  } else if (query) {
+    emptyText = t("common.empty.noResults");
+  }
+
   return (
     <View style={styles.rail}>
       <Text style={styles.railHeader}>{t("tasks.pickProject")}</Text>
+      <View style={styles.railSearchRow}>
+        <FormTextInput
+          size="sm"
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t("tasks.searchProjects")}
+          style={styles.railSearchInput}
+          testID="tasks-project-search"
+        />
+        <Pressable
+          style={sortButtonStyle}
+          onPress={toggleSort}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.sortProjects")}
+          testID="tasks-project-sort"
+        >
+          {sortMode === "name" ? (
+            <ThemedSortAz size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          ) : (
+            <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          )}
+        </Pressable>
+      </View>
       <ScrollView style={styles.railScroll} contentContainerStyle={styles.railContent}>
-        {projects.length === 0 ? (
-          <Text style={styles.railEmptyText}>{t("tasks.noProjects")}</Text>
-        ) : null}
-        {projects.map((entry) => (
+        {emptyText ? <Text style={styles.railEmptyText}>{emptyText}</Text> : null}
+        {displayed.map((entry) => (
           <ProjectRailItem
             key={`${entry.serverId}:${entry.projectId}`}
             entry={entry}
@@ -374,9 +465,14 @@ function FoldersRail({
     return counts;
   }, [boardHandle.board]);
 
+  const totalTasks = boardHandle.board?.tasks.length ?? 0;
+
   return (
     <View style={styles.rail}>
       <Text style={styles.railHeader}>{t("tasks.folders")}</Text>
+      <Text style={styles.railSummary}>
+        {t("tasks.foldersSummary", { folders: folders.length, tasks: totalTasks })}
+      </Text>
       <ScrollView style={styles.railScroll} contentContainerStyle={styles.railContent}>
         {folders.length === 0 && !boardHandle.isLoading ? (
           <Text style={styles.railEmptyText}>{t("tasks.noFolders")}</Text>
@@ -851,6 +947,36 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[2],
+  },
+  railSummary: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[2],
+    marginTop: -theme.spacing[1],
+  },
+  railSearchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+  },
+  railSearchInput: {
+    flex: 1,
+  },
+  sortButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+  },
+  sortButtonHovered: {
+    backgroundColor: theme.colors.surface3,
   },
   railScroll: {
     flex: 1,
