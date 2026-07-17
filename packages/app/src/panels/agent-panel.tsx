@@ -469,6 +469,9 @@ const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
 // Breathing room between the magic scrollbar's bottom and the composer's top on
 // compact layouts, so the rail doesn't butt right up against the input area.
 const MAGIC_SCROLLBAR_COMPOSER_MARGIN = 8;
+// Breathing room between the floating synthesis banner and the first transcript
+// message once the content is inset below it.
+const SYNTHESIS_BANNER_CONTENT_GAP = 12;
 
 type RouteBottomAnchorRequest = ReturnType<typeof deriveRouteBottomAnchorRequest>;
 
@@ -1228,6 +1231,19 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       { bottom: composerHeight + MAGIC_SCROLLBAR_COMPOSER_MARGIN },
     ];
   }, [composerHeight, isCompactFormFactor]);
+  // When the floating synthesis banner is present it overlaps the top of the
+  // transcript, hiding the first message. Inset the content by the banner's
+  // occupied extent (plus a small gap) so the first message clears it.
+  const [synthesisBannerExtent, setSynthesisBannerExtent] = useState(0);
+  const contentContainerStyle = useMemo(() => {
+    if (synthesisBannerExtent <= 0) {
+      return styles.contentContainer;
+    }
+    return [
+      styles.contentContainer,
+      { paddingTop: synthesisBannerExtent + SYNTHESIS_BANNER_CONTENT_GAP },
+    ];
+  }, [synthesisBannerExtent]);
   const streamSection = (
     <RenderProfile id={`AgentStreamSection:${agentId}`}>
       <AgentStreamSection
@@ -1264,7 +1280,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const streamContent = (
     <ReanimatedAnimated.View style={animatedContentStyle}>{streamSection}</ReanimatedAnimated.View>
   );
-  const contentContainer = <View style={styles.contentContainer}>{streamContent}</View>;
+  const contentContainer = <View style={contentContainerStyle}>{streamContent}</View>;
 
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
@@ -1272,7 +1288,11 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
           {contentContainer}
 
-          <AgentSynthesisBanner serverId={serverId} agentId={agentId} />
+          <AgentSynthesisBanner
+            serverId={serverId}
+            agentId={agentId}
+            onHeightChange={setSynthesisBannerExtent}
+          />
 
           <View onLayout={handleComposerAreaLayout}>{composerSection}</View>
 

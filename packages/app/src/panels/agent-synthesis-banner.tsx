@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { memo, useCallback, useEffect, useState } from "react";
+import { type LayoutChangeEvent, Pressable, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Ionicons } from "@expo/vector-icons";
 import { useSessionStore } from "@/stores/session-store";
@@ -15,12 +15,26 @@ import { useSessionStore } from "@/stores/session-store";
 export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
   serverId,
   agentId,
+  onHeightChange,
 }: {
   serverId: string;
   agentId: string;
+  /**
+   * Reports the banner's occupied vertical extent (its bottom edge relative to
+   * the panel top) so the transcript can inset its content and keep the first
+   * message from hiding behind this floating card. Reports 0 when hidden.
+   */
+  onHeightChange?: (extent: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setExpanded((prev) => !prev), []);
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { y, height } = event.nativeEvent.layout;
+      onHeightChange?.(Math.round(y + height));
+    },
+    [onHeightChange],
+  );
 
   const synthesis = useSessionStore((state) => {
     const session = state.sessions[serverId];
@@ -33,6 +47,13 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
     return agent?.title ?? null;
   });
 
+  const hasSynthesis = Boolean(synthesis);
+  useEffect(() => {
+    if (!hasSynthesis) {
+      onHeightChange?.(0);
+    }
+  }, [hasSynthesis, onHeightChange]);
+
   if (!synthesis) {
     return null;
   }
@@ -40,7 +61,7 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
   const hasDetails = Boolean(synthesis.objective || synthesis.state);
 
   return (
-    <View style={styles.host} pointerEvents="box-none">
+    <View style={styles.host} pointerEvents="box-none" onLayout={handleLayout}>
       <Pressable
         style={styles.card}
         onPress={hasDetails ? toggleExpanded : undefined}
