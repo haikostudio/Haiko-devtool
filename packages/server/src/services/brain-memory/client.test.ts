@@ -5,6 +5,8 @@ import {
   formatRecall,
   injectBrainContext,
   parseBrainContextEnvelope,
+  selectPertinentSkills,
+  skillToSouvenir,
   toTimelineMemories,
 } from "./client.js";
 
@@ -29,7 +31,7 @@ describe("formatRecall", () => {
 
   it("caps the blob length", () => {
     const long = { texte: "x".repeat(5000) };
-    expect(formatRecall([long]).length).toBeLessThanOrEqual(2000);
+    expect(formatRecall([long]).length).toBeLessThanOrEqual(3000);
   });
 });
 
@@ -101,11 +103,34 @@ describe("toTimelineMemories", () => {
   });
 });
 
+/**
+ * Route the fetch mock by target: the scoped search (X-Cerveau-Project header),
+ * the global search (no header) and the skills listing each get their own body.
+ */
+function brainFetchMock(bodies: {
+  scoped?: unknown;
+  global?: unknown;
+  skills?: unknown;
+}): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: URL | string, init?: RequestInit) => {
+    const target = String(url);
+    if (target.includes("/v1/skills")) {
+      return jsonResponse(bodies.skills ?? []);
+    }
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    if (headers["X-Cerveau-Project"]) {
+      return jsonResponse(bodies.scoped ?? { resultats: [] });
+    }
+    return jsonResponse(bodies.global ?? { resultats: [] });
+  });
+}
+
 describe("BrainMemoryClient.recall", () => {
-  it("returns the scoped results as portee=projet", async () => {
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({ resultats: [{ id: "1", texte: "souvenir projet" }] }),
-    );
+  it("returns the scoped results first as portee=projet", async () => {
+    const fetchMock = brainFetchMock({
+      scoped: { resultats: [{ id: "1", texte: "souvenir projet", project: "paseo" }] },
+      global: { resultats: [{ id: "2", texte: "convention globale", score: 0.52 }] },
+    });
     const client = new BrainMemoryClient({
       logger,
       apiKey: "k",
@@ -113,17 +138,89 @@ describe("BrainMemoryClient.recall", () => {
     });
     const result = await client.recall("q", { projet: "paseo" });
     expect(result.portee).toBe("projet");
-    expect(result.count).toBe(1);
-    expect(result.blob).toContain("souvenir projet");
-    const firstUrl = String(fetchMock.mock.calls[0][0]);
-    expect(firstUrl).toContain("/v1/memories/search");
+    expect(result.count).toBe(2);
+    // Le projet d'abord, le complément global ensuite.
+    expect(result.blob.indexOf("souvenir projet")).toBeLessThan(
+      result.blob.indexOf("convention globale"),
+    );
   });
 
-  it("falls back to the global scope when the project scope is empty", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse({ resultats: [] })) // scoped → empty
-      .mockResolvedValueOnce(jsonResponse({ resultats: [{ id: "9", texte: "global hit" }] }));
+  it("drops cross-project leaks from the scoped pass", async () => {
+    // Le bug du 17/07/2026 : scopé Maroket, le chemin lexical du Cerveau ramenait
+    // des souvenirs whatsapp-perso/bluemangocloud. Un vieux Cerveau non corrigé ne
+    // doit jamais les faire passer dans le prompt.
+    const fetchMock = brainFetchMock({
+      scoped: {
+        resultats: [
+          { id: "1", texte: "message à Michael", project: "whatsapp-perso" },
+          { id: "2", texte: "fait du projet", project: "Maroket" },
+          { id: "3", texte: "fait sans projet" },
+        ],
+      },
+    });
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("q", { projet: "maroket" });
+    expect(result.blob).not.toContain("Michael");
+    expect(result.blob).toContain("fait du projet");
+    expect(result.blob).toContain("fait sans projet");
+  });
+
+  it("dedupes the global complement against the scoped results and caps at k", async () => {
+    const fetchMock = brainFetchMock({
+      scoped: {
+        resultats: [
+          { id: "1", texte: "a", project: "paseo" },
+          { id: "2", texte: "b", project: "paseo" },
+        ],
+      },
+      global: {
+        resultats: [
+          { id: "2", texte: "b", score: 0.6 },
+          { id: "3", texte: "c", score: 0.5 },
+          { id: "4", texte: "d", score: 0.5 },
+        ],
+      },
+    });
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("q", { projet: "paseo", k: 3 });
+    expect(result.resultats.map((r) => r.id)).toEqual(["1", "2", "3"]);
+  });
+
+  it("drops weak and lexical-concept matches from the global complement", async () => {
+    // Observé en prod (requête du 17/07/2026) : la passe globale ramenait un
+    // garde-fou exempté (0.0004), un repêchage (0.02) et deux souvenirs d'un
+    // autre projet via le concept « test » (0.6). Aucun ne doit compléter.
+    const fetchMock = brainFetchMock({
+      global: {
+        resultats: [
+          { id: "1", texte: "garde-fou Playwright", statut: "rejete", score: 0.0004 },
+          { id: "2", texte: "repêchage instance dev", score: 0.0217, via: "repechage" },
+          { id: "3", texte: "test Brevo template 9", score: 0.5999, via: "concept:test" },
+          { id: "4", texte: "convention solide", score: 0.47, via: "secret+generique+fait" },
+        ],
+      },
+    });
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("q", { projet: "maroket" });
+    expect(result.resultats.map((r) => r.id)).toEqual(["4"]);
+  });
+
+  it("is portee=global when the project scope is empty", async () => {
+    const fetchMock = brainFetchMock({
+      global: { resultats: [{ id: "9", texte: "global hit", score: 0.47 }] },
+    });
     const client = new BrainMemoryClient({
       logger,
       apiKey: "k",
@@ -134,8 +231,8 @@ describe("BrainMemoryClient.recall", () => {
     expect(result.blob).toContain("global hit");
   });
 
-  it("does not fall back when globalFallback is disabled", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ resultats: [] }));
+  it("skips the global search when globalFallback is disabled", async () => {
+    const fetchMock = brainFetchMock({});
     const client = new BrainMemoryClient({
       logger,
       apiKey: "k",
@@ -145,11 +242,14 @@ describe("BrainMemoryClient.recall", () => {
     const result = await client.recall("q", { projet: "paseo" });
     expect(result.count).toBe(0);
     expect(result.blob).toBe("");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const searchCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("/v1/memories/search"),
+    );
+    expect(searchCalls).toHaveLength(1);
   });
 
   it("a full miss injects nothing — no broad overview searches", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ resultats: [] }));
+    const fetchMock = brainFetchMock({});
     const client = new BrainMemoryClient({
       logger,
       apiKey: "k",
@@ -158,8 +258,48 @@ describe("BrainMemoryClient.recall", () => {
     const result = await client.recall("question technique sans souvenir", { projet: "paseo" });
     expect(result.count).toBe(0);
     expect(result.blob).toBe("");
-    // Scoped search + global fallback only — never the old "aperçu" fan-out.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Scoped + global + skills only — never the old "aperçu" fan-out.
+    const searchCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("/v1/memories/search"),
+    );
+    expect(searchCalls).toHaveLength(2);
+  });
+
+  it("appends the pertinent skill as a bounded procedure line", async () => {
+    const fetchMock = brainFetchMock({
+      skills: [
+        {
+          id: "s1",
+          name: "deploy-maroket",
+          description: "Comment déployer Maroket en production",
+          procedure: "1. push sur main\n2. attendre la CI",
+          portee: "projet",
+          project: "maroket",
+        },
+        {
+          id: "s2",
+          name: "convention-commits",
+          description: "Format des messages de commit",
+          procedure: "…",
+          portee: "global",
+        },
+      ],
+    });
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("qu'est-ce que tu entends par déployer ?", {
+      projet: "maroket",
+    });
+    expect(result.blob).toContain("📋 Procédure « deploy-maroket »");
+    expect(result.blob).toContain("push sur main");
+    // La skill globale sans rapport avec la demande n'est pas injectée.
+    expect(result.blob).not.toContain("convention-commits");
+    const skillCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/v1/skills"));
+    expect(skillCall).toBeDefined();
+    expect(String(skillCall?.[0])).toContain("statut=actif");
   });
 
   it("is best-effort: a throwing fetch yields empty context", async () => {
@@ -174,6 +314,50 @@ describe("BrainMemoryClient.recall", () => {
     const result = await client.recall("q", { projet: "paseo" });
     expect(result.count).toBe(0);
     expect(result.blob).toBe("");
+  });
+});
+
+describe("selectPertinentSkills", () => {
+  const deploy = {
+    id: "s1",
+    name: "deploy-eloya",
+    description: "Procédure de déploiement des releases",
+    portee: "projet",
+    project: "eloya",
+  };
+  const commits = {
+    id: "s2",
+    name: "convention-commits",
+    description: "Format des messages de commit",
+    portee: "global",
+  };
+
+  it("keeps only the skills sharing a word with the prompt", () => {
+    const picked = selectPertinentSkills([deploy, commits], "comment déployer la release ?");
+    expect(picked.map((s) => s.id)).toEqual(["s1"]);
+  });
+
+  it("ranks the project's own skills first", () => {
+    const globalDeploy = { ...commits, id: "s3", description: "Checklist de déploiement" };
+    const picked = selectPertinentSkills([globalDeploy, deploy], "on déploie ?", "eloya");
+    expect(picked[0]?.id).toBe("s1");
+  });
+
+  it("returns nothing for a prompt without meaningful words", () => {
+    expect(selectPertinentSkills([deploy], "ok")).toEqual([]);
+  });
+});
+
+describe("skillToSouvenir", () => {
+  it("bounds long procedures", () => {
+    const out = skillToSouvenir({
+      id: "s",
+      name: "longue",
+      description: "d",
+      procedure: "x".repeat(2000),
+    });
+    expect((out.texte ?? "").length).toBeLessThan(700 + 64);
+    expect(out.texte).toContain("…");
   });
 });
 

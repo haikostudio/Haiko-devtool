@@ -27,8 +27,15 @@ export const DEFAULT_BRAIN_BASE_URL = "https://memoire.haiko-s1.com";
 // to ReadTimeout and came back empty).
 const RECALL_TIMEOUT_MS = 10_000;
 const NOTE_TIMEOUT_MS = 6_000;
-const MAX_BLOB_CHARS = 2_000;
+// Leaves room for a couple of recalled procedures on top of the memories.
+const MAX_BLOB_CHARS = 3_000;
 const MAX_NOTE_CHARS = 4_000;
+const MAX_SKILLS_INJECTED = 2;
+const MAX_SKILL_PROCEDURE_CHARS = 600;
+// The Cerveau's own "anchored recall" relevance floor. The unscoped complement
+// pass reuses it client-side: below it live the repêchage (≥0.02) and
+// exempted-guardrail results that only make sense inside a project scope.
+const GLOBAL_COMPLEMENT_MIN_SCORE = 0.3;
 
 /** One memory as returned by the Cerveau search endpoint (subset we use). */
 export interface BrainSouvenir {
@@ -37,6 +44,21 @@ export interface BrainSouvenir {
   statut?: string;
   motif?: string;
   score?: number;
+  /** Project the memory belongs to — used to drop cross-project leaks client-side. */
+  project?: string | null;
+  /** Recall path that surfaced the memory ("concept:mot", "repechage", layers…). */
+  via?: string | null;
+}
+
+/** One stored procedure ("skill") as returned by GET /v1/skills (subset we use). */
+export interface BrainSkill {
+  id?: string;
+  name?: string;
+  description?: string;
+  procedure?: string;
+  portee?: string;
+  project?: string | null;
+  sujets?: string[];
 }
 
 // "apercu" is no longer emitted (the overview tier injected unrelated noise on
@@ -126,28 +148,94 @@ export class BrainMemoryClient {
   }
 
   /**
-   * Recall relevant memories for a prompt: scoped search, then a global
-   * fallback if the project scope is empty. A miss stays a miss — injecting
-   * broad "overview" memories on unrelated prompts is pure noise (the agent can
-   * still call the memory MCP tool for meta questions like "résume ta mémoire").
+   * List the active skills (stored procedures) relevant to the current task.
+   * The new Cerveau filters server-side on `q` + the project header; an older
+   * Cerveau ignores the unknown `q` param and returns every active skill —
+   * either way `selectPertinentSkills` re-filters client-side. Empty on error.
+   */
+  async listSkills(
+    query: string,
+    options?: { projet?: string; session?: string },
+  ): Promise<BrainSkill[]> {
+    const url = new URL(`${this.baseUrl}/v1/skills`);
+    url.searchParams.set("statut", "actif");
+    const trimmed = (query ?? "").trim();
+    if (trimmed) {
+      url.searchParams.set("q", trimmed.slice(0, 500));
+    }
+    try {
+      const resp = await this.fetchImpl(url, {
+        method: "GET",
+        headers: this.headers({ projet: options?.projet, session: options?.session }),
+        signal: AbortSignal.timeout(RECALL_TIMEOUT_MS),
+      });
+      if (!resp.ok) {
+        this.logger.debug({ status: resp.status }, "cerveau: skills non-ok");
+        return [];
+      }
+      const data = (await resp.json()) as BrainSkill[];
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      this.logger.debug({ err }, "cerveau: skills failed");
+      return [];
+    }
+  }
+
+  /**
+   * Recall relevant memories for a prompt. Project first: the scoped search
+   * anchors the recall, a parallel global search fills the remaining slots
+   * (deploy conventions, guardrails… live outside any one project), and the
+   * relevant stored procedures (skills) are appended so "je parle de déployer"
+   * surfaces the deployment process, not just loose facts. Cross-project
+   * results leaking out of the scoped pass are dropped client-side (older
+   * Cerveau versions leaked through the lexical concept path). A miss stays a
+   * miss — no broad "overview" injection on unrelated prompts.
    */
   async recall(
     query: string,
     options?: { k?: number; projet?: string; session?: string },
   ): Promise<BrainRecallResult> {
     const k = options?.k ?? 5;
-    let resultats = await this.search(query, {
-      k,
-      projet: options?.projet,
-      session: options?.session,
-    });
-    let portee: BrainPortee = "projet";
-    if (resultats.length === 0 && this.globalFallback && options?.projet) {
-      resultats = await this.search(query, { k, projet: undefined, session: options?.session });
-      if (resultats.length > 0) {
-        portee = "global";
+    const projet = options?.projet;
+    const session = options?.session;
+    const [scopedRaw, globalRaw, skillsRaw] = await Promise.all([
+      projet ? this.search(query, { k, projet, session }) : Promise.resolve([]),
+      !projet || this.globalFallback
+        ? this.search(query, { k, session })
+        : Promise.resolve<BrainSouvenir[]>([]),
+      this.listSkills(query, { projet, session }),
+    ]);
+    // Leak guard: a scoped search must only return the project's own memories
+    // (or unscoped ones); anything tagged with another project is a Cerveau
+    // recall bug bleeding through — never inject it.
+    const scoped = scopedRaw.filter(
+      (s) => !s.project || !projet || foldText(s.project) === foldText(projet),
+    );
+    // The unscoped complement only keeps solidly relevant matches: repêchage
+    // (score ≥0.02) and exempted guardrails only make sense inside a project
+    // scope, and lexical concept matches are cross-project by construction —
+    // a generic dev word ("test") would drag another project's facts into the
+    // conversation. Inside the project scope all of these stay welcome.
+    const complement = globalRaw.filter(
+      (s) => (s.score ?? 0) >= GLOBAL_COMPLEMENT_MIN_SCORE && !s.via?.startsWith("concept:"),
+    );
+    const seen = new Set(scoped.map((s) => s.id).filter(Boolean));
+    const resultats = [...scoped];
+    for (const s of complement) {
+      if (resultats.length >= k) {
+        break;
       }
+      if (s.id && seen.has(s.id)) {
+        continue;
+      }
+      if (s.id) {
+        seen.add(s.id);
+      }
+      resultats.push(s);
     }
+    const skills = selectPertinentSkills(skillsRaw, query, projet);
+    resultats.push(...skills.map(skillToSouvenir));
+    const portee: BrainPortee = scoped.length > 0 ? "projet" : "global";
     return {
       blob: formatRecall(resultats),
       count: resultats.length,
@@ -194,6 +282,84 @@ export class BrainMemoryClient {
       return false;
     }
   }
+}
+
+/** Fold accents + case so "Maroket" ≈ "maroket" and "sécurité" ≈ "securite". */
+function foldText(text: string): string {
+  return text
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+/** Poor-man's French stems of the meaningful words: ≥4 chars, trailing -s/-x dropped. */
+function foldStems(text: string): string[] {
+  const words = foldText(text).match(/[a-z0-9à-ÿ]{4,}/g) ?? [];
+  return words.map((w) =>
+    w.length > 4 && (w.endsWith("s") || w.endsWith("x")) ? w.slice(0, -1) : w,
+  );
+}
+
+/** Two stems relate if equal or one extends the other ("deploy" ~ "deployer"). */
+function stemsRelate(a: string, b: string): boolean {
+  return a === b || a.startsWith(b) || b.startsWith(a);
+}
+
+/**
+ * Keep only the skills that actually relate to the prompt. The Cerveau always
+ * returns every `global` skill in recall mode (and an old Cerveau returns all
+ * active skills) — injecting them on every turn would be recurring noise, so a
+ * skill must share at least one word with the prompt (its own project counts
+ * as a tie-breaker, not a free pass). Project skills rank first.
+ */
+export function selectPertinentSkills(
+  skills: BrainSkill[],
+  query: string,
+  projet?: string,
+): BrainSkill[] {
+  const queryStems = foldStems(query);
+  if (queryStems.length === 0) {
+    return [];
+  }
+  const projetFold = projet ? foldText(projet) : undefined;
+  const scored: { skill: BrainSkill; overlap: number; onProject: boolean }[] = [];
+  for (const skill of skills) {
+    const haystack = foldStems(
+      [skill.name ?? "", skill.description ?? "", ...(skill.sujets ?? [])].join(" "),
+    );
+    const overlap = queryStems.filter((q) => haystack.some((h) => stemsRelate(q, h))).length;
+    if (overlap === 0) {
+      continue;
+    }
+    const onProject = Boolean(
+      projetFold && skill.project && foldText(skill.project) === projetFold,
+    );
+    scored.push({ skill, overlap, onProject });
+  }
+  scored.sort((a, b) => Number(b.onProject) - Number(a.onProject) || b.overlap - a.overlap);
+  return scored.slice(0, MAX_SKILLS_INJECTED).map((s) => s.skill);
+}
+
+/**
+ * Render a skill as a synthetic memory so it flows through the existing blob /
+ * pill / envelope machinery unchanged (no new wire shape). The procedure is
+ * bounded; the closing note already points the agent at the memory tool
+ * (detail_skill) for the full text.
+ */
+export function skillToSouvenir(skill: BrainSkill): BrainSouvenir {
+  const description = (skill.description ?? "").trim();
+  const procedure = (skill.procedure ?? "").trim();
+  const bounded =
+    procedure.length > MAX_SKILL_PROCEDURE_CHARS
+      ? `${procedure.slice(0, MAX_SKILL_PROCEDURE_CHARS)}…`
+      : procedure;
+  const lines = [
+    `📋 Procédure « ${(skill.name ?? "").trim() || "sans nom"} »${description ? ` — ${description}` : ""}`,
+  ];
+  if (bounded) {
+    lines.push(bounded);
+  }
+  return { id: skill.id, texte: lines.join("\n") };
 }
 
 /** Compact block of memories ready to inject into a prompt (≤ MAX_BLOB_CHARS). */
