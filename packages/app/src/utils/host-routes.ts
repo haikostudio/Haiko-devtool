@@ -423,6 +423,10 @@ export function buildChangelogRoute() {
   return "/changelog" as const;
 }
 
+export function buildActivityRoute() {
+  return "/activity" as const;
+}
+
 export function buildSchedulesRoute() {
   return "/schedules" as const;
 }

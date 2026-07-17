@@ -131,8 +131,12 @@ import { TaskBoardService } from "./tasks/service.js";
 import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
 import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
+import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { MessageTriage } from "./tasks/message-triage.js";
+import { BrainMemoryClient } from "../services/brain-memory/client.js";
+import { BrainCurator } from "../services/brain-memory/curator.js";
+import { ProjectBriefStore } from "../services/brain-memory/project-brief.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -185,6 +189,7 @@ import { createGitMutationService } from "./session/git-mutation/git-mutation-se
 import { workspaceIdsOnCheckout } from "./workspace-directory.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import {
+  type BoundCreateAgentCommand,
   createAgentCommand,
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
@@ -387,6 +392,8 @@ export interface PaseoDaemonConfig {
     baseUrl: string;
     apiKey: string | null;
     globalFallback: boolean;
+    curation: boolean;
+    providerModel: string;
   };
   messageTriage?: {
     enabled: boolean;
@@ -468,6 +475,44 @@ function mountWebUi(app: express.Application, config: PaseoDaemonConfig, logger:
 
 function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | string[] {
   return config.trustedProxies ?? ["loopback"];
+}
+
+/**
+ * Cerveau long-term memory: REST client + curation layer (librarian recall
+ * filter and scribe distillation, both short-lived internal Haiku agents).
+ * Null when the feature is disabled or unkeyed.
+ */
+function createBrainMemoryServices(input: {
+  brainConfig: PaseoDaemonConfig["brainMemory"];
+  paseoHome: string;
+  agentManager: AgentManager;
+  createAgent: BoundCreateAgentCommand;
+  logger: Logger;
+}): { client: BrainMemoryClient; curator: BrainCurator | null } | null {
+  const { brainConfig } = input;
+  if (!brainConfig?.enabled || !brainConfig.apiKey) {
+    return null;
+  }
+  const client = new BrainMemoryClient({
+    logger: input.logger,
+    apiKey: brainConfig.apiKey,
+    baseUrl: brainConfig.baseUrl,
+    globalFallback: brainConfig.globalFallback,
+  });
+  const curator = brainConfig.curation
+    ? new BrainCurator({
+        agentManager: input.agentManager,
+        createAgent: input.createAgent,
+        brain: client,
+        briefStore: new ProjectBriefStore(
+          path.join(input.paseoHome, "brain", "fiches"),
+          input.logger,
+        ),
+        providerModel: brainConfig.providerModel,
+        logger: input.logger,
+      })
+    : null;
+  return { client, curator };
 }
 
 function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
@@ -1133,6 +1178,15 @@ export async function createPaseoDaemon(
     logger,
   });
   agentTaskSync.start();
+  const activityLogService = new ActivityLogService({
+    agentManager,
+    agentStorage,
+    workspaceRegistry,
+    projectRegistry,
+    paseoHome: config.paseoHome,
+    logger,
+  });
+  activityLogService.start();
   const taskEstimator = new TaskEstimator({
     agentManager,
     createAgent,
@@ -1195,6 +1249,13 @@ export async function createPaseoDaemon(
         logger,
       })
     : null;
+  const brainMemoryServices = createBrainMemoryServices({
+    brainConfig: config.brainMemory,
+    paseoHome: config.paseoHome,
+    agentManager,
+    createAgent,
+    logger,
+  });
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");
@@ -1503,7 +1564,7 @@ export async function createPaseoDaemon(
               },
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
-              config.brainMemory,
+              brainMemoryServices,
             );
             wsServer.setTasksServices({
               taskBoardService,
@@ -1511,6 +1572,7 @@ export async function createPaseoDaemon(
               taskScheduler,
               messageTriage,
             });
+            wsServer.setActivityLogService(activityLogService);
             {
               const boundWsServer = wsServer;
               taskProposalPush = (payload) => boundWsServer.sendPush(payload);
@@ -1590,6 +1652,7 @@ export async function createPaseoDaemon(
     quotaResetWatcher.stop();
     taskScheduler.stop();
     agentTaskSync.stop();
+    activityLogService.stop();
     await relayTransport?.stop().catch(() => undefined);
     if (wsServer) {
       await wsServer.close();

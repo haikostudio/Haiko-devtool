@@ -4192,6 +4192,27 @@ export class DaemonClient {
   // Tasks board (per-project kanban)
   // ============================================================================
 
+  async activityLogGet(requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"activity.log.get.response">({
+      requestId,
+      message: { type: "activity.log.get.request" },
+    });
+  }
+
+  async activityLogSubscribe(subscriptionId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"activity.log.subscribe.response">({
+      requestId,
+      message: { type: "activity.log.subscribe.request", subscriptionId },
+    });
+  }
+
+  async activityLogUnsubscribe(subscriptionId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"activity.log.unsubscribe.response">({
+      requestId,
+      message: { type: "activity.log.unsubscribe.request", subscriptionId },
+    });
+  }
+
   async tasksBoardGet(projectId: string, requestId?: string) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.get.response">({
       requestId,

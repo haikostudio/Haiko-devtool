@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
 import {
+  Activity,
   CalendarClock,
   ChevronDown,
   History,
@@ -38,6 +39,7 @@ const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedLayoutDashboard = withUnistyles(LayoutDashboard);
 const ThemedSquareKanban = withUnistyles(SquareKanban);
 const ThemedScrollText = withUnistyles(ScrollText);
+const ThemedActivity = withUnistyles(Activity);
 
 const newWorkspaceLeadingIcon = (
   <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
@@ -57,6 +59,9 @@ const tasksLeadingIcon = (
 const changelogLeadingIcon = (
   <ThemedScrollText size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
+const activityLeadingIcon = (
+  <ThemedActivity size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+);
 
 interface SidebarPrimaryMenuProps {
   menuLabel: string;
@@ -66,12 +71,14 @@ interface SidebarPrimaryMenuProps {
   schedulesLabel: string;
   tasksLabel: string;
   changelogLabel: string;
+  activityLabel: string;
   newWorkspaceKeys: ShortcutKey[][] | null;
   onViewDashboard: () => void;
   onViewSessions: () => void;
   onViewSchedules: () => void;
   onViewTasks: () => void;
   onViewChangelog: () => void;
+  onViewActivity: () => void;
   /** Runs before navigating to the new-workspace screen (e.g. closing the mobile sidebar). */
   onBeforeNavigate?: () => void;
   testID?: string;
@@ -89,12 +96,14 @@ export function SidebarPrimaryMenu({
   schedulesLabel,
   tasksLabel,
   changelogLabel,
+  activityLabel,
   newWorkspaceKeys,
   onViewDashboard,
   onViewSessions,
   onViewSchedules,
   onViewTasks,
   onViewChangelog,
+  onViewActivity,
   onBeforeNavigate,
   testID,
 }: SidebarPrimaryMenuProps) {
@@ -196,6 +205,13 @@ export function SidebarPrimaryMenu({
           onSelect={onViewSchedules}
         >
           {schedulesLabel}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID="sidebar-activity"
+          leading={activityLeadingIcon}
+          onSelect={onViewActivity}
+        >
+          {activityLabel}
         </DropdownMenuItem>
         <DropdownMenuItem
           testID="sidebar-changelog"
