@@ -29,6 +29,10 @@ const ICON_SIZE = 16;
 // Matches theme.spacing[4]; kept as a literal so the container can add the
 // safe-area inset without subscribing the whole component to the theme runtime.
 const BASE_BOTTOM_OFFSET = 16;
+// The magic scrollbar rail lives at right:12 with a 20px width, so it occupies
+// the rightmost ~32px of the pane. Offset the toast stack past it (plus a small
+// gap) so the rail stays visible instead of hiding behind the toasts.
+const RAIL_CLEARANCE = 44;
 
 interface TrackedTask {
   key: string;
@@ -226,7 +230,7 @@ export function AgentTasksToastStack(): ReactElement | null {
 const styles = StyleSheet.create((theme) => ({
   container: {
     position: "absolute",
-    right: theme.spacing[4],
+    right: RAIL_CLEARANCE,
     alignItems: "flex-end",
     gap: theme.spacing[2],
     maxWidth: 320,
