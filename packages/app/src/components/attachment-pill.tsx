@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
 import { isNative } from "@/constants/platform";
@@ -131,14 +132,17 @@ export function AttachmentLabel({ icon, title, subtitle }: AttachmentLabelProps)
   );
 }
 
-/** Square image preview pill body. */
+/** Square image preview pill body. Uses expo-image (like the lightbox): the
+ * react-native Image did not reliably render the IndexedDB blob: URLs that back
+ * a cross-device–materialized attachment on web, leaving a blank placeholder even
+ * though the full-size open worked. */
 export function AttachmentThumbnail({ metadata }: { metadata: AttachmentMetadata }) {
   const uri = useAttachmentPreviewUrl(metadata);
   const source = useMemo(() => ({ uri: uri ?? "" }), [uri]);
   if (!uri) {
     return <View style={styles.thumbnailPlaceholder} />;
   }
-  return <Image source={source} style={styles.thumbnail} />;
+  return <ExpoImage source={source} style={styles.thumbnail} contentFit="cover" />;
 }
 
 const ThemedX = withUnistyles(X);
