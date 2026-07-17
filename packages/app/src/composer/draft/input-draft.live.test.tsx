@@ -118,6 +118,23 @@ vi.mock("@/hooks/use-agent-form-state", () => ({
 let useAgentInputDraft: typeof import("./input-draft").useAgentInputDraft;
 type DraftRecordForTest = ReturnType<typeof useDraftStore.getState>["drafts"][string];
 
+// Writes a draft into the store as if a remote cross-device update landed
+// (hydrateWorkspaceUiState does this on a broadcast). Kept at module scope so the
+// store updater is not a function literal nested inside an async act callback.
+function seedRemoteDraft(draftKey: string, text: string, version: number): void {
+  useDraftStore.setState((previous) => ({
+    drafts: {
+      ...previous.drafts,
+      [draftKey]: {
+        input: { text, attachments: [] },
+        lifecycle: "active",
+        updatedAt: version * 100,
+        version,
+      } as unknown as DraftRecordForTest,
+    },
+  }));
+}
+
 beforeAll(async () => {
   const storage = new Map<string, string>();
 
@@ -476,6 +493,94 @@ describe("useAgentInputDraft live contract", () => {
       text: "",
       attachments: [],
     });
+  });
+
+  it("adopts a remote draft change in place while the input is not focused", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:remote" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    // Simulate a cross-device update landing in the store from outside this
+    // composer (as hydrateWorkspaceUiState does on a remote broadcast).
+    await act(async () => {
+      seedRemoteDraft("draft:remote", "from another device", 7);
+    });
+
+    expect(getLatest().text).toBe("from another device");
+  });
+
+  it("defers a remote draft change while the input is focused, then adopts it on blur", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:focused" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      getLatest().notifyInputFocus(true);
+    });
+
+    await act(async () => {
+      seedRemoteDraft("draft:focused", "remote while typing", 9);
+    });
+
+    // Focused: the remote value must not yank the input out from under typing.
+    expect(getLatest().text).toBe("");
+
+    await act(async () => {
+      getLatest().notifyInputFocus(false);
+    });
+
+    // On blur we catch up to the deferred remote value.
+    expect(getLatest().text).toBe("remote while typing");
   });
 
   it("clears drafts with sent and abandoned lifecycle tombstones", async () => {

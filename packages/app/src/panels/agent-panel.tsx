@@ -63,7 +63,6 @@ import {
 import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
-import { useDraftStore } from "@/stores/draft-store";
 import { usePanelStore } from "@/stores/panel-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
@@ -361,30 +360,6 @@ function DraftPanel() {
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "draft", "DraftPanel requires draft target");
 
-  // Re-seed the composer when its synced draft (text) or config (target.setup)
-  // changes on another device, but only while this pane is NOT the active one —
-  // so a live remote update never wipes what you are currently typing here. The
-  // composer seeds its form + text once at mount, so a fresh mount (new key) is
-  // how remote edits become visible in an already-open draft tab.
-  const draftKey = useMemo(
-    () => buildDraftStoreKey({ serverId, agentId: tabId, draftId: target.draftId }),
-    [serverId, tabId, target.draftId],
-  );
-  const draftVersion = useDraftStore((state) => state.drafts[draftKey]?.version ?? 0);
-  const remoteSeedSignature = useMemo(
-    () => `${draftVersion}:${JSON.stringify(target.setup ?? null)}`,
-    [draftVersion, target.setup],
-  );
-  const [committedSeedSignature, setCommittedSeedSignature] = useState(remoteSeedSignature);
-  useEffect(() => {
-    if (isInteractive) {
-      return;
-    }
-    setCommittedSeedSignature((prev) =>
-      prev === remoteSeedSignature ? prev : remoteSeedSignature,
-    );
-  }, [isInteractive, remoteSeedSignature]);
-
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
       const normalized = normalizeAgentSnapshot(agentSnapshot, serverId);
@@ -401,7 +376,6 @@ function DraftPanel() {
 
   return (
     <WorkspaceDraftAgentTab
-      key={committedSeedSignature}
       serverId={serverId}
       workspaceId={workspaceId}
       tabId={tabId}
@@ -1166,8 +1140,16 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   });
   // Stabilize the agentInputDraft object identity so that memo(AgentComposerSection) can bail out
   // when only toast state changes (which does not affect any draft field).
-  const { text, setText, attachments, setAttachments, clear, isHydrated, composerState } =
-    rawAgentInputDraft;
+  const {
+    text,
+    setText,
+    attachments,
+    setAttachments,
+    clear,
+    isHydrated,
+    composerState,
+    notifyInputFocus,
+  } = rawAgentInputDraft;
   const agentInputDraft = useMemo(
     (): AgentInputDraft => ({
       text,
@@ -1177,8 +1159,18 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       clear,
       isHydrated,
       composerState,
+      notifyInputFocus,
     }),
-    [text, setText, attachments, setAttachments, clear, isHydrated, composerState],
+    [
+      text,
+      setText,
+      attachments,
+      setAttachments,
+      clear,
+      isHydrated,
+      composerState,
+      notifyInputFocus,
+    ],
   );
   // Per-panel portal host so the magic scrollbar can paint over the full panel
   // height (down past the composer) instead of being clipped to the message

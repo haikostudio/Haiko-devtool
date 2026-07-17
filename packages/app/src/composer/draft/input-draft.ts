@@ -58,6 +58,9 @@ export interface AgentInputDraft {
   clear: (lifecycle: "sent" | "abandoned") => void;
   isHydrated: boolean;
   composerState: DraftComposerState | null;
+  /** Report text-input focus so cross-device draft updates are adopted in place
+   * only while the user is NOT actively typing here. */
+  notifyInputFocus: (focused: boolean) => void;
 }
 
 export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDraft {
@@ -82,6 +85,13 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
   const [isHydrated, setIsHydrated] = useState(false);
   const draftGenerationRef = useRef(0);
   const hydratedGenerationRef = useRef(0);
+  // Mirrors of the live local state + input focus, read by the store subscription
+  // below without re-subscribing on every keystroke.
+  const textRef = useRef(text);
+  const attachmentsRef = useRef(attachments);
+  const inputFocusedRef = useRef(false);
+  textRef.current = text;
+  attachmentsRef.current = attachments;
 
   const setAttachments = useCallback((updater: AttachmentUpdater) => {
     setAttachmentsState((previousAttachments) => {
@@ -190,6 +200,57 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
       },
     });
   }, [attachments, draftKey, text]);
+
+  // Adopt a draft that changed in the store from outside this composer (a remote
+  // cross-device update applied via hydrateWorkspaceUiState) into the local
+  // input, in place. Skipped while the input is focused so it never yanks text
+  // out from under active typing; on blur we run it once to catch up. Our own
+  // saves keep the store equal to local state, so this is a no-op for them.
+  const adoptRemoteDraft = useCallback(() => {
+    if (inputFocusedRef.current) {
+      return;
+    }
+    if (draftGenerationRef.current <= 0) {
+      return;
+    }
+    if (hydratedGenerationRef.current !== draftGenerationRef.current) {
+      return;
+    }
+    const remote = useDraftStore.getState().getDraftInput(draftKey);
+    if (!remote) {
+      return;
+    }
+    const sameText = remote.text === textRef.current;
+    const sameAttachments = areAttachmentsEqual({
+      left: remote.attachments,
+      right: attachmentsRef.current,
+    });
+    if (sameText && sameAttachments) {
+      return;
+    }
+    setText(remote.text);
+    setAttachmentsState(remote.attachments);
+  }, [draftKey]);
+
+  useEffect(() => {
+    const unsubscribe = useDraftStore.subscribe((state, previous) => {
+      if (state.drafts[draftKey] === previous.drafts[draftKey]) {
+        return;
+      }
+      adoptRemoteDraft();
+    });
+    return unsubscribe;
+  }, [draftKey, adoptRemoteDraft]);
+
+  const notifyInputFocus = useCallback(
+    (focused: boolean) => {
+      inputFocusedRef.current = focused;
+      if (!focused) {
+        adoptRemoteDraft();
+      }
+    },
+    [adoptRemoteDraft],
+  );
 
   const lockedWorkingDir = composerOptions?.lockedWorkingDir?.trim() ?? "";
   useEffect(() => {
@@ -305,6 +366,7 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     clear,
     isHydrated,
     composerState,
+    notifyInputFocus,
   };
 }
 

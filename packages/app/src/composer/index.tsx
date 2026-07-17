@@ -782,6 +782,9 @@ interface ComposerProps {
   onComposerHeightChange?: (height: number) => void;
   onAttentionInputFocus?: () => void;
   onAttentionPromptSend?: () => void;
+  /** Reports text-input focus gain/loss so a parent can defer disruptive updates
+   * (e.g. cross-device re-seeding) while the user is actively typing. */
+  onInputFocusChange?: (focused: boolean) => void;
   /** Controlled agent controls rendered in input area (draft flows). */
   agentControls?: DraftAgentControlsProps;
   /** Extra styles merged onto the message input wrapper (e.g. elevated background). */
@@ -990,6 +993,7 @@ export function Composer({
   onComposerHeightChange,
   onAttentionInputFocus,
   onAttentionPromptSend,
+  onInputFocusChange,
   agentControls,
   inputWrapperStyle,
   footer,
@@ -1810,11 +1814,12 @@ export function Composer({
   const handleFocusChange = useCallback(
     (focused: boolean) => {
       setIsMessageInputFocused(focused);
+      onInputFocusChange?.(focused);
       if (focused) {
         onAttentionInputFocus?.();
       }
     },
-    [onAttentionInputFocus],
+    [onAttentionInputFocus, onInputFocusChange],
   );
 
   const handleLightboxClose = useCallback(() => {
