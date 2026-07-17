@@ -167,6 +167,17 @@ const FeatureBrainMemorySchema = z
   })
   .strict();
 
+// Inline task-intent triage: a lightweight LLM reads chat messages that look
+// like task requests and proposes tasks (awaiting approval) or asks for
+// clarification. providerModel defaults to a cheap model (claude/haiku) but can
+// point elsewhere (e.g. an OpenRouter-backed provider) via config.
+const FeatureMessageTriageSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    providerModel: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
 const StructuredGenerationProviderConfigSchema = z
   .object({
     provider: z.string().min(1),
@@ -332,6 +343,7 @@ export const PersistedConfigSchema = z
         voiceMode: FeatureVoiceModeSchema.optional(),
         webUi: FeatureWebUiSchema.optional(),
         brainMemory: FeatureBrainMemorySchema.optional(),
+        messageTriage: FeatureMessageTriageSchema.optional(),
       })
       .strict()
       .optional(),

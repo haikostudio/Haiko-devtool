@@ -376,6 +376,15 @@ export interface BrainContextTimelineItem {
   status?: "loading" | "done";
 }
 
+export interface TaskTriageTimelineItem {
+  [key: string]: unknown;
+  type: "task_triage";
+  status: "questions" | "proposed";
+  questions?: string[];
+  proposedCount?: number;
+  projectId?: string;
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -384,7 +393,8 @@ export type AgentTimelineItem =
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
   | CompactionTimelineItem
-  | BrainContextTimelineItem;
+  | BrainContextTimelineItem
+  | TaskTriageTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

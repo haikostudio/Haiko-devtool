@@ -357,6 +357,21 @@ export interface BrainContextTimelineItem {
   status?: "loading" | "done";
 }
 
+/**
+ * Result of the daemon's inline task-intent triage: when a user message looks
+ * like it wants task(s) created, a lightweight LLM either proposed task(s) (now
+ * on the board awaiting approval) or needs clarification. Rendered as a distinct
+ * pill in the chat so the user sees what happened without leaving the thread.
+ */
+export interface TaskTriageTimelineItem {
+  [key: string]: unknown;
+  type: "task_triage";
+  status: "questions" | "proposed";
+  questions?: string[];
+  proposedCount?: number;
+  projectId?: string;
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -365,7 +380,8 @@ export type AgentTimelineItem =
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
   | CompactionTimelineItem
-  | BrainContextTimelineItem;
+  | BrainContextTimelineItem
+  | TaskTriageTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

@@ -656,6 +656,14 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     ),
     status: z.enum(["loading", "done"]).optional(),
   }),
+  // COMPAT(messageTriage): added in v0.1.X, drop the gate when floor >= v0.1.X.
+  z.object({
+    type: z.literal("task_triage"),
+    status: z.enum(["questions", "proposed"]),
+    questions: z.array(z.string()).optional(),
+    proposedCount: z.number().optional(),
+    projectId: z.string().optional(),
+  }),
 ]);
 
 export const AgentStreamEventPayloadSchema = z.discriminatedUnion("type", [
@@ -2767,6 +2775,8 @@ export const ServerInfoStatusPayloadSchema = z
         sessionUiStateSync: z.boolean().optional(),
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
         brainMemory: z.boolean().optional(),
+        // COMPAT(messageTriage): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        messageTriage: z.boolean().optional(),
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
         tasksBoard: z.boolean().optional(),
         // COMPAT(tasksRunConfig): added in v0.1.110, drop the gate when floor >= v0.1.110.

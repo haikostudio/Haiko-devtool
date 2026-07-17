@@ -132,6 +132,7 @@ import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
 import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
 import { TaskEstimator } from "./tasks/estimator.js";
+import { MessageTriage } from "./tasks/message-triage.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -386,6 +387,10 @@ export interface PaseoDaemonConfig {
     baseUrl: string;
     apiKey: string | null;
     globalFallback: boolean;
+  };
+  messageTriage?: {
+    enabled: boolean;
+    providerModel: string;
   };
   appBaseUrl?: string;
   auth?: DaemonAuthConfig;
@@ -1167,6 +1172,29 @@ export async function createPaseoDaemon(
   taskBoardService.setOnTaskProposed((projectId) => {
     taskProposalNotifier.notifyProposed(projectId);
   });
+  // Inline task-intent triage (opt-in): interprets chat messages that ask for
+  // tasks and proposes them (awaiting approval) or asks clarifying questions.
+  const messageTriage = config.messageTriage?.enabled
+    ? new MessageTriage({
+        agentManager,
+        createAgent,
+        taskBoardService,
+        providerModel: config.messageTriage.providerModel,
+        resolveProjectId: async (agentId) => {
+          const agent = await agentStorage.get(agentId);
+          if (!agent?.workspaceId) {
+            return null;
+          }
+          const workspace = await workspaceRegistry.get(agent.workspaceId);
+          return workspace?.projectId ?? null;
+        },
+        resolveProjectCwd: async (projectId) => {
+          const project = await projectRegistry.get(projectId);
+          return project?.rootPath ?? null;
+        },
+        logger,
+      })
+    : null;
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");
@@ -1477,7 +1505,12 @@ export async function createPaseoDaemon(
               browserToolsBroker,
               config.brainMemory,
             );
-            wsServer.setTasksServices({ taskBoardService, taskEstimator, taskScheduler });
+            wsServer.setTasksServices({
+              taskBoardService,
+              taskEstimator,
+              taskScheduler,
+              messageTriage,
+            });
             {
               const boundWsServer = wsServer;
               taskProposalPush = (payload) => boundWsServer.sendPush(payload);

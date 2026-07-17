@@ -326,6 +326,20 @@ function resolveBrainMemoryConfig(
   return { enabled, baseUrl, apiKey, globalFallback };
 }
 
+function resolveMessageTriageConfig(
+  env: NodeJS.ProcessEnv,
+  persisted: ReturnType<typeof loadPersistedConfig>,
+): PaseoDaemonConfig["messageTriage"] {
+  const persistedTriage = persisted.features?.messageTriage;
+  const enabled =
+    parseBooleanEnv(env.PASEO_MESSAGE_TRIAGE_ENABLED) ?? persistedTriage?.enabled ?? false;
+  const providerModel =
+    env.PASEO_MESSAGE_TRIAGE_PROVIDER_MODEL?.trim() ||
+    persistedTriage?.providerModel?.trim() ||
+    "claude/haiku";
+  return { enabled, providerModel };
+}
+
 function resolveVoiceLlmConfig(
   env: NodeJS.ProcessEnv,
   persisted: ReturnType<typeof loadPersistedConfig>,
@@ -494,6 +508,7 @@ export function loadConfig(
   const serviceProxy = resolveServiceProxyConfig(env, persisted);
   const webUi = resolveWebUiConfig(paseoHome, env, options?.cli, persisted);
   const brainMemory = resolveBrainMemoryConfig(env, persisted);
+  const messageTriage = resolveMessageTriageConfig(env, persisted);
 
   const { openai, speech } = resolveSpeechConfig({
     paseoHome,
@@ -534,6 +549,7 @@ export function loadConfig(
     serviceProxy,
     webUi,
     brainMemory,
+    messageTriage,
     appBaseUrl,
     auth: resolveAuthConfig(env, persisted),
     openai,

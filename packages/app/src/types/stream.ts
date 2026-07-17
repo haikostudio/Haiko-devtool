@@ -80,7 +80,8 @@ export type StreamItem =
   | TodoListItem
   | ActivityLogItem
   | CompactionItem
-  | BrainContextItem;
+  | BrainContextItem
+  | TaskTriageItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -207,6 +208,17 @@ export interface BrainContextItem {
   count: number;
   memories: BrainContextMemoryEntry[];
   status?: "loading" | "done";
+}
+
+/** Inline task-intent triage result surfaced by the daemon in the chat thread. */
+export interface TaskTriageItem {
+  kind: "task_triage";
+  id: string;
+  timestamp: Date;
+  status: "questions" | "proposed";
+  questions: string[];
+  proposedCount: number;
+  projectId?: string;
 }
 
 export interface TodoEntry {
@@ -908,6 +920,18 @@ function reduceTimelineEvent(
       };
       return finalizeActiveThoughts([...state, brainItem]);
     }
+    case "task_triage": {
+      const triageItem: TaskTriageItem = {
+        kind: "task_triage",
+        id: createTimelineId("task_triage", item.status, timestamp),
+        timestamp,
+        status: item.status,
+        questions: item.questions ?? [],
+        proposedCount: item.proposedCount ?? 0,
+        projectId: item.projectId,
+      };
+      return finalizeActiveThoughts([...state, triageItem]);
+    }
     default:
       return state;
   }
@@ -1015,6 +1039,8 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "activity_log";
     case "brain_context":
       return "brain_context";
+    case "task_triage":
+      return "task_triage";
     default:
       return null;
   }

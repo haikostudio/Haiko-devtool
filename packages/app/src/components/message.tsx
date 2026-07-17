@@ -47,6 +47,8 @@ import {
   MicVocal,
   FileSymlink,
   BrainCircuit,
+  ListChecks,
+  ClipboardList,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
@@ -63,7 +65,12 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
-import type { BrainContextItem, TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import type {
+  BrainContextItem,
+  TaskTriageItem,
+  TodoEntry,
+  UserMessageImageAttachment,
+} from "@/types/stream";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -2369,6 +2376,94 @@ export const BrainContextPill = memo(function BrainContextPill({ item }: BrainCo
         </View>
       </View>
     </Pressable>
+  );
+});
+
+interface TaskTriagePillProps {
+  item: TaskTriageItem;
+}
+
+const TRIAGE_COLOR = "#34d399";
+
+const taskTriageStylesheet = StyleSheet.create((theme) => ({
+  pressable: {
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
+    marginBottom: theme.spacing[1],
+    backgroundColor: "rgba(52, 211, 153, 0.15)",
+  },
+  content: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: 10,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
+  },
+  iconContainer: {
+    flexShrink: 0,
+    height: 20,
+    justifyContent: "center",
+  },
+  textContainer: {
+    flex: 1,
+  },
+  headerText: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    color: TRIAGE_COLOR,
+  },
+  questionsContainer: {
+    marginTop: theme.spacing[1],
+    gap: theme.spacing[1],
+  },
+  questionText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+}));
+
+export const TaskTriagePill = memo(function TaskTriagePill({ item }: TaskTriagePillProps) {
+  const isQuestions = item.status === "questions";
+  const header = isQuestions
+    ? "Tri de tâches · précisions demandées"
+    : `Tri de tâches · ${item.proposedCount} tâche${item.proposedCount > 1 ? "s" : ""} proposée${
+        item.proposedCount > 1 ? "s" : ""
+      } · à confirmer`;
+  return (
+    <View style={taskTriageStylesheet.pressable}>
+      <View style={taskTriageStylesheet.content}>
+        <View style={taskTriageStylesheet.row}>
+          <View style={taskTriageStylesheet.iconContainer}>
+            {isQuestions ? (
+              <ClipboardList size={16} color={TRIAGE_COLOR} />
+            ) : (
+              <ListChecks size={16} color={TRIAGE_COLOR} />
+            )}
+          </View>
+          <View style={taskTriageStylesheet.textContainer}>
+            <Text style={taskTriageStylesheet.headerText} selectable>
+              {header}
+            </Text>
+            {isQuestions && item.questions.length > 0 && (
+              <View style={taskTriageStylesheet.questionsContainer}>
+                {item.questions.map((question) => (
+                  <Text
+                    key={`${item.id}:${question}`}
+                    style={taskTriageStylesheet.questionText}
+                    selectable
+                  >
+                    • {question}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </View>
   );
 });
 

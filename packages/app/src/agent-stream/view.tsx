@@ -38,6 +38,7 @@ import {
   TodoListCard,
   CompactionMarker,
   BrainContextPill,
+  TaskTriagePill,
   MessageOuterSpacingProvider,
   type InlinePathTarget,
 } from "@/components/message";
@@ -902,6 +903,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
           case "brain_context":
             return <BrainContextPill item={item} />;
+
+          case "task_triage":
+            return <TaskTriagePill item={item} />;
 
           default:
             return null;

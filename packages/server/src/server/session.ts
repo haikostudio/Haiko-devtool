@@ -153,6 +153,7 @@ import { ChatScheduleLoopSession } from "./session/chat/chat-schedule-loop-sessi
 import { TasksSession } from "./session/tasks/tasks-session.js";
 import type { TaskBoardService } from "./tasks/service.js";
 import type { TaskEstimator } from "./tasks/estimator.js";
+import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
@@ -453,6 +454,7 @@ export interface SessionOptions {
   taskBoardService?: TaskBoardService;
   taskEstimator?: TaskEstimator | null;
   taskScheduler?: TaskScheduler | null;
+  messageTriage?: MessageTriage | null;
   checkoutDiffManager: CheckoutDiffManager;
   github?: GitHubService;
   createAgentMcpTransport?: AgentMcpTransportFactory;
@@ -635,6 +637,7 @@ export class Session {
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly brainMemory: BrainMemoryClient | null;
+  private readonly messageTriage: MessageTriage | null;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
   private readonly getDaemonTcpPort: (() => number | null) | null;
@@ -688,6 +691,7 @@ export class Session {
       taskBoardService,
       taskEstimator,
       taskScheduler,
+      messageTriage,
       checkoutDiffManager,
       github,
       renameCurrentBranch,
@@ -948,6 +952,7 @@ export class Session {
     });
     this.providerSnapshotManager = providerSnapshotManager;
     this.brainMemory = brainMemory ?? null;
+    this.messageTriage = messageTriage ?? null;
     this.serviceProxy = serviceProxy ?? null;
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
     this.workspaceSetupSnapshots = workspaceSetupSnapshots ?? new Map();
@@ -6168,6 +6173,11 @@ export class Session {
         promptText = await this.recallAndInjectBrainContext(agentId, msg.text, projet);
         this.scheduleBrainNote(agentId, msg.text, projet);
       }
+
+      // Inline task-intent triage: if the message reads like a task request,
+      // propose tasks (awaiting approval) or ask clarifying questions in-thread.
+      // Strictly fire-and-forget — never blocks or alters the normal agent turn.
+      this.messageTriage?.triage({ agentId, text: msg.text });
 
       const prompt = buildAgentPrompt(promptText, msg.images, msg.attachments);
       this.sessionLogger.trace(
