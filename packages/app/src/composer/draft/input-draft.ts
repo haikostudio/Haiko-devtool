@@ -219,23 +219,35 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
     if (hydratedGenerationRef.current !== draftGenerationRef.current) {
       return;
     }
-    const remote = useDraftStore.getState().getDraftInput(draftKey);
-    if (!remote) {
+    const store = useDraftStore.getState();
+    const record = store.drafts[draftKey];
+    if (!record) {
       return;
     }
+    // A sent/abandoned tombstone means the composer was cleared on another device
+    // (message sent, or the field emptied). Adopt the empty state so the field
+    // clears here too. An active-but-not-yet-ready draft (e.g. an image still
+    // migrating) is skipped; a later store change retries.
+    const isActive = record.lifecycle === "active";
+    const remote = isActive ? store.getDraftInput(draftKey) : undefined;
+    if (isActive && !remote) {
+      return;
+    }
+    const remoteText = remote?.text ?? "";
+    const remoteAttachments = remote?.attachments ?? [];
     if (
       !areAttachmentsEqual({
-        left: remote.attachments,
+        left: remoteAttachments,
         right: attachmentsRef.current,
       })
     ) {
-      setAttachmentsState(remote.attachments);
+      setAttachmentsState(remoteAttachments);
     }
     if (inputFocusedRef.current) {
       return;
     }
-    if (remote.text !== textRef.current) {
-      setText(remote.text);
+    if (remoteText !== textRef.current) {
+      setText(remoteText);
     }
   }, [draftKey]);
 

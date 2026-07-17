@@ -135,6 +135,25 @@ function seedRemoteDraft(draftKey: string, text: string, version: number): void 
   }));
 }
 
+// Mirrors a cleared/sent draft arriving from another device: an empty tombstone
+// with a non-active lifecycle, as applyClearDraftRecord produces.
+function sendDraftTombstone(draftKey: string): void {
+  useDraftStore.setState((previous) => {
+    const record = previous.drafts[draftKey];
+    return {
+      drafts: {
+        ...previous.drafts,
+        [draftKey]: {
+          input: { text: "", attachments: [] },
+          lifecycle: "sent",
+          updatedAt: 9999,
+          version: (record?.version ?? 0) + 1,
+        } as unknown as DraftRecordForTest,
+      },
+    };
+  });
+}
+
 // Writes a draft holding a single image attachment, mirroring how a synced draft
 // (and later its locally materialized bytes) looks in the store. Version/updatedAt
 // stay fixed so a metadata swap is not rejected as a stale write.
@@ -566,6 +585,48 @@ describe("useAgentInputDraft live contract", () => {
     });
 
     expect(getLatest().text).toBe("from another device");
+  });
+
+  it("clears the composer when the draft is sent/cleared on another device", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:clear-sync" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      seedRemoteDraft("draft:clear-sync", "hello from other device", 5);
+    });
+    expect(getLatest().text).toBe("hello from other device");
+
+    // The other device sends the message (or clears the field): a tombstone lands.
+    await act(async () => {
+      sendDraftTombstone("draft:clear-sync");
+    });
+    expect(getLatest().text).toBe("");
   });
 
   it("adopts a materialized image attachment (storageKey swap) into an open composer", async () => {
