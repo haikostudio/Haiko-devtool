@@ -103,6 +103,57 @@ export class WorkspaceAutoName {
     );
   }
 
+  /**
+   * Re-derive the workspace title from the latest user message so the tab name
+   * tracks the current subject of the conversation "au fil des requêtes". Unlike
+   * the first-agent worktree path this is TITLE-ONLY — it never renames the git
+   * branch. Best-effort and async; a generation failure leaves the title as-is.
+   */
+  scheduleRenameFromMessage(input: { workspaceId: string; cwd: string; message: string }): void {
+    const message = input.message.trim();
+    if (!message) {
+      return;
+    }
+    this.schedule(
+      () =>
+        this.renameWorkspaceTitleFromMessage({
+          workspaceId: input.workspaceId,
+          cwd: input.cwd,
+          message,
+        }),
+      { cwd: input.cwd, message: "Failed to auto-rename workspace from latest message" },
+    );
+  }
+
+  private async renameWorkspaceTitleFromMessage(input: {
+    workspaceId: string;
+    cwd: string;
+    message: string;
+  }): Promise<void> {
+    const generated = await this.generateFromContext({
+      cwd: input.cwd,
+      firstAgentContext: { prompt: input.message },
+      currentSelection: null,
+    });
+    const title = generated?.title ?? null;
+    if (!title) {
+      return;
+    }
+    const current = await this.workspaceRegistry.get(input.workspaceId);
+    if (!current || current.archivedAt) {
+      return;
+    }
+    if (current.title === title) {
+      return;
+    }
+    await this.workspaceRegistry.upsert({
+      ...current,
+      title,
+      updatedAt: new Date().toISOString(),
+    });
+    await this.emitWorkspaceUpdateForWorkspaceId(input.workspaceId);
+  }
+
   private async maybeAutoNameWorkspaceBranchForFirstAgent(input: {
     workspace: PersistedWorkspaceRecord;
     firstAgentContext: FirstAgentContext;

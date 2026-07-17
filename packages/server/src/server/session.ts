@@ -6199,6 +6199,11 @@ export class Session {
         return;
       }
 
+      // Keep the workspace tab name tracking the current subject: re-derive the
+      // title from this message ("au fil des requêtes"). Best-effort, async,
+      // title-only — never touches the git branch.
+      this.scheduleWorkspaceRenameFromMessage(agentId, msg.text);
+
       if (dispatchResult.outOfBand) {
         this.emit({
           type: "send_agent_message_response",
@@ -6247,6 +6252,16 @@ export class Session {
         },
       });
     }
+  }
+
+  private scheduleWorkspaceRenameFromMessage(agentId: string, message: string): void {
+    const agent = this.agentManager.getAgent(agentId);
+    const workspaceId = agent?.workspaceId;
+    const cwd = agent?.cwd;
+    if (!workspaceId || !cwd) {
+      return;
+    }
+    this.workspaceAutoName.scheduleRenameFromMessage({ workspaceId, cwd, message });
   }
 
   private async handleWaitForFinish(
