@@ -14,11 +14,20 @@ import { ComposerImportPill } from "@/composer/draft/import-pill";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
+import { buildDraftSetupEchoKey, recordLocalDraftSetup } from "@/composer/draft/local-setup-echo";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
+import {
+  buildWorkspaceTabPersistenceKey,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
+import {
+  normalizeWorkspaceDraftTabSetup,
+  workspaceDraftTabSetupsEqual,
+} from "@/workspace-tabs/identity";
 import { usePanelStore } from "@/stores/panel-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { Agent } from "@/stores/session-store";
@@ -309,6 +318,12 @@ interface WorkspaceDraftAgentTabProps {
   onCreated: (snapshot: AgentSnapshotPayload) => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet?: () => void;
+  /** Reports composer text-input focus to the parent so it can defer the remote
+   * config re-seed while the user is actively typing here. */
+  onInputFocusChange?: (focused: boolean) => void;
+  /** When true, skip auto-focusing the input on mount. Set by the parent for a
+   * remote-config re-seed remount so the keyboard never pops on the receiver. */
+  suppressAutoFocus?: boolean;
 }
 
 function resolveImportPillPress(
@@ -331,6 +346,8 @@ export function WorkspaceDraftAgentTab({
   onCreated,
   onOpenWorkspaceFile,
   onOpenImportSheet,
+  onInputFocusChange,
+  suppressAutoFocus = false,
 }: WorkspaceDraftAgentTabProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -378,6 +395,69 @@ export function WorkspaceDraftAgentTab({
   const clearDraftInput = draftInput.clear;
   const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
+
+  // Cross-device agent config (target.setup) sync. The config lives in the
+  // mount-once form; two one-directional halves keep it in sync without the write
+  // loop the reactive version caused:
+  //  - Capture (this device -> target.setup): only when the local user changed a
+  //    control (pendingConfigCaptureRef), never reactively, so a device that
+  //    RECEIVES a config change never writes it back.
+  //  - Apply (target.setup -> this device): the draft panel remounts the composer
+  //    when target.setup diverges from the echo (a remote change); see DraftPanel.
+  // The echo records the setup this composer currently displays: seeded at mount
+  // and updated on each local capture, so local edits never look "remote".
+  const composerSetup = useMemo(
+    () =>
+      normalizeWorkspaceDraftTabSetup({
+        provider: composerState.selectedProvider,
+        cwd: composerState.workingDir,
+        modeId: composerState.selectedMode || null,
+        model: composerState.effectiveModelId || null,
+        thinkingOptionId: composerState.effectiveThinkingOptionId || null,
+        featureValues: composerState.featureValues ?? {},
+      }),
+    [
+      composerState.selectedProvider,
+      composerState.workingDir,
+      composerState.selectedMode,
+      composerState.effectiveModelId,
+      composerState.effectiveThinkingOptionId,
+      composerState.featureValues,
+    ],
+  );
+  const setupEchoKey = buildDraftSetupEchoKey(serverId, draftId);
+  const initialSetupAtMountRef = useRef(initialSetup);
+  useEffect(() => {
+    // Seed the echo to what this composer mounts with, so the panel does not read
+    // a stale/missing echo and remount spuriously on first render.
+    recordLocalDraftSetup(
+      setupEchoKey,
+      normalizeWorkspaceDraftTabSetup(initialSetupAtMountRef.current) ?? null,
+    );
+  }, [setupEchoKey]);
+  useEffect(() => {
+    if (!pendingConfigCaptureRef.current) {
+      return;
+    }
+    pendingConfigCaptureRef.current = false;
+    if (!composerSetup) {
+      return;
+    }
+    if (
+      workspaceDraftTabSetupsEqual(normalizeWorkspaceDraftTabSetup(initialSetup), composerSetup)
+    ) {
+      return;
+    }
+    const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+    if (!workspaceKey) {
+      return;
+    }
+    recordLocalDraftSetup(setupEchoKey, composerSetup);
+    useWorkspaceLayoutStore
+      .getState()
+      .retargetTab(workspaceKey, tabId, { kind: "draft", draftId, setup: composerSetup });
+  }, [composerSetup, initialSetup, serverId, workspaceId, tabId, draftId, setupEchoKey]);
+
   const pendingAutoSubmit = useWorkspaceDraftSubmissionStore((state) => {
     const pending = state.pendingByDraftId[draftId] ?? null;
     return pending?.serverId === serverId && pending.workspaceId === workspaceId ? pending : null;
@@ -579,28 +659,51 @@ export function WorkspaceDraftAgentTab({
     focusInputRef.current = focus;
   }, []);
 
+  // Set by the config controls when the LOCAL user changes a setting, so the
+  // capture effect below writes target.setup ONLY for genuine local edits (never
+  // for remote-driven form changes — that reactive write-back is what caused the
+  // cross-device loop). Read-and-cleared on the next composer config change.
+  const pendingConfigCaptureRef = useRef(false);
+  const markConfigCaptureFromUser = useCallback(() => {
+    pendingConfigCaptureRef.current = true;
+  }, []);
+
+  const notifyInputFocus = draftInput.notifyInputFocus;
+  const handleInputFocusChange = useCallback(
+    (focused: boolean) => {
+      // Drive both the in-place text/attachment adoption (hook) and the parent's
+      // config re-seed gate.
+      notifyInputFocus(focused);
+      onInputFocusChange?.(focused);
+    },
+    [notifyInputFocus, onInputFocusChange],
+  );
+
   const handleProviderSelectWithFocus = useCallback(
     (provider: Parameters<typeof composerState.setProviderFromUser>[0]) => {
+      markConfigCaptureFromUser();
       composerState.setProviderFromUser(provider);
       focusInputRef.current?.();
     },
-    [composerState],
+    [composerState, markConfigCaptureFromUser],
   );
 
   const handleModeSelectWithFocus = useCallback(
     (modeId: string) => {
+      markConfigCaptureFromUser();
       composerState.setModeFromUser(modeId);
       focusInputRef.current?.();
     },
-    [composerState],
+    [composerState, markConfigCaptureFromUser],
   );
 
   const handleModelSelectWithFocus = useCallback(
     (modelId: string) => {
+      markConfigCaptureFromUser();
       composerState.setModelFromUser(modelId);
       focusInputRef.current?.();
     },
-    [composerState],
+    [composerState, markConfigCaptureFromUser],
   );
 
   const handleProviderAndModelSelectWithFocus = useCallback(
@@ -608,26 +711,29 @@ export function WorkspaceDraftAgentTab({
       provider: Parameters<typeof composerState.setProviderAndModelFromUser>[0],
       modelId: string,
     ) => {
+      markConfigCaptureFromUser();
       composerState.setProviderAndModelFromUser(provider, modelId);
       focusInputRef.current?.();
     },
-    [composerState],
+    [composerState, markConfigCaptureFromUser],
   );
 
   const handleThinkingOptionSelectWithFocus = useCallback(
     (optionId: string) => {
+      markConfigCaptureFromUser();
       composerState.setThinkingOptionFromUser(optionId);
       focusInputRef.current?.();
     },
-    [composerState],
+    [composerState, markConfigCaptureFromUser],
   );
 
   const handleSetFeatureWithFocus = useCallback(
     (featureId: string, value: unknown) => {
+      markConfigCaptureFromUser();
       composerState.agentControls.onSetFeature?.(featureId, value);
       focusInputRef.current?.();
     },
-    [composerState],
+    [composerState, markConfigCaptureFromUser],
   );
 
   const { style: composerKeyboardStyle } = useKeyboardShiftStyle({
@@ -730,9 +836,12 @@ export function WorkspaceDraftAgentTab({
           onChangeAttachments={draftInput.setAttachments}
           cwd={composerState.workingDir}
           clearDraft={draftInput.clear}
-          autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
+          autoFocus={
+            !suppressAutoFocus &&
+            shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })
+          }
           onFocusInput={handleFocusInputCallback}
-          onInputFocusChange={draftInput.notifyInputFocus}
+          onInputFocusChange={handleInputFocusChange}
           commandDraftConfig={composerState.commandDraftConfig}
           agentControls={composerAgentControls}
           footer={composerFooter}
