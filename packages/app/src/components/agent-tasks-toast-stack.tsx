@@ -23,6 +23,7 @@ import { SyncedLoader } from "@/components/synced-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
+import { formatMessageTimestamp } from "@/utils/time";
 import { agentTaskToastKey, useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
 
 const ICON_SIZE = 16;
@@ -48,6 +49,17 @@ function bucketOf(agent: AggregatedAgent): WorkspaceStateBucket {
     attentionReason: agent.attentionReason,
   });
 }
+
+// Groups the five status buckets into the three lifecycle lanes the stack sorts by:
+// waiting-for-user (top) → running (middle) → finished (bottom, nearest the corner).
+// Lower rank renders higher up the column.
+const BUCKET_GROUP_RANK: Record<WorkspaceStateBucket, number> = {
+  needs_input: 0,
+  failed: 0,
+  attention: 0,
+  running: 1,
+  done: 2,
+};
 
 // A single app-wide pulse value so every blinking border breathes in lockstep
 // (mirrors the SyncedLoader philosophy). Ref-counted so the animation only runs
@@ -130,6 +142,23 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
   const title = task.agent.title || t("agentList.fallbackTitle");
   const pulseColorStyle = PULSE_BORDER_STYLE_BY_BUCKET[task.bucket];
 
+  // Once a task is paused/finished it stops moving, so surface where it ran and when
+  // it settled: project name + the finish time (falls back to last activity).
+  const metaText = useMemo(() => {
+    if (task.bucket !== "done") {
+      return null;
+    }
+    const projectName = task.agent.projectPlacement?.projectName ?? "";
+    const finishedAt = task.agent.attentionTimestamp ?? task.agent.lastActivityAt;
+    const timestamp = finishedAt ? formatMessageTimestamp(finishedAt) : "";
+    return [projectName, timestamp].filter(Boolean).join(" · ") || null;
+  }, [
+    task.bucket,
+    task.agent.projectPlacement,
+    task.agent.attentionTimestamp,
+    task.agent.lastActivityAt,
+  ]);
+
   const handlePress = useCallback(() => {
     navigateToAgent({
       serverId: task.agent.serverId,
@@ -154,9 +183,16 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
         >
           {pulseColorStyle ? <PulsingBorder colorStyle={pulseColorStyle} /> : null}
           <TaskToastIcon provider={task.agent.provider} bucket={task.bucket} />
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
+          <View style={styles.textColumn}>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            {metaText ? (
+              <Text style={styles.meta} numberOfLines={1}>
+                {metaText}
+              </Text>
+            ) : null}
+          </View>
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="left" align="center">
@@ -195,8 +231,10 @@ export function AgentTasksToastStack(): ReactElement | null {
     reconcile({ activeKeys, existingKeys });
   }, [reconcile, activeKeys, existingKeys, isCompact]);
 
-  // Show tracked toasts in appearance order (oldest first → newest sits at the
-  // bottom, nearest the corner), dropping any whose agent has since disappeared.
+  // Auto-sort by lifecycle lane so cards settle into three groups: waiting-for-user
+  // at the top, running in the middle, finished at the bottom (nearest the corner).
+  // Within a lane, keep appearance order (oldest first) for stability. Any tracked
+  // key whose agent has since disappeared is dropped.
   const visible = useMemo(() => {
     const items: TrackedTask[] = [];
     for (const key of order.keys()) {
@@ -205,7 +243,13 @@ export function AgentTasksToastStack(): ReactElement | null {
         items.push(task);
       }
     }
-    items.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
+    items.sort((a, b) => {
+      const rankDiff = BUCKET_GROUP_RANK[a.bucket] - BUCKET_GROUP_RANK[b.bucket];
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0);
+    });
     return items;
   }, [order, buckets]);
 
@@ -303,11 +347,18 @@ const styles = StyleSheet.create((theme) => ({
         ? theme.colors.palette.amber[700]
         : theme.colors.palette.amber[500],
   },
-  title: {
+  textColumn: {
     flexShrink: 1,
     minWidth: 0,
+    gap: 2,
+  },
+  title: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foreground,
+  },
+  meta: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   tooltipText: {
     fontSize: theme.fontSize.sm,

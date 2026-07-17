@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-17",
     markdown:
-      "### Added\n\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Share git watches by cwd\n- Bound magic scrollbar above the composer on mobile\n- Make lifecycle operations transactional\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Remove duplicate ownership discovery\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Compare filesystem identities\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+      "### Added\n\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Fix draft image race + sync active-agent composer content\n- Share git watches by cwd\n- Bound magic scrollbar above the composer on mobile\n- Make lifecycle operations transactional\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Remove duplicate ownership discovery\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Compare filesystem identities\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
   },
   {
     version: "0.1.108",
@@ -618,11 +618,33 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
-    hash: "6005ac9f325225f6460cc97b54dba784eccfbb60",
-    shortHash: "6005ac9f3",
+    hash: "7f5d83435b38c4525c058f6b303d3ed81f98e9f3",
+    shortHash: "7f5d83435",
+    date: "2026-07-17T13:57:20+02:00",
+    author: "haikostudio",
+    subject:
+      "index on feat/sidebar-dashboard-ui: bd8364222 fix(app): fix draft image race + sync active-agent composer content",
+  },
+  {
+    hash: "4c881f1a3eced742c40eab199ab73c268223cb3b",
+    shortHash: "4c881f1a3",
     date: "2026-07-17T11:36:56+00:00",
     author: "Mohamed Boudra",
     subject: "test(worktrees): make teardown proof portable",
+  },
+  {
+    hash: "bd83642220b23b6593daa23f6069bb35722dae98",
+    shortHash: "bd8364222",
+    date: "2026-07-17T13:45:50+02:00",
+    author: "haikostudio",
+    subject: "fix(app): fix draft image race + sync active-agent composer content",
+  },
+  {
+    hash: "1774ce3c4c0fc0915e9ab48b6a40d91b6c3a10d7",
+    shortHash: "1774ce3c4",
+    date: "2026-07-17T13:44:50+02:00",
+    author: "Mohamed Boudra",
+    subject: "fix superseded directory sync races",
   },
   {
     hash: "7c9db91ac8a787f9fd8a9de77a66d6ad46d5037f",
@@ -637,14 +659,6 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     date: "2026-07-17T13:12:12+02:00",
     author: "haikostudio",
     subject: "fix(app): bound magic scrollbar above the composer on mobile",
-  },
-  {
-    hash: "6360942a4e0d8803ec8ebbaeb3ca228f1e1cb7ed",
-    shortHash: "6360942a4",
-    date: "2026-07-17T13:12:12+02:00",
-    author: "haikostudio",
-    subject:
-      "index on feat/sidebar-dashboard-ui: 074ea1f4f feat(app): loop-free cross-device sync of draft agent config",
   },
   {
     hash: "cd8a91c77ed49810a4ce49c4ae50dea477fc3e6b",
@@ -2704,21 +2718,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "fix(desktop): retain browser keys across windows",
   },
-  {
-    hash: "7cd76581b38dcf720653cdb0552af9c44ef64d59",
-    shortHash: "7cd76581b",
-    date: "2026-07-10T15:00:00+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): respect browser shortcut ownership",
-  },
-  {
-    hash: "df7ddb490044431c747acd929af331c93d517e7e",
-    shortHash: "df7ddb490",
-    date: "2026-07-10T14:39:39+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): tighten browser shortcut validation",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T11:36:56+00:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T13:57:20+02:00";
