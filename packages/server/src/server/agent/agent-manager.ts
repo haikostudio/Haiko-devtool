@@ -45,6 +45,7 @@ import {
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
+import { PRESENTATION_GUIDANCE } from "./presentation-guidance.js";
 import type { UsageStatsStore } from "../stats/usage-stats-store.js";
 import {
   InMemoryAgentTimelineStore,
@@ -4103,16 +4104,23 @@ export class AgentManager {
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 
-    return daemonAppendSystemPrompt
-      ? {
-          ...next,
-          daemonAppendSystemPrompt,
-        }
-      : next;
+    const parts: string[] = [];
+    const userAppend = this.appendSystemPrompt.trim();
+    if (userAppend) {
+      parts.push(userAppend);
+    }
+    // Presentation guidance (colored callouts) is for real, user-facing agents
+    // only. Internal ephemeral agents (synthesis, estimation, recap) must stay
+    // unshaped so their structured output is not perturbed.
+    if (config.internal !== true) {
+      parts.push(PRESENTATION_GUIDANCE);
+    }
+
+    const daemonAppendSystemPrompt = parts.join("\n\n");
+    return daemonAppendSystemPrompt ? { ...next, daemonAppendSystemPrompt } : next;
   }
 
   private async buildLaunchContext(

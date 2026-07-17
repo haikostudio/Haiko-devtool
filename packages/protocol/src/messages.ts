@@ -71,6 +71,15 @@ import {
   TasksBoardUpdateMessageSchema,
 } from "./tasks/rpc-schemas.js";
 import {
+  ActivityLogGetRequestSchema,
+  ActivityLogSubscribeRequestSchema,
+  ActivityLogUnsubscribeRequestSchema,
+  ActivityLogGetResponseSchema,
+  ActivityLogSubscribeResponseSchema,
+  ActivityLogUnsubscribeResponseSchema,
+  ActivityLogUpdateMessageSchema,
+} from "./activity/rpc-schemas.js";
+import {
   LoopRunRequestSchema,
   LoopListRequestSchema,
   LoopInspectRequestSchema,
@@ -663,6 +672,19 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     questions: z.array(z.string()).optional(),
     proposedCount: z.number().optional(),
     projectId: z.string().optional(),
+  }),
+  // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
+  z.object({
+    type: z.literal("turn_recap"),
+    summary: z.string(),
+    highlights: z.array(z.string()).optional(),
+    files: z.array(
+      z.object({
+        path: z.string(),
+        operation: z.enum(["created", "edited", "deleted"]),
+      }),
+    ),
+    cwd: z.string().optional(),
   }),
 ]);
 
@@ -2568,6 +2590,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskEstimateRequestSchema,
   TasksTaskRunNowRequestSchema,
   TasksTaskApproveRequestSchema,
+  ActivityLogGetRequestSchema,
+  ActivityLogSubscribeRequestSchema,
+  ActivityLogUnsubscribeRequestSchema,
 ]);
 
 export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
@@ -2790,6 +2815,10 @@ export const ServerInfoStatusPayloadSchema = z
         usageStats: z.boolean().optional(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
         agentSynthesis: z.boolean().optional(),
+        // COMPAT(activityLog): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        activityLog: z.boolean().optional(),
+        // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        turnRecap: z.boolean().optional(),
       })
       .optional(),
   })
@@ -4936,6 +4965,10 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskRunNowResponseSchema,
   TasksTaskApproveResponseSchema,
   TasksBoardUpdateMessageSchema,
+  ActivityLogGetResponseSchema,
+  ActivityLogSubscribeResponseSchema,
+  ActivityLogUnsubscribeResponseSchema,
+  ActivityLogUpdateMessageSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
 ]);

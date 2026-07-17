@@ -372,6 +372,35 @@ export interface TaskTriageTimelineItem {
   projectId?: string;
 }
 
+/**
+ * Plain-language recap the daemon appends at the end of a turn that changed
+ * files. It lets a non-technical reader see, at a glance, what the agent did
+ * and which files moved — each tappable to open its diff. `files` is derived
+ * deterministically from the turn's edit/write tool calls (never the model);
+ * only `summary`/`highlights` are model-written. Rendered as a distinct block
+ * at the end of the turn in the chat thread.
+ */
+export type TurnRecapFileOperation = "created" | "edited" | "deleted";
+
+export interface TurnRecapFileChange {
+  /** Path as reported by the tool call (may be absolute or workspace-relative). */
+  path: string;
+  operation: TurnRecapFileOperation;
+}
+
+export interface TurnRecapTimelineItem {
+  [key: string]: unknown;
+  type: "turn_recap";
+  /** One or two plain sentences: what was accomplished this turn. */
+  summary: string;
+  /** Optional short bullets naming concrete things done, in plain language. */
+  highlights?: string[];
+  /** Files touched this turn, deduped, driving the "modifications" list. */
+  files: TurnRecapFileChange[];
+  /** Absolute workspace root, so the client can open each file's diff. */
+  cwd?: string;
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -381,7 +410,8 @@ export type AgentTimelineItem =
   | { type: "error"; message: string }
   | CompactionTimelineItem
   | BrainContextTimelineItem
-  | TaskTriageTimelineItem;
+  | TaskTriageTimelineItem
+  | TurnRecapTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

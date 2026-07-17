@@ -43,6 +43,7 @@ import {
   type InlinePathTarget,
 } from "@/components/message";
 import { PlanCard } from "@/components/plan-card";
+import { TurnRecapCard } from "@/components/turn-recap-card";
 import type { StreamItem } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
 import type {
@@ -512,6 +513,22 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       handleInlinePathPress({ raw: filePath, path: filePath }, "main");
     });
 
+    // Open the workspace "changes" (diff) view from the turn-recap block's
+    // "view all modifications" button. Mirrors the checkout wiring in
+    // handleInlinePathPress but targets the changes tab.
+    const handleOpenChanges = useStableEvent(() => {
+      if (!context.cwd) {
+        return;
+      }
+      const checkout = {
+        serverId: resolvedServerId,
+        cwd: context.cwd,
+        isGit: context.projectPlacement?.checkout?.isGit ?? true,
+      };
+      setExplorerTabForCheckout({ ...checkout, tab: "changes" });
+      openFileExplorerForCheckout({ isCompact: isMobile, checkout });
+    });
+
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
       async ({ target, boundary }) => {
         try {
@@ -907,11 +924,28 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
           case "task_triage":
             return <TaskTriagePill item={item} />;
 
+          case "turn_recap":
+            return (
+              <TurnRecapCard
+                item={item}
+                onOpenFile={handleToolCallOpenFile}
+                onOpenChanges={context.cwd ? handleOpenChanges : undefined}
+              />
+            );
+
           default:
             return null;
         }
       },
-      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+      [
+        renderUserMessageItem,
+        renderAssistantMessageItem,
+        renderThoughtItem,
+        renderToolCallItem,
+        handleToolCallOpenFile,
+        handleOpenChanges,
+        context.cwd,
+      ],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;

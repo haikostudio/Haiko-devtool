@@ -229,6 +229,19 @@ export const ptBR: TranslationResources = {
       commits: "Nenhum commit encontrado.",
     },
   },
+  activity: {
+    title: "Atividade",
+    filter: {
+      all: "Todos os projetos",
+    },
+    empty: "Nenhuma atividade ainda.",
+    loading: "Carregando atividade…",
+  },
+  turnRecap: {
+    title: "Resumo",
+    filesChanged: "Arquivos alterados",
+    viewAllChanges: "Ver todas as alterações",
+  },
   dashboard: {
     title: "Painel",
     empty: "Nenhum agente ativo",

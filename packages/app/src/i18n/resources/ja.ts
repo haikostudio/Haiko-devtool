@@ -229,6 +229,19 @@ export const ja: TranslationResources = {
       commits: "コミットが見つかりません。",
     },
   },
+  activity: {
+    title: "アクティビティ",
+    filter: {
+      all: "すべてのプロジェクト",
+    },
+    empty: "まだアクティビティはありません。",
+    loading: "アクティビティを読み込み中…",
+  },
+  turnRecap: {
+    title: "まとめ",
+    filesChanged: "変更されたファイル",
+    viewAllChanges: "すべての変更を表示",
+  },
   dashboard: {
     title: "ダッシュボード",
     empty: "アクティブなエージェントはありません",

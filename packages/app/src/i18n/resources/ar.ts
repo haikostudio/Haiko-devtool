@@ -226,6 +226,19 @@ export const ar: TranslationResources = {
       commits: "لم يتم العثور على أي التزامات.",
     },
   },
+  activity: {
+    title: "النشاط",
+    filter: {
+      all: "كل المشاريع",
+    },
+    empty: "لا يوجد نشاط بعد.",
+    loading: "جارٍ تحميل النشاط…",
+  },
+  turnRecap: {
+    title: "ملخّص",
+    filesChanged: "الملفات المعدّلة",
+    viewAllChanges: "عرض كل التغييرات",
+  },
   dashboard: {
     title: "لوحة القيادة",
     empty: "لا توجد وكلاء نشطون",

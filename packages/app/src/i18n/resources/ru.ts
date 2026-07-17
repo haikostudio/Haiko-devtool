@@ -228,6 +228,19 @@ export const ru: TranslationResources = {
       commits: "Коммиты не найдены.",
     },
   },
+  activity: {
+    title: "Активность",
+    filter: {
+      all: "Все проекты",
+    },
+    empty: "Пока нет активности.",
+    loading: "Загрузка активности…",
+  },
+  turnRecap: {
+    title: "Сводка",
+    filesChanged: "Изменённые файлы",
+    viewAllChanges: "Показать все изменения",
+  },
   dashboard: {
     title: "Панель",
     empty: "Нет активных агентов",

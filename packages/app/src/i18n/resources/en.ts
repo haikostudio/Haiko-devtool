@@ -225,6 +225,19 @@ export const en = {
       commits: "No commits found.",
     },
   },
+  activity: {
+    title: "Activity",
+    filter: {
+      all: "All projects",
+    },
+    empty: "No activity yet.",
+    loading: "Loading activity…",
+  },
+  turnRecap: {
+    title: "Recap",
+    filesChanged: "Files changed",
+    viewAllChanges: "View all changes",
+  },
   dashboard: {
     title: "Dashboard",
     empty: "No active agents",

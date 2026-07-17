@@ -229,6 +229,19 @@ export const fr: TranslationResources = {
       commits: "Aucun commit trouvé.",
     },
   },
+  activity: {
+    title: "Activité",
+    filter: {
+      all: "Tous les projets",
+    },
+    empty: "Aucune activité pour l'instant.",
+    loading: "Chargement de l'activité…",
+  },
+  turnRecap: {
+    title: "Récapitulatif",
+    filesChanged: "Fichiers modifiés",
+    viewAllChanges: "Voir toutes les modifications",
+  },
   dashboard: {
     title: "Tableau de bord",
     empty: "Aucun agent actif",

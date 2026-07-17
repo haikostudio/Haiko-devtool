@@ -229,6 +229,19 @@ export const es: TranslationResources = {
       commits: "No se encontraron commits.",
     },
   },
+  activity: {
+    title: "Actividad",
+    filter: {
+      all: "Todos los proyectos",
+    },
+    empty: "Aún no hay actividad.",
+    loading: "Cargando actividad…",
+  },
+  turnRecap: {
+    title: "Resumen",
+    filesChanged: "Archivos modificados",
+    viewAllChanges: "Ver todos los cambios",
+  },
   dashboard: {
     title: "Panel",
     empty: "No hay agentes activos",

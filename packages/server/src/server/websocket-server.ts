@@ -17,6 +17,7 @@ import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { TaskBoardService } from "./tasks/service.js";
+import type { ActivityLogService } from "./activity/service.js";
 import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
@@ -78,7 +79,8 @@ import {
   type WebSocketRuntimeDiagnosticSnapshot,
 } from "./websocket/runtime-metrics.js";
 import { ProviderUsageService } from "../services/quota-fetcher/service.js";
-import { BrainMemoryClient } from "../services/brain-memory/client.js";
+import type { BrainMemoryClient } from "../services/brain-memory/client.js";
+import type { BrainCurator } from "../services/brain-memory/curator.js";
 import { getProcessMemoryDiagnostics, getProcessUptimeSeconds } from "./process-diagnostics.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -480,10 +482,12 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
   private readonly brainMemory: BrainMemoryClient | null;
+  private readonly brainCurator: BrainCurator | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private taskBoardService: TaskBoardService | null = null;
   private taskEstimator: TaskEstimator | null = null;
   private taskScheduler: TaskScheduler | null = null;
+  private activityLogService: ActivityLogService | null = null;
   private messageTriage: MessageTriage | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
@@ -543,12 +547,10 @@ export class VoiceAssistantWebSocketServer {
     },
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
-    brainMemoryConfig?: {
-      enabled: boolean;
-      baseUrl: string;
-      apiKey: string | null;
-      globalFallback: boolean;
-    },
+    brainMemoryServices?: {
+      client: BrainMemoryClient;
+      curator: BrainCurator | null;
+    } | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -648,15 +650,8 @@ export class VoiceAssistantWebSocketServer {
       logger: this.logger,
     });
 
-    this.brainMemory =
-      brainMemoryConfig?.enabled && brainMemoryConfig.apiKey
-        ? new BrainMemoryClient({
-            logger: this.logger,
-            apiKey: brainMemoryConfig.apiKey,
-            baseUrl: brainMemoryConfig.baseUrl,
-            globalFallback: brainMemoryConfig.globalFallback,
-          })
-        : null;
+    this.brainMemory = brainMemoryServices?.client ?? null;
+    this.brainCurator = brainMemoryServices?.curator ?? null;
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
     this.startRuntimeMetricsInterval();
@@ -1108,6 +1103,7 @@ export class VoiceAssistantWebSocketServer {
       taskBoardService: this.taskBoardService ?? undefined,
       taskEstimator: this.taskEstimator,
       taskScheduler: this.taskScheduler,
+      activityLogService: this.activityLogService ?? undefined,
       messageTriage: this.messageTriage,
       checkoutDiffManager: this.checkoutDiffManager,
       github: this.github,
@@ -1122,6 +1118,7 @@ export class VoiceAssistantWebSocketServer {
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
       brainMemory: this.brainMemory,
+      brainCurator: this.brainCurator,
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
@@ -1301,6 +1298,8 @@ export class VoiceAssistantWebSocketServer {
     this.messageTriage = services.messageTriage;
   }
 
+  public setActivityLogService(service: ActivityLogService): void {
+    this.activityLogService = service;
   }
 
   /** Fire-and-forget push to all registered devices (task proposals, etc.). */
@@ -1377,6 +1376,10 @@ export class VoiceAssistantWebSocketServer {
         usageStats: !!this.agentManager.getUsageStatsStore(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
         agentSynthesis: true,
+        // COMPAT(activityLog): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        activityLog: !!this.activityLogService,
+        // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        turnRecap: true,
       },
     };
   }

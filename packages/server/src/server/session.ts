@@ -27,6 +27,7 @@ import type {
 } from "../terminal/terminal-manager.js";
 import { TerminalSessionController } from "../terminal/terminal-session-controller.js";
 import type { TerminalActivity } from "@getpaseo/protocol/terminal-activity";
+import type { AgentTimelineItem } from "@getpaseo/protocol/agent-types";
 import type { BinaryFrame } from "@getpaseo/protocol/binary-frames/index";
 import { CursorError } from "./pagination/cursor.js";
 import { SortablePager, type SortSpec } from "./pagination/sortable-pager.js";
@@ -151,6 +152,8 @@ import {
 } from "./session/checkout/git-metadata-generator.js";
 import { ChatScheduleLoopSession } from "./session/chat/chat-schedule-loop-session.js";
 import { TasksSession } from "./session/tasks/tasks-session.js";
+import { ActivityLogSession } from "./session/activity/activity-session.js";
+import type { ActivityLogService } from "./activity/service.js";
 import type { TaskBoardService } from "./tasks/service.js";
 import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
@@ -204,7 +207,14 @@ import {
 } from "../services/github-service.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import type { BrainMemoryClient } from "../services/brain-memory/client.js";
-import { injectBrainContext, toTimelineMemories } from "../services/brain-memory/client.js";
+import {
+  formatRecall,
+  injectBrainContext,
+  toTimelineMemories,
+} from "../services/brain-memory/client.js";
+import { briefToSouvenir } from "../services/brain-memory/curator.js";
+import type { BrainCurator } from "../services/brain-memory/curator.js";
+import { hasRecallSubstance } from "../services/brain-memory/recall-gate.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -220,6 +230,8 @@ import {
 } from "./paseo-worktree-service.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { generateAgentSynthesis } from "./agent-synthesis-generator.js";
+import { generateTurnRecap } from "./agent-turn-recap-generator.js";
+import { extractTurnFileChanges } from "./turn-recap-files.js";
 import {
   buildAgentSessionConfig as buildWorktreeAgentSessionConfig,
   createPaseoWorktreeWorkflow as createWorktreeWorkflow,
@@ -454,6 +466,7 @@ export interface SessionOptions {
   taskBoardService?: TaskBoardService;
   taskEstimator?: TaskEstimator | null;
   taskScheduler?: TaskScheduler | null;
+  activityLogService?: ActivityLogService;
   messageTriage?: MessageTriage | null;
   checkoutDiffManager: CheckoutDiffManager;
   github?: GitHubService;
@@ -472,6 +485,7 @@ export interface SessionOptions {
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
   brainMemory?: BrainMemoryClient | null;
+  brainCurator?: BrainCurator | null;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -637,6 +651,7 @@ export class Session {
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly brainMemory: BrainMemoryClient | null;
+  private readonly brainCurator: BrainCurator | null;
   private readonly messageTriage: MessageTriage | null;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -654,6 +669,7 @@ export class Session {
   private readonly checkoutSession: CheckoutSession;
   private readonly chatScheduleLoopSession: ChatScheduleLoopSession;
   private readonly tasksSession: TasksSession | null;
+  private readonly activityLogSession: ActivityLogSession | null;
   private readonly providerCatalogSession: ProviderCatalogSession;
   private readonly workspaceFilesSession: WorkspaceFilesSession;
   private readonly agentConfigSession: AgentConfigSession;
@@ -691,6 +707,7 @@ export class Session {
       taskBoardService,
       taskEstimator,
       taskScheduler,
+      activityLogService,
       messageTriage,
       checkoutDiffManager,
       github,
@@ -705,6 +722,7 @@ export class Session {
       providerSnapshotManager,
       providerUsageService,
       brainMemory,
+      brainCurator,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -850,6 +868,15 @@ export class Session {
           logger: this.sessionLogger,
         })
       : null;
+    this.activityLogSession = activityLogService
+      ? new ActivityLogSession({
+          host: {
+            emit: (msg) => this.emit(msg),
+          },
+          activityLogService,
+          logger: this.sessionLogger,
+        })
+      : null;
     this.providerCatalogSession = new ProviderCatalogSession({
       host: {
         emit: (msg) => this.emit(msg),
@@ -952,6 +979,7 @@ export class Session {
     });
     this.providerSnapshotManager = providerSnapshotManager;
     this.brainMemory = brainMemory ?? null;
+    this.brainCurator = brainCurator ?? null;
     this.messageTriage = messageTriage ?? null;
     this.serviceProxy = serviceProxy ?? null;
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
@@ -1494,6 +1522,7 @@ export class Session {
       this.dispatchTerminalMessage(msg) ??
       this.dispatchChatScheduleLoopMessage(msg) ??
       this.dispatchTasksMessage(msg) ??
+      this.dispatchActivityMessage(msg) ??
       this.dispatchMiscMessage(msg);
     if (promise) await promise;
   }
@@ -1924,6 +1953,24 @@ export class Session {
         return tasksSession.handleTaskRunNowRequest(msg);
       case "tasks.task.approve.request":
         return tasksSession.handleTaskApproveRequest(msg);
+      default:
+        return undefined;
+    }
+  }
+
+  private dispatchActivityMessage(msg: SessionInboundMessage): Promise<void> | undefined {
+    const activityLogSession = this.activityLogSession;
+    if (!activityLogSession) {
+      return undefined;
+    }
+    switch (msg.type) {
+      case "activity.log.get.request":
+        return activityLogSession.handleGetRequest(msg);
+      case "activity.log.subscribe.request":
+        return activityLogSession.handleSubscribeRequest(msg);
+      case "activity.log.unsubscribe.request":
+        activityLogSession.handleUnsubscribeRequest(msg);
+        return Promise.resolve();
       default:
         return undefined;
     }
@@ -6036,56 +6083,96 @@ export class Session {
   }
 
   /**
-   * Resolve the Cerveau project scope for an agent: the human project name if
-   * the agent belongs to a registered workspace, else the last path segment of
-   * its working directory. Best-effort — returns undefined on any failure.
+   * Resolve the Cerveau scope for an agent: the human project name if the
+   * agent belongs to a registered workspace (else the last path segment of its
+   * working directory), plus the cwd the curator's internal agents run in.
+   * Best-effort — empty scope on any failure.
    */
-  private async resolveBrainProjectScope(agentId: string): Promise<string | undefined> {
+  private async resolveBrainScope(
+    agentId: string,
+  ): Promise<{ projet: string | undefined; cwd: string | null }> {
     try {
       const agent = await this.agentStorage.get(agentId);
       if (!agent) {
-        return undefined;
+        return { projet: undefined, cwd: null };
       }
       if (agent.workspaceId) {
         const workspace = await this.workspaceRegistry.get(agent.workspaceId);
         if (workspace) {
           const project = await this.projectRegistry.get(workspace.projectId);
           if (project) {
-            return resolveProjectDisplayName(project);
+            return { projet: resolveProjectDisplayName(project), cwd: agent.cwd };
           }
         }
       }
       const segments = agent.cwd.replace(/\\/g, "/").split("/").filter(Boolean);
-      return segments[segments.length - 1] ?? undefined;
+      return { projet: segments[segments.length - 1] ?? undefined, cwd: agent.cwd };
     } catch (err) {
-      this.sessionLogger.debug({ err, agentId }, "brain: project scope resolution failed");
-      return undefined;
+      this.sessionLogger.debug({ err, agentId }, "brain: scope resolution failed");
+      return { projet: undefined, cwd: null };
     }
   }
 
   /**
    * Recall relevant memories from the Cerveau, surface them as a yellow
-   * brain_context timeline item, and return the prompt augmented with the recall
-   * block. Entirely best-effort: a Cerveau outage returns the text unchanged and
+   * brain_context timeline item, and return the prompt augmented with the
+   * recall block.
+   *
+   * First prompt of a conversation: the recall always runs and the project
+   * fiche (curated brief) leads the block — global-but-precise context. On
+   * follow-ups the conversation already holds that context, so low-substance
+   * messages ("Oui", "vas-y") skip recall entirely (the query would be noise)
+   * and the fiche is not re-injected. When the curator is available, the
+   * librarian re-reads the candidates and keeps only what helps THIS request,
+   * falling back to the unfiltered recall if it is unavailable.
+   *
+   * Entirely best-effort: a Cerveau outage returns the text unchanged and
    * never blocks the prompt.
    */
   private async recallAndInjectBrainContext(
     agentId: string,
     text: string,
-    projet: string | undefined,
+    scope: { projet: string | undefined; cwd: string | null },
   ): Promise<string> {
     const brain = this.brainMemory;
     if (!brain || !text.trim()) {
       return text;
     }
+    let isFirstPrompt = false;
+    try {
+      isFirstPrompt = (await this.agentManager.getLastAssistantMessage(agentId)) === null;
+    } catch (err) {
+      this.sessionLogger.debug({ err, agentId }, "brain: first-prompt detection failed");
+    }
+    if (!isFirstPrompt && !hasRecallSubstance(text)) {
+      return text;
+    }
     let recall: Awaited<ReturnType<BrainMemoryClient["recall"]>>;
     try {
-      recall = await brain.recall(text, { projet });
+      recall = await brain.recall(text, { projet: scope.projet });
     } catch (err) {
       this.sessionLogger.debug({ err, agentId }, "brain: recall failed");
       return text;
     }
-    if (recall.count === 0) {
+    const curator = this.brainCurator;
+    const brief = curator && scope.projet ? await curator.loadBrief(scope.projet) : null;
+    let kept = recall.resultats;
+    if (curator && scope.cwd && kept.length > 0) {
+      const filtered = await curator.filterRecall({
+        prompt: text,
+        memories: kept,
+        brief,
+        projet: scope.projet,
+        cwd: scope.cwd,
+      });
+      if (filtered) {
+        kept = filtered;
+      }
+    }
+    if (isFirstPrompt && brief && scope.projet) {
+      kept = [briefToSouvenir(scope.projet, brief), ...kept];
+    }
+    if (kept.length === 0) {
       return text;
     }
     try {
@@ -6093,21 +6180,27 @@ export class Session {
         type: "brain_context",
         query: text.slice(0, 500),
         portee: recall.portee,
-        count: recall.count,
-        memories: toTimelineMemories(recall.resultats),
+        count: kept.length,
+        memories: toTimelineMemories(kept),
         status: "done",
       });
     } catch (err) {
       this.sessionLogger.debug({ err, agentId }, "brain: timeline emit failed");
     }
-    return injectBrainContext(recall.blob, recall.portee, text);
+    return injectBrainContext(formatRecall(kept), recall.portee, text);
   }
 
   /**
-   * After the next turn ends, note the exchange back into the Cerveau so it keeps
-   * learning. One-shot subscription mirroring the auto-archive terminal listener.
+   * After the next turn ends, capture the exchange into the Cerveau. With the
+   * curator (scribe): completed turns only, distilled into durable facts plus
+   * a fiche refresh — trivia never reaches the brain. Without it: legacy raw
+   * note. One-shot subscription mirroring the auto-archive terminal listener.
    */
-  private scheduleBrainNote(agentId: string, userText: string, projet: string | undefined): void {
+  private scheduleBrainCapture(
+    agentId: string,
+    userText: string,
+    scope: { projet: string | undefined; cwd: string | null },
+  ): void {
     const brain = this.brainMemory;
     if (!brain || !userText.trim()) {
       return;
@@ -6127,18 +6220,36 @@ export class Session {
         }
         unsubscribe();
         void (async () => {
-          const finalText =
-            eventType === "turn_completed"
-              ? ((await this.agentManager.getLastAssistantMessage(agentId)) ?? "")
-              : "";
-          const note = finalText
-            ? `Utilisateur: ${userText}\n\nAssistant: ${finalText}`
-            : `Utilisateur: ${userText}`;
-          await brain.note(note, {
-            source: "paseo-daemon",
-            projet,
-            discussionId: agentId,
-          });
+          try {
+            const finalText =
+              eventType === "turn_completed"
+                ? ((await this.agentManager.getLastAssistantMessage(agentId)) ?? "")
+                : "";
+            const curator = this.brainCurator;
+            if (curator) {
+              if (eventType !== "turn_completed" || !scope.cwd) {
+                return;
+              }
+              await curator.distillExchange({
+                userText,
+                assistantText: finalText,
+                projet: scope.projet,
+                cwd: scope.cwd,
+                discussionId: agentId,
+              });
+              return;
+            }
+            const note = finalText
+              ? `Utilisateur: ${userText}\n\nAssistant: ${finalText}`
+              : `Utilisateur: ${userText}`;
+            await brain.note(note, {
+              source: "paseo-daemon",
+              projet: scope.projet,
+              discussionId: agentId,
+            });
+          } catch (err) {
+            this.sessionLogger.debug({ err, agentId }, "brain: exchange capture failed");
+          }
         })();
       },
       { agentId, replayState: false },
@@ -6170,9 +6281,9 @@ export class Session {
       // turn ends. All best-effort — a Cerveau outage never blocks the prompt.
       let promptText = msg.text;
       if (this.brainMemory) {
-        const projet = await this.resolveBrainProjectScope(agentId);
-        promptText = await this.recallAndInjectBrainContext(agentId, msg.text, projet);
-        this.scheduleBrainNote(agentId, msg.text, projet);
+        const scope = await this.resolveBrainScope(agentId);
+        promptText = await this.recallAndInjectBrainContext(agentId, msg.text, scope);
+        this.scheduleBrainCapture(agentId, msg.text, scope);
       }
 
       // Inline task-intent triage: if the message reads like a task request,
@@ -6228,6 +6339,12 @@ export class Session {
       // async; a generation failure leaves the previous synthesis untouched.
       void this.regenerateSynthesis(agentId, { appendUserText: msg.text, pushHistory: false });
       this.scheduleSynthesisFromTurn(agentId);
+
+      // Append a plain-language recap block at the end of the turn when it
+      // changed files, so a non-technical reader can see what was done and open
+      // each modification. Best-effort, async; captures the timeline position
+      // now so only this turn's tool calls are considered.
+      this.scheduleTurnRecap(agentId);
 
       if (dispatchResult.outOfBand) {
         this.emit({
@@ -6311,6 +6428,99 @@ export class Session {
       },
       { agentId, replayState: false },
     );
+  }
+
+  /**
+   * After the next turn ends, if it changed any files, append a plain-language
+   * recap block to the thread (what was done + the modified files, each
+   * openable). The timeline length is captured now so only tool calls from this
+   * turn are considered. One-shot subscription mirroring scheduleSynthesisFromTurn;
+   * entirely best-effort. Skipped for internal ephemeral agents.
+   */
+  private scheduleTurnRecap(agentId: string): void {
+    const agent = this.agentManager.getAgent(agentId);
+    const cwd = agent?.cwd;
+    if (!cwd || agent.internal) {
+      return;
+    }
+    let startLength = 0;
+    try {
+      startLength = this.agentManager.getTimeline(agentId).length;
+    } catch {
+      startLength = 0;
+    }
+    const unsubscribe = this.agentManager.subscribe(
+      (event) => {
+        if (event.type !== "agent_stream") {
+          return;
+        }
+        const eventType = event.event.type;
+        if (
+          eventType !== "turn_completed" &&
+          eventType !== "turn_failed" &&
+          eventType !== "turn_canceled"
+        ) {
+          return;
+        }
+        unsubscribe();
+        if (eventType !== "turn_completed") {
+          return;
+        }
+        void this.generateAndEmitTurnRecap(agentId, cwd, startLength);
+      },
+      { agentId, replayState: false },
+    );
+  }
+
+  /**
+   * Extract the turn's file changes deterministically from its tool calls, ask
+   * the model for a plain-language recap of what was accomplished, then append
+   * a `turn_recap` timeline item so it renders as a block at the end of the
+   * turn. No file changes → no recap (chat-only turns stay quiet). Best-effort.
+   */
+  private async generateAndEmitTurnRecap(
+    agentId: string,
+    cwd: string,
+    startLength: number,
+  ): Promise<void> {
+    let timeline: readonly AgentTimelineItem[];
+    try {
+      timeline = this.agentManager.getTimeline(agentId);
+    } catch {
+      return;
+    }
+    const turnItems = timeline.slice(startLength);
+    const files = extractTurnFileChanges(turnItems);
+    if (files.length === 0) {
+      return;
+    }
+    const transcript = this.buildConversationTranscript(agentId);
+    if (!transcript.trim()) {
+      return;
+    }
+    const recap = await generateTurnRecap({
+      agentManager: this.agentManager,
+      cwd,
+      providerSnapshotManager: this.providerSnapshotManager,
+      daemonConfig: this.readStructuredGenerationDaemonConfig(),
+      transcript,
+      files,
+      logger: this.sessionLogger,
+    });
+    if (!recap) {
+      return;
+    }
+    try {
+      await this.agentManager.appendTimelineItem(agentId, {
+        type: "turn_recap",
+        summary: recap.summary,
+        highlights: recap.highlights.length > 0 ? recap.highlights : undefined,
+        files,
+        cwd,
+      });
+    } catch (err) {
+      this.sessionLogger.debug({ err, agentId }, "turn recap: timeline emit failed");
+    }
   }
 
   /**
@@ -6572,6 +6782,7 @@ export class Session {
     }
     this.providerCatalogSession.dispose();
     this.tasksSession?.dispose();
+    this.activityLogSession?.dispose();
 
     await this.voiceSession.cleanup();
 

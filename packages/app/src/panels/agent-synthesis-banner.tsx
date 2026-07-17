@@ -223,20 +223,20 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[1],
   },
   detailRow: {
-    flexDirection: "row",
-    gap: theme.spacing[2],
+    gap: 2,
   },
   detailLabel: {
-    width: 58,
-    fontSize: theme.fontSize.xs,
+    fontSize: 10,
     fontWeight: theme.fontWeight.semibold,
+    letterSpacing: 0.5,
     color: theme.colors.foregroundMuted,
     textTransform: "uppercase",
+    opacity: 0.7,
   },
   detailValue: {
-    flex: 1,
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.3,
+    color: theme.colors.foreground,
   },
   thread: {
     marginTop: theme.spacing[2],

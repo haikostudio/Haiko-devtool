@@ -226,6 +226,19 @@ export const zhCN: TranslationResources = {
       commits: "未找到提交。",
     },
   },
+  activity: {
+    title: "活动",
+    filter: {
+      all: "所有项目",
+    },
+    empty: "暂无活动。",
+    loading: "正在加载活动…",
+  },
+  turnRecap: {
+    title: "小结",
+    filesChanged: "已更改的文件",
+    viewAllChanges: "查看所有更改",
+  },
   dashboard: {
     title: "仪表板",
     empty: "没有活动的代理",

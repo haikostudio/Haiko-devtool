@@ -81,7 +81,8 @@ export type StreamItem =
   | ActivityLogItem
   | CompactionItem
   | BrainContextItem
-  | TaskTriageItem;
+  | TaskTriageItem
+  | TurnRecapItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
@@ -219,6 +220,28 @@ export interface TaskTriageItem {
   questions: string[];
   proposedCount: number;
   projectId?: string;
+}
+
+export type TurnRecapFileOperation = "created" | "edited" | "deleted";
+
+export interface TurnRecapFileEntry {
+  path: string;
+  operation: TurnRecapFileOperation;
+}
+
+/**
+ * Plain-language recap block the daemon appends at the end of a turn that
+ * changed files. `files` is exact (derived server-side from the turn's tool
+ * calls); `summary`/`highlights` are model-written in the user's language.
+ */
+export interface TurnRecapItem {
+  kind: "turn_recap";
+  id: string;
+  timestamp: Date;
+  summary: string;
+  highlights: string[];
+  files: TurnRecapFileEntry[];
+  cwd?: string;
 }
 
 export interface TodoEntry {
@@ -931,6 +954,21 @@ function reduceTimelineEvent(
         projectId: item.projectId,
       };
       return finalizeActiveThoughts([...state, triageItem]);
+    }
+    case "turn_recap": {
+      const recapItem: TurnRecapItem = {
+        kind: "turn_recap",
+        id: createTimelineId("turn_recap", item.summary, timestamp),
+        timestamp,
+        summary: item.summary,
+        highlights: item.highlights ?? [],
+        files: (item.files ?? []).map((file) => ({
+          path: file.path,
+          operation: file.operation,
+        })),
+        cwd: item.cwd,
+      };
+      return finalizeActiveThoughts([...state, recapItem]);
     }
     default:
       return state;

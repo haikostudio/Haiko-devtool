@@ -34,6 +34,9 @@ import MaskedView from "@react-native-masked-view/masked-view";
 import {
   Circle,
   Info,
+  Lightbulb,
+  Megaphone,
+  ShieldAlert,
   CheckCircle,
   XCircle,
   FileText,
@@ -80,6 +83,7 @@ import { markdownNodeContainsType } from "@/utils/markdown-ast";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
+import { parseCalloutBlock, type CalloutType, type ParsedCallout } from "@/utils/markdown-callout";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
@@ -1493,6 +1497,95 @@ function AssistantMessageBlockContainer({
   );
 }
 
+/**
+ * Per-type accent for callouts. Hard-coded tints (like BRAIN_COLOR) so the
+ * accent reads the same on every light/dark theme without threading tokens
+ * through each theme variant. `icon` is a lucide component.
+ */
+const CALLOUT_PALETTE: Record<
+  CalloutType,
+  { color: string; background: string; icon: ComponentType<{ size?: number; color?: string }> }
+> = {
+  tip: { color: "#a855f7", background: "rgba(168, 85, 247, 0.13)", icon: Lightbulb },
+  note: { color: "#60a5fa", background: "rgba(96, 165, 250, 0.13)", icon: Info },
+  important: { color: "#818cf8", background: "rgba(129, 140, 248, 0.13)", icon: Megaphone },
+  warning: { color: "#f59e0b", background: "rgba(245, 158, 11, 0.13)", icon: TriangleAlertIcon },
+  caution: { color: "#f87171", background: "rgba(248, 113, 113, 0.13)", icon: ShieldAlert },
+};
+
+const calloutStylesheet = StyleSheet.create((theme) => ({
+  container: {
+    borderRadius: theme.borderRadius.md,
+    borderLeftWidth: 3,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    overflow: "hidden",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  headerText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    letterSpacing: 0.3,
+  },
+}));
+
+interface MarkdownCalloutProps {
+  callout: ParsedCallout;
+  rules: RenderRules;
+  parser: MarkdownIt;
+  onLinkPress: (url: string) => boolean;
+}
+
+/**
+ * Renders a markdown blockquote as a colored callout so advice, notes and
+ * warnings visually separate from the surrounding prose. Plain blockquotes get
+ * the purple "tip" tint with no header; `[!TYPE]` alerts add an icon + label.
+ */
+const MarkdownCallout = memo(function MarkdownCallout({
+  callout,
+  rules,
+  parser,
+  onLinkPress,
+}: MarkdownCalloutProps) {
+  const palette = CALLOUT_PALETTE[callout.type];
+  const HeaderIcon = palette.icon;
+  const containerStyle = useMemo(
+    () => [
+      calloutStylesheet.container,
+      { borderLeftColor: palette.color, backgroundColor: palette.background },
+    ],
+    [palette.background, palette.color],
+  );
+  const headerTextStyle = useMemo(
+    () => [calloutStylesheet.headerText, { color: palette.color }],
+    [palette.color],
+  );
+
+  return (
+    <View style={containerStyle}>
+      {callout.heading !== null && (
+        <View style={calloutStylesheet.header}>
+          <HeaderIcon size={15} color={palette.color} />
+          <Text style={headerTextStyle} selectable={false}>
+            {callout.heading}
+          </Text>
+        </View>
+      )}
+      <MemoizedMarkdownBlock
+        text={callout.body}
+        rules={rules}
+        parser={parser}
+        onLinkPress={onLinkPress}
+      />
+    </View>
+  );
+});
+
 interface MemoizedMarkdownBlockProps {
   text: string;
   rules: RenderRules;
@@ -1908,7 +2001,12 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
   const keyedBlocks = useMemo(
-    () => blocks.map((block, index) => ({ key: `${index}:${block.slice(0, 32)}`, block })),
+    () =>
+      blocks.map((block, index) => ({
+        key: `${index}:${block.slice(0, 32)}`,
+        block,
+        callout: parseCalloutBlock(block),
+      })),
     [blocks],
   );
 
@@ -1925,18 +2023,27 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block }, index) => (
+      {keyedBlocks.map(({ key, block, callout }, index) => (
         <AssistantMessageBlockContainer
           key={key}
           block={block}
           marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
         >
-          <MemoizedMarkdownBlock
-            text={block}
-            rules={markdownRules}
-            parser={markdownParser}
-            onLinkPress={handleMarkdownLinkPress}
-          />
+          {callout ? (
+            <MarkdownCallout
+              callout={callout}
+              rules={markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          ) : (
+            <MemoizedMarkdownBlock
+              text={block}
+              rules={markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          )}
         </AssistantMessageBlockContainer>
       ))}
     </View>

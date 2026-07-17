@@ -385,6 +385,16 @@ export interface TaskTriageTimelineItem {
   projectId?: string;
 }
 
+/** Mirrors the protocol {@link TurnRecapTimelineItem}; see agent-types.ts. */
+export interface TurnRecapTimelineItem {
+  [key: string]: unknown;
+  type: "turn_recap";
+  summary: string;
+  highlights?: string[];
+  files: { path: string; operation: "created" | "edited" | "deleted" }[];
+  cwd?: string;
+}
+
 export type AgentTimelineItem =
   | { type: "user_message"; text: string; messageId?: string }
   | { type: "assistant_message"; text: string; messageId?: string }
@@ -394,7 +404,8 @@ export type AgentTimelineItem =
   | { type: "error"; message: string }
   | CompactionTimelineItem
   | BrainContextTimelineItem
-  | TaskTriageTimelineItem;
+  | TaskTriageTimelineItem
+  | TurnRecapTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

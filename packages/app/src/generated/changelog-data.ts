@@ -618,6 +618,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    hash: "4f9bb22d4d292d19c57831f80c4d6ae97159338b",
+    shortHash: "4f9bb22d4",
+    date: "2026-07-18T00:45:48+02:00",
+    author: "haikostudio",
+    subject: "chore(server): brain curation config — curation flag + internal provider model",
+  },
+  {
     hash: "8a511df92719c282b9c3e5f481001edd3d98401a",
     shortHash: "8a511df92",
     date: "2026-07-18T00:11:54+02:00",
@@ -2714,14 +2721,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "Verify real agent workflows through the hosted relay (#1998)",
   },
-  {
-    hash: "603b38032111776c14d5f4a9073840a1d7ae7a0e",
-    shortHash: "603b38032",
-    date: "2026-07-11T09:21:12+00:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): preserve workspace-root link tooltips",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-18T00:11:54+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-18T00:45:48+02:00";

@@ -264,7 +264,9 @@ export function createMarkdownStyles(theme: Theme) {
     },
 
     list_item: {
-      marginBottom: theme.spacing[1],
+      // A touch more air between items so lists read as scannable rows rather
+      // than one dense block of text.
+      marginBottom: theme.spacing[2],
       flexDirection: "row" as const,
       alignItems: "flex-start" as const,
       flexShrink: 1,
@@ -282,16 +284,16 @@ export function createMarkdownStyles(theme: Theme) {
 
     bullet_list_icon: {
       ...webSelectableTextStyle,
-      color: theme.colors.foregroundMuted,
-      marginRight: 4,
+      color: theme.colors.foreground,
+      marginRight: 8,
       fontSize: theme.fontSize.base,
       lineHeight: 22,
     },
 
     ordered_list_icon: {
       ...webSelectableTextStyle,
-      color: theme.colors.foregroundMuted,
-      marginRight: 4,
+      color: theme.colors.foreground,
+      marginRight: 8,
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
       lineHeight: 22,
@@ -302,12 +304,15 @@ export function createMarkdownStyles(theme: Theme) {
     // BLOCKQUOTE
     // =========================================================================
 
+    // Fallback styling for blockquotes that don't reach the block-level callout
+    // renderer (e.g. a quote glued to a paragraph inside one block, or nested).
+    // Keep it in sync with the purple "tip" callout tint in message.tsx.
     blockquote: {
-      backgroundColor: theme.colors.surface2,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.colors.primary,
-      paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[3],
+      backgroundColor: "rgba(168, 85, 247, 0.13)",
+      borderLeftWidth: 3,
+      borderLeftColor: "#a855f7",
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[2],
       marginVertical: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
