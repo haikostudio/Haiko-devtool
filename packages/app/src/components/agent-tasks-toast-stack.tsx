@@ -271,9 +271,13 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
   },
   statusPip: {
+    position: "absolute",
+    top: 6,
+    left: 6,
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
+    zIndex: 1,
   },
   statusPipNeedsInput: {
     backgroundColor: theme.colors.palette.amber[500],

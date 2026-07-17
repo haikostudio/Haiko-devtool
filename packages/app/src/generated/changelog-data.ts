@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-17",
     markdown:
-      "### Added\n\n- Floating conversation-synthesis block per agent\n- Make keyboard shortcuts searchable\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Share git watches by cwd\n- Bound magic scrollbar above the composer on mobile\n- Make lifecycle operations transactional\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Remove duplicate ownership discovery\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Compare filesystem identities\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+      "### Added\n\n- Floating conversation-synthesis block per agent\n- Make keyboard shortcuts searchable\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Share git watches by cwd\n- Bound magic scrollbar above the composer on mobile\n- Make lifecycle operations transactional\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Remove duplicate ownership discovery\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Compare filesystem identities\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
   },
   {
     version: "0.1.108",
@@ -618,6 +618,21 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    hash: "a7d406cd5831941dd4b86a527da27e7bb09b7280",
+    shortHash: "a7d406cd5",
+    date: "2026-07-17T14:19:25+02:00",
+    author: "haikostudio",
+    subject:
+      "index on feat/sidebar-dashboard-ui: 04bca8475 fix(app): render attachment thumbnails with expo-image",
+  },
+  {
+    hash: "04bca84754065db531b7131e3ea605ed668128b7",
+    shortHash: "04bca8475",
+    date: "2026-07-17T14:15:39+02:00",
+    author: "haikostudio",
+    subject: "fix(app): render attachment thumbnails with expo-image",
+  },
+  {
     hash: "84f3f9aa076f9e6871f532a31169515d2633bfc1",
     shortHash: "84f3f9aa0",
     date: "2026-07-17T14:13:09+02:00",
@@ -637,14 +652,6 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     date: "2026-07-17T14:10:23+02:00",
     author: "haikostudio",
     subject: "feat(app): replace pulsing toast border with a colored status dot + running timer",
-  },
-  {
-    hash: "e65375fdd7b5b33a20f004157ec442a679cb24f8",
-    shortHash: "e65375fdd",
-    date: "2026-07-17T14:10:23+02:00",
-    author: "haikostudio",
-    subject:
-      "index on feat/sidebar-dashboard-ui: 7ee8a5d49 fix(app): propagate draft clear/send to other devices",
   },
   {
     hash: "dfada2a556a5013899214dea75fad874723f084c",
@@ -2711,14 +2718,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "fix(app): restore missing workspaces from History",
   },
-  {
-    hash: "5d18edd31e56145911eb875a103eba181a3f4888",
-    shortHash: "5d18edd31",
-    date: "2026-07-11T12:00:42+02:00",
-    author: "Mohamed Boudra",
-    subject: "Verify real agent workflows through the hosted relay (#1998)",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T14:13:09+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T14:19:25+02:00";
