@@ -1614,6 +1614,7 @@ export const useSessionStore = create<SessionStore>()(
             title: agent.title ?? null,
             status: agent.status,
             lastActivityAt,
+            lastUserMessageAt: agent.lastUserMessageAt,
             cwd: agent.cwd,
             provider: agent.provider,
             pendingPermissionCount: agent.pendingPermissions.length,

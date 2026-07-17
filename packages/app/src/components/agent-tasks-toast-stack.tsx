@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
@@ -83,54 +83,53 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
   const dismiss = useAgentTaskToastStore((state) => state.dismiss);
   const title = task.agent.title || t("agentList.fallbackTitle");
   const pipColorStyle = PIP_STYLE_BY_BUCKET[task.bucket];
-
-  // Once a task is paused/finished it stops moving, so surface where it ran and when
-  // it settled: project name + the finish time (falls back to last activity).
-  const metaText = useMemo(() => {
-    if (task.bucket !== "done") {
-      return null;
-    }
-    const projectName = task.agent.projectPlacement?.projectName ?? "";
-    const finishedAt = task.agent.attentionTimestamp ?? task.agent.lastActivityAt;
-    const timestamp = finishedAt ? formatMessageTimestamp(finishedAt) : "";
-    return [projectName, timestamp].filter(Boolean).join(" · ") || null;
-  }, [
-    task.bucket,
-    task.agent.projectPlacement,
-    task.agent.attentionTimestamp,
-    task.agent.lastActivityAt,
-  ]);
-
-  // Live "running for Xs" counter. There's no server-provided run-start timestamp, so
-  // we stamp the moment this toast first observes the running state and tick every
-  // second while it lasts. The toast stays mounted for the whole run, so the stamp is
-  // stable; it resets whenever the task leaves the running state.
   const isRunning = task.bucket === "running";
-  const runStartRef = useRef<number | null>(null);
+
+  // Re-render once a second while running so the live "running for" counter advances.
   const [elapsedTick, setElapsedTick] = useState(0);
   useEffect(() => {
     if (!isRunning) {
-      runStartRef.current = null;
       return;
-    }
-    if (runStartRef.current === null) {
-      runStartRef.current = Date.now();
     }
     const id = setInterval(() => setElapsedTick((tick) => tick + 1), 1000);
     return () => clearInterval(id);
   }, [isRunning]);
-  const elapsedText = useMemo(() => {
-    if (!isRunning || runStartRef.current === null) {
-      return null;
-    }
-    // elapsedTick drives the recompute each second.
-    void elapsedTick;
-    return t("agentList.runningFor", {
-      duration: formatDuration(Date.now() - runStartRef.current),
-    });
-  }, [isRunning, elapsedTick, t]);
 
-  const subtitle = metaText ?? elapsedText;
+  // Every toast leads with the project name, then a time read that depends on state:
+  // running shows a live "running for Xs" counter; a settled task shows how long the
+  // request took plus when it finished. lastUserMessageAt is the server's start-of-
+  // request stamp, so the duration is correct even for a task already done on load.
+  const subtitle = useMemo(() => {
+    // elapsedTick drives the per-second recompute while running.
+    void elapsedTick;
+    const projectName = task.agent.projectPlacement?.projectName ?? "";
+    const startMs = task.agent.lastUserMessageAt?.getTime() ?? null;
+
+    if (isRunning) {
+      const runningText =
+        startMs !== null
+          ? t("agentList.runningFor", { duration: formatDuration(Date.now() - startMs) })
+          : "";
+      return [projectName, runningText].filter(Boolean).join(" · ") || null;
+    }
+
+    const finishedAt = task.agent.attentionTimestamp ?? task.agent.lastActivityAt;
+    const finishedMs = finishedAt ? finishedAt.getTime() : null;
+    const durationText =
+      startMs !== null && finishedMs !== null && finishedMs >= startMs
+        ? formatDuration(finishedMs - startMs)
+        : "";
+    const finishTime = finishedAt ? formatMessageTimestamp(finishedAt) : "";
+    return [projectName, durationText, finishTime].filter(Boolean).join(" · ") || null;
+  }, [
+    isRunning,
+    elapsedTick,
+    task.agent.projectPlacement,
+    task.agent.lastUserMessageAt,
+    task.agent.attentionTimestamp,
+    task.agent.lastActivityAt,
+    t,
+  ]);
 
   const handlePress = useCallback(() => {
     navigateToAgent({
