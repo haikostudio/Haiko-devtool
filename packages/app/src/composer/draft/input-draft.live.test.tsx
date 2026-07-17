@@ -629,6 +629,58 @@ describe("useAgentInputDraft live contract", () => {
     expect(getLatest().text).toBe("");
   });
 
+  it("keeps attachments the user just added while focused when a tombstone arrives", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+    const image: AttachmentMetadata = {
+      id: "paste-guard-image",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "paste-guard-image",
+      createdAt: 1,
+    };
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:paste-guard" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    // The user focuses the input and pastes/attaches an image.
+    await act(async () => {
+      getLatest().notifyInputFocus(true);
+      getLatest().setAttachments([{ kind: "image", metadata: image }]);
+    });
+    expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
+
+    // A stale/echoed tombstone lands while the field is focused — it must NOT
+    // yank the just-added attachment out from under the user.
+    await act(async () => {
+      sendDraftTombstone("draft:paste-guard");
+    });
+    expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
+  });
+
   it("adopts a materialized image attachment (storageKey swap) into an open composer", async () => {
     let latest: ReturnType<typeof useAgentInputDraft> | null = null;
 

@@ -241,7 +241,14 @@ export function useAgentInputDraft(input: UseAgentInputDraftInput): AgentInputDr
         right: attachmentsRef.current,
       })
     ) {
-      setAttachmentsState(remoteAttachments);
+      // A non-empty change (e.g. a materialized image's storageKey swap, or an
+      // attachment added on another device) is adopted even while focused — it
+      // never removes what the user is holding. But EMPTYING the list (a
+      // sent/abandoned tombstone) must respect focus, exactly like text: never
+      // yank an attachment the local user just added/pasted out from under them.
+      if (remoteAttachments.length > 0 || !inputFocusedRef.current) {
+        setAttachmentsState(remoteAttachments);
+      }
     }
     if (inputFocusedRef.current) {
       return;
