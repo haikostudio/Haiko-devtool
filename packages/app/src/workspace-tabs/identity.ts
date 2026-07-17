@@ -101,7 +101,7 @@ export function workspaceTabTargetsEqual(
   return false;
 }
 
-function workspaceDraftTabSetupsEqual(
+export function workspaceDraftTabSetupsEqual(
   left: WorkspaceDraftTabSetup | undefined,
   right: WorkspaceDraftTabSetup | undefined,
 ): boolean {

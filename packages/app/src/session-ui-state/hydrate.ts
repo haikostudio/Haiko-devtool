@@ -8,7 +8,7 @@ import {
   useWorkspaceLayoutStore,
 } from "@/stores/workspace-layout-store";
 import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
-import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
+import { normalizeWorkspaceTabTarget, workspaceTabTargetsEqual } from "@/workspace-tabs/identity";
 
 function coerceLifecycle(lifecycle: string): DraftLifecycleState {
   return lifecycle === "abandoned" || lifecycle === "sent" ? lifecycle : "active";
@@ -95,6 +95,17 @@ export function hydrateWorkspaceUiState(input: {
     const target = remoteTargets.get(tabId);
     if (target && !localTabIds.has(tabId)) {
       layoutStore.openTabInBackground(workspaceKey, target);
+    }
+  }
+
+  // Refresh the target of tabs that already exist locally but whose remote
+  // target changed — e.g. a draft tab whose agent config (target.setup) was
+  // edited on another device. Without this, an already-open tab would keep its
+  // stale target and only the tab structure (open/close/order) would sync.
+  for (const tab of localTabs) {
+    const remoteTarget = remoteTargets.get(tab.tabId);
+    if (remoteTarget && !workspaceTabTargetsEqual(tab.target, remoteTarget)) {
+      layoutStore.retargetTab(workspaceKey, tab.tabId, remoteTarget);
     }
   }
 

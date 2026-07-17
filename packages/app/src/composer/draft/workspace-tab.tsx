@@ -19,6 +19,14 @@ import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/dra
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
+import {
+  buildWorkspaceTabPersistenceKey,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
+import {
+  normalizeWorkspaceDraftTabSetup,
+  workspaceDraftTabSetupsEqual,
+} from "@/workspace-tabs/identity";
 import { usePanelStore } from "@/stores/panel-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { Agent } from "@/stores/session-store";
@@ -378,6 +386,51 @@ export function WorkspaceDraftAgentTab({
   const clearDraftInput = draftInput.clear;
   const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
+  const draftIsHydrated = draftInput.isHydrated;
+
+  // Mirror the live composer config (provider/model/mode/thinking/features) back
+  // into the tab's target.setup so cross-device session sync carries it. The
+  // config otherwise lives only in the ephemeral form state and the creation-time
+  // setup, so edits never reach the synced snapshot. retargetTab is a no-op when
+  // the setup is unchanged, so re-running with an identical config cannot loop.
+  const composerSetup = useMemo(
+    () =>
+      normalizeWorkspaceDraftTabSetup({
+        provider: composerState.selectedProvider,
+        cwd: composerState.workingDir,
+        modeId: composerState.selectedMode || null,
+        model: composerState.effectiveModelId || null,
+        thinkingOptionId: composerState.effectiveThinkingOptionId || null,
+        featureValues: composerState.featureValues ?? {},
+      }),
+    [
+      composerState.selectedProvider,
+      composerState.workingDir,
+      composerState.selectedMode,
+      composerState.effectiveModelId,
+      composerState.effectiveThinkingOptionId,
+      composerState.featureValues,
+    ],
+  );
+  useEffect(() => {
+    // Wait for the draft to hydrate first so we never overwrite a synced setup
+    // with pre-hydration form defaults.
+    if (!draftIsHydrated || !composerSetup) {
+      return;
+    }
+    const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+    if (!workspaceKey) {
+      return;
+    }
+    if (
+      workspaceDraftTabSetupsEqual(normalizeWorkspaceDraftTabSetup(initialSetup), composerSetup)
+    ) {
+      return;
+    }
+    useWorkspaceLayoutStore
+      .getState()
+      .retargetTab(workspaceKey, tabId, { kind: "draft", draftId, setup: composerSetup });
+  }, [composerSetup, draftIsHydrated, initialSetup, serverId, workspaceId, tabId, draftId]);
   const pendingAutoSubmit = useWorkspaceDraftSubmissionStore((state) => {
     const pending = state.pendingByDraftId[draftId] ?? null;
     return pending?.serverId === serverId && pending.workspaceId === workspaceId ? pending : null;
