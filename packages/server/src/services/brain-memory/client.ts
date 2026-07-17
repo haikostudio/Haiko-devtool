@@ -27,8 +27,10 @@ export const DEFAULT_BRAIN_BASE_URL = "https://memoire.haiko-s1.com";
 // to ReadTimeout and came back empty).
 const RECALL_TIMEOUT_MS = 10_000;
 const NOTE_TIMEOUT_MS = 6_000;
-// Leaves room for a couple of recalled procedures on top of the memories.
-const MAX_BLOB_CHARS = 3_000;
+// Leaves room for the project fiche (first prompt, ≤6000 chars) plus filtered
+// memories and a couple of recalled procedures. Follow-up recalls carry no
+// fiche and a librarian-filtered list, so they stay far below the cap.
+const MAX_BLOB_CHARS = 8_000;
 const MAX_NOTE_CHARS = 4_000;
 const MAX_SKILLS_INJECTED = 2;
 const MAX_SKILL_PROCEDURE_CHARS = 600;
@@ -285,7 +287,7 @@ export class BrainMemoryClient {
 }
 
 /** Fold accents + case so "Maroket" ≈ "maroket" and "sécurité" ≈ "securite". */
-function foldText(text: string): string {
+export function foldText(text: string): string {
   return text
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -293,7 +295,7 @@ function foldText(text: string): string {
 }
 
 /** Poor-man's French stems of the meaningful words: ≥4 chars, trailing -s/-x dropped. */
-function foldStems(text: string): string[] {
+export function foldStems(text: string): string[] {
   const words = foldText(text).match(/[a-z0-9à-ÿ]{4,}/g) ?? [];
   return words.map((w) =>
     w.length > 4 && (w.endsWith("s") || w.endsWith("x")) ? w.slice(0, -1) : w,

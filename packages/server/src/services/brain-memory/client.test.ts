@@ -30,8 +30,8 @@ describe("formatRecall", () => {
   });
 
   it("caps the blob length", () => {
-    const long = { texte: "x".repeat(5000) };
-    expect(formatRecall([long]).length).toBeLessThanOrEqual(3000);
+    const long = { texte: "x".repeat(20_000) };
+    expect(formatRecall([long]).length).toBeLessThanOrEqual(8_000);
   });
 });
 
