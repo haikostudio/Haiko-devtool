@@ -217,6 +217,17 @@ export const es: TranslationResources = {
       unarchive: "Desarchivar",
     },
   },
+  changelog: {
+    title: "Registro de cambios",
+    tabs: {
+      releases: "Versiones",
+      commits: "Commits",
+    },
+    empty: {
+      releases: "Aún no hay versiones.",
+      commits: "No se encontraron commits.",
+    },
+  },
   dashboard: {
     title: "Panel",
     empty: "No hay agentes activos",

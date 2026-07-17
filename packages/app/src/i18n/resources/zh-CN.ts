@@ -214,6 +214,17 @@ export const zhCN: TranslationResources = {
       unarchive: "取消归档",
     },
   },
+  changelog: {
+    title: "更新日志",
+    tabs: {
+      releases: "版本",
+      commits: "提交",
+    },
+    empty: {
+      releases: "暂无版本。",
+      commits: "未找到提交。",
+    },
+  },
   dashboard: {
     title: "仪表板",
     empty: "没有活动的代理",

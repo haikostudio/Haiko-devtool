@@ -217,6 +217,17 @@ export const ja: TranslationResources = {
       unarchive: "アーカイブ解除",
     },
   },
+  changelog: {
+    title: "変更履歴",
+    tabs: {
+      releases: "リリース",
+      commits: "コミット",
+    },
+    empty: {
+      releases: "まだリリースはありません。",
+      commits: "コミットが見つかりません。",
+    },
+  },
   dashboard: {
     title: "ダッシュボード",
     empty: "アクティブなエージェントはありません",

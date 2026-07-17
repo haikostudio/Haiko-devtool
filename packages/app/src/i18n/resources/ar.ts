@@ -214,6 +214,17 @@ export const ar: TranslationResources = {
       unarchive: "إلغاء الأرشفة",
     },
   },
+  changelog: {
+    title: "سجل التغييرات",
+    tabs: {
+      releases: "الإصدارات",
+      commits: "الالتزامات",
+    },
+    empty: {
+      releases: "لا توجد إصدارات بعد.",
+      commits: "لم يتم العثور على أي التزامات.",
+    },
+  },
   dashboard: {
     title: "لوحة القيادة",
     empty: "لا توجد وكلاء نشطون",

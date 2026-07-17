@@ -216,6 +216,17 @@ export const ru: TranslationResources = {
       unarchive: "Разархивировать",
     },
   },
+  changelog: {
+    title: "История изменений",
+    tabs: {
+      releases: "Релизы",
+      commits: "Коммиты",
+    },
+    empty: {
+      releases: "Пока нет релизов.",
+      commits: "Коммиты не найдены.",
+    },
+  },
   dashboard: {
     title: "Панель",
     empty: "Нет активных агентов",

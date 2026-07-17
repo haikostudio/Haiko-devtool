@@ -45,6 +45,7 @@ import { useOwnsWindowChromeCorner, WindowChromeSafeArea } from "@/utils/desktop
 import { useCloseAgentListGesture } from "@/mobile-panels/gestures";
 import { MobilePanelOverlay } from "@/mobile-panels/presentation";
 import {
+  buildChangelogRoute,
   buildDashboardRoute,
   buildTasksRoute,
   buildOpenProjectRoute,
@@ -100,6 +101,7 @@ interface SidebarLabels {
   addHost: string;
   dashboard: string;
   tasks: string;
+  changelog: string;
 }
 
 interface MobileSidebarProps extends SidebarSharedProps {
@@ -110,6 +112,7 @@ interface MobileSidebarProps extends SidebarSharedProps {
   handleViewMoreNavigate: () => void;
   handleViewSchedulesNavigate: () => void;
   handleViewTasksNavigate: () => void;
+  handleViewChangelogNavigate: () => void;
 }
 
 interface DesktopSidebarProps extends SidebarSharedProps {
@@ -121,6 +124,7 @@ interface DesktopSidebarProps extends SidebarSharedProps {
   handleViewMore: () => void;
   handleViewSchedules: () => void;
   handleViewTasks: () => void;
+  handleViewChangelog: () => void;
 }
 
 export const LeftSidebar = memo(function LeftSidebar({
@@ -232,6 +236,10 @@ export const LeftSidebar = memo(function LeftSidebar({
     router.push(buildTasksRoute());
   }, []);
 
+  const handleViewChangelogNavigate = useCallback(() => {
+    router.push(buildChangelogRoute());
+  }, []);
+
   const newWorkspaceKeys = useShortcutKeys("new-workspace");
   const labels = useMemo(
     (): SidebarLabels => ({
@@ -249,6 +257,7 @@ export const LeftSidebar = memo(function LeftSidebar({
       addHost: t("settings.addHost"),
       dashboard: t("dashboard.title"),
       tasks: t("tasks.title"),
+      changelog: t("changelog.title"),
     }),
     [t],
   );
@@ -289,6 +298,7 @@ export const LeftSidebar = memo(function LeftSidebar({
           handleViewMoreNavigate={handleViewMoreNavigate}
           handleViewSchedulesNavigate={handleViewSchedulesNavigate}
           handleViewTasksNavigate={handleViewTasksNavigate}
+          handleViewChangelogNavigate={handleViewChangelogNavigate}
         />
       </RetainedPanelActivity>
     );
@@ -310,6 +320,7 @@ export const LeftSidebar = memo(function LeftSidebar({
         handleViewMore={handleViewMoreNavigate}
         handleViewSchedules={handleViewSchedulesNavigate}
         handleViewTasks={handleViewTasksNavigate}
+        handleViewChangelog={handleViewChangelogNavigate}
       />
     </RetainedPanelActivity>
   );
@@ -465,6 +476,7 @@ function MobileSidebar({
   handleViewMoreNavigate,
   handleViewSchedulesNavigate,
   handleViewTasksNavigate,
+  handleViewChangelogNavigate,
 }: MobileSidebarProps) {
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
   const { gesture: closeGesture, gestureRef: closeGestureRef } = useCloseAgentListGesture();
@@ -488,6 +500,11 @@ function MobileSidebar({
     closeSidebar();
     handleViewTasksNavigate();
   }, [closeSidebar, handleViewTasksNavigate]);
+
+  const handleViewChangelog = useCallback(() => {
+    closeSidebar();
+    handleViewChangelogNavigate();
+  }, [closeSidebar, handleViewChangelogNavigate]);
 
   const handleWorkspacePress = useCallback(() => {
     closeSidebar();
@@ -518,11 +535,13 @@ function MobileSidebar({
             sessionsLabel={labels.sessions}
             schedulesLabel={labels.schedules}
             tasksLabel={labels.tasks}
+            changelogLabel={labels.changelog}
             newWorkspaceKeys={newWorkspaceKeys}
             onViewDashboard={handleViewDashboard}
             onViewSessions={handleViewMore}
             onViewSchedules={handleViewSchedules}
             onViewTasks={handleViewTasks}
+            onViewChangelog={handleViewChangelog}
             onBeforeNavigate={closeSidebar}
             testID="sidebar-primary-menu"
           />
@@ -612,6 +631,7 @@ function DesktopSidebar({
   handleViewMore,
   handleViewSchedules,
   handleViewTasks,
+  handleViewChangelog,
 }: DesktopSidebarProps) {
   const ownsTopLeft = useOwnsWindowChromeCorner("top-left");
   const hasActiveHostFilter = useSidebarViewStore((state) => state.hostFilters.length > 0);
@@ -721,11 +741,13 @@ function DesktopSidebar({
               sessionsLabel={labels.sessions}
               schedulesLabel={labels.schedules}
               tasksLabel={labels.tasks}
+              changelogLabel={labels.changelog}
               newWorkspaceKeys={newWorkspaceKeys}
               onViewDashboard={handleViewDashboard}
               onViewSessions={handleViewMore}
               onViewSchedules={handleViewSchedules}
               onViewTasks={handleViewTasks}
+              onViewChangelog={handleViewChangelog}
               testID="sidebar-primary-menu"
             />
           </View>

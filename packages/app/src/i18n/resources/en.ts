@@ -213,6 +213,17 @@ export const en = {
       unarchive: "Unarchive",
     },
   },
+  changelog: {
+    title: "Changelog",
+    tabs: {
+      releases: "Releases",
+      commits: "Commits",
+    },
+    empty: {
+      releases: "No releases yet.",
+      commits: "No commits found.",
+    },
+  },
   dashboard: {
     title: "Dashboard",
     empty: "No active agents",

@@ -217,6 +217,17 @@ export const fr: TranslationResources = {
       unarchive: "Désarchiver",
     },
   },
+  changelog: {
+    title: "Journal des modifications",
+    tabs: {
+      releases: "Versions",
+      commits: "Commits",
+    },
+    empty: {
+      releases: "Aucune version pour l'instant.",
+      commits: "Aucun commit trouvé.",
+    },
+  },
   dashboard: {
     title: "Tableau de bord",
     empty: "Aucun agent actif",

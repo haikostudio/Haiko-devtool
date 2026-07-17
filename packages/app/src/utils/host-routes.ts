@@ -419,6 +419,10 @@ export function buildSessionsRoute() {
   return "/sessions" as const;
 }
 
+export function buildChangelogRoute() {
+  return "/changelog" as const;
+}
+
 export function buildSchedulesRoute() {
   return "/schedules" as const;
 }

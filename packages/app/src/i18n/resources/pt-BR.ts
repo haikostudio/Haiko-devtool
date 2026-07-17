@@ -217,6 +217,17 @@ export const ptBR: TranslationResources = {
       unarchive: "Desarquivar",
     },
   },
+  changelog: {
+    title: "Registro de alterações",
+    tabs: {
+      releases: "Versões",
+      commits: "Commits",
+    },
+    empty: {
+      releases: "Ainda não há versões.",
+      commits: "Nenhum commit encontrado.",
+    },
+  },
   dashboard: {
     title: "Painel",
     empty: "Nenhum agente ativo",

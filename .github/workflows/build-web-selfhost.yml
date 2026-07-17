@@ -16,6 +16,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        # Full history so generate-changelog-data.mjs can read the commit log for
+        # the changelog page's Commits tab (default shallow checkout gives 1 commit).
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

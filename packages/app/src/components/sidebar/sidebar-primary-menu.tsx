@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Menu,
   Plus,
+  ScrollText,
   SquareKanban,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -36,6 +37,7 @@ const ThemedHistory = withUnistyles(History);
 const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedLayoutDashboard = withUnistyles(LayoutDashboard);
 const ThemedSquareKanban = withUnistyles(SquareKanban);
+const ThemedScrollText = withUnistyles(ScrollText);
 
 const newWorkspaceLeadingIcon = (
   <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
@@ -52,6 +54,9 @@ const schedulesLeadingIcon = (
 const tasksLeadingIcon = (
   <ThemedSquareKanban size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
+const changelogLeadingIcon = (
+  <ThemedScrollText size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
+);
 
 interface SidebarPrimaryMenuProps {
   menuLabel: string;
@@ -60,11 +65,13 @@ interface SidebarPrimaryMenuProps {
   sessionsLabel: string;
   schedulesLabel: string;
   tasksLabel: string;
+  changelogLabel: string;
   newWorkspaceKeys: ShortcutKey[][] | null;
   onViewDashboard: () => void;
   onViewSessions: () => void;
   onViewSchedules: () => void;
   onViewTasks: () => void;
+  onViewChangelog: () => void;
   /** Runs before navigating to the new-workspace screen (e.g. closing the mobile sidebar). */
   onBeforeNavigate?: () => void;
   testID?: string;
@@ -81,11 +88,13 @@ export function SidebarPrimaryMenu({
   sessionsLabel,
   schedulesLabel,
   tasksLabel,
+  changelogLabel,
   newWorkspaceKeys,
   onViewDashboard,
   onViewSessions,
   onViewSchedules,
   onViewTasks,
+  onViewChangelog,
   onBeforeNavigate,
   testID,
 }: SidebarPrimaryMenuProps) {
@@ -187,6 +196,13 @@ export function SidebarPrimaryMenu({
           onSelect={onViewSchedules}
         >
           {schedulesLabel}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          testID="sidebar-changelog"
+          leading={changelogLeadingIcon}
+          onSelect={onViewChangelog}
+        >
+          {changelogLabel}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
