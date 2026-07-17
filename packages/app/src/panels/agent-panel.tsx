@@ -7,6 +7,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { PortalHost } from "@gorhom/portal";
 import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -1179,6 +1180,10 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     }),
     [text, setText, attachments, setAttachments, clear, isHydrated, composerState],
   );
+  // Per-panel portal host so the magic scrollbar can paint over the full panel
+  // height (down past the composer) instead of being clipped to the message
+  // pane. Unique per agent so split panes don't collide.
+  const magicScrollbarPortalHostName = `magic-scrollbar-${serverId}-${agentId}`;
   const streamSection = (
     <RenderProfile id={`AgentStreamSection:${agentId}`}>
       <AgentStreamSection
@@ -1190,6 +1195,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
         toast={toastApi}
         onOpenWorkspaceFile={onOpenWorkspaceFile}
+        magicScrollbarPortalHostName={magicScrollbarPortalHostName}
       />
     </RenderProfile>
   );
@@ -1224,6 +1230,16 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 
           {composerSection}
 
+          {/* Full-panel-height host for the magic scrollbar; box-none so only the
+              rail itself (rendered into it) captures pointer events. */}
+          <View
+            style={styles.magicScrollbarPortalHost}
+            pointerEvents="box-none"
+            collapsable={false}
+          >
+            <PortalHost name={magicScrollbarPortalHostName} />
+          </View>
+
           {showHistorySyncOverlay ? (
             <View style={styles.historySyncOverlay} testID="agent-history-overlay">
               <ThemedActivityIndicator size="large" uniProps={foregroundMutedColorMapping} />
@@ -1254,6 +1270,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory,
   toast,
   onOpenWorkspaceFile,
+  magicScrollbarPortalHostName,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
@@ -1263,6 +1280,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  magicScrollbarPortalHostName?: string;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
     agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
@@ -1307,6 +1325,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      magicScrollbarPortalHostName={magicScrollbarPortalHostName}
     />
   );
 });
@@ -1629,6 +1648,13 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
+  },
+  magicScrollbarPortalHost: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   content: {
     flex: 1,

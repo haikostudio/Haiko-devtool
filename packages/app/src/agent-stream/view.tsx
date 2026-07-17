@@ -23,6 +23,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { Portal } from "@gorhom/portal";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -252,6 +253,10 @@ export interface AgentStreamViewProps {
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
   };
+  // When set, the magic scrollbar renders into this portal host instead of
+  // inline, so it escapes the message pane's clip and spans the full panel
+  // height (down past the composer). Only agent-panel provides one.
+  magicScrollbarPortalHostName?: string;
 }
 
 const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
@@ -336,6 +341,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       onOpenWorkspaceFile,
       readOnly = false,
       historyPagination,
+      magicScrollbarPortalHostName,
     },
     ref,
   ) {
@@ -1112,12 +1118,14 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             </View>
           )}
           {magicScrollbarEntries.length >= 2 ? (
-            <StreamMagicScrollbar
-              entries={magicScrollbarEntries}
-              visible={magicScrollbarActive || (!isMobile && isPaneHovered)}
-              activeEntryId={activeStreamItemId}
-              onJumpToEntry={jumpToStreamItem}
-            />
+            <MagicScrollbarPortalBoundary hostName={magicScrollbarPortalHostName}>
+              <StreamMagicScrollbar
+                entries={magicScrollbarEntries}
+                visible={magicScrollbarActive || (!isMobile && isPaneHovered)}
+                activeEntryId={activeStreamItemId}
+                onJumpToEntry={jumpToStreamItem}
+              />
+            </MagicScrollbarPortalBoundary>
           ) : null}
         </View>
       </ToolCallSheetProvider>
@@ -1236,12 +1244,32 @@ function agentStreamViewPropsEqual(
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
   }
+  if (left.magicScrollbarPortalHostName !== right.magicScrollbarPortalHostName) {
+    reasons.push("magicScrollbarPortalHostName");
+  }
   recordRenderProfileReasons(`AgentStreamView:${right.agentId}`, reasons);
   return reasons.length === 0;
 }
 
 export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
 AgentStreamView.displayName = "AgentStreamView";
+
+// Portals the magic scrollbar into the panel-level host when one is provided,
+// so the rail can span the full panel height instead of being clipped to the
+// message pane. Without a host it renders inline (the default for panels that
+// don't need the escape, e.g. draft/subagent views).
+function MagicScrollbarPortalBoundary({
+  hostName,
+  children,
+}: {
+  hostName?: string;
+  children: ReactNode;
+}) {
+  if (hostName) {
+    return <Portal hostName={hostName}>{children}</Portal>;
+  }
+  return children;
+}
 
 interface ToolCallSlotProps extends Omit<
   ComponentProps<typeof ToolCall>,

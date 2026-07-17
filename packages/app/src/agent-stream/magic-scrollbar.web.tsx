@@ -45,14 +45,19 @@ const positionStyles = RNStyleSheet.create({
   },
 });
 
-// Radar ping behind the active dot, HaikoMail-style. Transform/opacity live on
-// the Animated.View; the theme color lives on the inner Unistyles View.
+// Diffuse radar sweep behind the active dot: two soft, low-opacity rings
+// expanding continuously and out of phase, so it reads as a breathing radar
+// rather than a single blink. Transform/opacity live on the Animated.Views; the
+// theme color lives on the inner Unistyles Views.
+const PING_MAX_SCALE = 3.4;
+const PING_PEAK_OPACITY = 0.28;
+
 function ActiveDotPing() {
   const pulse = useSharedValue(0);
   useEffect(() => {
     pulse.value = 0;
     pulse.value = withRepeat(
-      withTiming(1, { duration: 1600, easing: Easing.out(Easing.ease) }),
+      withTiming(1, { duration: 2400, easing: Easing.out(Easing.ease) }),
       -1,
       false,
     );
@@ -60,15 +65,30 @@ function ActiveDotPing() {
       cancelAnimation(pulse);
     };
   }, [pulse]);
-  const pingStyle = useAnimatedStyle(() => ({
-    opacity: 0.5 * (1 - pulse.value),
-    transform: [{ scale: 0.6 + pulse.value * 1.6 }],
+  // Leading ring.
+  const ring1Style = useAnimatedStyle(() => ({
+    opacity: PING_PEAK_OPACITY * (1 - pulse.value),
+    transform: [{ scale: 0.4 + pulse.value * PING_MAX_SCALE }],
   }));
-  const style = useMemo(() => [positionStyles.ping, pingStyle], [pingStyle]);
+  // Trailing ring, half a cycle behind, for a continuous sweep.
+  const ring2Style = useAnimatedStyle(() => {
+    const p = (pulse.value + 0.5) % 1;
+    return {
+      opacity: PING_PEAK_OPACITY * (1 - p),
+      transform: [{ scale: 0.4 + p * PING_MAX_SCALE }],
+    };
+  });
+  const ring1 = useMemo(() => [positionStyles.ping, ring1Style], [ring1Style]);
+  const ring2 = useMemo(() => [positionStyles.ping, ring2Style], [ring2Style]);
   return (
-    <Animated.View style={style} pointerEvents="none">
-      <View style={styles.pingFill} />
-    </Animated.View>
+    <>
+      <Animated.View style={ring1} pointerEvents="none">
+        <View style={styles.pingFill} />
+      </Animated.View>
+      <Animated.View style={ring2} pointerEvents="none">
+        <View style={styles.pingFill} />
+      </Animated.View>
+    </>
   );
 }
 
