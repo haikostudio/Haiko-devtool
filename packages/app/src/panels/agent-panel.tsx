@@ -3,7 +3,7 @@ import type { TFunction } from "i18next";
 import { SquarePen } from "lucide-react-native";
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, type LayoutChangeEvent, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -465,6 +465,9 @@ export function useDraftPanelDescriptor(
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
 const EMPTY_PENDING_PERMISSIONS = new Map<string, PendingPermission>();
 const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
+// Breathing room between the magic scrollbar's bottom and the composer's top on
+// compact layouts, so the rail doesn't butt right up against the input area.
+const MAGIC_SCROLLBAR_COMPOSER_MARGIN = 8;
 
 type RouteBottomAnchorRequest = ReturnType<typeof deriveRouteBottomAnchorRequest>;
 
@@ -1206,6 +1209,24 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   // height (down past the composer) instead of being clipped to the message
   // pane. Unique per agent so split panes don't collide.
   const magicScrollbarPortalHostName = `magic-scrollbar-${serverId}-${agentId}`;
+  // On compact (mobile) layouts the composer takes up a big chunk of the
+  // bottom, so the rail should end just above it instead of running to the
+  // screen edge. Shrink the portal host to the space above the composer (plus a
+  // small margin) so the portalled rail is bounded to that region.
+  const isCompactFormFactor = useIsCompactFormFactor();
+  const [composerHeight, setComposerHeight] = useState(0);
+  const handleComposerAreaLayout = useCallback((event: LayoutChangeEvent) => {
+    setComposerHeight(Math.round(event.nativeEvent.layout.height));
+  }, []);
+  const magicScrollbarPortalHostStyle = useMemo(() => {
+    if (!isCompactFormFactor || composerHeight <= 0) {
+      return styles.magicScrollbarPortalHost;
+    }
+    return [
+      styles.magicScrollbarPortalHost,
+      { bottom: composerHeight + MAGIC_SCROLLBAR_COMPOSER_MARGIN },
+    ];
+  }, [composerHeight, isCompactFormFactor]);
   const streamSection = (
     <RenderProfile id={`AgentStreamSection:${agentId}`}>
       <AgentStreamSection
@@ -1250,15 +1271,12 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
           {contentContainer}
 
-          {composerSection}
+          <View onLayout={handleComposerAreaLayout}>{composerSection}</View>
 
-          {/* Full-panel-height host for the magic scrollbar; box-none so only the
-              rail itself (rendered into it) captures pointer events. */}
-          <View
-            style={styles.magicScrollbarPortalHost}
-            pointerEvents="box-none"
-            collapsable={false}
-          >
+          {/* Host for the magic scrollbar; box-none so only the rail itself
+              (rendered into it) captures pointer events. On compact layouts it
+              stops above the composer; otherwise it spans the full panel. */}
+          <View style={magicScrollbarPortalHostStyle} pointerEvents="box-none" collapsable={false}>
             <PortalHost name={magicScrollbarPortalHostName} />
           </View>
 

@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-17",
     markdown:
-      "### Added\n\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Revert live draft-config sync that caused a cross-device loop\n- Remove duplicate ownership discovery\n- Close E2E logs after output drains\n- Wait for E2E bridge readiness\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Keep browser keyboard attachment idempotent\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Preserve active browser on repeated registration\n- Compare filesystem identities\n- Launch Electron E2E reliably on Linux\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Keep browser tabs connected across workspaces\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+      "### Added\n\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Centralize workspace placement\n\n### Fixed\n\n- Make lifecycle operations transactional\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Remove duplicate ownership discovery\n- Centralize path containment\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Compare filesystem identities\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Preserve source checkout root\n- Preserve placement through workspace lifecycle\n- Live-adopt remote draft text into an open composer\n- Validate created worktree placement\n- Preserve placement reshape compatibility\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
   },
   {
     version: "0.1.108",
@@ -618,6 +618,56 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    hash: "6360942a4e0d8803ec8ebbaeb3ca228f1e1cb7ed",
+    shortHash: "6360942a4",
+    date: "2026-07-17T13:12:12+02:00",
+    author: "haikostudio",
+    subject:
+      "index on feat/sidebar-dashboard-ui: 074ea1f4f feat(app): loop-free cross-device sync of draft agent config",
+  },
+  {
+    hash: "cd8a91c77ed49810a4ce49c4ae50dea477fc3e6b",
+    shortHash: "cd8a91c77",
+    date: "2026-07-17T11:08:34+00:00",
+    author: "Mohamed Boudra",
+    subject: "fix(worktrees): make lifecycle operations transactional",
+  },
+  {
+    hash: "388f1d426c01a9b492d084c207dfd99ff2bc33af",
+    shortHash: "388f1d426",
+    date: "2026-07-17T13:02:09+02:00",
+    author: "Mohamed Boudra",
+    subject: "Keep agent browser tabs connected across workspace switches (#2156)",
+  },
+  {
+    hash: "a7cbf4f61ddd5adf78970e8c6584b6e8f5c78880",
+    shortHash: "a7cbf4f61",
+    date: "2026-07-17T13:00:47+02:00",
+    author: "Mohamed Boudra",
+    subject: "fix(app): make sidebar reordering respond immediately",
+  },
+  {
+    hash: "50af1a0d5434e672cc67f068289ed544d2323ee8",
+    shortHash: "50af1a0d5",
+    date: "2026-07-17T10:50:56+00:00",
+    author: "Mohamed Boudra",
+    subject: "test(e2e): isolate daemon restart ownership",
+  },
+  {
+    hash: "074ea1f4f9520dfc5c99c0acd5775a50a53fac87",
+    shortHash: "074ea1f4f",
+    date: "2026-07-17T12:47:49+02:00",
+    author: "haikostudio",
+    subject: "feat(app): loop-free cross-device sync of draft agent config",
+  },
+  {
+    hash: "266d54463be65f01ef3e5e0d57505427d70e598e",
+    shortHash: "266d54463",
+    date: "2026-07-17T12:27:15+02:00",
+    author: "Mohamed Boudra",
+    subject: "feat(app): highlight sidebar resize handles",
+  },
+  {
     hash: "fcd093b9eb0eff83a897847fa3f93e7e009066cb",
     shortHash: "fcd093b9e",
     date: "2026-07-17T12:24:07+02:00",
@@ -646,25 +696,11 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     subject: "fix(worktrees): remove duplicate ownership discovery",
   },
   {
-    hash: "21abd16f66163cb2d9ea9a044e7f6c6d8dddcd82",
-    shortHash: "21abd16f6",
-    date: "2026-07-17T12:03:45+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): close E2E logs after output drains",
-  },
-  {
     hash: "08a0aa8f69133e5b6f6b6e0e99e60ec6dd122884",
     shortHash: "08a0aa8f6",
     date: "2026-07-17T11:53:04+02:00",
     author: "Mohamed Boudra",
     subject: "fix directory bootstrap reconciliation edge cases",
-  },
-  {
-    hash: "f10e491236177fe7a38fff05fd5a86a8976ea991",
-    shortHash: "f10e49123",
-    date: "2026-07-17T11:52:11+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): wait for E2E bridge readiness",
   },
   {
     hash: "5ae48b5d50435d0240638b735963ec2ab53b801c",
@@ -688,13 +724,6 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     subject: "fix(app): apply materialized image attachments to a focused composer",
   },
   {
-    hash: "23aacac4956477d9010b44cafdae935072b205f6",
-    shortHash: "23aacac49",
-    date: "2026-07-17T11:34:12+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): keep browser keyboard attachment idempotent",
-  },
-  {
     hash: "f7a6548b68ad279ad390c5d76ffeff46db6b2f20",
     shortHash: "f7a6548b6",
     date: "2026-07-17T11:33:56+02:00",
@@ -709,25 +738,11 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     subject: "fix(server): normalize conductor import paths",
   },
   {
-    hash: "d36c34bcfc23f1c7984a00b4eb312c07862d0f9a",
-    shortHash: "d36c34bcf",
-    date: "2026-07-17T11:20:35+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): preserve active browser on repeated registration",
-  },
-  {
     hash: "fe2410c1a373a8eeb257138216517ee4a6ac8939",
     shortHash: "fe2410c1a",
     date: "2026-07-17T09:20:04+00:00",
     author: "Mohamed Boudra",
     subject: "fix(worktrees): compare filesystem identities",
-  },
-  {
-    hash: "84e91814dd16d48880f9c1dc9857ab553ad508d8",
-    shortHash: "84e91814d",
-    date: "2026-07-17T11:17:42+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): launch Electron E2E reliably on Linux",
   },
   {
     hash: "557fc42c890b8badcb60249fd0b30a2396f2b112",
@@ -833,13 +848,6 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     date: "2026-07-17T11:05:50+02:00",
     author: "haikostudio",
     subject: "fix(server): rappel Cerveau projet-d'abord + complément global + procédures",
-  },
-  {
-    hash: "e9f22b0f0b589bb679a42fe3f7f77ef7d4c3840b",
-    shortHash: "e9f22b0f0",
-    date: "2026-07-17T11:07:59+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): keep browser tabs connected across workspaces",
   },
   {
     hash: "c97296ccda8cb4ded0827741be198b2ab4d9162b",
@@ -1596,22 +1604,6 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     date: "2026-07-16T00:13:46+02:00",
     author: "Mohamed Boudra",
     subject: "docs: add 0.1.108 changelog",
-  },
-  {
-    hash: "3bee51d2a2375867cdba953194bf8395f8d53a07",
-    shortHash: "3bee51d2a",
-    date: "2026-07-16T00:13:15+02:00",
-    author: "haikostudio",
-    subject:
-      "index on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area",
-  },
-  {
-    hash: "94fbae108a0f555b5349137a40cc608ae5340632",
-    shortHash: "94fbae108",
-    date: "2026-07-16T00:13:15+02:00",
-    author: "haikostudio",
-    subject:
-      "untracked files on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area",
   },
   {
     hash: "181f972eb32ca6113205f209b1645740a9336bba",
@@ -2719,7 +2711,14 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "paseo-ai[bot]",
     subject: "fix: update lockfile signatures and Nix hash [skip ci]",
   },
+  {
+    hash: "4c72bf02095ac21ed989f5a0d38e0fae589da4e4",
+    shortHash: "4c72bf020",
+    date: "2026-07-10T12:58:31+02:00",
+    author: "Mohamed Boudra",
+    subject: "chore(release): cut 0.1.105",
+  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T12:24:07+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-17T13:12:12+02:00";
