@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
+import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import { useHostFeature } from "@/runtime/host-features";
 import { useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { deriveProjectIconColor } from "@/utils/project-icon-color";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
@@ -436,6 +438,7 @@ const ProjectRailItem = memo(function ProjectRailItem({
       onPress={handlePress}
       testID={`tasks-project-${entry.projectId}`}
     >
+      <ProjectColorMark projectKey={entry.projectId} />
       <Text
         style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
         numberOfLines={1}
@@ -593,6 +596,16 @@ const FolderRailItem = memo(function FolderRailItem({
   );
 });
 
+// Colored dot that mirrors the project's icon color elsewhere in the app, so a
+// glance ties each rail row (and the Gantt bars) back to the same project.
+const ProjectColorMark = memo(function ProjectColorMark({ projectKey }: { projectKey: string }) {
+  const dotStyle = useMemo(
+    () => [styles.projectColorDot, { backgroundColor: deriveProjectIconColor(projectKey) }],
+    [projectKey],
+  );
+  return <View style={dotStyle} />;
+});
+
 const FolderColorMark = memo(function FolderColorMark({ color }: { color?: string }) {
   const dotStyle = useMemo(
     () => (color ? [styles.folderColorDot, { backgroundColor: color }] : null),
@@ -730,6 +743,9 @@ function BoardContent({
 
   return (
     <View style={styles.boardContainer}>
+      {boardHandle.board ? (
+        <TaskGantt board={boardHandle.board} onPressTask={handlePressTask} />
+      ) : null}
       <KanbanBoard
         board={boardHandle.board}
         folderId={folderId}
@@ -831,6 +847,7 @@ const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: Pr
       onPress={handlePress}
       testID={`tasks-project-${entry.projectId}`}
     >
+      <ProjectColorMark projectKey={entry.projectId} />
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{entry.displayName}</Text>
         <Text style={styles.rowSubtitle}>{entry.hostLabel}</Text>
@@ -1026,6 +1043,11 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
   folderColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: theme.borderRadius.full,
+  },
+  projectColorDot: {
     width: 10,
     height: 10,
     borderRadius: theme.borderRadius.full,
