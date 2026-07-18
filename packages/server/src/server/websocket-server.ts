@@ -1351,7 +1351,11 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(agentForkContextCursor): added in v0.1.108, remove gate after 2027-01-14.
         agentForkContextCursor: true,
         // COMPAT(providerSubagents): added in v0.1.107, remove gate after 2027-01-12.
-        providerSubagents: true,
+        // Fork choice: disabled — the subagents track must only show agents the
+        // user created or the task scheduler launched, never provider-internal
+        // sidechains (Claude Task-tool "general-purpose" rows). The client gates
+        // the whole track feature on this flag, so flipping it back on restores it.
+        providerSubagents: false,
         // COMPAT(workspacePinning): added in v0.1.107, remove gate after 2027-01-12.
         workspacePinning: true,
         // COMPAT(projectGithubClone): added in v0.1.108, remove gate after 2027-01-15.
