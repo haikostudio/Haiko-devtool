@@ -2509,7 +2509,9 @@ export const BrainContextPill = memo(function BrainContextPill({ item }: BrainCo
             </Text>
             <View style={brainContextStylesheet.detailsRow}>
               <Text style={brainContextStylesheet.metaText}>
-                {item.count} souvenir{item.count > 1 ? "s" : ""} ({portee})
+                {item.count === 0
+                  ? "aucune info complémentaire"
+                  : `${item.count} souvenir${item.count > 1 ? "s" : ""} (${portee})`}
               </Text>
               {chevron}
             </View>

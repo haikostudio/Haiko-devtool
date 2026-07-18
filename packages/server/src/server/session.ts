@@ -6179,9 +6179,10 @@ export class Session {
     if (isFirstPrompt && brief && scope.projet) {
       kept = [briefToSouvenir(scope.projet, brief), ...kept];
     }
-    if (kept.length === 0) {
-      return text;
-    }
+    // Always surface the pill — even with 0 memories — so the user sees the
+    // Cerveau was queried on this prompt (the client renders "aucune info
+    // complémentaire" for an empty recall). Empty pills aren't reconstructed on
+    // replay (no envelope is injected into the prompt), which is fine: live-only.
     try {
       await this.agentManager.appendTimelineItem(agentId, {
         type: "brain_context",
@@ -6193,6 +6194,9 @@ export class Session {
       });
     } catch (err) {
       this.sessionLogger.debug({ err, agentId }, "brain: timeline emit failed");
+    }
+    if (kept.length === 0) {
+      return text;
     }
     return injectBrainContext(formatRecall(kept), recall.portee, text);
   }
