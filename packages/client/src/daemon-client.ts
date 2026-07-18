@@ -870,6 +870,10 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
+// Binary file transfers can stall or drop frames over a loaded relay. Bound the wait so a
+// stalled transfer falls back to an inline (non-binary) read instead of hanging the full RPC
+// timeout and surfacing "no preview available" for a file that is perfectly readable.
+const FILE_BINARY_READ_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_HEARTBEAT_INTERVAL_MS = 10_000;
 const LIVENESS_HEARTBEAT_TIMEOUT_MS = 15_000;
@@ -3842,6 +3846,7 @@ export class DaemonClient {
     mode: "list" | "file",
     requestId?: string,
     acceptBinary = false,
+    timeout?: number,
   ): Promise<FileExplorerPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -3853,6 +3858,7 @@ export class DaemonClient {
         ...(acceptBinary ? { acceptBinary: true } : {}),
       },
       responseType: "file_explorer_response",
+      timeout,
     });
   }
 
@@ -3875,7 +3881,14 @@ export class DaemonClient {
     const resolvedRequestId = this.createRequestId(requestId);
     this.pendingBinaryFileReads.set(resolvedRequestId, { cwd, path });
     try {
-      const payload = await this.requestFileExplorer(cwd, path, "file", resolvedRequestId, true);
+      const payload = await this.requestFileExplorer(
+        cwd,
+        path,
+        "file",
+        resolvedRequestId,
+        true,
+        FILE_BINARY_READ_TIMEOUT_MS,
+      );
       if (payload.error) {
         throw new Error(payload.error);
       }
@@ -3884,14 +3897,39 @@ export class DaemonClient {
         this.completedBinaryFileReads.delete(resolvedRequestId);
         return binaryResult;
       }
-      if (!payload.file) {
-        throw new Error("File unavailable.");
+      if (payload.file) {
+        return legacyExplorerFileToBytes(payload.file);
       }
-      return legacyExplorerFileToBytes(payload.file);
+      // Binary channel acknowledged the request but no bytes arrived (dropped/stalled frames
+      // over a loaded relay). Fall through to a non-binary inline read below.
+    } catch (error) {
+      // Binary transfer stalled or errored — retry inline rather than surfacing "no preview".
+      this.logger.debug(
+        { err: error, path },
+        "Binary file read failed; retrying with inline (non-binary) read",
+      );
     } finally {
       this.pendingBinaryFileReads.delete(resolvedRequestId);
       this.activeBinaryFileTransfers.delete(resolvedRequestId);
     }
+    return this.readFileInline(cwd, path);
+  }
+
+  private async readFileInline(cwd: string, path: string): Promise<FileReadResult> {
+    const payload = await this.requestFileExplorer(
+      cwd,
+      path,
+      "file",
+      this.createRequestId(),
+      false,
+    );
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    if (!payload.file) {
+      throw new Error("File unavailable.");
+    }
+    return legacyExplorerFileToBytes(payload.file);
   }
 
   async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {
