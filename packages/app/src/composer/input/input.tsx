@@ -2030,12 +2030,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[1],
   },
   attachmentSheetItem: {
-    minHeight: 44,
+    minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.xl,
   },
   attachmentSheetItemPressed: {

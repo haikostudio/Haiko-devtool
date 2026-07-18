@@ -196,13 +196,15 @@ const styles = StyleSheet.create((theme) => ({
     flexGrow: 1,
   },
   bottomSheetContent: {
-    padding: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+    paddingVertical: theme.spacing[4],
+    gap: theme.spacing[3],
   },
   bottomSheetStaticContent: {
     flex: 1,
-    padding: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+    paddingVertical: theme.spacing[4],
+    gap: theme.spacing[3],
     minHeight: 0,
   },
   desktopStaticContent: {

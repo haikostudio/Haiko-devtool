@@ -1594,16 +1594,15 @@ const styles = StyleSheet.create((theme) => ({
   comboboxItem: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: 32,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderRadius: 0,
     ...(IS_WEB
       ? {}
       : {
           marginHorizontal: theme.spacing[1],
-          marginBottom: theme.spacing[1],
         }),
   },
   comboboxItemHovered: {
