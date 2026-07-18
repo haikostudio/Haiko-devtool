@@ -229,7 +229,7 @@ import {
   type CreatePaseoWorktreeResult,
 } from "./paseo-worktree-service.js";
 import { WorkspaceAutoName } from "./workspace-auto-name.js";
-import { generateAgentSynthesis } from "./agent-synthesis-generator.js";
+import { type SynthesisTurn, buildAgentSynthesis } from "./agent-synthesis-builder.js";
 import { generateTurnRecap } from "./agent-turn-recap-generator.js";
 import { extractTurnFileChanges } from "./turn-recap-files.js";
 import {
@@ -1392,7 +1392,18 @@ export class Session {
   private async buildAgentPayload(agent: ManagedAgent): Promise<AgentSnapshotPayload> {
     const storedRecord = await this.agentStorage.get(agent.id);
     const title = storedRecord?.title ?? null;
-    const synthesis = storedRecord?.synthesis ?? null;
+    // Backfill the banner for agents created before per-interaction synthesis:
+    // when nothing is persisted yet, derive it on the fly from the loaded
+    // timeline (deterministic and cheap). Display-only — the next interaction
+    // persists a real one with history. Returns null when the timeline isn't
+    // loaded, so list views stay untouched.
+    const synthesis =
+      storedRecord?.synthesis ??
+      buildAgentSynthesis({
+        turns: this.buildConversationTurns(agent.id),
+        status: agent.lifecycle,
+        now: new Date().toISOString(),
+      });
     const synthesisHistory = storedRecord?.synthesisHistory ?? null;
     const payload = toAgentPayload(agent, { title, synthesis, synthesisHistory });
     const storedUpdatedAt = storedRecord ? resolveStoredAgentPayloadUpdatedAt(storedRecord) : null;
@@ -4930,14 +4941,24 @@ export class Session {
 
     const explicitTitle = request.title?.trim() || null;
     const promptTitle = resolveFirstAgentPromptTitle(request.firstAgentContext);
-    const workspace = await createLocalCheckoutWorkspace(
-      { cwd, title: explicitTitle ?? promptTitle },
-      {
-        projectRegistry: this.projectRegistry,
-        workspaceRegistry: this.workspaceRegistry,
-        workspaceGitService: this.workspaceGitService,
-      },
-    );
+    // A directory may back any number of workspaces, but a *new* record should only
+    // be minted when the caller is actually starting work in it — an initial agent
+    // (firstAgentContext) or an explicit name. A bare "open this directory" call
+    // (setup dialog / preselect: no agent, no title) must instead reuse the existing
+    // workspace for the cwd via the same find-or-create path open_project uses.
+    // Otherwise every such call leaks an empty, agent-less duplicate that surfaces in
+    // the sidebar as a phantom "branch" row for the directory.
+    const workspace =
+      request.firstAgentContext || explicitTitle
+        ? await createLocalCheckoutWorkspace(
+            { cwd, title: explicitTitle ?? promptTitle },
+            {
+              projectRegistry: this.projectRegistry,
+              workspaceRegistry: this.workspaceRegistry,
+              workspaceGitService: this.workspaceGitService,
+            },
+          )
+        : await this.workspaceProvisioning.findOrCreateWorkspaceForDirectory(cwd);
     await this.syncWorkspaceGitObserverForWorkspace(workspace);
     const descriptor = await this.describeWorkspaceRecord(workspace);
     this.emit({
@@ -6524,83 +6545,88 @@ export class Session {
   }
 
   /**
-   * Re-summarize the whole discussion and store it as the agent's conversation
-   * synthesis. Builds the source transcript from the full loaded timeline (tail
-   * capped inside the generator) so the block reflects the entire thread, not
-   * just the last exchange. `appendUserText` folds in a just-sent prompt that
-   * may not be on the timeline yet. `pushHistory` records a settled per-turn
-   * entry on the running thread. Entirely best-effort — failures leave the
-   * previous synthesis untouched.
+   * Rebuild the agent's conversation synthesis deterministically from the loaded
+   * timeline (no LLM — instant, free, never fails). `appendUserText` folds in a
+   * just-sent prompt that may not be on the timeline yet. `pushHistory` records
+   * a settled per-turn entry on the running thread. Best-effort: an empty
+   * transcript or a persist error leaves the previous synthesis untouched. See
+   * agent-synthesis-builder for what each field carries.
    */
-  private async regenerateSynthesis(
+  private regenerateSynthesis(
     agentId: string,
     options: { appendUserText?: string; pushHistory: boolean },
-  ): Promise<void> {
+  ): void {
     const agent = this.agentManager.getAgent(agentId);
-    const cwd = agent?.cwd;
-    if (!cwd) {
+    if (!agent?.cwd) {
       return;
     }
-    const transcript = this.buildConversationTranscript(agentId, options.appendUserText);
-    if (!transcript.trim()) {
-      return;
-    }
-    const synthesis = await generateAgentSynthesis({
-      agentManager: this.agentManager,
-      cwd,
-      providerSnapshotManager: this.providerSnapshotManager,
-      daemonConfig: this.readStructuredGenerationDaemonConfig(),
-      transcript,
-      logger: this.sessionLogger,
+    const synthesis = buildAgentSynthesis({
+      turns: this.buildConversationTurns(agentId, options.appendUserText),
+      status: agent.lifecycle,
+      now: new Date().toISOString(),
     });
-    if (synthesis) {
-      await this.agentManager.setSynthesis(agentId, synthesis, {
-        pushHistory: options.pushHistory,
-      });
+    if (!synthesis) {
+      return;
     }
+    void this.agentManager
+      .setSynthesis(agentId, synthesis, { pushHistory: options.pushHistory })
+      .catch((err) => {
+        this.sessionLogger.debug({ err, agentId }, "synthesis: persist failed");
+      });
   }
 
   /**
-   * Flatten the agent's loaded timeline into a plain User/Assistant transcript
-   * for synthesis. Contiguous same-role chunks (Claude streams assistant text
-   * in pieces) are merged. `appendUserText` is added as a trailing user turn
-   * when it isn't already the last user message on the timeline.
+   * Flatten the agent's loaded timeline into ordered role-tagged turns.
+   * Contiguous same-role chunks (Claude streams assistant text in pieces) are
+   * merged. `appendUserText` is added as a trailing user turn when it isn't
+   * already the last user message on the timeline. Shared by the deterministic
+   * synthesis builder and the turn-recap transcript.
    */
-  private buildConversationTranscript(agentId: string, appendUserText?: string): string {
+  private buildConversationTurns(agentId: string, appendUserText?: string): SynthesisTurn[] {
     let items: readonly { type: string; text?: string }[];
     try {
       items = this.agentManager.getTimeline(agentId);
     } catch {
       items = [];
     }
-    const parts: { role: "User" | "Assistant"; text: string }[] = [];
-    const push = (role: "User" | "Assistant", raw: string | undefined): void => {
+    const parts: SynthesisTurn[] = [];
+    const push = (role: SynthesisTurn["role"], raw: string | undefined): void => {
       const text = raw?.trim();
       if (!text) {
         return;
       }
       const last = parts[parts.length - 1];
       if (last && last.role === role) {
-        last.text += role === "Assistant" ? text : `\n${text}`;
+        last.text += role === "assistant" ? text : `\n${text}`;
       } else {
         parts.push({ role, text });
       }
     };
     for (const item of items) {
       if (item.type === "user_message") {
-        push("User", item.text);
+        push("user", item.text);
       } else if (item.type === "assistant_message") {
-        push("Assistant", item.text);
+        push("assistant", item.text);
       }
     }
     const trimmedAppend = appendUserText?.trim();
     if (trimmedAppend) {
       const last = parts[parts.length - 1];
-      if (!(last?.role === "User" && last.text.trim() === trimmedAppend)) {
-        push("User", trimmedAppend);
+      if (!(last?.role === "user" && last.text.trim() === trimmedAppend)) {
+        push("user", trimmedAppend);
       }
     }
-    return parts.map((part) => `${part.role}: ${part.text}`).join("\n\n");
+    return parts;
+  }
+
+  /**
+   * Flatten the timeline into a plain User/Assistant transcript for the turn
+   * recap. Thin wrapper over {@link buildConversationTurns}.
+   */
+  private buildConversationTranscript(agentId: string, appendUserText?: string): string {
+    return this.buildConversationTurns(agentId, appendUserText)
+      .map((part) => `${part.role === "user" ? "User" : "Assistant"}: ${part.text}`)
+      .join("\n\n");
   }
 
   private scheduleWorkspaceRenameFromMessage(agentId: string, message: string): void {

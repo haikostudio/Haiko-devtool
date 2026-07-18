@@ -13,10 +13,11 @@ import { formatTimeAgo } from "@/utils/time";
  * a scrollable thread of the previous syntheses ("fil conducteur") with the
  * latest always on top.
  *
- * The content is regenerated server-side on each prompt and after each turn (see
- * the daemon's agent-synthesis-generator), so it stays fresh across the whole
- * discussion. When no synthesis exists yet, nothing renders. The card spans the
- * same content column as the transcript (see MAX_CONTENT_WIDTH).
+ * The content is rebuilt server-side (deterministically, no LLM) on each prompt
+ * and after each turn — see the daemon's agent-synthesis-builder — so it stays
+ * fresh across the whole discussion and updates on every interaction. When no
+ * synthesis exists yet, nothing renders. The card spans the same content column
+ * as the transcript (see MAX_CONTENT_WIDTH).
  */
 export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
   serverId,
