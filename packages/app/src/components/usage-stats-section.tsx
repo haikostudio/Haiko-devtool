@@ -4,6 +4,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import type { UsageStatsDay, UsageStatsProjectBucket } from "@getpaseo/protocol/messages";
 import { formatTokenCount } from "@/components/context-window-meter.utils";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { baseColors } from "@/styles/theme";
 
 // Static series palette — charts keep fixed colors across themes so a project
@@ -174,9 +175,25 @@ function buildHourBars(days: UsageStatsDay[], series: SeriesProject[], now: Date
 
 export function UsageStatsSection({ days }: UsageStatsSectionProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const [mode, setMode] = useState<ChartMode>("days");
   const showDays = useCallback(() => setMode("days"), []);
   const showHours = useCallback(() => setMode("hours"), []);
+
+  // On phones the default insets waste a lot of horizontal space, so tighten the
+  // outer and card paddings when compact.
+  const containerStyle = useMemo(
+    () => [styles.container, isCompact && styles.containerCompact],
+    [isCompact],
+  );
+  const chartCardStyle = useMemo(
+    () => [styles.chartCard, isCompact && styles.cardCompact],
+    [isCompact],
+  );
+  const tableCardStyle = useMemo(
+    () => [styles.tableCard, isCompact && styles.tableCardCompact],
+    [isCompact],
+  );
 
   const totalsByProject = useMemo(() => sumProjects(days), [days]);
   const series = useMemo(() => pickSeriesProjects(totalsByProject), [totalsByProject]);
@@ -222,7 +239,7 @@ export function UsageStatsSection({ days }: UsageStatsSectionProps) {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={containerStyle}>
       <View style={styles.cardsRow}>
         <SummaryCard label={t("dashboard.stats.agentsToday")} value={String(summary.agentsToday)} />
         <SummaryCard
@@ -239,7 +256,7 @@ export function UsageStatsSection({ days }: UsageStatsSectionProps) {
         />
       </View>
 
-      <View style={styles.chartCard}>
+      <View style={chartCardStyle}>
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>{t("dashboard.stats.activityTitle")}</Text>
           <View style={styles.modeToggle}>
@@ -301,7 +318,7 @@ export function UsageStatsSection({ days }: UsageStatsSectionProps) {
       </View>
 
       {projectRows.length > 0 ? (
-        <View style={styles.tableCard}>
+        <View style={tableCardStyle}>
           <View style={styles.tableHeaderRow}>
             <Text style={styles.tableHeaderProject}>{t("dashboard.stats.columnProject")}</Text>
             <Text style={styles.tableHeaderNumber}>{t("dashboard.stats.columnAgents")}</Text>
@@ -369,6 +386,15 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[4],
+  },
+  containerCompact: {
+    paddingHorizontal: theme.spacing[2],
+  },
+  cardCompact: {
+    padding: theme.spacing[2],
+  },
+  tableCardCompact: {
+    paddingHorizontal: theme.spacing[2],
   },
   cardsRow: {
     flexDirection: "row",
