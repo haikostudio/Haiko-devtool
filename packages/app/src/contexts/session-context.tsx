@@ -499,6 +499,27 @@ interface SessionProviderClientProps extends SessionProviderSharedProps {
 
 export type SessionProviderProps = SessionProviderClientProps;
 
+// Drop a single queued message by id from an agent's queue, preserving order and
+// referential identity when nothing changed. Module-level so the queue drain can
+// remove a delivered message without nesting three callbacks deep.
+function dropQueuedMessageById<T extends { id: string }>(
+  prev: Map<string, T[]>,
+  agentId: string,
+  messageId: string,
+): Map<string, T[]> {
+  const current = prev.get(agentId);
+  if (!current) {
+    return prev;
+  }
+  const remaining = current.filter((message) => message.id !== messageId);
+  if (remaining.length === current.length) {
+    return prev;
+  }
+  const updated = new Map(prev);
+  updated.set(agentId, remaining);
+  return updated;
+}
+
 function SessionProviderWithClient({ children, serverId, client }: SessionProviderClientProps) {
   return (
     <SessionProviderInternal serverId={serverId} client={client}>
@@ -617,15 +638,20 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
   }, [sessionAgents]);
 
   // Deliver the next follow-up that was queued while an agent was busy. A prompt
-  // sent to a running agent is parked in `queuedMessages` (see submit.ts); it is
-  // drained on the running->idle transition and on reconnect. Two invariants keep
-  // prompts from being silently lost — the bug where a queued follow-up would
-  // vanish "without executing" after leaving the tab:
-  //   1. Never remove a message unless a live client is available to take it.
-  //      If the client is momentarily gone (mobile reconnect), leave it queued;
-  //      the reconnect drain will deliver it.
-  //   2. If delivery rejects, put the message back at the FRONT of the queue so
-  //      it is retried instead of dropped.
+  // sent to a running agent is parked in `queuedMessages` (see submit.ts); its card
+  // shows in the tray above the composer and is drained on the running->idle
+  // transition and on reconnect. Invariants that keep a queued prompt from ever
+  // vanishing "without executing" (the reported bug):
+  //   1. Never touch the queue unless a live client is available. If the client is
+  //      momentarily gone (mobile reconnect), leave it queued; a later drain
+  //      (reconnect / next idle transition) delivers it.
+  //   2. Remove the card ONLY after the daemon confirms delivery. Until then the
+  //      card stays visible; if delivery rejects, it is simply left queued and
+  //      retried on the next trigger. So a card that disappears always means the
+  //      daemon took the message — never a silent drop, and no optimistic
+  //      "appear then disappear" flash.
+  //   3. A per-agent in-flight guard serializes drains so the same head is never
+  //      sent twice by two overlapping triggers.
   const drainingAgentQueueRef = useRef<Set<string>>(new Set());
   const drainAgentQueue = useCallback(
     (agentId: string) => {
@@ -641,24 +667,17 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       if (!queue || queue.length === 0) {
         return;
       }
-      const [next, ...rest] = queue;
+      const next = queue[0];
       const wirePayload = splitComposerAttachmentsForSubmit(next.attachments);
       drainingAgentQueueRef.current.add(agentId);
-      // Optimistically remove the head so a concurrent drain can't re-send it.
-      setQueuedMessages(serverId, (prev) => {
-        const updated = new Map(prev);
-        updated.set(agentId, rest);
-        return updated;
-      });
       void send(agentId, next.text, wirePayload.images, wirePayload.attachments)
+        // Delivery confirmed by the daemon: drop just this message (match by id, not
+        // position, in case the user edited/removed a card meanwhile).
+        .then(() =>
+          setQueuedMessages(serverId, (prev) => dropQueuedMessageById(prev, agentId, next.id)),
+        )
         .catch((error) => {
-          console.error("[Session] Failed to deliver queued message; re-queuing:", error);
-          setQueuedMessages(serverId, (prev) => {
-            const updated = new Map(prev);
-            const current = updated.get(agentId) ?? [];
-            updated.set(agentId, [next, ...current]);
-            return updated;
-          });
+          console.error("[Session] Failed to deliver queued message; left queued:", error);
         })
         .finally(() => {
           drainingAgentQueueRef.current.delete(agentId);
