@@ -283,6 +283,8 @@ export const ar: TranslationResources = {
       editTitle: "تعديل المجلد",
       nameField: "الاسم",
       colorField: "اللون",
+      autopilotField: "الطيار الآلي",
+      autopilotHint: "تنطلق مهام قائمة الانتظار تلقائيًا — تُدار الحصة وساعات الذروة المنخفضة.",
       create: "إنشاء",
       save: "حفظ",
     },

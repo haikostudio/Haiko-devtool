@@ -287,6 +287,9 @@ export const ptBR: TranslationResources = {
       editTitle: "Editar pasta",
       nameField: "Nome",
       colorField: "Cor",
+      autopilotField: "Piloto automático",
+      autopilotHint:
+        "As tarefas do backlog são iniciadas sozinhas — cota e horários de baixa demanda gerenciados.",
       create: "Criar",
       save: "Salvar",
     },

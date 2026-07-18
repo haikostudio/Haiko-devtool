@@ -286,6 +286,8 @@ export const ja: TranslationResources = {
       editTitle: "フォルダーを編集",
       nameField: "名前",
       colorField: "カラー",
+      autopilotField: "オートパイロット",
+      autopilotHint: "バックログのタスクが自動で起動します — クォータとオフピークは管理されます。",
       create: "作成",
       save: "保存",
     },

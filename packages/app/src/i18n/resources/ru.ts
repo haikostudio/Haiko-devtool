@@ -285,6 +285,9 @@ export const ru: TranslationResources = {
       editTitle: "Изменить папку",
       nameField: "Название",
       colorField: "Цвет",
+      autopilotField: "Автопилот",
+      autopilotHint:
+        "Задачи из бэклога запускаются сами — квота и часы низкой нагрузки под контролем.",
       create: "Создать",
       save: "Сохранить",
     },

@@ -2823,6 +2823,8 @@ export const ServerInfoStatusPayloadSchema = z
         tasksBoard: z.boolean().optional(),
         // COMPAT(tasksRunConfig): added in v0.1.110, drop the gate when floor >= v0.1.110.
         tasksRunConfig: z.boolean().optional(),
+        // COMPAT(tasksAutopilot): added in v0.1.111, drop the gate when floor >= v0.1.111.
+        tasksAutopilot: z.boolean().optional(),
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: z.boolean().optional(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.

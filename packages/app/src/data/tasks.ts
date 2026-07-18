@@ -136,7 +136,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   }, [getClient, projectId]);
 
   const createFolder = useCallback(
-    async (input: { name: string; color?: string }) => {
+    async (input: { name: string; color?: string; autopilot?: boolean }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksFolderCreate({ projectId: project, ...input });
     },
@@ -152,7 +152,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   );
 
   const updateFolder = useCallback(
-    async (input: { folderId: string; name?: string; color?: string }) => {
+    async (input: { folderId: string; name?: string; color?: string; autopilot?: boolean }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksFolderUpdate({ projectId: project, ...input });
     },

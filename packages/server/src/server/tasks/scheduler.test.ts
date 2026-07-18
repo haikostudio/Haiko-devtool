@@ -81,6 +81,7 @@ describe("TaskScheduler", () => {
   }
 
   async function seedScheduledTask(options?: {
+    title?: string;
     quotaPercent?: number;
     estimatedMinutes?: number;
     runConfig?: KanbanTask["runConfig"];
@@ -90,7 +91,7 @@ describe("TaskScheduler", () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
-      title: "Implement login flow",
+      title: options?.title ?? "Implement login flow",
     });
     await service.moveTask("proj-1", {
       taskId: task.id,
@@ -121,7 +122,6 @@ describe("TaskScheduler", () => {
   function buildScheduler(options: {
     remainingPct: number | null;
     runAgent?: () => Promise<{ canceled: boolean; finalText: string; timeline: [] }>;
-    branch?: string | null;
     quietHours?: QuietHours;
     nowMs?: number;
   }) {
@@ -145,7 +145,6 @@ describe("TaskScheduler", () => {
       createAgent: createAgent as never,
       providerUsageService: usageWithRemaining(options.remainingPct),
       logger,
-      readCurrentBranch: async () => options.branch ?? null,
       // Default: always inside the launch window so quota-focused tests stay
       // independent of the wall clock.
       getQuietHours: () => options.quietHours ?? { startHour: 0, endHour: 24, timeZone: "UTC" },
@@ -154,9 +153,9 @@ describe("TaskScheduler", () => {
     return { scheduler, createAgent, estimator };
   }
 
-  test("launches an awaiting task in the current workspace and marks it done", async () => {
+  test("launches an awaiting task in an isolated worktree and marks it done", async () => {
     const task = await seedScheduledTask({ quotaPercent: 15 });
-    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80, branch: "main" });
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
 
     await scheduler.tick();
     await vi.waitFor(async () => {
@@ -168,12 +167,21 @@ describe("TaskScheduler", () => {
     const done = board.tasks.find((entry) => entry.id === task.id);
     expect(done?.links.primaryAgentId).toBe("task-agent-1");
     expect(done?.links.workspaceId).toBe("ws-proj-1");
-    expect(done?.links.branch).toBe("main");
+    // The branch is the task's own worktree branch, unique via the id suffix.
+    expect(done?.links.branch).toMatch(/^task\/implement-login-flow-/);
     expect(done?.links.prUrl ?? null).toBeNull();
     expect(done?.schedule ?? null).toBeNull();
     expect(createAgent).toHaveBeenCalledTimes(1);
-    // Runs in the project's checkout, not a throwaway worktree.
-    expect(createAgent).toHaveBeenCalledWith(expect.objectContaining({ cwd: "/tmp/proj-1" }));
+    // Runs in a fresh worktree branched off the project checkout.
+    expect(createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/tmp/proj-1",
+        worktree: expect.objectContaining({
+          action: "branch-off",
+          branchName: expect.stringMatching(/^task\/implement-login-flow-/),
+        }),
+      }),
+    );
   });
 
   test("defers launch when remaining quota is below estimate + margin", async () => {
@@ -358,12 +366,107 @@ describe("TaskScheduler", () => {
         mode: "plan",
       }),
     );
+    // Plan runs make no changes, so they get no throwaway worktree.
+    expect(createAgent.mock.calls[0]?.[0]).not.toHaveProperty("worktree");
     const board = await service.getBoard("proj-1");
     const planned = board.tasks.find((entry) => entry.id === task.id);
     // Plan runs finish without a PR: the card stays in progress for the user.
     expect(planned?.column).toBe("in_progress");
     expect(planned?.schedule ?? null).toBeNull();
     expect(planned?.links.prUrl ?? null).toBeNull();
+  });
+
+  test("autopilot folder: backlog task launches without entering Planned", async () => {
+    const folder = await service.createFolder("proj-1", "Auto", undefined, true);
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Autopilot me",
+    });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 50_000,
+        quotaPercent: 8,
+        estimatedMinutes: 10,
+        confidence: "medium" as const,
+        model: "claude/haiku",
+        estimatedAt: "2026-07-16T00:00:00.000Z",
+      },
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
+
+    await scheduler.tick();
+    await vi.waitFor(async () => {
+      expect((await findTask(task.id))?.column).toBe("done");
+    });
+    expect(createAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test("non-autopilot backlog task is estimated once by the sweep but never launched", async () => {
+    const folder = await service.createFolder("proj-1", "Manual");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Sit in backlog",
+    });
+    const { scheduler, createAgent, estimator } = buildScheduler({ remainingPct: 80 });
+
+    await scheduler.tick();
+    expect(estimator.requestEstimate).toHaveBeenCalledWith("proj-1", task.id);
+    expect(createAgent).not.toHaveBeenCalled();
+
+    // The sweep requests each task once per daemon lifetime, not every tick.
+    await scheduler.tick();
+    expect(estimator.requestEstimate).toHaveBeenCalledTimes(1);
+  });
+
+  test("quiet hours pack the biggest estimated task first when quota is tight", async () => {
+    const big = await seedScheduledTask({ title: "Big migration", quotaPercent: 30 });
+    const small = await seedScheduledTask({ title: "Tiny tweak", quotaPercent: 5 });
+    // 42% remaining: the big task fits (30 + 10 margin), and once its 30% is
+    // reserved the small one no longer does (12 < 5 + 10).
+    const { scheduler, createAgent } = buildScheduler({
+      remainingPct: 42,
+      quietHours: { startHour: 1, endHour: 7, timeZone: "UTC" },
+      nowMs: Date.UTC(2026, 6, 17, 3, 0, 0),
+    });
+
+    await scheduler.tick();
+    await vi.waitFor(async () => {
+      expect((await findTask(big.id))?.column).toBe("done");
+    });
+
+    expect(createAgent).toHaveBeenCalledTimes(1);
+    expect(createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Tâche : Big migration" }),
+    );
+    const held = await findTask(small.id);
+    expect(held?.column).toBe("scheduled");
+    expect(held?.schedule?.waitingReason).toBe("quota");
+  });
+
+  test("during the day the lightest task goes first", async () => {
+    await seedScheduledTask({ title: "Big migration", quotaPercent: 30, estimatedMinutes: 120 });
+    const small = await seedScheduledTask({
+      title: "Tiny tweak",
+      quotaPercent: 5,
+      estimatedMinutes: 5,
+    });
+    const { scheduler, createAgent } = buildScheduler({
+      remainingPct: 42,
+      quietHours: { startHour: 1, endHour: 7, timeZone: "UTC" },
+      nowMs: Date.UTC(2026, 6, 17, 12, 0, 0),
+    });
+
+    await scheduler.tick();
+    await vi.waitFor(async () => {
+      expect((await findTask(small.id))?.column).toBe("done");
+    });
+
+    // Only the light task runs during the day; the heavy one waits for night.
+    expect(createAgent).toHaveBeenCalledTimes(1);
+    expect(createAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Tâche : Tiny tweak" }),
+    );
   });
 
   test("re-arms estimation for pending_estimate tasks after a restart", async () => {

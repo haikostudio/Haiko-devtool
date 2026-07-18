@@ -283,6 +283,8 @@ export const zhCN: TranslationResources = {
       editTitle: "编辑文件夹",
       nameField: "名称",
       colorField: "颜色",
+      autopilotField: "自动驾驶",
+      autopilotHint: "待办任务将自动启动 — 配额和低峰时段自动管理。",
       create: "创建",
       save: "保存",
     },

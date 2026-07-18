@@ -282,6 +282,8 @@ export const en = {
       editTitle: "Edit folder",
       nameField: "Name",
       colorField: "Color",
+      autopilotField: "Autopilot",
+      autopilotHint: "Backlog tasks launch on their own — quota and off-peak hours are managed.",
       create: "Create",
       save: "Save",
     },

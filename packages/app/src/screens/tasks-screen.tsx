@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Zap,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -49,6 +50,7 @@ const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
+const ThemedZap = withUnistyles(Zap);
 
 const MENU_ICON_SIZE = 16;
 const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
@@ -221,6 +223,7 @@ export function TasksScreen() {
 
   const projects = useProjectEntries();
   const supportsTasksBoard = useHostFeature(serverId, "tasksBoard");
+  const supportsAutopilot = useHostFeature(serverId, "tasksAutopilot");
   const boardHandle = useTaskBoard(serverId, projectId);
 
   const selectedProject = useMemo(
@@ -272,6 +275,7 @@ export function TasksScreen() {
           folderId={folderId}
           projects={projects}
           supportsTasksBoard={supportsTasksBoard}
+          supportsAutopilot={supportsAutopilot}
           boardHandle={boardHandle}
         />
       ) : (
@@ -282,6 +286,7 @@ export function TasksScreen() {
           projects={projects}
           folders={sortedFolders}
           supportsTasksBoard={supportsTasksBoard}
+          supportsAutopilot={supportsAutopilot}
           boardHandle={boardHandle}
         />
       )}
@@ -302,6 +307,7 @@ function DesktopLayout({
   projects,
   folders,
   supportsTasksBoard,
+  supportsAutopilot,
   boardHandle,
 }: {
   serverId: string | null;
@@ -310,6 +316,7 @@ function DesktopLayout({
   projects: ProjectEntry[];
   folders: TaskFolder[];
   supportsTasksBoard: boolean;
+  supportsAutopilot: boolean;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
@@ -344,7 +351,12 @@ function DesktopLayout({
     <View style={styles.desktopRow}>
       <ProjectsRail projects={projects} serverId={serverId} projectId={projectId} />
       {serverId && projectId && supportsTasksBoard ? (
-        <FoldersRail folders={folders} folderId={folderId} boardHandle={boardHandle} />
+        <FoldersRail
+          folders={folders}
+          folderId={folderId}
+          supportsAutopilot={supportsAutopilot}
+          boardHandle={boardHandle}
+        />
       ) : null}
       <View style={styles.boardArea}>{boardArea}</View>
     </View>
@@ -453,14 +465,16 @@ const ProjectRailItem = memo(function ProjectRailItem({
 function FoldersRail({
   folders,
   folderId,
+  supportsAutopilot,
   boardHandle,
 }: {
   folders: TaskFolder[];
   folderId: string | null;
+  supportsAutopilot: boolean;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
-  const folderModal = useFolderModal(boardHandle);
+  const folderModal = useFolderModal(boardHandle, supportsAutopilot);
   const taskCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const task of boardHandle.board?.tasks ?? []) {
@@ -509,7 +523,7 @@ function FoldersRail({
 
 // Shared create/edit folder modal wiring: the folders rail and the compact
 // folder list both open the same FolderCreateModal in either mode.
-function useFolderModal(boardHandle: BoardHandle) {
+function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   const [mode, setMode] = useState<
     { kind: "create" } | { kind: "edit"; folder: TaskFolder } | null
   >(null);
@@ -525,7 +539,7 @@ function useFolderModal(boardHandle: BoardHandle) {
   }, []);
 
   const handleSubmit = useCallback(
-    (input: { name: string; color: string }) => {
+    (input: { name: string; color: string; autopilot?: boolean }) => {
       if (mode?.kind === "edit") {
         void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
       } else {
@@ -537,7 +551,9 @@ function useFolderModal(boardHandle: BoardHandle) {
 
   const initialFolder = useMemo(
     () =>
-      mode?.kind === "edit" ? { name: mode.folder.name, color: mode.folder.color } : undefined,
+      mode?.kind === "edit"
+        ? { name: mode.folder.name, color: mode.folder.color, autopilot: mode.folder.autopilot }
+        : undefined,
     [mode],
   );
 
@@ -547,6 +563,7 @@ function useFolderModal(boardHandle: BoardHandle) {
       onClose={close}
       onCreate={handleSubmit}
       initialFolder={initialFolder}
+      showAutopilot={supportsAutopilot}
     />
   );
 
@@ -592,6 +609,7 @@ const FolderRailItem = memo(function FolderRailItem({
         </Text>
         <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
+      {folder.autopilot ? <AutopilotMark /> : null}
       <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
   );
@@ -605,6 +623,16 @@ const ProjectColorMark = memo(function ProjectColorMark({ projectKey }: { projec
     [projectKey],
   );
   return <View style={dotStyle} />;
+});
+
+// Lightning mark on folders whose backlog runs on autopilot.
+const AutopilotMark = memo(function AutopilotMark() {
+  const { t } = useTranslation();
+  return (
+    <View accessibilityLabel={t("tasks.folderModal.autopilotField")}>
+      <ThemedZap size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+    </View>
+  );
 });
 
 const FolderColorMark = memo(function FolderColorMark({ color }: { color?: string }) {
@@ -784,6 +812,7 @@ function CompactFlow({
   folderId,
   projects,
   supportsTasksBoard,
+  supportsAutopilot,
   boardHandle,
 }: {
   serverId: string | null;
@@ -791,6 +820,7 @@ function CompactFlow({
   folderId: string | null;
   projects: ProjectEntry[];
   supportsTasksBoard: boolean;
+  supportsAutopilot: boolean;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
@@ -804,7 +834,7 @@ function CompactFlow({
     return <CenteredNote text={boardHandle.error} />;
   }
   if (!folderId) {
-    return <CompactFolderList boardHandle={boardHandle} />;
+    return <CompactFolderList boardHandle={boardHandle} supportsAutopilot={supportsAutopilot} />;
   }
   return (
     <View style={styles.compactBoardWrap}>
@@ -862,9 +892,15 @@ const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: Pr
   );
 });
 
-function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
+function CompactFolderList({
+  boardHandle,
+  supportsAutopilot,
+}: {
+  boardHandle: BoardHandle;
+  supportsAutopilot: boolean;
+}) {
   const { t } = useTranslation();
-  const folderModal = useFolderModal(boardHandle);
+  const folderModal = useFolderModal(boardHandle, supportsAutopilot);
   const folders = useMemo(
     () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
     [boardHandle.board],
@@ -948,6 +984,7 @@ const CompactFolderRow = memo(function CompactFolderRow({
         <Text style={styles.rowTitle}>{folder.name}</Text>
         <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
+      {folder.autopilot ? <AutopilotMark /> : null}
       <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
   );

@@ -1,5 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
@@ -10,10 +8,8 @@ import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quie
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
 
-const execFileAsync = promisify(execFile);
-
 const TICK_INTERVAL_MS = 30_000;
-const MAX_CONCURRENT_TASK_AGENTS = 2;
+const MAX_CONCURRENT_TASK_AGENTS = 3;
 const QUOTA_SAFETY_MARGIN_PCT = 10;
 const MAX_ATTEMPTS = 3;
 // "Light" tasks (below both thresholds) may launch outside quiet hours in
@@ -34,8 +30,6 @@ interface TaskSchedulerOptions {
   tickIntervalMs?: number;
   /** Off-peak window for heavy tasks. Defaults to 01:00–07:00 Europe/Paris. */
   getQuietHours?: () => QuietHours;
-  /** Reads the current branch of a checkout; injected for tests. */
-  readCurrentBranch?: (cwd: string) => Promise<string | null>;
   /** Injected for tests. */
   now?: () => number;
 }
@@ -47,35 +41,67 @@ interface LaunchCandidate {
   runNow: boolean;
 }
 
-async function defaultReadCurrentBranch(cwd: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-      cwd,
-      timeout: 15_000,
-    });
-    const branch = stdout.trim();
-    return branch && branch !== "HEAD" ? branch : null;
-  } catch {
-    return null;
-  }
+// Branch (and worktree slug) for a task launch: stable, readable, unique via a
+// short task-id suffix so two similarly-titled tasks never collide.
+function taskBranchName(task: KanbanTask): string {
+  const slug = task.title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+)|(-+$)/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  const suffix = task.id.slice(0, 6);
+  return slug ? `task/${slug}-${suffix}` : `task/${suffix}`;
+}
+
+// "Planifié" column task ready to launch: estimated, awaiting a slot, and not
+// an unapproved agent proposal.
+function isScheduledCandidate(task: KanbanTask): boolean {
+  return (
+    task.column === "scheduled" &&
+    task.schedule?.state === "awaiting_slot" &&
+    Boolean(task.estimate) &&
+    task.approval?.state !== "pending"
+  );
+}
+
+// Autopilot folders: backlog tasks are launch candidates directly — enabling
+// autopilot on the folder is the consent. Estimate-less tasks wait for the
+// sweep; schedule-carrying ones went through a failed launch and already live
+// in the scheduled flow.
+function isAutopilotBacklogCandidate(task: KanbanTask, folderAutopilot: boolean): boolean {
+  return (
+    task.column === "backlog" &&
+    folderAutopilot &&
+    task.approval?.state !== "pending" &&
+    Boolean(task.estimate) &&
+    !task.schedule
+  );
 }
 
 /**
- * Executes tasks the user dragged into the "Planifié" column. Consent is
- * structural: only column === "scheduled" tasks are ever considered, so a
- * backlog card can never auto-run. Each launch opens a fresh visible
- * (non-internal) agent directly in the project's current workspace — the same
- * checkout the user works in, no throwaway worktree — instructed to implement
- * the task and commit locally (no push, no PR). Plan-mode tasks produce a plan
- * and stop without touching files.
+ * Executes tasks from the board. Two entry points:
+ * - "Planifié" column: the user dragged the task there (explicit consent).
+ * - Autopilot folders: the scheduler picks tasks straight from the folder's
+ *   backlog — turning autopilot on IS the consent for that folder.
  *
- * Because these agents share the project's working directory, launches are
- * serialized per project: a project with an in-flight task is skipped until it
- * frees up, so two task agents never fight over the same checkout.
+ * Every launch opens a fresh visible (non-internal) agent in its own isolated
+ * worktree + branch (task/<slug>-<id>), so several task agents can run in the
+ * SAME project concurrently without fighting over the user's checkout. The
+ * agent implements the task and commits on its branch (no push, no PR); the
+ * user reviews and merges. Plan-mode tasks produce a plan and stop.
+ *
+ * The scheduler also sweeps every open task (backlog included) and requests a
+ * cost estimate once, so the board shows real quota lengths and packing can
+ * plan ahead.
  *
  * The quota gate reads the task provider's five_hour window and only launches
  * when remaining % covers the task estimate plus a safety margin, minus
- * estimates already reserved by in-flight launches.
+ * estimates already reserved by in-flight launches. Candidates are packed by
+ * size: during quiet hours the biggest tasks launch first (spend the fresh
+ * post-reset window on heavy work), during the day the lightest go first.
  *
  * Two extra gates sit in front of the quota gate:
  * - Approval: tasks with approval.state === "pending" (agent proposals) are
@@ -93,16 +119,16 @@ export class TaskScheduler {
   private readonly providerUsageService: Pick<ProviderUsageService, "listUsage">;
   private readonly logger: pino.Logger;
   private readonly tickIntervalMs: number;
-  private readonly readCurrentBranch: (cwd: string) => Promise<string | null>;
   private readonly getQuietHours: () => QuietHours;
   private readonly now: () => number;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
   // taskId -> reserved quota percent for launches still in flight.
   private readonly inFlight = new Map<string, number>();
-  // Projects with an in-flight launch: one task agent per checkout at a time.
-  private readonly inFlightProjects = new Set<string>();
   private readonly runNowQueue = new Set<string>();
+  // Open tasks already sent to the estimator this daemon lifetime — the sweep
+  // estimates each task once (a failed run writes a fallback estimate anyway).
+  private readonly estimateRequested = new Set<string>();
 
   constructor(options: TaskSchedulerOptions) {
     this.taskBoardService = options.taskBoardService;
@@ -113,7 +139,6 @@ export class TaskScheduler {
     this.providerUsageService = options.providerUsageService;
     this.logger = options.logger.child({ module: "task-scheduler" });
     this.tickIntervalMs = options.tickIntervalMs ?? TICK_INTERVAL_MS;
-    this.readCurrentBranch = options.readCurrentBranch ?? defaultReadCurrentBranch;
     this.getQuietHours = options.getQuietHours ?? (() => DEFAULT_TASKS_QUIET_HOURS);
     this.now = options.now ?? (() => Date.now());
   }
@@ -173,11 +198,6 @@ export class TaskScheduler {
         if (this.inFlight.has(candidate.task.id)) {
           continue;
         }
-        if (this.inFlightProjects.has(candidate.projectId)) {
-          // One task agent per checkout: another task for this project is still
-          // running in its shared working directory.
-          continue;
-        }
         if (!candidate.runNow) {
           if (!this.isWithinLaunchWindow(candidate.task)) {
             await this.setWaitingReason(candidate, "quiet_hours");
@@ -191,7 +211,6 @@ export class TaskScheduler {
         }
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
-        this.inFlightProjects.add(candidate.projectId);
         void this.launch(candidate)
           .catch((error) => {
             this.logger.error(
@@ -201,7 +220,6 @@ export class TaskScheduler {
           })
           .finally(() => {
             this.inFlight.delete(candidate.task.id);
-            this.inFlightProjects.delete(candidate.projectId);
           });
       }
     } finally {
@@ -221,21 +239,24 @@ export class TaskScheduler {
         continue;
       }
       const folderOrders = new Map(board.folders.map((folder) => [folder.id, folder.order]));
+      const folderAutopilot = new Map(
+        board.folders.map((folder) => [folder.id, folder.autopilot === true]),
+      );
       for (const task of board.tasks) {
-        if (task.column !== "scheduled" || !task.schedule) {
+        if (task.column === "done") {
           continue;
         }
-        if (task.schedule.state === "pending_estimate") {
+        this.maybeSweepEstimate(project.projectId, task);
+        if (task.column === "scheduled" && task.schedule?.state === "pending_estimate") {
           // Re-arm after daemon restarts: the estimate request queue is in-memory.
           // Also runs for approval-pending proposals so the cost is ready to review.
           this.taskEstimator.requestEstimate(project.projectId, task.id);
           continue;
         }
-        if (task.approval?.state === "pending") {
-          // Agent proposals never launch without explicit user approval.
-          continue;
-        }
-        if (task.schedule.state !== "awaiting_slot" || !task.estimate) {
+        const eligible =
+          isScheduledCandidate(task) ||
+          isAutopilotBacklogCandidate(task, folderAutopilot.get(task.folderId) === true);
+        if (!eligible) {
           continue;
         }
         candidates.push({
@@ -246,9 +267,38 @@ export class TaskScheduler {
         });
       }
     }
-    candidates.sort((left, right) => {
+    return this.sortForPacking(candidates);
+  }
+
+  /**
+   * Estimation sweep: every open task (backlog included) gets one cost estimate
+   * so cards/timeline show real sizes and packing can plan. One request per
+   * task per daemon lifetime — a failed run writes a fallback estimate anyway.
+   */
+  private maybeSweepEstimate(projectId: string, task: KanbanTask): void {
+    if (task.estimate || task.schedule?.state === "pending_estimate") {
+      return;
+    }
+    const key = `${projectId}:${task.id}`;
+    if (this.estimateRequested.has(key)) {
+      return;
+    }
+    this.estimateRequested.add(key);
+    this.taskEstimator.requestEstimate(projectId, task.id);
+  }
+
+  // Quota packing: runNow always first; then during quiet hours spend the
+  // fresh window on the biggest tasks first, during the day lightest first.
+  private sortForPacking(candidates: LaunchCandidate[]): LaunchCandidate[] {
+    const inQuietHours = isQuietTime(this.now(), this.getQuietHours());
+    return candidates.sort((left, right) => {
       if (left.runNow !== right.runNow) {
         return left.runNow ? -1 : 1;
+      }
+      const leftQuota = left.task.estimate?.quotaPercent ?? 0;
+      const rightQuota = right.task.estimate?.quotaPercent ?? 0;
+      if (leftQuota !== rightQuota) {
+        return inQuietHours ? rightQuota - leftQuota : leftQuota - rightQuota;
       }
       return (
         left.folderOrder - right.folderOrder ||
@@ -256,7 +306,6 @@ export class TaskScheduler {
         left.task.createdAt.localeCompare(right.task.createdAt)
       );
     });
-    return candidates;
   }
 
   /**
@@ -360,8 +409,11 @@ export class TaskScheduler {
           ? `${runConfig.provider}/${runConfig.model}`
           : runConfig.provider;
       }
-      // Run in the project's current workspace: passing cwd without a
-      // workspaceId reuses the existing workspace for that checkout.
+      // Each launch gets its own worktree + branch off the project checkout, so
+      // several task agents can run in the same project concurrently without
+      // touching the user's working directory. Plan-mode runs make no changes,
+      // so they run directly in the current workspace — no throwaway worktree.
+      const branchName = planMode ? null : taskBranchName(task);
       const created = await this.createAgent({
         kind: "mcp",
         provider,
@@ -374,13 +426,14 @@ export class TaskScheduler {
         notifyOnFinish: false,
         ...(runConfig?.thinkingOptionId ? { thinking: runConfig.thinkingOptionId } : {}),
         ...(planMode ? { mode: "plan" } : {}),
+        ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
       });
       const agent = created.snapshot;
       if (created.initialPromptError) {
         throw created.initialPromptError;
       }
 
-      const branch = await this.readCurrentBranch(project.rootPath);
+      const branch = branchName;
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
         ...current,
         column: "in_progress",
@@ -400,7 +453,7 @@ export class TaskScheduler {
         },
       }));
 
-      const prompt = this.buildTaskPrompt({ task, planMode });
+      const prompt = this.buildTaskPrompt({ task, planMode, branch });
       const result = await this.agentManager.runAgent(agent.id, prompt);
       if (result.canceled) {
         throw new Error("Task agent run was canceled");
@@ -424,8 +477,8 @@ export class TaskScheduler {
       }));
       await this.taskBoardService.transitionTask(projectId, task.id, "done");
       this.logger.info(
-        { taskId: task.id, agentId: agent.id },
-        "Task executed in the current workspace",
+        { taskId: task.id, agentId: agent.id, branch },
+        "Task executed in an isolated worktree",
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -453,10 +506,16 @@ export class TaskScheduler {
     }
   }
 
-  private buildTaskPrompt(input: { task: KanbanTask; planMode: boolean }): string {
-    const { task, planMode } = input;
+  private buildTaskPrompt(input: {
+    task: KanbanTask;
+    planMode: boolean;
+    branch: string | null;
+  }): string {
+    const { task, planMode, branch } = input;
     const header = [
-      "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet.",
+      planMode
+        ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
+        : `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree dédié, sur la branche ${branch ?? "de la tâche"}. Le checkout principal de l'utilisateur n'est pas touché.`,
       "",
       `## Tâche`,
       `Titre : ${task.title}`,
@@ -476,8 +535,8 @@ export class TaskScheduler {
       : [
           "1. Implémente la tâche complètement dans ce dépôt, en respectant ses conventions.",
           "2. Vérifie ton travail (typecheck, lint, tests ciblés pertinents s'ils existent).",
-          "3. Commite tes changements avec un message conventionnel clair.",
-          "4. NE pousse PAS et NE crée PAS de pull request : l'utilisateur relit et pousse lui-même.",
+          "3. Commite tes changements sur cette branche avec un message conventionnel clair.",
+          "4. NE pousse PAS et NE crée PAS de pull request : l'utilisateur relit la branche et merge lui-même.",
           "5. Termine ta réponse par un résumé de ce que tu as fait et la liste des fichiers modifiés.",
         ];
     return [...header, ...instructions].filter((line) => line !== "").join("\n");

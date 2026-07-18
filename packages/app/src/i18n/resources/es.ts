@@ -287,6 +287,8 @@ export const es: TranslationResources = {
       editTitle: "Editar carpeta",
       nameField: "Nombre",
       colorField: "Color",
+      autopilotField: "Piloto automático",
+      autopilotHint: "Las tareas del backlog se lanzan solas — cuota y horas valle gestionadas.",
       create: "Crear",
       save: "Guardar",
     },

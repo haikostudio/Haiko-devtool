@@ -124,6 +124,7 @@ export class TasksSession {
         request.projectId,
         request.name,
         request.color,
+        request.autopilot,
       );
       this.host.emit({
         type: "tasks.folder.create.response",
@@ -141,6 +142,7 @@ export class TasksSession {
       const folder = await this.taskBoardService.updateFolder(request.projectId, request.folderId, {
         ...(request.name !== undefined ? { name: request.name } : {}),
         ...(request.color !== undefined ? { color: request.color } : {}),
+        ...(request.autopilot !== undefined ? { autopilot: request.autopilot } : {}),
         ...(request.order !== undefined ? { order: request.order } : {}),
       });
       this.host.emit({

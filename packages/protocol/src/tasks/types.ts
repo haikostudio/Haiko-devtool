@@ -98,6 +98,9 @@ export const TaskFolderSchema = z.object({
   name: z.string(),
   // Accent color for the folder card, hex string (e.g. "#f97316").
   color: z.string().optional(),
+  // Autopilot: the scheduler may pick this folder's backlog tasks directly
+  // (quota + quiet-hours gates still apply). Absent = manual (drag to Planned).
+  autopilot: z.boolean().optional(),
   order: z.number().int(),
   createdAt: z.string(),
 });

@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
+import { Switch } from "@/components/ui/switch";
 import { useIsCompactFormFactor } from "@/constants/layout";
 
 // Accent palette for folder cards — mirrors the Paseo project-color range.
@@ -23,12 +24,14 @@ export const FOLDER_COLORS = [
 interface FolderCreateModalProps {
   visible: boolean;
   onClose: () => void;
-  onCreate: (input: { name: string; color: string }) => void;
+  onCreate: (input: { name: string; color: string; autopilot?: boolean }) => void;
   /**
    * When provided the dialog opens in edit mode: fields prefill from this
    * folder, the title/submit labels switch, and onCreate carries the edits.
    */
-  initialFolder?: { name: string; color?: string };
+  initialFolder?: { name: string; color?: string; autopilot?: boolean };
+  // Autopilot toggle is shown only when the daemon supports it.
+  showAutopilot?: boolean;
 }
 
 /**
@@ -41,6 +44,7 @@ export function FolderCreateModal({
   onClose,
   onCreate,
   initialFolder,
+  showAutopilot,
 }: FolderCreateModalProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -48,6 +52,7 @@ export function FolderCreateModal({
   const isEditing = initialFolder !== undefined;
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(FOLDER_COLORS[0]);
+  const [autopilot, setAutopilot] = useState(false);
   // The name input is native-owned (see AdaptiveTextInput); bump the reset key
   // on every open so the field remounts empty instead of replaying old text.
   const [resetKey, setResetKey] = useState(0);
@@ -56,6 +61,7 @@ export function FolderCreateModal({
     if (visible) {
       setName(initialFolder?.name ?? "");
       setColor(initialFolder?.color ?? FOLDER_COLORS[0]);
+      setAutopilot(initialFolder?.autopilot ?? false);
       setResetKey((key) => key + 1);
     }
   }, [visible, initialFolder]);
@@ -65,9 +71,9 @@ export function FolderCreateModal({
     if (!trimmed) {
       return;
     }
-    onCreate({ name: trimmed, color });
+    onCreate({ name: trimmed, color, ...(showAutopilot ? { autopilot } : {}) });
     onClose();
-  }, [name, color, onCreate, onClose]);
+  }, [name, color, autopilot, showAutopilot, onCreate, onClose]);
 
   const header = useMemo(
     (): SheetHeader => ({
@@ -129,6 +135,19 @@ export function FolderCreateModal({
           ))}
         </View>
       </Field>
+      {showAutopilot ? (
+        <Field label={t("tasks.folderModal.autopilotField")}>
+          <View style={styles.autopilotRow}>
+            <Text style={styles.autopilotHint}>{t("tasks.folderModal.autopilotHint")}</Text>
+            <Switch
+              value={autopilot}
+              onValueChange={setAutopilot}
+              accessibilityLabel={t("tasks.folderModal.autopilotField")}
+              testID="tasks-folder-modal-autopilot"
+            />
+          </View>
+        </Field>
+      ) : null}
     </AdaptiveModalSheet>
   );
 }
@@ -180,6 +199,17 @@ const styles = StyleSheet.create((theme) => ({
   },
   swatchSelected: {
     borderColor: theme.colors.foreground,
+  },
+  autopilotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+  },
+  autopilotHint: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   footerRow: {
     flex: 1,
