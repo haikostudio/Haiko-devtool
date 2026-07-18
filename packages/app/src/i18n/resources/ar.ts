@@ -413,6 +413,11 @@ export const ar: TranslationResources = {
       loadMore: "تحميل المزيد",
     },
   },
+  agentTasks: {
+    openDrawer: "عرض المهام ({{count}})",
+    drawerTitle: "المهام",
+    drawerEmpty: "لا توجد مهام قيد التنفيذ.",
+  },
   agentList: {
     fallbackTitle: "جلسة جديدة",
     runningFor: "قيد التشغيل منذ {{duration}}",

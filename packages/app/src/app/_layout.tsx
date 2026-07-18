@@ -26,6 +26,7 @@ import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
 import { AgentTasksToastStack } from "@/components/agent-tasks-toast-stack";
+import { AgentTasksToastFab } from "@/components/agent-tasks-toast-fab";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
@@ -547,7 +548,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <FloatingPanelPortalHost />
       {isCompactLayout ? sidebarChrome : null}
       <DownloadToast />
-      <AgentTasksToastStack />
+      {isCompactLayout ? <AgentTasksToastFab /> : <AgentTasksToastStack />}
       <RosettaCalloutSource />
       <UpdateCalloutSource />
       <WorktreeSetupCalloutSource />

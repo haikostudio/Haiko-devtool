@@ -417,6 +417,11 @@ export const es: TranslationResources = {
       loadMore: "Cargar más",
     },
   },
+  agentTasks: {
+    openDrawer: "Mostrar tareas ({{count}})",
+    drawerTitle: "Tareas",
+    drawerEmpty: "No hay tareas en curso.",
+  },
   agentList: {
     fallbackTitle: "Nueva sesión",
     runningFor: "En ejecución desde hace {{duration}}",

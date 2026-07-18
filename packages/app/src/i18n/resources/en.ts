@@ -412,6 +412,11 @@ export const en = {
       loadMore: "Load more",
     },
   },
+  agentTasks: {
+    openDrawer: "Show tasks ({{count}})",
+    drawerTitle: "Tasks",
+    drawerEmpty: "No tasks in progress.",
+  },
   agentList: {
     fallbackTitle: "New session",
     runningFor: "Running for {{duration}}",

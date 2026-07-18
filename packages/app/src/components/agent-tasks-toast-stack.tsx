@@ -26,7 +26,7 @@ const BASE_BOTTOM_OFFSET = 16;
 // gap) so the rail stays visible instead of hiding behind the toasts.
 const RAIL_CLEARANCE = 44;
 
-interface TrackedTask {
+export interface TrackedTask {
   key: string;
   agent: AggregatedAgent;
   bucket: WorkspaceStateBucket;
@@ -78,7 +78,64 @@ function TaskToastIcon({
   );
 }
 
-function TaskToast({ task }: { task: TrackedTask }): ReactElement {
+// Shared source of truth for both the desktop toast stack and the mobile
+// floating button + drawer: reconciles the toast store against the live agent
+// list and returns the sorted, currently-visible tracked tasks.
+export function useTrackedTasks(): TrackedTask[] {
+  const { agents } = useAggregatedAgents();
+  const reconcile = useAgentTaskToastStore((state) => state.reconcile);
+  const order = useAgentTaskToastStore((state) => state.order);
+
+  const buckets = useMemo(() => {
+    const map = new Map<string, TrackedTask>();
+    for (const agent of agents) {
+      const key = agentTaskToastKey(agent.serverId, agent.id);
+      map.set(key, { key, agent, bucket: bucketOf(agent) });
+    }
+    return map;
+  }, [agents]);
+
+  const activeKeys = useMemo(
+    () => [...buckets.values()].filter((task) => task.bucket !== "done").map((task) => task.key),
+    [buckets],
+  );
+  const existingKeys = useMemo(() => new Set(buckets.keys()), [buckets]);
+
+  useEffect(() => {
+    reconcile({ activeKeys, existingKeys });
+  }, [reconcile, activeKeys, existingKeys]);
+
+  // Auto-sort by lifecycle lane so cards settle into three groups: waiting-for-user
+  // at the top, running in the middle, finished at the bottom (nearest the corner).
+  // Within a lane, keep appearance order (oldest first) for stability. Any tracked
+  // key whose agent has since disappeared is dropped.
+  return useMemo(() => {
+    const items: TrackedTask[] = [];
+    for (const key of order.keys()) {
+      const task = buckets.get(key);
+      if (task) {
+        items.push(task);
+      }
+    }
+    items.sort((a, b) => {
+      const rankDiff = BUCKET_GROUP_RANK[a.bucket] - BUCKET_GROUP_RANK[b.bucket];
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0);
+    });
+    return items;
+  }, [order, buckets]);
+}
+
+export function TaskToast({
+  task,
+  onActivate,
+}: {
+  task: TrackedTask;
+  // Fired after navigation so a host (e.g. the mobile drawer) can dismiss itself.
+  onActivate?: () => void;
+}): ReactElement {
   const { t } = useTranslation();
   const dismiss = useAgentTaskToastStore((state) => state.dismiss);
   const title = task.agent.title || t("agentList.fallbackTitle");
@@ -143,7 +200,8 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
     if (task.bucket === "done") {
       dismiss(task.key);
     }
-  }, [dismiss, task]);
+    onActivate?.();
+  }, [dismiss, task, onActivate]);
 
   return (
     <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
@@ -177,53 +235,7 @@ function TaskToast({ task }: { task: TrackedTask }): ReactElement {
 export function AgentTasksToastStack(): ReactElement | null {
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
-  const { agents } = useAggregatedAgents();
-  const reconcile = useAgentTaskToastStore((state) => state.reconcile);
-  const order = useAgentTaskToastStore((state) => state.order);
-
-  const buckets = useMemo(() => {
-    const map = new Map<string, TrackedTask>();
-    for (const agent of agents) {
-      const key = agentTaskToastKey(agent.serverId, agent.id);
-      map.set(key, { key, agent, bucket: bucketOf(agent) });
-    }
-    return map;
-  }, [agents]);
-
-  const activeKeys = useMemo(
-    () => [...buckets.values()].filter((task) => task.bucket !== "done").map((task) => task.key),
-    [buckets],
-  );
-  const existingKeys = useMemo(() => new Set(buckets.keys()), [buckets]);
-
-  useEffect(() => {
-    if (isCompact) {
-      return;
-    }
-    reconcile({ activeKeys, existingKeys });
-  }, [reconcile, activeKeys, existingKeys, isCompact]);
-
-  // Auto-sort by lifecycle lane so cards settle into three groups: waiting-for-user
-  // at the top, running in the middle, finished at the bottom (nearest the corner).
-  // Within a lane, keep appearance order (oldest first) for stability. Any tracked
-  // key whose agent has since disappeared is dropped.
-  const visible = useMemo(() => {
-    const items: TrackedTask[] = [];
-    for (const key of order.keys()) {
-      const task = buckets.get(key);
-      if (task) {
-        items.push(task);
-      }
-    }
-    items.sort((a, b) => {
-      const rankDiff = BUCKET_GROUP_RANK[a.bucket] - BUCKET_GROUP_RANK[b.bucket];
-      if (rankDiff !== 0) {
-        return rankDiff;
-      }
-      return (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0);
-    });
-    return items;
-  }, [order, buckets]);
+  const visible = useTrackedTasks();
 
   const containerStyle = useMemo(
     () => [styles.container, inlineUnistylesStyle({ bottom: BASE_BOTTOM_OFFSET + insets.bottom })],

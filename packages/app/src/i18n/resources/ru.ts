@@ -416,6 +416,11 @@ export const ru: TranslationResources = {
       loadMore: "Загрузить больше",
     },
   },
+  agentTasks: {
+    openDrawer: "Показать задачи ({{count}})",
+    drawerTitle: "Задачи",
+    drawerEmpty: "Нет задач в процессе.",
+  },
   agentList: {
     fallbackTitle: "Новая сессия",
     runningFor: "Выполняется уже {{duration}}",

@@ -416,6 +416,11 @@ export const ja: TranslationResources = {
       loadMore: "さらに読み込む",
     },
   },
+  agentTasks: {
+    openDrawer: "タスクを表示 ({{count}})",
+    drawerTitle: "タスク",
+    drawerEmpty: "進行中のタスクはありません。",
+  },
   agentList: {
     fallbackTitle: "新しいセッション",
     runningFor: "{{duration}} 実行中",

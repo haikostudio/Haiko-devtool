@@ -413,6 +413,11 @@ export const zhCN: TranslationResources = {
       loadMore: "加载更多",
     },
   },
+  agentTasks: {
+    openDrawer: "显示任务 ({{count}})",
+    drawerTitle: "任务",
+    drawerEmpty: "没有正在进行的任务。",
+  },
   agentList: {
     fallbackTitle: "新会话",
     runningFor: "已运行 {{duration}}",

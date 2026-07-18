@@ -418,6 +418,11 @@ export const ptBR: TranslationResources = {
       loadMore: "Carregar mais",
     },
   },
+  agentTasks: {
+    openDrawer: "Mostrar tarefas ({{count}})",
+    drawerTitle: "Tarefas",
+    drawerEmpty: "Nenhuma tarefa em andamento.",
+  },
   agentList: {
     fallbackTitle: "Nova sessão",
     runningFor: "Em execução há {{duration}}",
