@@ -272,6 +272,9 @@ export const ja: TranslationResources = {
     title: "タスク",
     gantt: {
       title: "タイムライン",
+      now: "現在",
+      inProgress: "実行中",
+      quotaWindow: "5時間クォータ",
     },
     pickProject: "プロジェクトを選択",
     noProjects: "利用可能なプロジェクトがありません — まずホストに接続してください。",

@@ -67,10 +67,10 @@ function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
 }
 
 /**
- * A single kanban card: title, priority flag, deadline, quota estimate,
- * schedule state, linked-agent marker, PR link and thematic tag chips. Kept
- * intentionally flat/minimal to match the Paseo surfaces (surface2 card on
- * surface1 column).
+ * A single kanban card, ticket-style: a soft tinted priority chip on top, the
+ * title, an optional two-line description, then deadline / meta / tags. Flat
+ * surfaces only — a surface0 card with a hairline border sitting on the
+ * folder-tinted column, generous padding so the board breathes.
  */
 export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCardProps) {
   const { t } = useTranslation();
@@ -82,11 +82,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
 
-  const modelLabel = task.runConfig ? (task.runConfig.model ?? task.runConfig.provider) : null;
-
-  const hasMetaRow = Boolean(
-    task.estimate || scheduleBadge || modelLabel || task.links.primaryAgentId || task.links.prUrl,
-  );
+  const hasChipRow = Boolean(priority || scheduleBadge);
 
   return (
     <Pressable
@@ -96,39 +92,24 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
       accessibilityRole="button"
       accessibilityLabel={task.title}
     >
-      <Text style={styles.title} numberOfLines={3}>
-        {task.title}
-      </Text>
-      {priority ? <PriorityFlag priority={priority} /> : null}
-      {deadline ? <DeadlineRow deadline={deadline} /> : null}
-      {hasMetaRow ? (
-        <View style={styles.metaRow}>
-          {task.estimate ? (
-            <Text style={styles.estimateText}>
-              {t("tasks.card.quotaEstimate", {
-                percent: Math.round(task.estimate.quotaPercent),
-              })}
-            </Text>
-          ) : null}
-          {task.estimate?.estimatedMinutes !== undefined ? (
-            <Text style={styles.estimateText}>
-              {t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })}
-            </Text>
-          ) : null}
-          {modelLabel ? (
-            <View style={styles.tagChip}>
-              <Text style={styles.tagText}>{modelLabel}</Text>
-            </View>
-          ) : null}
+      {hasChipRow ? (
+        <View style={styles.chipRow}>
+          {priority ? <PriorityChip priority={priority} /> : null}
           {scheduleBadge ? (
             <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
           ) : null}
-          {task.links.primaryAgentId ? (
-            <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          ) : null}
-          {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
         </View>
       ) : null}
+      <Text style={styles.title} numberOfLines={3}>
+        {task.title}
+      </Text>
+      {task.description ? (
+        <Text style={styles.description} numberOfLines={2}>
+          {task.description}
+        </Text>
+      ) : null}
+      {deadline ? <DeadlineRow deadline={deadline} /> : null}
+      <CardMetaRow task={task} />
       {tags.length > 0 ? (
         <View style={styles.tagsRow}>
           {tags.map((tag) => (
@@ -147,15 +128,49 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   );
 });
 
-// Colored priority flag — just the level word ("haute"), no "priorité" prefix,
-// tinted so high/medium/low read at a glance.
-const PriorityFlag = memo(function PriorityFlag({ priority }: { priority: ParsedPriority }) {
+// Muted single-line footer: quota share, duration, model, linked agent, PR.
+// Split out of TaskCard to keep the card render under the complexity budget.
+const CardMetaRow = memo(function CardMetaRow({ task }: { task: KanbanTask }) {
+  const { t } = useTranslation();
+  const modelLabel = task.runConfig ? (task.runConfig.model ?? task.runConfig.provider) : null;
+  const hasMetaRow = Boolean(
+    task.estimate || modelLabel || task.links.primaryAgentId || task.links.prUrl,
+  );
+  if (!hasMetaRow) {
+    return null;
+  }
+  return (
+    <View style={styles.metaRow}>
+      {task.estimate ? (
+        <Text style={styles.estimateText}>
+          {t("tasks.card.quotaEstimate", {
+            percent: Math.round(task.estimate.quotaPercent),
+          })}
+        </Text>
+      ) : null}
+      {task.estimate?.estimatedMinutes !== undefined ? (
+        <Text style={styles.estimateText}>
+          {t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })}
+        </Text>
+      ) : null}
+      {modelLabel ? <Text style={styles.estimateText}>{modelLabel}</Text> : null}
+      {task.links.primaryAgentId ? (
+        <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      ) : null}
+      {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
+    </View>
+  );
+});
+
+// Soft tinted priority chip — level word only ("Haute"), status-colored text on
+// a 10%-alpha tint of the same color (docs/design.md §12). Low priority stays
+// deliberately quiet: muted text on a neutral surface.
+const PriorityChip = memo(function PriorityChip({ priority }: { priority: ParsedPriority }) {
   const pillStyle = useMemo(
     () => [
-      styles.priorityPill,
-      priority.level === "high" && styles.priorityPillHigh,
-      priority.level === "medium" && styles.priorityPillMedium,
-      priority.level === "low" && styles.priorityPillLow,
+      styles.priorityChip,
+      priority.level === "high" && styles.priorityChipHigh,
+      priority.level === "medium" && styles.priorityChipMedium,
     ],
     [priority.level],
   );
@@ -164,15 +179,12 @@ const PriorityFlag = memo(function PriorityFlag({ priority }: { priority: Parsed
       styles.priorityText,
       priority.level === "high" && styles.priorityTextHigh,
       priority.level === "medium" && styles.priorityTextMedium,
-      priority.level === "low" && styles.priorityTextLow,
     ],
     [priority.level],
   );
   return (
-    <View style={styles.priorityRow}>
-      <View style={pillStyle}>
-        <Text style={textStyle}>{priority.label}</Text>
-      </View>
+    <View style={pillStyle}>
+      <Text style={textStyle}>{priority.label}</Text>
     </View>
   );
 });
@@ -248,63 +260,62 @@ function extractPrNumber(prUrl: string): string {
 
 const styles = StyleSheet.create((theme) => ({
   card: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    padding: theme.spacing[3],
+    padding: theme.spacing[4],
     gap: theme.spacing[2],
   },
   cardHovered: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface1,
+  },
+  chipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: theme.spacing[2],
+    // Clears the absolute move-to trigger the touch board overlays top-right.
+    paddingRight: theme.spacing[6],
   },
   title: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    lineHeight: 20,
+  },
+  description: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 17,
   },
   tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
   },
-  priorityRow: {
-    flexDirection: "row",
-  },
-  priorityPill: {
+  priorityChip: {
     borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
-  priorityPillHigh: {
-    backgroundColor: theme.colors.palette.red[900],
-    borderColor: theme.colors.palette.red[800],
+  priorityChipHigh: {
+    backgroundColor: `${theme.colors.statusDanger}1A`,
   },
-  priorityPillMedium: {
-    backgroundColor: theme.colors.surface3,
-    borderColor: theme.colors.palette.amber[700],
-  },
-  priorityPillLow: {
-    backgroundColor: theme.colors.palette.blue[900],
-    borderColor: theme.colors.palette.blue[800],
+  priorityChipMedium: {
+    backgroundColor: `${theme.colors.statusWarning}1A`,
   },
   priorityText: {
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
     textTransform: "capitalize",
     color: theme.colors.foregroundMuted,
   },
   priorityTextHigh: {
-    color: theme.colors.palette.red[500],
+    color: theme.colors.statusDanger,
   },
   priorityTextMedium: {
     color: theme.colors.statusWarning,
-  },
-  priorityTextLow: {
-    color: theme.colors.palette.blue[400],
   },
   deadlineRow: {
     flexDirection: "row",
@@ -322,11 +333,10 @@ const styles = StyleSheet.create((theme) => ({
   deadlineDaysOverdue: {
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
   },
   tagChip: {
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 2,
   },

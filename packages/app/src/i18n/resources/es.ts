@@ -273,6 +273,9 @@ export const es: TranslationResources = {
     title: "Tareas",
     gantt: {
       title: "Cronología",
+      now: "Ahora",
+      inProgress: "En curso",
+      quotaWindow: "Cuota de 5 h",
     },
     pickProject: "Elige un proyecto",
     noProjects: "No hay proyectos disponibles — conecta un host primero.",

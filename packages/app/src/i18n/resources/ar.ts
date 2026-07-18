@@ -269,6 +269,9 @@ export const ar: TranslationResources = {
     title: "المهام",
     gantt: {
       title: "الجدول الزمني",
+      now: "الآن",
+      inProgress: "قيد التنفيذ",
+      quotaWindow: "حصة ٥ ساعات",
     },
     pickProject: "اختر مشروعًا",
     noProjects: "لا توجد مشاريع متاحة — صِل مضيفًا أولاً.",

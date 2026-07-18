@@ -1002,18 +1002,17 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "stretch",
   },
   rail: {
-    width: 240,
+    width: 264,
     borderRightWidth: 1,
     borderRightColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surfaceSidebar,
   },
   railHeader: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    fontWeight: theme.fontWeight.medium,
     paddingHorizontal: theme.spacing[3],
-    paddingTop: theme.spacing[3],
+    paddingTop: theme.spacing[4],
     paddingBottom: theme.spacing[2],
   },
   railSummary: {
@@ -1052,7 +1051,7 @@ const styles = StyleSheet.create((theme) => ({
   railContent: {
     paddingHorizontal: theme.spacing[2],
     paddingBottom: theme.spacing[2],
-    gap: 2,
+    gap: theme.spacing[1],
   },
   railItem: {
     flexDirection: "row",
@@ -1063,8 +1062,10 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.lg,
   },
   railItemHovered: {
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
+  // Selected state follows the desktop list+detail pattern (docs/design.md
+  // §11): surfaceSidebarHover background, hierarchy via color — not weight.
   railItemSelected: {
     flexDirection: "row",
     alignItems: "center",
@@ -1072,7 +1073,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surfaceSidebarHover,
   },
   railItemBody: {
     flex: 1,
@@ -1086,7 +1087,6 @@ const styles = StyleSheet.create((theme) => ({
   railItemTitleSelected: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
     flexShrink: 1,
   },
   railItemSubtitle: {
@@ -1117,21 +1117,21 @@ const styles = StyleSheet.create((theme) => ({
   },
   boardArea: {
     flex: 1,
-    paddingTop: theme.spacing[3],
+    paddingTop: theme.spacing[4],
   },
   boardContainer: {
     flex: 1,
-    gap: theme.spacing[2],
+    gap: theme.spacing[3],
   },
   // Aligns the timeline strip to the columns block below: same horizontal inset
   // as the board, capped to the columns' total width so its edges meet the
   // first and last column. Left-aligns (parent stretch + maxWidth) on wide
   // screens; on narrow screens it fills like the columns do.
   ganttBoardAlign: {
-    marginHorizontal: theme.spacing[3],
+    marginHorizontal: theme.spacing[4],
     maxWidth:
       KANBAN_COLUMNS.length * KANBAN_COLUMN_MAX_WIDTH +
-      (KANBAN_COLUMNS.length - 1) * theme.spacing[3],
+      (KANBAN_COLUMNS.length - 1) * theme.spacing[4],
   },
   centered: {
     flex: 1,
@@ -1154,8 +1154,7 @@ const styles = StyleSheet.create((theme) => ({
   sectionLabel: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    fontWeight: theme.fontWeight.medium,
     marginBottom: theme.spacing[1],
   },
   rowItem: {
@@ -1165,8 +1164,8 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface1,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.xl,
+    paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[3],
   },
   rowItemHovered: {
@@ -1179,7 +1178,6 @@ const styles = StyleSheet.create((theme) => ({
   rowTitle: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
   },
   rowSubtitle: {
     color: theme.colors.foregroundMuted,

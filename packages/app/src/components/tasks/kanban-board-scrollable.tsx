@@ -15,7 +15,9 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import {
   buildColumnModels,
+  columnTint,
   KANBAN_COLUMNS,
+  resolveBoardAccentColor,
   useColumnLabels,
   type KanbanBoardProps,
 } from "./kanban-columns";
@@ -25,8 +27,12 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedArrowRight = withUnistyles(ArrowRight);
 
 // Shared by the board row styles and the compact snap interval — keep in sync.
-const COLUMN_WIDTH = 280;
-const COLUMN_GAP = 12;
+const COLUMN_WIDTH = 300;
+const COLUMN_GAP = 16;
+
+function addButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.addButton, (hovered || pressed) && styles.addButtonHovered];
+}
 
 /**
  * Scrollable kanban board: four horizontally scrollable columns with a
@@ -45,6 +51,7 @@ export function ScrollableKanbanBoard({
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
   const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
+  const tint = columnTint(resolveBoardAccentColor(board, folderId));
 
   return (
     // Board padding/gap live on an inner View, NOT on contentContainerStyle —
@@ -65,6 +72,7 @@ export function ScrollableKanbanBoard({
             label={labels[column]}
             labels={labels}
             tasks={tasks}
+            tint={tint}
             extras={columnExtras?.column === column ? columnExtras.node : null}
             onMoveTask={onMoveTask}
             onPressTask={onPressTask}
@@ -81,6 +89,7 @@ const BoardColumn = memo(function BoardColumn({
   label,
   labels,
   tasks,
+  tint,
   extras,
   onMoveTask,
   onPressTask,
@@ -90,6 +99,7 @@ const BoardColumn = memo(function BoardColumn({
   label: string;
   labels: Record<TaskColumn, string>;
   tasks: KanbanTask[];
+  tint: string | null;
   extras: React.ReactNode;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -99,15 +109,21 @@ const BoardColumn = memo(function BoardColumn({
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
+  const columnStyle = useMemo(
+    () => (tint ? [styles.column, { backgroundColor: tint }] : styles.column),
+    [tint],
+  );
 
   return (
-    <View style={styles.column}>
+    <View style={columnStyle}>
       <View style={styles.columnHeader}>
+        <ColumnStatusDot column={column} />
         <Text style={styles.columnTitle}>{label}</Text>
         <Text style={styles.columnCount}>{tasks.length}</Text>
         <View style={styles.columnHeaderSpacer} />
         <Pressable
           onPress={handleAddTask}
+          style={addButtonStyle}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t("tasks.actions.addTask")}
@@ -137,6 +153,22 @@ const BoardColumn = memo(function BoardColumn({
   );
 });
 
+// Small semantic dot in the column header, like the colored markers on the
+// board's reference designs: quiet for the backlog, blue for planned, amber for
+// running, green for done.
+const ColumnStatusDot = memo(function ColumnStatusDot({ column }: { column: TaskColumn }) {
+  const dotStyle = useMemo(
+    () => [
+      styles.columnDot,
+      column === "scheduled" && styles.columnDotScheduled,
+      column === "in_progress" && styles.columnDotInProgress,
+      column === "done" && styles.columnDotDone,
+    ],
+    [column],
+  );
+  return <View style={dotStyle} />;
+});
+
 const BoardCardRow = memo(function BoardCardRow({
   task,
   labels,
@@ -151,7 +183,9 @@ const BoardCardRow = memo(function BoardCardRow({
   return (
     <View style={styles.cardRow}>
       <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
-      <MoveTaskMenu task={task} labels={labels} onMoveTask={onMoveTask} />
+      <View style={styles.moveTriggerOverlay}>
+        <MoveTaskMenu task={task} labels={labels} onMoveTask={onMoveTask} />
+      </View>
     </View>
   );
 });
@@ -218,29 +252,43 @@ const styles = StyleSheet.create((theme) => ({
   },
   boardContent: {
     flexDirection: "row",
-    paddingHorizontal: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],
     gap: COLUMN_GAP,
   },
+  // Flat pastel container: no border, big radius, folder-tinted background
+  // (inline override) with a neutral surface fallback.
   column: {
     width: COLUMN_WIDTH,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius["2xl"],
     backgroundColor: theme.colors.surface1,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[1],
   },
   columnHeaderSpacer: {
     flex: 1,
+  },
+  columnDot: {
+    width: 8,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foregroundMuted,
+  },
+  columnDotScheduled: {
+    backgroundColor: theme.colors.palette.blue[500],
+  },
+  columnDotInProgress: {
+    backgroundColor: theme.colors.statusWarning,
+  },
+  columnDotDone: {
+    backgroundColor: theme.colors.statusSuccess,
   },
   columnTitle: {
     color: theme.colors.foreground,
@@ -251,24 +299,36 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
+  addButton: {
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+  },
+  addButtonHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
   columnScroll: {
     flex: 1,
   },
   columnContent: {
-    padding: theme.spacing[2],
-    gap: theme.spacing[2],
+    padding: theme.spacing[3],
+    gap: theme.spacing[3],
   },
   cardRow: {
-    gap: theme.spacing[1],
+    position: "relative",
+  },
+  moveTriggerOverlay: {
+    position: "absolute",
+    top: theme.spacing[2],
+    right: theme.spacing[2],
   },
   moveTrigger: {
-    alignSelf: "flex-end",
     padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
   },
   emptyColumnText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     textAlign: "center",
-    paddingVertical: theme.spacing[4],
+    paddingVertical: theme.spacing[8],
   },
 }));

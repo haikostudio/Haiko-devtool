@@ -273,6 +273,9 @@ export const ptBR: TranslationResources = {
     title: "Tarefas",
     gantt: {
       title: "Linha do tempo",
+      now: "Agora",
+      inProgress: "Em execução",
+      quotaWindow: "Cota de 5 h",
     },
     pickProject: "Escolha um projeto",
     noProjects: "Nenhum projeto disponível — conecte um host primeiro.",

@@ -36,28 +36,27 @@ export function StatusBadge({ label, variant = "muted" }: StatusBadgeProps) {
   );
 }
 
+// Flat tinted pills (docs/design.md §12): status-colored text on a 10%-alpha
+// background of the same color, no border. The status colors are theme-adaptive
+// (darker in light themes, brighter in dark), so the tint stays readable on
+// both without per-theme branches.
 const styles = StyleSheet.create((theme) => ({
   pill: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface3,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: 3,
   },
   pillSuccess: {
-    backgroundColor: theme.colors.palette.green[900],
-    borderColor: theme.colors.palette.green[800],
+    backgroundColor: `${theme.colors.statusSuccess}1A`,
   },
   pillError: {
-    backgroundColor: theme.colors.palette.red[900],
-    borderColor: theme.colors.palette.red[800],
+    backgroundColor: `${theme.colors.statusDanger}1A`,
   },
   pillWarning: {
-    backgroundColor: theme.colors.surface3,
-    borderColor: theme.colors.palette.amber[700],
+    backgroundColor: `${theme.colors.statusWarning}1A`,
   },
   pillText: {
     fontSize: theme.fontSize.xs,
@@ -65,10 +64,10 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
   pillTextSuccess: {
-    color: theme.colors.palette.green[400],
+    color: theme.colors.statusSuccess,
   },
   pillTextError: {
-    color: theme.colors.palette.red[500],
+    color: theme.colors.statusDanger,
   },
   pillTextWarning: {
     color: theme.colors.statusWarning,

@@ -268,6 +268,9 @@ export const en = {
     title: "Tasks",
     gantt: {
       title: "Timeline",
+      now: "Now",
+      inProgress: "Running",
+      quotaWindow: "5h quota",
     },
     pickProject: "Choose a project",
     noProjects: "No projects available — connect a host first.",

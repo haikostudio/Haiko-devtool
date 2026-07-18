@@ -269,6 +269,9 @@ export const zhCN: TranslationResources = {
     title: "任务",
     gantt: {
       title: "时间线",
+      now: "现在",
+      inProgress: "进行中",
+      quotaWindow: "5 小时配额",
     },
     pickProject: "选择项目",
     noProjects: "暂无可用项目 — 请先连接主机。",

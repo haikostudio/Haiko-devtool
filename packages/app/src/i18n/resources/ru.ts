@@ -271,6 +271,9 @@ export const ru: TranslationResources = {
     title: "Задачи",
     gantt: {
       title: "Хронология",
+      now: "Сейчас",
+      inProgress: "Выполняется",
+      quotaWindow: "Квота 5 ч",
     },
     pickProject: "Выберите проект",
     noProjects: "Нет доступных проектов — сначала подключите хост.",

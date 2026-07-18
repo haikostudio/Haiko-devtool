@@ -26,7 +26,9 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import {
   buildColumnModels,
+  columnTint,
   KANBAN_COLUMN_MAX_WIDTH,
+  resolveBoardAccentColor,
   useColumnLabels,
   type KanbanBoardProps,
 } from "./kanban-columns";
@@ -79,6 +81,7 @@ export function KanbanBoard({
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
   const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
+  const tint = columnTint(resolveBoardAccentColor(board, folderId));
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 
   const sensors = useSensors(
@@ -162,6 +165,7 @@ export function KanbanBoard({
               label={labels[column]}
               tasks={tasks}
               compact={isCompact}
+              tint={tint}
               extras={columnExtras?.column === column ? columnExtras.node : null}
               onAddTask={onAddTask}
               onPressTask={onPressTask}
@@ -185,6 +189,7 @@ const DroppableColumn = memo(function DroppableColumn({
   label,
   tasks,
   compact,
+  tint,
   extras,
   onAddTask,
   onPressTask,
@@ -193,6 +198,7 @@ const DroppableColumn = memo(function DroppableColumn({
   label: string;
   tasks: KanbanTask[];
   compact: boolean;
+  tint: string | null;
   extras: React.ReactNode;
   onAddTask: KanbanBoardProps["onAddTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -203,9 +209,10 @@ const DroppableColumn = memo(function DroppableColumn({
     () => [
       styles.column,
       compact ? styles.columnCompact : styles.columnDesktop,
+      tint ? { backgroundColor: tint } : null,
       isOver && styles.columnOver,
     ],
-    [compact, isOver],
+    [compact, tint, isOver],
   );
   const sortableItems = useMemo(() => tasks.map((task) => task.id), [tasks]);
   const handleAddTask = useCallback(() => {
@@ -215,11 +222,13 @@ const DroppableColumn = memo(function DroppableColumn({
   return (
     <View style={columnStyle}>
       <View style={styles.columnHeader}>
+        <ColumnStatusDot column={column} />
         <Text style={styles.columnTitle}>{label}</Text>
         <Text style={styles.columnCount}>{tasks.length}</Text>
         <View style={styles.columnHeaderSpacer} />
         <Pressable
           onPress={handleAddTask}
+          style={addButtonStyle}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t("tasks.actions.addTask")}
@@ -242,6 +251,25 @@ const DroppableColumn = memo(function DroppableColumn({
     </View>
   );
 });
+
+// Small semantic dot in the column header: quiet for the backlog, blue for
+// planned, amber for running, green for done. Mirrors the scrollable board.
+const ColumnStatusDot = memo(function ColumnStatusDot({ column }: { column: TaskColumn }) {
+  const dotStyle = useMemo(
+    () => [
+      styles.columnDot,
+      column === "scheduled" && styles.columnDotScheduled,
+      column === "in_progress" && styles.columnDotInProgress,
+      column === "done" && styles.columnDotDone,
+    ],
+    [column],
+  );
+  return <View style={dotStyle} />;
+});
+
+function addButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.addButton, (hovered || pressed) && styles.addButtonHovered];
+}
 
 const SortableTaskCard = memo(function SortableTaskCard({
   task,
@@ -304,8 +332,8 @@ const webColumnBodyStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  gap: 8,
-  padding: 8,
+  gap: 12,
+  padding: 12,
   flex: 1,
   minHeight: 120,
   overflowY: "auto",
@@ -316,40 +344,56 @@ const styles = StyleSheet.create((theme) => ({
     flexGrow: 1,
     flexDirection: "row",
     alignItems: "stretch",
-    gap: theme.spacing[3],
-    paddingHorizontal: theme.spacing[3],
+    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],
   },
+  // Flat pastel container: no border, big radius, folder-tinted background
+  // (inline override) with a neutral surface fallback.
   column: {
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius["2xl"],
     backgroundColor: theme.colors.surface1,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
     overflow: "hidden",
   },
   columnDesktop: {
     flex: 1,
-    minWidth: 220,
+    minWidth: 240,
     maxWidth: KANBAN_COLUMN_MAX_WIDTH,
   },
   columnCompact: {
-    width: 280,
+    width: 300,
     flexShrink: 0,
   },
+  // Drop target: an inset ring instead of a border so the layout never shifts.
+  // Web-only file, so boxShadow is safe.
   columnOver: {
-    borderColor: theme.colors.foregroundMuted,
+    boxShadow: `inset 0 0 0 2px ${theme.colors.foregroundMuted}`,
   },
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[1],
   },
   columnHeaderSpacer: {
     flex: 1,
+  },
+  columnDot: {
+    width: 8,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foregroundMuted,
+  },
+  columnDotScheduled: {
+    backgroundColor: theme.colors.palette.blue[500],
+  },
+  columnDotInProgress: {
+    backgroundColor: theme.colors.statusWarning,
+  },
+  columnDotDone: {
+    backgroundColor: theme.colors.statusSuccess,
   },
   columnTitle: {
     color: theme.colors.foreground,
@@ -360,14 +404,21 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
+  addButton: {
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+  },
+  addButtonHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
   dragOverlayCard: {
-    width: 260,
+    width: 280,
     opacity: 0.95,
   },
   emptyColumnText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     textAlign: "center",
-    paddingVertical: theme.spacing[4],
+    paddingVertical: theme.spacing[8],
   },
 }));

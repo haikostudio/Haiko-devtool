@@ -60,11 +60,11 @@ export function NewTaskCard({ onSubmit, onCancel }: NewTaskCardProps) {
 
 const styles = StyleSheet.create((theme) => ({
   card: {
-    backgroundColor: theme.colors.surface2,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface0,
+    borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
-    borderColor: theme.colors.foregroundMuted,
-    padding: theme.spacing[2],
+    borderColor: theme.colors.border,
+    padding: theme.spacing[3],
     gap: theme.spacing[2],
   },
   actionsRow: {

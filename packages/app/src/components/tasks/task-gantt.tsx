@@ -1,7 +1,16 @@
-import { memo, useCallback, useMemo } from "react";
-import { Pressable, ScrollView, type StyleProp, Text, View, type ViewStyle } from "react-native";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  type LayoutChangeEvent,
+  type StyleProp,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 
@@ -10,19 +19,41 @@ import { deriveProjectIconColor } from "@/utils/project-icon-color";
 // history. Any unknown column sorts last.
 const GANTT_ORDER: Record<string, number> = { in_progress: 0, scheduled: 1, backlog: 2 };
 
-// Quota share (0-100) assigned to un-estimated tasks so their bar stays visible
-// and the plan still reads as a sequence before every task has been estimated.
-const FALLBACK_WEIGHT = 4;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+// The Claude usage-quota window the scheduler packs against.
+const QUOTA_WINDOW_MS = 5 * HOUR_MS;
+// Projected duration for tasks that have no estimate yet — enough to give the
+// bar a visible body without inventing precision (the bar is drawn dashed).
+const FALLBACK_MINUTES = 30;
+// Axis bounds: never narrower than 2h (bars stay readable), never wider than
+// 12h (a deep backlog must not crush the near future into invisibility).
+const MIN_HORIZON_MS = 2 * HOUR_MS;
+const MAX_HORIZON_MS = 12 * HOUR_MS;
 
-interface GanttRow {
+// Fixed column widths so the "now"/quota vertical lines can be positioned in
+// plain px against the measured track. Row layout: label | track | start time.
+const LABEL_WIDTH_DESKTOP = 200;
+const LABEL_WIDTH_COMPACT = 112;
+const START_WIDTH = 56;
+const CELL_GAP = 8;
+
+interface TimelineRow {
   task: KanbanTask;
-  folderColor?: string;
+  barColor: string;
   estimated: boolean;
   column: KanbanTask["column"];
-  // Cumulative-quota placement, expressed as track percentages.
+  // Track placement as percentages of the visible horizon.
   leftPct: number;
   widthPct: number;
-  quotaLabel: string | null;
+  // Right-cell label: projected launch time, "running", or an overflow hint.
+  startLabel: string;
+  startsBeyondHorizon: boolean;
+}
+
+interface AxisTick {
+  leftPct: number;
+  label: string;
 }
 
 interface TaskGanttProps {
@@ -33,23 +64,66 @@ interface TaskGanttProps {
   containerStyle?: StyleProp<ViewStyle>;
 }
 
-// A compact projected timeline that sits above the kanban board. One bar per
-// still-open task across the whole project (everything but Done), chained
-// left-to-right by cumulative quota so the bar length reads as "how much of a
-// 5h window this task eats". Bars carry the project color so the strip ties
-// back to the colored dot in the projects rail; opacity encodes the column
-// (running > planned > backlog).
+function taskDurationMs(task: KanbanTask): number {
+  if (task.estimate?.estimatedMinutes !== undefined) {
+    return Math.max(task.estimate.estimatedMinutes, 5) * MINUTE_MS;
+  }
+  if (task.estimate) {
+    // quotaPercent is the share of a 5h window — convert back to minutes.
+    return Math.max((task.estimate.quotaPercent / 100) * QUOTA_WINDOW_MS, 5 * MINUTE_MS);
+  }
+  return FALLBACK_MINUTES * MINUTE_MS;
+}
+
+function formatDuration(ms: number): string {
+  const totalMinutes = Math.round(ms / MINUTE_MS);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) {
+    return `~${minutes} min`;
+  }
+  if (minutes === 0) {
+    return `~${hours} h`;
+  }
+  return `~${hours} h ${String(minutes).padStart(2, "0")}`;
+}
+
+/**
+ * Projected timeline for the whole project: a real time axis starting now,
+ * one row per still-open task, bars placed at their projected launch slot.
+ * Running tasks start at the "now" line; queued tasks (planned, then backlog)
+ * pack sequentially behind them, so the strip answers "what launches when".
+ * Bars carry the folder color (project color fallback); a dashed amber line
+ * marks the end of the 5h quota window. Re-renders every minute so the axis
+ * actually tracks the passing time.
+ */
 export const TaskGantt = memo(function TaskGantt({
   board,
   onPressTask,
   containerStyle,
 }: TaskGanttProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const projectColor = deriveProjectIconColor(board.projectId);
 
-  const { rows, totalQuota } = useMemo(() => {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, MINUTE_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
+  const timeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }),
+    [],
+  );
+
+  const { rows, ticks, quotaPct, totalQuota, totalDurationMs } = useMemo(() => {
     const folderColorById = new Map(board.folders.map((folder) => [folder.id, folder.color]));
-    const planned = board.tasks
+    const open = board.tasks
       .filter((task) => task.column !== "done")
       .sort(
         (left, right) =>
@@ -58,34 +132,107 @@ export const TaskGantt = memo(function TaskGantt({
           left.createdAt.localeCompare(right.createdAt),
       );
 
-    const weights = planned.map((task) =>
-      task.estimate ? Math.max(task.estimate.quotaPercent, 0.5) : FALLBACK_WEIGHT,
-    );
-    const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+    // Sequential packing: running tasks all start now; queued work starts once
+    // the longest running task is projected to finish, then chains task after
+    // task. A deliberate simplification of the scheduler (which packs by quota
+    // budget), but it gives every task an honest "not before" launch slot.
+    let runningEnd = 0;
+    const spans: { start: number; end: number }[] = [];
+    for (const task of open) {
+      if (task.column !== "in_progress") {
+        continue;
+      }
+      const end = taskDurationMs(task);
+      runningEnd = Math.max(runningEnd, end);
+    }
+    let cursor = runningEnd;
+    let maxEnd = runningEnd;
+    for (const task of open) {
+      const duration = taskDurationMs(task);
+      if (task.column === "in_progress") {
+        spans.push({ start: 0, end: duration });
+        continue;
+      }
+      spans.push({ start: cursor, end: cursor + duration });
+      cursor += duration;
+      maxEnd = Math.max(maxEnd, cursor);
+    }
 
-    let cumulative = 0;
-    const built: GanttRow[] = planned.map((task, index) => {
-      const weight = weights[index];
-      const leftPct = (cumulative / total) * 100;
-      const widthPct = (weight / total) * 100;
-      cumulative += weight;
+    const horizonMs = Math.min(
+      Math.max(Math.ceil(maxEnd / HOUR_MS) * HOUR_MS, MIN_HORIZON_MS),
+      MAX_HORIZON_MS,
+    );
+
+    const builtRows: TimelineRow[] = open.map((task, index) => {
+      const span = spans[index];
+      const beyond = span.start >= horizonMs;
+      const clampedStart = Math.min(span.start, horizonMs);
+      const clampedEnd = Math.min(span.end, horizonMs);
+      let startLabel: string;
+      if (task.column === "in_progress") {
+        startLabel = t("tasks.gantt.inProgress");
+      } else if (beyond) {
+        startLabel = `+${Math.round(span.start / HOUR_MS)} h`;
+      } else {
+        startLabel = timeFormatter.format(new Date(nowMs + span.start));
+      }
       return {
         task,
-        folderColor: folderColorById.get(task.folderId),
+        barColor: folderColorById.get(task.folderId) ?? projectColor,
         estimated: Boolean(task.estimate),
         column: task.column,
-        leftPct,
-        widthPct,
-        quotaLabel: task.estimate
-          ? t("tasks.card.quotaEstimate", { percent: Math.round(task.estimate.quotaPercent) })
-          : null,
+        leftPct: beyond ? 97 : (clampedStart / horizonMs) * 100,
+        widthPct: beyond ? 3 : Math.max(((clampedEnd - clampedStart) / horizonMs) * 100, 1),
+        startLabel,
+        startsBeyondHorizon: beyond,
       };
     });
 
-    // Cumulative sum of the real (estimated-only) quota, for the header summary.
-    const realQuota = planned.reduce((sum, task) => sum + (task.estimate?.quotaPercent ?? 0), 0);
-    return { rows: built, totalQuota: realQuota };
-  }, [board.folders, board.tasks, t]);
+    // Hour ticks along the axis; denser when the horizon is short.
+    let stepMs = HOUR_MS;
+    if (horizonMs <= 3 * HOUR_MS) {
+      stepMs = 30 * MINUTE_MS;
+    } else if (horizonMs > 8 * HOUR_MS) {
+      stepMs = 2 * HOUR_MS;
+    }
+    const builtTicks: AxisTick[] = [];
+    for (let at = stepMs; at <= horizonMs - stepMs / 2; at += stepMs) {
+      builtTicks.push({
+        leftPct: (at / horizonMs) * 100,
+        label: timeFormatter.format(new Date(nowMs + at)),
+      });
+    }
+
+    const realQuota = open.reduce((sum, task) => sum + (task.estimate?.quotaPercent ?? 0), 0);
+    const duration = open.reduce((sum, task) => sum + taskDurationMs(task), 0);
+
+    return {
+      rows: builtRows,
+      ticks: builtTicks,
+      quotaPct: QUOTA_WINDOW_MS < horizonMs ? (QUOTA_WINDOW_MS / horizonMs) * 100 : null,
+      totalQuota: realQuota,
+      totalDurationMs: duration,
+    };
+  }, [board.folders, board.tasks, nowMs, projectColor, t, timeFormatter]);
+
+  // Measured width of the track cell, so the full-height vertical lines (now,
+  // quota window) can be placed in px across the whole rows block.
+  const [trackWidth, setTrackWidth] = useState(0);
+  const handleTrackLayout = useCallback((event: LayoutChangeEvent) => {
+    setTrackWidth(event.nativeEvent.layout.width);
+  }, []);
+
+  const labelWidth = isCompact ? LABEL_WIDTH_COMPACT : LABEL_WIDTH_DESKTOP;
+  const trackLeft = labelWidth + CELL_GAP;
+
+  const nowLineStyle = useMemo(() => [styles.nowLine, { left: trackLeft }], [trackLeft]);
+  const labelSpacerStyle = useMemo(() => ({ width: labelWidth }), [labelWidth]);
+  const quotaLineStyle = useMemo(() => {
+    if (quotaPct === null || trackWidth === 0) {
+      return null;
+    }
+    return [styles.quotaLine, { left: trackLeft + (trackWidth * quotaPct) / 100 }];
+  }, [quotaPct, trackWidth, trackLeft]);
 
   const rootStyle = useMemo(() => [styles.container, containerStyle], [containerStyle]);
 
@@ -93,41 +240,81 @@ export const TaskGantt = memo(function TaskGantt({
     return null;
   }
 
+  const summary =
+    totalQuota > 0
+      ? `${t("tasks.card.quotaEstimate", { percent: Math.round(totalQuota) })} · ${formatDuration(totalDurationMs)}`
+      : formatDuration(totalDurationMs);
+
   return (
     <View style={rootStyle}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("tasks.gantt.title")}</Text>
-        {totalQuota > 0 ? (
-          <Text style={styles.summary}>
-            {t("tasks.card.quotaEstimate", { percent: Math.round(totalQuota) })}
-          </Text>
-        ) : null}
+        <Text style={styles.summary}>{summary}</Text>
       </View>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {rows.map((row) => (
-          <GanttRowView
-            key={row.task.id}
-            row={row}
-            projectColor={projectColor}
-            onPressTask={onPressTask}
-          />
-        ))}
-      </ScrollView>
+      <View style={styles.timelineBody}>
+        <View style={styles.axisRow}>
+          <View style={labelSpacerStyle} />
+          <View style={styles.axisTrack} onLayout={handleTrackLayout}>
+            <Text style={styles.axisNowLabel}>{t("tasks.gantt.now")}</Text>
+            {ticks.map((tick) => (
+              <AxisTickView key={tick.label} leftPct={tick.leftPct} label={tick.label} />
+            ))}
+            {quotaPct !== null ? (
+              <AxisTickView leftPct={quotaPct} label={t("tasks.gantt.quotaWindow")} quota />
+            ) : null}
+          </View>
+          <View style={startSpacerStyle} />
+        </View>
+        <ScrollView
+          style={styles.rowsScroll}
+          contentContainerStyle={styles.rowsContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {rows.map((row) => (
+            <TimelineRowView
+              key={row.task.id}
+              row={row}
+              labelWidth={labelWidth}
+              onPressTask={onPressTask}
+            />
+          ))}
+        </ScrollView>
+        <View pointerEvents="none" style={nowLineStyle} />
+        {quotaLineStyle ? <View pointerEvents="none" style={quotaLineStyle} /> : null}
+      </View>
     </View>
   );
 });
 
-const GanttRowView = memo(function GanttRowView({
+const startSpacerStyle = { width: START_WIDTH };
+
+const AxisTickView = memo(function AxisTickView({
+  leftPct,
+  label,
+  quota,
+}: {
+  leftPct: number;
+  label: string;
+  quota?: boolean;
+}) {
+  const wrapStyle = useMemo(
+    () => [styles.axisTickWrap, { left: `${leftPct}%` as const }],
+    [leftPct],
+  );
+  return (
+    <View style={wrapStyle}>
+      <Text style={quota ? styles.axisQuotaLabel : styles.axisTickLabel}>{label}</Text>
+    </View>
+  );
+});
+
+const TimelineRowView = memo(function TimelineRowView({
   row,
-  projectColor,
+  labelWidth,
   onPressTask,
 }: {
-  row: GanttRow;
-  projectColor: string;
+  row: TimelineRow;
+  labelWidth: number;
   onPressTask: (task: KanbanTask) => void;
 }) {
   const handlePress = useCallback(() => {
@@ -140,12 +327,16 @@ const GanttRowView = memo(function GanttRowView({
       width: `${row.widthPct}%` as const,
     };
     if (!row.estimated) {
-      // Un-estimated: outline only, so an unknown size reads differently from a
-      // measured one without inventing a length. Kept fully visible (no column
-      // dim) since most backlog tasks aren't estimated yet.
-      return [styles.bar, styles.barOutlined, base, { borderColor: projectColor }];
+      // Un-estimated: dashed outline over a light tint, so an unknown size
+      // reads differently from a measured one without inventing a length.
+      return [
+        styles.bar,
+        styles.barOutlined,
+        base,
+        { borderColor: row.barColor, backgroundColor: `${row.barColor}14` },
+      ];
     }
-    // Estimated: filled with the project color, dimmed by column so a glance
+    // Estimated: filled with the folder color, dimmed by column so a glance
     // separates running (solid) from planned and backlog.
     let dim: StyleProp<ViewStyle> = null;
     if (row.column === "scheduled") {
@@ -153,13 +344,17 @@ const GanttRowView = memo(function GanttRowView({
     } else if (row.column === "backlog") {
       dim = styles.barBacklog;
     }
-    return [styles.bar, base, { backgroundColor: projectColor }, dim];
-  }, [row.estimated, row.column, row.leftPct, row.widthPct, projectColor]);
+    return [styles.bar, base, { backgroundColor: row.barColor }, dim];
+  }, [row.estimated, row.column, row.leftPct, row.widthPct, row.barColor]);
 
   const dotStyle = useMemo(
-    () => (row.folderColor ? [styles.folderDot, { backgroundColor: row.folderColor }] : null),
-    [row.folderColor],
+    () => [styles.folderDot, { backgroundColor: row.barColor }],
+    [row.barColor],
   );
+
+  const startLabelStyle = row.column === "in_progress" ? styles.startTextRunning : styles.startText;
+
+  const labelCellStyle = useMemo(() => [styles.labelCell, { width: labelWidth }], [labelWidth]);
 
   return (
     <Pressable
@@ -169,8 +364,8 @@ const GanttRowView = memo(function GanttRowView({
       accessibilityLabel={row.task.title}
       testID={`tasks-gantt-row-${row.task.id}`}
     >
-      <View style={styles.labelCell}>
-        {dotStyle ? <View style={dotStyle} /> : null}
+      <View style={labelCellStyle}>
+        <View style={dotStyle} />
         <Text style={styles.labelText} numberOfLines={1}>
           {row.task.title}
         </Text>
@@ -178,8 +373,8 @@ const GanttRowView = memo(function GanttRowView({
       <View style={styles.track}>
         <View style={barStyle} />
       </View>
-      <Text style={styles.quotaText} numberOfLines={1}>
-        {row.quotaLabel ?? "—"}
+      <Text style={startLabelStyle} numberOfLines={1}>
+        {row.startLabel}
       </Text>
     </Pressable>
   );
@@ -189,18 +384,16 @@ function rowPressableStyle({ pressed, hovered }: { pressed: boolean; hovered?: b
   return [styles.row, (hovered || pressed) && styles.rowHovered];
 }
 
-const BAR_HEIGHT = 14;
-
 const styles = StyleSheet.create((theme) => ({
+  // Flat panel matching the board columns: no border, big radius, quiet
+  // surface. The timeline earns real height — it is the "when" view.
   container: {
     backgroundColor: theme.colors.surface1,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing[3],
-    paddingTop: theme.spacing[2],
-    paddingBottom: theme.spacing[1],
-    gap: theme.spacing[1],
+    borderRadius: theme.borderRadius["2xl"],
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+    gap: theme.spacing[2],
   },
   header: {
     flexDirection: "row",
@@ -209,34 +402,70 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   title: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
   },
   summary: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
-  scroll: {
-    maxHeight: 168,
+  // Wrapper around axis + rows: the full-height "now" and quota lines are
+  // positioned against it in px (label column width is fixed).
+  timelineBody: {
+    position: "relative",
   },
-  scrollContent: {
-    gap: 2,
+  axisRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: CELL_GAP,
+    height: 18,
+    marginBottom: theme.spacing[1],
+  },
+  axisTrack: {
+    flex: 1,
+    position: "relative",
+    height: "100%",
+  },
+  axisNowLabel: {
+    position: "absolute",
+    left: 0,
+    bottom: 0,
+    color: theme.colors.statusDanger,
+    fontSize: theme.fontSize.xs,
+  },
+  axisTickWrap: {
+    position: "absolute",
+    bottom: 0,
+    width: 64,
+    marginLeft: -32,
+    alignItems: "center",
+  },
+  axisTickLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  axisQuotaLabel: {
+    color: theme.colors.statusWarning,
+    fontSize: theme.fontSize.xs,
+  },
+  rowsScroll: {
+    maxHeight: 280,
+  },
+  rowsContent: {
+    gap: theme.spacing[1],
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[1],
+    gap: CELL_GAP,
+    paddingVertical: 3,
     borderRadius: theme.borderRadius.md,
   },
   rowHovered: {
     backgroundColor: theme.colors.surface2,
   },
   labelCell: {
-    width: 128,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
@@ -253,34 +482,59 @@ const styles = StyleSheet.create((theme) => ({
   },
   track: {
     flex: 1,
-    height: BAR_HEIGHT,
-    borderRadius: theme.borderRadius.full,
+    height: 20,
+    borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surface2,
     overflow: "hidden",
   },
   bar: {
     position: "absolute",
-    top: 0,
-    bottom: 0,
-    minWidth: 6,
-    borderRadius: theme.borderRadius.full,
+    top: 2,
+    bottom: 2,
+    minWidth: 8,
+    borderRadius: theme.borderRadius.base,
   },
   barScheduled: {
     opacity: 0.7,
   },
   barBacklog: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   barOutlined: {
-    backgroundColor: "transparent",
     borderWidth: 1,
     borderStyle: "dashed",
-    opacity: 0.85,
   },
-  quotaText: {
-    width: 52,
+  startText: {
+    width: START_WIDTH,
     textAlign: "right",
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    fontVariant: ["tabular-nums"],
+  },
+  startTextRunning: {
+    width: START_WIDTH,
+    textAlign: "right",
+    color: theme.colors.statusSuccess,
+    fontSize: theme.fontSize.xs,
+  },
+  // Vertical "now" cursor: spans axis + rows, sits at the start of the track.
+  nowLine: {
+    position: "absolute",
+    top: 18,
+    bottom: 0,
+    width: 2,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.statusDanger,
+    opacity: 0.55,
+  },
+  // End of the 5h quota window: dashed amber divider.
+  quotaLine: {
+    position: "absolute",
+    top: 18,
+    bottom: 0,
+    width: 1,
+    borderLeftWidth: 1,
+    borderStyle: "dashed",
+    borderLeftColor: theme.colors.statusWarning,
   },
 }));
