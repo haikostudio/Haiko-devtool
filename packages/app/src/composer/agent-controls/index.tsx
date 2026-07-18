@@ -1846,7 +1846,7 @@ const styles = StyleSheet.create((theme) => ({
   // No negative top margin: the sheet header keeps its divider and the content
   // starts cleanly below it. Sections stay compact.
   drawerBody: {
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
   },
   // Without a leading context row, the first section title sits flush under the
@@ -1856,7 +1856,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[2],
   },
   drawerSection: {
-    gap: theme.spacing[1],
+    gap: 0,
   },
   drawerSectionTitle: {
     color: theme.colors.foregroundMuted,
@@ -1866,7 +1866,7 @@ const styles = StyleSheet.create((theme) => ({
     letterSpacing: 0.5,
     // Aligns with the ComboboxItem row content (item margin + padding = spacing[4]).
     paddingHorizontal: theme.spacing[4],
-    marginBottom: theme.spacing[1],
+    marginBottom: 0,
   },
   drawerContextRow: {
     flexDirection: "row",

@@ -197,14 +197,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   bottomSheetContent: {
     paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-    paddingVertical: theme.spacing[4],
-    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[2],
   },
   bottomSheetStaticContent: {
     flex: 1,
     paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-    paddingVertical: theme.spacing[4],
-    gap: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[2],
     minHeight: 0,
   },
   desktopStaticContent: {
