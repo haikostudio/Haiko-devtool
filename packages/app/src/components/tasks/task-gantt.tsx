@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
+import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "./kanban-columns";
 
 // Columns the timeline projects. Backlog is the icebox (not planned) and done is
 // history — the Gantt only surfaces what is actively planned or executing, in
@@ -174,6 +175,12 @@ const BAR_HEIGHT = 14;
 
 const styles = StyleSheet.create((theme) => ({
   container: {
+    // Match the board's horizontal inset and cap to the columns block width so
+    // the strip's left/right edges line up with the first and last column below.
+    marginHorizontal: theme.spacing[3],
+    maxWidth:
+      KANBAN_COLUMNS.length * KANBAN_COLUMN_MAX_WIDTH +
+      (KANBAN_COLUMNS.length - 1) * theme.spacing[3],
     backgroundColor: theme.colors.surface1,
     borderWidth: 1,
     borderColor: theme.colors.border,

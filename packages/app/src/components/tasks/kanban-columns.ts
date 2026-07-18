@@ -4,6 +4,11 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 
 export const KANBAN_COLUMNS: TaskColumn[] = ["backlog", "scheduled", "in_progress", "done"];
 
+// Per-column cap on the desktop board (columns grow to fill, then stop here and
+// left-align). Shared so the timeline strip above the board can match the exact
+// width of the columns block and line its edges up with the first/last column.
+export const KANBAN_COLUMN_MAX_WIDTH = 360;
+
 export interface KanbanColumnModel {
   column: TaskColumn;
   tasks: KanbanTask[];

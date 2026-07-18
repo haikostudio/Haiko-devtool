@@ -24,7 +24,12 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
-import { buildColumnModels, useColumnLabels, type KanbanBoardProps } from "./kanban-columns";
+import {
+  buildColumnModels,
+  KANBAN_COLUMN_MAX_WIDTH,
+  useColumnLabels,
+  type KanbanBoardProps,
+} from "./kanban-columns";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedPlus = withUnistyles(Plus);
@@ -325,7 +330,7 @@ const styles = StyleSheet.create((theme) => ({
   columnDesktop: {
     flex: 1,
     minWidth: 220,
-    maxWidth: 360,
+    maxWidth: KANBAN_COLUMN_MAX_WIDTH,
   },
   columnCompact: {
     width: 280,
