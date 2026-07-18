@@ -214,7 +214,6 @@ import {
 } from "../services/brain-memory/client.js";
 import { briefToSouvenir } from "../services/brain-memory/curator.js";
 import type { BrainCurator } from "../services/brain-memory/curator.js";
-import { hasRecallSubstance } from "../services/brain-memory/recall-gate.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -6144,14 +6143,16 @@ export class Session {
     if (!brain || !text.trim()) {
       return text;
     }
+    // Recall fires on every non-empty prompt (no substance gate): each turn
+    // re-queries the Cerveau to pull in newly-relevant context, per user request
+    // "à chaque nouveau prompt il doit piocher des infos complémentaires". The
+    // librarian below still filters to what matters, so bare follow-ups (e.g.
+    // "oui") search the Cerveau but usually surface nothing.
     let isFirstPrompt = false;
     try {
       isFirstPrompt = (await this.agentManager.getLastAssistantMessage(agentId)) === null;
     } catch (err) {
       this.sessionLogger.debug({ err, agentId }, "brain: first-prompt detection failed");
-    }
-    if (!isFirstPrompt && !hasRecallSubstance(text)) {
-      return text;
     }
     let recall: Awaited<ReturnType<BrainMemoryClient["recall"]>>;
     try {
