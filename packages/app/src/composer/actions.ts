@@ -185,11 +185,42 @@ export async function dispatchComposerAgentMessage(
     attachments: wirePayload.attachments,
   });
   appendUserMessageToStream(input.agentId, userMessage, input.stream);
-  await input.client.sendAgentMessage(input.agentId, input.text, {
-    messageId,
-    images: imagesData ?? [],
-    attachments: wirePayload.attachments,
-  });
+  try {
+    await input.client.sendAgentMessage(input.agentId, input.text, {
+      messageId,
+      images: imagesData ?? [],
+      attachments: wirePayload.attachments,
+    });
+  } catch (error) {
+    // The send never reached the daemon: drop the optimistic bubble so the
+    // stream doesn't keep a ghost message (and its pending loader) forever.
+    // The caller restores the composer input and surfaces the error.
+    removeUserMessageFromStream(input.agentId, messageId, input.stream);
+    throw error;
+  }
+}
+
+export function removeUserMessageFromStream(
+  agentId: string,
+  messageId: string,
+  stream: AgentStreamWriter,
+): void {
+  // Filter inside the updater so concurrent stream updates between the
+  // optimistic append and this removal are never clobbered.
+  const dropMessage = (prev: Map<string, StreamItem[]>): Map<string, StreamItem[]> => {
+    const items = prev.get(agentId);
+    if (!items || !items.some((item) => item.kind === "user_message" && item.id === messageId)) {
+      return prev;
+    }
+    const next = new Map(prev);
+    next.set(
+      agentId,
+      items.filter((item) => item.kind !== "user_message" || item.id !== messageId),
+    );
+    return next;
+  };
+  stream.setHead(dropMessage);
+  stream.setTail(dropMessage);
 }
 
 function appendUserMessageToStream(

@@ -1965,14 +1965,39 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       // rejection to re-queue instead of silently dropping the prompt. A
       // fire-and-forget send here was losing queued messages whenever the send
       // rejected or the client was momentarily unavailable.
+      const dropOptimisticMessage = () => {
+        const filterOut = (prev: Map<string, StreamItem[]>): Map<string, StreamItem[]> => {
+          const items = prev.get(agentId);
+          if (!items || !items.some((item) => item.id === messageId)) {
+            return prev;
+          }
+          const updated = new Map(prev);
+          updated.set(
+            agentId,
+            items.filter((item) => item.id !== messageId),
+          );
+          return updated;
+        };
+        setAgentStreamHead(serverId, filterOut);
+        setAgentStreamTail(serverId, filterOut);
+      };
       if (!client) {
+        dropOptimisticMessage();
         throw new Error("Daemon unavailable");
       }
-      await client.sendAgentMessage(agentId, message, {
-        messageId,
-        ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
-        ...(attachments && attachments.length > 0 ? { attachments } : {}),
-      });
+      try {
+        await client.sendAgentMessage(agentId, message, {
+          messageId,
+          ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
+          ...(attachments && attachments.length > 0 ? { attachments } : {}),
+        });
+      } catch (error) {
+        // The daemon never took the message; the queued card stays visible in
+        // the tray, so drop the optimistic bubble to avoid a ghost duplicate
+        // when the drain retries.
+        dropOptimisticMessage();
+        throw error;
+      }
     },
     [serverId, client, setAgentStreamTail, setAgentStreamHead],
   );

@@ -72,10 +72,12 @@ import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import {
   CompletedTurnFooterRow,
+  PendingPromptBubble,
   TurnFooter,
   type AssistantTurnForkHandler,
   type TurnContentStrategy,
 } from "./turn-footer";
+import { pendingSendKey, usePendingSendStore } from "@/stores/pending-send-store";
 import { layoutStream, type StreamLayoutItem } from "./layout";
 import { StreamMagicScrollbar } from "./magic-scrollbar";
 import type { StreamMagicScrollbarEntry } from "./magic-scrollbar-types";
@@ -127,6 +129,25 @@ function renderLiveAuxiliaryNode(input: {
       ) : null}
     </>
   );
+}
+
+// The working loader under the last message shows as soon as a send is in
+// flight — an optimistic user message at the end of the stream, or a prompt
+// still finalizing locally (dictation) — instead of waiting for the daemon to
+// report the running status. Feedback lives in the chat, not just the send
+// button spinner.
+export function shouldShowRunningTurnFooter(input: {
+  status: string | null;
+  tail: StreamItem[];
+  head: StreamItem[] | undefined;
+  hasPendingLocalSend: boolean;
+}): boolean {
+  if (input.status === "running" || input.hasPendingLocalSend) {
+    return true;
+  }
+  const items = input.head && input.head.length > 0 ? input.head : input.tail;
+  const last = items[items.length - 1];
+  return last?.kind === "user_message" && last.optimistic === true;
 }
 
 function renderPendingPermissionsNode(input: {
@@ -1000,7 +1021,19 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       return { proposals, projectId: triageProjectId };
     }, [effectiveStreamItems]);
 
-    const showRunningTurnFooter = context.status === "running";
+    // A prompt the user already committed to sending but whose text is still
+    // finalizing locally (dictation). Rendered as a pending bubble above the
+    // working loader so the chat reacts instantly, not just the send button.
+    const pendingLocalSend = usePendingSendStore((state) =>
+      state.pendingSends.get(pendingSendKey(resolvedServerId, agentId)),
+    );
+
+    const showRunningTurnFooter = shouldShowRunningTurnFooter({
+      status: context.status,
+      tail: effectiveStreamItems,
+      head: effectiveStreamHead,
+      hasPendingLocalSend: pendingLocalSend != null,
+    });
     const pendingPermissionsNode = useMemo(() => {
       const permissions = renderPendingPermissionsNode({
         pendingPermissions: pendingPermissionItems,
@@ -1027,17 +1060,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     const turnFooterNode = useMemo(
       () =>
         showRunningTurnFooter || bottomTurnFooterHost ? (
-          <TurnFooter
-            isRunning={showRunningTurnFooter}
-            inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
-            host={bottomTurnFooterHost}
-            strategy={streamRenderStrategy}
-            supportsTimelineCursor={supportsAgentForkContextCursor}
-            onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
-          />
+          <>
+            {pendingLocalSend ? <PendingPromptBubble text={pendingLocalSend.text} /> : null}
+            <TurnFooter
+              isRunning={showRunningTurnFooter}
+              inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
+              host={bottomTurnFooterHost}
+              strategy={streamRenderStrategy}
+              supportsTimelineCursor={supportsAgentForkContextCursor}
+              onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
+            />
+          </>
         ) : null,
       [
         handleForkAssistantTurn,
+        pendingLocalSend,
         readOnly,
         showRunningTurnFooter,
         baseRenderModel.turnTiming.runningStartedAt,

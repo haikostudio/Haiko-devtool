@@ -91,6 +91,7 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
+import { usePendingSendStore } from "@/stores/pending-send-store";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
@@ -1267,6 +1268,22 @@ export function Composer({
     ],
   );
 
+  // Bridge the input's committed-but-still-transcribing prompt (dictation
+  // finalization) into the pending-send store so the agent stream shows it as
+  // a pending bubble with the working loader.
+  const setPendingSend = usePendingSendStore((state) => state.setPendingSend);
+  const clearPendingSend = usePendingSendStore((state) => state.clearPendingSend);
+  const handlePendingSendChange = useCallback(
+    (text: string | null) => {
+      if (text === null) {
+        clearPendingSend(serverId, agentId);
+      } else {
+        setPendingSend(serverId, agentId, { text });
+      }
+    },
+    [agentId, clearPendingSend, serverId, setPendingSend],
+  );
+
   const sendMessageWithContent = useCallback(
     async (
       outgoingMessage: string,
@@ -1983,6 +2000,7 @@ export function Composer({
                 onKeyPress={handleCommandKeyPress}
                 onSelectionChange={handleSelectionChange}
                 onFocusChange={handleFocusChange}
+                onPendingSendChange={handlePendingSendChange}
                 onHeightChange={onComposerHeightChange}
                 inputWrapperStyle={inputWrapperStyle}
                 attachmentSlot={attachmentTray}

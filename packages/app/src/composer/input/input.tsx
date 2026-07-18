@@ -137,6 +137,14 @@ export interface MessageInputProps {
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
+  /**
+   * Reports a prompt the user has committed to sending but whose text is still
+   * finalizing locally (confirm-with-send dictation transcription). Called with
+   * the live partial transcript while finalizing, then with null once the real
+   * submit (or a cancel/failure) happens. Lets the chat show a pending bubble
+   * immediately instead of only the send-button spinner.
+   */
+  onPendingSendChange?: (text: string | null) => void;
   onHeightChange?: (height: number) => void;
   /** Extra styles merged onto the input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
@@ -1153,6 +1161,7 @@ interface ResolvedMessageInputProps {
   onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
+  onPendingSendChange: ((text: string | null) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
   attachmentSlot: React.ReactNode;
@@ -1195,6 +1204,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onKeyPressCallback: props.onKeyPress,
     onSelectionChangeCallback: props.onSelectionChange,
     onFocusChange: props.onFocusChange,
+    onPendingSendChange: props.onPendingSendChange,
     onHeightChange: props.onHeightChange,
     inputWrapperStyle: props.inputWrapperStyle,
     attachmentSlot: props.attachmentSlot,
@@ -1245,6 +1255,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onKeyPressCallback,
       onSelectionChangeCallback,
       onFocusChange,
+      onPendingSendChange,
       onHeightChange,
       inputWrapperStyle,
       attachmentSlot,
@@ -1371,7 +1382,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const {
       isRecording: isDictating,
       isProcessing: isDictationProcessing,
-      partialTranscript: _dictationPartialTranscript,
+      partialTranscript: dictationPartialTranscript,
       volume: dictationVolume,
       duration: dictationDuration,
       error: dictationError,
@@ -1414,6 +1425,27 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       }
       sendAfterTranscriptRef.current = false;
     }, [dictationStatus, isDictating, isDictationProcessing]);
+
+    // While a confirm-with-send dictation is finalizing, surface the live
+    // partial transcript as a pending send so the chat shows the prompt (and a
+    // loader) immediately. The cleanup covers every exit path: final transcript
+    // (the real submit takes over), cancel, failure, and unmount.
+    useEffect(() => {
+      if (!onPendingSendChange) {
+        return;
+      }
+      if (!(isDictationProcessing && sendAfterTranscriptRef.current)) {
+        return;
+      }
+      // Mirror applyDictationTranscript: the submit prepends any text already
+      // present in the input, so the pending bubble shows the same thing.
+      const prefix = valueRef.current;
+      const shouldPad = prefix.length > 0 && !/\s$/.test(prefix);
+      onPendingSendChange(`${prefix}${shouldPad ? " " : ""}${dictationPartialTranscript}`);
+      return () => {
+        onPendingSendChange(null);
+      };
+    }, [dictationPartialTranscript, isDictationProcessing, onPendingSendChange]);
 
     const startDictationIfAvailable = useCallback(
       () =>
