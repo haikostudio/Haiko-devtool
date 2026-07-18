@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-18",
     markdown:
-      "### Added\n\n- Taller activity bar with a percentage in every slice\n- Multi-select project filter + percentages on the activity bar\n- Single stacked project bar + colored project tags on Activity\n- Deterministic per-interaction synthesis banner (no LLM)\n- Colored per-project activity chart on the Activity screen\n- Task board — folder/task counts, priority flags, deadlines, project search\n- Global activity log — one line per agent per turn\n- Plain-language end-of-turn recap block + colored callouts\n- Brain memory curation — librarian filter, project fiche, scribe distillation\n- Running conversation-synthesis thread, content-width banner\n- Inline LLM task-intent triage from chat messages\n- Show project name + request duration in every task toast\n- Per-task run config, approval gate, quiet-hours scheduling, MCP task tools\n- Floating conversation-synthesis block per agent\n- Make keyboard shortcuts searchable\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Make project imports pluggable\n\n### Fixed\n\n- Keep new-agent draft focused after submit\n- Reuse existing workspace for external/internal agent creation\n- Enforce one-workspace-per-directory invariant at the registry\n- Enforce one workspace per directory at creation chokepoint\n- Collapse local workspace create to one-per-directory\n- Activity filter chips rendered as full-height capsules\n- Stack synthesis banner labels above values, add separator\n- Give the attachment thumbnail image an explicit plain-object size\n- Tighten relay backpressure accounting\n- Bound stale websocket connections\n- Align thinking section scroll layout with other detail sections (#1884)\n- Stop syncing active-agent composer drafts (broke image send)\n- Keep composer-held attachment blobs from being garbage collected\n- Reject imported port offsets\n- Refresh import availability previews\n- Expose remaining import errors\n- Tighten conductor service imports\n- Preserve conductor migration context\n- Report remaining import gaps\n- Inset transcript below the floating synthesis banner\n- Stop pasted image being cleared by a stale draft tombstone\n- Wait for import preview before setup callout\n- Keep project imports current and complete\n- Give release builds more memory\n- Handle remaining import edge cases\n- Update lockfile signatures and Nix hash [skip ci]\n- Close project import edge cases\n- Index shortcut modifier aliases\n- Harden conductor imports\n- Straddle toast status dot over the top-left corner\n- Pin toast status dot to the top-left corner\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Bound magic scrollbar above the composer on mobile\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Live-adopt remote draft text into an open composer\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+      "### Added\n\n- Align agent and schedule automation\n- Tighter dashboard stats padding on compact screens\n- Taller activity bar with a percentage in every slice\n- Multi-select project filter + percentages on the activity bar\n- Single stacked project bar + colored project tags on Activity\n- Deterministic per-interaction synthesis banner (no LLM)\n- Colored per-project activity chart on the Activity screen\n- Task board — folder/task counts, priority flags, deadlines, project search\n- Global activity log — one line per agent per turn\n- Plain-language end-of-turn recap block + colored callouts\n- Brain memory curation — librarian filter, project fiche, scribe distillation\n- Running conversation-synthesis thread, content-width banner\n- Inline LLM task-intent triage from chat messages\n- Show project name + request duration in every task toast\n- Per-task run config, approval gate, quiet-hours scheduling, MCP task tools\n- Floating conversation-synthesis block per agent\n- Make keyboard shortcuts searchable\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Make project imports pluggable\n\n### Fixed\n\n- Keep agent timelines ordered during catch-up\n- Keep new-agent draft focused after submit\n- Reuse existing workspace for external/internal agent creation\n- Enforce one-workspace-per-directory invariant at the registry\n- Enforce one workspace per directory at creation chokepoint\n- Collapse local workspace create to one-per-directory\n- Activity filter chips rendered as full-height capsules\n- Stack synthesis banner labels above values, add separator\n- Give the attachment thumbnail image an explicit plain-object size\n- Tighten relay backpressure accounting\n- Bound stale websocket connections\n- Align thinking section scroll layout with other detail sections (#1884)\n- Stop syncing active-agent composer drafts (broke image send)\n- Keep composer-held attachment blobs from being garbage collected\n- Reject imported port offsets\n- Refresh import availability previews\n- Expose remaining import errors\n- Tighten conductor service imports\n- Preserve conductor migration context\n- Report remaining import gaps\n- Inset transcript below the floating synthesis banner\n- Stop pasted image being cleared by a stale draft tombstone\n- Wait for import preview before setup callout\n- Keep project imports current and complete\n- Give release builds more memory\n- Handle remaining import edge cases\n- Update lockfile signatures and Nix hash [skip ci]\n- Close project import edge cases\n- Index shortcut modifier aliases\n- Harden conductor imports\n- Straddle toast status dot over the top-left corner\n- Pin toast status dot to the top-left corner\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Bound magic scrollbar above the composer on mobile\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Live-adopt remote draft text into an open composer\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
   },
   {
     version: "0.1.108",
@@ -617,6 +617,27 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "dfa12aa8160c1dfe5cf25091f6cfc55c7eb42684",
+    shortHash: "dfa12aa81",
+    date: "2026-07-18T10:28:14+02:00",
+    author: "Mohamed Boudra",
+    subject: "feat(workspaces): align agent and schedule automation",
+  },
+  {
+    hash: "9ae9a4163c5bbfb9ede327c3fef6fe6e30e4668f",
+    shortHash: "9ae9a4163",
+    date: "2026-07-18T10:25:22+02:00",
+    author: "Mohamed Boudra",
+    subject: "fix(app): keep agent timelines ordered during catch-up",
+  },
+  {
+    hash: "3f89ec85ba9382832f799fa05b5f3d3d263e1e9e",
+    shortHash: "3f89ec85b",
+    date: "2026-07-18T09:57:05+02:00",
+    author: "haikostudio",
+    subject: "feat(app): tighter dashboard stats padding on compact screens",
+  },
   {
     hash: "7b23cef199034e382e0dae87109e2430a81125ed",
     shortHash: "7b23cef19",
@@ -2701,28 +2722,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "fix(app): yield navigation to narrow workspace explorer",
   },
-  {
-    hash: "f8bec5f36afd790bb7364025966e98fa0514c952",
-    shortHash: "f8bec5f36",
-    date: "2026-07-10T15:14:15+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(app): wait for mobile sidebar motion to settle",
-  },
-  {
-    hash: "3d3cf7139d0150f15eee938b33d258f83058878f",
-    shortHash: "3d3cf7139",
-    date: "2026-07-10T15:09:12+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): yield app sidebar to narrow settings",
-  },
-  {
-    hash: "2e4a209954142126a8da201185f8baf8c0200a98",
-    shortHash: "2e4a20995",
-    date: "2026-07-10T14:45:59+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): retain sidebar width across window resizes",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-18T09:39:47+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-18T10:28:14+02:00";

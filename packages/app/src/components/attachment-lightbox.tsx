@@ -12,22 +12,26 @@ import { WindowChromeRootRegion, WindowChromeSafeArea } from "@/utils/desktop-wi
 
 interface AttachmentLightboxProps {
   metadata: AttachmentMetadata | null;
+  /** Render this URI directly (e.g. a remote image's data URI) instead of resolving from the store. */
+  uri?: string | null;
   onClose: () => void;
 }
 
-export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProps) {
+export function AttachmentLightbox({ metadata, uri: directUri, onClose }: AttachmentLightboxProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const url = useAttachmentPreviewUrl(metadata);
+  const resolvedUrl = useAttachmentPreviewUrl(metadata);
+  const url = directUri ?? resolvedUrl;
+  const isOpen = Boolean(metadata) || Boolean(directUri);
   const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     setErrored(false);
-  }, [metadata?.id]);
+  }, [metadata?.id, directUri]);
 
   useEffect(() => {
-    if (!isWeb || !metadata) return;
+    if (!isWeb || !isOpen) return;
     function handleKeydown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         onClose();
@@ -37,7 +41,7 @@ export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProp
     return () => {
       window.removeEventListener("keydown", handleKeydown);
     };
-  }, [metadata, onClose]);
+  }, [isOpen, onClose]);
 
   const closeButtonRowStyle = useMemo(
     () => [
@@ -57,7 +61,7 @@ export function AttachmentLightbox({ metadata, onClose }: AttachmentLightboxProp
   const noopPress = useCallback(() => {}, []);
   const imageSource = useMemo(() => ({ uri: url ?? "" }), [url]);
 
-  if (!metadata) {
+  if (!isOpen) {
     return null;
   }
 

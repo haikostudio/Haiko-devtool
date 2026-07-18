@@ -70,6 +70,7 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
 import type {
   BrainContextItem,
+  RemoteUserMessageImage,
   TaskTriageItem,
   TodoEntry,
   UserMessageImageAttachment,
@@ -138,6 +139,7 @@ interface UserMessageProps {
   messageId?: string;
   message: string;
   images?: UserMessageImageAttachment[];
+  remoteImages?: RemoteUserMessageImage[];
   attachments?: AgentAttachment[];
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
@@ -429,12 +431,38 @@ function UserMessageImagePill({ image, onOpen, accessibilityLabel }: UserMessage
   );
 }
 
+interface UserMessageRemoteImagePillProps {
+  image: RemoteUserMessageImage;
+  onOpen: (image: RemoteUserMessageImage) => void;
+  accessibilityLabel: string;
+}
+
+function UserMessageRemoteImagePill({
+  image,
+  onOpen,
+  accessibilityLabel,
+}: UserMessageRemoteImagePillProps) {
+  const handlePress = useCallback(() => {
+    onOpen(image);
+  }, [onOpen, image]);
+  return (
+    <AttachmentFrame onPress={handlePress} accessibilityLabel={accessibilityLabel}>
+      <AttachmentThumbnail uri={image.dataUrl} />
+    </AttachmentFrame>
+  );
+}
+
+type UserMessageLightboxTarget =
+  | { kind: "local"; metadata: UserMessageImageAttachment }
+  | { kind: "remote"; image: RemoteUserMessageImage };
+
 export const UserMessage = memo(function UserMessage({
   serverId,
   agentId,
   messageId,
   message,
   images = [],
+  remoteImages = [],
   attachments = [],
   timestamp,
   capabilities,
@@ -446,11 +474,20 @@ export const UserMessage = memo(function UserMessage({
   const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
-  const [lightboxMetadata, setLightboxMetadata] = useState<UserMessageImageAttachment | null>(null);
-  const handleLightboxClose = useCallback(() => setLightboxMetadata(null), []);
+  const [lightboxTarget, setLightboxTarget] = useState<UserMessageLightboxTarget | null>(null);
+  const openLocalLightbox = useCallback(
+    (metadata: UserMessageImageAttachment) => setLightboxTarget({ kind: "local", metadata }),
+    [],
+  );
+  const openRemoteLightbox = useCallback(
+    (image: RemoteUserMessageImage) => setLightboxTarget({ kind: "remote", image }),
+    [],
+  );
+  const handleLightboxClose = useCallback(() => setLightboxTarget(null), []);
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const hasText = message.trim().length > 0;
   const hasImages = images.length > 0;
+  const hasRemoteImages = remoteImages.length > 0;
   const hasAttachments = attachments.length > 0;
   const showTrailingRow = hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
@@ -518,7 +555,19 @@ export const UserMessage = memo(function UserMessage({
                 <UserMessageImagePill
                   key={image.id}
                   image={image}
-                  onOpen={setLightboxMetadata}
+                  onOpen={openLocalLightbox}
+                  accessibilityLabel={t("composer.attachments.openImage")}
+                />
+              ))}
+            </View>
+          ) : null}
+          {hasRemoteImages ? (
+            <View style={imagePreviewContainerStyle}>
+              {remoteImages.map((image) => (
+                <UserMessageRemoteImagePill
+                  key={image.id}
+                  image={image}
+                  onOpen={openRemoteLightbox}
                   accessibilityLabel={t("composer.attachments.openImage")}
                 />
               ))}
@@ -567,7 +616,11 @@ export const UserMessage = memo(function UserMessage({
           </View>
         ) : null}
       </View>
-      <AttachmentLightbox metadata={lightboxMetadata} onClose={handleLightboxClose} />
+      <AttachmentLightbox
+        metadata={lightboxTarget?.kind === "local" ? lightboxTarget.metadata : null}
+        uri={lightboxTarget?.kind === "remote" ? lightboxTarget.image.dataUrl : null}
+        onClose={handleLightboxClose}
+      />
     </View>
   );
 });

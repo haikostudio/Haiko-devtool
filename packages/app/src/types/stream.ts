@@ -86,6 +86,19 @@ export type StreamItem =
 
 export type UserMessageImageAttachment = AttachmentMetadata;
 
+/**
+ * An image that arrived with a user message from the server (base64 over the
+ * wire) rather than from this client's local attachment store. Other clients —
+ * and this client after a reload — have no local copy, so we render the bytes
+ * directly from a data URI instead of resolving a local storage key.
+ */
+export interface RemoteUserMessageImage {
+  id: string;
+  mimeType: string;
+  /** Ready-to-render `data:<mime>;base64,<bytes>` URI. */
+  dataUrl: string;
+}
+
 export interface UserMessageItem {
   kind: "user_message";
   id: string;
@@ -93,6 +106,8 @@ export interface UserMessageItem {
   timestamp: Date;
   optimistic?: true;
   images?: UserMessageImageAttachment[];
+  /** Server-persisted images, present on non-optimistic messages from other clients. */
+  remoteImages?: RemoteUserMessageImage[];
   attachments?: AgentAttachment[];
 }
 
@@ -290,13 +305,39 @@ function markThoughtReady(item: ThoughtItem): ThoughtItem {
   };
 }
 
+function buildRemoteUserMessageImages(
+  entryId: string,
+  images: readonly { data: string; mimeType: string }[] | undefined,
+): RemoteUserMessageImage[] | undefined {
+  if (!images || images.length === 0) {
+    return undefined;
+  }
+  const result: RemoteUserMessageImage[] = [];
+  for (let index = 0; index < images.length; index += 1) {
+    const image = images[index];
+    if (!image || !image.data) {
+      continue;
+    }
+    const mimeType = image.mimeType || "image/jpeg";
+    result.push({
+      id: `${entryId}:img:${index}`,
+      mimeType,
+      dataUrl: `data:${mimeType};base64,${image.data}`,
+    });
+  }
+  return result.length > 0 ? result : undefined;
+}
+
 function buildUserMessageItem(input: {
   id: string;
   text: string;
   timestamp: Date;
   optimistic?: UserMessageItem | null;
+  remoteImages?: RemoteUserMessageImage[];
 }): UserMessageItem {
   if (input.optimistic) {
+    // The sender keeps its local (optimistic) image copies; the server echo's
+    // remote bytes are redundant here, so they are intentionally dropped.
     return {
       kind: "user_message",
       id: input.id,
@@ -316,6 +357,9 @@ function buildUserMessageItem(input: {
     id: input.id,
     text: input.text,
     timestamp: input.timestamp,
+    ...(input.remoteImages && input.remoteImages.length > 0
+      ? { remoteImages: input.remoteImages }
+      : {}),
   };
 }
 
@@ -405,13 +449,17 @@ function appendUserMessage(
   text: string,
   timestamp: Date,
   messageId?: string,
+  images?: readonly { data: string; mimeType: string }[],
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!hasContent) {
+  const hasImages = Boolean(images && images.length > 0);
+  // An image-only message has no text but must still appear, so we keep it when
+  // it carries images.
+  if (!hasContent && !hasImages) {
     return state;
   }
 
-  const chunkSeed = chunk.trim() || chunk;
+  const chunkSeed = chunk.trim() || chunk || messageId || "image";
   const entryId = messageId ?? createUniqueTimelineId(state, "user", chunkSeed, timestamp);
   const optimisticIndex = state.findIndex(
     (entry) => entry.kind === "user_message" && entry.optimistic,
@@ -423,6 +471,7 @@ function appendUserMessage(
     text: chunk,
     timestamp,
     optimistic,
+    remoteImages: optimistic ? undefined : buildRemoteUserMessageImages(entryId, images),
   });
 
   if (optimisticIndex >= 0) {
@@ -887,7 +936,9 @@ function reduceTimelineEvent(
   const item = event.item;
   switch (item.type) {
     case "user_message":
-      return finalizeActiveThoughts(appendUserMessage(state, item.text, timestamp, item.messageId));
+      return finalizeActiveThoughts(
+        appendUserMessage(state, item.text, timestamp, item.messageId, item.images),
+      );
     case "assistant_message":
       return finalizeActiveThoughts(
         appendAssistantMessage(

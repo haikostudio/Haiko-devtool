@@ -144,8 +144,16 @@ const THUMBNAIL_IMAGE_STYLE = {
  * react-native Image did not reliably render the IndexedDB blob: URLs that back
  * a materialized attachment on web, leaving a blank placeholder even though the
  * full-size open worked. */
-export function AttachmentThumbnail({ metadata }: { metadata: AttachmentMetadata }) {
-  const uri = useAttachmentPreviewUrl(metadata);
+export function AttachmentThumbnail({
+  metadata,
+  uri: directUri,
+}: {
+  metadata?: AttachmentMetadata | null;
+  /** Render this URI directly (e.g. a remote image's data URI) instead of resolving from the store. */
+  uri?: string;
+}) {
+  const resolvedUri = useAttachmentPreviewUrl(metadata ?? null);
+  const uri = directUri ?? resolvedUri;
   const source = useMemo(() => ({ uri: uri ?? "" }), [uri]);
   if (!uri) {
     return <View style={styles.thumbnailPlaceholder} />;

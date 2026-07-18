@@ -401,8 +401,26 @@ export interface TurnRecapTimelineItem {
   cwd?: string;
 }
 
+/**
+ * Image bytes attached to a user message, carried inside the timeline so that
+ * every client — not just the sender that still holds the local copy — can
+ * render it. Base64-encoded, matching the `send_agent_message` wire shape.
+ */
+export interface TimelineImageAttachment {
+  /** Base64-encoded image bytes (no `data:` prefix). */
+  data: string;
+  /** MIME type, e.g. "image/jpeg", "image/png". */
+  mimeType: string;
+}
+
 export type AgentTimelineItem =
-  | { type: "user_message"; text: string; messageId?: string }
+  | {
+      type: "user_message";
+      text: string;
+      messageId?: string;
+      /** Attached images, so other clients render them instead of just the text. */
+      images?: TimelineImageAttachment[];
+    }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem
