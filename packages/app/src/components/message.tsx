@@ -2379,17 +2379,145 @@ const brainContextStylesheet = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[2],
     gap: theme.spacing[1],
   },
+  sectionHeader: {
+    color: BRAIN_COLOR,
+    fontSize: theme.fontSize.xs,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  memoryRow: {
+    flexDirection: "row",
+    gap: theme.spacing[1],
+    alignItems: "flex-start",
+  },
+  memoryBullet: {
+    color: BRAIN_COLOR,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
   memoryText: {
+    flex: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     lineHeight: 18,
   },
   memoryTextRejected: {
+    flex: 1,
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     lineHeight: 18,
   },
+  memoryMotif: {
+    color: theme.colors.foregroundMuted,
+    fontStyle: "italic",
+  },
 }));
+
+type BrainMemory = BrainContextItem["memories"][number];
+type BrainMemoryKind = "fiche" | "fait" | "procedure" | "rejete";
+
+/** Bucket a recalled memory by the emoji prefix the daemon emits (📁 fiche,
+ * 📋 procédure), its rejected flag, or plain fact — so the pill can group them
+ * into readable sections instead of one flat blob. */
+function categorizeBrainMemory(memory: BrainMemory): BrainMemoryKind {
+  if (memory.rejete) {
+    return "rejete";
+  }
+  const text = memory.texte.trimStart();
+  if (text.startsWith("📁")) {
+    return "fiche";
+  }
+  if (text.startsWith("📋")) {
+    return "procedure";
+  }
+  return "fait";
+}
+
+/** Strip the leading category emoji — the section header already conveys it. */
+function stripBrainPrefix(texte: string): string {
+  return texte.replace(/^\s*(?:📁|📋)\s*/u, "").trim();
+}
+
+const BRAIN_SECTIONS: { kind: BrainMemoryKind; label: string }[] = [
+  { kind: "fiche", label: "Fiche projet" },
+  { kind: "fait", label: "Souvenirs & décisions" },
+  { kind: "procedure", label: "Procédures" },
+  { kind: "rejete", label: "Pistes écartées" },
+];
+
+/** Short one-line breakdown for the collapsed pill, e.g. "3 souvenirs · 1 procédure". */
+function summarizeBrainMemories(memories: BrainMemory[]): string {
+  const counts: Record<BrainMemoryKind, number> = { fiche: 0, fait: 0, procedure: 0, rejete: 0 };
+  for (const memory of memories) {
+    counts[categorizeBrainMemory(memory)] += 1;
+  }
+  const parts: string[] = [];
+  if (counts.fiche > 0) {
+    parts.push("fiche projet");
+  }
+  if (counts.fait > 0) {
+    parts.push(`${counts.fait} souvenir${counts.fait > 1 ? "s" : ""}`);
+  }
+  if (counts.procedure > 0) {
+    parts.push(`${counts.procedure} procédure${counts.procedure > 1 ? "s" : ""}`);
+  }
+  if (counts.rejete > 0) {
+    parts.push(`${counts.rejete} écartée${counts.rejete > 1 ? "s" : ""}`);
+  }
+  return parts.join(" · ");
+}
+
+function BrainMemoryRow({ kind, memory }: { kind: BrainMemoryKind; memory: BrainMemory }) {
+  return (
+    <View style={brainContextStylesheet.memoryRow}>
+      <Text style={brainContextStylesheet.memoryBullet} selectable={false}>
+        {kind === "rejete" ? "⛔" : "•"}
+      </Text>
+      <Text
+        style={
+          kind === "rejete"
+            ? brainContextStylesheet.memoryTextRejected
+            : brainContextStylesheet.memoryText
+        }
+        selectable
+      >
+        {kind === "rejete" && memory.motif ? (
+          <Text style={brainContextStylesheet.memoryMotif}>{`(${memory.motif}) `}</Text>
+        ) : null}
+        {stripBrainPrefix(memory.texte)}
+      </Text>
+    </View>
+  );
+}
+
+function BrainMemorySection({
+  id,
+  kind,
+  label,
+  entries,
+}: {
+  id: string | undefined;
+  kind: BrainMemoryKind;
+  label: string;
+  entries: BrainMemory[];
+}) {
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <View>
+      <Text style={brainContextStylesheet.sectionHeader} selectable={false}>
+        {label}
+      </Text>
+      {entries.map((memory) => (
+        <BrainMemoryRow key={`${id}:${kind}:${memory.texte}`} kind={kind} memory={memory} />
+      ))}
+    </View>
+  );
+}
 
 export const BrainContextPill = memo(function BrainContextPill({ item }: BrainContextPillProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -2400,6 +2528,19 @@ export const BrainContextPill = memo(function BrainContextPill({ item }: BrainCo
     }
   }, [hasMemories]);
   const portee = BRAIN_PORTEE_LABELS[item.portee] ?? item.portee;
+  const grouped = useMemo(() => {
+    const buckets: Record<BrainMemoryKind, BrainMemory[]> = {
+      fiche: [],
+      fait: [],
+      procedure: [],
+      rejete: [],
+    };
+    for (const memory of item.memories) {
+      buckets[categorizeBrainMemory(memory)].push(memory);
+    }
+    return buckets;
+  }, [item.memories]);
+  const summary = useMemo(() => summarizeBrainMemories(item.memories), [item.memories]);
   let chevron: ReactNode = null;
   if (hasMemories) {
     chevron = isExpanded ? (
@@ -2429,28 +2570,20 @@ export const BrainContextPill = memo(function BrainContextPill({ item }: BrainCo
             </Text>
             <View style={brainContextStylesheet.detailsRow}>
               <Text style={brainContextStylesheet.metaText}>
-                {item.count === 0
-                  ? "aucune info complémentaire"
-                  : `${item.count} souvenir${item.count > 1 ? "s" : ""} (${portee})`}
+                {item.count === 0 ? "aucune info complémentaire" : `${summary} (${portee})`}
               </Text>
               {chevron}
             </View>
             {isExpanded && hasMemories && (
               <View style={brainContextStylesheet.memoriesContainer}>
-                {item.memories.map((memory) => (
-                  <Text
-                    key={`${item.id}:${memory.texte}`}
-                    style={
-                      memory.rejete
-                        ? brainContextStylesheet.memoryTextRejected
-                        : brainContextStylesheet.memoryText
-                    }
-                    selectable
-                  >
-                    {memory.rejete
-                      ? `⛔ ${memory.motif ? `(${memory.motif}) ` : ""}${memory.texte}`
-                      : `• ${memory.texte}`}
-                  </Text>
+                {BRAIN_SECTIONS.map((section) => (
+                  <BrainMemorySection
+                    key={section.kind}
+                    id={item.id}
+                    kind={section.kind}
+                    label={section.label}
+                    entries={grouped[section.kind]}
+                  />
                 ))}
               </View>
             )}

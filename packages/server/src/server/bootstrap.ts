@@ -491,6 +491,14 @@ function createBrainMemoryServices(input: {
 }): { client: BrainMemoryClient; curator: BrainCurator | null } | null {
   const { brainConfig } = input;
   if (!brainConfig?.enabled || !brainConfig.apiKey) {
+    input.logger.info(
+      {
+        module: "brain-memory",
+        enabled: brainConfig?.enabled ?? false,
+        hasApiKey: Boolean(brainConfig?.apiKey),
+      },
+      "Cerveau: OFF (brainMemory not created — check features.brainMemory.enabled + apiKey)",
+    );
     return null;
   }
   const client = new BrainMemoryClient({
@@ -512,6 +520,14 @@ function createBrainMemoryServices(input: {
         logger: input.logger,
       })
     : null;
+  input.logger.info(
+    {
+      module: "brain-memory",
+      curation: Boolean(curator),
+      baseUrl: brainConfig.baseUrl ?? "default",
+    },
+    "Cerveau: ON (recall injected before every prompt)",
+  );
   return { client, curator };
 }
 

@@ -6192,6 +6192,10 @@ export class Session {
         memories: toTimelineMemories(kept),
         status: "done",
       });
+      this.sessionLogger.info(
+        { module: "brain-memory", agentId, count: kept.length, portee: recall.portee },
+        "Cerveau: pill emitted",
+      );
     } catch (err) {
       this.sessionLogger.debug({ err, agentId }, "brain: timeline emit failed");
     }
