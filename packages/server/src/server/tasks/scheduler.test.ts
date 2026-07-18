@@ -80,6 +80,11 @@ describe("TaskScheduler", () => {
     return board.tasks.find((entry) => entry.id === taskId);
   }
 
+  async function countQuotaWaiting(): Promise<number> {
+    const board = await service.getBoard("proj-1");
+    return board.tasks.filter((task) => task.schedule?.waitingReason === "quota").length;
+  }
+
   async function seedScheduledTask(options?: {
     title?: string;
     quotaPercent?: number;
@@ -467,6 +472,40 @@ describe("TaskScheduler", () => {
     expect(createAgent).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Tâche : Tiny tweak" }),
     );
+  });
+
+  // Keeps every launch in flight (never resolves) so quota reservations stay
+  // held for the whole tick — makes the parallel-launch counts deterministic.
+  const hangingRun = () =>
+    new Promise<{ canceled: boolean; finalText: string; timeline: [] }>(() => {});
+
+  test("runs many tiny tasks in parallel — concurrency scales with size, not a fixed 2", async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await seedScheduledTask({ title: `Tiny ${i}`, quotaPercent: 4, estimatedMinutes: 5 });
+    }
+    // 90% remaining easily covers 5 × 4% (+10% margin each), and 5 is under the
+    // machine ceiling, so all five launch at once — no per-project serialization.
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90, runAgent: hangingRun });
+
+    await scheduler.tick();
+    await vi.waitFor(() => {
+      expect(createAgent).toHaveBeenCalledTimes(5);
+    });
+  });
+
+  test("stops launching tiny tasks once the quota budget is spent", async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await seedScheduledTask({ title: `Tiny ${i}`, quotaPercent: 8, estimatedMinutes: 5 });
+    }
+    // 30% remaining: first task reserves 8 (needs 8+10), then 22 left covers one
+    // more (needs 18), then 14 left < 18 — so exactly 2 launch, quota-limited.
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 30, runAgent: hangingRun });
+
+    await scheduler.tick();
+    await vi.waitFor(async () => {
+      expect(await countQuotaWaiting()).toBe(3);
+    });
+    expect(createAgent).toHaveBeenCalledTimes(2);
   });
 
   test("re-arms estimation for pending_estimate tasks after a restart", async () => {

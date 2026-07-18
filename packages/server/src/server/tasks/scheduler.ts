@@ -9,7 +9,13 @@ import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
 
 const TICK_INTERVAL_MS = 30_000;
-const MAX_CONCURRENT_TASK_AGENTS = 3;
+// Real concurrency is governed by the quota budget, not this number: each launch
+// reserves its estimated quota%, and `hasQuotaFor` keeps launching only while the
+// window still covers the next task + margin. So a batch of tiny tasks can run
+// many at once while one heavy task runs alone. This is only a machine-safety
+// ceiling on parallel worktrees/processes (RAM, disk, CPU) — raise it if the host
+// is beefy, lower it if it thrashes.
+const MAX_CONCURRENT_TASK_AGENTS = 6;
 const QUOTA_SAFETY_MARGIN_PCT = 10;
 const MAX_ATTEMPTS = 3;
 // "Light" tasks (below both thresholds) may launch outside quiet hours in
