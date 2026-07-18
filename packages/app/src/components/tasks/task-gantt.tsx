@@ -5,10 +5,10 @@ import { StyleSheet } from "react-native-unistyles";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 
-// Columns the timeline projects. Backlog is the icebox (not planned) and done is
-// history — the Gantt only surfaces what is actively planned or executing, in
-// time order (executing now on the left, planned next on the right).
-const GANTT_ORDER: Record<string, number> = { in_progress: 0, scheduled: 1 };
+// Row order for the timeline: what's running first, then planned, then the
+// to-do backlog. Done is excluded — the strip shows the work still ahead, not
+// history. Any unknown column sorts last.
+const GANTT_ORDER: Record<string, number> = { in_progress: 0, scheduled: 1, backlog: 2 };
 
 // Quota share (0-100) assigned to un-estimated tasks so their bar stays visible
 // and the plan still reads as a sequence before every task has been estimated.
@@ -18,7 +18,7 @@ interface GanttRow {
   task: KanbanTask;
   folderColor?: string;
   estimated: boolean;
-  running: boolean;
+  column: KanbanTask["column"];
   // Cumulative-quota placement, expressed as track percentages.
   leftPct: number;
   widthPct: number;
@@ -34,10 +34,11 @@ interface TaskGanttProps {
 }
 
 // A compact projected timeline that sits above the kanban board. One bar per
-// planned/running task across the whole project, chained left-to-right by
-// cumulative quota so the bar length reads as "how much of a 5h window this
-// task eats". Bars carry the project color so the strip ties back to the
-// colored dot in the projects rail.
+// still-open task across the whole project (everything but Done), chained
+// left-to-right by cumulative quota so the bar length reads as "how much of a
+// 5h window this task eats". Bars carry the project color so the strip ties
+// back to the colored dot in the projects rail; opacity encodes the column
+// (running > planned > backlog).
 export const TaskGantt = memo(function TaskGantt({
   board,
   onPressTask,
@@ -49,7 +50,7 @@ export const TaskGantt = memo(function TaskGantt({
   const { rows, totalQuota } = useMemo(() => {
     const folderColorById = new Map(board.folders.map((folder) => [folder.id, folder.color]));
     const planned = board.tasks
-      .filter((task) => task.column === "in_progress" || task.column === "scheduled")
+      .filter((task) => task.column !== "done")
       .sort(
         (left, right) =>
           (GANTT_ORDER[left.column] ?? 9) - (GANTT_ORDER[right.column] ?? 9) ||
@@ -72,7 +73,7 @@ export const TaskGantt = memo(function TaskGantt({
         task,
         folderColor: folderColorById.get(task.folderId),
         estimated: Boolean(task.estimate),
-        running: task.column === "in_progress",
+        column: task.column,
         leftPct,
         widthPct,
         quotaLabel: task.estimate
@@ -140,11 +141,20 @@ const GanttRowView = memo(function GanttRowView({
     };
     if (!row.estimated) {
       // Un-estimated: outline only, so an unknown size reads differently from a
-      // measured one without inventing a length.
+      // measured one without inventing a length. Kept fully visible (no column
+      // dim) since most backlog tasks aren't estimated yet.
       return [styles.bar, styles.barOutlined, base, { borderColor: projectColor }];
     }
-    return [styles.bar, base, { backgroundColor: projectColor }, !row.running && styles.barPlanned];
-  }, [row.estimated, row.running, row.leftPct, row.widthPct, projectColor]);
+    // Estimated: filled with the project color, dimmed by column so a glance
+    // separates running (solid) from planned and backlog.
+    let dim: StyleProp<ViewStyle> = null;
+    if (row.column === "scheduled") {
+      dim = styles.barScheduled;
+    } else if (row.column === "backlog") {
+      dim = styles.barBacklog;
+    }
+    return [styles.bar, base, { backgroundColor: projectColor }, dim];
+  }, [row.estimated, row.column, row.leftPct, row.widthPct, projectColor]);
 
   const dotStyle = useMemo(
     () => (row.folderColor ? [styles.folderDot, { backgroundColor: row.folderColor }] : null),
@@ -255,8 +265,11 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 6,
     borderRadius: theme.borderRadius.full,
   },
-  barPlanned: {
-    opacity: 0.6,
+  barScheduled: {
+    opacity: 0.7,
+  },
+  barBacklog: {
+    opacity: 0.5,
   },
   barOutlined: {
     backgroundColor: "transparent",
