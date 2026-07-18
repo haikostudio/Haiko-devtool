@@ -54,7 +54,19 @@ export function useSessionUiStateSync(
       }
       const applied = buildWorkspaceUiState({ serverId, workspaceId, revision: 0 });
       if (applied) {
-        lastSyncedRef.current.set(workspaceId, canonicalizeWorkspaceUiState(applied));
+        const appliedCanonical = canonicalizeWorkspaceUiState(applied);
+        lastSyncedRef.current.set(workspaceId, appliedCanonical);
+        // Hydrate can deliberately refuse part of a remote snapshot — a draft
+        // tab this device already converted into its created agent tab (see
+        // resolveDraftHandoffTarget). Without a corrective push the daemon
+        // keeps the stale layout as authoritative and every other device shows
+        // the resurrected draft forever. The push is convergent: receivers
+        // apply it fully, so their applied state matches and they stay silent.
+        if (appliedCanonical !== canonicalizeWorkspaceUiState(state)) {
+          void client
+            .setWorkspaceUiState(workspaceId, { ...applied, revision: Date.now() })
+            .catch(() => undefined);
+        }
       }
       // Pull down any draft image bytes this device is missing. Runs after the
       // synchronous hydrate; the canonical is storageKey-agnostic so patching the
