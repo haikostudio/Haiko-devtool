@@ -1,13 +1,18 @@
 import { useMemo } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { AggregatedActivityEntry } from "@/data/activity";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import type { Theme } from "@/styles/theme";
 
+// Below this share a slice is too narrow to fit its "NN%" label legibly, so the
+// label is dropped and only the colored slice remains.
+const MIN_LABEL_PCT = 10;
+
 interface Segment {
   key: string;
   count: number;
+  pct: number;
   color: string;
 }
 
@@ -16,15 +21,21 @@ function buildSegments(entries: AggregatedActivityEntry[]): Segment[] {
   for (const entry of entries) {
     counts.set(entry.projectName, (counts.get(entry.projectName) ?? 0) + 1);
   }
+  const total = entries.length || 1;
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({ key: name, count, color: deriveProjectIconColor(name) }));
+    .map(([name, count]) => ({
+      key: name,
+      count,
+      pct: Math.round((count / total) * 100),
+      color: deriveProjectIconColor(name),
+    }));
 }
 
 /**
  * One full-width bar split into a colored slice per project, each slice sized by
- * how many agents are active there. Every slice uses the project's own color —
- * the same color as that project's tag on each row below.
+ * how many agents are active there and labelled with its share. Every slice uses
+ * the project's own color — the same color as that project's tag on each row.
  */
 export function ActivityProjectBar({ entries }: { entries: AggregatedActivityEntry[] }) {
   const segments = useMemo(() => buildSegments(entries), [entries]);
@@ -34,7 +45,13 @@ export function ActivityProjectBar({ entries }: { entries: AggregatedActivityEnt
   return (
     <View style={styles.bar}>
       {segments.map((segment) => (
-        <View key={segment.key} style={styles.segment(segment.count, segment.color)} />
+        <View key={segment.key} style={styles.segment(segment.count, segment.color)}>
+          {segment.pct >= MIN_LABEL_PCT ? (
+            <Text style={styles.label} numberOfLines={1}>
+              {segment.pct}%
+            </Text>
+          ) : null}
+        </View>
       ))}
     </View>
   );
@@ -43,8 +60,8 @@ export function ActivityProjectBar({ entries }: { entries: AggregatedActivityEnt
 const styles = StyleSheet.create((theme: Theme) => ({
   bar: {
     flexDirection: "row",
-    height: 12,
-    borderRadius: theme.borderRadius.full,
+    height: 22,
+    borderRadius: theme.borderRadius.md,
     overflow: "hidden",
     backgroundColor: theme.colors.surface2,
     marginHorizontal: theme.spacing[4],
@@ -57,6 +74,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexGrow: count,
     flexShrink: 1,
     flexBasis: 0,
+    minWidth: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
     backgroundColor: color,
   }),
+  label: {
+    color: "#ffffff",
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+  },
 }));
