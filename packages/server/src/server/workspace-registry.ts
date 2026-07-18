@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { resolve } from "node:path";
 
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -230,10 +231,14 @@ export class FileBackedProjectRegistry
   }
 }
 
+const DIRECTORY_WORKSPACE_KINDS = new Set<PersistedWorkspaceKind>(["local_checkout", "directory"]);
+
 export class FileBackedWorkspaceRegistry
   extends FileBackedRegistry<PersistedWorkspaceRecord>
   implements WorkspaceRegistry
 {
+  private readonly workspaceLogger: Logger;
+
   constructor(filePath: string, logger: Logger) {
     super({
       filePath,
@@ -242,6 +247,43 @@ export class FileBackedWorkspaceRegistry
       getId: (record) => record.workspaceId,
       component: "workspaces",
     });
+    this.workspaceLogger = logger.child({ module: "workspace-registry", component: "workspaces" });
+  }
+
+  // Hard invariant: at most ONE non-archived directory-backed workspace per cwd. Every
+  // workspace persistence funnels through upsert(), so enforcing it here blocks duplicate
+  // "phantom branch" rows regardless of which caller (agent create, import, provisioning,
+  // bootstrap) tries to mint one — the earlier per-caller guards kept missing paths. Updates
+  // to an existing record, archives, and deliberate worktrees are unaffected. The blocked
+  // stack is logged so the leaking caller can be fixed at its source.
+  override async upsert(record: PersistedWorkspaceRecord): Promise<void> {
+    if (!record.archivedAt && DIRECTORY_WORKSPACE_KINDS.has(record.kind)) {
+      const isNew = (await this.get(record.workspaceId)) === null;
+      if (isNew) {
+        const cwd = resolve(record.cwd);
+        const existing = (await this.list()).find(
+          (candidate) =>
+            !candidate.archivedAt &&
+            candidate.workspaceId !== record.workspaceId &&
+            DIRECTORY_WORKSPACE_KINDS.has(candidate.kind) &&
+            resolve(candidate.cwd) === cwd,
+        );
+        if (existing) {
+          this.workspaceLogger.warn(
+            {
+              blockedWorkspaceId: record.workspaceId,
+              existingWorkspaceId: existing.workspaceId,
+              cwd: record.cwd,
+              kind: record.kind,
+              stack: new Error("duplicate-workspace-create").stack,
+            },
+            "Blocked duplicate workspace creation for directory (one-per-cwd invariant)",
+          );
+          return;
+        }
+      }
+    }
+    return super.upsert(record);
   }
 }
 
