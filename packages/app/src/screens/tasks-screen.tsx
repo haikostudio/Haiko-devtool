@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
@@ -37,7 +37,7 @@ import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/s
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { useHostFeature } from "@/runtime/host-features";
-import { useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
@@ -205,6 +205,61 @@ function useProjectEntries(): ProjectEntry[] {
     // rail re-sorts for display when the user toggles to alphabetical.
     return entries.sort(compareByRecent);
   }, [hosts, sessions]);
+}
+
+interface ProjectCounts {
+  folders: number;
+  tasks: number;
+}
+
+// One-shot per-project board fetch so the projects rail can show a
+// "X dossier(s) · Y tâche(s)" subtitle. Runs only when the *set* of projects
+// changes (the key is a value string, not the array identity, so per-tick
+// session churn doesn't refetch). Desktop-only — mounted by ProjectsRail.
+function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCounts> {
+  const [counts, setCounts] = useState<Map<string, ProjectCounts>>(() => new Map());
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+  const projectKey = useMemo(
+    () => projects.map((entry) => `${entry.serverId} ${entry.projectId}`).join("|"),
+    [projects],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const store = getHostRuntimeStore();
+      const next = new Map<string, ProjectCounts>();
+      await Promise.all(
+        projectsRef.current.map(async (entry) => {
+          const client = store.getClient(entry.serverId);
+          if (!client) {
+            return;
+          }
+          try {
+            const payload = await client.tasksBoardGet(entry.projectId);
+            if (payload.board) {
+              next.set(`${entry.serverId}:${entry.projectId}`, {
+                folders: payload.board.folders.length,
+                tasks: payload.board.tasks.length,
+              });
+            }
+          } catch {
+            // Host may not support tasks or be disconnected — skip silently.
+          }
+        }),
+      );
+      if (!cancelled) {
+        setCounts(next);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectKey]);
+
+  return counts;
 }
 
 function selectProject(entry: ProjectEntry): void {
@@ -377,6 +432,7 @@ function ProjectsRail({
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<ProjectSortMode>("recent");
+  const counts = useProjectTaskCounts(projects);
 
   const displayed = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -430,6 +486,7 @@ function ProjectsRail({
             key={`${entry.serverId}:${entry.projectId}`}
             entry={entry}
             selected={entry.serverId === serverId && entry.projectId === projectId}
+            counts={counts.get(`${entry.serverId}:${entry.projectId}`) ?? null}
           />
         ))}
       </ScrollView>
@@ -440,10 +497,13 @@ function ProjectsRail({
 const ProjectRailItem = memo(function ProjectRailItem({
   entry,
   selected,
+  counts,
 }: {
   entry: ProjectEntry;
   selected: boolean;
+  counts: ProjectCounts | null;
 }) {
+  const { t } = useTranslation();
   const handlePress = useCallback(() => {
     selectProject(entry);
   }, [entry]);
@@ -454,12 +514,19 @@ const ProjectRailItem = memo(function ProjectRailItem({
       testID={`tasks-project-${entry.projectId}`}
     >
       <ProjectColorMark projectKey={entry.projectId} />
-      <Text
-        style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
-        numberOfLines={1}
-      >
-        {entry.displayName}
-      </Text>
+      <View style={styles.railItemBody}>
+        <Text
+          style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
+          numberOfLines={1}
+        >
+          {entry.displayName}
+        </Text>
+        {counts && (counts.folders > 0 || counts.tasks > 0) ? (
+          <Text style={styles.railItemSubtitle} numberOfLines={1}>
+            {t("tasks.foldersSummary", { folders: counts.folders, tasks: counts.tasks })}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 });
@@ -1083,21 +1150,25 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     paddingBottom: theme.spacing[2],
   },
+  // White field + white square button so both read clearly against the gray
+  // sidebar rail (surface2 input on a surface2 rail was invisible). The input
+  // flexes to fill; the sort button is a fixed square column beside it.
   railSearchInput: {
     flex: 1,
+    backgroundColor: theme.colors.surface0,
   },
   sortButton: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface0,
   },
   sortButtonHovered: {
-    backgroundColor: theme.colors.surface3,
+    backgroundColor: theme.colors.surface1,
   },
   railScroll: {
     flex: 1,
