@@ -325,6 +325,16 @@ export const ja: TranslationResources = {
       approve: "承認",
       explainer: "エージェントによる提案 — 承認するまで実行されません。",
     },
+    triage: {
+      header: "{{count}}件のタスク提案 — 確認待ち",
+      approve: "承認",
+      refuse: "却下",
+      save: "保存",
+      approved: "承認済み",
+      refused: "却下済み",
+      folder: "フォルダー: {{name}}",
+      loading: "タスクボードを読み込み中…",
+    },
     detail: {
       title: "タスク",
       titleField: "タイトル",

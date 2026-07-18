@@ -324,6 +324,16 @@ export const ru: TranslationResources = {
       approve: "Подтвердить",
       explainer: "Предложена агентом — запустится только после вашего подтверждения.",
     },
+    triage: {
+      header: "Предложено задач: {{count}} — ждут вашего решения",
+      approve: "Одобрить",
+      refuse: "Отклонить",
+      save: "Сохранить",
+      approved: "Одобрена",
+      refused: "Отклонена",
+      folder: "Папка: {{name}}",
+      loading: "Загрузка доски задач…",
+    },
     detail: {
       title: "Задача",
       titleField: "Название",

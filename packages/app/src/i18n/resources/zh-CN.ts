@@ -322,6 +322,16 @@ export const zhCN: TranslationResources = {
       approve: "批准",
       explainer: "由智能体提出 — 需要你确认后才会执行。",
     },
+    triage: {
+      header: "{{count}} 个任务提案 — 待确认",
+      approve: "批准",
+      refuse: "拒绝",
+      save: "保存",
+      approved: "已批准",
+      refused: "已拒绝",
+      folder: "文件夹：{{name}}",
+      loading: "正在加载任务看板…",
+    },
     detail: {
       title: "任务",
       titleField: "标题",

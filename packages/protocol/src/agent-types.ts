@@ -370,6 +370,9 @@ export interface TaskTriageTimelineItem {
   questions?: string[];
   proposedCount?: number;
   projectId?: string;
+  // Ids + title snapshots of the proposed tasks so clients can render live
+  // actionable cards against the board. Absent on pre-carousel items.
+  tasks?: Array<{ taskId: string; title: string }>;
 }
 
 /**

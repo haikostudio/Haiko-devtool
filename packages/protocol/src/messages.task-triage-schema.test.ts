@@ -26,6 +26,26 @@ describe("task_triage timeline item schema", () => {
     });
   });
 
+  it("parses a proposed variant carrying task snapshots", () => {
+    const parsed = AgentTimelineItemPayloadSchema.parse({
+      type: "task_triage",
+      status: "proposed",
+      proposedCount: 2,
+      projectId: "proj-1",
+      tasks: [
+        { taskId: "t-1", title: "Corriger le login" },
+        { taskId: "t-2", title: "Ajouter le logo" },
+      ],
+    });
+    expect(parsed).toMatchObject({
+      type: "task_triage",
+      tasks: [
+        { taskId: "t-1", title: "Corriger le login" },
+        { taskId: "t-2", title: "Ajouter le logo" },
+      ],
+    });
+  });
+
   it("parses a minimal item (all refinements optional — back-compat)", () => {
     const parsed = AgentTimelineItemPayloadSchema.parse({
       type: "task_triage",

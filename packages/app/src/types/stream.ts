@@ -226,6 +226,11 @@ export interface BrainContextItem {
   status?: "loading" | "done";
 }
 
+export interface TaskTriageProposalRef {
+  taskId: string;
+  title: string;
+}
+
 /** Inline task-intent triage result surfaced by the daemon in the chat thread. */
 export interface TaskTriageItem {
   kind: "task_triage";
@@ -235,6 +240,8 @@ export interface TaskTriageItem {
   questions: string[];
   proposedCount: number;
   projectId?: string;
+  // Task refs for the actionable proposal cards; empty on pre-carousel items.
+  tasks: TaskTriageProposalRef[];
 }
 
 export type TurnRecapFileOperation = "created" | "edited" | "deleted";
@@ -925,6 +932,28 @@ function reduceTimelineCompaction(
   return [...state, compaction];
 }
 
+function buildTaskTriageItem(
+  item: {
+    status: "questions" | "proposed";
+    questions?: string[];
+    proposedCount?: number;
+    projectId?: string;
+    tasks?: TaskTriageProposalRef[];
+  },
+  timestamp: Date,
+): TaskTriageItem {
+  return {
+    kind: "task_triage",
+    id: createTimelineId("task_triage", item.status, timestamp),
+    timestamp,
+    status: item.status,
+    questions: item.questions ?? [],
+    proposedCount: item.proposedCount ?? 0,
+    projectId: item.projectId,
+    tasks: item.tasks ?? [],
+  };
+}
+
 function reduceTimelineEvent(
   state: StreamItem[],
   event: Extract<AgentStreamEventPayload, { type: "timeline" }>,
@@ -994,18 +1023,8 @@ function reduceTimelineEvent(
       };
       return finalizeActiveThoughts([...state, brainItem]);
     }
-    case "task_triage": {
-      const triageItem: TaskTriageItem = {
-        kind: "task_triage",
-        id: createTimelineId("task_triage", item.status, timestamp),
-        timestamp,
-        status: item.status,
-        questions: item.questions ?? [],
-        proposedCount: item.proposedCount ?? 0,
-        projectId: item.projectId,
-      };
-      return finalizeActiveThoughts([...state, triageItem]);
-    }
+    case "task_triage":
+      return finalizeActiveThoughts([...state, buildTaskTriageItem(item, timestamp)]);
     case "turn_recap": {
       const recapItem: TurnRecapItem = {
         kind: "turn_recap",

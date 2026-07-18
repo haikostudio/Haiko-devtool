@@ -326,6 +326,16 @@ export const fr: TranslationResources = {
       approve: "Approuver",
       explainer: "Proposée par un agent — elle ne sera lancée qu'après votre confirmation.",
     },
+    triage: {
+      header: "{{count}} tâche(s) proposée(s) — à valider",
+      approve: "Approuver",
+      refuse: "Refuser",
+      save: "Enregistrer",
+      approved: "Approuvée",
+      refused: "Refusée",
+      folder: "Dossier : {{name}}",
+      loading: "Chargement du board de tâches…",
+    },
     detail: {
       title: "Tâche",
       titleField: "Titre",

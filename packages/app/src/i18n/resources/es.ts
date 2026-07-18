@@ -326,6 +326,16 @@ export const es: TranslationResources = {
       approve: "Aprobar",
       explainer: "Propuesta por un agente — solo se ejecutará cuando la apruebes.",
     },
+    triage: {
+      header: "{{count}} tarea(s) propuesta(s) — pendiente(s) de validación",
+      approve: "Aprobar",
+      refuse: "Rechazar",
+      save: "Guardar",
+      approved: "Aprobada",
+      refused: "Rechazada",
+      folder: "Carpeta: {{name}}",
+      loading: "Cargando el tablero de tareas…",
+    },
     detail: {
       title: "Tarea",
       titleField: "Título",

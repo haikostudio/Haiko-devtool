@@ -673,6 +673,17 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     questions: z.array(z.string()).optional(),
     proposedCount: z.number().optional(),
     projectId: z.string().optional(),
+    // Ids + title snapshots of the proposed tasks so clients can render live
+    // actionable cards (approve/refuse/edit) against the board. Additive: old
+    // items without it fall back to the count-only pill.
+    tasks: z
+      .array(
+        z.object({
+          taskId: z.string(),
+          title: z.string(),
+        }),
+      )
+      .optional(),
   }),
   // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
   z.object({

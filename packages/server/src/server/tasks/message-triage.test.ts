@@ -104,6 +104,15 @@ describe("MessageTriage", () => {
       status: "proposed",
       proposedCount: 2,
     });
+    // Task snapshots ride along so the client can render live actionable cards.
+    const proposedTasks = proposedCall.tasks as { taskId: string; title: string }[];
+    expect(proposedTasks.map((entry) => entry.title)).toEqual([
+      "Ajouter le mode sombre",
+      "Corriger le redirect login",
+    ]);
+    for (const entry of proposedTasks) {
+      expect(board.tasks.some((task) => task.id === entry.taskId)).toBe(true);
+    }
   });
 
   test("surfaces clarifying questions without creating tasks", async () => {

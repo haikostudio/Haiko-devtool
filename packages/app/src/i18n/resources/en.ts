@@ -321,6 +321,16 @@ export const en = {
       approve: "Approve",
       explainer: "Proposed by an agent — it will only run once you approve it.",
     },
+    triage: {
+      header: "{{count}} proposed task(s) — awaiting your review",
+      approve: "Approve",
+      refuse: "Refuse",
+      save: "Save",
+      approved: "Approved",
+      refused: "Refused",
+      folder: "Folder: {{name}}",
+      loading: "Loading the task board…",
+    },
     detail: {
       title: "Task",
       titleField: "Title",

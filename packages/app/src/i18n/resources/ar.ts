@@ -322,6 +322,16 @@ export const ar: TranslationResources = {
       approve: "موافقة",
       explainer: "اقترحها وكيل — لن تُنفَّذ إلا بعد موافقتك.",
     },
+    triage: {
+      header: "{{count}} مهمة مقترحة — بانتظار مراجعتك",
+      approve: "الموافقة",
+      refuse: "الرفض",
+      save: "حفظ",
+      approved: "تمت الموافقة",
+      refused: "مرفوضة",
+      folder: "المجلد: {{name}}",
+      loading: "جارٍ تحميل لوحة المهام…",
+    },
     detail: {
       title: "المهمة",
       titleField: "العنوان",

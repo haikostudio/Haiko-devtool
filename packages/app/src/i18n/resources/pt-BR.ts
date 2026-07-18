@@ -326,6 +326,16 @@ export const ptBR: TranslationResources = {
       approve: "Aprovar",
       explainer: "Proposta por um agente — só será executada após sua aprovação.",
     },
+    triage: {
+      header: "{{count}} tarefa(s) proposta(s) — aguardando sua validação",
+      approve: "Aprovar",
+      refuse: "Recusar",
+      save: "Salvar",
+      approved: "Aprovada",
+      refused: "Recusada",
+      folder: "Pasta: {{name}}",
+      loading: "Carregando o quadro de tarefas…",
+    },
     detail: {
       title: "Tarefa",
       titleField: "Título",

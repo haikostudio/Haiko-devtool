@@ -178,7 +178,7 @@ export class MessageTriage {
       return;
     }
 
-    let proposedCount = 0;
+    const proposed: { taskId: string; title: string }[] = [];
     for (const task of result.tasks) {
       try {
         const folderId = await this.taskBoardService.ensureFolder(
@@ -186,7 +186,7 @@ export class MessageTriage {
           task.folderName?.trim() || DEFAULT_TRIAGE_FOLDER,
         );
         const runConfig = sanitizeRunConfig(task.runConfig);
-        await this.taskBoardService.createTask(projectId, {
+        const created = await this.taskBoardService.createTask(projectId, {
           folderId,
           title: task.title,
           ...(task.description ? { description: task.description } : {}),
@@ -197,7 +197,7 @@ export class MessageTriage {
           ...(runConfig !== undefined ? { runConfig } : {}),
           approval: { state: "pending" },
         });
-        proposedCount += 1;
+        proposed.push({ taskId: created.id, title: created.title });
       } catch (error) {
         this.logger.debug(
           { err: error, projectId, title: task.title },
@@ -206,12 +206,14 @@ export class MessageTriage {
       }
     }
 
-    if (proposedCount > 0) {
+    if (proposed.length > 0) {
       await this.emitTriagePill(agentId, {
         type: "task_triage",
         status: "proposed",
-        proposedCount,
+        proposedCount: proposed.length,
         projectId,
+        // Task snapshots let the client render live approve/refuse/edit cards.
+        tasks: proposed,
       });
     }
   }

@@ -43,6 +43,7 @@ import {
   type InlinePathTarget,
 } from "@/components/message";
 import { PlanCard } from "@/components/plan-card";
+import { TaskProposalCarousel } from "@/components/tasks/task-proposal-carousel";
 import { TurnRecapCard } from "@/components/turn-recap-card";
 import type { StreamItem } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
@@ -923,7 +924,17 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return <BrainContextPill item={item} />;
 
           case "task_triage":
-            return <TaskTriagePill item={item} />;
+            // Items carrying task refs render live actionable cards; legacy
+            // count-only items (old daemon) keep the static pill.
+            return item.status === "proposed" && item.tasks.length > 0 ? (
+              <TaskProposalCarousel
+                serverId={resolvedServerId}
+                projectId={item.projectId}
+                proposals={item.tasks}
+              />
+            ) : (
+              <TaskTriagePill item={item} />
+            );
 
           case "turn_recap":
             return (
@@ -946,6 +957,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         handleToolCallOpenFile,
         handleOpenChanges,
         context.cwd,
+        resolvedServerId,
       ],
     );
 
