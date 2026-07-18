@@ -5,10 +5,6 @@ import type { AggregatedActivityEntry } from "@/data/activity";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import type { Theme } from "@/styles/theme";
 
-// Below this share a slice is too narrow to fit its "NN%" label legibly, so the
-// label is dropped and only the colored slice remains.
-const MIN_LABEL_PCT = 10;
-
 interface Segment {
   key: string;
   count: number;
@@ -46,11 +42,9 @@ export function ActivityProjectBar({ entries }: { entries: AggregatedActivityEnt
     <View style={styles.bar}>
       {segments.map((segment) => (
         <View key={segment.key} style={styles.segment(segment.count, segment.color)}>
-          {segment.pct >= MIN_LABEL_PCT ? (
-            <Text style={styles.label} numberOfLines={1}>
-              {segment.pct}%
-            </Text>
-          ) : null}
+          <Text style={styles.label} numberOfLines={1}>
+            {segment.pct}%
+          </Text>
         </View>
       ))}
     </View>
@@ -60,7 +54,7 @@ export function ActivityProjectBar({ entries }: { entries: AggregatedActivityEnt
 const styles = StyleSheet.create((theme: Theme) => ({
   bar: {
     flexDirection: "row",
-    height: 22,
+    height: 88,
     borderRadius: theme.borderRadius.md,
     overflow: "hidden",
     backgroundColor: theme.colors.surface2,
