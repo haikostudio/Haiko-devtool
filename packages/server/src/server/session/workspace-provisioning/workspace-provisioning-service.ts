@@ -74,7 +74,14 @@ export function createWorkspaceProvisioningService(deps: {
   ): Promise<PersistedWorkspaceRecord | null> {
     const normalizedCwd = await resolveWorkspaceDirectory(cwd, options);
     const workspaces = await workspaceRegistry.list();
-    return workspaces.find((workspace) => workspace.cwd === normalizedCwd) ?? null;
+    // Enforce one workspace per directory: prefer the oldest NON-archived record for the
+    // cwd (falling back to the oldest archived one only when none is active). Returning an
+    // arbitrary/first match let duplicate + archived records for the same directory leak
+    // fresh "branch" rows on every resolve.
+    const matches = workspaces
+      .filter((workspace) => workspace.cwd === normalizedCwd)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return matches.find((workspace) => !workspace.archivedAt) ?? matches[0] ?? null;
   }
 
   async function resolveProjectRecordForPlacement(input: {
@@ -214,6 +221,17 @@ export function createWorkspaceProvisioningService(deps: {
     cwd: string,
     title?: string | null,
   ): Promise<PersistedWorkspaceRecord> {
+    // One workspace per directory. Every runtime "create a workspace for this dir" path
+    // (agent create, agent import, find-or-create miss) funnels through here; reuse the
+    // existing non-archived record for the cwd instead of minting a duplicate that
+    // surfaces as an empty phantom "branch" row in the sidebar.
+    const dedupeCwd = resolve(cwd);
+    const existingForCwd = (await workspaceRegistry.list())
+      .filter((workspace) => !workspace.archivedAt && resolve(workspace.cwd) === dedupeCwd)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+    if (existingForCwd) {
+      return existingForCwd;
+    }
     const checkout = await workspaceGitService.getCheckout(cwd);
     const membership = classifyDirectoryForProjectMembership({ cwd, checkout });
     const timestamp = new Date().toISOString();
