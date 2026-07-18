@@ -38,6 +38,14 @@ const LABEL_WIDTH_COMPACT = 112;
 const START_WIDTH = 56;
 const CELL_GAP = 8;
 
+// Axis-label collision budget (px), applied against the measured track width so
+// the hour ticks never pile onto the "now"/quota labels or each other on narrow
+// screens. Labels are left-aligned at their position; each reserves this width.
+const NOW_LABEL_RESERVE = 74;
+const TICK_LABEL_WIDTH = 40;
+const QUOTA_LABEL_WIDTH = 62;
+const AXIS_LABEL_GAP = 10;
+
 interface TimelineRow {
   task: KanbanTask;
   barColor: string;
@@ -62,6 +70,9 @@ interface TaskGanttProps {
   // Extra container styling supplied by the host layout (e.g. the desktop board
   // aligns the strip to the columns block; the mobile folder list lets it fill).
   containerStyle?: StyleProp<ViewStyle>;
+  // When true the panel expands to fill its parent (its own tab on compact)
+  // instead of capping the rows at a fixed strip height above the board.
+  fill?: boolean;
 }
 
 function taskDurationMs(task: KanbanTask): number {
@@ -101,6 +112,7 @@ export const TaskGantt = memo(function TaskGantt({
   board,
   onPressTask,
   containerStyle,
+  fill = false,
 }: TaskGanttProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -224,17 +236,50 @@ export const TaskGantt = memo(function TaskGantt({
 
   const labelWidth = isCompact ? LABEL_WIDTH_COMPACT : LABEL_WIDTH_DESKTOP;
   const trackLeft = labelWidth + CELL_GAP;
+  const quotaPx = quotaPct !== null && trackWidth > 0 ? (trackWidth * quotaPct) / 100 : null;
+
+  // Left-to-right sweep that drops any hour tick that would collide with the
+  // "now" label, the quota label, the right edge, or the previous kept tick.
+  // Naturally thins to one or two ticks on a narrow phone track, more on desktop.
+  const visibleTicks = useMemo(() => {
+    if (trackWidth <= 0) {
+      return [] as { key: string; px: number; label: string }[];
+    }
+    const kept: { key: string; px: number; label: string }[] = [];
+    let occupiedRight = NOW_LABEL_RESERVE;
+    for (const tick of ticks) {
+      const px = (trackWidth * tick.leftPct) / 100;
+      if (px < occupiedRight + AXIS_LABEL_GAP) {
+        continue;
+      }
+      if (px + TICK_LABEL_WIDTH > trackWidth) {
+        continue;
+      }
+      if (
+        quotaPx !== null &&
+        px + TICK_LABEL_WIDTH + AXIS_LABEL_GAP > quotaPx &&
+        px < quotaPx + QUOTA_LABEL_WIDTH + AXIS_LABEL_GAP
+      ) {
+        continue;
+      }
+      kept.push({ key: tick.label, px, label: tick.label });
+      occupiedRight = px + TICK_LABEL_WIDTH;
+    }
+    return kept;
+  }, [ticks, trackWidth, quotaPx]);
 
   const nowLineStyle = useMemo(() => [styles.nowLine, { left: trackLeft }], [trackLeft]);
   const labelSpacerStyle = useMemo(() => ({ width: labelWidth }), [labelWidth]);
-  const quotaLineStyle = useMemo(() => {
-    if (quotaPct === null || trackWidth === 0) {
-      return null;
-    }
-    return [styles.quotaLine, { left: trackLeft + (trackWidth * quotaPct) / 100 }];
-  }, [quotaPct, trackWidth, trackLeft]);
+  const quotaLineStyle = useMemo(
+    () => (quotaPx === null ? null : [styles.quotaLine, { left: trackLeft + quotaPx }]),
+    [quotaPx, trackLeft],
+  );
 
-  const rootStyle = useMemo(() => [styles.container, containerStyle], [containerStyle]);
+  const rootStyle = useMemo(
+    () => [styles.container, fill && styles.containerFill, containerStyle],
+    [fill, containerStyle],
+  );
+  const bodyStyle = useMemo(() => [styles.timelineBody, fill && styles.timelineBodyFill], [fill]);
 
   if (rows.length === 0) {
     return null;
@@ -251,22 +296,22 @@ export const TaskGantt = memo(function TaskGantt({
         <Text style={styles.title}>{t("tasks.gantt.title")}</Text>
         <Text style={styles.summary}>{summary}</Text>
       </View>
-      <View style={styles.timelineBody}>
+      <View style={bodyStyle}>
         <View style={styles.axisRow}>
           <View style={labelSpacerStyle} />
           <View style={styles.axisTrack} onLayout={handleTrackLayout}>
             <Text style={styles.axisNowLabel}>{t("tasks.gantt.now")}</Text>
-            {ticks.map((tick) => (
-              <AxisTickView key={tick.label} leftPct={tick.leftPct} label={tick.label} />
+            {visibleTicks.map((tick) => (
+              <AxisTickView key={tick.key} px={tick.px} label={tick.label} />
             ))}
-            {quotaPct !== null ? (
-              <AxisTickView leftPct={quotaPct} label={t("tasks.gantt.quotaWindow")} quota />
+            {quotaPx !== null ? (
+              <AxisTickView px={quotaPx} label={t("tasks.gantt.quotaWindow")} quota />
             ) : null}
           </View>
           <View style={startSpacerStyle} />
         </View>
         <ScrollView
-          style={styles.rowsScroll}
+          style={fill ? styles.rowsScrollFill : styles.rowsScroll}
           contentContainerStyle={styles.rowsContent}
           showsVerticalScrollIndicator={false}
         >
@@ -289,21 +334,20 @@ export const TaskGantt = memo(function TaskGantt({
 const startSpacerStyle = { width: START_WIDTH };
 
 const AxisTickView = memo(function AxisTickView({
-  leftPct,
+  px,
   label,
   quota,
 }: {
-  leftPct: number;
+  px: number;
   label: string;
   quota?: boolean;
 }) {
-  const wrapStyle = useMemo(
-    () => [styles.axisTickWrap, { left: `${leftPct}%` as const }],
-    [leftPct],
-  );
+  const wrapStyle = useMemo(() => [styles.axisTickWrap, { left: px }], [px]);
   return (
     <View style={wrapStyle}>
-      <Text style={quota ? styles.axisQuotaLabel : styles.axisTickLabel}>{label}</Text>
+      <Text style={quota ? styles.axisQuotaLabel : styles.axisTickLabel} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 });
@@ -395,6 +439,10 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[3],
     gap: theme.spacing[2],
   },
+  containerFill: {
+    flex: 1,
+    marginHorizontal: theme.spacing[4],
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -415,6 +463,9 @@ const styles = StyleSheet.create((theme) => ({
   timelineBody: {
     position: "relative",
   },
+  timelineBodyFill: {
+    flex: 1,
+  },
   axisRow: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -434,12 +485,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
   },
+  // Left-aligned at the tick's px position (the collision sweep guarantees the
+  // reserved width to the right is clear), so no centering offset is needed.
   axisTickWrap: {
     position: "absolute",
     bottom: 0,
-    width: 64,
-    marginLeft: -32,
-    alignItems: "center",
   },
   axisTickLabel: {
     color: theme.colors.foregroundMuted,
@@ -451,6 +501,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowsScroll: {
     maxHeight: 280,
+  },
+  rowsScrollFill: {
+    flex: 1,
   },
   rowsContent: {
     gap: theme.spacing[1],

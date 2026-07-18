@@ -277,6 +277,10 @@ export const ptBR: TranslationResources = {
       inProgress: "Em execução",
       quotaWindow: "Cota de 5 h",
     },
+    view: {
+      board: "Quadro",
+      timeline: "Linha do tempo",
+    },
     pickProject: "Escolha um projeto",
     noProjects: "Nenhum projeto disponível — conecte um host primeiro.",
     allProjects: "Todos os projetos",

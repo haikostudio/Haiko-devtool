@@ -277,6 +277,10 @@ export const fr: TranslationResources = {
       inProgress: "En cours",
       quotaWindow: "Quota 5 h",
     },
+    view: {
+      board: "Tableau",
+      timeline: "Chronologie",
+    },
     pickProject: "Choisir un projet",
     noProjects: "Aucun projet disponible — connectez d'abord un hôte.",
     allProjects: "Tous les projets",

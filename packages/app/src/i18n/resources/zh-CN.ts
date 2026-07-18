@@ -273,6 +273,10 @@ export const zhCN: TranslationResources = {
       inProgress: "进行中",
       quotaWindow: "5 小时配额",
     },
+    view: {
+      board: "看板",
+      timeline: "时间线",
+    },
     pickProject: "选择项目",
     noProjects: "暂无可用项目 — 请先连接主机。",
     allProjects: "所有项目",

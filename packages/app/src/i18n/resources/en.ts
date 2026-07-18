@@ -272,6 +272,10 @@ export const en = {
       inProgress: "Running",
       quotaWindow: "5h quota",
     },
+    view: {
+      board: "Board",
+      timeline: "Timeline",
+    },
     pickProject: "Choose a project",
     noProjects: "No projects available — connect a host first.",
     allProjects: "All projects",

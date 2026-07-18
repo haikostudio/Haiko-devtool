@@ -276,6 +276,10 @@ export const ja: TranslationResources = {
       inProgress: "実行中",
       quotaWindow: "5時間クォータ",
     },
+    view: {
+      board: "ボード",
+      timeline: "タイムライン",
+    },
     pickProject: "プロジェクトを選択",
     noProjects: "利用可能なプロジェクトがありません — まずホストに接続してください。",
     allProjects: "すべてのプロジェクト",

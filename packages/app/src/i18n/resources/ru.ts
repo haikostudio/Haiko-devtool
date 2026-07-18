@@ -275,6 +275,10 @@ export const ru: TranslationResources = {
       inProgress: "Выполняется",
       quotaWindow: "Квота 5 ч",
     },
+    view: {
+      board: "Доска",
+      timeline: "Хронология",
+    },
     pickProject: "Выберите проект",
     noProjects: "Нет доступных проектов — сначала подключите хост.",
     allProjects: "Все проекты",

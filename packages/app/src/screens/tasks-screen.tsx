@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   Folder,
+  LayoutGrid,
   MoreVertical,
   Pencil,
   Plus,
@@ -32,6 +33,7 @@ import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { useHostFeature } from "@/runtime/host-features";
@@ -661,6 +663,18 @@ function CenteredNote({ text }: { text: string }) {
 // Shared board content: add-task row + kanban columns + detail sheet.
 // ---------------------------------------------------------------------------
 
+// Compact board view toggle: the timeline moves behind a tab instead of
+// stacking above the kanban, so the board owns the screen by default and the
+// Gantt gets full height when picked.
+type CompactBoardView = "board" | "timeline";
+
+const renderBoardIcon = ({ color, size }: { color: string; size: number }) => (
+  <LayoutGrid color={color} size={size} />
+);
+const renderTimelineIcon = ({ color, size }: { color: string; size: number }) => (
+  <Clock color={color} size={size} />
+);
+
 function BoardContent({
   serverId,
   folderId,
@@ -670,8 +684,29 @@ function BoardContent({
   folderId: string;
   boardHandle: BoardHandle;
 }) {
+  const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
+  const [compactView, setCompactView] = useState<CompactBoardView>("board");
+
+  const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
+    () => [
+      {
+        value: "board",
+        label: t("tasks.view.board"),
+        icon: renderBoardIcon,
+        testID: "tasks-view-board",
+      },
+      {
+        value: "timeline",
+        label: t("tasks.view.timeline"),
+        icon: renderTimelineIcon,
+        testID: "tasks-view-timeline",
+      },
+    ],
+    [t],
+  );
 
   const detailTask = useMemo(
     () =>
@@ -770,23 +805,42 @@ function BoardContent({
     [boardHandle],
   );
 
+  // Desktop keeps the strip-above-board layout; compact swaps to one-at-a-time
+  // tabs so neither view is squeezed.
+  const showTimeline = !isCompact || compactView === "timeline";
+  const showBoard = !isCompact || compactView === "board";
+
   return (
     <View style={styles.boardContainer}>
-      {boardHandle.board ? (
+      {isCompact ? (
+        <View style={styles.compactViewSwitch}>
+          <SegmentedControl
+            options={viewOptions}
+            value={compactView}
+            onValueChange={setCompactView}
+            size="sm"
+            testID="tasks-view-switch"
+          />
+        </View>
+      ) : null}
+      {boardHandle.board && showTimeline ? (
         <TaskGantt
           board={boardHandle.board}
           onPressTask={handlePressTask}
-          containerStyle={styles.ganttBoardAlign}
+          containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
+          fill={isCompact}
         />
       ) : null}
-      <KanbanBoard
-        board={boardHandle.board}
-        folderId={folderId}
-        onMoveTask={handleMoveTask}
-        onPressTask={handlePressTask}
-        onAddTask={setNewTaskColumn}
-        columnExtras={columnExtras}
-      />
+      {showBoard ? (
+        <KanbanBoard
+          board={boardHandle.board}
+          folderId={folderId}
+          onMoveTask={handleMoveTask}
+          onPressTask={handlePressTask}
+          onAddTask={setNewTaskColumn}
+          columnExtras={columnExtras}
+        />
+      ) : null}
       <TaskDetailSheet
         serverId={serverId}
         task={detailTask}
@@ -913,12 +967,6 @@ function CompactFolderList({
     return counts;
   }, [boardHandle.board]);
 
-  // No detail sheet at the project level — tapping a timeline bar drills into
-  // the task's folder board, where the card can be opened.
-  const openTaskFolder = useCallback((task: KanbanTask) => {
-    selectFolder(task.folderId);
-  }, []);
-
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       <Pressable
@@ -929,9 +977,6 @@ function CompactFolderList({
         <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
       </Pressable>
-      {boardHandle.board ? (
-        <TaskGantt board={boardHandle.board} onPressTask={openTaskFolder} />
-      ) : null}
       <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
       {folders.map((folder) => (
         <CompactFolderRow
@@ -1122,6 +1167,12 @@ const styles = StyleSheet.create((theme) => ({
   boardContainer: {
     flex: 1,
     gap: theme.spacing[3],
+  },
+  // Compact board/timeline tab switch — natural width, aligned to the board
+  // inset so it lines up with the columns below.
+  compactViewSwitch: {
+    paddingHorizontal: theme.spacing[4],
+    alignItems: "flex-start",
   },
   // Aligns the timeline strip to the columns block below: same horizontal inset
   // as the board, capped to the columns' total width so its edges meet the

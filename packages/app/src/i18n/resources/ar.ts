@@ -273,6 +273,10 @@ export const ar: TranslationResources = {
       inProgress: "قيد التنفيذ",
       quotaWindow: "حصة ٥ ساعات",
     },
+    view: {
+      board: "اللوحة",
+      timeline: "الجدول الزمني",
+    },
     pickProject: "اختر مشروعًا",
     noProjects: "لا توجد مشاريع متاحة — صِل مضيفًا أولاً.",
     allProjects: "كل المشاريع",

@@ -277,6 +277,10 @@ export const es: TranslationResources = {
       inProgress: "En curso",
       quotaWindow: "Cuota de 5 h",
     },
+    view: {
+      board: "Tablero",
+      timeline: "Cronología",
+    },
     pickProject: "Elige un proyecto",
     noProjects: "No hay proyectos disponibles — conecta un host primero.",
     allProjects: "Todos los proyectos",
