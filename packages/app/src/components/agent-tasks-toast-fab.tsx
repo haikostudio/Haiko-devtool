@@ -13,7 +13,7 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 const BASE_BOTTOM_OFFSET = 16;
 // Clear the message composer that lives along the bottom edge on the compact
 // chat screen so the button floats above it instead of overlapping the input.
-const COMPOSER_CLEARANCE = 96;
+const COMPOSER_CLEARANCE = 140;
 const DRAWER_SNAP_POINTS = ["55%", "90%"];
 
 // Compact-only counterpart to AgentTasksToastStack: a round badge in the
