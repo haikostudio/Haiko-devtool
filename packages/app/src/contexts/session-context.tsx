@@ -616,6 +616,57 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
     );
   }, [sessionAgents]);
 
+  // Deliver the next follow-up that was queued while an agent was busy. A prompt
+  // sent to a running agent is parked in `queuedMessages` (see submit.ts); it is
+  // drained on the running->idle transition and on reconnect. Two invariants keep
+  // prompts from being silently lost — the bug where a queued follow-up would
+  // vanish "without executing" after leaving the tab:
+  //   1. Never remove a message unless a live client is available to take it.
+  //      If the client is momentarily gone (mobile reconnect), leave it queued;
+  //      the reconnect drain will deliver it.
+  //   2. If delivery rejects, put the message back at the FRONT of the queue so
+  //      it is retried instead of dropped.
+  const drainingAgentQueueRef = useRef<Set<string>>(new Set());
+  const drainAgentQueue = useCallback(
+    (agentId: string) => {
+      if (drainingAgentQueueRef.current.has(agentId)) {
+        return;
+      }
+      const send = sendAgentMessageRef.current;
+      if (!client || !send) {
+        return;
+      }
+      const session = useSessionStore.getState().sessions[serverId];
+      const queue = session?.queuedMessages.get(agentId);
+      if (!queue || queue.length === 0) {
+        return;
+      }
+      const [next, ...rest] = queue;
+      const wirePayload = splitComposerAttachmentsForSubmit(next.attachments);
+      drainingAgentQueueRef.current.add(agentId);
+      // Optimistically remove the head so a concurrent drain can't re-send it.
+      setQueuedMessages(serverId, (prev) => {
+        const updated = new Map(prev);
+        updated.set(agentId, rest);
+        return updated;
+      });
+      void send(agentId, next.text, wirePayload.images, wirePayload.attachments)
+        .catch((error) => {
+          console.error("[Session] Failed to deliver queued message; re-queuing:", error);
+          setQueuedMessages(serverId, (prev) => {
+            const updated = new Map(prev);
+            const current = updated.get(agentId) ?? [];
+            updated.set(agentId, [next, ...current]);
+            return updated;
+          });
+        })
+        .finally(() => {
+          drainingAgentQueueRef.current.delete(agentId);
+        });
+    },
+    [client, serverId, setQueuedMessages],
+  );
+
   const hydrateWorkspaces = useCallback(
     async (options?: { subscribe?: boolean; isCancelled?: () => boolean }) => {
       if (!client || !isConnected) {
@@ -735,25 +786,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
       const prevStatus = previousAgentStatusRef.current.get(agent.id);
       if (prevStatus === "running" && agent.status !== "running") {
-        const session = useSessionStore.getState().sessions[serverId];
-        const queue = session?.queuedMessages.get(agent.id);
-        if (queue && queue.length > 0) {
-          const [next, ...rest] = queue;
-          if (sendAgentMessageRef.current) {
-            const wirePayload = splitComposerAttachmentsForSubmit(next.attachments);
-            void sendAgentMessageRef.current(
-              agent.id,
-              next.text,
-              wirePayload.images,
-              wirePayload.attachments,
-            );
-          }
-          setQueuedMessages(serverId, (prev) => {
-            const updated = new Map(prev);
-            updated.set(agent.id, rest);
-            return updated;
-          });
-        }
+        drainAgentQueue(agent.id);
       }
 
       previousAgentStatusRef.current.set(agent.id, agent.status);
@@ -764,7 +797,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       setAgentLastActivity,
       setAgents,
       setPendingPermissions,
-      setQueuedMessages,
+      drainAgentQueue,
     ],
   );
 
@@ -1290,6 +1323,30 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       scheduleAuthoritativeRevalidation();
     }
   }, [isConnected, scheduleAuthoritativeRevalidation]);
+
+  // Deliver follow-ups that were queued while the client was unavailable. The
+  // running->idle transition that normally drains the queue can fire during an
+  // outage (or before the client is ready), leaving the message parked. Once the
+  // client is back, hand any queued message for a now-idle agent to the transport
+  // so it is never stranded. A running agent drains on its next idle transition.
+  useEffect(() => {
+    if (!client || !isConnected) {
+      return;
+    }
+    const session = useSessionStore.getState().sessions[serverId];
+    const queued = session?.queuedMessages;
+    if (!queued || queued.size === 0) {
+      return;
+    }
+    for (const [agentId, messages] of queued) {
+      if (!messages || messages.length === 0) {
+        continue;
+      }
+      if (session?.agents?.get(agentId)?.status !== "running") {
+        drainAgentQueue(agentId);
+      }
+    }
+  }, [client, isConnected, serverId, drainAgentQueue]);
 
   useEffect(() => {
     return () => {
@@ -1884,19 +1941,19 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         });
       }
 
+      // Await real delivery (daemon ACK) and let failures propagate. This helper
+      // is private to the queued-follow-up drain below, which relies on the
+      // rejection to re-queue instead of silently dropping the prompt. A
+      // fire-and-forget send here was losing queued messages whenever the send
+      // rejected or the client was momentarily unavailable.
       if (!client) {
-        console.warn("[Session] sendAgentMessage skipped: daemon unavailable");
-        return;
+        throw new Error("Daemon unavailable");
       }
-      void client
-        .sendAgentMessage(agentId, message, {
-          messageId,
-          ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
-          ...(attachments && attachments.length > 0 ? { attachments } : {}),
-        })
-        .catch((error) => {
-          console.error("[Session] Failed to send agent message:", error);
-        });
+      await client.sendAgentMessage(agentId, message, {
+        messageId,
+        ...(imagesData && imagesData.length > 0 ? { images: imagesData } : {}),
+        ...(attachments && attachments.length > 0 ? { attachments } : {}),
+      });
     },
     [serverId, client, setAgentStreamTail, setAgentStreamHead],
   );
