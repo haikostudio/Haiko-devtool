@@ -108,6 +108,7 @@ function ActivityScreenContent() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.filtersScroll}
           contentContainerStyle={styles.filters}
         >
           <FilterChip
@@ -179,8 +180,16 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flex: 1,
     backgroundColor: theme.colors.surface0,
   },
+  // A horizontal ScrollView inherits RNW's flex-grow, so inside this column it
+  // stretches vertically and drags the chips into full-height capsules. Pin it
+  // to its content height and stop the chips from stretching.
+  filtersScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   filters: {
     flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[4],
     paddingTop: theme.spacing[3],
