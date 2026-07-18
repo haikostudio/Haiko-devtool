@@ -10,11 +10,15 @@ export interface ParsedPriority {
   level: TaskPriorityLevel;
   /** Display text — the tag suffix as authored, e.g. "haute". */
   label: string;
+  /** The full original tag, e.g. "priorité-haute" — kept so edits round-trip. */
+  raw: string;
 }
 
 export interface ParsedDeadline {
   /** Display text — the raw date ("15.07.26") or a humanized value ("à définir"). */
   label: string;
+  /** The suffix as authored, e.g. "15.07.26" or "à-définir" — kept so edits round-trip. */
+  raw: string;
   /** Parsed calendar date when the suffix is a recognizable date, else null. */
   dueDate: Date | null;
 }
@@ -87,7 +91,7 @@ export function parseTaskTags(tags: readonly string[]): ParsedTaskTags {
     const prioritySuffix = PRIORITY_PREFIX.exec(tag)?.[1];
     if (!priority && prioritySuffix) {
       const label = humanize(prioritySuffix);
-      priority = { level: priorityLevel(label), label };
+      priority = { level: priorityLevel(label), label, raw: tag };
       continue;
     }
 
@@ -95,7 +99,7 @@ export function parseTaskTags(tags: readonly string[]): ParsedTaskTags {
     if (!deadline && deadlineSuffix) {
       const raw = deadlineSuffix.trim();
       const dueDate = parseDeadlineDate(raw);
-      deadline = { label: dueDate ? raw : humanize(raw), dueDate };
+      deadline = { label: dueDate ? raw : humanize(raw), raw, dueDate };
       continue;
     }
 
@@ -103,6 +107,47 @@ export function parseTaskTags(tags: readonly string[]): ParsedTaskTags {
   }
 
   return { priority, deadline, tags: rest };
+}
+
+/** Canonical tag written when the user picks a priority level in the editor. */
+export const PRIORITY_TAG_BY_LEVEL: Record<Exclude<TaskPriorityLevel, "other">, string> = {
+  high: "priorité-haute",
+  medium: "priorité-moyenne",
+  low: "priorité-basse",
+};
+
+/**
+ * Build the deadline tag from editor input ("15.07.26", "à définir"). Empty
+ * input drops the tag; input already carrying the prefix is kept as-is so a
+ * pasted "échéance-15.07.26" doesn't get double-prefixed.
+ */
+export function deadlineTagFor(value: string): string | null {
+  const normalized = value.trim().replace(/\s+/g, "-");
+  if (!normalized) {
+    return null;
+  }
+  return DEADLINE_PREFIX.test(normalized) ? normalized : `échéance-${normalized}`;
+}
+
+/**
+ * Inverse of `parseTaskTags`: rebuild the flat `tags[]` array from the
+ * dedicated editor fields plus the thematic tags. Priority/deadline-prefixed
+ * entries typed into the thematic field are stripped — the dedicated fields
+ * are the single source of truth, and keeping both would render twice.
+ */
+export function serializeTaskTags(input: {
+  priorityTag: string | null;
+  deadlineTag: string | null;
+  tags: readonly string[];
+}): string[] {
+  const thematic = input.tags.filter(
+    (tag) => !PRIORITY_PREFIX.test(tag) && !DEADLINE_PREFIX.test(tag),
+  );
+  return [
+    ...(input.priorityTag ? [input.priorityTag] : []),
+    ...(input.deadlineTag ? [input.deadlineTag] : []),
+    ...thematic,
+  ];
 }
 
 /**

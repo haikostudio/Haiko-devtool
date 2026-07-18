@@ -19,6 +19,13 @@ import {
   formatUsd,
   resolveEffectiveExecution,
 } from "@/components/tasks/task-cost";
+import {
+  deadlineTagFor,
+  type ParsedPriority,
+  parseTaskTags,
+  PRIORITY_TAG_BY_LEVEL,
+  serializeTaskTags,
+} from "@/components/tasks/task-tags";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostFeature } from "@/runtime/host-features";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
@@ -95,6 +102,17 @@ function thinkingOptionKey(value: string | null): string {
   return value ?? DEFAULT_MODEL_OPTION_ID;
 }
 
+function priorityValueKey(value: string | null): string {
+  return value ?? "none";
+}
+
+function initialPriorityTag(priority: ParsedPriority | null): string | null {
+  if (!priority) {
+    return null;
+  }
+  return priority.level === "other" ? priority.raw : PRIORITY_TAG_BY_LEVEL[priority.level];
+}
+
 function preferenceLabelKey(preference: TaskSchedulePreference): string {
   if (preference === "asap") {
     return "tasks.detail.execution.prefAsap";
@@ -121,7 +139,17 @@ function TaskDetailSheetForm({
   const controlSize = isCompact ? "md" : "sm";
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
-  const [tagsText, setTagsText] = useState(task.tags.join(", "));
+  // Priority and deadline are structured tags ("priorité-haute",
+  // "échéance-15.07.26") — same parsing as the board card. The editor lifts
+  // them into dedicated fields and only the thematic leftovers stay in the
+  // free-text tags input; save reassembles the flat array.
+  const parsedTags = useMemo(() => parseTaskTags(task.tags), [task.tags]);
+  const [priorityTag, setPriorityTag] = useState<string | null>(() =>
+    initialPriorityTag(parsedTags.priority),
+  );
+  const initialDeadline = parsedTags.deadline?.raw ?? "";
+  const [deadlineText, setDeadlineText] = useState(initialDeadline);
+  const [tagsText, setTagsText] = useState(parsedTags.tags.join(", "));
   const taskId = task.id;
 
   // COMPAT(tasksRunConfig): added in v0.1.110, drop the gate when floor >= v0.1.110.
@@ -159,16 +187,30 @@ function TaskDetailSheetForm({
       taskId,
       title: title.trim(),
       description: description.trim(),
-      tags: tagsText
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
+      tags: serializeTaskTags({
+        priorityTag,
+        deadlineTag: deadlineTagFor(deadlineText),
+        tags: tagsText
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      }),
       runConfig: buildRunConfig(executionConfig),
       schedulePreference:
         executionConfig.schedulePreference === "auto" ? null : executionConfig.schedulePreference,
     });
     onClose();
-  }, [taskId, title, description, tagsText, executionConfig, onSave, onClose]);
+  }, [
+    taskId,
+    title,
+    description,
+    priorityTag,
+    deadlineText,
+    tagsText,
+    executionConfig,
+    onSave,
+    onClose,
+  ]);
 
   const handleDelete = useCallback(() => {
     onDelete(taskId);
@@ -259,10 +301,25 @@ function TaskDetailSheetForm({
           testID="task-detail-description"
         />
       </Field>
+      <PriorityField
+        parsedPriority={parsedTags.priority}
+        value={priorityTag}
+        onChange={setPriorityTag}
+        controlSize={controlSize}
+      />
+      <Field label={t("tasks.detail.deadlineField")}>
+        <FormTextInput
+          size={controlSize}
+          initialValue={initialDeadline}
+          onChangeText={setDeadlineText}
+          placeholder={t("tasks.detail.deadlinePlaceholder")}
+          testID="task-detail-deadline"
+        />
+      </Field>
       <Field label={t("tasks.detail.tagsField")}>
         <FormTextInput
           size={controlSize}
-          initialValue={task.tags.join(", ")}
+          initialValue={parsedTags.tags.join(", ")}
           onChangeText={setTagsText}
           placeholder={t("tasks.detail.tagsPlaceholder")}
           testID="task-detail-tags"
@@ -295,6 +352,65 @@ function TaskDetailSheetForm({
         ) : null}
       </View>
     </AdaptiveModalSheet>
+  );
+}
+
+function PriorityField({
+  parsedPriority,
+  value,
+  onChange,
+  controlSize,
+}: {
+  parsedPriority: ParsedPriority | null;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  controlSize: FieldControlSize;
+}) {
+  const { t } = useTranslation();
+
+  const options = useMemo((): SelectFieldOption<string | null>[] => {
+    const built: SelectFieldOption<string | null>[] = [
+      { id: "none", value: null, label: t("tasks.detail.priorityNone") },
+      { id: "high", value: PRIORITY_TAG_BY_LEVEL.high, label: t("tasks.detail.priorityHigh") },
+      {
+        id: "medium",
+        value: PRIORITY_TAG_BY_LEVEL.medium,
+        label: t("tasks.detail.priorityMedium"),
+      },
+      { id: "low", value: PRIORITY_TAG_BY_LEVEL.low, label: t("tasks.detail.priorityLow") },
+    ];
+    // Keep an unrecognized authored priority selectable instead of dropping it.
+    if (parsedPriority?.level === "other") {
+      built.push({
+        id: parsedPriority.raw,
+        value: parsedPriority.raw,
+        label: parsedPriority.label,
+      });
+    }
+    return built;
+  }, [parsedPriority, t]);
+
+  const display = useMemo(
+    () => ({
+      label:
+        options.find((option) => option.value === value)?.label ?? t("tasks.detail.priorityNone"),
+    }),
+    [options, value, t],
+  );
+
+  return (
+    <SelectField
+      label={t("tasks.detail.priorityField")}
+      value={value}
+      selectedDisplay={display}
+      options={options}
+      onChange={onChange}
+      placeholder={t("tasks.detail.priorityNone")}
+      emptyText={t("tasks.detail.priorityNone")}
+      size={controlSize}
+      getValueKey={priorityValueKey}
+      testID="task-detail-priority"
+    />
   );
 }
 

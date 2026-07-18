@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { daysUntil, parseDeadlineDate, parseTaskTags } from "./task-tags";
+import {
+  daysUntil,
+  deadlineTagFor,
+  parseDeadlineDate,
+  parseTaskTags,
+  PRIORITY_TAG_BY_LEVEL,
+  serializeTaskTags,
+} from "./task-tags";
 
 describe("parseTaskTags", () => {
   it("pulls priority and deadline out of the flat tag list", () => {
     const parsed = parseTaskTags(["priorité-haute", "échéance-15.07.26", "HEXAPRO", "i18n"]);
-    expect(parsed.priority).toEqual({ level: "high", label: "haute" });
+    expect(parsed.priority).toEqual({ level: "high", label: "haute", raw: "priorité-haute" });
     expect(parsed.deadline?.label).toBe("15.07.26");
     expect(parsed.deadline?.dueDate).toEqual(new Date(2026, 6, 15));
     expect(parsed.tags).toEqual(["HEXAPRO", "i18n"]);
@@ -20,7 +27,7 @@ describe("parseTaskTags", () => {
 
   it("keeps a non-date deadline as a humanized label with no date", () => {
     const parsed = parseTaskTags(["échéance-à-définir"]);
-    expect(parsed.deadline).toEqual({ label: "à définir", dueDate: null });
+    expect(parsed.deadline).toEqual({ label: "à définir", raw: "à-définir", dueDate: null });
   });
 
   it("only lifts the first priority and first deadline; the rest stay tags", () => {
@@ -40,6 +47,47 @@ describe("parseTaskTags", () => {
     expect(parsed.priority).toBeNull();
     expect(parsed.deadline).toBeNull();
     expect(parsed.tags).toEqual(["bug", "notifications"]);
+  });
+});
+
+describe("serializeTaskTags", () => {
+  it("round-trips a parsed tag list", () => {
+    const original = ["priorité-haute", "échéance-15.07.26", "HEXAPRO", "i18n"];
+    const parsed = parseTaskTags(original);
+    const rebuilt = serializeTaskTags({
+      priorityTag: parsed.priority?.raw ?? null,
+      deadlineTag: parsed.deadline ? deadlineTagFor(parsed.deadline.raw) : null,
+      tags: parsed.tags,
+    });
+    expect(rebuilt).toEqual(original);
+  });
+
+  it("drops empty fields and keeps thematic tags", () => {
+    expect(serializeTaskTags({ priorityTag: null, deadlineTag: null, tags: ["bug"] })).toEqual([
+      "bug",
+    ]);
+  });
+
+  it("strips prefixed entries typed into the thematic field — dedicated fields win", () => {
+    expect(
+      serializeTaskTags({
+        priorityTag: PRIORITY_TAG_BY_LEVEL.high,
+        deadlineTag: null,
+        tags: ["priorité-basse", "échéance-01.01.27", "ui"],
+      }),
+    ).toEqual(["priorité-haute", "ui"]);
+  });
+});
+
+describe("deadlineTagFor", () => {
+  it("prefixes plain values and normalizes whitespace", () => {
+    expect(deadlineTagFor("15.07.26")).toBe("échéance-15.07.26");
+    expect(deadlineTagFor("à définir")).toBe("échéance-à-définir");
+  });
+
+  it("returns null for empty input and keeps an already-prefixed value as-is", () => {
+    expect(deadlineTagFor("   ")).toBeNull();
+    expect(deadlineTagFor("échéance-15.07.26")).toBe("échéance-15.07.26");
   });
 });
 
