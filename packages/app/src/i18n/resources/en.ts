@@ -322,6 +322,12 @@ export const en = {
       explainer: "Proposed by an agent — it will only run once you approve it.",
     },
     triage: {
+      fieldFolder: "Folder",
+      fieldPriority: "Priority",
+      fieldDeadline: "Deadline",
+      fieldEstimate: "Estimate",
+      fieldCost: "Cost",
+      pendingEstimate: "estimating…",
       header: "{{count}} proposed task(s) — awaiting your review",
       approve: "Approve",
       refuse: "Refuse",

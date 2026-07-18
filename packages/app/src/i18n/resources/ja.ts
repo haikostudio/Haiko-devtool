@@ -326,6 +326,12 @@ export const ja: TranslationResources = {
       explainer: "エージェントによる提案 — 承認するまで実行されません。",
     },
     triage: {
+      fieldFolder: "フォルダー",
+      fieldPriority: "優先度",
+      fieldDeadline: "期限",
+      fieldEstimate: "見積もり",
+      fieldCost: "コスト",
+      pendingEstimate: "見積もり中…",
       header: "{{count}}件のタスク提案 — 確認待ち",
       approve: "承認",
       refuse: "却下",

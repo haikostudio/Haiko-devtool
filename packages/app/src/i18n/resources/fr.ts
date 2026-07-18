@@ -327,6 +327,12 @@ export const fr: TranslationResources = {
       explainer: "Proposée par un agent — elle ne sera lancée qu'après votre confirmation.",
     },
     triage: {
+      fieldFolder: "Dossier",
+      fieldPriority: "Priorité",
+      fieldDeadline: "Échéance",
+      fieldEstimate: "Estimation",
+      fieldCost: "Coût",
+      pendingEstimate: "en cours…",
       header: "{{count}} tâche(s) proposée(s) — à valider",
       approve: "Approuver",
       refuse: "Refuser",

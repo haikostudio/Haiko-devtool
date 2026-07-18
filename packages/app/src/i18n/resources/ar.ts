@@ -323,6 +323,12 @@ export const ar: TranslationResources = {
       explainer: "اقترحها وكيل — لن تُنفَّذ إلا بعد موافقتك.",
     },
     triage: {
+      fieldFolder: "المجلد",
+      fieldPriority: "الأولوية",
+      fieldDeadline: "الموعد النهائي",
+      fieldEstimate: "التقدير",
+      fieldCost: "التكلفة",
+      pendingEstimate: "جارٍ التقدير…",
       header: "{{count}} مهمة مقترحة — بانتظار مراجعتك",
       approve: "الموافقة",
       refuse: "الرفض",

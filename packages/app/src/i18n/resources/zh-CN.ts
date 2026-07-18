@@ -323,6 +323,12 @@ export const zhCN: TranslationResources = {
       explainer: "由智能体提出 — 需要你确认后才会执行。",
     },
     triage: {
+      fieldFolder: "文件夹",
+      fieldPriority: "优先级",
+      fieldDeadline: "截止日期",
+      fieldEstimate: "预估",
+      fieldCost: "成本",
+      pendingEstimate: "预估中…",
       header: "{{count}} 个任务提案 — 待确认",
       approve: "批准",
       refuse: "拒绝",

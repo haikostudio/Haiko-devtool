@@ -325,6 +325,12 @@ export const ru: TranslationResources = {
       explainer: "Предложена агентом — запустится только после вашего подтверждения.",
     },
     triage: {
+      fieldFolder: "Папка",
+      fieldPriority: "Приоритет",
+      fieldDeadline: "Срок",
+      fieldEstimate: "Оценка",
+      fieldCost: "Стоимость",
+      pendingEstimate: "оценка…",
       header: "Предложено задач: {{count}} — ждут вашего решения",
       approve: "Одобрить",
       refuse: "Отклонить",

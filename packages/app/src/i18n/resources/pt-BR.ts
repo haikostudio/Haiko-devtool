@@ -327,6 +327,12 @@ export const ptBR: TranslationResources = {
       explainer: "Proposta por um agente — só será executada após sua aprovação.",
     },
     triage: {
+      fieldFolder: "Pasta",
+      fieldPriority: "Prioridade",
+      fieldDeadline: "Prazo",
+      fieldEstimate: "Estimativa",
+      fieldCost: "Custo",
+      pendingEstimate: "estimando…",
       header: "{{count}} tarefa(s) proposta(s) — aguardando sua validação",
       approve: "Aprovar",
       refuse: "Recusar",

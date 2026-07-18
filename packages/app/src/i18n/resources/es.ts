@@ -327,6 +327,12 @@ export const es: TranslationResources = {
       explainer: "Propuesta por un agente — solo se ejecutará cuando la apruebes.",
     },
     triage: {
+      fieldFolder: "Carpeta",
+      fieldPriority: "Prioridad",
+      fieldDeadline: "Fecha límite",
+      fieldEstimate: "Estimación",
+      fieldCost: "Coste",
+      pendingEstimate: "estimando…",
       header: "{{count}} tarea(s) propuesta(s) — pendiente(s) de validación",
       approve: "Aprobar",
       refuse: "Rechazar",
