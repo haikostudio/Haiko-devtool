@@ -921,6 +921,17 @@ export async function createPaseoDaemon(
     cwd: string,
     firstAgentContext?: FirstAgentContext,
   ): Promise<string> => {
+    // Reuse the existing workspace for this directory instead of minting a new one.
+    // This path backs MCP/internal agent creation — notably the Brain memory curator,
+    // which spawns an internal agent on every message. Always-creating here leaked an
+    // empty duplicate workspace per interaction; one directory maps to one workspace.
+    const resolvedCwd = path.resolve(cwd);
+    const existing = (await workspaceRegistry.list()).find(
+      (workspace) => !workspace.archivedAt && path.resolve(workspace.cwd) === resolvedCwd,
+    );
+    if (existing) {
+      return existing.workspaceId;
+    }
     const workspace = await createLocalCheckoutWorkspace(
       { cwd, title: resolveFirstAgentPromptTitle(firstAgentContext) },
       { projectRegistry, workspaceRegistry, workspaceGitService },
