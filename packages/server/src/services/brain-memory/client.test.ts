@@ -5,6 +5,7 @@ import {
   formatRecall,
   injectBrainContext,
   parseBrainContextEnvelope,
+  sameProject,
   selectPertinentSkills,
   skillToSouvenir,
   toTimelineMemories,
@@ -125,7 +126,71 @@ function brainFetchMock(bodies: {
   });
 }
 
+describe("sameProject", () => {
+  it("matches display names against folder slugs (prod silo bug)", () => {
+    // Mesuré en prod le 18/07/2026 : le démon scope par nom d'affichage, les
+    // souvenirs sont tagués par slug — l'égalité stricte rendait le rappel vide.
+    expect(sameProject("Paseo", "paseo")).toBe(true);
+    expect(sameProject("Haiko Mail", "haikomail")).toBe(true);
+    expect(sameProject("Haiko Formations", "formations")).toBe(true);
+    expect(sameProject("Eloya", "eloya-saas")).toBe(true);
+    expect(sameProject("La Roma", "la-roma")).toBe(true);
+  });
+
+  it("keeps namespaced and short keys strict", () => {
+    expect(sameProject("Eloya", "eloya-user:3")).toBe(false);
+    expect(sameProject("eloya-user:3", "eloya-user:3")).toBe(true);
+    expect(sameProject("web", "webapp")).toBe(false);
+    expect(sameProject("haikomail", "haiko-compta")).toBe(false);
+  });
+});
+
 describe("BrainMemoryClient.recall", () => {
+  it("keeps alias/family results from the scoped pass (Cerveau-resolved scope)", async () => {
+    // Le Cerveau résout « Paseo » vers `paseo` (+ famille) : ces souvenirs sont
+    // CEUX du projet — le garde anti-fuite ne doit plus les jeter.
+    const fetchMock = brainFetchMock({
+      scoped: {
+        resultats: [
+          { id: "1", texte: "fait du silo slug", project: "paseo" },
+          { id: "2", texte: "fait d'un autre projet", project: "haikomail" },
+        ],
+      },
+    });
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("q", { projet: "Paseo" });
+    expect(result.blob).toContain("fait du silo slug");
+    expect(result.blob).not.toContain("autre projet");
+    expect(result.portee).toBe("projet");
+  });
+
+  it("drops other-project-tagged memories from the global complement", async () => {
+    // Mesuré en prod : un prompt vague (« mets à jour les docs ») ramenait par la
+    // passe globale un souvenir 0.97 d'un projet SANS RAPPORT. Le complément ne
+    // garde que le savoir global (non tagué) ou la même famille de projet.
+    const fetchMock = brainFetchMock({
+      scoped: { resultats: [{ id: "1", texte: "fait projet", project: "paseo" }] },
+      global: {
+        resultats: [
+          { id: "2", texte: "docs d'un autre projet", score: 0.97, project: "haikomail" },
+          { id: "3", texte: "convention globale", score: 0.5 },
+          { id: "4", texte: "fait famille", score: 0.45, project: "Paseo" },
+        ],
+      },
+    });
+    const client = new BrainMemoryClient({
+      logger,
+      apiKey: "k",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    const result = await client.recall("q", { projet: "paseo" });
+    expect(result.resultats.map((r) => r.id)).toEqual(["1", "3", "4"]);
+  });
+
   it("returns the scoped results first as portee=projet", async () => {
     const fetchMock = brainFetchMock({
       scoped: { resultats: [{ id: "1", texte: "souvenir projet", project: "paseo" }] },

@@ -209,17 +209,25 @@ export class BrainMemoryClient {
     ]);
     // Leak guard: a scoped search must only return the project's own memories
     // (or unscoped ones); anything tagged with another project is a Cerveau
-    // recall bug bleeding through — never inject it.
-    const scoped = scopedRaw.filter(
-      (s) => !s.project || !projet || foldText(s.project) === foldText(projet),
-    );
+    // recall bug bleeding through — never inject it. Family-tolerant: the
+    // Cerveau resolves the scope to aliases ("Paseo" covers `paseo`, "Eloya"
+    // covers `eloya-saas`) — those are the project's own memories, keep them.
+    const scoped = scopedRaw.filter((s) => !s.project || !projet || sameProject(s.project, projet));
     // The unscoped complement only keeps solidly relevant matches: repêchage
     // (score ≥0.02) and exempted guardrails only make sense inside a project
     // scope, and lexical concept matches are cross-project by construction —
     // a generic dev word ("test") would drag another project's facts into the
     // conversation. Inside the project scope all of these stay welcome.
+    // And when a scope is set, the complement's job is GLOBAL knowledge
+    // (deploy conventions, guardrails): a memory tagged with a DIFFERENT
+    // project is another project's context by definition — measured in prod, a
+    // vague "update the docs" prompt dragged a 0.97-scored memory from an
+    // unrelated project. Untagged or same-family memories stay welcome.
     const complement = globalRaw.filter(
-      (s) => (s.score ?? 0) >= GLOBAL_COMPLEMENT_MIN_SCORE && !s.via?.startsWith("concept:"),
+      (s) =>
+        (s.score ?? 0) >= GLOBAL_COMPLEMENT_MIN_SCORE &&
+        !s.via?.startsWith("concept:") &&
+        (!projet || !s.project || sameProject(s.project, projet)),
     );
     const seen = new Set(scoped.map((s) => s.id).filter(Boolean));
     const resultats = [...scoped];
@@ -294,6 +302,45 @@ export function foldText(text: string): string {
     .toLowerCase();
 }
 
+/**
+ * Compact project key, mirror of the Cerveau's `projets.cle`: accents folded,
+ * lowercase, only alphanumerics (and the `:` namespace marker) survive.
+ * "Haiko Mail" → "haikomail", "eloya-user:3" → "eloyauser:3".
+ */
+export function projectKey(text: string): string {
+  return foldText(text).replace(/[^a-z0-9:]+/g, "");
+}
+
+// Below this length a compact key is too generic to justify a family match
+// ("web" must not swallow "webapp"). Mirror of the Cerveau's `_MIN_FAMILLE`.
+const MIN_FAMILY_KEY = 5;
+
+/**
+ * Same project, alias/family tolerant — mirror of the Cerveau's server-side
+ * scope resolution (`projets.meme_projet`). Exact compact key = alias ("Paseo"
+ * ≈ "paseo", "Haiko Mail" ≈ "haikomail"); prefix/suffix = same family ("Eloya"
+ * ≈ "eloya-saas", "Haiko Formations" ≈ "formations"). Namespaced tags (`:`,
+ * e.g. per-end-user silos like "eloya-user:3") never family-match, and short
+ * keys require exact equality.
+ */
+export function sameProject(a?: string | null, b?: string | null): boolean {
+  const ka = projectKey(a ?? "");
+  const kb = projectKey(b ?? "");
+  if (!ka || !kb) {
+    return false;
+  }
+  if (ka === kb) {
+    return true;
+  }
+  if (ka.includes(":") || kb.includes(":")) {
+    return false;
+  }
+  if (Math.min(ka.length, kb.length) < MIN_FAMILY_KEY) {
+    return false;
+  }
+  return ka.startsWith(kb) || kb.startsWith(ka) || ka.endsWith(kb) || kb.endsWith(ka);
+}
+
 /** Poor-man's French stems of the meaningful words: ≥4 chars, trailing -s/-x dropped. */
 export function foldStems(text: string): string[] {
   const words = foldText(text).match(/[a-z0-9à-ÿ]{4,}/g) ?? [];
@@ -323,7 +370,6 @@ export function selectPertinentSkills(
   if (queryStems.length === 0) {
     return [];
   }
-  const projetFold = projet ? foldText(projet) : undefined;
   const scored: { skill: BrainSkill; overlap: number; onProject: boolean }[] = [];
   for (const skill of skills) {
     const haystack = foldStems(
@@ -333,9 +379,8 @@ export function selectPertinentSkills(
     if (overlap === 0) {
       continue;
     }
-    const onProject = Boolean(
-      projetFold && skill.project && foldText(skill.project) === projetFold,
-    );
+    // Alias/family tolerant ("Haiko Mail" workspace ≈ `haikomail`-tagged skill).
+    const onProject = Boolean(projet && skill.project && sameProject(skill.project, projet));
     scored.push({ skill, overlap, onProject });
   }
   scored.sort((a, b) => Number(b.onProject) - Number(a.onProject) || b.overlap - a.overlap);
