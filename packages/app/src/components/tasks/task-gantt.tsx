@@ -12,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
-import { deriveProjectIconColor } from "@/utils/project-icon-color";
 
 // Row order for the timeline: what's running first, then planned, then the
 // to-do backlog. Done is excluded — the strip shows the work still ahead, not
@@ -48,7 +47,6 @@ const AXIS_LABEL_GAP = 10;
 
 interface TimelineRow {
   task: KanbanTask;
-  barColor: string;
   estimated: boolean;
   column: KanbanTask["column"];
   // Track placement as percentages of the visible horizon.
@@ -116,7 +114,6 @@ export const TaskGantt = memo(function TaskGantt({
 }: TaskGanttProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const projectColor = deriveProjectIconColor(board.projectId);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -134,7 +131,6 @@ export const TaskGantt = memo(function TaskGantt({
   );
 
   const { rows, ticks, quotaPct, totalQuota, totalDurationMs } = useMemo(() => {
-    const folderColorById = new Map(board.folders.map((folder) => [folder.id, folder.color]));
     const open = board.tasks
       .filter((task) => task.column !== "done")
       .sort(
@@ -190,7 +186,6 @@ export const TaskGantt = memo(function TaskGantt({
       }
       return {
         task,
-        barColor: folderColorById.get(task.folderId) ?? projectColor,
         estimated: Boolean(task.estimate),
         column: task.column,
         leftPct: beyond ? 97 : (clampedStart / horizonMs) * 100,
@@ -225,7 +220,7 @@ export const TaskGantt = memo(function TaskGantt({
       totalQuota: realQuota,
       totalDurationMs: duration,
     };
-  }, [board.folders, board.tasks, nowMs, projectColor, t, timeFormatter]);
+  }, [board.tasks, nowMs, t, timeFormatter]);
 
   // Measured width of the track cell, so the full-height vertical lines (now,
   // quota window) can be placed in px across the whole rows block.
@@ -371,30 +366,20 @@ const TimelineRowView = memo(function TimelineRowView({
       width: `${row.widthPct}%` as const,
     };
     if (!row.estimated) {
-      // Un-estimated: dashed outline over a light tint, so an unknown size
-      // reads differently from a measured one without inventing a length.
-      return [
-        styles.bar,
-        styles.barOutlined,
-        base,
-        { borderColor: row.barColor, backgroundColor: `${row.barColor}14` },
-      ];
+      // Un-estimated: dashed gray outline, so an unknown size reads differently
+      // from a measured one without inventing a length.
+      return [styles.bar, styles.barOutlined, base];
     }
-    // Estimated: filled with the folder color, dimmed by column so a glance
-    // separates running (solid) from planned and backlog.
-    let dim: StyleProp<ViewStyle> = null;
+    // Estimated: grayscale fill, darker to lighter by column so a glance
+    // separates running (near-black) from planned (mid) and backlog (light).
+    let fill: StyleProp<ViewStyle> = styles.barRunning;
     if (row.column === "scheduled") {
-      dim = styles.barScheduled;
+      fill = styles.barScheduled;
     } else if (row.column === "backlog") {
-      dim = styles.barBacklog;
+      fill = styles.barBacklog;
     }
-    return [styles.bar, base, { backgroundColor: row.barColor }, dim];
-  }, [row.estimated, row.column, row.leftPct, row.widthPct, row.barColor]);
-
-  const dotStyle = useMemo(
-    () => [styles.folderDot, { backgroundColor: row.barColor }],
-    [row.barColor],
-  );
+    return [styles.bar, base, fill];
+  }, [row.estimated, row.column, row.leftPct, row.widthPct]);
 
   const startLabelStyle = row.column === "in_progress" ? styles.startTextRunning : styles.startText;
 
@@ -409,7 +394,7 @@ const TimelineRowView = memo(function TimelineRowView({
       testID={`tasks-gantt-row-${row.task.id}`}
     >
       <View style={labelCellStyle}>
-        <View style={dotStyle} />
+        <View style={styles.rowDot} />
         <Text style={styles.labelText} numberOfLines={1}>
           {row.task.title}
         </Text>
@@ -523,10 +508,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
-  folderDot: {
+  rowDot: {
     width: 8,
     height: 8,
     borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.foregroundMuted,
   },
   labelText: {
     flex: 1,
@@ -537,7 +523,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     height: 20,
     borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface2,
+    backgroundColor: theme.colors.surface3,
     overflow: "hidden",
   },
   bar: {
@@ -547,15 +533,21 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 8,
     borderRadius: theme.borderRadius.base,
   },
+  // Grayscale ramp: running near-black, planned mid-gray, backlog light gray.
+  barRunning: {
+    backgroundColor: theme.colors.foreground,
+  },
   barScheduled: {
-    opacity: 0.7,
+    backgroundColor: theme.colors.foregroundMuted,
   },
   barBacklog: {
-    opacity: 0.45,
+    backgroundColor: theme.colors.palette.zinc[400],
   },
   barOutlined: {
+    backgroundColor: "transparent",
     borderWidth: 1,
     borderStyle: "dashed",
+    borderColor: theme.colors.foregroundMuted,
   },
   startText: {
     width: START_WIDTH,

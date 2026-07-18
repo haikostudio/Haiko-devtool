@@ -261,11 +261,11 @@ function extractPrNumber(prUrl: string): string {
 const styles = StyleSheet.create((theme) => ({
   card: {
     backgroundColor: theme.colors.surface0,
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    padding: theme.spacing[4],
-    gap: theme.spacing[2],
+    padding: theme.spacing[3],
+    gap: theme.spacing[1.5],
   },
   cardHovered: {
     backgroundColor: theme.colors.surface1,
@@ -276,7 +276,7 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     gap: theme.spacing[2],
     // Clears the absolute move-to trigger the touch board overlays top-right.
-    paddingRight: theme.spacing[6],
+    paddingRight: theme.spacing[4],
   },
   title: {
     color: theme.colors.foreground,

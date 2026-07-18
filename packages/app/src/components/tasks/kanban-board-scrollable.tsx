@@ -15,9 +15,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import {
   buildColumnModels,
-  columnTint,
   KANBAN_COLUMNS,
-  resolveBoardAccentColor,
   useColumnLabels,
   type KanbanBoardProps,
 } from "./kanban-columns";
@@ -27,8 +25,8 @@ const ThemedPlus = withUnistyles(Plus);
 const ThemedArrowRight = withUnistyles(ArrowRight);
 
 // Shared by the board row styles and the compact snap interval — keep in sync.
-const COLUMN_WIDTH = 300;
-const COLUMN_GAP = 16;
+const COLUMN_WIDTH = 296;
+const COLUMN_GAP = 12;
 
 function addButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.addButton, (hovered || pressed) && styles.addButtonHovered];
@@ -51,7 +49,6 @@ export function ScrollableKanbanBoard({
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
   const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
-  const tint = columnTint(resolveBoardAccentColor(board, folderId));
 
   return (
     // Board padding/gap live on an inner View, NOT on contentContainerStyle —
@@ -72,7 +69,6 @@ export function ScrollableKanbanBoard({
             label={labels[column]}
             labels={labels}
             tasks={tasks}
-            tint={tint}
             extras={columnExtras?.column === column ? columnExtras.node : null}
             onMoveTask={onMoveTask}
             onPressTask={onPressTask}
@@ -89,7 +85,6 @@ const BoardColumn = memo(function BoardColumn({
   label,
   labels,
   tasks,
-  tint,
   extras,
   onMoveTask,
   onPressTask,
@@ -99,7 +94,6 @@ const BoardColumn = memo(function BoardColumn({
   label: string;
   labels: Record<TaskColumn, string>;
   tasks: KanbanTask[];
-  tint: string | null;
   extras: React.ReactNode;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -109,13 +103,9 @@ const BoardColumn = memo(function BoardColumn({
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
-  const columnStyle = useMemo(
-    () => (tint ? [styles.column, { backgroundColor: tint }] : styles.column),
-    [tint],
-  );
 
   return (
-    <View style={columnStyle}>
+    <View style={styles.column}>
       <View style={styles.columnHeader}>
         <ColumnStatusDot column={column} />
         <Text style={styles.columnTitle}>{label}</Text>
@@ -252,23 +242,23 @@ const styles = StyleSheet.create((theme) => ({
   },
   boardContent: {
     flexDirection: "row",
-    paddingHorizontal: theme.spacing[4],
-    paddingBottom: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
     gap: COLUMN_GAP,
   },
-  // Flat pastel container: no border, big radius, folder-tinted background
-  // (inline override) with a neutral surface fallback.
+  // Flat neutral container: no border, big radius, light-gray surface to match
+  // the Paseo zinc palette (cards sit on top as white/surface0 tickets).
   column: {
     width: COLUMN_WIDTH,
     borderRadius: theme.borderRadius["2xl"],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface2,
     overflow: "hidden",
   },
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
     paddingTop: theme.spacing[3],
     paddingBottom: theme.spacing[1],
   },
@@ -310,8 +300,8 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
   },
   columnContent: {
-    padding: theme.spacing[3],
-    gap: theme.spacing[3],
+    padding: theme.spacing[2],
+    gap: theme.spacing[2],
   },
   cardRow: {
     position: "relative",

@@ -26,9 +26,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import {
   buildColumnModels,
-  columnTint,
   KANBAN_COLUMN_MAX_WIDTH,
-  resolveBoardAccentColor,
   useColumnLabels,
   type KanbanBoardProps,
 } from "./kanban-columns";
@@ -81,7 +79,6 @@ export function KanbanBoard({
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
   const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
-  const tint = columnTint(resolveBoardAccentColor(board, folderId));
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 
   const sensors = useSensors(
@@ -157,7 +154,7 @@ export function KanbanBoard({
       onDragCancel={handleDragCancel}
     >
       <div style={boardScrollStyle}>
-        <View style={styles.boardRow}>
+        <View style={isCompact ? styles.boardRowCompact : styles.boardRow}>
           {columns.map(({ column, tasks }) => (
             <DroppableColumn
               key={column}
@@ -165,7 +162,6 @@ export function KanbanBoard({
               label={labels[column]}
               tasks={tasks}
               compact={isCompact}
-              tint={tint}
               extras={columnExtras?.column === column ? columnExtras.node : null}
               onAddTask={onAddTask}
               onPressTask={onPressTask}
@@ -189,7 +185,6 @@ const DroppableColumn = memo(function DroppableColumn({
   label,
   tasks,
   compact,
-  tint,
   extras,
   onAddTask,
   onPressTask,
@@ -198,7 +193,6 @@ const DroppableColumn = memo(function DroppableColumn({
   label: string;
   tasks: KanbanTask[];
   compact: boolean;
-  tint: string | null;
   extras: React.ReactNode;
   onAddTask: KanbanBoardProps["onAddTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -209,10 +203,9 @@ const DroppableColumn = memo(function DroppableColumn({
     () => [
       styles.column,
       compact ? styles.columnCompact : styles.columnDesktop,
-      tint ? { backgroundColor: tint } : null,
       isOver && styles.columnOver,
     ],
-    [compact, tint, isOver],
+    [compact, isOver],
   );
   const sortableItems = useMemo(() => tasks.map((task) => task.id), [tasks]);
   const handleAddTask = useCallback(() => {
@@ -332,8 +325,8 @@ const webColumnBodyStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  gap: 12,
-  padding: 12,
+  gap: 8,
+  padding: 8,
   flex: 1,
   minHeight: 120,
   overflowY: "auto",
@@ -348,11 +341,21 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],
   },
-  // Flat pastel container: no border, big radius, folder-tinted background
-  // (inline override) with a neutral surface fallback.
+  // Compact: tighter gap and inset so the board reclaims horizontal space and
+  // its left edge lines up with the tab switch and back row above.
+  boardRowCompact: {
+    flexGrow: 1,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[3],
+  },
+  // Flat neutral container: no border, big radius, light-gray surface to match
+  // the Paseo zinc palette (cards sit on top as white/surface0 tickets).
   column: {
     borderRadius: theme.borderRadius["2xl"],
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface2,
     overflow: "hidden",
   },
   columnDesktop: {

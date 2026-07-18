@@ -512,7 +512,9 @@ function FoldersRail({
         <Button
           leftIcon={Plus}
           variant="secondary"
+          size="sm"
           onPress={folderModal.openCreate}
+          style={styles.addButton}
           testID="tasks-new-folder-open"
         >
           {t("tasks.actions.addFolder")}
@@ -991,7 +993,14 @@ function CompactFolderList({
         <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
       ) : null}
       <View style={styles.newFolderRow}>
-        <Button leftIcon={Plus} onPress={folderModal.openCreate} testID="tasks-new-folder-open">
+        <Button
+          leftIcon={Plus}
+          variant="secondary"
+          size="sm"
+          onPress={folderModal.openCreate}
+          style={styles.addButton}
+          testID="tasks-new-folder-open"
+        >
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
@@ -1169,9 +1178,9 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
   },
   // Compact board/timeline tab switch — natural width, aligned to the board
-  // inset so it lines up with the columns below.
+  // inset (12) so it shares the same left edge as the back row and columns.
   compactViewSwitch: {
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: theme.spacing[3],
     alignItems: "flex-start",
   },
   // Aligns the timeline strip to the columns block below: same horizontal inset
@@ -1246,6 +1255,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[2],
+    alignSelf: "flex-start",
+  },
+  // Add-folder / add-task action buttons: small, icon+label, always left-aligned
+  // (never stretched), so the folder rail and the compact list share one edge.
+  addButton: {
     alignSelf: "flex-start",
   },
   newFolderRow: {
