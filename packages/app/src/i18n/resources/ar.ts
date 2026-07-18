@@ -399,11 +399,17 @@ export const ar: TranslationResources = {
       moveToColumn: "نقل إلى {{column}}",
       reEstimate: "إعادة التقدير",
       runNow: "تشغيل الآن",
+      reanalyze: "إعادة التحليل",
+      taskActions: "إجراءات المهمة",
       add: "إضافة",
       save: "حفظ",
       edit: "تعديل",
       delete: "حذف",
       folderActions: "إجراءات المجلد",
+    },
+    toast: {
+      launching: "جارٍ تشغيل المهمة…",
+      reanalyzing: "جارٍ إعادة تحليل المهمة…",
     },
   },
   sessions: {

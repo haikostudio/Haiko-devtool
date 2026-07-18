@@ -1,28 +1,17 @@
 import { memo, useCallback, useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { ArrowRight, Plus } from "lucide-react-native";
+import { Plus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
-import {
-  buildColumnModels,
-  KANBAN_COLUMNS,
-  useColumnLabels,
-  type KanbanBoardProps,
-} from "./kanban-columns";
+import { TaskCardMenu } from "./task-card-menu";
+import { buildColumnModels, useColumnLabels, type KanbanBoardProps } from "./kanban-columns";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedPlus = withUnistyles(Plus);
-const ThemedArrowRight = withUnistyles(ArrowRight);
 
 // Shared by the board row styles and the compact snap interval — keep in sync.
 const COLUMN_WIDTH = 296;
@@ -44,6 +33,8 @@ export function ScrollableKanbanBoard({
   onMoveTask,
   onPressTask,
   onAddTask,
+  onRunTask,
+  onReanalyzeTask,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -73,6 +64,8 @@ export function ScrollableKanbanBoard({
             onMoveTask={onMoveTask}
             onPressTask={onPressTask}
             onAddTask={onAddTask}
+            onRunTask={onRunTask}
+            onReanalyzeTask={onReanalyzeTask}
           />
         ))}
       </View>
@@ -89,6 +82,8 @@ const BoardColumn = memo(function BoardColumn({
   onMoveTask,
   onPressTask,
   onAddTask,
+  onRunTask,
+  onReanalyzeTask,
 }: {
   column: TaskColumn;
   label: string;
@@ -98,6 +93,8 @@ const BoardColumn = memo(function BoardColumn({
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
   onAddTask: KanbanBoardProps["onAddTask"];
+  onRunTask: KanbanBoardProps["onRunTask"];
+  onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
 }) {
   const { t } = useTranslation();
   const handleAddTask = useCallback(() => {
@@ -132,6 +129,8 @@ const BoardColumn = memo(function BoardColumn({
               labels={labels}
               onMoveTask={onMoveTask}
               onPressTask={onPressTask}
+              onRunTask={onRunTask}
+              onReanalyzeTask={onReanalyzeTask}
             />
           ))}
           {tasks.length === 0 && !extras ? (
@@ -164,76 +163,30 @@ const BoardCardRow = memo(function BoardCardRow({
   labels,
   onMoveTask,
   onPressTask,
+  onRunTask,
+  onReanalyzeTask,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
+  onRunTask: KanbanBoardProps["onRunTask"];
+  onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
 }) {
   return (
     <View style={styles.cardRow}>
       <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
       <View style={styles.moveTriggerOverlay}>
-        <MoveTaskMenu task={task} labels={labels} onMoveTask={onMoveTask} />
+        <TaskCardMenu
+          task={task}
+          labels={labels}
+          onMoveTask={onMoveTask}
+          onRunTask={onRunTask}
+          onReanalyzeTask={onReanalyzeTask}
+        />
       </View>
     </View>
   );
-});
-
-function renderMoveTrigger() {
-  return <ThemedArrowRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-}
-
-const MoveTaskMenu = memo(function MoveTaskMenu({
-  task,
-  labels,
-  onMoveTask,
-}: {
-  task: KanbanTask;
-  labels: Record<TaskColumn, string>;
-  onMoveTask: KanbanBoardProps["onMoveTask"];
-}) {
-  const { t } = useTranslation();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        style={styles.moveTrigger}
-        accessibilityRole="button"
-        accessibilityLabel={t("tasks.actions.moveTo")}
-        testID={`tasks-move-${task.id}`}
-      >
-        {renderMoveTrigger}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="end" offset={4} width={200}>
-        {KANBAN_COLUMNS.filter((column) => column !== task.column).map((column) => (
-          <MoveTaskMenuItem
-            key={column}
-            taskId={task.id}
-            column={column}
-            label={t("tasks.actions.moveToColumn", { column: labels[column] })}
-            onMoveTask={onMoveTask}
-          />
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-});
-
-const MoveTaskMenuItem = memo(function MoveTaskMenuItem({
-  taskId,
-  column,
-  label,
-  onMoveTask,
-}: {
-  taskId: string;
-  column: TaskColumn;
-  label: string;
-  onMoveTask: KanbanBoardProps["onMoveTask"];
-}) {
-  const handleSelect = useCallback(() => {
-    onMoveTask({ taskId, column, index: Number.MAX_SAFE_INTEGER });
-  }, [onMoveTask, taskId, column]);
-  return <DropdownMenuItem onSelect={handleSelect}>{label}</DropdownMenuItem>;
 });
 
 const styles = StyleSheet.create((theme) => ({
@@ -310,10 +263,6 @@ const styles = StyleSheet.create((theme) => ({
     position: "absolute",
     top: theme.spacing[2],
     right: theme.spacing[2],
-  },
-  moveTrigger: {
-    padding: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
   },
   emptyColumnText: {
     color: theme.colors.foregroundMuted,

@@ -404,11 +404,17 @@ export const fr: TranslationResources = {
       moveToColumn: "Déplacer vers {{column}}",
       reEstimate: "Ré-estimer",
       runNow: "Lancer maintenant",
+      reanalyze: "Ré-analyser",
+      taskActions: "Actions de la tâche",
       add: "Ajouter",
       save: "Enregistrer",
       edit: "Modifier",
       delete: "Supprimer",
       folderActions: "Actions du dossier",
+    },
+    toast: {
+      launching: "Lancement de la tâche…",
+      reanalyzing: "Analyse relancée…",
     },
   },
   sessions: {

@@ -402,11 +402,17 @@ export const ru: TranslationResources = {
       moveToColumn: "Переместить в {{column}}",
       reEstimate: "Пересчитать",
       runNow: "Запустить сейчас",
+      reanalyze: "Повторный анализ",
+      taskActions: "Действия задачи",
       add: "Добавить",
       save: "Сохранить",
       edit: "Изменить",
       delete: "Удалить",
       folderActions: "Действия с папкой",
+    },
+    toast: {
+      launching: "Запуск задачи…",
+      reanalyzing: "Повторный анализ задачи…",
     },
   },
   sessions: {

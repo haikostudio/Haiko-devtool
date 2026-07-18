@@ -403,11 +403,17 @@ export const es: TranslationResources = {
       moveToColumn: "Mover a {{column}}",
       reEstimate: "Re-estimar",
       runNow: "Ejecutar ahora",
+      reanalyze: "Reanalizar",
+      taskActions: "Acciones de la tarea",
       add: "Añadir",
       save: "Guardar",
       edit: "Editar",
       delete: "Eliminar",
       folderActions: "Acciones de carpeta",
+    },
+    toast: {
+      launching: "Iniciando la tarea…",
+      reanalyzing: "Reanalizando la tarea…",
     },
   },
   sessions: {

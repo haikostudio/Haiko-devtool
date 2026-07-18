@@ -44,6 +44,10 @@ export interface KanbanBoardProps {
   onMoveTask: (input: { taskId: string; column: TaskColumn; index: number }) => void;
   onPressTask: (task: KanbanTask) => void;
   onAddTask: (column: TaskColumn) => void;
+  // Launch a task now (run-now) / re-run its analysis, straight from a card's
+  // overflow menu — no need to open the detail sheet.
+  onRunTask: (taskId: string) => void;
+  onReanalyzeTask: (taskId: string) => void;
   // Node rendered at the top of one column's body (inline new-task draft).
   columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
 }

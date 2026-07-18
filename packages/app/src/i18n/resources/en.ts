@@ -398,11 +398,17 @@ export const en = {
       moveToColumn: "Move to {{column}}",
       reEstimate: "Re-estimate",
       runNow: "Run now",
+      reanalyze: "Re-analyze",
+      taskActions: "Task actions",
       add: "Add",
       save: "Save",
       edit: "Edit",
       delete: "Delete",
       folderActions: "Folder actions",
+    },
+    toast: {
+      launching: "Launching task…",
+      reanalyzing: "Re-analyzing task…",
     },
   },
   sessions: {

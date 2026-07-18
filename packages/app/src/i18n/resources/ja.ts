@@ -402,11 +402,17 @@ export const ja: TranslationResources = {
       moveToColumn: "{{column}} へ移動",
       reEstimate: "再見積もり",
       runNow: "今すぐ実行",
+      reanalyze: "再分析",
+      taskActions: "タスク操作",
       add: "追加",
       save: "保存",
       edit: "編集",
       delete: "削除",
       folderActions: "フォルダー操作",
+    },
+    toast: {
+      launching: "タスクを開始しています…",
+      reanalyzing: "タスクを再分析しています…",
     },
   },
   sessions: {

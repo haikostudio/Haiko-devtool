@@ -24,6 +24,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
+import { TaskCardMenu } from "./task-card-menu";
 import {
   buildColumnModels,
   KANBAN_COLUMN_MAX_WIDTH,
@@ -74,6 +75,8 @@ export function KanbanBoard({
   onMoveTask,
   onPressTask,
   onAddTask,
+  onRunTask,
+  onReanalyzeTask,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -160,11 +163,15 @@ export function KanbanBoard({
               key={column}
               column={column}
               label={labels[column]}
+              labels={labels}
               tasks={tasks}
               compact={isCompact}
               extras={columnExtras?.column === column ? columnExtras.node : null}
               onAddTask={onAddTask}
               onPressTask={onPressTask}
+              onMoveTask={onMoveTask}
+              onRunTask={onRunTask}
+              onReanalyzeTask={onReanalyzeTask}
             />
           ))}
         </View>
@@ -183,19 +190,27 @@ export function KanbanBoard({
 const DroppableColumn = memo(function DroppableColumn({
   column,
   label,
+  labels,
   tasks,
   compact,
   extras,
   onAddTask,
   onPressTask,
+  onMoveTask,
+  onRunTask,
+  onReanalyzeTask,
 }: {
   column: TaskColumn;
   label: string;
+  labels: Record<TaskColumn, string>;
   tasks: KanbanTask[];
   compact: boolean;
   extras: React.ReactNode;
   onAddTask: KanbanBoardProps["onAddTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
+  onMoveTask: KanbanBoardProps["onMoveTask"];
+  onRunTask: KanbanBoardProps["onRunTask"];
+  onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
 }) {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({ id: `${COLUMN_DROPPABLE_PREFIX}${column}` });
@@ -234,7 +249,15 @@ const DroppableColumn = memo(function DroppableColumn({
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} onPressTask={onPressTask} />
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              labels={labels}
+              onPressTask={onPressTask}
+              onMoveTask={onMoveTask}
+              onRunTask={onRunTask}
+              onReanalyzeTask={onReanalyzeTask}
+            />
           ))}
         </SortableContext>
         {tasks.length === 0 && !extras ? (
@@ -266,10 +289,18 @@ function addButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: bool
 
 const SortableTaskCard = memo(function SortableTaskCard({
   task,
+  labels,
   onPressTask,
+  onMoveTask,
+  onRunTask,
+  onReanalyzeTask,
 }: {
   task: KanbanTask;
+  labels: Record<TaskColumn, string>;
   onPressTask: (task: KanbanTask) => void;
+  onMoveTask: KanbanBoardProps["onMoveTask"];
+  onRunTask: KanbanBoardProps["onRunTask"];
+  onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -280,6 +311,8 @@ const SortableTaskCard = memo(function SortableTaskCard({
       transition: transition ?? undefined,
       opacity: isDragging ? 0.4 : 1,
       cursor: "grab",
+      // Anchor for the absolutely-positioned overflow-menu overlay below.
+      position: "relative",
       // TaskCard renders as a real <button>, and button width:auto is
       // shrink-to-fit in some engines (Safari) — force the card to fill the
       // column by making this wrapper a stretching flex column.
@@ -308,9 +341,36 @@ const SortableTaskCard = memo(function SortableTaskCard({
       data-testid={`tasks-drag-${task.id}`}
     >
       <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
+      {/* Overflow menu overlay: swallow the drag-start pointer/mouse/touch so
+          opening the menu never lifts the card into a drag. */}
+      <div
+        style={cardMenuOverlayStyle}
+        onPointerDown={stopDragActivation}
+        onMouseDown={stopDragActivation}
+        onTouchStart={stopDragActivation}
+      >
+        <TaskCardMenu
+          task={task}
+          labels={labels}
+          onMoveTask={onMoveTask}
+          onRunTask={onRunTask}
+          onReanalyzeTask={onReanalyzeTask}
+        />
+      </div>
     </div>
   );
 });
+
+function stopDragActivation(event: React.SyntheticEvent) {
+  event.stopPropagation();
+}
+
+const cardMenuOverlayStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 8,
+  right: 8,
+  zIndex: 2,
+};
 
 // Horizontal scroll surface for the columns row. A plain div (not an RNW
 // ScrollView) so dnd-kit's auto-scroll can drive it while dragging.

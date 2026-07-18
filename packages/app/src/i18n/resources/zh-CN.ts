@@ -399,11 +399,17 @@ export const zhCN: TranslationResources = {
       moveToColumn: "移动到{{column}}",
       reEstimate: "重新估算",
       runNow: "立即运行",
+      reanalyze: "重新分析",
+      taskActions: "任务操作",
       add: "添加",
       save: "保存",
       edit: "编辑",
       delete: "删除",
       folderActions: "文件夹操作",
+    },
+    toast: {
+      launching: "正在启动任务…",
+      reanalyzing: "正在重新分析任务…",
     },
   },
   sessions: {

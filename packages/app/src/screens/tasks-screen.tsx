@@ -34,6 +34,7 @@ import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
+import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { useHostFeature } from "@/runtime/host-features";
@@ -754,6 +755,7 @@ function BoardContent({
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
@@ -855,16 +857,22 @@ function BoardContent({
 
   const handleEstimateTask = useCallback(
     (taskId: string) => {
-      void boardHandle.estimateTask(taskId);
+      toast.show(t("tasks.toast.reanalyzing"));
+      boardHandle.estimateTask(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
     },
-    [boardHandle],
+    [boardHandle, toast, t],
   );
 
   const handleRunTaskNow = useCallback(
     (taskId: string) => {
-      void boardHandle.runTaskNow(taskId);
+      toast.show(t("tasks.toast.launching"));
+      boardHandle.runTaskNow(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
     },
-    [boardHandle],
+    [boardHandle, toast, t],
   );
 
   const handleApproveTask = useCallback(
@@ -907,6 +915,8 @@ function BoardContent({
           onMoveTask={handleMoveTask}
           onPressTask={handlePressTask}
           onAddTask={setNewTaskColumn}
+          onRunTask={handleRunTaskNow}
+          onReanalyzeTask={handleEstimateTask}
           columnExtras={columnExtras}
         />
       ) : null}

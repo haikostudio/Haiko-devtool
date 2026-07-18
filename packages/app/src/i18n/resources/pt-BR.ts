@@ -404,11 +404,17 @@ export const ptBR: TranslationResources = {
       moveToColumn: "Mover para {{column}}",
       reEstimate: "Re-estimar",
       runNow: "Executar agora",
+      reanalyze: "Reanalisar",
+      taskActions: "Ações da tarefa",
       add: "Adicionar",
       save: "Salvar",
       edit: "Editar",
       delete: "Excluir",
       folderActions: "Ações da pasta",
+    },
+    toast: {
+      launching: "Iniciando a tarefa…",
+      reanalyzing: "Reanalisando a tarefa…",
     },
   },
   sessions: {
