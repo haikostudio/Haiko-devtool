@@ -223,7 +223,6 @@ import {
 } from "./workspace-directory.js";
 import { shouldEmitPendingBootstrapUpdate } from "./workspace-bootstrap-dedupe.js";
 import {
-  createLocalCheckoutWorkspace,
   createPaseoWorktree,
   type CreatePaseoWorktreeInput,
   type CreatePaseoWorktreeResult,
@@ -4939,26 +4938,12 @@ export class Session {
       return;
     }
 
-    const explicitTitle = request.title?.trim() || null;
-    const promptTitle = resolveFirstAgentPromptTitle(request.firstAgentContext);
-    // A directory may back any number of workspaces, but a *new* record should only
-    // be minted when the caller is actually starting work in it — an initial agent
-    // (firstAgentContext) or an explicit name. A bare "open this directory" call
-    // (setup dialog / preselect: no agent, no title) must instead reuse the existing
-    // workspace for the cwd via the same find-or-create path open_project uses.
-    // Otherwise every such call leaks an empty, agent-less duplicate that surfaces in
-    // the sidebar as a phantom "branch" row for the directory.
-    const workspace =
-      request.firstAgentContext || explicitTitle
-        ? await createLocalCheckoutWorkspace(
-            { cwd, title: explicitTitle ?? promptTitle },
-            {
-              projectRegistry: this.projectRegistry,
-              workspaceRegistry: this.workspaceRegistry,
-              workspaceGitService: this.workspaceGitService,
-            },
-          )
-        : await this.workspaceProvisioning.findOrCreateWorkspaceForDirectory(cwd);
+    // A local directory maps to exactly ONE workspace. Always resolve to the existing
+    // workspace for this cwd (creating it only if none exists yet) — never mint a second
+    // record for the same directory. The same-directory "multiplicity" path was leaking
+    // empty, agent-less duplicates that pile up in the sidebar as phantom "branch" rows;
+    // collapsing to one-workspace-per-directory kills the leak at the source.
+    const workspace = await this.workspaceProvisioning.findOrCreateWorkspaceForDirectory(cwd);
     await this.syncWorkspaceGitObserverForWorkspace(workspace);
     const descriptor = await this.describeWorkspaceRecord(workspace);
     this.emit({
