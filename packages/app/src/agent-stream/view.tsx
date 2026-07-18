@@ -43,7 +43,7 @@ import {
   type InlinePathTarget,
 } from "@/components/message";
 import { PlanCard } from "@/components/plan-card";
-import { TaskProposalCarousel } from "@/components/tasks/task-proposal-carousel";
+import { TaskProposalTray } from "@/components/tasks/task-proposal-carousel";
 import { TurnRecapCard } from "@/components/turn-recap-card";
 import type { StreamItem } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
@@ -924,17 +924,9 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             return <BrainContextPill item={item} />;
 
           case "task_triage":
-            // Items carrying task refs render live actionable cards; legacy
-            // count-only items (old daemon) keep the static pill.
-            return item.status === "proposed" && item.tasks.length > 0 ? (
-              <TaskProposalCarousel
-                serverId={resolvedServerId}
-                projectId={item.projectId}
-                proposals={item.tasks}
-              />
-            ) : (
-              <TaskTriagePill item={item} />
-            );
+            // Historical marker only — the interactive approval tray is pinned
+            // above the composer (same slot as permission/question cards).
+            return <TaskTriagePill item={item} />;
 
           case "turn_recap":
             return (
@@ -957,7 +949,6 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         handleToolCallOpenFile,
         handleOpenChanges,
         context.cwd,
-        resolvedServerId,
       ],
     );
 
@@ -988,15 +979,51 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [pendingPermissions, agentId],
     );
 
+    // Triage proposals from the timeline, deduped by task id. The tray itself
+    // filters to still-pending tasks against the live board and hides when done.
+    const triageProposals = useMemo(() => {
+      const seen = new Set<string>();
+      const proposals: { taskId: string; title: string }[] = [];
+      let triageProjectId: string | undefined;
+      for (const item of effectiveStreamItems) {
+        if (item.kind !== "task_triage") {
+          continue;
+        }
+        triageProjectId = item.projectId ?? triageProjectId;
+        for (const proposalRef of item.tasks) {
+          if (!seen.has(proposalRef.taskId)) {
+            seen.add(proposalRef.taskId);
+            proposals.push(proposalRef);
+          }
+        }
+      }
+      return { proposals, projectId: triageProjectId };
+    }, [effectiveStreamItems]);
+
     const showRunningTurnFooter = context.status === "running";
-    const pendingPermissionsNode = useMemo(
-      () =>
-        renderPendingPermissionsNode({
-          pendingPermissions: pendingPermissionItems,
-          client,
-        }),
-      [client, pendingPermissionItems],
-    );
+    const pendingPermissionsNode = useMemo(() => {
+      const permissions = renderPendingPermissionsNode({
+        pendingPermissions: pendingPermissionItems,
+        client,
+      });
+      const tray =
+        !readOnly && triageProposals.proposals.length > 0 ? (
+          <TaskProposalTray
+            serverId={resolvedServerId}
+            projectId={triageProposals.projectId}
+            proposals={triageProposals.proposals}
+          />
+        ) : null;
+      if (!permissions && !tray) {
+        return null;
+      }
+      return (
+        <>
+          {tray}
+          {permissions}
+        </>
+      );
+    }, [client, pendingPermissionItems, readOnly, resolvedServerId, triageProposals]);
     const turnFooterNode = useMemo(
       () =>
         showRunningTurnFooter || bottomTurnFooterHost ? (

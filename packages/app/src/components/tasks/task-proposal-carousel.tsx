@@ -13,6 +13,7 @@ import type { TFunction } from "i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Check, ListChecks, X } from "lucide-react-native";
 import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
+import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
 import {
   computeBillableCostChf,
   type EffectiveExecution,
@@ -21,56 +22,54 @@ import {
   formatUsd,
   resolveEffectiveExecution,
 } from "@/components/tasks/task-cost";
-import { parseTaskTags } from "@/components/tasks/task-tags";
-import { useTaskBoard, type KanbanTask, type TaskBoardHandle } from "@/data/tasks";
+import {
+  useTaskBoard,
+  type KanbanTask,
+  type TaskBoardHandle,
+  type TaskRunConfig,
+  type TaskSchedulePreference,
+} from "@/data/tasks";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import type { TaskTriageProposalRef } from "@/types/stream";
 
-const CARD_WIDTH = 288;
-const CARD_GAP = 12;
+const CARD_WIDTH = 300;
+const CARD_GAP = 10;
+const DEFAULT_OPTION_ID = "__default__";
 
-// Bespoke deep-violet block palette, independent of the light app theme.
-const C = {
-  block: "#2E2A63",
-  blockBorder: "#4A429A",
-  header: "#CBC0FF",
-  card: "#39337E",
-  cardBorder: "#524BA6",
-  text: "#F2EFFF",
-  muted: "#B8B0E8",
-  label: "#948BD0",
-  inputBg: "rgba(255,255,255,0.07)",
-  inputBorder: "rgba(255,255,255,0.17)",
-  placeholder: "rgba(233,230,255,0.42)",
-  chipBg: "rgba(255,255,255,0.10)",
-  dot: "rgba(255,255,255,0.26)",
-  dotActive: "#CBC0FF",
-  approve: "#22C55E",
-  refuse: "#F0556B",
-  refusedText: "#C9BEFF",
-};
-
-interface TaskProposalCarouselProps {
+interface TaskProposalTrayProps {
   serverId: string;
   projectId?: string;
   proposals: TaskTriageProposalRef[];
 }
 
-/** Connected wrapper: resolves the live board + provider snapshot from the host. */
-export function TaskProposalCarousel({
-  serverId,
-  projectId,
-  proposals,
-}: TaskProposalCarouselProps) {
+/**
+ * Pinned approval tray for triage-proposed tasks — mounted above the composer
+ * (same slot as the question/permission cards), NOT inline in the timeline.
+ * Shows one fully-editable card per still-pending proposal and disappears once
+ * every proposal has been approved or refused.
+ */
+export function TaskProposalTray({ serverId, projectId, proposals }: TaskProposalTrayProps) {
   const board = useTaskBoard(serverId || null, projectId ?? null);
+  // Home scope: provider availability does not depend on a checkout.
   const snapshot = useProvidersSnapshot(serverId || null, { cwd: null });
-  return <TaskProposalCards board={board} entries={snapshot.entries} proposals={proposals} />;
+
+  const pending = useMemo(() => {
+    if (!board.board) {
+      return [];
+    }
+    const byId = new Map(board.board.tasks.map((task) => [task.id, task]));
+    return proposals.filter((ref) => byId.get(ref.taskId)?.approval?.state === "pending");
+  }, [board.board, proposals]);
+
+  if (pending.length === 0) {
+    return null;
+  }
+  return <TaskProposalCards board={board} entries={snapshot.entries} proposals={pending} />;
 }
 
 /**
- * Presentational violet block: header, a horizontal carousel of one detail-rich
- * card per proposed task, and pagination dots. Split from the connected wrapper
- * so it can be previewed with a fabricated board.
+ * Presentational block styled like the chat surface (light/dark via theme
+ * tokens): header, horizontal carousel of one card per task, pagination dots.
  */
 export function TaskProposalCards({
   board,
@@ -93,7 +92,7 @@ export function TaskProposalCards({
   return (
     <View style={styles.block} testID="task-proposal-carousel">
       <View style={styles.headerRow}>
-        <ListChecks size={16} color={C.header} />
+        <ListChecks size={15} color={styles.headerText.color as string} />
         <Text style={styles.headerText}>
           {t("tasks.triage.header", { count: proposals.length })}
         </Text>
@@ -117,281 +116,67 @@ export function TaskProposalCards({
         ))}
       </ScrollView>
       {proposals.length > 1 ? (
-        <PaginationDots count={proposals.length} activeIndex={activeIndex} />
+        <View style={styles.dotsRow}>
+          {proposals.map((proposal, index) => (
+            <View
+              key={proposal.taskId}
+              style={index === activeIndex ? styles.dotActive : styles.dot}
+            />
+          ))}
+        </View>
       ) : null}
     </View>
   );
 }
 
-function PaginationDots({ count, activeIndex }: { count: number; activeIndex: number }) {
-  return (
-    <View style={styles.dotsRow}>
-      {Array.from({ length: count }, (_, index) => (
-        <View
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length static dot list
-          key={index}
-          style={index === activeIndex ? styles.dotActive : styles.dot}
-        />
-      ))}
-    </View>
-  );
+interface ModelSelection {
+  provider: string;
+  model?: string;
 }
 
-type CardBusy = "approve" | "refuse" | null;
-
-interface CardDraft {
-  title: string;
-  description: string;
+interface ExecState {
+  modelSelection: ModelSelection | null;
+  thinkingOptionId: string | null;
+  mode: "direct" | "plan";
+  schedulePreference: TaskSchedulePreference;
 }
 
-interface CardView {
-  task: KanbanTask | null;
-  boardReady: boolean;
-  folderName: string | null;
-  liveTitle: string;
-  liveDescription: string;
-}
-
-function deriveCardView(proposal: TaskTriageProposalRef, board: TaskBoardHandle): CardView {
-  const task = board.board?.tasks.find((entry) => entry.id === proposal.taskId) ?? null;
-  const folderName =
-    board.board?.folders.find((folder) => folder.id === task?.folderId)?.name ?? null;
+function execStateFromTask(task: KanbanTask | null): ExecState {
   return {
-    task,
-    boardReady: board.board !== null,
-    folderName,
-    liveTitle: task?.title ?? proposal.title,
-    liveDescription: task?.description ?? "",
-  };
-}
-
-function resolveTaskEffective(
-  entries: ProviderSnapshotEntry[] | undefined,
-  task: KanbanTask | null,
-): EffectiveExecution {
-  return resolveEffectiveExecution({
-    entries,
-    selection: task?.runConfig
+    modelSelection: task?.runConfig
       ? { provider: task.runConfig.provider, model: task.runConfig.model }
       : null,
     thinkingOptionId: task?.runConfig?.thinkingOptionId ?? null,
-    mode: task?.runConfig?.mode === "plan" ? "plan" : "direct",
-  });
+    mode: task?.runConfig?.mode ?? "direct",
+    schedulePreference: task?.schedulePreference ?? "auto",
+  };
 }
 
-function TaskProposalCard({
-  proposal,
-  board,
-  entries,
-}: {
-  proposal: TaskTriageProposalRef;
-  board: TaskBoardHandle;
-  entries: ProviderSnapshotEntry[] | undefined;
-}) {
-  const { t } = useTranslation();
-  const [busy, setBusy] = useState<CardBusy>(null);
-  const [draft, setDraft] = useState<CardDraft | null>(null);
-
-  const taskId = proposal.taskId;
-  const view = deriveCardView(proposal, board);
-  const { task, boardReady, folderName, liveTitle, liveDescription } = view;
-  const dirty =
-    draft !== null && (draft.title !== liveTitle || draft.description !== liveDescription);
-  const effective = useMemo(
-    () => resolveTaskEffective(entries, task),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runConfig identity tracks task content
-    [entries, task?.runConfig],
-  );
-
-  const saveDraft = useCallback(async () => {
-    if (!draft || !draft.title.trim()) {
-      return;
-    }
-    await board.updateTask({
-      taskId,
-      title: draft.title.trim(),
-      description: draft.description.trim() === "" ? null : draft.description,
-    });
-  }, [board, draft, taskId]);
-
-  const commitOnBlur = useCallback(() => {
-    if (dirty) {
-      void saveDraft();
-    }
-  }, [dirty, saveDraft]);
-
-  const handleApprove = useCallback(() => {
-    setBusy("approve");
-    void (async () => {
-      try {
-        if (dirty) {
-          await saveDraft();
-        }
-        await board.approveTask(taskId);
-      } finally {
-        setBusy(null);
-      }
-    })();
-  }, [board, dirty, saveDraft, taskId]);
-
-  const handleRefuse = useCallback(() => {
-    setBusy("refuse");
-    void board.deleteTask(taskId).finally(() => setBusy(null));
-  }, [board, taskId]);
-
-  const changeTitle = useCallback(
-    (value: string) =>
-      setDraft((current) => ({
-        title: value,
-        description: current?.description ?? liveDescription,
-      })),
-    [liveDescription],
-  );
-  const changeDescription = useCallback(
-    (value: string) =>
-      setDraft((current) => ({ title: current?.title ?? liveTitle, description: value })),
-    [liveTitle],
-  );
-
-  // Board loaded but the task is gone: it was refused (or deleted elsewhere).
-  if (boardReady && !task) {
-    return (
-      <View style={styles.cardRefused} testID={`task-proposal-${taskId}`}>
-        <X size={15} color={C.refusedText} />
-        <Text style={styles.refusedTitle} numberOfLines={2}>
-          {proposal.title}
-        </Text>
-        <Text style={styles.refusedLabel}>{t("tasks.triage.refused")}</Text>
-      </View>
-    );
+function buildRunConfig(state: ExecState): TaskRunConfig | null {
+  if (state.modelSelection) {
+    return {
+      provider: state.modelSelection.provider,
+      ...(state.modelSelection.model ? { model: state.modelSelection.model } : {}),
+      ...(state.thinkingOptionId ? { thinkingOptionId: state.thinkingOptionId } : {}),
+      ...(state.mode === "plan" ? { mode: "plan" as const } : {}),
+    };
   }
-
-  const pending = task?.approval?.state === "pending";
-
-  return (
-    <View style={styles.card} testID={`task-proposal-${taskId}`}>
-      <View style={styles.cardBody}>
-        <LabeledField label={t("tasks.detail.titleField")}>
-          {pending ? (
-            <TextInput
-              style={styles.input}
-              value={draft?.title ?? liveTitle}
-              onChangeText={changeTitle}
-              onBlur={commitOnBlur}
-              placeholderTextColor={C.placeholder}
-              testID={`task-proposal-title-${taskId}`}
-            />
-          ) : (
-            <Text style={styles.readValue}>{liveTitle}</Text>
-          )}
-        </LabeledField>
-
-        <LabeledField label={t("tasks.detail.descriptionField")}>
-          {pending ? (
-            <TextInput
-              style={styles.inputMultiline}
-              value={draft?.description ?? liveDescription}
-              onChangeText={changeDescription}
-              onBlur={commitOnBlur}
-              placeholder={t("tasks.newTaskDescriptionPlaceholder")}
-              placeholderTextColor={C.placeholder}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              testID={`task-proposal-description-${taskId}`}
-            />
-          ) : (
-            <Text style={styles.readValue}>{liveDescription || "—"}</Text>
-          )}
-        </LabeledField>
-
-        <CardDetailList task={task} effective={effective} folderName={folderName} />
-      </View>
-
-      <CardFooter
-        pending={pending}
-        approved={task !== null && !pending}
-        busy={busy}
-        onApprove={handleApprove}
-        onRefuse={handleRefuse}
-        taskId={taskId}
-      />
-    </View>
-  );
-}
-
-function CardFooter({
-  pending,
-  approved,
-  busy,
-  onApprove,
-  onRefuse,
-  taskId,
-}: {
-  pending: boolean;
-  approved: boolean;
-  busy: CardBusy;
-  onApprove: () => void;
-  onRefuse: () => void;
-  taskId: string;
-}) {
-  const { t } = useTranslation();
-  if (pending) {
-    return (
-      <View style={styles.actionsRow}>
-        <Pressable
-          style={styles.approveBtn}
-          onPress={onApprove}
-          disabled={busy !== null}
-          accessibilityLabel={t("tasks.triage.approve")}
-          testID={`task-proposal-approve-${taskId}`}
-        >
-          <Check size={18} color="#0B2E17" />
-        </Pressable>
-        <Pressable
-          style={styles.refuseBtn}
-          onPress={onRefuse}
-          disabled={busy !== null}
-          accessibilityLabel={t("tasks.triage.refuse")}
-          testID={`task-proposal-refuse-${taskId}`}
-        >
-          <X size={18} color="#3A0B12" />
-        </Pressable>
-      </View>
-    );
-  }
-  if (approved) {
-    return (
-      <View style={styles.approvedRow}>
-        <Check size={14} color={C.approve} />
-        <Text style={styles.approvedText}>{t("tasks.triage.approved")}</Text>
-      </View>
-    );
+  if (state.thinkingOptionId || state.mode === "plan") {
+    // Explicit reasoning/mode without a model still needs a runConfig carrier.
+    return {
+      provider: "claude",
+      ...(state.thinkingOptionId ? { thinkingOptionId: state.thinkingOptionId } : {}),
+      ...(state.mode === "plan" ? { mode: "plan" as const } : {}),
+    };
   }
   return null;
 }
 
-function LabeledField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
-    </View>
-  );
+function modelSelectionKey(value: ModelSelection | null): string {
+  return value ? `${value.provider}/${value.model ?? "default"}` : DEFAULT_OPTION_ID;
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue} numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function preferenceLabelKey(preference: string): string {
+function preferenceLabelKey(preference: TaskSchedulePreference): string {
   if (preference === "asap") {
     return "tasks.detail.execution.prefAsap";
   }
@@ -399,13 +184,6 @@ function preferenceLabelKey(preference: string): string {
     return "tasks.detail.execution.prefOffPeak";
   }
   return "tasks.detail.execution.prefAuto";
-}
-
-function formatWithDefault(label: string | null, isDefault: boolean, suffix: string): string {
-  if (!label) {
-    return "—";
-  }
-  return `${label}${isDefault ? suffix : ""}`;
 }
 
 function buildEstimateValue(estimate: KanbanTask["estimate"], t: TFunction): string | null {
@@ -417,8 +195,6 @@ function buildEstimateValue(estimate: KanbanTask["estimate"], t: TFunction): str
     estimate.estimatedMinutes !== undefined
       ? t("tasks.card.duration", { minutes: estimate.estimatedMinutes })
       : null,
-    `${(estimate.tokens / 1000).toFixed(0)}k tok`,
-    estimate.confidence,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -439,7 +215,338 @@ function buildCostValue(
     .join(" · ");
 }
 
-function CardDetailList({
+function TaskProposalCard({
+  proposal,
+  board,
+  entries,
+}: {
+  proposal: TaskTriageProposalRef;
+  board: TaskBoardHandle;
+  entries: ProviderSnapshotEntry[] | undefined;
+}) {
+  const { t } = useTranslation();
+  const taskId = proposal.taskId;
+  const task = board.board?.tasks.find((entry) => entry.id === taskId) ?? null;
+  const folderName =
+    board.board?.folders.find((folder) => folder.id === task?.folderId)?.name ?? null;
+
+  const [busy, setBusy] = useState(false);
+  const [title, setTitle] = useState(task?.title ?? proposal.title);
+  const [description, setDescription] = useState(task?.description ?? "");
+  const [tagsText, setTagsText] = useState((task?.tags ?? []).join(", "));
+  const [exec, setExec] = useState<ExecState>(() => execStateFromTask(task));
+
+  const effective = useMemo(
+    () =>
+      resolveEffectiveExecution({
+        entries,
+        selection: exec.modelSelection,
+        thinkingOptionId: exec.thinkingOptionId,
+        mode: exec.mode,
+      }),
+    [entries, exec],
+  );
+
+  const saveText = useCallback(() => {
+    if (!title.trim()) {
+      return;
+    }
+    void board.updateTask({
+      taskId,
+      title: title.trim(),
+      description: description.trim() === "" ? null : description,
+      tags: tagsText
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    });
+  }, [board, taskId, title, description, tagsText]);
+
+  const applyExec = useCallback(
+    (next: ExecState) => {
+      setExec(next);
+      void board.updateTask({
+        taskId,
+        runConfig: buildRunConfig(next),
+        schedulePreference: next.schedulePreference === "auto" ? null : next.schedulePreference,
+      });
+    },
+    [board, taskId],
+  );
+
+  const handleApprove = useCallback(() => {
+    setBusy(true);
+    void (async () => {
+      try {
+        saveText();
+        await board.approveTask(taskId);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [board, saveText, taskId]);
+
+  const handleRefuse = useCallback(() => {
+    setBusy(true);
+    void board.deleteTask(taskId).finally(() => setBusy(false));
+  }, [board, taskId]);
+
+  return (
+    <View style={styles.card} testID={`task-proposal-${taskId}`}>
+      <LabeledInput
+        label={t("tasks.detail.titleField")}
+        value={title}
+        onChangeText={setTitle}
+        onBlur={saveText}
+        testID={`task-proposal-title-${taskId}`}
+      />
+      <LabeledInput
+        label={t("tasks.detail.descriptionField")}
+        value={description}
+        onChangeText={setDescription}
+        onBlur={saveText}
+        placeholder={t("tasks.newTaskDescriptionPlaceholder")}
+        multiline
+        testID={`task-proposal-description-${taskId}`}
+      />
+      <LabeledInput
+        label={t("tasks.detail.tagsField")}
+        value={tagsText}
+        onChangeText={setTagsText}
+        onBlur={saveText}
+        placeholder={t("tasks.detail.tagsPlaceholder")}
+        testID={`task-proposal-tags-${taskId}`}
+      />
+
+      <ExecSelects entries={entries} exec={exec} effective={effective} onChange={applyExec} />
+
+      <CardInfo task={task} effective={effective} folderName={folderName} />
+
+      <View style={styles.actionsRow}>
+        <Pressable
+          style={styles.approveBtn}
+          onPress={handleApprove}
+          disabled={busy}
+          accessibilityLabel={t("tasks.triage.approve")}
+          testID={`task-proposal-approve-${taskId}`}
+        >
+          <Check size={15} color="#ffffff" />
+          <Text style={styles.actionText}>{t("tasks.triage.approve")}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.refuseBtn}
+          onPress={handleRefuse}
+          disabled={busy}
+          accessibilityLabel={t("tasks.triage.refuse")}
+          testID={`task-proposal-refuse-${taskId}`}
+        >
+          <X size={15} color={styles.refuseText.color as string} />
+          <Text style={styles.refuseText}>{t("tasks.triage.refuse")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function LabeledInput({
+  label,
+  value,
+  onChangeText,
+  onBlur,
+  placeholder,
+  multiline,
+  testID,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  onBlur: () => void;
+  placeholder?: string;
+  multiline?: boolean;
+  testID?: string;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={multiline ? styles.inputMultiline : styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        placeholderTextColor={styles.placeholderColor.color as string}
+        multiline={multiline}
+        textAlignVertical={multiline ? "top" : "center"}
+        testID={testID}
+      />
+    </View>
+  );
+}
+
+function ExecSelects({
+  entries,
+  exec,
+  effective,
+  onChange,
+}: {
+  entries: ProviderSnapshotEntry[] | undefined;
+  exec: ExecState;
+  effective: EffectiveExecution;
+  onChange: (next: ExecState) => void;
+}) {
+  const { t } = useTranslation();
+
+  const modelOptions = useMemo((): SelectFieldOption<ModelSelection | null>[] => {
+    const options: SelectFieldOption<ModelSelection | null>[] = [
+      { id: DEFAULT_OPTION_ID, value: null, label: t("tasks.detail.execution.modelDefault") },
+    ];
+    for (const entry of entries ?? []) {
+      if (!entry.enabled || !entry.models || entry.models.length === 0) {
+        continue;
+      }
+      for (const model of entry.models) {
+        options.push({
+          id: `${entry.provider}/${model.id}`,
+          value: { provider: entry.provider, model: model.id },
+          label: model.label,
+          description: entry.label ?? entry.provider,
+        });
+      }
+    }
+    return options;
+  }, [entries, t]);
+
+  const selectedModelDefinition = useMemo(() => {
+    const entry = entries?.find((item) => item.provider === effective.provider);
+    return entry?.models?.find((model) => model.id === effective.modelId) ?? null;
+  }, [entries, effective.provider, effective.modelId]);
+
+  const thinkingOptions = useMemo((): SelectFieldOption<string | null>[] => {
+    const options: SelectFieldOption<string | null>[] = [
+      { id: DEFAULT_OPTION_ID, value: null, label: t("tasks.detail.execution.thinkingDefault") },
+    ];
+    for (const option of selectedModelDefinition?.thinkingOptions ?? []) {
+      options.push({ id: option.id, value: option.id, label: option.label });
+    }
+    return options;
+  }, [selectedModelDefinition, t]);
+
+  const modeOptions = useMemo(
+    (): SelectFieldOption<"direct" | "plan">[] => [
+      { id: "direct", value: "direct", label: t("tasks.detail.execution.modeDirect") },
+      { id: "plan", value: "plan", label: t("tasks.detail.execution.modePlan") },
+    ],
+    [t],
+  );
+
+  const prefOptions = useMemo(
+    (): SelectFieldOption<TaskSchedulePreference>[] => [
+      { id: "auto", value: "auto", label: t("tasks.detail.execution.prefAuto") },
+      { id: "asap", value: "asap", label: t("tasks.detail.execution.prefAsap") },
+      { id: "off_peak", value: "off_peak", label: t("tasks.detail.execution.prefOffPeak") },
+    ],
+    [t],
+  );
+
+  const suffix = ` ${t("tasks.detail.execution.defaultSuffix")}`;
+  const modelDisplay = useMemo(
+    () => ({ label: `${effective.modelLabel}${effective.modelIsDefault ? suffix : ""}` }),
+    [effective.modelLabel, effective.modelIsDefault, suffix],
+  );
+  const thinkingDisplay = useMemo(
+    () => ({
+      label: effective.thinkingLabel
+        ? `${effective.thinkingLabel}${effective.thinkingIsDefault ? suffix : ""}`
+        : t("tasks.detail.execution.thinkingDefault"),
+    }),
+    [effective.thinkingLabel, effective.thinkingIsDefault, suffix, t],
+  );
+  const modeDisplay = useMemo(
+    () => ({
+      label:
+        exec.mode === "plan"
+          ? t("tasks.detail.execution.modePlan")
+          : t("tasks.detail.execution.modeDirect"),
+    }),
+    [exec.mode, t],
+  );
+  const prefDisplay = useMemo(
+    () => ({ label: t(preferenceLabelKey(exec.schedulePreference)) }),
+    [exec.schedulePreference, t],
+  );
+
+  const selectModel = useCallback(
+    (value: ModelSelection | null) =>
+      // Thinking option ids are model-specific; reset on model change.
+      onChange({ ...exec, modelSelection: value, thinkingOptionId: null }),
+    [exec, onChange],
+  );
+  const selectThinking = useCallback(
+    (value: string | null) => onChange({ ...exec, thinkingOptionId: value }),
+    [exec, onChange],
+  );
+  const selectMode = useCallback(
+    (value: "direct" | "plan") => onChange({ ...exec, mode: value }),
+    [exec, onChange],
+  );
+  const selectPref = useCallback(
+    (value: TaskSchedulePreference) => onChange({ ...exec, schedulePreference: value }),
+    [exec, onChange],
+  );
+
+  return (
+    <View style={styles.selectStack}>
+      <SelectField
+        label={t("tasks.detail.execution.model")}
+        value={exec.modelSelection}
+        selectedDisplay={modelDisplay}
+        options={modelOptions}
+        onChange={selectModel}
+        placeholder={t("tasks.detail.execution.modelDefault")}
+        emptyText={t("tasks.detail.execution.noModels")}
+        searchable
+        size="sm"
+        getValueKey={modelSelectionKey}
+        testID="task-proposal-model"
+      />
+      <SelectField
+        label={t("tasks.detail.execution.thinking")}
+        value={exec.thinkingOptionId}
+        selectedDisplay={thinkingDisplay}
+        options={thinkingOptions}
+        onChange={selectThinking}
+        placeholder={t("tasks.detail.execution.thinkingDefault")}
+        emptyText={t("tasks.detail.execution.thinkingDefault")}
+        size="sm"
+        testID="task-proposal-thinking"
+      />
+      <SelectField
+        label={t("tasks.detail.execution.mode")}
+        value={exec.mode}
+        selectedDisplay={modeDisplay}
+        options={modeOptions}
+        onChange={selectMode}
+        placeholder={t("tasks.detail.execution.modeDirect")}
+        emptyText={t("tasks.detail.execution.modeDirect")}
+        size="sm"
+        testID="task-proposal-mode"
+      />
+      <SelectField
+        label={t("tasks.detail.execution.schedulePreference")}
+        value={exec.schedulePreference}
+        selectedDisplay={prefDisplay}
+        options={prefOptions}
+        onChange={selectPref}
+        placeholder={t("tasks.detail.execution.prefAuto")}
+        emptyText={t("tasks.detail.execution.prefAuto")}
+        size="sm"
+        testID="task-proposal-preference"
+      />
+    </View>
+  );
+}
+
+function CardInfo({
   task,
   effective,
   folderName,
@@ -449,66 +556,37 @@ function CardDetailList({
   folderName: string | null;
 }) {
   const { t } = useTranslation();
-  const parsed = parseTaskTags(task?.tags ?? []);
-  const suffix = ` ${t("tasks.detail.execution.defaultSuffix")}`;
-  const modelValue = formatWithDefault(effective.modelLabel, effective.modelIsDefault, suffix);
-  const thinkingValue = formatWithDefault(
-    effective.thinkingLabel,
-    effective.thinkingIsDefault,
-    suffix,
-  );
-  const modeValue =
-    effective.mode === "plan"
-      ? t("tasks.detail.execution.modePlan")
-      : t("tasks.detail.execution.modeDirect");
-  const prefValue = t(preferenceLabelKey(task?.schedulePreference ?? "auto"));
   const estimateValue = buildEstimateValue(task?.estimate ?? null, t);
   const costValue = buildCostValue(task?.estimate ?? null, effective);
-
   return (
-    <View style={styles.detailList}>
-      {parsed.tags.length > 0 ? (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>{t("tasks.detail.tagsField")}</Text>
-          <View style={styles.chipRow}>
-            {parsed.tags.map((tag) => (
-              <Text key={tag} style={styles.chip}>
-                {tag}
-              </Text>
-            ))}
-          </View>
-        </View>
+    <View style={styles.infoBlock}>
+      {folderName ? (
+        <Text style={styles.infoText} numberOfLines={1}>
+          {t("tasks.triage.fieldFolder")} : {folderName}
+        </Text>
       ) : null}
-      {folderName ? <DetailRow label={t("tasks.triage.fieldFolder")} value={folderName} /> : null}
-      {parsed.priority ? (
-        <DetailRow label={t("tasks.triage.fieldPriority")} value={parsed.priority.label} />
+      <Text style={styles.infoText} numberOfLines={1}>
+        {t("tasks.triage.fieldEstimate")} : {estimateValue ?? t("tasks.triage.pendingEstimate")}
+      </Text>
+      {costValue ? (
+        <Text style={styles.infoText} numberOfLines={1}>
+          {t("tasks.triage.fieldCost")} : {costValue}
+        </Text>
       ) : null}
-      {parsed.deadline ? (
-        <DetailRow label={t("tasks.triage.fieldDeadline")} value={parsed.deadline.label} />
-      ) : null}
-      <DetailRow label={t("tasks.detail.execution.model")} value={modelValue} />
-      <DetailRow label={t("tasks.detail.execution.thinking")} value={thinkingValue} />
-      <DetailRow label={t("tasks.detail.execution.mode")} value={modeValue} />
-      <DetailRow label={t("tasks.detail.execution.schedulePreference")} value={prefValue} />
-      <DetailRow
-        label={t("tasks.triage.fieldEstimate")}
-        value={estimateValue ?? t("tasks.triage.pendingEstimate")}
-      />
-      {costValue ? <DetailRow label={t("tasks.triage.fieldCost")} value={costValue} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   block: {
-    marginVertical: theme.spacing[2],
     gap: theme.spacing[2],
-    borderRadius: theme.borderRadius.xl,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
-    borderColor: C.blockBorder,
-    backgroundColor: C.block,
-    paddingVertical: theme.spacing[3],
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+    paddingVertical: theme.spacing[2],
     paddingLeft: theme.spacing[3],
+    marginBottom: theme.spacing[2],
   },
   headerRow: {
     flexDirection: "row",
@@ -517,7 +595,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingRight: theme.spacing[3],
   },
   headerText: {
-    color: C.header,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.semibold,
   },
@@ -527,160 +605,109 @@ const styles = StyleSheet.create((theme) => ({
   },
   card: {
     width: CARD_WIDTH,
-    justifyContent: "space-between",
-    gap: theme.spacing[3],
-    borderRadius: theme.borderRadius.lg,
-    borderWidth: 1,
-    borderColor: C.cardBorder,
-    backgroundColor: C.card,
-    padding: theme.spacing[3],
-  },
-  cardBody: {
     gap: theme.spacing[2],
-  },
-  cardRefused: {
-    width: CARD_WIDTH,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[1],
     borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: C.cardBorder,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    padding: theme.spacing[4],
-  },
-  refusedTitle: {
-    color: C.muted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-    textDecorationLine: "line-through",
-    textAlign: "center",
-  },
-  refusedLabel: {
-    color: C.refusedText,
-    fontSize: theme.fontSize.xs,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+    padding: theme.spacing[3],
   },
   field: {
     gap: 3,
   },
   fieldLabel: {
-    color: C.label,
+    color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.semibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+    fontWeight: theme.fontWeight.medium,
   },
   input: {
     width: "100%",
-    color: C.text,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: C.inputBorder,
-    backgroundColor: C.inputBg,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: 6,
   },
   inputMultiline: {
     width: "100%",
-    minHeight: 60,
-    color: C.text,
+    minHeight: 52,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: C.inputBorder,
-    backgroundColor: C.inputBg,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: 6,
   },
-  readValue: {
-    color: C.text,
-    fontSize: theme.fontSize.sm,
+  placeholderColor: {
+    color: theme.colors.foregroundMuted,
   },
-  detailList: {
-    gap: theme.spacing[1],
-    marginTop: theme.spacing[1],
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
+  selectStack: {
     gap: theme.spacing[2],
   },
-  detailLabel: {
-    width: 92,
-    color: C.label,
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.semibold,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+  infoBlock: {
+    gap: 2,
   },
-  detailValue: {
-    flex: 1,
-    color: C.text,
+  infoText: {
+    color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-  },
-  chip: {
-    color: C.text,
-    fontSize: theme.fontSize.xs,
-    backgroundColor: C.chipBg,
-    borderRadius: theme.borderRadius.full,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: 2,
-    overflow: "hidden",
   },
   actionsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: theme.spacing[2],
+    marginTop: theme.spacing[1],
   },
   approveBtn: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: C.approve,
-  },
-  refuseBtn: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: C.refuse,
-  },
-  approvedRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
+    gap: 6,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.statusSuccess,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: 6,
   },
-  approvedText: {
-    color: C.approve,
+  actionText: {
+    color: "#ffffff",
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.semibold,
+  },
+  refuseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: 6,
+  },
+  refuseText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
   },
   dotsRow: {
     flexDirection: "row",
     alignSelf: "center",
-    gap: 6,
+    gap: 5,
     paddingRight: theme.spacing[3],
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: C.dot,
+    backgroundColor: theme.colors.border,
   },
   dotActive: {
-    width: 18,
+    width: 16,
     height: 6,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: C.dotActive,
+    backgroundColor: theme.colors.foreground,
   },
 }));
