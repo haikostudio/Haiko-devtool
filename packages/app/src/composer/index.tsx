@@ -2046,7 +2046,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
     alignItems: "center",
     width: "100%",
     overflow: "visible",
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: {
+      xs: theme.spacing[3],
+      md: theme.spacing[4],
+    },
     paddingBottom: theme.spacing[4],
   },
   inputAreaLocked: {
@@ -2059,7 +2062,10 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
   footer: {
     width: "100%",
-    paddingHorizontal: theme.spacing[4],
+    paddingHorizontal: {
+      xs: theme.spacing[3],
+      md: theme.spacing[4],
+    },
     // Negative margin pulls the footer up against the input area's paddingBottom.
     // On mobile, leave a 3px gap (no token sits below spacing[1]); desktop keeps more.
     marginTop: {
