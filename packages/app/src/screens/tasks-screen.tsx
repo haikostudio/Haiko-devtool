@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
+import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
@@ -744,7 +745,11 @@ function BoardContent({
   return (
     <View style={styles.boardContainer}>
       {boardHandle.board ? (
-        <TaskGantt board={boardHandle.board} onPressTask={handlePressTask} />
+        <TaskGantt
+          board={boardHandle.board}
+          onPressTask={handlePressTask}
+          containerStyle={styles.ganttBoardAlign}
+        />
       ) : null}
       <KanbanBoard
         board={boardHandle.board}
@@ -872,6 +877,12 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
     return counts;
   }, [boardHandle.board]);
 
+  // No detail sheet at the project level — tapping a timeline bar drills into
+  // the task's folder board, where the card can be opened.
+  const openTaskFolder = useCallback((task: KanbanTask) => {
+    selectFolder(task.folderId);
+  }, []);
+
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       <Pressable
@@ -882,6 +893,9 @@ function CompactFolderList({ boardHandle }: { boardHandle: BoardHandle }) {
         <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
       </Pressable>
+      {boardHandle.board ? (
+        <TaskGantt board={boardHandle.board} onPressTask={openTaskFolder} />
+      ) : null}
       <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
       {folders.map((folder) => (
         <CompactFolderRow
@@ -1071,6 +1085,16 @@ const styles = StyleSheet.create((theme) => ({
   boardContainer: {
     flex: 1,
     gap: theme.spacing[2],
+  },
+  // Aligns the timeline strip to the columns block below: same horizontal inset
+  // as the board, capped to the columns' total width so its edges meet the
+  // first and last column. Left-aligns (parent stretch + maxWidth) on wide
+  // screens; on narrow screens it fills like the columns do.
+  ganttBoardAlign: {
+    marginHorizontal: theme.spacing[3],
+    maxWidth:
+      KANBAN_COLUMNS.length * KANBAN_COLUMN_MAX_WIDTH +
+      (KANBAN_COLUMNS.length - 1) * theme.spacing[3],
   },
   centered: {
     flex: 1,

@@ -1,10 +1,9 @@
 import { memo, useCallback, useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, type StyleProp, Text, View, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
-import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "./kanban-columns";
 
 // Columns the timeline projects. Backlog is the icebox (not planned) and done is
 // history — the Gantt only surfaces what is actively planned or executing, in
@@ -29,6 +28,9 @@ interface GanttRow {
 interface TaskGanttProps {
   board: TaskBoard;
   onPressTask: (task: KanbanTask) => void;
+  // Extra container styling supplied by the host layout (e.g. the desktop board
+  // aligns the strip to the columns block; the mobile folder list lets it fill).
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 // A compact projected timeline that sits above the kanban board. One bar per
@@ -36,7 +38,11 @@ interface TaskGanttProps {
 // cumulative quota so the bar length reads as "how much of a 5h window this
 // task eats". Bars carry the project color so the strip ties back to the
 // colored dot in the projects rail.
-export const TaskGantt = memo(function TaskGantt({ board, onPressTask }: TaskGanttProps) {
+export const TaskGantt = memo(function TaskGantt({
+  board,
+  onPressTask,
+  containerStyle,
+}: TaskGanttProps) {
   const { t } = useTranslation();
   const projectColor = deriveProjectIconColor(board.projectId);
 
@@ -80,12 +86,14 @@ export const TaskGantt = memo(function TaskGantt({ board, onPressTask }: TaskGan
     return { rows: built, totalQuota: realQuota };
   }, [board.folders, board.tasks, t]);
 
+  const rootStyle = useMemo(() => [styles.container, containerStyle], [containerStyle]);
+
   if (rows.length === 0) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
+    <View style={rootStyle}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("tasks.gantt.title")}</Text>
         {totalQuota > 0 ? (
@@ -175,12 +183,6 @@ const BAR_HEIGHT = 14;
 
 const styles = StyleSheet.create((theme) => ({
   container: {
-    // Match the board's horizontal inset and cap to the columns block width so
-    // the strip's left/right edges line up with the first and last column below.
-    marginHorizontal: theme.spacing[3],
-    maxWidth:
-      KANBAN_COLUMNS.length * KANBAN_COLUMN_MAX_WIDTH +
-      (KANBAN_COLUMNS.length - 1) * theme.spacing[3],
     backgroundColor: theme.colors.surface1,
     borderWidth: 1,
     borderColor: theme.colors.border,
