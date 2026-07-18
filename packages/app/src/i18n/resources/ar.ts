@@ -267,6 +267,9 @@ export const ar: TranslationResources = {
   },
   tasks: {
     title: "المهام",
+    gantt: {
+      title: "الجدول الزمني",
+    },
     pickProject: "اختر مشروعًا",
     noProjects: "لا توجد مشاريع متاحة — صِل مضيفًا أولاً.",
     allProjects: "كل المشاريع",
@@ -330,7 +333,15 @@ export const ar: TranslationResources = {
       openPr: "فتح PR",
       branch: "الفرع: {{branch}}",
       viewPlan: "عرض الخطة",
+      cost: {
+        billable: "≈ {{amount}} · الوقت",
+        tokens: "≈ {{amount}} · الرموز",
+      },
       execution: {
+        effectiveTitle: "سيتم التنفيذ كـ",
+        effectiveModel: "النموذج: {{model}}",
+        effectiveThinking: "مستوى الاستدلال: {{level}}",
+        defaultSuffix: "(افتراضي)",
         title: "التنفيذ",
         model: "النموذج",
         modelDefault: "النموذج الافتراضي",
@@ -339,7 +350,7 @@ export const ar: TranslationResources = {
         thinkingDefault: "افتراضي",
         mode: "الوضع",
         modeDirect: "تنفيذ مباشر",
-        modeDirectHint: "ينفّذ ثم يفتح طلب سحب",
+        modeDirectHint: "ينفّذ مباشرة في مساحة العمل الحالية",
         modePlan: "الخطة أولاً",
         modePlanHint: "ينتج خطة ثم يتوقف للمراجعة",
         schedulePreference: "توقيت الإطلاق",

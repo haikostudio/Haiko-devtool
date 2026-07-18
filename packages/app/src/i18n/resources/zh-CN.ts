@@ -267,6 +267,9 @@ export const zhCN: TranslationResources = {
   },
   tasks: {
     title: "任务",
+    gantt: {
+      title: "时间线",
+    },
     pickProject: "选择项目",
     noProjects: "暂无可用项目 — 请先连接主机。",
     allProjects: "所有项目",
@@ -330,7 +333,15 @@ export const zhCN: TranslationResources = {
       openPr: "打开 PR",
       branch: "分支：{{branch}}",
       viewPlan: "查看计划",
+      cost: {
+        billable: "≈ {{amount}} · 时间",
+        tokens: "≈ {{amount}} · 令牌",
+      },
       execution: {
+        effectiveTitle: "将以此运行",
+        effectiveModel: "模型：{{model}}",
+        effectiveThinking: "推理级别：{{level}}",
+        defaultSuffix: "（默认）",
         title: "执行",
         model: "模型",
         modelDefault: "默认模型",
@@ -339,7 +350,7 @@ export const zhCN: TranslationResources = {
         thinkingDefault: "默认",
         mode: "模式",
         modeDirect: "直接执行",
-        modeDirectHint: "完成实现并创建 PR",
+        modeDirectHint: "直接在当前工作区中实现",
         modePlan: "先出计划",
         modePlanHint: "生成计划后暂停等待审阅",
         schedulePreference: "启动时机",

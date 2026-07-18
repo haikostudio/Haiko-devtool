@@ -270,6 +270,9 @@ export const ja: TranslationResources = {
   },
   tasks: {
     title: "タスク",
+    gantt: {
+      title: "タイムライン",
+    },
     pickProject: "プロジェクトを選択",
     noProjects: "利用可能なプロジェクトがありません — まずホストに接続してください。",
     allProjects: "すべてのプロジェクト",
@@ -333,7 +336,15 @@ export const ja: TranslationResources = {
       openPr: "PR を開く",
       branch: "ブランチ: {{branch}}",
       viewPlan: "プランを見る",
+      cost: {
+        billable: "≈ {{amount}} · 時間",
+        tokens: "≈ {{amount}} · トークン",
+      },
       execution: {
+        effectiveTitle: "実行内容",
+        effectiveModel: "モデル: {{model}}",
+        effectiveThinking: "推論レベル: {{level}}",
+        defaultSuffix: "（デフォルト）",
         title: "実行",
         model: "モデル",
         modelDefault: "デフォルトモデル",
@@ -342,7 +353,7 @@ export const ja: TranslationResources = {
         thinkingDefault: "デフォルト",
         mode: "モード",
         modeDirect: "直接実行",
-        modeDirectHint: "実装してPRを作成",
+        modeDirectHint: "現在のワークスペースで直接実装します",
         modePlan: "プラン優先",
         modePlanHint: "プランを作成してレビュー待ちで停止",
         schedulePreference: "起動タイミング",

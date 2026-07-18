@@ -1211,11 +1211,6 @@ export async function createPaseoDaemon(
     projectRegistry,
     agentManager,
     createAgent,
-    createPaseoWorktreeWorkspace: async (input) => {
-      const result = await createPaseoWorktreeForTools(input);
-      await emitWorkspaceUpdatesExternal([result.workspace.workspaceId]);
-      return result;
-    },
     providerUsageService: new ProviderUsageService({ logger }),
     logger,
     getQuietHours: () => daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,

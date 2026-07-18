@@ -269,6 +269,9 @@ export const ru: TranslationResources = {
   },
   tasks: {
     title: "Задачи",
+    gantt: {
+      title: "Хронология",
+    },
     pickProject: "Выберите проект",
     noProjects: "Нет доступных проектов — сначала подключите хост.",
     allProjects: "Все проекты",
@@ -332,7 +335,15 @@ export const ru: TranslationResources = {
       openPr: "Открыть PR",
       branch: "Ветка: {{branch}}",
       viewPlan: "Посмотреть план",
+      cost: {
+        billable: "≈ {{amount}} · время",
+        tokens: "≈ {{amount}} · токены",
+      },
       execution: {
+        effectiveTitle: "Будет выполнено как",
+        effectiveModel: "Модель: {{model}}",
+        effectiveThinking: "Уровень рассуждения: {{level}}",
+        defaultSuffix: "(по умолчанию)",
         title: "Выполнение",
         model: "Модель",
         modelDefault: "Модель по умолчанию",
@@ -341,7 +352,7 @@ export const ru: TranslationResources = {
         thinkingDefault: "По умолчанию",
         mode: "Режим",
         modeDirect: "Прямое выполнение",
-        modeDirectHint: "Реализует и открывает PR",
+        modeDirectHint: "Реализует прямо в текущем рабочем пространстве",
         modePlan: "Сначала план",
         modePlanHint: "Готовит план и останавливается для проверки",
         schedulePreference: "Время запуска",

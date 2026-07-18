@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { QuietHours } from "../quiet-hours.js";
 import type { PersistedProjectRecord, ProjectRegistry } from "../workspace-registry.js";
-import type { CreatePaseoWorktreeWorkflowResult } from "../worktree-session.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
 import { TaskScheduler } from "./scheduler.js";
@@ -122,35 +121,19 @@ describe("TaskScheduler", () => {
   function buildScheduler(options: {
     remainingPct: number | null;
     runAgent?: () => Promise<{ canceled: boolean; finalText: string; timeline: [] }>;
-    ghUrl?: string | null;
+    branch?: string | null;
     quietHours?: QuietHours;
     nowMs?: number;
   }) {
-    const createWorktree = vi.fn(async () => ({
-      workspace: {
-        workspaceId: "ws-task",
-        projectId: "proj-1",
-        cwd: "/tmp/proj-1-wt",
-        kind: "worktree",
-        displayName: "wt",
-        title: null,
-        branch: "task/abc-implement-login-flow",
-        baseBranch: "main",
-        createdAt: "",
-        updatedAt: "",
-        archivedAt: null,
-        pinnedAt: null,
-      },
-    })) as unknown as () => Promise<CreatePaseoWorktreeWorkflowResult>;
     const createAgent = vi.fn(async () => ({
-      snapshot: { id: "task-agent-1" },
+      snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1" },
       initialPromptError: null,
     }));
     const runAgent =
       options.runAgent ??
       (async () => ({
         canceled: false,
-        finalText: "Done!\nhttps://github.com/acme/repo/pull/42",
+        finalText: "Done!",
         timeline: [] as [],
       }));
     const estimator = { requestEstimate: vi.fn() } as unknown as TaskEstimator;
@@ -160,21 +143,20 @@ describe("TaskScheduler", () => {
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       agentManager: { runAgent } as never,
       createAgent: createAgent as never,
-      createPaseoWorktreeWorkspace: createWorktree,
       providerUsageService: usageWithRemaining(options.remainingPct),
       logger,
-      execGhPrViewUrl: async () => options.ghUrl ?? null,
+      readCurrentBranch: async () => options.branch ?? null,
       // Default: always inside the launch window so quota-focused tests stay
       // independent of the wall clock.
       getQuietHours: () => options.quietHours ?? { startHour: 0, endHour: 24, timeZone: "UTC" },
       now: () => options.nowMs ?? Date.UTC(2026, 6, 17, 3, 0, 0),
     });
-    return { scheduler, createWorktree, createAgent, estimator };
+    return { scheduler, createAgent, estimator };
   }
 
-  test("launches an awaiting task when quota allows and records the PR", async () => {
+  test("launches an awaiting task in the current workspace and marks it done", async () => {
     const task = await seedScheduledTask({ quotaPercent: 15 });
-    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80, branch: "main" });
 
     await scheduler.tick();
     await vi.waitFor(async () => {
@@ -184,10 +166,14 @@ describe("TaskScheduler", () => {
 
     const board = await service.getBoard("proj-1");
     const done = board.tasks.find((entry) => entry.id === task.id);
-    expect(done?.links.prUrl).toBe("https://github.com/acme/repo/pull/42");
     expect(done?.links.primaryAgentId).toBe("task-agent-1");
+    expect(done?.links.workspaceId).toBe("ws-proj-1");
+    expect(done?.links.branch).toBe("main");
+    expect(done?.links.prUrl ?? null).toBeNull();
     expect(done?.schedule ?? null).toBeNull();
     expect(createAgent).toHaveBeenCalledTimes(1);
+    // Runs in the project's checkout, not a throwaway worktree.
+    expect(createAgent).toHaveBeenCalledWith(expect.objectContaining({ cwd: "/tmp/proj-1" }));
   });
 
   test("defers launch when remaining quota is below estimate + margin", async () => {
@@ -202,12 +188,11 @@ describe("TaskScheduler", () => {
     expect(board.tasks[0]?.schedule?.state).toBe("awaiting_slot");
   });
 
-  test("returns the task to awaiting_slot with an error when no PR is produced", async () => {
+  test("returns the task to awaiting_slot with an error when the run is canceled", async () => {
     const task = await seedScheduledTask();
     const { scheduler } = buildScheduler({
       remainingPct: 90,
-      runAgent: async () => ({ canceled: false, finalText: "Could not push", timeline: [] }),
-      ghUrl: null,
+      runAgent: async () => ({ canceled: true, finalText: "", timeline: [] }),
     });
 
     await scheduler.tick();
@@ -223,7 +208,7 @@ describe("TaskScheduler", () => {
     const failed = board.tasks.find((entry) => entry.id === task.id);
     expect(failed?.column).toBe("scheduled");
     expect(failed?.schedule?.attempts).toBe(1);
-    expect(failed?.schedule?.lastError).toContain("pull request");
+    expect(failed?.schedule?.lastError).toContain("canceled");
   });
 
   test("never launches a task awaiting user approval", async () => {
@@ -359,7 +344,6 @@ describe("TaskScheduler", () => {
     const { scheduler, createAgent } = buildScheduler({
       remainingPct: 90,
       runAgent: async () => ({ canceled: false, finalText: "Voici le plan…", timeline: [] }),
-      ghUrl: null,
     });
 
     await scheduler.tick();

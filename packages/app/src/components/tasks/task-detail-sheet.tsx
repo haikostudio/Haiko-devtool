@@ -11,6 +11,14 @@ import { SelectField, type SelectFieldOption } from "@/components/ui/select-fiel
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskRunConfig, TaskSchedulePreference } from "@/data/tasks";
+import {
+  computeBillableCostChf,
+  type EffectiveExecution,
+  estimateTokenCostUsd,
+  formatChf,
+  formatUsd,
+  resolveEffectiveExecution,
+} from "@/components/tasks/task-cost";
 import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { useHostFeature } from "@/runtime/host-features";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
@@ -127,6 +135,21 @@ function TaskDetailSheetForm({
     mode: task.runConfig?.mode ?? "direct",
     schedulePreference: task.schedulePreference ?? "auto",
   });
+
+  // Home-scope snapshot: the tasks screen only knows the projectId, and provider
+  // availability does not depend on a specific checkout. Fetched once here so
+  // both the execution section and the cost lines resolve the same concrete model.
+  const snapshot = useProvidersSnapshot(serverId, { cwd: null, enabled: visible });
+  const effective = useMemo(
+    () =>
+      resolveEffectiveExecution({
+        entries: snapshot.entries,
+        selection: executionConfig.modelSelection,
+        thinkingOptionId: executionConfig.thinkingOptionId,
+        mode: executionConfig.mode,
+      }),
+    [snapshot.entries, executionConfig],
+  );
 
   const handleSave = useCallback(() => {
     if (!title.trim()) {
@@ -248,15 +271,15 @@ function TaskDetailSheetForm({
 
       {supportsRunConfig ? (
         <ExecutionSection
-          serverId={serverId}
-          visible={visible}
+          snapshot={snapshot}
+          effective={effective}
           controlSize={controlSize}
           config={executionConfig}
           onChange={setExecutionConfig}
         />
       ) : null}
 
-      <TaskMetaSection task={task} />
+      <TaskMetaSection task={task} effective={effective} />
 
       <View style={styles.actionsRow}>
         <Button variant="outline" onPress={handleEstimate}>
@@ -276,24 +299,20 @@ function TaskDetailSheetForm({
 }
 
 function ExecutionSection({
-  serverId,
-  visible,
+  snapshot,
+  effective,
   controlSize,
   config,
   onChange,
 }: {
-  serverId: string | null;
-  visible: boolean;
+  snapshot: ReturnType<typeof useProvidersSnapshot>;
+  effective: EffectiveExecution;
   controlSize: FieldControlSize;
   config: ExecutionConfigState;
   onChange: (config: ExecutionConfigState) => void;
 }) {
   const { t } = useTranslation();
   const { modelSelection, thinkingOptionId, mode, schedulePreference } = config;
-
-  // Home-scope snapshot: the tasks screen only knows the projectId, and provider
-  // availability does not depend on a specific checkout.
-  const snapshot = useProvidersSnapshot(serverId, { cwd: null, enabled: visible });
 
   const modelOptions = useMemo((): SelectFieldOption<ModelSelection | null>[] => {
     const options: SelectFieldOption<ModelSelection | null>[] = [
@@ -448,6 +467,21 @@ function ExecutionSection({
   return (
     <View style={styles.executionSection}>
       <Text style={styles.sectionTitle}>{t("tasks.detail.execution.title")}</Text>
+      <View style={styles.effectiveCard} testID="task-detail-effective">
+        <Text style={styles.effectiveLabel}>{t("tasks.detail.execution.effectiveTitle")}</Text>
+        <Text style={styles.effectiveLine}>
+          {`${t("tasks.detail.execution.effectiveModel", { model: effective.modelLabel })}${
+            effective.modelIsDefault ? ` ${t("tasks.detail.execution.defaultSuffix")}` : ""
+          }`}
+        </Text>
+        {effective.thinkingLabel ? (
+          <Text style={styles.effectiveLine}>
+            {`${t("tasks.detail.execution.effectiveThinking", { level: effective.thinkingLabel })}${
+              effective.thinkingIsDefault ? ` ${t("tasks.detail.execution.defaultSuffix")}` : ""
+            }`}
+          </Text>
+        ) : null}
+      </View>
       <SelectField
         label={t("tasks.detail.execution.model")}
         value={modelSelection}
@@ -502,8 +536,16 @@ function ExecutionSection({
   );
 }
 
-function TaskMetaSection({ task }: { task: KanbanTask }) {
+function TaskMetaSection({ task, effective }: { task: KanbanTask; effective: EffectiveExecution }) {
   const { t } = useTranslation();
+  const billableLabel =
+    task.estimate?.estimatedMinutes !== undefined
+      ? formatChf(computeBillableCostChf(task.estimate.estimatedMinutes))
+      : null;
+  const tokenCostLabel =
+    task.estimate && effective.modelId
+      ? formatUsd(estimateTokenCostUsd(effective.modelId, task.estimate.tokens))
+      : null;
   return (
     <View style={styles.metaSection}>
       {task.estimate ? (
@@ -517,6 +559,12 @@ function TaskMetaSection({ task }: { task: KanbanTask }) {
             <StatusBadge
               label={t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })}
             />
+          ) : null}
+          {billableLabel ? (
+            <StatusBadge label={t("tasks.detail.cost.billable", { amount: billableLabel })} />
+          ) : null}
+          {tokenCostLabel ? (
+            <StatusBadge label={t("tasks.detail.cost.tokens", { amount: tokenCostLabel })} />
           ) : null}
           <Text style={styles.metaText}>
             {t("tasks.detail.estimateDetail", {
@@ -572,6 +620,24 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.semibold,
+  },
+  effectiveCard: {
+    gap: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface2,
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+  },
+  effectiveLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  effectiveLine: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
   },
   metaSection: {
     marginTop: theme.spacing[2],

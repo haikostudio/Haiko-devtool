@@ -271,6 +271,9 @@ export const ptBR: TranslationResources = {
   },
   tasks: {
     title: "Tarefas",
+    gantt: {
+      title: "Linha do tempo",
+    },
     pickProject: "Escolha um projeto",
     noProjects: "Nenhum projeto disponível — conecte um host primeiro.",
     allProjects: "Todos os projetos",
@@ -334,7 +337,15 @@ export const ptBR: TranslationResources = {
       openPr: "Abrir PR",
       branch: "Branch: {{branch}}",
       viewPlan: "Ver o plano",
+      cost: {
+        billable: "≈ {{amount}} · tempo",
+        tokens: "≈ {{amount}} · tokens",
+      },
       execution: {
+        effectiveTitle: "Será executado como",
+        effectiveModel: "Modelo: {{model}}",
+        effectiveThinking: "Raciocínio: {{level}}",
+        defaultSuffix: "(padrão)",
         title: "Execução",
         model: "Modelo",
         modelDefault: "Modelo padrão",
@@ -343,7 +354,7 @@ export const ptBR: TranslationResources = {
         thinkingDefault: "Padrão",
         mode: "Modo",
         modeDirect: "Ação direta",
-        modeDirectHint: "Implementa e abre um PR",
+        modeDirectHint: "Implementa diretamente no workspace atual",
         modePlan: "Plano primeiro",
         modePlanHint: "Gera um plano e pausa para revisão",
         schedulePreference: "Momento de execução",

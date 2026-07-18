@@ -266,6 +266,9 @@ export const en = {
   },
   tasks: {
     title: "Tasks",
+    gantt: {
+      title: "Timeline",
+    },
     pickProject: "Choose a project",
     noProjects: "No projects available — connect a host first.",
     allProjects: "All projects",
@@ -329,7 +332,15 @@ export const en = {
       openPr: "Open PR",
       branch: "Branch: {{branch}}",
       viewPlan: "View the plan",
+      cost: {
+        billable: "≈ {{amount}} · time",
+        tokens: "≈ {{amount}} · tokens",
+      },
       execution: {
+        effectiveTitle: "Will run as",
+        effectiveModel: "Model: {{model}}",
+        effectiveThinking: "Reasoning: {{level}}",
+        defaultSuffix: "(default)",
         title: "Execution",
         model: "Model",
         modelDefault: "Default model",
@@ -338,7 +349,7 @@ export const en = {
         thinkingDefault: "Default",
         mode: "Mode",
         modeDirect: "Direct action",
-        modeDirectHint: "Implement, then open a PR",
+        modeDirectHint: "Implement directly in the current workspace",
         modePlan: "Plan first",
         modePlanHint: "Produce a plan and stop for review",
         schedulePreference: "Launch timing",
