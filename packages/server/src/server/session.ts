@@ -5850,6 +5850,12 @@ export class Session {
       });
       const agentPayload = await this.buildAgentPayload(snapshot);
 
+      // Opening a chat (tail fetch, no cursor) is our cue to catch up any old tab
+      // whose labels are missing or still English. Best-effort, off the hot path.
+      if (direction === "tail" && !cursor) {
+        this.maybeBackfillAgentLabels(msg.agentId);
+      }
+
       const controlTimeline = this.agentManager.fetchTimeline(msg.agentId, {
         direction,
         cursor,
@@ -6436,6 +6442,30 @@ export class Session {
    * {@link scheduleSynthesisFromTurn}); a failed/canceled turn is left untouched.
    * Best-effort and off the hot path.
    */
+  // Agents whose labels we've already attempted to backfill this daemon run, so a
+  // tab that's opened repeatedly triggers at most one sideband regeneration.
+  private readonly labelsBackfilledAgentIds = new Set<string>();
+
+  /**
+   * Lazy, one-shot backfill of the tab title + banner headline when an old chat is
+   * opened. Older tabs either never got labels (pre-v3) or got them in English
+   * (before the French prompt) — reopening one regenerates both in French from its
+   * last response. Fires only on a fresh "open the chat" (tail) fetch of an idle,
+   * non-internal agent, and at most once per agent per daemon run so browsing a
+   * list never fans out into a mass regeneration.
+   */
+  private maybeBackfillAgentLabels(agentId: string): void {
+    if (this.labelsBackfilledAgentIds.has(agentId)) {
+      return;
+    }
+    const agent = this.agentManager.getAgent(agentId);
+    if (!agent?.cwd || agent.internal || agent.lifecycle !== "idle") {
+      return;
+    }
+    this.labelsBackfilledAgentIds.add(agentId);
+    void this.generateAndApplyAgentLabels(agentId, 0);
+  }
+
   private scheduleAgentLabelsFromResponse(agentId: string): void {
     const agent = this.agentManager.getAgent(agentId);
     if (!agent?.cwd || agent.internal) {
