@@ -96,9 +96,12 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
         >
           <View style={styles.headerRow}>
             <View style={styles.dot} />
-            {title ? (
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
+            {(synthesis.headline ?? title) ? (
+              // Bold header: prefer the generated one-sentence headline (longer,
+              // reflects what the turn addressed); fall back to the short tab
+              // title on old daemons that don't emit a headline yet.
+              <Text style={styles.title} numberOfLines={2}>
+                {synthesis.headline ?? title}
               </Text>
             ) : null}
             {expandable ? (

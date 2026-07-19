@@ -104,62 +104,34 @@ export class WorkspaceAutoName {
   }
 
   /**
-   * Re-derive the workspace title from the given text — the agent's latest
-   * response — so the tab name tracks what the agent actually addressed "au fil
-   * des requêtes". Unlike the first-agent worktree path this is TITLE-ONLY — it
-   * never renames the git branch. Best-effort and async; a generation failure
-   * leaves the title as-is. Skips workspaces the user has renamed by hand
-   * (titleLockedByUser).
+   * Apply a title that was already generated elsewhere (the per-turn agent-label
+   * generator) to the workspace, so the sidebar name tracks the same subject as
+   * the tab without a second model call. Title-only, best-effort, async; defers
+   * to a hand-picked workspace title (titleLockedByUser).
    */
-  scheduleRenameFromText(input: { workspaceId: string; cwd: string; text: string }): void {
-    const text = input.text.trim();
-    if (!text) {
-      return;
-    }
-    this.schedule(
-      () =>
-        this.renameWorkspaceTitleFromText({
-          workspaceId: input.workspaceId,
-          cwd: input.cwd,
-          text,
-        }),
-      { cwd: input.cwd, message: "Failed to auto-rename workspace from latest response" },
-    );
-  }
-
-  private async renameWorkspaceTitleFromText(input: {
-    workspaceId: string;
-    cwd: string;
-    text: string;
-  }): Promise<void> {
-    // Read the lock before spending a model call on a title we'd discard anyway.
-    const before = await this.workspaceRegistry.get(input.workspaceId);
-    if (!before || before.archivedAt || before.titleLockedByUser) {
-      return;
-    }
-    const generated = await this.generateFromContext({
-      cwd: input.cwd,
-      firstAgentContext: { prompt: input.text },
-      currentSelection: null,
-    });
-    const title = generated?.title ?? null;
+  applyGeneratedTitle(input: { workspaceId: string; title: string }): void {
+    const title = input.title.trim();
     if (!title) {
       return;
     }
-    // Re-read after the async generation: a hand-rename may have landed meanwhile.
-    const current = await this.workspaceRegistry.get(input.workspaceId);
-    if (!current || current.archivedAt || current.titleLockedByUser) {
-      return;
-    }
-    if (current.title === title) {
-      return;
-    }
-    await this.workspaceRegistry.upsert({
-      ...current,
-      title,
-      updatedAt: new Date().toISOString(),
-    });
-    await this.emitWorkspaceUpdateForWorkspaceId(input.workspaceId);
+    this.schedule(
+      async () => {
+        const current = await this.workspaceRegistry.get(input.workspaceId);
+        if (!current || current.archivedAt || current.titleLockedByUser) {
+          return;
+        }
+        if (current.title === title) {
+          return;
+        }
+        await this.workspaceRegistry.upsert({
+          ...current,
+          title,
+          updatedAt: new Date().toISOString(),
+        });
+        await this.emitWorkspaceUpdateForWorkspaceId(input.workspaceId);
+      },
+      { cwd: "", message: "Failed to apply generated workspace title" },
+    );
   }
 
   private async maybeAutoNameWorkspaceBranchForFirstAgent(input: {

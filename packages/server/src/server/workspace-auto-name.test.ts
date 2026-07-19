@@ -60,89 +60,66 @@ function makeHarness(input: {
   return { autoName, upsert, emit, generate };
 }
 
-describe("WorkspaceAutoName.scheduleRenameFromText", () => {
-  it("re-derives and persists the workspace title from the agent response", async () => {
+describe("WorkspaceAutoName.applyGeneratedTitle", () => {
+  it("persists a pre-generated workspace title", async () => {
     const { autoName, upsert, emit } = makeHarness({
       record: makeRecord({ title: "Old subject" }),
-      generatedTitle: "New subject",
+      generatedTitle: "unused",
     });
 
-    autoName.scheduleRenameFromText({
-      workspaceId: "ws-1",
-      cwd: "/tmp/project",
-      text: "I deployed the new subject and verified it live",
-    });
+    autoName.applyGeneratedTitle({ workspaceId: "ws-1", title: "New subject" });
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({ workspaceId: "ws-1", title: "New subject" });
     expect(emit).toHaveBeenCalledWith("ws-1");
   });
 
-  it("never touches the git branch when renaming from a response", async () => {
+  it("never touches the git branch", async () => {
     const { autoName, upsert } = makeHarness({
       record: makeRecord({ title: "Old", branch: "feature/keep-me" }),
-      generatedTitle: "Fresh title",
+      generatedTitle: "unused",
     });
 
-    autoName.scheduleRenameFromText({
-      workspaceId: "ws-1",
-      cwd: "/tmp/project",
-      text: "changed the subject",
-    });
+    autoName.applyGeneratedTitle({ workspaceId: "ws-1", title: "Fresh title" });
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
     expect(upsert.mock.calls[0]?.[0]).toMatchObject({ branch: "feature/keep-me" });
   });
 
-  it("skips the write when the generated title matches the current one", async () => {
+  it("skips the write when the title matches the current one", async () => {
     const { autoName, upsert, emit } = makeHarness({
       record: makeRecord({ title: "Same title" }),
-      generatedTitle: "Same title",
+      generatedTitle: "unused",
     });
 
-    autoName.scheduleRenameFromText({
-      workspaceId: "ws-1",
-      cwd: "/tmp/project",
-      text: "no meaningful change",
-    });
+    autoName.applyGeneratedTitle({ workspaceId: "ws-1", title: "Same title" });
 
-    await vi.waitFor(() => expect(true).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(upsert).not.toHaveBeenCalled();
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it("defers to a hand-picked title without invoking generation", async () => {
-    const { autoName, generate, upsert } = makeHarness({
+  it("defers to a hand-picked workspace title", async () => {
+    const { autoName, upsert } = makeHarness({
       record: makeRecord({ title: "My manual title", titleLockedByUser: true }),
-      generatedTitle: "auto title",
+      generatedTitle: "unused",
     });
 
-    autoName.scheduleRenameFromText({
-      workspaceId: "ws-1",
-      cwd: "/tmp/project",
-      text: "a substantive response",
-    });
+    autoName.applyGeneratedTitle({ workspaceId: "ws-1", title: "auto title" });
 
     await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(generate).not.toHaveBeenCalled();
     expect(upsert).not.toHaveBeenCalled();
   });
 
-  it("ignores blank text without invoking generation", async () => {
-    const { autoName, generate, upsert } = makeHarness({
+  it("ignores a blank title", async () => {
+    const { autoName, upsert } = makeHarness({
       record: makeRecord(),
       generatedTitle: "unused",
     });
 
-    autoName.scheduleRenameFromText({
-      workspaceId: "ws-1",
-      cwd: "/tmp/project",
-      text: "   ",
-    });
+    autoName.applyGeneratedTitle({ workspaceId: "ws-1", title: "   " });
 
     await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(generate).not.toHaveBeenCalled();
     expect(upsert).not.toHaveBeenCalled();
   });
 });

@@ -47,6 +47,9 @@ const STORED_AGENT_SCHEMA = z.object({
   lastActivityAt: z.string().optional(),
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
+  // True once the user has renamed this agent's tab by hand. The per-turn
+  // auto-titler defers to it and never overwrites a hand-picked tab title.
+  titleLockedByUser: z.boolean().optional(),
   synthesis: AgentSynthesisSchema.nullable().optional(),
   synthesisHistory: z.array(AgentSynthesisSchema).optional(),
   labels: z.record(z.string(), z.string()).default({}),
@@ -91,6 +94,7 @@ export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
 
 interface ApplySnapshotOptions {
   title?: string | null;
+  titleLockedByUser?: boolean;
   synthesis?: AgentSynthesis | null;
   synthesisHistory?: AgentSynthesis[] | null;
   internal?: boolean;
@@ -107,6 +111,7 @@ function resolveSnapshotOverrides(
   options?: ApplySnapshotOptions,
 ): {
   title: string | null;
+  titleLockedByUser?: boolean;
   synthesis: AgentSynthesis | null;
   synthesisHistory: AgentSynthesis[] | null;
   createdAt?: string;
@@ -116,6 +121,9 @@ function resolveSnapshotOverrides(
     options !== undefined && Object.prototype.hasOwnProperty.call(options, key);
   return {
     title: resolveOverrideField(has("title"), options?.title, existing?.title),
+    titleLockedByUser: has("titleLockedByUser")
+      ? options?.titleLockedByUser
+      : existing?.titleLockedByUser,
     synthesis: resolveOverrideField(has("synthesis"), options?.synthesis, existing?.synthesis),
     synthesisHistory: resolveOverrideField(
       has("synthesisHistory"),

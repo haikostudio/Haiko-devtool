@@ -25,6 +25,7 @@ export type { ManagedAgent };
 
 interface ProjectionOptions {
   title?: string | null;
+  titleLockedByUser?: boolean;
   synthesis?: AgentSynthesis | null;
   synthesisHistory?: AgentSynthesis[] | null;
   createdAt?: string;
@@ -82,6 +83,7 @@ export function toStoredAgentRecord(
     lastActivityAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
+    titleLockedByUser: options?.titleLockedByUser,
     synthesis: options?.synthesis ?? null,
     synthesisHistory: options?.synthesisHistory ?? undefined,
     labels: agent.labels,

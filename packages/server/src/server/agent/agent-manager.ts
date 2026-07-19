@@ -1572,7 +1572,11 @@ export class AgentManager {
     this.emitState(agent);
   }
 
-  async setTitle(agentId: string, title: string): Promise<void> {
+  async setTitle(
+    agentId: string,
+    title: string,
+    options?: { lockedByUser?: boolean },
+  ): Promise<void> {
     const agent = this.requireAgent(agentId);
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -1586,7 +1590,57 @@ export class AgentManager {
       return;
     }
     this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent, { title: normalizedTitle });
+    await this.persistSnapshot(agent, {
+      title: normalizedTitle,
+      // Only stamp the lock when a human explicitly renames — never on the
+      // auto-titler path, which omits the option and leaves the flag untouched.
+      ...(options?.lockedByUser ? { titleLockedByUser: true } : {}),
+    });
+    this.emitState(agent, { persist: false });
+  }
+
+  /**
+   * Set the tab title from the per-turn auto-titler. Defers to a hand-picked
+   * title: if the user has renamed this agent (titleLockedByUser), leave it
+   * alone. Best-effort — returns true when it applied a new title.
+   */
+  async setAutoTitle(agentId: string, title: string): Promise<boolean> {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      return false;
+    }
+    const record = this.registry ? await this.registry.get(agentId) : null;
+    if (record?.titleLockedByUser) {
+      return false;
+    }
+    if (record && record.title === normalizedTitle) {
+      return false;
+    }
+    await this.setTitle(agentId, normalizedTitle);
+    return true;
+  }
+
+  /**
+   * Overlay the generated one-sentence headline onto the agent's live synthesis
+   * (the floating banner's bold title line). Kept separate from the deterministic
+   * summary rebuild so the two update independently. Best-effort: if no synthesis
+   * exists yet, or nothing changed, it does nothing.
+   */
+  async setSynthesisHeadline(agentId: string, headline: string): Promise<void> {
+    const trimmed = headline.trim();
+    if (!trimmed || !this.registry) {
+      return;
+    }
+    const agent = this.getAgent(agentId);
+    if (!agent) {
+      return;
+    }
+    const current = (await this.registry.get(agentId))?.synthesis;
+    if (!current || current.headline === trimmed) {
+      return;
+    }
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent, { synthesis: { ...current, headline: trimmed } });
     this.emitState(agent, { persist: false });
   }
 
@@ -1625,12 +1679,23 @@ export class AgentManager {
     // entry. Otherwise omit the key so the existing thread is preserved.
     if (synthesis === null) {
       await this.persistSnapshot(agent, { synthesis: null, synthesisHistory: null });
-    } else if (options?.pushHistory) {
-      const existing = this.registry ? (await this.registry.get(agentId))?.synthesisHistory : null;
-      const history = [synthesis, ...(existing ?? [])].slice(0, MAX_SYNTHESIS_HISTORY);
-      await this.persistSnapshot(agent, { synthesis, synthesisHistory: history });
     } else {
-      await this.persistSnapshot(agent, { synthesis });
+      const existingRecord = this.registry ? await this.registry.get(agentId) : null;
+      // The deterministic rebuild carries no headline; preserve the last
+      // generated one so the banner's bold line survives every summary refresh.
+      const merged: AgentSynthesis =
+        synthesis.headline == null && existingRecord?.synthesis?.headline != null
+          ? { ...synthesis, headline: existingRecord.synthesis.headline }
+          : synthesis;
+      if (options?.pushHistory) {
+        const history = [merged, ...(existingRecord?.synthesisHistory ?? [])].slice(
+          0,
+          MAX_SYNTHESIS_HISTORY,
+        );
+        await this.persistSnapshot(agent, { synthesis: merged, synthesisHistory: history });
+      } else {
+        await this.persistSnapshot(agent, { synthesis: merged });
+      }
     }
     this.emitState(agent, { persist: false });
   }
@@ -1667,7 +1732,8 @@ export class AgentManager {
 
     const nextRecord = {
       ...record,
-      ...(patch.title ? { title: patch.title } : {}),
+      // Explicit rename locks the tab title against the per-turn auto-titler.
+      ...(patch.title ? { title: patch.title, titleLockedByUser: true } : {}),
       ...(patch.labels ? { labels: applyLabelPatch(record.labels, patch.labels) } : {}),
       updatedAt: this.nextStoredUpdatedAt(record),
     };
@@ -1810,7 +1876,8 @@ export class AgentManager {
     const liveAgent = this.getAgent(agentId);
     if (liveAgent) {
       if (updates.title) {
-        await this.setTitle(agentId, updates.title);
+        // Explicit rename: lock the tab title against the per-turn auto-titler.
+        await this.setTitle(agentId, updates.title, { lockedByUser: true });
       }
       if (updates.labels) {
         await this.writeLabels(agentId, updates.labels);

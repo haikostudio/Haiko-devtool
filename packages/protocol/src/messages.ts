@@ -792,6 +792,10 @@ export const AgentSynthesisSchema = z.object({
   objective: z.string().nullable().optional(),
   // Where things currently stand (one short line).
   state: z.string().nullable().optional(),
+  // A generated one-sentence headline for the floating banner's bold title line.
+  // Longer than the tab title (which stays short); LLM-generated per turn from
+  // the agent's response and preserved across the deterministic summary rebuilds.
+  headline: z.string().nullable().optional(),
   // ISO timestamp of when this synthesis was generated.
   updatedAt: z.string(),
 });

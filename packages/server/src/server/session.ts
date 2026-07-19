@@ -50,6 +50,10 @@ import {
   resolveCreateAgentTitles,
   resolveFirstAgentPromptTitle,
 } from "./agent/create-agent-title.js";
+import {
+  generateAgentTitleAndHeadline,
+  type GeneratedAgentLabels,
+} from "./agent/agent-title-headline-generator.js";
 import { respondToAgentPermission } from "./agent/permission-response.js";
 import type { VoiceCallerContext, VoiceSpeakHandler } from "./voice-types.js";
 import type { ScriptHealthState } from "./script-health-monitor.js";
@@ -6283,12 +6287,12 @@ export class Session {
         return;
       }
 
-      // Keep the workspace tab name tracking the current subject: after the turn
-      // settles, re-derive the title from the agent's *response* so the tab
-      // reflects what was actually addressed, not just what was asked ("au fil
-      // des requêtes"). Best-effort, async, title-only — never touches the git
-      // branch, and defers to a title the user set by hand.
-      this.scheduleWorkspaceRenameFromResponse(agentId);
+      // Keep the tab + banner tracking the current subject: after the turn
+      // settles, generate a short tab title and a one-sentence banner headline
+      // from the agent's *response*, so the labels reflect what was actually
+      // addressed, not just what was asked ("au fil des requêtes"). Best-effort,
+      // async; defers to titles the user set by hand.
+      this.scheduleAgentLabelsFromResponse(agentId);
 
       // Keep the floating conversation-synthesis block fresh: re-summarize the
       // whole discussion twice per exchange so the banner tracks where we are.
@@ -6569,18 +6573,18 @@ export class Session {
   }
 
   /**
-   * After the next turn completes, re-derive the workspace/tab title from the
-   * agent's latest response so the tab tracks what was actually addressed. Waits
-   * for the turn to settle (one-shot subscription mirroring
-   * {@link scheduleSynthesisFromTurn}); a failed or canceled turn leaves the
-   * title untouched. Title-only and best-effort — the auto-namer itself skips
-   * hand-renamed workspaces.
+   * After the next turn completes, generate two labels from the agent's response
+   * in a single model call and fan them out:
+   *   - a SHORT tab title       → agent.title (the tab), unless hand-renamed
+   *   - a ONE-SENTENCE headline  → synthesis.headline (the banner's bold line)
+   *   - the short title          → workspace.title (the sidebar), unless hand-renamed
+   * Waits for the turn to settle (one-shot subscription mirroring
+   * {@link scheduleSynthesisFromTurn}); a failed/canceled turn is left untouched.
+   * Best-effort and off the hot path.
    */
-  private scheduleWorkspaceRenameFromResponse(agentId: string): void {
+  private scheduleAgentLabelsFromResponse(agentId: string): void {
     const agent = this.agentManager.getAgent(agentId);
-    const workspaceId = agent?.workspaceId;
-    const cwd = agent?.cwd;
-    if (!workspaceId || !cwd || agent.internal) {
+    if (!agent?.cwd || agent.internal) {
       return;
     }
     const unsubscribe = this.agentManager.subscribe(
@@ -6600,14 +6604,73 @@ export class Session {
         if (eventType !== "turn_completed") {
           return;
         }
-        const text = this.latestAssistantText(agentId);
-        if (!text) {
-          return;
-        }
-        this.workspaceAutoName.scheduleRenameFromText({ workspaceId, cwd, text });
+        void this.generateAndApplyAgentLabels(agentId, 0);
       },
       { agentId, replayState: false },
     );
+  }
+
+  // Retry the label generation a couple of times while the agent stays at rest.
+  // The common failure is a daemon restart killing the sideband model mid-flight;
+  // a short idle retry recovers transient misses without waiting for the next turn.
+  private static readonly AGENT_LABEL_MAX_ATTEMPTS = 3;
+  private static readonly AGENT_LABEL_RETRY_DELAY_MS = 30_000;
+
+  private async generateAndApplyAgentLabels(agentId: string, attempt: number): Promise<void> {
+    const agent = this.agentManager.getAgent(agentId);
+    const cwd = agent?.cwd;
+    if (!cwd || agent.internal) {
+      return;
+    }
+    const text = this.latestAssistantText(agentId);
+    if (!text) {
+      return;
+    }
+    let labels: GeneratedAgentLabels | null = null;
+    try {
+      labels = await generateAgentTitleAndHeadline({
+        agentManager: this.agentManager,
+        cwd,
+        providerSnapshotManager: this.providerSnapshotManager,
+        daemonConfig: this.readStructuredGenerationDaemonConfig(),
+        responseText: text,
+        logger: this.sessionLogger,
+      });
+    } catch (err) {
+      this.sessionLogger.debug({ err, agentId }, "agent labels: generation threw");
+    }
+
+    if (labels && (labels.title || labels.headline)) {
+      if (labels.title) {
+        await this.agentManager.setAutoTitle(agentId, labels.title).catch((err) => {
+          this.sessionLogger.debug({ err, agentId }, "agent labels: setAutoTitle failed");
+        });
+        const workspaceId = agent.workspaceId;
+        if (workspaceId) {
+          this.workspaceAutoName.applyGeneratedTitle({ workspaceId, title: labels.title });
+        }
+      }
+      if (labels.headline) {
+        await this.agentManager.setSynthesisHeadline(agentId, labels.headline).catch((err) => {
+          this.sessionLogger.debug({ err, agentId }, "agent labels: setSynthesisHeadline failed");
+        });
+      }
+      return;
+    }
+
+    // Generation produced nothing usable (e.g. killed by a restart). Retry once
+    // more after a delay, but only while the agent is still idle — if the user
+    // sent a new prompt, the next turn will regenerate anyway.
+    if (attempt + 1 >= Session.AGENT_LABEL_MAX_ATTEMPTS) {
+      return;
+    }
+    setTimeout(() => {
+      const live = this.agentManager.getAgent(agentId);
+      if (!live || live.lifecycle !== "idle") {
+        return;
+      }
+      void this.generateAndApplyAgentLabels(agentId, attempt + 1);
+    }, Session.AGENT_LABEL_RETRY_DELAY_MS);
   }
 
   /**
