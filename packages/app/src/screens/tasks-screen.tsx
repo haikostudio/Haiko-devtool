@@ -41,8 +41,9 @@ import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
-import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
+import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskAgentPanel } from "@/components/tasks/task-agent-panel";
+import { CompactTaskAgentSheet } from "@/components/tasks/compact-task-agent-sheet";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { Button } from "@/components/ui/button";
@@ -891,8 +892,8 @@ function BoardContent({
     [boardHandle],
   );
 
-  // Compact keeps the modal editor; desktop opens the task in the agent side
-  // panel instead (its "Details" tab hosts the same editor).
+  // Compact opens the task's agent full-screen (Chat + Details tabs); desktop
+  // opens the same agent in the side panel beside the board.
   const handlePressTask = useCallback(
     (task: KanbanTask) => {
       if (isCompact) {
@@ -1075,7 +1076,7 @@ function BoardContent({
       ) : (
         boardStack
       )}
-      <TaskDetailSheet
+      <CompactTaskAgentSheet
         serverId={serverId}
         task={detailTask}
         visible={detailTask !== null}

@@ -32,6 +32,12 @@ export interface TaskAgentPanelProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onClose: () => void;
+  /**
+   * Full-screen (compact/mobile) presentation: drop the desktop-only collapse
+   * affordance and never render the collapsed rail. The tabs and body are the
+   * same as the desktop side panel.
+   */
+  fullscreen?: boolean;
   onSave: (input: TaskDetailSaveInput) => void;
   onDelete: (taskId: string) => void;
   onEstimate: (taskId: string) => void;
@@ -47,7 +53,7 @@ export interface TaskAgentPanelProps {
  * one.
  */
 export function TaskAgentPanel(props: TaskAgentPanelProps) {
-  const { serverId, task, collapsed, onToggleCollapse, onClose } = props;
+  const { serverId, task, collapsed, onToggleCollapse, onClose, fullscreen } = props;
   const { t } = useTranslation();
   const [view, setView] = useState<PanelView>("chat");
 
@@ -69,7 +75,7 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
     [t],
   );
 
-  if (collapsed) {
+  if (collapsed && !fullscreen) {
     return (
       <View style={styles.collapsedRail}>
         <Pressable
@@ -92,15 +98,17 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
         <Text style={styles.title} numberOfLines={1}>
           {task.title}
         </Text>
-        <Pressable
-          onPress={onToggleCollapse}
-          accessibilityRole="button"
-          accessibilityLabel={t("tasks.panel.collapse")}
-          style={styles.headerButton}
-          testID="task-panel-collapse"
-        >
-          <ThemedPanelClose size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        </Pressable>
+        {fullscreen ? null : (
+          <Pressable
+            onPress={onToggleCollapse}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.panel.collapse")}
+            style={styles.headerButton}
+            testID="task-panel-collapse"
+          >
+            <ThemedPanelClose size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          </Pressable>
+        )}
         <Pressable
           onPress={onClose}
           accessibilityRole="button"
