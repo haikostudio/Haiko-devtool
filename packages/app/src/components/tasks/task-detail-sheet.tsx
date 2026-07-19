@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -64,6 +64,18 @@ export function TaskDetailSheet(props: TaskDetailSheetProps) {
     return null;
   }
   return <TaskDetailSheetForm key={props.task.id} {...props} task={props.task} />;
+}
+
+/**
+ * Same editor rendered inline (no modal wrapper) so the desktop tasks board can
+ * host it as the "Details" tab of the agent side panel. Fresh mount per task via
+ * `key`, identical to the modal path.
+ */
+export function TaskDetailInlineForm(props: TaskDetailSheetProps) {
+  if (!props.task) {
+    return null;
+  }
+  return <TaskDetailSheetForm key={props.task.id} inline {...props} task={props.task} />;
 }
 
 interface ModelSelection {
@@ -133,7 +145,8 @@ function TaskDetailSheetForm({
   onEstimate,
   onRunNow,
   onApprove,
-}: TaskDetailSheetProps & { task: KanbanTask }) {
+  inline = false,
+}: TaskDetailSheetProps & { task: KanbanTask; inline?: boolean }) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const controlSize = isCompact ? "md" : "sm";
@@ -261,14 +274,8 @@ function TaskDetailSheetForm({
     [handleDelete, onClose, handleSave, t],
   );
 
-  return (
-    <AdaptiveModalSheet
-      header={header}
-      visible={visible}
-      onClose={onClose}
-      testID="task-detail-sheet"
-      footer={footer}
-    >
+  const body = (
+    <>
       {approvalPending ? (
         <View style={styles.approvalBanner}>
           <View style={styles.approvalTextBlock}>
@@ -351,6 +358,64 @@ function TaskDetailSheetForm({
           </Button>
         ) : null}
       </View>
+    </>
+  );
+
+  return (
+    <TaskDetailShell
+      inline={inline}
+      header={header}
+      footer={footer}
+      visible={visible}
+      onClose={onClose}
+    >
+      {body}
+    </TaskDetailShell>
+  );
+}
+
+// Renders the editor either inline (desktop side panel) or wrapped in the modal
+// sheet (compact). Split out of the form so the form's cyclomatic complexity
+// stays under the lint budget.
+function TaskDetailShell({
+  inline,
+  header,
+  footer,
+  visible,
+  onClose,
+  children,
+}: {
+  inline: boolean;
+  header: SheetHeader;
+  footer: ReactNode;
+  visible: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (inline) {
+    return (
+      <View style={styles.inlineContainer}>
+        <ScrollView
+          style={styles.inlineScroll}
+          contentContainerStyle={styles.inlineScrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+        <View style={styles.inlineFooter}>{footer}</View>
+      </View>
+    );
+  }
+
+  return (
+    <AdaptiveModalSheet
+      header={header}
+      visible={visible}
+      onClose={onClose}
+      testID="task-detail-sheet"
+      footer={footer}
+    >
+      {children}
     </AdaptiveModalSheet>
   );
 }
@@ -711,6 +776,22 @@ function TaskMetaSection({ task, effective }: { task: KanbanTask; effective: Eff
 const styles = StyleSheet.create((theme) => ({
   multilineInput: {
     minHeight: 96,
+  },
+  inlineContainer: {
+    flex: 1,
+  },
+  inlineScroll: {
+    flex: 1,
+  },
+  inlineScrollContent: {
+    padding: theme.spacing[3],
+    gap: theme.spacing[3],
+  },
+  inlineFooter: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    padding: theme.spacing[3],
   },
   approvalBanner: {
     flexDirection: "row",

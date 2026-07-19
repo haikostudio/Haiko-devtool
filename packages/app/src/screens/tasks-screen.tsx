@@ -1,5 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  type GestureResponderEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type ViewStyle,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
@@ -52,12 +59,14 @@ import {
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
+import { TaskAgentPanel } from "@/components/tasks/task-agent-panel";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
 import {
   useTaskBoard,
   type KanbanTask,
@@ -71,6 +80,52 @@ import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
+
+// Desktop agent side-panel geometry — collapsed rail vs a resizable open width.
+const COLLAPSED_PANEL_WIDTH = 44;
+const MIN_PANEL_WIDTH = 320;
+const MAX_PANEL_WIDTH = 760;
+const DEFAULT_PANEL_WIDTH = 440;
+
+function clampPanelWidth(width: number): number {
+  return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, width));
+}
+
+// RN's ViewStyle `cursor` only types auto|pointer; `col-resize` is web-valid, so
+// apply it as a web-only escape hatch outside Unistyles' stricter typing.
+const resizeCursorStyle: ViewStyle | undefined = isWeb
+  ? ({ cursor: "col-resize" } as unknown as ViewStyle)
+  : undefined;
+
+const alwaysCapture = () => true;
+
+// Cross-platform drag handle (RN responder system, so it works on web without
+// touching DOM APIs). Reports incremental pageX deltas; the board clamps width.
+function ResizeHandle({ onResize }: { onResize: (deltaX: number) => void }) {
+  const lastXRef = useRef(0);
+  const handleStyle = useMemo(() => [styles.resizeHandle, resizeCursorStyle], []);
+  const handleGrant = useCallback((event: GestureResponderEvent) => {
+    lastXRef.current = event.nativeEvent.pageX;
+  }, []);
+  const handleMove = useCallback(
+    (event: GestureResponderEvent) => {
+      const x = event.nativeEvent.pageX;
+      onResize(x - lastXRef.current);
+      lastXRef.current = x;
+    },
+    [onResize],
+  );
+  return (
+    <View
+      style={handleStyle}
+      accessibilityRole="adjustable"
+      onStartShouldSetResponder={alwaysCapture}
+      onMoveShouldSetResponder={alwaysCapture}
+      onResponderGrant={handleGrant}
+      onResponderMove={handleMove}
+    />
+  );
+}
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
@@ -979,6 +1034,10 @@ function BoardContent({
   const { config } = useDaemonConfig(serverId);
   const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  // Desktop only: the task whose agent is mirrored in the right-hand side panel.
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
   const [boardQuery, setBoardQuery] = useState("");
@@ -1012,6 +1071,14 @@ function BoardContent({
     [detailTaskId, boardHandle.board],
   );
 
+  const selectedTask = useMemo(
+    () =>
+      selectedTaskId
+        ? (boardHandle.board?.tasks.find((task) => task.id === selectedTaskId) ?? null)
+        : null,
+    [selectedTaskId, boardHandle.board],
+  );
+
   const handleMoveTask = useCallback(
     (input: { taskId: string; column: TaskColumn; index: number }) => {
       void boardHandle.moveTask(input);
@@ -1019,13 +1086,41 @@ function BoardContent({
     [boardHandle],
   );
 
-  const handlePressTask = useCallback((task: KanbanTask) => {
-    setDetailTaskId(task.id);
-  }, []);
+  // Compact keeps the modal editor; desktop opens the task in the agent side
+  // panel instead (its "Details" tab hosts the same editor).
+  const handlePressTask = useCallback(
+    (task: KanbanTask) => {
+      if (isCompact) {
+        setDetailTaskId(task.id);
+        return;
+      }
+      setSelectedTaskId(task.id);
+      setPanelCollapsed(false);
+    },
+    [isCompact],
+  );
 
   const handleCloseDetail = useCallback(() => {
     setDetailTaskId(null);
   }, []);
+
+  const handleClosePanel = useCallback(() => {
+    setSelectedTaskId(null);
+  }, []);
+
+  const handleToggleCollapsePanel = useCallback(() => {
+    setPanelCollapsed((collapsed) => !collapsed);
+  }, []);
+
+  const handleResizePanel = useCallback((deltaX: number) => {
+    // Panel sits on the right edge, so dragging the handle right shrinks it.
+    setPanelWidth((width) => clampPanelWidth(width - deltaX));
+  }, []);
+
+  const panelHostStyle = useMemo(
+    () => [styles.panelHost, { width: panelCollapsed ? COLLAPSED_PANEL_WIDTH : panelWidth }],
+    [panelCollapsed, panelWidth],
+  );
 
   const handleCancelNewTask = useCallback(() => {
     setNewTaskColumn(null);
@@ -1112,95 +1207,122 @@ function BoardContent({
   const showTimeline = !isCompact || compactView === "timeline";
   const showBoard = !isCompact || compactView === "board";
 
-  return (
-    <TaskScheduleProvider value={quietHours}>
-      <View style={styles.boardContainer}>
-        {isCompact ? (
-          <View style={styles.compactViewSwitch}>
-            <SegmentedControl
-              options={viewOptions}
-              value={compactView}
-              onValueChange={setCompactView}
-              size="sm"
-              fullWidth
-              testID="tasks-view-switch"
-            />
-          </View>
-        ) : null}
-        {boardHandle.board && showTimeline ? (
-          <TaskGantt
-            board={boardHandle.board}
-            onPressTask={handlePressTask}
-            containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
-            fill={isCompact}
+  const showPanel = !isCompact && selectedTask !== null;
+
+  const boardStack = (
+    <View style={styles.boardContainer}>
+      {isCompact ? (
+        <View style={styles.compactViewSwitch}>
+          <SegmentedControl
+            options={viewOptions}
+            value={compactView}
+            onValueChange={setCompactView}
+            size="sm"
+            fullWidth
+            testID="tasks-view-switch"
           />
-        ) : null}
-        {showBoard ? (
-          <>
-            <View style={styles.boardToolbar}>
-              <FormTextInput
-                size="sm"
-                value={boardQuery}
-                onChangeText={setBoardQuery}
-                placeholder={t("tasks.searchTasks")}
-                style={styles.boardSearchInput}
-                testID="tasks-board-search-input"
-              />
-              <BoardFilterMenu
-                board={boardHandle.board}
-                folderId={folderId}
-                filter={boardFilter}
-                onChange={setBoardFilter}
-              />
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  style={sortButtonStyle}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("tasks.sortTasks")}
-                  testID="tasks-board-sort"
-                >
-                  <ThemedArrowUpDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {TASK_SORT_MODES.map((mode) => (
-                    <SortMenuItem
-                      key={mode}
-                      mode={mode}
-                      label={sortLabels[mode]}
-                      selected={mode === sortMode}
-                      onSelect={setSortMode}
-                    />
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </View>
-            <KanbanBoard
+        </View>
+      ) : null}
+      {boardHandle.board && showTimeline ? (
+        <TaskGantt
+          board={boardHandle.board}
+          onPressTask={handlePressTask}
+          containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
+          fill={isCompact}
+        />
+      ) : null}
+      {showBoard ? (
+        <>
+          <View style={styles.boardToolbar}>
+            <FormTextInput
+              size="sm"
+              value={boardQuery}
+              onChangeText={setBoardQuery}
+              placeholder={t("tasks.searchTasks")}
+              style={styles.boardSearchInput}
+              testID="tasks-board-search-input"
+            />
+            <BoardFilterMenu
               board={boardHandle.board}
               folderId={folderId}
-              onMoveTask={handleMoveTask}
-              onPressTask={handlePressTask}
-              onAddTask={setNewTaskColumn}
-              onRunTask={handleRunTaskNow}
-              onReanalyzeTask={handleEstimateTask}
-              columnExtras={columnExtras}
-              query={boardQuery}
-              sortMode={sortMode}
               filter={boardFilter}
+              onChange={setBoardFilter}
             />
-          </>
-        ) : null}
-        <TaskDetailSheet
-          serverId={serverId}
-          task={detailTask}
-          visible={detailTask !== null}
-          onClose={handleCloseDetail}
-          onSave={handleSaveTask}
-          onDelete={handleDeleteTask}
-          onEstimate={handleEstimateTask}
-          onRunNow={handleRunTaskNow}
-          onApprove={handleApproveTask}
-        />
-      </View>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                style={sortButtonStyle}
+                accessibilityRole="button"
+                accessibilityLabel={t("tasks.sortTasks")}
+                testID="tasks-board-sort"
+              >
+                <ThemedArrowUpDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {TASK_SORT_MODES.map((mode) => (
+                  <SortMenuItem
+                    key={mode}
+                    mode={mode}
+                    label={sortLabels[mode]}
+                    selected={mode === sortMode}
+                    onSelect={setSortMode}
+                  />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </View>
+          <KanbanBoard
+            board={boardHandle.board}
+            folderId={folderId}
+            onMoveTask={handleMoveTask}
+            onPressTask={handlePressTask}
+            onAddTask={setNewTaskColumn}
+            onRunTask={handleRunTaskNow}
+            onReanalyzeTask={handleEstimateTask}
+            columnExtras={columnExtras}
+            query={boardQuery}
+            sortMode={sortMode}
+            filter={boardFilter}
+          />
+        </>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <TaskScheduleProvider value={quietHours}>
+      {showPanel && selectedTask ? (
+        <View style={styles.boardSplitRow}>
+          {boardStack}
+          {panelCollapsed ? null : <ResizeHandle onResize={handleResizePanel} />}
+          <View style={panelHostStyle}>
+            <TaskAgentPanel
+              serverId={serverId}
+              task={selectedTask}
+              collapsed={panelCollapsed}
+              onToggleCollapse={handleToggleCollapsePanel}
+              onClose={handleClosePanel}
+              onSave={handleSaveTask}
+              onDelete={handleDeleteTask}
+              onEstimate={handleEstimateTask}
+              onRunNow={handleRunTaskNow}
+              onApprove={handleApproveTask}
+            />
+          </View>
+        </View>
+      ) : (
+        boardStack
+      )}
+      <TaskDetailSheet
+        serverId={serverId}
+        task={detailTask}
+        visible={detailTask !== null}
+        onClose={handleCloseDetail}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
+        onEstimate={handleEstimateTask}
+        onRunNow={handleRunTaskNow}
+        onApprove={handleApproveTask}
+      />
     </TaskScheduleProvider>
   );
 }
@@ -1688,6 +1810,19 @@ const styles = StyleSheet.create((theme) => ({
   boardContainer: {
     flex: 1,
     gap: theme.spacing[3],
+  },
+  // Desktop split: board on the left (flex), resizable agent panel on the right.
+  boardSplitRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "stretch",
+  },
+  panelHost: {
+    height: "100%",
+  },
+  resizeHandle: {
+    width: 6,
+    backgroundColor: theme.colors.border,
   },
   // Always-visible search field + filter (funnel) + sort menu, sitting above
   // the columns and aligned to the same board inset.
