@@ -80,12 +80,13 @@ export function KanbanBoard({
   columnExtras,
   query,
   sortMode,
+  filter,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
   const columns = useMemo(
-    () => buildColumnModels(board, folderId, { query, sortMode }),
-    [board, folderId, query, sortMode],
+    () => buildColumnModels(board, folderId, { query, sortMode, filter }),
+    [board, folderId, query, sortMode, filter],
   );
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
-import { parseTaskTags } from "./task-tags";
+import { daysUntil, parseTaskTags, type TaskPriorityLevel } from "./task-tags";
 
 // How the cards within each column are ordered. "deadline" is the default the
 // board has always used; the rest are opt-in via the board's sort control.
@@ -93,9 +93,103 @@ function matchesQuery(task: KanbanTask, needle: string): boolean {
     .every((term) => haystack.includes(term));
 }
 
+// ---------------------------------------------------------------------------
+// Faceted filter (the funnel button): narrow the board by priority, deadline,
+// and thematic tags. Facets combine as AND (a card must clear every active
+// facet); values within a facet combine as OR (any selected tag is enough).
+// ---------------------------------------------------------------------------
+
+// The priority levels the filter offers — the same three the editor writes.
+// "other"-level priorities (unrecognized suffixes) are never a filter target.
+export type FilterPriorityLevel = Exclude<TaskPriorityLevel, "other">;
+
+export type DeadlineFilter = "overdue" | "none";
+
+export interface TaskFilter {
+  priorities: FilterPriorityLevel[];
+  deadline: DeadlineFilter[];
+  tags: string[];
+}
+
+export const EMPTY_TASK_FILTER: TaskFilter = { priorities: [], deadline: [], tags: [] };
+
+export function taskFilterCount(filter: TaskFilter): number {
+  return filter.priorities.length + filter.deadline.length + filter.tags.length;
+}
+
+// The facets actually present on this folder's board, so the filter menu only
+// offers choices that can match something (no empty "Low priority" row when no
+// card is tagged low). Priorities keep high→low order; tags sort alphabetically.
+export interface BoardFacets {
+  priorities: FilterPriorityLevel[];
+  hasDeadlines: boolean;
+  tags: string[];
+}
+
+const PRIORITY_FILTER_ORDER: FilterPriorityLevel[] = ["high", "medium", "low"];
+
+export function collectBoardFacets(board: TaskBoard | null, folderId: string): BoardFacets {
+  const priorities = new Set<FilterPriorityLevel>();
+  const tags = new Set<string>();
+  let hasDeadlines = false;
+  for (const task of board?.tasks ?? []) {
+    if (task.folderId !== folderId) {
+      continue;
+    }
+    const parsed = parseTaskTags(task.tags);
+    if (parsed.priority && parsed.priority.level !== "other") {
+      priorities.add(parsed.priority.level);
+    }
+    if (parsed.deadline) {
+      hasDeadlines = true;
+    }
+    for (const tag of parsed.tags) {
+      tags.add(tag);
+    }
+  }
+  return {
+    priorities: PRIORITY_FILTER_ORDER.filter((level) => priorities.has(level)),
+    hasDeadlines,
+    tags: [...tags].sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: "base" }),
+    ),
+  };
+}
+
+function matchesFilter(task: KanbanTask, filter: TaskFilter, now: Date): boolean {
+  if (filter.priorities.length === 0 && filter.deadline.length === 0 && filter.tags.length === 0) {
+    return true;
+  }
+  const parsed = parseTaskTags(task.tags);
+  if (filter.priorities.length > 0) {
+    const level = parsed.priority?.level;
+    if (!level || level === "other" || !filter.priorities.includes(level)) {
+      return false;
+    }
+  }
+  if (filter.deadline.length > 0) {
+    const dueDate = parsed.deadline?.dueDate ?? null;
+    const passesDeadline = filter.deadline.some((cond) =>
+      cond === "none" ? !parsed.deadline : dueDate !== null && daysUntil(dueDate, now) < 0,
+    );
+    if (!passesDeadline) {
+      return false;
+    }
+  }
+  if (filter.tags.length > 0) {
+    if (!parsed.tags.some((tag) => filter.tags.includes(tag))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export interface BuildColumnOptions {
   query?: string;
   sortMode?: TaskSortMode;
+  filter?: TaskFilter;
+  // Injected so the "overdue" deadline facet is deterministic in tests.
+  now?: Date;
 }
 
 export function buildColumnModels(
@@ -105,6 +199,8 @@ export function buildColumnModels(
 ): KanbanColumnModel[] {
   const needle = options?.query?.trim() ?? "";
   const compare = comparatorFor(options?.sortMode ?? "deadline");
+  const filter = options?.filter ?? EMPTY_TASK_FILTER;
+  const now = options?.now ?? new Date();
   return KANBAN_COLUMNS.map((column) => ({
     column,
     tasks: (board?.tasks ?? [])
@@ -112,10 +208,46 @@ export function buildColumnModels(
         (task) =>
           task.folderId === folderId &&
           task.column === column &&
-          (needle === "" || matchesQuery(task, needle)),
+          (needle === "" || matchesQuery(task, needle)) &&
+          matchesFilter(task, filter, now),
       )
       .sort(compare),
   }));
+}
+
+export interface FilterLabels {
+  title: string;
+  empty: string;
+  clear: string;
+  priorityHeading: string;
+  deadlineHeading: string;
+  tagsHeading: string;
+  priority: Record<FilterPriorityLevel, string>;
+  deadline: Record<DeadlineFilter, string>;
+}
+
+export function useFilterLabels(): FilterLabels {
+  const { t } = useTranslation();
+  return useMemo(
+    () => ({
+      title: t("tasks.filter.title"),
+      empty: t("tasks.filter.empty"),
+      clear: t("tasks.filter.clear"),
+      priorityHeading: t("tasks.filter.priorityHeading"),
+      deadlineHeading: t("tasks.filter.deadlineHeading"),
+      tagsHeading: t("tasks.filter.tagsHeading"),
+      priority: {
+        high: t("tasks.filter.priorityHigh"),
+        medium: t("tasks.filter.priorityMedium"),
+        low: t("tasks.filter.priorityLow"),
+      },
+      deadline: {
+        overdue: t("tasks.filter.deadlineOverdue"),
+        none: t("tasks.filter.deadlineNone"),
+      },
+    }),
+    [t],
+  );
 }
 
 export function useTaskSortLabels(): Record<TaskSortMode, string> {
@@ -157,7 +289,8 @@ export interface KanbanBoardProps {
   onReanalyzeTask: (taskId: string) => void;
   // Node rendered at the top of one column's body (inline new-task draft).
   columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
-  // Board-level filter + ordering, driven by the search/sort toolbar.
+  // Board-level search, faceted filter, and ordering, driven by the toolbar.
   query?: string;
   sortMode?: TaskSortMode;
+  filter?: TaskFilter;
 }

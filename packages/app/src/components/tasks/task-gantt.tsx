@@ -13,14 +13,14 @@ import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
 
-// Row order for the timeline: what's running first, then planned, then the
-// to-do backlog. Done is excluded — the strip shows the work still ahead, not
-// history. Any unknown column sorts last.
+// The timeline is scoped to committed work only: what's running now, then what
+// is planned to launch next. Backlog / validated / done never appear — the
+// strip answers "what is scheduled to happen", not "everything on the board".
+// Running sorts before planned; any other column is filtered out upstream.
+const GANTT_COLUMNS = new Set<KanbanTask["column"]>(["in_progress", "scheduled"]);
 const GANTT_ORDER: Record<string, number> = {
   in_progress: 0,
   scheduled: 1,
-  validated: 2,
-  backlog: 3,
 };
 
 const MINUTE_MS = 60_000;
@@ -103,12 +103,12 @@ function formatDuration(ms: number): string {
 }
 
 /**
- * Projected timeline for the whole project: a real time axis starting now,
- * one row per still-open task, bars placed at their projected launch slot.
- * Running tasks start at the "now" line; queued tasks (planned, then backlog)
- * pack sequentially behind them, so the strip answers "what launches when".
- * Bars carry the folder color (project color fallback); a dashed amber line
- * marks the end of the 5h quota window. Re-renders every minute so the axis
+ * Projected timeline for the committed work only: a real time axis starting
+ * now, one row per running or planned task (backlog/validated/done never show).
+ * Running tasks start at the "now" line; planned tasks pack sequentially behind
+ * them, so the strip answers "what launches when". Bars carry their kanban
+ * column color — amber for "En cours", blue for "Planifié" — and a dashed amber
+ * line marks the end of the 5h quota window. Re-renders every minute so the axis
  * actually tracks the passing time.
  */
 export const TaskGantt = memo(function TaskGantt({
@@ -137,7 +137,7 @@ export const TaskGantt = memo(function TaskGantt({
 
   const { rows, ticks, quotaPct, totalQuota, totalDurationMs } = useMemo(() => {
     const open = board.tasks
-      .filter((task) => task.column !== "done")
+      .filter((task) => GANTT_COLUMNS.has(task.column))
       .sort(
         (left, right) =>
           (GANTT_ORDER[left.column] ?? 9) - (GANTT_ORDER[right.column] ?? 9) ||
@@ -365,28 +365,29 @@ const TimelineRowView = memo(function TimelineRowView({
     onPressTask(row.task);
   }, [onPressTask, row.task]);
 
+  const isRunning = row.column === "in_progress";
   const barStyle = useMemo(() => {
     const base = {
       left: `${row.leftPct}%` as const,
       width: `${row.widthPct}%` as const,
     };
     if (!row.estimated) {
-      // Un-estimated: dashed gray outline, so an unknown size reads differently
-      // from a measured one without inventing a length.
-      return [styles.bar, styles.barOutlined, base];
+      // Un-estimated: dashed outline in the column color, so an unknown size
+      // reads differently from a measured one while keeping the lane's hue.
+      return [
+        styles.bar,
+        base,
+        isRunning ? styles.barOutlinedRunning : styles.barOutlinedScheduled,
+      ];
     }
-    // Estimated: grayscale fill, darker to lighter by column so a glance
-    // separates running (near-black) from planned (mid) and backlog (light).
-    let fill: StyleProp<ViewStyle> = styles.barRunning;
-    if (row.column === "scheduled" || row.column === "validated") {
-      fill = styles.barScheduled;
-    } else if (row.column === "backlog") {
-      fill = styles.barBacklog;
-    }
-    return [styles.bar, base, fill];
-  }, [row.estimated, row.column, row.leftPct, row.widthPct]);
+    // Estimated: solid fill in the column color — amber for what's running,
+    // blue for what's planned — so the bar matches its kanban column at a glance.
+    return [styles.bar, base, isRunning ? styles.barRunning : styles.barScheduled];
+  }, [row.estimated, isRunning, row.leftPct, row.widthPct]);
 
-  const startLabelStyle = row.column === "in_progress" ? styles.startTextRunning : styles.startText;
+  const dotStyle = isRunning ? styles.rowDotRunning : styles.rowDotScheduled;
+
+  const startLabelStyle = isRunning ? styles.startTextRunning : styles.startText;
 
   const labelCellStyle = useMemo(() => [styles.labelCell, { width: labelWidth }], [labelWidth]);
 
@@ -399,7 +400,7 @@ const TimelineRowView = memo(function TimelineRowView({
       testID={`tasks-gantt-row-${row.task.id}`}
     >
       <View style={labelCellStyle}>
-        <View style={styles.rowDot} />
+        <View style={[styles.rowDot, dotStyle]} />
         <Text style={styles.labelText} numberOfLines={1}>
           {row.task.title}
         </Text>
@@ -519,6 +520,13 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foregroundMuted,
   },
+  // Row dots echo the kanban column color: amber = running, blue = planned.
+  rowDotRunning: {
+    backgroundColor: theme.colors.statusWarning,
+  },
+  rowDotScheduled: {
+    backgroundColor: theme.colors.palette.blue[500],
+  },
   labelText: {
     flex: 1,
     color: theme.colors.foreground,
@@ -538,21 +546,26 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 8,
     borderRadius: theme.borderRadius.base,
   },
-  // Grayscale ramp: running near-black, planned mid-gray, backlog light gray.
+  // Column-matched fills: amber for what's running, blue for what's planned —
+  // the same hues as the "En cours" / "Planifié" kanban columns.
   barRunning: {
-    backgroundColor: theme.colors.foreground,
+    backgroundColor: theme.colors.statusWarning,
   },
   barScheduled: {
-    backgroundColor: theme.colors.foregroundMuted,
+    backgroundColor: theme.colors.palette.blue[500],
   },
-  barBacklog: {
-    backgroundColor: theme.colors.palette.zinc[400],
-  },
-  barOutlined: {
+  // Un-estimated: dashed outline in the same column hue (unknown size, known lane).
+  barOutlinedRunning: {
     backgroundColor: "transparent",
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: theme.colors.foregroundMuted,
+    borderColor: theme.colors.statusWarning,
+  },
+  barOutlinedScheduled: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: theme.colors.palette.blue[500],
   },
   startText: {
     width: START_WIDTH,
