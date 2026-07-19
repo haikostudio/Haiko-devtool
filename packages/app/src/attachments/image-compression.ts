@@ -28,11 +28,23 @@ export interface EncodedAttachment {
 /** Total base64 characters allowed across all attachments in one message. */
 export const MAX_TOTAL_ATTACHMENT_BASE64_CHARS = 640_000;
 
-/** Above this per-image base64 length we attempt compression before sending. */
-export const IMAGE_COMPRESS_TRIGGER_BASE64_CHARS = 480_000;
+/**
+ * Above this per-image base64 length we attempt compression before sending.
+ *
+ * This is deliberately well below the send budget: it is not just about frame
+ * size, it is also a proxy for "this image is probably high-resolution". Some
+ * providers reject high-resolution inputs that others accept — Codex forwards
+ * attachments straight to the OpenAI vision API (as an `image_url` block) with no
+ * client-side downscaling, whereas Claude tolerates much larger images. Any image
+ * past this threshold is therefore normalized down to {@link IMAGE_COMPRESS_TARGET_BYTES}
+ * and {@link ImageCompressor}'s max edge so it is safe for every agent, not just
+ * the most lenient one. Genuinely small thumbnails/icons stay under it and pass
+ * through untouched.
+ */
+export const IMAGE_COMPRESS_TRIGGER_BASE64_CHARS = 150_000;
 
 /** Byte target the compressor aims for per image (base64 of this stays comfortably under budget). */
-export const IMAGE_COMPRESS_TARGET_BYTES = 320_000;
+export const IMAGE_COMPRESS_TARGET_BYTES = 240_000;
 
 export interface CompressImageInput {
   /** Loadable URL for the source image (blob: URL on web, file:// URI on native). */

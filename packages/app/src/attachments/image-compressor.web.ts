@@ -5,10 +5,11 @@ import {
 } from "@/attachments/image-compression";
 
 /** Longest edge we keep. Larger images are scaled down before re-encoding. */
-const MAX_EDGE_PX = 1568;
-const MAX_ATTEMPTS = 6;
-const MIN_QUALITY = 0.4;
-const MIN_SCALE = 0.3;
+const MAX_EDGE_PX = 1280;
+const MIN_EDGE_PX = 320;
+const MAX_ATTEMPTS = 10;
+const MIN_QUALITY = 0.28;
+const EDGE_SHRINK_RATIO = 0.72;
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -37,11 +38,13 @@ export async function compressImage({
   const naturalHeight = img.naturalHeight || img.height;
   if (naturalWidth === 0 || naturalHeight === 0) return null;
 
-  // Never upscale: start at 1 and only shrink if the image is larger than MAX_EDGE_PX.
-  let scale = Math.min(1, MAX_EDGE_PX / Math.max(naturalWidth, naturalHeight));
+  const sourceLongestEdge = Math.max(naturalWidth, naturalHeight);
+  // Never upscale: start at the smaller of the source edge and our max edge.
+  let targetLongestEdge = Math.min(MAX_EDGE_PX, sourceLongestEdge);
   let best: EncodedAttachment | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const scale = targetLongestEdge / sourceLongestEdge;
     const width = Math.max(1, Math.round(naturalWidth * scale));
     const height = Math.max(1, Math.round(naturalHeight * scale));
 
@@ -52,7 +55,7 @@ export async function compressImage({
     if (!ctx) return best;
     ctx.drawImage(img, 0, 0, width, height);
 
-    const quality = Math.max(MIN_QUALITY, 0.82 - attempt * 0.12);
+    const quality = Math.max(MIN_QUALITY, 0.82 - attempt * 0.08);
     const dataUrl = canvas.toDataURL("image/jpeg", quality);
     const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
 
@@ -63,8 +66,8 @@ export async function compressImage({
       return best;
     }
 
-    if (scale <= MIN_SCALE && quality <= MIN_QUALITY) break;
-    scale = Math.max(MIN_SCALE, scale * 0.8);
+    if (targetLongestEdge <= MIN_EDGE_PX && quality <= MIN_QUALITY) break;
+    targetLongestEdge = Math.max(MIN_EDGE_PX, Math.round(targetLongestEdge * EDGE_SHRINK_RATIO));
   }
 
   return best;
