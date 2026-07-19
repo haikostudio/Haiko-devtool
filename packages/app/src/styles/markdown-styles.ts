@@ -306,11 +306,12 @@ export function createMarkdownStyles(theme: Theme) {
 
     // Fallback styling for blockquotes that don't reach the block-level callout
     // renderer (e.g. a quote glued to a paragraph inside one block, or nested).
-    // Keep it in sync with the purple "tip" callout tint in message.tsx.
+    // Keep it in sync with the neutral grey card in message.tsx: surface tint,
+    // uniform border, no left accent bar.
     blockquote: {
-      backgroundColor: "rgba(168, 85, 247, 0.13)",
-      borderLeftWidth: 3,
-      borderLeftColor: "#a855f7",
+      backgroundColor: theme.colors.surface1,
+      borderWidth: theme.borderWidth[1],
+      borderColor: theme.colors.border,
       paddingHorizontal: theme.spacing[3],
       paddingVertical: theme.spacing[2],
       marginVertical: theme.spacing[3],

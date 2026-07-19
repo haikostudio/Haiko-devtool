@@ -1,12 +1,18 @@
 /**
  * Detects "callout" blocks in assistant markdown so the message thread can
  * lift advice, notes and warnings out of the wall of prose. A callout is any
- * markdown blockquote. Plain blockquotes render as a purple accent (advice);
- * GitHub-style alert markers (`> [!TIP]`, `> [!WARNING]`, …) get a typed color
- * plus a labelled header. See docs/design.md for the rationale.
+ * markdown blockquote. Plain blockquotes (and blockquotes whose first line is a
+ * bold `**Title**`) render as a neutral grey card — no colored accent, no left
+ * border. GitHub-style alert markers (`> [!TIP]`, `> [!WARNING]`, …) get a typed
+ * color plus a labelled header. See docs/design.md for the rationale.
  */
 
-export type CalloutType = "tip" | "note" | "important" | "warning" | "caution";
+export type CalloutType = "neutral" | "tip" | "note" | "important" | "warning" | "caution";
+
+// Matches a blockquote whose whole first line is a bold heading, e.g.
+// `**Ce qui a été fait**` — used to give a plain (non-alert) blockquote a grey
+// card header + icon without a colored `[!TYPE]` label.
+const BOLD_HEADING_LINE = /^\*\*(.+?)\*\*\s*$/;
 
 export interface ParsedCallout {
   /** Drives the accent color and icon. */
@@ -73,7 +79,10 @@ export function parseCalloutBlock(block: string): ParsedCallout | null {
   });
   stripLeadingBlankLines(innerLines);
 
-  let type: CalloutType = "tip";
+  // Default: a plain blockquote is a neutral grey card with no header. An alert
+  // marker upgrades it to a typed/colored callout; a bold first line upgrades it
+  // to a neutral card with an icon + title (but no colored label).
+  let type: CalloutType = "neutral";
   let heading: string | null = null;
 
   const alertMatch = ALERT_LINE.exec((innerLines[0] ?? "").trim());
@@ -86,6 +95,13 @@ export function parseCalloutBlock(block: string): ParsedCallout | null {
       innerLines.shift();
       stripLeadingBlankLines(innerLines);
     }
+  } else {
+    const boldMatch = BOLD_HEADING_LINE.exec((innerLines[0] ?? "").trim());
+    if (boldMatch) {
+      heading = boldMatch[1].trim();
+      innerLines.shift();
+      stripLeadingBlankLines(innerLines);
+    }
   }
 
   return { type, heading, body: innerLines.join("\n").trimEnd() };
@@ -93,6 +109,7 @@ export function parseCalloutBlock(block: string): ParsedCallout | null {
 
 /** Default header label per type, used when an alert carries no inline title. */
 export const DEFAULT_HEADINGS: Record<CalloutType, string> = {
+  neutral: "",
   tip: "Conseil",
   note: "Note",
   important: "Important",

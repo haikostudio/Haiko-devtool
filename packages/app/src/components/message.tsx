@@ -52,6 +52,13 @@ import {
   BrainCircuit,
   ListChecks,
   ClipboardList,
+  CircleDot,
+  Wrench,
+  RefreshCw,
+  Target,
+  MessageSquare,
+  TrendingUp,
+  ReceiptText,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
@@ -1475,9 +1482,11 @@ function AssistantMessageBlockContainer({
  * accent reads the same on every light/dark theme without threading tokens
  * through each theme variant. `icon` is a lucide component.
  */
+type CalloutIcon = ComponentType<{ size?: number; color?: string }>;
+
 const CALLOUT_PALETTE: Record<
-  CalloutType,
-  { color: string; background: string; icon: ComponentType<{ size?: number; color?: string }> }
+  Exclude<CalloutType, "neutral">,
+  { color: string; background: string; icon: CalloutIcon }
 > = {
   tip: { color: "#a855f7", background: "rgba(168, 85, 247, 0.13)", icon: Lightbulb },
   note: { color: "#60a5fa", background: "rgba(96, 165, 250, 0.13)", icon: Info },
@@ -1486,13 +1495,45 @@ const CALLOUT_PALETTE: Record<
   caution: { color: "#f87171", background: "rgba(248, 113, 113, 0.13)", icon: ShieldAlert },
 };
 
+// Neutral (grey) callouts carry no colored accent. The icon is a muted grey
+// that reads on both light and dark themes (hard-coded like the palette tints
+// so we don't reach for the forbidden useUnistyles()).
+const NEUTRAL_ICON_COLOR = "#9ca3af";
+
+// Title → icon for a neutral card. Matched loosely against the bold heading so
+// the fixed task-report sections each get a fitting lucide glyph; anything else
+// falls back to a plain dot.
+const NEUTRAL_ICON_BY_HEADING: { match: RegExp; icon: CalloutIcon }[] = [
+  { match: /fait|réalis|realis/i, icon: Wrench },
+  { match: /change|modif/i, icon: RefreshCw },
+  { match: /impact/i, icon: Target },
+  { match: /expliqu|tiers|client/i, icon: MessageSquare },
+  { match: /évolu|evolu|amélior|ameli|piste/i, icon: TrendingUp },
+  { match: /factur|temps|coût|cout|tarif/i, icon: ReceiptText },
+];
+
+function resolveNeutralIcon(heading: string | null): CalloutIcon {
+  if (heading) {
+    for (const entry of NEUTRAL_ICON_BY_HEADING) {
+      if (entry.match.test(heading)) return entry.icon;
+    }
+  }
+  return CircleDot;
+}
+
 const calloutStylesheet = StyleSheet.create((theme) => ({
   container: {
     borderRadius: theme.borderRadius.md,
-    borderLeftWidth: 3,
+    borderWidth: theme.borderWidth[1],
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     overflow: "hidden",
+  },
+  // Grey card for plain / bold-heading blockquotes — surface tint, subtle
+  // uniform border, no colored accent (matches the turn-recap card).
+  neutralContainer: {
+    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
   },
   header: {
     flexDirection: "row",
@@ -1505,6 +1546,9 @@ const calloutStylesheet = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.semibold,
     letterSpacing: 0.3,
   },
+  neutralHeaderText: {
+    color: theme.colors.foreground,
+  },
 }));
 
 interface MarkdownCalloutProps {
@@ -1515,9 +1559,11 @@ interface MarkdownCalloutProps {
 }
 
 /**
- * Renders a markdown blockquote as a colored callout so advice, notes and
- * warnings visually separate from the surrounding prose. Plain blockquotes get
- * the purple "tip" tint with no header; `[!TYPE]` alerts add an icon + label.
+ * Renders a markdown blockquote as a card so advice, notes and warnings
+ * visually separate from the surrounding prose. Plain / bold-heading
+ * blockquotes render as a neutral grey card (icon + title, no colored accent);
+ * `[!TYPE]` alerts keep a typed color plus a labelled header. Neither draws a
+ * left border — both use a uniform card border.
  */
 const MarkdownCallout = memo(function MarkdownCallout({
   callout,
@@ -1525,25 +1571,32 @@ const MarkdownCallout = memo(function MarkdownCallout({
   parser,
   onLinkPress,
 }: MarkdownCalloutProps) {
-  const palette = CALLOUT_PALETTE[callout.type];
-  const HeaderIcon = palette.icon;
+  const palette = callout.type === "neutral" ? null : CALLOUT_PALETTE[callout.type];
+  const HeaderIcon = palette ? palette.icon : resolveNeutralIcon(callout.heading);
+  const iconColor = palette ? palette.color : NEUTRAL_ICON_COLOR;
   const containerStyle = useMemo(
-    () => [
-      calloutStylesheet.container,
-      { borderLeftColor: palette.color, backgroundColor: palette.background },
-    ],
-    [palette.background, palette.color],
+    () =>
+      palette
+        ? [
+            calloutStylesheet.container,
+            { borderColor: palette.color, backgroundColor: palette.background },
+          ]
+        : [calloutStylesheet.container, calloutStylesheet.neutralContainer],
+    [palette],
   );
   const headerTextStyle = useMemo(
-    () => [calloutStylesheet.headerText, { color: palette.color }],
-    [palette.color],
+    () =>
+      palette
+        ? [calloutStylesheet.headerText, { color: palette.color }]
+        : [calloutStylesheet.headerText, calloutStylesheet.neutralHeaderText],
+    [palette],
   );
 
   return (
     <View style={containerStyle}>
       {callout.heading !== null && (
         <View style={calloutStylesheet.header}>
-          <HeaderIcon size={15} color={palette.color} />
+          <HeaderIcon size={15} color={iconColor} />
           <Text style={headerTextStyle} selectable={false}>
             {callout.heading}
           </Text>
