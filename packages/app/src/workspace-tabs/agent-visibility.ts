@@ -58,6 +58,30 @@ export function deriveWorkspaceAgentVisibility(input: {
   return { activeAgentIds, autoOpenAgentIds, knownAgentIds };
 }
 
+// Remove agents that an in-flight create flow already owns through its draft tab
+// from the auto-open set. Those agents retarget their draft tab in-place; letting
+// auto-open surface them again produces a duplicate background tab. See the
+// reconcile pass in workspace-screen for why the draft-tab gate alone can't cover
+// this window.
+export function excludeAutoOpenAgentIds(
+  visibility: WorkspaceAgentVisibility,
+  excludedAgentIds: ReadonlySet<string>,
+): WorkspaceAgentVisibility {
+  if (excludedAgentIds.size === 0) {
+    return visibility;
+  }
+  const autoOpenAgentIds = new Set<string>();
+  for (const agentId of visibility.autoOpenAgentIds) {
+    if (!excludedAgentIds.has(agentId)) {
+      autoOpenAgentIds.add(agentId);
+    }
+  }
+  if (autoOpenAgentIds.size === visibility.autoOpenAgentIds.size) {
+    return visibility;
+  }
+  return { ...visibility, autoOpenAgentIds };
+}
+
 export function buildWorkspaceTabSnapshot(input: {
   agentVisibility: WorkspaceAgentVisibility;
   agentsHydrated: boolean;

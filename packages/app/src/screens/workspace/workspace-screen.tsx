@@ -147,6 +147,7 @@ import { renderWorkspaceRouteGate } from "@/screens/workspace/workspace-route-st
 import {
   buildWorkspaceTabSnapshot,
   deriveWorkspaceAgentVisibility,
+  excludeAutoOpenAgentIds,
   workspaceAgentVisibilityEqual,
 } from "@/workspace-tabs/agent-visibility";
 import {
@@ -2065,10 +2066,30 @@ function WorkspaceScreenContent({
       return pending?.serverId === normalizedServerId && pending.lifecycle === "active";
     });
 
+    // A create flow that has already resolved an agentId owns that agent through
+    // its draft tab: the tab retargets onto the agent in-place. Auto-open must
+    // never surface that agent as a *second* background tab. The draft-tab-based
+    // gate above can't cover this window — once the tab retargets it's no longer a
+    // draft, and the "active" -> "sent" lifecycle flip races the reconcile pass, so
+    // the agent briefly looks un-gated and un-represented and gets double-opened.
+    // Excluding pending-owned agentIds is race-proof: the pending entry lives with
+    // its agentId until the agent's authoritative history syncs (clearByAgent), by
+    // which point the retargeted tab already represents it.
+    const pendingCreateAgentIds = new Set<string>();
+    for (const pending of Object.values(pendingByDraftId)) {
+      if (pending.serverId === normalizedServerId && pending.agentId) {
+        pendingCreateAgentIds.add(pending.agentId);
+      }
+    }
+    const agentVisibility = excludeAutoOpenAgentIds(
+      workspaceAgentVisibility,
+      pendingCreateAgentIds,
+    );
+
     reconcileWorkspaceTabs(
       persistenceKey,
       buildWorkspaceTabSnapshot({
-        agentVisibility: workspaceAgentVisibility,
+        agentVisibility,
         agentsHydrated: hasHydratedAgents,
         terminalsHydrated: terminalsQuery.isSuccess,
         knownTerminalIds,

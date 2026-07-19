@@ -3,6 +3,7 @@ import type { Agent } from "@/stores/session-store";
 import {
   buildWorkspaceTabSnapshot,
   deriveWorkspaceAgentVisibility,
+  excludeAutoOpenAgentIds,
   shouldPruneWorkspaceAgentTab,
   workspaceAgentVisibilityEqual,
 } from "@/workspace-tabs/agent-visibility";
@@ -415,6 +416,29 @@ describe("workspace agent visibility", () => {
         knownAgentIds: new Set<string>(),
       };
       expect(workspaceAgentVisibilityEqual(a, b)).toBe(true);
+    });
+  });
+
+  describe("excludeAutoOpenAgentIds", () => {
+    const visibility = {
+      activeAgentIds: new Set(["a", "b"]),
+      autoOpenAgentIds: new Set(["a", "b"]),
+      knownAgentIds: new Set(["a", "b"]),
+    };
+
+    it("drops agents owned by an in-flight create flow from auto-open", () => {
+      const result = excludeAutoOpenAgentIds(visibility, new Set(["a"]));
+      // "a" is retargeting its draft tab in-place; auto-open must not double it.
+      expect([...result.autoOpenAgentIds]).toEqual(["b"]);
+      // Active/known sets are untouched — the agent still exists, it just isn't
+      // force-opened a second time.
+      expect(result.activeAgentIds).toBe(visibility.activeAgentIds);
+      expect(result.knownAgentIds).toBe(visibility.knownAgentIds);
+    });
+
+    it("returns the same reference when nothing is excluded", () => {
+      expect(excludeAutoOpenAgentIds(visibility, new Set())).toBe(visibility);
+      expect(excludeAutoOpenAgentIds(visibility, new Set(["not-here"]))).toBe(visibility);
     });
   });
 });
