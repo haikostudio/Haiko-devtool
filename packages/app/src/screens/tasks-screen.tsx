@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowDownAZ,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -17,7 +19,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
-import { MenuHeader } from "@/components/headers/menu-header";
+import { MenuHeader, SidebarMenuToggle } from "@/components/headers/menu-header";
+import { ScreenHeader } from "@/components/headers/screen-header";
 import { FolderCreateModal } from "@/components/tasks/folder-create-modal";
 import { FormTextInput } from "@/components/ui/form-field";
 import {
@@ -48,6 +51,7 @@ const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destruc
 const ThemedFolder = withUnistyles(Folder);
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedChevronLeft = withUnistyles(ChevronLeft);
+const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedTrash = withUnistyles(Trash2);
 const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
@@ -56,6 +60,9 @@ const ThemedSortAz = withUnistyles(ArrowDownAZ);
 const ThemedZap = withUnistyles(Zap);
 
 const MENU_ICON_SIZE = 16;
+// Base vertical padding for the pinned folder footer; the bottom safe-area inset
+// (PWA home indicator) is added on top at render time.
+const FOOTER_VERTICAL_PADDING = 12;
 const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const deleteLeading = <ThemedTrash size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
 
@@ -271,6 +278,21 @@ function selectFolder(folderId: string): void {
   router.setParams({ folder: folderId });
 }
 
+function tasksHeaderTitle(
+  t: ReturnType<typeof useTranslation>["t"],
+  isCompact: boolean,
+  selectedFolder: TaskFolder | null,
+  selectedProject: ProjectEntry | null,
+): string {
+  if (isCompact && selectedFolder) {
+    return `${t("tasks.title")} · ${selectedFolder.name}`;
+  }
+  if (isCompact && selectedProject) {
+    return `${t("tasks.title")} · ${selectedProject.displayName}`;
+  }
+  return t("tasks.title");
+}
+
 export function TasksScreen() {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -316,16 +338,20 @@ export function TasksScreen() {
     }
   }, [isCompact, projectId, firstProject, boardHandle.board, selectedFolder, firstFolderId]);
 
-  let title = t("tasks.title");
-  if (selectedFolder && isCompact) {
-    title = `${t("tasks.title")} · ${selectedFolder.name}`;
-  } else if (selectedProject && isCompact) {
-    title = `${t("tasks.title")} · ${selectedProject.displayName}`;
-  }
+  const title = tasksHeaderTitle(t, isCompact, selectedFolder, selectedProject);
+
+  // In a folder board on mobile, the header owns the navigation: a back chevron
+  // returns to the folder list and the folder name is a dropdown that switches
+  // folders in place — no separate breadcrumb row below the header.
+  const showBoardHeader = isCompact && !!selectedFolder && supportsTasksBoard;
 
   return (
     <View style={styles.container}>
-      <MenuHeader title={title} />
+      {showBoardHeader && selectedFolder ? (
+        <CompactBoardHeader currentFolder={selectedFolder} folders={sortedFolders} />
+      ) : (
+        <MenuHeader title={title} />
+      )}
       {isCompact ? (
         <CompactFlow
           serverId={serverId}
@@ -971,14 +997,6 @@ function CompactFlow({
   }
   return (
     <View style={styles.compactBoardWrap}>
-      <Pressable
-        style={styles.backRow}
-        onPress={clearFolderSelection}
-        testID="tasks-back-to-folders"
-      >
-        <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        <Text style={styles.rowSubtitle}>{t("tasks.folders")}</Text>
-      </Pressable>
       <BoardContent serverId={serverId} folderId={folderId} boardHandle={boardHandle} />
     </View>
   );
@@ -990,6 +1008,75 @@ function clearFolderSelection() {
 
 function clearTasksSelection() {
   router.setParams({ host: undefined, project: undefined, folder: undefined });
+}
+
+const FolderSelectorItem = memo(function FolderSelectorItem({ folder }: { folder: TaskFolder }) {
+  const leading = useMemo(() => <FolderColorMark color={folder.color} />, [folder.color]);
+  const handleSelect = useCallback(() => {
+    selectFolder(folder.id);
+  }, [folder.id]);
+  return (
+    <DropdownMenuItem
+      leading={leading}
+      onSelect={handleSelect}
+      testID={`tasks-header-folder-${folder.id}`}
+    >
+      {folder.name}
+    </DropdownMenuItem>
+  );
+});
+
+// Mobile board header: hamburger + back-to-folders chevron + a folder-name
+// dropdown that switches folders in place. Replaces the old separate "‹ Dossiers"
+// row so the navigation lives in a single, obvious bar.
+function CompactBoardHeader({
+  currentFolder,
+  folders,
+}: {
+  currentFolder: TaskFolder;
+  folders: TaskFolder[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <ScreenHeader
+      leftStyle={styles.boardHeaderLeft}
+      left={
+        <>
+          <SidebarMenuToggle />
+          <Pressable
+            onPress={clearFolderSelection}
+            hitSlop={8}
+            style={styles.boardHeaderBack}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.folders")}
+            testID="tasks-header-back"
+          >
+            <ThemedChevronLeft size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+          </Pressable>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              style={styles.folderSelector}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t("tasks.folders")}
+              testID="tasks-header-folder-selector"
+            >
+              <FolderColorMark color={currentFolder.color} />
+              <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+                {currentFolder.name}
+              </Text>
+              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" width={240}>
+              {folders.map((folder) => (
+                <FolderSelectorItem key={folder.id} folder={folder} />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      }
+    />
+  );
 }
 
 function CompactProjectPicker({ projects }: { projects: ProjectEntry[] }) {
@@ -1033,6 +1120,11 @@ function CompactFolderList({
   supportsAutopilot: boolean;
 }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const footerStyle = useMemo(
+    () => [styles.stickyFooter, { paddingBottom: insets.bottom + FOOTER_VERTICAL_PADDING }],
+    [insets.bottom],
+  );
   const folderModal = useFolderModal(boardHandle, supportsAutopilot);
   const folders = useMemo(
     () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
@@ -1047,42 +1139,44 @@ function CompactFolderList({
   }, [boardHandle.board]);
 
   return (
-    <ScrollView contentContainerStyle={styles.listContent}>
-      <Pressable
-        style={styles.backRow}
-        onPress={clearTasksSelection}
-        testID="tasks-back-to-projects"
-      >
-        <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
-      </Pressable>
-      <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
-      {folders.map((folder) => (
-        <CompactFolderRow
-          key={folder.id}
-          folder={folder}
-          taskCount={taskCounts.get(folder.id) ?? 0}
-          onEditFolder={folderModal.openEdit}
-          onDeleteFolder={boardHandle.deleteFolder}
-        />
-      ))}
-      {folders.length === 0 && !boardHandle.isLoading ? (
-        <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
-      ) : null}
-      <View style={styles.newFolderRow}>
+    <View style={styles.compactListWrap}>
+      <ScrollView contentContainerStyle={styles.listContent}>
+        <Pressable
+          style={styles.backRow}
+          onPress={clearTasksSelection}
+          testID="tasks-back-to-projects"
+        >
+          <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
+        </Pressable>
+        <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
+        {folders.map((folder) => (
+          <CompactFolderRow
+            key={folder.id}
+            folder={folder}
+            taskCount={taskCounts.get(folder.id) ?? 0}
+            onEditFolder={folderModal.openEdit}
+            onDeleteFolder={boardHandle.deleteFolder}
+          />
+        ))}
+        {folders.length === 0 && !boardHandle.isLoading ? (
+          <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
+        ) : null}
+      </ScrollView>
+      <View style={footerStyle}>
         <Button
           leftIcon={Plus}
           variant="secondary"
           size="sm"
           onPress={folderModal.openCreate}
-          style={styles.addButton}
+          style={styles.footerButton}
           testID="tasks-new-folder-open"
         >
           {t("tasks.actions.addFolder")}
         </Button>
       </View>
       {folderModal.element}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -1338,16 +1432,47 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     alignSelf: "flex-start",
   },
+  // Mobile board header: back chevron + folder-name dropdown selector.
+  boardHeaderLeft: {
+    gap: theme.spacing[1],
+  },
+  boardHeaderBack: {
+    padding: theme.spacing[1],
+  },
+  folderSelector: {
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    minWidth: 0,
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    borderRadius: theme.borderRadius.lg,
+  },
+  folderSelectorLabel: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: theme.fontSize.base,
+    color: theme.colors.foreground,
+  },
+  // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
+  compactListWrap: {
+    flex: 1,
+  },
+  stickyFooter: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    paddingHorizontal: theme.spacing[4],
+    paddingTop: theme.spacing[3],
+  },
+  footerButton: {
+    alignSelf: "stretch",
+  },
   // Add-folder / add-task action buttons: small, icon+label, always left-aligned
   // (never stretched), so the folder rail and the compact list share one edge.
   addButton: {
     alignSelf: "flex-start",
-  },
-  newFolderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    marginTop: theme.spacing[3],
   },
   newTaskRow: {
     flexDirection: "row",
