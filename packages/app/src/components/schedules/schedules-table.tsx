@@ -149,6 +149,6 @@ function SchedulesTableRow({
 const styles = StyleSheet.create((theme) => ({
   // Full-width list padding matching the History screen.
   listContent: {
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
+    paddingHorizontal: { xs: theme.spacing[2], md: theme.spacing[6] },
   },
 }));

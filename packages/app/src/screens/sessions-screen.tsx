@@ -133,7 +133,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   filterContainer: {
     paddingHorizontal: {
-      xs: theme.spacing[3],
+      xs: theme.spacing[2],
       md: theme.spacing[6],
     },
     paddingTop: theme.spacing[4],
