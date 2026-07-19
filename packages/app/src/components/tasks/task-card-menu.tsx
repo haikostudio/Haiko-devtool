@@ -46,7 +46,8 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   labels: Record<TaskColumn, string>;
 } & TaskCardMenuHandlers) {
   const { t } = useTranslation();
-  const canLaunch = task.column === "backlog" || task.column === "scheduled";
+  const canLaunch =
+    task.column === "backlog" || task.column === "validated" || task.column === "scheduled";
 
   const handleRun = useCallback(() => {
     onRunTask(task.id);

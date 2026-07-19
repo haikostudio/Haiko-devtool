@@ -2,8 +2,11 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
-import type { ProjectRegistry } from "../workspace-registry.js";
+import { type ProjectRegistry, resolveProjectDisplayName } from "../workspace-registry.js";
 import type { ProviderUsageService } from "../../services/quota-fetcher/service.js";
+import type { BrainMemoryClient } from "../../services/brain-memory/client.js";
+import type { BrainCurator } from "../../services/brain-memory/curator.js";
+import { recallAndInjectBrainContext } from "../../services/brain-memory/recall.js";
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
@@ -29,10 +32,16 @@ interface TaskSchedulerOptions {
   taskBoardService: TaskBoardService;
   taskEstimator: TaskEstimator;
   projectRegistry: ProjectRegistry;
-  agentManager: Pick<AgentManager, "runAgent">;
+  agentManager: Pick<AgentManager, "runAgent" | "appendTimelineItem" | "getLastAssistantMessage">;
   createAgent: BoundCreateAgentCommand;
   providerUsageService: Pick<ProviderUsageService, "listUsage">;
   logger: pino.Logger;
+  // Cerveau memory: recall relevant context server-side and inject it into the
+  // task prompt (shown as a yellow pill), exactly like interactive prompts. Null
+  // when the Cerveau is disabled. Without this, task agents get no brain context
+  // — and since their MCP surface is locked down, they would be brain-blind.
+  brainMemory?: BrainMemoryClient | null;
+  brainCurator?: BrainCurator | null;
   tickIntervalMs?: number;
   /** Off-peak window for heavy tasks. Defaults to 01:00–07:00 Europe/Paris. */
   getQuietHours?: () => QuietHours;
@@ -73,25 +82,27 @@ function isScheduledCandidate(task: KanbanTask): boolean {
   );
 }
 
-// Autopilot folders: backlog tasks are launch candidates directly — enabling
-// autopilot on the folder is the consent. Estimate-less tasks wait for the
-// sweep; schedule-carrying ones went through a failed launch and already live
-// in the scheduled flow.
-function isAutopilotBacklogCandidate(task: KanbanTask, folderAutopilot: boolean): boolean {
+// A "Validé" task whose analysis is done: it has an estimate, is approved, and
+// isn't mid-launch. The scheduler promotes it to "Planifié" (queued for a slot).
+function isValidatedReady(task: KanbanTask): boolean {
   return (
-    task.column === "backlog" &&
-    folderAutopilot &&
-    task.approval?.state !== "pending" &&
+    task.column === "validated" &&
     Boolean(task.estimate) &&
-    !task.schedule
+    task.approval?.state !== "pending" &&
+    task.schedule?.state !== "launching" &&
+    task.schedule?.state !== "running"
   );
 }
 
 /**
- * Executes tasks from the board. Two entry points:
- * - "Planifié" column: the user dragged the task there (explicit consent).
- * - Autopilot folders: the scheduler picks tasks straight from the folder's
- *   backlog — turning autopilot on IS the consent for that folder.
+ * Executes tasks from the board. The consent gate is the "Validé" column:
+ * dropping a task there starts the automated pipeline (analysis then execution).
+ * - "Validé" column: analysis runs; once estimated the task is promoted to
+ *   "Planifié" and launched. Backlog tasks are inert — never analyzed or run.
+ * - "Planifié" column: estimated tasks awaiting a launch slot (also a valid
+ *   direct-drop entry point that skips straight to the queue).
+ * - Autopilot folders: the scheduler auto-validates the folder's backlog —
+ *   turning autopilot on IS the consent — so execution still flows via "Validé".
  *
  * Every launch opens a fresh visible (non-internal) agent in its own isolated
  * worktree + branch (task/<slug>-<id>), so several task agents can run in the
@@ -99,9 +110,9 @@ function isAutopilotBacklogCandidate(task: KanbanTask, folderAutopilot: boolean)
  * agent implements the task and commits on its branch (no push, no PR); the
  * user reviews and merges. Plan-mode tasks produce a plan and stop.
  *
- * The scheduler also sweeps every open task (backlog included) and requests a
- * cost estimate once, so the board shows real quota lengths and packing can
- * plan ahead.
+ * The scheduler also sweeps every pipeline task ("validated"/"scheduled") and
+ * requests a cost estimate once, so the board shows real quota lengths and
+ * packing can plan ahead. Backlog tasks are never estimated.
  *
  * The quota gate reads the task provider's five_hour window and only launches
  * when remaining % covers the task estimate plus a safety margin, minus
@@ -120,9 +131,14 @@ export class TaskScheduler {
   private readonly taskBoardService: TaskBoardService;
   private readonly taskEstimator: TaskEstimator;
   private readonly projectRegistry: ProjectRegistry;
-  private readonly agentManager: Pick<AgentManager, "runAgent">;
+  private readonly agentManager: Pick<
+    AgentManager,
+    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage"
+  >;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly providerUsageService: Pick<ProviderUsageService, "listUsage">;
+  private readonly brainMemory: BrainMemoryClient | null;
+  private readonly brainCurator: BrainCurator | null;
   private readonly logger: pino.Logger;
   private readonly tickIntervalMs: number;
   private readonly getQuietHours: () => QuietHours;
@@ -143,6 +159,8 @@ export class TaskScheduler {
     this.agentManager = options.agentManager;
     this.createAgent = options.createAgent;
     this.providerUsageService = options.providerUsageService;
+    this.brainMemory = options.brainMemory ?? null;
+    this.brainCurator = options.brainCurator ?? null;
     this.logger = options.logger.child({ module: "task-scheduler" });
     this.tickIntervalMs = options.tickIntervalMs ?? TICK_INTERVAL_MS;
     this.getQuietHours = options.getQuietHours ?? (() => DEFAULT_TASKS_QUIET_HOURS);
@@ -249,20 +267,34 @@ export class TaskScheduler {
         board.folders.map((folder) => [folder.id, folder.autopilot === true]),
       );
       for (const task of board.tasks) {
-        if (task.column === "done") {
+        if (task.column === "done" || task.column === "in_progress") {
           continue;
         }
+        if (task.column === "backlog") {
+          // Backlog tasks are inert: no analysis, no execution until validated.
+          // Autopilot folders auto-validate their backlog (the folder flag is the
+          // consent) so the pipeline still always runs through "Validé".
+          if (folderAutopilot.get(task.folderId) === true && task.approval?.state !== "pending") {
+            this.autoTransition(project.projectId, task.id, "validated");
+          }
+          continue;
+        }
+        // "validated" or "scheduled": the analysis + execution pipeline.
         this.maybeSweepEstimate(project.projectId, task);
-        if (task.column === "scheduled" && task.schedule?.state === "pending_estimate") {
+        if (task.schedule?.state === "pending_estimate") {
           // Re-arm after daemon restarts: the estimate request queue is in-memory.
           // Also runs for approval-pending proposals so the cost is ready to review.
           this.taskEstimator.requestEstimate(project.projectId, task.id);
           continue;
         }
-        const eligible =
-          isScheduledCandidate(task) ||
-          isAutopilotBacklogCandidate(task, folderAutopilot.get(task.folderId) === true);
-        if (!eligible) {
+        if (task.column === "validated") {
+          // Analysis done → promote to "Planifié" so it queues for a launch slot.
+          if (isValidatedReady(task)) {
+            this.autoTransition(project.projectId, task.id, "scheduled");
+          }
+          continue;
+        }
+        if (!isScheduledCandidate(task)) {
           continue;
         }
         candidates.push({
@@ -276,10 +308,18 @@ export class TaskScheduler {
     return this.sortForPacking(candidates);
   }
 
+  /** Fire-and-forget column move driven by the scheduler (never manual). */
+  private autoTransition(projectId: string, taskId: string, column: KanbanTask["column"]): void {
+    void this.taskBoardService.transitionTask(projectId, taskId, column).catch((error) => {
+      this.logger.warn({ err: error, taskId, column }, "Task auto-transition failed");
+    });
+  }
+
   /**
-   * Estimation sweep: every open task (backlog included) gets one cost estimate
-   * so cards/timeline show real sizes and packing can plan. One request per
-   * task per daemon lifetime — a failed run writes a fallback estimate anyway.
+   * Estimation sweep: every task in the pipeline ("validated"/"scheduled") gets
+   * one cost estimate so cards/timeline show real sizes and packing can plan.
+   * Backlog tasks are never swept — analysis only starts once the user validates.
+   * One request per task per daemon lifetime — a failed run writes a fallback.
    */
   private maybeSweepEstimate(projectId: string, task: KanbanTask): void {
     if (task.estimate || task.schedule?.state === "pending_estimate") {
@@ -409,11 +449,22 @@ export class TaskScheduler {
     try {
       const runConfig = task.runConfig;
       const planMode = runConfig?.mode === "plan";
+      const providerId = runConfig?.provider ?? "claude";
       let provider = "claude";
       if (runConfig) {
         provider = runConfig.model
           ? `${runConfig.provider}/${runConfig.model}`
           : runConfig.provider;
+      }
+      // Task agents run unattended, so they must never block on a permission
+      // prompt mid-run. Launch them with the maximally-permissive mode for their
+      // provider: Claude "bypassPermissions", Codex "full-access". Plan-mode runs
+      // make no changes and keep their own mode.
+      let launchMode = "bypassPermissions";
+      if (planMode) {
+        launchMode = "plan";
+      } else if (providerId === "codex") {
+        launchMode = "full-access";
       }
       // Each launch gets its own worktree + branch off the project checkout, so
       // several task agents can run in the same project concurrently without
@@ -431,7 +482,7 @@ export class TaskScheduler {
         background: true,
         notifyOnFinish: false,
         ...(runConfig?.thinkingOptionId ? { thinking: runConfig.thinkingOptionId } : {}),
-        ...(planMode ? { mode: "plan" } : {}),
+        mode: launchMode,
         ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
       });
       const agent = created.snapshot;
@@ -459,7 +510,24 @@ export class TaskScheduler {
         },
       }));
 
-      const prompt = this.buildTaskPrompt({ task, planMode, branch });
+      const basePrompt = this.buildTaskPrompt({ task, planMode, branch });
+      // Recall Cerveau context and inject it into the task prompt — same path as
+      // interactive prompts, so task agents get (and the user sees) the yellow
+      // brain pill instead of the model reaching for a memory tool it no longer
+      // has. Best-effort: an outage returns the prompt unchanged.
+      const prompt = await recallAndInjectBrainContext(
+        {
+          brain: this.brainMemory,
+          curator: this.brainCurator,
+          agentManager: this.agentManager,
+          logger: this.logger,
+        },
+        {
+          agentId: agent.id,
+          text: basePrompt,
+          scope: { projet: resolveProjectDisplayName(project), cwd: agent.cwd },
+        },
+      );
       const result = await this.agentManager.runAgent(agent.id, prompt);
       if (result.canceled) {
         throw new Error("Task agent run was canceled");

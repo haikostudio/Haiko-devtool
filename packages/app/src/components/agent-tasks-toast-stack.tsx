@@ -131,10 +131,14 @@ export function useTrackedTasks(): TrackedTask[] {
 export function TaskToast({
   task,
   onActivate,
+  fullWidth = false,
 }: {
   task: TrackedTask;
   // Fired after navigation so a host (e.g. the mobile drawer) can dismiss itself.
   onActivate?: () => void;
+  // When hosted in the mobile drawer the card should span the full width instead
+  // of the floating-stack's capped 320px pill.
+  fullWidth?: boolean;
 }): ReactElement {
   const { t } = useTranslation();
   const dismiss = useAgentTaskToastStore((state) => state.dismiss);
@@ -207,7 +211,7 @@ export function TaskToast({
     <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger asChild>
         <Pressable
-          style={taskToastPressableStyle}
+          style={fullWidth ? taskToastFullWidthPressableStyle : taskToastPressableStyle}
           onPress={handlePress}
           testID={`task-toast-${task.agent.serverId}-${task.agent.id}`}
         >
@@ -276,6 +280,12 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     ...theme.shadow.md,
+  },
+  toastFullWidth: {
+    alignSelf: "stretch",
+    // "100%" (not undefined) so it reliably overrides the base 320px cap when the
+    // styles merge — a later `undefined` does not reset an earlier value in RN.
+    maxWidth: "100%",
   },
   toastHovered: {
     borderColor: theme.colors.borderAccent,
@@ -388,4 +398,14 @@ function taskToastPressableStyle({
   pressed: boolean;
 }) {
   return [styles.toast, (hovered || pressed) && styles.toastHovered];
+}
+
+function taskToastFullWidthPressableStyle({
+  hovered = false,
+  pressed,
+}: {
+  hovered?: boolean;
+  pressed: boolean;
+}) {
+  return [styles.toast, styles.toastFullWidth, (hovered || pressed) && styles.toastHovered];
 }

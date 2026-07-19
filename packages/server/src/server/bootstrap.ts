@@ -1221,6 +1221,15 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
+  // Created before the scheduler so task launches can recall + inject Cerveau
+  // context on the same code path as interactive prompts.
+  const brainMemoryServices = createBrainMemoryServices({
+    brainConfig: config.brainMemory,
+    paseoHome: config.paseoHome,
+    agentManager,
+    createAgent,
+    logger,
+  });
   const taskScheduler = new TaskScheduler({
     taskBoardService,
     taskEstimator,
@@ -1228,6 +1237,8 @@ export async function createPaseoDaemon(
     agentManager,
     createAgent,
     providerUsageService: new ProviderUsageService({ logger }),
+    brainMemory: brainMemoryServices?.client ?? null,
+    brainCurator: brainMemoryServices?.curator ?? null,
     logger,
     getQuietHours: () => daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,
   });
@@ -1271,13 +1282,6 @@ export async function createPaseoDaemon(
         logger,
       })
     : null;
-  const brainMemoryServices = createBrainMemoryServices({
-    brainConfig: config.brainMemory,
-    paseoHome: config.paseoHome,
-    agentManager,
-    createAgent,
-    logger,
-  });
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");

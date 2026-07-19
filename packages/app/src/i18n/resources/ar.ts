@@ -302,6 +302,7 @@ export const ar: TranslationResources = {
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {
       backlog: "للإنجاز",
+      validated: "تم التحقق",
       scheduled: "مُجدولة",
       inProgress: "قيد التنفيذ",
       done: "منجزة",

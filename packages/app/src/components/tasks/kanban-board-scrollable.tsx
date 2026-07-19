@@ -149,6 +149,7 @@ const ColumnStatusDot = memo(function ColumnStatusDot({ column }: { column: Task
   const dotStyle = useMemo(
     () => [
       styles.columnDot,
+      column === "validated" && styles.columnDotValidated,
       column === "scheduled" && styles.columnDotScheduled,
       column === "in_progress" && styles.columnDotInProgress,
       column === "done" && styles.columnDotDone,
@@ -223,6 +224,9 @@ const styles = StyleSheet.create((theme) => ({
     height: 8,
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foregroundMuted,
+  },
+  columnDotValidated: {
+    backgroundColor: theme.colors.palette.purple[500],
   },
   columnDotScheduled: {
     backgroundColor: theme.colors.palette.blue[500],

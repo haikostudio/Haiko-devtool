@@ -207,13 +207,8 @@ import {
 } from "../services/github-service.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import type { BrainMemoryClient } from "../services/brain-memory/client.js";
-import {
-  formatRecall,
-  injectBrainContext,
-  toTimelineMemories,
-} from "../services/brain-memory/client.js";
-import { briefToSouvenir } from "../services/brain-memory/curator.js";
 import type { BrainCurator } from "../services/brain-memory/curator.js";
+import { recallAndInjectBrainContext } from "../services/brain-memory/recall.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -6139,70 +6134,15 @@ export class Session {
     text: string,
     scope: { projet: string | undefined; cwd: string | null },
   ): Promise<string> {
-    const brain = this.brainMemory;
-    if (!brain || !text.trim()) {
-      return text;
-    }
-    // Recall fires on every non-empty prompt (no substance gate): each turn
-    // re-queries the Cerveau to pull in newly-relevant context, per user request
-    // "à chaque nouveau prompt il doit piocher des infos complémentaires". The
-    // librarian below still filters to what matters, so bare follow-ups (e.g.
-    // "oui") search the Cerveau but usually surface nothing.
-    let isFirstPrompt = false;
-    try {
-      isFirstPrompt = (await this.agentManager.getLastAssistantMessage(agentId)) === null;
-    } catch (err) {
-      this.sessionLogger.debug({ err, agentId }, "brain: first-prompt detection failed");
-    }
-    let recall: Awaited<ReturnType<BrainMemoryClient["recall"]>>;
-    try {
-      recall = await brain.recall(text, { projet: scope.projet });
-    } catch (err) {
-      this.sessionLogger.debug({ err, agentId }, "brain: recall failed");
-      return text;
-    }
-    const curator = this.brainCurator;
-    const brief = curator && scope.projet ? await curator.loadBrief(scope.projet) : null;
-    let kept = recall.resultats;
-    if (curator && scope.cwd && kept.length > 0) {
-      const filtered = await curator.filterRecall({
-        prompt: text,
-        memories: kept,
-        brief,
-        projet: scope.projet,
-        cwd: scope.cwd,
-      });
-      if (filtered) {
-        kept = filtered;
-      }
-    }
-    if (isFirstPrompt && brief && scope.projet) {
-      kept = [briefToSouvenir(scope.projet, brief), ...kept];
-    }
-    // Always surface the pill — even with 0 memories — so the user sees the
-    // Cerveau was queried on this prompt (the client renders "aucune info
-    // complémentaire" for an empty recall). Empty pills aren't reconstructed on
-    // replay (no envelope is injected into the prompt), which is fine: live-only.
-    try {
-      await this.agentManager.appendTimelineItem(agentId, {
-        type: "brain_context",
-        query: text.slice(0, 500),
-        portee: recall.portee,
-        count: kept.length,
-        memories: toTimelineMemories(kept),
-        status: "done",
-      });
-      this.sessionLogger.info(
-        { module: "brain-memory", agentId, count: kept.length, portee: recall.portee },
-        "Cerveau: pill emitted",
-      );
-    } catch (err) {
-      this.sessionLogger.debug({ err, agentId }, "brain: timeline emit failed");
-    }
-    if (kept.length === 0) {
-      return text;
-    }
-    return injectBrainContext(formatRecall(kept), recall.portee, text);
+    return recallAndInjectBrainContext(
+      {
+        brain: this.brainMemory,
+        curator: this.brainCurator,
+        agentManager: this.agentManager,
+        logger: this.sessionLogger,
+      },
+      { agentId, text, scope },
+    );
   }
 
   /**

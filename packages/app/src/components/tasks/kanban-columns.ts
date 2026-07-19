@@ -2,7 +2,13 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 
-export const KANBAN_COLUMNS: TaskColumn[] = ["backlog", "scheduled", "in_progress", "done"];
+export const KANBAN_COLUMNS: TaskColumn[] = [
+  "backlog",
+  "validated",
+  "scheduled",
+  "in_progress",
+  "done",
+];
 
 // Per-column cap on the desktop board (columns grow to fill, then stop here and
 // left-align). Shared so the timeline strip above the board can match the exact
@@ -30,6 +36,7 @@ export function useColumnLabels(): Record<TaskColumn, string> {
   return useMemo(
     () => ({
       backlog: t("tasks.columns.backlog"),
+      validated: t("tasks.columns.validated"),
       scheduled: t("tasks.columns.scheduled"),
       in_progress: t("tasks.columns.inProgress"),
       done: t("tasks.columns.done"),

@@ -2815,7 +2815,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         inputSchema: {
           projectId: z.string(),
           folderId: z.string().optional(),
-          column: z.enum(["backlog", "scheduled", "in_progress", "done"]).optional(),
+          column: z.enum(["backlog", "validated", "scheduled", "in_progress", "done"]).optional(),
         },
         outputSchema: {
           tasks: z.array(

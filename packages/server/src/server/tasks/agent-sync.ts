@@ -241,7 +241,7 @@ export class AgentTaskSyncService {
       ) {
         continue;
       }
-      if (task.column === "backlog" || task.column === "scheduled") {
+      if (task.column === "backlog" || task.column === "validated" || task.column === "scheduled") {
         await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
       }
     }

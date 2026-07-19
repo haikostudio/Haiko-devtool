@@ -2989,6 +2989,13 @@ class ClaudeAgentSession implements AgentSession {
         append: appendedSystemPrompt,
       },
       settingSources: CLAUDE_SETTING_SOURCES,
+      // Lock the agent's MCP surface to exactly what Paseo injects programmatically
+      // (the `paseo` daemon server + any per-agent configured servers). This drops
+      // claude.ai account connectors — notably the "Memoire" connector, which would
+      // otherwise give the model a direct back-door into the Cerveau. The Cerveau
+      // must only reach the agent through the daemon's REST injection (brain-memory),
+      // never as a tool the model can call on its own.
+      strictMcpConfig: true,
       stderr: (data: string) => {
         this.captureStderr(data);
         this.logger.error({ stderr: data.trim() }, "Claude Agent SDK stderr");

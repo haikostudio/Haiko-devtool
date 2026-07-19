@@ -306,6 +306,7 @@ export const es: TranslationResources = {
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {
       backlog: "Por hacer",
+      validated: "Validado",
       scheduled: "Planificado",
       inProgress: "En curso",
       done: "Hecho",

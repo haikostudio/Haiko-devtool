@@ -305,6 +305,7 @@ export const ru: TranslationResources = {
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
       backlog: "К выполнению",
+      validated: "Подтверждено",
       scheduled: "Запланировано",
       inProgress: "В работе",
       done: "Готово",

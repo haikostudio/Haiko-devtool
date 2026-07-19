@@ -14,7 +14,9 @@ const BASE_BOTTOM_OFFSET = 16;
 // Clear the message composer that lives along the bottom edge on the compact
 // chat screen so the button floats above it instead of overlapping the input.
 const COMPOSER_CLEARANCE = 140;
-const DRAWER_SNAP_POINTS = ["55%", "90%"];
+// Sit the list close to the sheet edges (spacing[4]) instead of the header's
+// wide default indent (spacing[6]) so the cards read as full-width rows.
+const DRAWER_CONTENT_PADDING_SCALE = 4;
 
 // Compact-only counterpart to AgentTasksToastStack: a round badge in the
 // bottom-right corner showing how many agent tasks are being tracked. Tapping it
@@ -80,14 +82,17 @@ function AgentTasksToastDrawer({
       header={header}
       visible={visible}
       onClose={onClose}
-      snapPoints={DRAWER_SNAP_POINTS}
+      dynamicSizing
+      contentPaddingScale={DRAWER_CONTENT_PADDING_SCALE}
       testID="agent-tasks-toast-drawer"
     >
       <View style={styles.drawerList}>
         {tasks.length === 0 ? (
           <Text style={styles.emptyText}>{t("agentTasks.drawerEmpty")}</Text>
         ) : (
-          tasks.map((task) => <TaskToast key={task.key} task={task} onActivate={onClose} />)
+          tasks.map((task) => (
+            <TaskToast key={task.key} task={task} onActivate={onClose} fullWidth />
+          ))
         )}
       </View>
     </AdaptiveModalSheet>

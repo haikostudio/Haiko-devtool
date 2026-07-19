@@ -381,7 +381,7 @@ describe("TaskScheduler", () => {
     expect(planned?.links.prUrl ?? null).toBeNull();
   });
 
-  test("autopilot folder: backlog task launches without entering Planned", async () => {
+  test("autopilot folder: backlog task auto-validates then launches", async () => {
     const folder = await service.createFolder("proj-1", "Auto", undefined, true);
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
@@ -400,14 +400,17 @@ describe("TaskScheduler", () => {
     }));
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
 
-    await scheduler.tick();
+    // Autopilot is the folder-level consent: the scheduler moves the backlog task
+    // into "Validé" itself, and from there the pipeline runs to completion. This
+    // takes several ticks (backlog → validated → scheduled → launch → done).
     await vi.waitFor(async () => {
+      await scheduler.tick();
       expect((await findTask(task.id))?.column).toBe("done");
     });
     expect(createAgent).toHaveBeenCalledTimes(1);
   });
 
-  test("non-autopilot backlog task is estimated once by the sweep but never launched", async () => {
+  test("non-autopilot backlog task is inert: never estimated, never launched", async () => {
     const folder = await service.createFolder("proj-1", "Manual");
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
@@ -415,13 +418,15 @@ describe("TaskScheduler", () => {
     });
     const { scheduler, createAgent, estimator } = buildScheduler({ remainingPct: 80 });
 
+    // Backlog is the un-validated staging area: no analysis and no execution
+    // happen until the user moves the task into "Validé".
     await scheduler.tick();
-    expect(estimator.requestEstimate).toHaveBeenCalledWith("proj-1", task.id);
+    expect(estimator.requestEstimate).not.toHaveBeenCalled();
     expect(createAgent).not.toHaveBeenCalled();
 
-    // The sweep requests each task once per daemon lifetime, not every tick.
     await scheduler.tick();
-    expect(estimator.requestEstimate).toHaveBeenCalledTimes(1);
+    expect(estimator.requestEstimate).not.toHaveBeenCalled();
+    expect((await findTask(task.id))?.column).toBe("backlog");
   });
 
   test("quiet hours pack the biggest estimated task first when quota is tight", async () => {

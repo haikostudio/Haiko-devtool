@@ -16,7 +16,12 @@ import type { KanbanTask, TaskBoard } from "@/data/tasks";
 // Row order for the timeline: what's running first, then planned, then the
 // to-do backlog. Done is excluded — the strip shows the work still ahead, not
 // history. Any unknown column sorts last.
-const GANTT_ORDER: Record<string, number> = { in_progress: 0, scheduled: 1, backlog: 2 };
+const GANTT_ORDER: Record<string, number> = {
+  in_progress: 0,
+  scheduled: 1,
+  validated: 2,
+  backlog: 3,
+};
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -373,7 +378,7 @@ const TimelineRowView = memo(function TimelineRowView({
     // Estimated: grayscale fill, darker to lighter by column so a glance
     // separates running (near-black) from planned (mid) and backlog (light).
     let fill: StyleProp<ViewStyle> = styles.barRunning;
-    if (row.column === "scheduled") {
+    if (row.column === "scheduled" || row.column === "validated") {
       fill = styles.barScheduled;
     } else if (row.column === "backlog") {
       fill = styles.barBacklog;

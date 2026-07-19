@@ -12,6 +12,11 @@ import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
 
+// Columns where the scheduler runs analysis + execution. "validated" is the
+// consent gate: dropping a task here starts the automated pipeline. "scheduled"
+// remains a valid direct-drop entry point (and the queued-for-launch state).
+const PIPELINE_COLUMNS = new Set<TaskColumn>(["validated", "scheduled"]);
+
 export class TaskBoardServiceError extends Error {
   constructor(
     public readonly code: string,
@@ -257,7 +262,7 @@ export class TaskBoardService {
           ? { schedulePreference: input.schedulePreference }
           : {}),
         ...(input.approval !== undefined ? { approval: input.approval } : {}),
-        ...(column === "scheduled"
+        ...(PIPELINE_COLUMNS.has(column)
           ? { schedule: { state: "pending_estimate" as const, attempts: 0 } }
           : {}),
         links: input.agentId
@@ -272,7 +277,7 @@ export class TaskBoardService {
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
     }
-    if (column === "scheduled") {
+    if (PIPELINE_COLUMNS.has(column)) {
       this.notifyScheduled(projectId, created);
     }
     if (input.approval?.state === "pending" && this.onTaskProposed) {
@@ -340,7 +345,7 @@ export class TaskBoardService {
         ...task,
         approval: { ...task.approval, state: "approved", approvedAt: now },
       };
-      if (task.column === "scheduled" && !task.schedule) {
+      if (PIPELINE_COLUMNS.has(task.column) && !task.schedule) {
         updated.schedule = { state: "pending_estimate", attempts: 0 };
         needsScheduleNotify = true;
       }
@@ -374,18 +379,23 @@ export class TaskBoardService {
         throw new TaskBoardServiceError("task_not_found", `Task not found: ${input.taskId}`);
       }
       const now = new Date().toISOString();
-      const enteringScheduled = input.column === "scheduled" && task.column !== "scheduled";
-      const leavingScheduled = input.column !== "scheduled" && task.column === "scheduled";
+      // "validated" and "scheduled" are the pipeline columns where analysis and
+      // execution live. Entering either from outside arms the schedule and pokes
+      // the estimator/scheduler; leaving to a non-pipeline column disarms it.
+      const enteringPipeline =
+        PIPELINE_COLUMNS.has(input.column) && !PIPELINE_COLUMNS.has(task.column);
+      const leavingPipeline =
+        !PIPELINE_COLUMNS.has(input.column) && PIPELINE_COLUMNS.has(task.column);
       const moved: KanbanTask = {
         ...task,
         column: input.column,
         updatedAt: now,
         ...(input.manual ? { manualOverrideAt: now } : {}),
-        // A user drag into "scheduled" is an implicit approval of the proposal.
-        ...(input.manual && input.column === "scheduled" && task.approval?.state === "pending"
+        // A user drag into a pipeline column is an implicit approval of the proposal.
+        ...(input.manual && enteringPipeline && task.approval?.state === "pending"
           ? { approval: { ...task.approval, state: "approved" as const, approvedAt: now } }
           : {}),
-        ...(enteringScheduled
+        ...(enteringPipeline
           ? {
               schedule: {
                 state: task.estimate ? ("awaiting_slot" as const) : ("pending_estimate" as const),
@@ -393,9 +403,9 @@ export class TaskBoardService {
               },
             }
           : {}),
-        ...(leavingScheduled && task.schedule?.state !== "running" ? { schedule: null } : {}),
+        ...(leavingPipeline && task.schedule?.state !== "running" ? { schedule: null } : {}),
       };
-      if (enteringScheduled) {
+      if (enteringPipeline) {
         scheduledTask = moved;
       }
 
@@ -412,7 +422,7 @@ export class TaskBoardService {
 
       const reOrdered = new Map<string, number>();
       targetColumn.forEach((entry, index) => reOrdered.set(entry.id, index));
-      for (const column of ["backlog", "scheduled", "in_progress", "done"] as const) {
+      for (const column of ["backlog", "validated", "scheduled", "in_progress", "done"] as const) {
         if (column === input.column) {
           continue;
         }

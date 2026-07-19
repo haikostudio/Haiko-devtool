@@ -305,6 +305,7 @@ export const ja: TranslationResources = {
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
       backlog: "未着手",
+      validated: "検証済み",
       scheduled: "予定",
       inProgress: "進行中",
       done: "完了",

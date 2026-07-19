@@ -12,6 +12,7 @@ import {
   BottomSheetFooter,
   BottomSheetScrollView,
   BottomSheetTextInput,
+  BottomSheetView,
   type BottomSheetBackgroundProps,
   type BottomSheetFooterProps,
 } from "@gorhom/bottom-sheet";
@@ -468,6 +469,19 @@ export interface AdaptiveModalSheetProps {
   desktopMaxWidth?: number;
   scrollable?: boolean;
   presentation?: "push" | "replace";
+  /**
+   * Compact only: let the sheet grow to fit its content instead of snapping to
+   * fixed points. It starts at content height and is capped at the safe-area
+   * top (via `topInset`), scrolling internally once it hits the ceiling. Use for
+   * short, variable-length lists where a fixed 55%/90% snap wastes space.
+   */
+  dynamicSizing?: boolean;
+  /**
+   * Compact only: horizontal padding token for the bottom-sheet body. Defaults
+   * to the shared header indent (spacing[6]); pass a smaller scale for dense
+   * lists that should sit closer to the edges.
+   */
+  contentPaddingScale?: number;
 }
 
 export function AdaptiveModalSheet({
@@ -482,6 +496,8 @@ export function AdaptiveModalSheet({
   desktopMaxWidth,
   scrollable = true,
   presentation,
+  dynamicSizing = false,
+  contentPaddingScale,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -499,14 +515,19 @@ export function AdaptiveModalSheet({
       }),
     [footer, insets.bottom, isMobile, theme.spacing],
   );
+  const contentHorizontalPadding =
+    contentPaddingScale != null
+      ? theme.spacing[contentPaddingScale as keyof typeof theme.spacing]
+      : null;
   const bottomSheetContentStyle = useMemo(
     () => [
       styles.bottomSheetContent,
+      contentHorizontalPadding != null ? { paddingHorizontal: contentHorizontalPadding } : null,
       compactSafeAreaPadding.contentPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.contentPaddingBottom],
+    [contentHorizontalPadding, compactSafeAreaPadding.contentPaddingBottom],
   );
   const bottomSheetStaticContentStyle = useMemo(
     () => [
@@ -630,12 +651,37 @@ export function AdaptiveModalSheet({
   }, [visible, isMobile, notifyNativeModalDismiss]);
 
   if (isMobile) {
+    let compactBody: ReactNode;
+    if (dynamicSizing) {
+      // Dynamic sizing must measure the true content height, so the body is a
+      // gorhom BottomSheetView (which reports its natural size) rather than a
+      // scroll view — a BottomSheetScrollView fills the available frame and the
+      // sheet snaps taller than its content. The sheet is capped at `topInset`,
+      // so short lists hug their content instead of wasting vertical space.
+      compactBody = <BottomSheetView style={bottomSheetContentStyle}>{children}</BottomSheetView>;
+    } else if (scrollable) {
+      // Padding lives on an inner View, NOT on contentContainerStyle:
+      // BottomSheetScrollView is not a Unistyles-remapped component, so a
+      // Unistyles style passed to contentContainerStyle is dropped on web
+      // (docs/unistyles.md, "Main Gotcha: contentContainerStyle").
+      compactBody = (
+        <BottomSheetScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          enableFooterMarginAdjustment={Boolean(footer)}
+        >
+          <View style={bottomSheetContentStyle}>{children}</View>
+        </BottomSheetScrollView>
+      );
+    } else {
+      compactBody = <View style={bottomSheetStaticContentStyle}>{children}</View>;
+    }
     return (
       <IsolatedBottomSheetModal
         ref={sheetRef}
-        snapPoints={resolvedSnapPoints}
+        snapPoints={dynamicSizing ? undefined : resolvedSnapPoints}
         index={0}
-        enableDynamicSizing={false}
+        enableDynamicSizing={dynamicSizing}
         onChange={handleSheetChange}
         onDismiss={handleDismiss}
         backdropComponent={renderBackdrop}
@@ -653,21 +699,7 @@ export function AdaptiveModalSheet({
         footerComponent={footer && scrollable ? renderCompactFooter : undefined}
       >
         <SheetHeaderView header={header} onClose={onClose} testID={testID} />
-        {scrollable ? (
-          // Padding lives on an inner View, NOT on contentContainerStyle:
-          // BottomSheetScrollView is not a Unistyles-remapped component, so a
-          // Unistyles style passed to contentContainerStyle is dropped on web
-          // (docs/unistyles.md, "Main Gotcha: contentContainerStyle").
-          <BottomSheetScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            enableFooterMarginAdjustment={Boolean(footer)}
-          >
-            <View style={bottomSheetContentStyle}>{children}</View>
-          </BottomSheetScrollView>
-        ) : (
-          <View style={bottomSheetStaticContentStyle}>{children}</View>
-        )}
+        {compactBody}
         {footer && !scrollable ? <View style={footerStyle}>{footer}</View> : null}
       </IsolatedBottomSheetModal>
     );

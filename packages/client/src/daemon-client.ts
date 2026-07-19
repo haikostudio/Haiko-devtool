@@ -4313,7 +4313,7 @@ export class DaemonClient {
       title: string;
       description?: string;
       tags?: string[];
-      column?: "backlog" | "scheduled" | "in_progress" | "done";
+      column?: "backlog" | "validated" | "scheduled" | "in_progress" | "done";
       runConfig?: TaskRunConfig;
       schedulePreference?: TaskSchedulePreference;
     },
@@ -4347,7 +4347,7 @@ export class DaemonClient {
     input: {
       projectId: string;
       taskId: string;
-      column: "backlog" | "scheduled" | "in_progress" | "done";
+      column: "backlog" | "validated" | "scheduled" | "in_progress" | "done";
       index: number;
     },
     requestId?: string,

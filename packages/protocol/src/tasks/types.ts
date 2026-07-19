@@ -3,7 +3,15 @@ import { z } from "zod";
 // Kanban task board — per-project task management.
 // Wire schemas are pure structural declarations (no transforms/defaults on containers).
 
-export const TaskColumnSchema = z.enum(["backlog", "scheduled", "in_progress", "done"]);
+// "validated": user-validated tasks. This is the consent gate — analysis
+// (estimation) and execution only ever start here, never from "backlog".
+export const TaskColumnSchema = z.enum([
+  "backlog",
+  "validated",
+  "scheduled",
+  "in_progress",
+  "done",
+]);
 export type TaskColumn = z.infer<typeof TaskColumnSchema>;
 
 export const TaskEstimateSchema = z.object({
