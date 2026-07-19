@@ -13,6 +13,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { UNRELEASED_FR } from "./changelog-unreleased-fr.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 // packages/app/scripts -> repo root
@@ -45,14 +46,15 @@ function parseReleases(markdown) {
 
 // Conventional-commit type -> changelog section. Types not listed here (chore,
 // docs, test, build, ci, style, ...) are treated as noise and left out of the
-// synthesized "Unreleased" section.
+// synthesized "Unreleased" section. Section headings are in French to match the
+// released sections (CHANGELOG.md), which are authored in French.
 const TYPE_SECTIONS = new Map([
-  ["feat", "Added"],
-  ["fix", "Fixed"],
-  ["perf", "Improved"],
-  ["refactor", "Improved"],
+  ["feat", "Ajouts"],
+  ["fix", "Corrections"],
+  ["perf", "Améliorations"],
+  ["refactor", "Améliorations"],
 ]);
-const SECTION_ORDER = ["Added", "Improved", "Fixed"];
+const SECTION_ORDER = ["Ajouts", "Améliorations", "Corrections"];
 const CONVENTIONAL = /^(\w+)(?:\([^)]*\))?!?:\s*(.+)$/;
 
 /**
@@ -73,7 +75,11 @@ function synthesizeUnreleased(releases, commits) {
     const section = match && TYPE_SECTIONS.get(match[1].toLowerCase());
     if (!section) continue;
     const message = match[2].trim();
-    buckets.get(section).push(message.charAt(0).toUpperCase() + message.slice(1));
+    const bullet = message.charAt(0).toUpperCase() + message.slice(1);
+    // Translate the English commit-derived bullet to French via a one-time
+    // backfill map. Bullets with no entry pass through unchanged, so future
+    // French commit subjects render as-is. See changelog-unreleased-fr.mjs.
+    buckets.get(section).push(UNRELEASED_FR[bullet] ?? bullet);
   }
   const parts = [];
   for (const section of SECTION_ORDER) {
