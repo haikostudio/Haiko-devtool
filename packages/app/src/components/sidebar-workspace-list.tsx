@@ -658,8 +658,11 @@ function WorkspaceRowRightGroup({
   onTogglePin?: () => void;
 }) {
   const { t } = useTranslation();
+  // Web PWA on a phone reports isNative === false, so hover-to-reveal never fires
+  // on touch. Treat the compact layout as always-visible for the kebab menu.
+  const isCompact = useIsCompactFormFactor();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompact));
   const showKebabInSlot = showKebab && !showShortcut;
   const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
 
