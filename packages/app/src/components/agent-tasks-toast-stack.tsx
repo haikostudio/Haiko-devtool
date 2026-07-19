@@ -45,6 +45,10 @@ const RAIL_CLEARANCE = 44;
 // How much of each card behind the front one peeks out at the top when the stack
 // is collapsed into a pile — just enough to show the status pip and a sliver.
 const COLLAPSED_PEEK = 10;
+// When collapsed, the pile fades into the distance: the front card is fully opaque
+// and each card further back drops one step, floored so its status pip still reads.
+const COLLAPSED_OPACITY_STEP = 0.18;
+const COLLAPSED_MIN_OPACITY = 0.35;
 // Once this many toasts are tracked, the pile folds itself by default (until the
 // user overrides it with the toggle). Keeps a busy corner from taking over.
 const AUTO_COLLAPSE_COUNT = 4;
@@ -312,11 +316,13 @@ function DragHandle({ gesture }: { gesture: ReturnType<typeof Gesture.Pan> }): R
 function ToastStackItem({
   task,
   overlap,
+  opacity,
   zIndex,
   onMeasure,
 }: {
   task: TrackedTask;
   overlap: number;
+  opacity: number;
   zIndex: number;
   onMeasure: (key: string, height: number) => void;
 }): ReactElement {
@@ -331,9 +337,19 @@ function ToastStackItem({
   useEffect(() => {
     foldOffset.value = withTiming(overlap, { duration: FOLD_DURATION_MS });
   }, [overlap, foldOffset]);
+  // The depth fade rides the same timing as the fold, so cards dim into the pile
+  // as it collapses and brighten back to full as it opens.
+  const cardOpacity = useSharedValue(opacity);
+  useEffect(() => {
+    cardOpacity.value = withTiming(opacity, { duration: FOLD_DURATION_MS });
+  }, [opacity, cardOpacity]);
   // zIndex rides along in the animated style so later (lower) cards stay on top
   // and the ones behind only show their top sliver — no second style prop needed.
-  const animatedStyle = useAnimatedStyle(() => ({ marginBottom: foldOffset.value, zIndex }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    marginBottom: foldOffset.value,
+    opacity: cardOpacity.value,
+    zIndex,
+  }));
 
   return (
     <Animated.View onLayout={handleLayout} style={animatedStyle} pointerEvents="box-none">
@@ -437,11 +453,18 @@ export function AgentTasksToastStack(): ReactElement | null {
           const isFront = index === lastIndex;
           const overlap =
             isCollapsed && !isFront ? -Math.max((heights[task.key] ?? 0) - COLLAPSED_PEEK, 0) : 0;
+          // Depth fade only while piled: front card stays solid, each one behind it
+          // dims a step (floored) so the stack recedes into the distance.
+          const depthFromFront = lastIndex - index;
+          const opacity = isCollapsed
+            ? Math.max(1 - depthFromFront * COLLAPSED_OPACITY_STEP, COLLAPSED_MIN_OPACITY)
+            : 1;
           return (
             <ToastStackItem
               key={task.key}
               task={task}
               overlap={overlap}
+              opacity={opacity}
               zIndex={index}
               onMeasure={handleMeasure}
             />
