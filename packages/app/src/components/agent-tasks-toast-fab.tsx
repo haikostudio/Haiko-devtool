@@ -81,14 +81,15 @@ function AgentTasksToastDrawer({
   const insets = useSafeAreaInsets();
   const header = useMemo(() => ({ title: t("agentTasks.drawerTitle") }), [t]);
 
-  // On the standalone PWA the sheet's own safe-area handling can resolve to 0
-  // (env() insets don't reach the portaled bottom sheet), leaving the last card
-  // flush against the home indicator. Add the inset here when the sheet didn't,
-  // with a floor so there's always a comfortable gap above the home indicator.
+  // The sheet's own bottom safe-area padding doesn't render on the standalone
+  // PWA (env() insets don't reach the portaled bottom sheet), so the drawer must
+  // own its home-indicator clearance instead of trusting the sheet. Reserve the
+  // real inset when we have it, but never less than the fallback floor — that
+  // keeps the last card off the home indicator even when insets resolve to 0.
   const listStyle = useMemo(
     () => [
       styles.drawerList,
-      { paddingBottom: insets.bottom > 0 ? 0 : DRAWER_BOTTOM_SAFE_AREA_FALLBACK },
+      { paddingBottom: Math.max(insets.bottom, DRAWER_BOTTOM_SAFE_AREA_FALLBACK) },
     ],
     [insets.bottom],
   );
