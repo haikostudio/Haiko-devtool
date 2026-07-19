@@ -8,6 +8,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide-react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -36,6 +37,11 @@ const RAIL_CLEARANCE = 44;
 // How much of each card behind the front one peeks out at the top when the stack
 // is collapsed into a pile — just enough to show the status pip and a sliver.
 const COLLAPSED_PEEK = 10;
+// Once this many toasts are tracked, the pile folds itself by default (until the
+// user overrides it with the toggle). Keeps a busy corner from taking over.
+const AUTO_COLLAPSE_COUNT = 4;
+// Fold/unfold timing — short enough to feel snappy, long enough to read as motion.
+const FOLD_DURATION_MS = 220;
 
 export interface TrackedTask {
   key: string;
@@ -276,7 +282,7 @@ function CollapseToggle({
 }
 
 // One row in the pile. Reports its natural height back to the stack so the
-// collapsed layout can overlap it, and applies the fold offset + z-order.
+// collapsed layout can overlap it, and animates the fold offset + z-order.
 function ToastStackItem({
   task,
   overlap,
@@ -292,15 +298,21 @@ function ToastStackItem({
     (event: LayoutChangeEvent) => onMeasure(task.key, event.nativeEvent.layout.height),
     [onMeasure, task.key],
   );
+
+  // Ease the overlap between 0 (unfolded) and its collapsed target so the pile
+  // folds and unfolds smoothly instead of snapping.
+  const foldOffset = useSharedValue(overlap);
+  useEffect(() => {
+    foldOffset.value = withTiming(overlap, { duration: FOLD_DURATION_MS });
+  }, [overlap, foldOffset]);
+  // zIndex rides along in the animated style so later (lower) cards stay on top
+  // and the ones behind only show their top sliver — no second style prop needed.
+  const animatedStyle = useAnimatedStyle(() => ({ marginBottom: foldOffset.value, zIndex }));
+
   return (
-    <View
-      onLayout={handleLayout}
-      // Later cards sit on top so the ones behind only show their top sliver.
-      style={inlineUnistylesStyle({ marginBottom: overlap, zIndex })}
-      pointerEvents="box-none"
-    >
+    <Animated.View onLayout={handleLayout} style={animatedStyle} pointerEvents="box-none">
       <TaskToast task={task} />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -309,7 +321,7 @@ export function AgentTasksToastStack(): ReactElement | null {
   const insets = useSafeAreaInsets();
   const visible = useTrackedTasks();
   const collapsed = useAgentTaskToastStore((state) => state.collapsed);
-  const toggleCollapsed = useAgentTaskToastStore((state) => state.toggleCollapsed);
+  const setCollapsed = useAgentTaskToastStore((state) => state.setCollapsed);
   // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
   // can pull each card up over the one behind it and leave only a top sliver.
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -323,12 +335,17 @@ export function AgentTasksToastStack(): ReactElement | null {
     setHeights((prev) => (prev[key] === height ? prev : { ...prev, [key]: height }));
   }, []);
 
+  const canCollapse = visible.length > 1;
+  // `null` = auto: fold once the corner gets busy; an explicit choice always wins.
+  const wantsCollapsed = collapsed ?? visible.length >= AUTO_COLLAPSE_COUNT;
+  const isCollapsed = wantsCollapsed && canCollapse;
+
+  const handleToggle = useCallback(() => setCollapsed(!isCollapsed), [setCollapsed, isCollapsed]);
+
   if (isCompact || visible.length === 0) {
     return null;
   }
 
-  const canCollapse = visible.length > 1;
-  const isCollapsed = collapsed && canCollapse;
   // The front (fully visible) card is the last one — nearest the bottom-right
   // corner. Cards above it fold up behind it, so their status pips peek out.
   const lastIndex = visible.length - 1;
@@ -350,7 +367,7 @@ export function AgentTasksToastStack(): ReactElement | null {
         );
       })}
       {canCollapse ? (
-        <CollapseToggle collapsed={isCollapsed} count={visible.length} onPress={toggleCollapsed} />
+        <CollapseToggle collapsed={isCollapsed} count={visible.length} onPress={handleToggle} />
       ) : null}
     </View>
   );

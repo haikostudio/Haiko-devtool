@@ -29,12 +29,14 @@ interface AgentTaskToastState {
   /** Hide a toast (used when a finished task is clicked). */
   dismiss: (key: AgentTaskToastKey) => void;
   /**
-   * When true the floating stack is folded into an overlapping pile. Persisted so
-   * the user's choice survives a reload; the live `order`/`seq` bookkeeping is not
-   * persisted (it's rebuilt from the agent list on every load).
+   * Fold preference for the floating pile, persisted so the user's choice survives
+   * a reload. `null` means "auto": the stack folds itself once there are enough
+   * tasks and stays open below that. An explicit `true`/`false` is the user having
+   * tapped the toggle, and always wins over the auto behaviour. The live
+   * `order`/`seq` bookkeeping is not persisted (it's rebuilt on every load).
    */
-  collapsed: boolean;
-  toggleCollapsed: () => void;
+  collapsed: boolean | null;
+  setCollapsed: (collapsed: boolean) => void;
 }
 
 export const useAgentTaskToastStore = create<AgentTaskToastState>()(
@@ -42,8 +44,8 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
     (set) => ({
       order: new Map(),
       seq: 0,
-      collapsed: false,
-      toggleCollapsed: () => set((state) => ({ collapsed: !state.collapsed })),
+      collapsed: null,
+      setCollapsed: (collapsed) => set({ collapsed }),
       reconcile: ({ activeKeys, existingKeys }) =>
         set((state) => {
           let changed = false;
