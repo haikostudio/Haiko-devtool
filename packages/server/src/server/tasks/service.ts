@@ -382,14 +382,22 @@ export class TaskBoardService {
       // "validated" and "scheduled" are the pipeline columns where analysis and
       // execution live. Entering either from outside arms the schedule and pokes
       // the estimator/scheduler; leaving to a non-pipeline column disarms it.
+      // A task that has already reached "done" is terminal: never re-arm or
+      // relaunch it, even if it is later dragged/transitioned back into a
+      // pipeline column. This kills the "done task keeps relaunching" loop.
+      const alreadyCompleted = task.completedAt != null;
       const enteringPipeline =
-        PIPELINE_COLUMNS.has(input.column) && !PIPELINE_COLUMNS.has(task.column);
+        !alreadyCompleted &&
+        PIPELINE_COLUMNS.has(input.column) &&
+        !PIPELINE_COLUMNS.has(task.column);
       const leavingPipeline =
         !PIPELINE_COLUMNS.has(input.column) && PIPELINE_COLUMNS.has(task.column);
+      const enteringDone = input.column === "done" && task.completedAt == null;
       const moved: KanbanTask = {
         ...task,
         column: input.column,
         updatedAt: now,
+        ...(enteringDone ? { completedAt: now } : {}),
         ...(input.manual ? { manualOverrideAt: now } : {}),
         // A user drag into a pipeline column is an implicit approval of the proposal.
         ...(input.manual && enteringPipeline && task.approval?.state === "pending"

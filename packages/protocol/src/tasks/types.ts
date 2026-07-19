@@ -100,6 +100,10 @@ export const KanbanTaskSchema = z.object({
   links: TaskLinksSchema,
   // Set on user-initiated column moves; suppresses agent-sync transitions afterwards.
   manualOverrideAt: z.string().nullable().optional(),
+  // Stamped the first time a task reaches "done". Makes "done" terminal: the
+  // scheduler never re-arms or relaunches a completed task, even if it later
+  // re-enters a pipeline column.
+  completedAt: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

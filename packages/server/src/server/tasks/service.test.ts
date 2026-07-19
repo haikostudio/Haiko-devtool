@@ -96,6 +96,35 @@ describe("TaskBoardService", () => {
     expect(back.tasks[0]?.schedule ?? null).toBeNull();
   });
 
+  test("done is terminal: re-entering a pipeline column never re-arms a completed task", async () => {
+    const scheduled: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Ship it now" });
+
+    // Complete the task.
+    const doneBoard = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "done",
+      index: 0,
+      manual: false,
+    });
+    expect(doneBoard.tasks[0]?.completedAt).toBeTruthy();
+    const completedAt = doneBoard.tasks[0]?.completedAt;
+
+    // Drag it back into the pipeline: it must NOT re-arm or notify the scheduler.
+    const back = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "scheduled",
+      index: 0,
+      manual: true,
+    });
+    expect(back.tasks[0]?.column).toBe("scheduled");
+    expect(back.tasks[0]?.schedule ?? null).toBeNull();
+    expect(back.tasks[0]?.completedAt).toBe(completedAt);
+    expect(scheduled).toEqual([]);
+  });
+
   test("upsertSyncedTask dedupes by normalized title project-wide", async () => {
     const folder = await service.createFolder("proj-1", "Agent");
     const first = await service.upsertSyncedTask("proj-1", {
