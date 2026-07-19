@@ -9,6 +9,7 @@ import {
 } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
+import { Check, X } from "lucide-react-native";
 
 export interface AdaptiveRenameModalProps {
   visible: boolean;
@@ -149,6 +150,7 @@ export function AdaptiveRenameModal({
             onPress={handleCancel}
             disabled={isPending}
             testID={cancelTestID}
+            leftIcon={X}
           >
             {t("common.actions.cancel")}
           </Button>
@@ -159,6 +161,7 @@ export function AdaptiveRenameModal({
             onPress={handleSubmitVoid}
             disabled={submitDisabled}
             testID={submitTestID}
+            leftIcon={Check}
           >
             {isPending ? t("renameModal.saving") : (submitLabel ?? t("renameModal.rename"))}
           </Button>
