@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { Pressable, type PressableStateCallbackType, Text, View } from "react-native";
 import { router } from "expo-router";
 import {
@@ -6,23 +6,53 @@ import {
   CalendarClock,
   History,
   LayoutDashboard,
-  Plus,
   ScrollText,
   SquareKanban,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Shortcut } from "@/components/ui/shortcut";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import { useWorkspace } from "@/stores/session-store-hooks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import type { ShortcutKey } from "@/utils/format-shortcut";
 import { buildNewWorkspaceRoute } from "@/utils/host-routes";
 
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
-const ThemedPlus = withUnistyles(Plus);
+/**
+ * Navigates to the new-workspace screen, seeding it with the active workspace's
+ * project context when the host supports creating another workspace there. Shared
+ * by the sidebar's primary actions and the Workspaces section header "+" button.
+ */
+export function useNewWorkspaceNavigation(onBeforeNavigate?: () => void) {
+  const selection = useActiveWorkspaceSelection();
+  const serverId = selection?.serverId ?? null;
+  const workspaceId = selection?.workspaceId ?? null;
+  const activeWorkspace = useWorkspace(serverId, workspaceId);
+  const supportsWorkspaceMultiplicity = useHostFeature(serverId, "workspaceMultiplicity");
+  const canUseActiveWorkspaceContext = Boolean(
+    activeWorkspace &&
+    (supportsWorkspaceMultiplicity || canCreateWorktreeForProjectKind(activeWorkspace.projectKind)),
+  );
+
+  return useCallback(() => {
+    onBeforeNavigate?.();
+    router.push(
+      serverId
+        ? buildNewWorkspaceRoute(
+            activeWorkspace && canUseActiveWorkspaceContext
+              ? {
+                  serverId,
+                  sourceDirectory: activeWorkspace.projectRootPath,
+                  projectId: activeWorkspace.projectId,
+                }
+              : { serverId },
+          )
+        : buildNewWorkspaceRoute(),
+    );
+  }, [activeWorkspace, canUseActiveWorkspaceContext, onBeforeNavigate, serverId]);
+}
+
 const ThemedHistory = withUnistyles(History);
 const ThemedCalendarClock = withUnistyles(CalendarClock);
 const ThemedLayoutDashboard = withUnistyles(LayoutDashboard);
@@ -30,9 +60,6 @@ const ThemedSquareKanban = withUnistyles(SquareKanban);
 const ThemedScrollText = withUnistyles(ScrollText);
 const ThemedActivity = withUnistyles(Activity);
 
-const newWorkspaceLeadingIcon = (
-  <ThemedPlus size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
-);
 const dashboardLeadingIcon = (
   <ThemedLayoutDashboard size={ICON_SIZE.sm} uniProps={foregroundMutedColorMapping} />
 );
@@ -53,22 +80,18 @@ const activityLeadingIcon = (
 );
 
 interface SidebarPrimaryActionsProps {
-  newWorkspaceLabel: string;
   dashboardLabel: string;
   sessionsLabel: string;
   schedulesLabel: string;
   tasksLabel: string;
   changelogLabel: string;
   activityLabel: string;
-  newWorkspaceKeys: ShortcutKey[][] | null;
   onViewDashboard: () => void;
   onViewSessions: () => void;
   onViewSchedules: () => void;
   onViewTasks: () => void;
   onViewChangelog: () => void;
   onViewActivity: () => void;
-  /** Runs before navigating to the new-workspace screen (e.g. closing the mobile sidebar). */
-  onBeforeNavigate?: () => void;
 }
 
 function ActionRow({
@@ -111,63 +134,21 @@ function ActionRow({
  * buttons sit directly above the workspaces with a divider between the two.
  */
 export function SidebarPrimaryActions({
-  newWorkspaceLabel,
   dashboardLabel,
   sessionsLabel,
   schedulesLabel,
   tasksLabel,
   changelogLabel,
   activityLabel,
-  newWorkspaceKeys,
   onViewDashboard,
   onViewSessions,
   onViewSchedules,
   onViewTasks,
   onViewChangelog,
   onViewActivity,
-  onBeforeNavigate,
 }: SidebarPrimaryActionsProps) {
-  const selection = useActiveWorkspaceSelection();
-  const serverId = selection?.serverId ?? null;
-  const workspaceId = selection?.workspaceId ?? null;
-  const activeWorkspace = useWorkspace(serverId, workspaceId);
-  const supportsWorkspaceMultiplicity = useHostFeature(serverId, "workspaceMultiplicity");
-  const canUseActiveWorkspaceContext = Boolean(
-    activeWorkspace &&
-    (supportsWorkspaceMultiplicity || canCreateWorktreeForProjectKind(activeWorkspace.projectKind)),
-  );
-
-  const handleNewWorkspace = useCallback(() => {
-    onBeforeNavigate?.();
-    router.push(
-      serverId
-        ? buildNewWorkspaceRoute(
-            activeWorkspace && canUseActiveWorkspaceContext
-              ? {
-                  serverId,
-                  sourceDirectory: activeWorkspace.projectRootPath,
-                  projectId: activeWorkspace.projectId,
-                }
-              : { serverId },
-          )
-        : buildNewWorkspaceRoute(),
-    );
-  }, [activeWorkspace, canUseActiveWorkspaceContext, onBeforeNavigate, serverId]);
-
-  const newWorkspaceTrailing = useMemo(
-    () => (newWorkspaceKeys ? <Shortcut chord={newWorkspaceKeys} /> : null),
-    [newWorkspaceKeys],
-  );
-
   return (
     <View style={styles.container}>
-      <ActionRow
-        label={newWorkspaceLabel}
-        leading={newWorkspaceLeadingIcon}
-        trailing={newWorkspaceTrailing}
-        onPress={handleNewWorkspace}
-        testID="sidebar-global-new-workspace"
-      />
       <ActionRow
         label={dashboardLabel}
         leading={dashboardLeadingIcon}

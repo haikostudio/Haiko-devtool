@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { FolderPlus, Search, Settings, X } from "lucide-react-native";
+import { FolderPlus, Plus, Search, Settings, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
@@ -23,7 +23,10 @@ import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/sidebar-display-preferences-menu";
 import { SidebarOptionsMenu } from "@/components/sidebar/sidebar-options-menu";
-import { SidebarPrimaryActions } from "@/components/sidebar/sidebar-primary-actions";
+import {
+  SidebarPrimaryActions,
+  useNewWorkspaceNavigation,
+} from "@/components/sidebar/sidebar-primary-actions";
 import { SidebarPrimaryMenu } from "@/components/sidebar/sidebar-primary-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -474,7 +477,6 @@ function MobileSidebar({
   shortcutIndexByWorkspaceKey,
   toggleProjectCollapsed,
   handleRefresh,
-  newWorkspaceKeys,
   handleOpenProject,
   handleHome,
   handleSettings,
@@ -547,21 +549,18 @@ function MobileSidebar({
         <WindowChromeSafeArea placement="below" />
         <View style={styles.mobileHeaderGroup}>
           <SidebarPrimaryActions
-            newWorkspaceLabel={labels.newWorkspace}
             dashboardLabel={labels.dashboard}
             sessionsLabel={labels.sessions}
             schedulesLabel={labels.schedules}
             tasksLabel={labels.tasks}
             changelogLabel={labels.changelog}
             activityLabel={labels.activity}
-            newWorkspaceKeys={newWorkspaceKeys}
             onViewDashboard={handleViewDashboard}
             onViewSessions={handleViewMore}
             onViewSchedules={handleViewSchedules}
             onViewTasks={handleViewTasks}
             onViewChangelog={handleViewChangelog}
             onViewActivity={handleViewActivity}
-            onBeforeNavigate={closeSidebar}
           />
         </View>
         <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
@@ -819,8 +818,15 @@ function WorkspacesSectionHeader() {
   const { theme } = useUnistyles();
   const setCommandCenterOpen = useKeyboardShortcutsStore((state) => state.setCommandCenterOpen);
   const commandCenterKeys = useShortcutKeys("toggle-command-center");
+  const newWorkspaceKeys = useShortcutKeys("new-workspace");
+  const isCompactLayout = useIsCompactFormFactor();
+  const showMobileAgent = usePanelStore((state) => state.showMobileAgent);
+  // On compact layouts the sidebar is an overlay — close it before navigating away.
+  const handleNewWorkspace = useNewWorkspaceNavigation(
+    isCompactLayout ? showMobileAgent : undefined,
+  );
   const handleSearchPress = useCallback(() => setCommandCenterOpen(true), [setCommandCenterOpen]);
-  const searchButtonStyle = useCallback(
+  const iconButtonStyle = useCallback(
     ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.workspacesHeaderIconButton,
       (hovered || pressed) && styles.workspacesHeaderIconButtonHovered,
@@ -836,9 +842,32 @@ function WorkspacesSectionHeader() {
           <TooltipTrigger asChild>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="New workspace"
+              testID="sidebar-global-new-workspace"
+              style={iconButtonStyle}
+              onPress={handleNewWorkspace}
+            >
+              {({ hovered, pressed }) => (
+                <Plus
+                  size={16}
+                  color={
+                    hovered || pressed ? theme.colors.foreground : theme.colors.foregroundMuted
+                  }
+                />
+              )}
+            </Pressable>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="center" offset={8}>
+            <IconTooltipContent label="New workspace" shortcutKeys={newWorkspaceKeys} />
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Open command center"
               testID="sidebar-command-center-search"
-              style={searchButtonStyle}
+              style={iconButtonStyle}
               onPress={handleSearchPress}
             >
               {({ hovered, pressed }) => (
