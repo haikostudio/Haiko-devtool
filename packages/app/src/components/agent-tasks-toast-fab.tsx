@@ -17,6 +17,9 @@ const COMPOSER_CLEARANCE = 140;
 // Sit the list close to the sheet edges (spacing[4]) instead of the header's
 // wide default indent (spacing[6]) so the cards read as full-width rows.
 const DRAWER_CONTENT_PADDING_SCALE = 4;
+// Home-indicator clearance used only when the sheet's own safe-area inset comes
+// back as 0 (see listStyle) — keeps the last card off the bottom edge.
+const DRAWER_BOTTOM_SAFE_AREA_FALLBACK = 28;
 
 // Compact-only counterpart to AgentTasksToastStack: a round badge in the
 // bottom-right corner showing how many agent tasks are being tracked. Tapping it
@@ -75,7 +78,20 @@ function AgentTasksToastDrawer({
   tasks: ReturnType<typeof useTrackedTasks>;
 }): ReactElement {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const header = useMemo(() => ({ title: t("agentTasks.drawerTitle") }), [t]);
+
+  // On the standalone PWA the sheet's own safe-area handling can resolve to 0
+  // (env() insets don't reach the portaled bottom sheet), leaving the last card
+  // flush against the home indicator. Add the inset here when the sheet didn't,
+  // with a floor so there's always a comfortable gap above the home indicator.
+  const listStyle = useMemo(
+    () => [
+      styles.drawerList,
+      { paddingBottom: insets.bottom > 0 ? 0 : DRAWER_BOTTOM_SAFE_AREA_FALLBACK },
+    ],
+    [insets.bottom],
+  );
 
   return (
     <AdaptiveModalSheet
@@ -86,7 +102,7 @@ function AgentTasksToastDrawer({
       contentPaddingScale={DRAWER_CONTENT_PADDING_SCALE}
       testID="agent-tasks-toast-drawer"
     >
-      <View style={styles.drawerList}>
+      <View style={listStyle}>
         {tasks.length === 0 ? (
           <Text style={styles.emptyText}>{t("agentTasks.drawerEmpty")}</Text>
         ) : (
@@ -130,6 +146,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   drawerList: {
     gap: theme.spacing[2],
+    // The status pip straddles the top-left corner of the first card (top: -5),
+    // so give the list a little headroom or the badge gets clipped by the sheet.
+    paddingTop: theme.spacing[2],
   },
   emptyText: {
     fontSize: theme.fontSize.sm,
