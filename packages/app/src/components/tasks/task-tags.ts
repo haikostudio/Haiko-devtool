@@ -87,7 +87,11 @@ export function parseTaskTags(tags: readonly string[]): ParsedTaskTags {
   let deadline: ParsedDeadline | null = null;
   const rest: string[] = [];
 
-  for (const tag of tags) {
+  for (const rawTag of tags) {
+    // Agent/brain-authored tags can arrive NFD-normalized (é = "e" + combining
+    // accent), which slips between the accented letter and the "-" separator and
+    // defeats the prefix regexes. Normalize to NFC so "priorité-haute" matches.
+    const tag = rawTag.normalize("NFC");
     const prioritySuffix = PRIORITY_PREFIX.exec(tag)?.[1];
     if (!priority && prioritySuffix) {
       const label = humanize(prioritySuffix);

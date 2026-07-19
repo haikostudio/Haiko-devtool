@@ -17,6 +17,15 @@ describe("parseTaskTags", () => {
     expect(parsed.tags).toEqual(["HEXAPRO", "i18n"]);
   });
 
+  it("parses NFD-normalized accented tags (combining accents from the brain/agent)", () => {
+    // é as "e" + U+0301 combining acute — how some agent-authored tags arrive.
+    const nfd = ["priorité-haute", "échéance-à-définir"].map((t) => t.normalize("NFD"));
+    const parsed = parseTaskTags(nfd);
+    expect(parsed.priority?.level).toBe("high");
+    expect(parsed.deadline?.label).toBe("à définir");
+    expect(parsed.tags).toEqual([]);
+  });
+
   it("maps priority suffixes to levels", () => {
     expect(parseTaskTags(["priorité-haute"]).priority?.level).toBe("high");
     expect(parseTaskTags(["priorité-moyenne"]).priority?.level).toBe("medium");

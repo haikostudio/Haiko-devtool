@@ -89,10 +89,8 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
 
-  const hasChipRow = Boolean(priority || scheduleBadge);
-
   // The triage writes a "Priorité : … — Date objectif : …" boilerplate into the
-  // description that just restates the priority chip and deadline row. Hide it so
+  // description that just restates the priority dot and deadline row. Hide it so
   // only a genuine, human-written description ever shows on the card.
   const description = useMemo(() => {
     const text = task.description?.trim();
@@ -102,25 +100,27 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
   const hiddenTagCount = tags.length - visibleTags.length;
 
+  const priorityLabel = priority?.label;
+
   return (
     <Pressable
       onPress={handlePress}
       style={cardStyle}
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={task.title}
+      accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
     >
-      {hasChipRow ? (
+      <View style={styles.titleRow}>
+        {priority ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
+        <Text style={styles.title} numberOfLines={3}>
+          {task.title}
+        </Text>
+      </View>
+      {scheduleBadge ? (
         <View style={styles.chipRow}>
-          {priority ? <PriorityChip priority={priority} /> : null}
-          {scheduleBadge ? (
-            <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
-          ) : null}
+          <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
         </View>
       ) : null}
-      <Text style={styles.title} numberOfLines={3}>
-        {task.title}
-      </Text>
       {description ? (
         <Text style={styles.description} numberOfLines={2}>
           {description}
@@ -150,10 +150,10 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   );
 });
 
-// One muted footer line: deadline (colored) leads, then the middot-separated
-// estimates (duration, quota), then the linked-agent icon and PR chip. Keeping
-// everything on a single row is the whole point — the card stays glanceable.
-// Split out of TaskCard to keep the card render under the complexity budget.
+// One muted footer line: deadline (colored) leads, then duration, then the
+// linked-agent icon and PR chip. Quota share and model live in the task detail,
+// not on the card — the card stays glanceable. Split out of TaskCard to keep the
+// card render under the complexity budget.
 const CardMetaRow = memo(function CardMetaRow({
   task,
   deadline,
@@ -162,27 +162,20 @@ const CardMetaRow = memo(function CardMetaRow({
   deadline: ParsedDeadline | null;
 }) {
   const { t } = useTranslation();
-  const estimates: string[] = [];
-  if (task.estimate?.estimatedMinutes !== undefined) {
-    estimates.push(t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes }));
-  }
-  if (task.estimate) {
-    estimates.push(
-      t("tasks.card.quotaEstimate", { percent: Math.round(task.estimate.quotaPercent) }),
-    );
-  }
+  const duration =
+    task.estimate?.estimatedMinutes !== undefined
+      ? t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })
+      : null;
 
-  const hasMetaRow = Boolean(
-    deadline || estimates.length || task.links.primaryAgentId || task.links.prUrl,
-  );
+  const hasMetaRow = Boolean(deadline || duration || task.links.primaryAgentId || task.links.prUrl);
   if (!hasMetaRow) {
     return null;
   }
   return (
     <View style={styles.metaRow}>
       {deadline ? <DeadlineRow deadline={deadline} /> : null}
-      {estimates.length ? (
-        <Text style={styles.estimateText}>{`${deadline ? "· " : ""}${estimates.join(" · ")}`}</Text>
+      {duration ? (
+        <Text style={styles.estimateText}>{`${deadline ? "· " : ""}${duration}`}</Text>
       ) : null}
       {task.links.primaryAgentId ? (
         <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
@@ -192,31 +185,26 @@ const CardMetaRow = memo(function CardMetaRow({
   );
 });
 
-// Soft tinted priority chip — level word only ("Haute"), status-colored text on
-// a 10%-alpha tint of the same color (docs/design.md §12). Low priority stays
-// deliberately quiet: muted text on a neutral surface.
-const PriorityChip = memo(function PriorityChip({ priority }: { priority: ParsedPriority }) {
-  const pillStyle = useMemo(
+// The priority "badge": a small colored dot the user reads at a glance — danger
+// red for high, warning amber for medium, a quiet muted dot for low/other. The
+// level word itself is dropped from the card; the color carries it (the a11y
+// label still announces it).
+const PriorityDot = memo(function PriorityDot({
+  level,
+  label,
+}: {
+  level: ParsedPriority["level"];
+  label?: string;
+}) {
+  const dotStyle = useMemo(
     () => [
-      styles.priorityChip,
-      priority.level === "high" && styles.priorityChipHigh,
-      priority.level === "medium" && styles.priorityChipMedium,
+      styles.priorityDot,
+      level === "high" && styles.priorityDotHigh,
+      level === "medium" && styles.priorityDotMedium,
     ],
-    [priority.level],
+    [level],
   );
-  const textStyle = useMemo(
-    () => [
-      styles.priorityText,
-      priority.level === "high" && styles.priorityTextHigh,
-      priority.level === "medium" && styles.priorityTextMedium,
-    ],
-    [priority.level],
-  );
-  return (
-    <View style={pillStyle}>
-      <Text style={textStyle}>{priority.label}</Text>
-    </View>
-  );
+  return <View style={dotStyle} accessibilityLabel={label} />;
 });
 
 // Deadline line: clock icon + date + days remaining. Overdue reads danger, due
@@ -308,7 +296,15 @@ const styles = StyleSheet.create((theme) => ({
     // Clears the absolute move-to trigger the touch board overlays top-right.
     paddingRight: theme.spacing[4],
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
+    // Clears the absolute move-to trigger the touch board overlays top-right.
+    paddingRight: theme.spacing[4],
+  },
   title: {
+    flex: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     lineHeight: 20,
@@ -324,28 +320,19 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     marginTop: theme.spacing[1],
   },
-  priorityChip: {
+  priorityDot: {
+    width: 8,
+    height: 8,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface2,
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: 3,
+    backgroundColor: theme.colors.foregroundMuted,
+    // Nudge the dot down so it optically centers on the first line of the title.
+    marginTop: 6,
   },
-  priorityChipHigh: {
-    backgroundColor: `${theme.colors.statusDanger}1A`,
+  priorityDotHigh: {
+    backgroundColor: theme.colors.statusDanger,
   },
-  priorityChipMedium: {
-    backgroundColor: `${theme.colors.statusWarning}1A`,
-  },
-  priorityText: {
-    fontSize: theme.fontSize.xs,
-    textTransform: "capitalize",
-    color: theme.colors.foregroundMuted,
-  },
-  priorityTextHigh: {
-    color: theme.colors.statusDanger,
-  },
-  priorityTextMedium: {
-    color: theme.colors.statusWarning,
+  priorityDotMedium: {
+    backgroundColor: theme.colors.statusWarning,
   },
   deadlineRow: {
     flexDirection: "row",
