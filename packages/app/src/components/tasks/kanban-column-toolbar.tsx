@@ -33,6 +33,12 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 const ThemedFilter = withUnistyles(ListFilter);
 const ThemedArrowUpDown = withUnistyles(ArrowUpDown);
 
+// Plain (non-Unistyles) style: FormTextInput's chrome/input style split runs the
+// value through RN's StyleSheet.flatten, which silently drops Unistyles proxy
+// styles. A plain object survives it, so this is the reliable way to knock out
+// the input's default grey chrome and let the white wrapper show through.
+const TRANSPARENT_CHROME = { backgroundColor: "transparent" } as const;
+
 function iconButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.iconButton, (hovered || pressed) && styles.iconButtonHovered];
 }
@@ -73,14 +79,16 @@ export const BoardColumnToolbar = memo(function BoardColumnToolbar({
 
   return (
     <View style={styles.toolbar}>
-      <FormTextInput
-        size="sm"
-        value={controls.query}
-        onChangeText={handleQueryChange}
-        placeholder={t("tasks.searchTasks")}
-        style={styles.searchInput}
-        testID={`tasks-column-search-${column}`}
-      />
+      <View style={styles.searchField}>
+        <FormTextInput
+          size="sm"
+          value={controls.query}
+          onChangeText={handleQueryChange}
+          placeholder={t("tasks.searchTasks")}
+          style={TRANSPARENT_CHROME}
+          testID={`tasks-column-search-${column}`}
+        />
+      </View>
       <ColumnFilterMenu
         board={board}
         folderId={folderId}
@@ -295,18 +303,27 @@ const ColumnFilterMenu = memo(function ColumnFilterMenu({
 });
 
 const styles = StyleSheet.create((theme) => ({
-  // Sits in the column header, between the title row and the cards. Search grows
-  // to fill; the funnel and sort buttons stay a fixed square.
+  // Sits in the column header, between the title row and the cards. Spans the
+  // full column width: the search field grows to fill, the funnel and sort
+  // buttons stay a fixed square on the right.
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
-    paddingBottom: theme.spacing[1],
+    paddingBottom: theme.spacing[2],
   },
-  searchInput: {
+  // White, bordered wrapper so the field reads as an input against the grey
+  // column surface. flex:1 here (a plain View) reliably fills the row — the
+  // FormTextInput's own flex/background style is dropped by its style split.
+  searchField: {
     flex: 1,
+    justifyContent: "center",
     backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
   },
   iconButton: {
     width: 30,
