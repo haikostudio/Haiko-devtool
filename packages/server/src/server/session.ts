@@ -212,7 +212,7 @@ import {
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import type { BrainMemoryClient } from "../services/brain-memory/client.js";
 import type { BrainCurator } from "../services/brain-memory/curator.js";
-import { recallAndInjectBrainContext } from "../services/brain-memory/recall.js";
+import { resolveBrainScope } from "../services/brain-memory/recall.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -6090,65 +6090,21 @@ export class Session {
   }
 
   /**
-   * Resolve the Cerveau scope for an agent: the human project name if the
-   * agent belongs to a registered workspace (else the last path segment of its
-   * working directory), plus the cwd the curator's internal agents run in.
-   * Best-effort — empty scope on any failure.
+   * Resolve the Cerveau scope for an agent (shared resolver — project display
+   * name, else last cwd segment). Used by the end-of-turn capture; the recall
+   * itself now happens at the AgentManager choke point.
    */
   private async resolveBrainScope(
     agentId: string,
   ): Promise<{ projet: string | undefined; cwd: string | null }> {
-    try {
-      const agent = await this.agentStorage.get(agentId);
-      if (!agent) {
-        return { projet: undefined, cwd: null };
-      }
-      if (agent.workspaceId) {
-        const workspace = await this.workspaceRegistry.get(agent.workspaceId);
-        if (workspace) {
-          const project = await this.projectRegistry.get(workspace.projectId);
-          if (project) {
-            return { projet: resolveProjectDisplayName(project), cwd: agent.cwd };
-          }
-        }
-      }
-      const segments = agent.cwd.replace(/\\/g, "/").split("/").filter(Boolean);
-      return { projet: segments[segments.length - 1] ?? undefined, cwd: agent.cwd };
-    } catch (err) {
-      this.sessionLogger.debug({ err, agentId }, "brain: scope resolution failed");
-      return { projet: undefined, cwd: null };
-    }
-  }
-
-  /**
-   * Recall relevant memories from the Cerveau, surface them as a yellow
-   * brain_context timeline item, and return the prompt augmented with the
-   * recall block.
-   *
-   * First prompt of a conversation: the recall always runs and the project
-   * fiche (curated brief) leads the block — global-but-precise context. On
-   * follow-ups the conversation already holds that context, so low-substance
-   * messages ("Oui", "vas-y") skip recall entirely (the query would be noise)
-   * and the fiche is not re-injected. When the curator is available, the
-   * librarian re-reads the candidates and keeps only what helps THIS request,
-   * falling back to the unfiltered recall if it is unavailable.
-   *
-   * Entirely best-effort: a Cerveau outage returns the text unchanged and
-   * never blocks the prompt.
-   */
-  private async recallAndInjectBrainContext(
-    agentId: string,
-    text: string,
-    scope: { projet: string | undefined; cwd: string | null },
-  ): Promise<string> {
-    return recallAndInjectBrainContext(
+    return resolveBrainScope(
       {
-        brain: this.brainMemory,
-        curator: this.brainCurator,
-        agentManager: this.agentManager,
+        agentStorage: this.agentStorage,
+        workspaceRegistry: this.workspaceRegistry,
+        projectRegistry: this.projectRegistry,
         logger: this.sessionLogger,
       },
-      { agentId, text, scope },
+      agentId,
     );
   }
 
@@ -6238,13 +6194,11 @@ export class Session {
     try {
       const agentId = resolved.agentId;
 
-      // Cerveau memory: recall relevant context before dispatching (shown as a
-      // yellow pill), inject it into the prompt, and note the exchange after the
-      // turn ends. All best-effort — a Cerveau outage never blocks the prompt.
-      let promptText = msg.text;
+      // Cerveau memory: recall + injection happen at the AgentManager choke
+      // point (every entrypoint, every prompt — see applyBrainRecall). Here we
+      // only schedule the end-of-turn capture, which needs the raw user text.
       if (this.brainMemory) {
         const scope = await this.resolveBrainScope(agentId);
-        promptText = await this.recallAndInjectBrainContext(agentId, msg.text, scope);
         this.scheduleBrainCapture(agentId, msg.text, scope);
       }
 
@@ -6253,7 +6207,7 @@ export class Session {
       // Strictly fire-and-forget — never blocks or alters the normal agent turn.
       this.messageTriage?.triage({ agentId, text: msg.text });
 
-      const prompt = buildAgentPrompt(promptText, msg.images, msg.attachments);
+      const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
       this.sessionLogger.trace(
         {
           agentId,

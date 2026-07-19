@@ -137,6 +137,7 @@ import { MessageTriage } from "./tasks/message-triage.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
 import { ProjectBriefStore } from "../services/brain-memory/project-brief.js";
+import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -1175,6 +1176,30 @@ export async function createPaseoDaemon(
       },
     );
   };
+  // Cerveau services + the recall hook are wired BEFORE any service that can
+  // dispatch prompts (schedule service, task scheduler, loops): the hook lives
+  // at the AgentManager choke point, so from here on every foreground prompt
+  // of every non-internal agent queries the brain — whatever the entrypoint.
+  const brainMemoryServices = createBrainMemoryServices({
+    brainConfig: config.brainMemory,
+    paseoHome: config.paseoHome,
+    agentManager,
+    createAgent,
+    logger,
+  });
+  if (brainMemoryServices && workspaceRegistry) {
+    agentManager.setBrainRecallHook(
+      createBrainRecallHook({
+        brain: brainMemoryServices.client,
+        curator: brainMemoryServices.curator,
+        agentManager,
+        agentStorage,
+        workspaceRegistry,
+        projectRegistry,
+        logger,
+      }),
+    );
+  }
   const scheduleService = new ScheduleService({
     paseoHome: config.paseoHome,
     logger,
@@ -1221,15 +1246,6 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
-  // Created before the scheduler so task launches can recall + inject Cerveau
-  // context on the same code path as interactive prompts.
-  const brainMemoryServices = createBrainMemoryServices({
-    brainConfig: config.brainMemory,
-    paseoHome: config.paseoHome,
-    agentManager,
-    createAgent,
-    logger,
-  });
   const taskScheduler = new TaskScheduler({
     taskBoardService,
     taskEstimator,
@@ -1237,8 +1253,6 @@ export async function createPaseoDaemon(
     agentManager,
     createAgent,
     providerUsageService: new ProviderUsageService({ logger }),
-    brainMemory: brainMemoryServices?.client ?? null,
-    brainCurator: brainMemoryServices?.curator ?? null,
     logger,
     getQuietHours: () => daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,
   });

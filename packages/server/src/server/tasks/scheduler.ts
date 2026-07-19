@@ -2,11 +2,8 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
-import { type ProjectRegistry, resolveProjectDisplayName } from "../workspace-registry.js";
+import type { ProjectRegistry } from "../workspace-registry.js";
 import type { ProviderUsageService } from "../../services/quota-fetcher/service.js";
-import type { BrainMemoryClient } from "../../services/brain-memory/client.js";
-import type { BrainCurator } from "../../services/brain-memory/curator.js";
-import { recallAndInjectBrainContext } from "../../services/brain-memory/recall.js";
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
@@ -36,12 +33,6 @@ interface TaskSchedulerOptions {
   createAgent: BoundCreateAgentCommand;
   providerUsageService: Pick<ProviderUsageService, "listUsage">;
   logger: pino.Logger;
-  // Cerveau memory: recall relevant context server-side and inject it into the
-  // task prompt (shown as a yellow pill), exactly like interactive prompts. Null
-  // when the Cerveau is disabled. Without this, task agents get no brain context
-  // — and since their MCP surface is locked down, they would be brain-blind.
-  brainMemory?: BrainMemoryClient | null;
-  brainCurator?: BrainCurator | null;
   tickIntervalMs?: number;
   /** Off-peak window for heavy tasks. Defaults to 01:00–07:00 Europe/Paris. */
   getQuietHours?: () => QuietHours;
@@ -137,8 +128,6 @@ export class TaskScheduler {
   >;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly providerUsageService: Pick<ProviderUsageService, "listUsage">;
-  private readonly brainMemory: BrainMemoryClient | null;
-  private readonly brainCurator: BrainCurator | null;
   private readonly logger: pino.Logger;
   private readonly tickIntervalMs: number;
   private readonly getQuietHours: () => QuietHours;
@@ -159,8 +148,6 @@ export class TaskScheduler {
     this.agentManager = options.agentManager;
     this.createAgent = options.createAgent;
     this.providerUsageService = options.providerUsageService;
-    this.brainMemory = options.brainMemory ?? null;
-    this.brainCurator = options.brainCurator ?? null;
     this.logger = options.logger.child({ module: "task-scheduler" });
     this.tickIntervalMs = options.tickIntervalMs ?? TICK_INTERVAL_MS;
     this.getQuietHours = options.getQuietHours ?? (() => DEFAULT_TASKS_QUIET_HOURS);
@@ -510,24 +497,9 @@ export class TaskScheduler {
         },
       }));
 
-      const basePrompt = this.buildTaskPrompt({ task, planMode, branch });
-      // Recall Cerveau context and inject it into the task prompt — same path as
-      // interactive prompts, so task agents get (and the user sees) the yellow
-      // brain pill instead of the model reaching for a memory tool it no longer
-      // has. Best-effort: an outage returns the prompt unchanged.
-      const prompt = await recallAndInjectBrainContext(
-        {
-          brain: this.brainMemory,
-          curator: this.brainCurator,
-          agentManager: this.agentManager,
-          logger: this.logger,
-        },
-        {
-          agentId: agent.id,
-          text: basePrompt,
-          scope: { projet: resolveProjectDisplayName(project), cwd: agent.cwd },
-        },
-      );
+      // Cerveau recall + injection happen inside runAgent (AgentManager choke
+      // point) — same path as interactive prompts, yellow pill included.
+      const prompt = this.buildTaskPrompt({ task, planMode, branch });
       const result = await this.agentManager.runAgent(agent.id, prompt);
       if (result.canceled) {
         throw new Error("Task agent run was canceled");

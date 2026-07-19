@@ -67,6 +67,7 @@ import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js";
+import type { BrainRecallPromptHook } from "../../services/brain-memory/recall.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
@@ -621,6 +622,7 @@ export class AgentManager {
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
+  private brainRecallHook: BrainRecallPromptHook | null = null;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -697,6 +699,18 @@ export class AgentManager {
 
   setAgentArchivedCallback(callback: AgentArchivedCallback): void {
     this.onAgentArchived = callback;
+  }
+
+  /**
+   * Install the Cerveau recall hook applied to every foreground prompt of
+   * every non-internal agent, whatever the entrypoint — session message, MCP
+   * send_agent_prompt, schedules, loops, task launches, notify-on-finish. Set
+   * once at bootstrap. Internal agents (curator, triage, estimator, quota
+   * keep-alive) are excluded: recalling for the librarian's own runs would
+   * recurse.
+   */
+  setBrainRecallHook(hook: BrainRecallPromptHook | null): void {
+    this.brainRecallHook = hook;
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -2045,8 +2059,12 @@ export class AgentManager {
     const streamForwarder = async function* streamForwarder(this: AgentManager) {
       let turnId: string;
       let turnStream: ReturnType<AgentRunState["createTurnStream"]> | null = null;
+      // Cerveau recall lives here — the single point every foreground prompt
+      // passes through (runAgent and replaceAgentRun both funnel into
+      // streamAgent) — so every entrypoint queries the brain. Never throws.
+      const effectivePrompt = await this.applyBrainRecall(agent, prompt);
       try {
-        const result = await agent.session.startTurn(prompt, options);
+        const result = await agent.session.startTurn(effectivePrompt, options);
         turnId = result.turnId;
       } catch (error) {
         agent.pendingReplacement = false;
@@ -2101,6 +2119,52 @@ export class AgentManager {
     }.call(this);
 
     return streamForwarder;
+  }
+
+  /**
+   * Recall Cerveau context for this prompt and return the augmented prompt
+   * (string prompts get the <contexte_memoire> envelope prepended; structured
+   * prompts get it inside their user-text block — text attachments carry a
+   * mimeType and are left alone). Skips internal agents (recursion), empty
+   * text, and prompts already carrying an envelope (requeues/replays).
+   * Best-effort: any failure returns the prompt unchanged.
+   */
+  private async applyBrainRecall(
+    agent: ActiveManagedAgent,
+    prompt: AgentPromptInput,
+  ): Promise<AgentPromptInput> {
+    const hook = this.brainRecallHook;
+    if (!hook || agent.internal) {
+      return prompt;
+    }
+    try {
+      if (typeof prompt === "string") {
+        if (!prompt.trim() || parseBrainContextEnvelope(prompt)) {
+          return prompt;
+        }
+        return await hook({ agentId: agent.id, text: prompt });
+      }
+      const textIndex = prompt.findIndex(
+        (block) => block.type === "text" && !("mimeType" in block) && block.text.trim().length > 0,
+      );
+      if (textIndex === -1) {
+        return prompt;
+      }
+      const textBlock = prompt[textIndex] as { type: "text"; text: string };
+      if (parseBrainContextEnvelope(textBlock.text)) {
+        return prompt;
+      }
+      const augmented = await hook({ agentId: agent.id, text: textBlock.text });
+      if (augmented === textBlock.text) {
+        return prompt;
+      }
+      const next = [...prompt];
+      next[textIndex] = { type: "text", text: augmented };
+      return next;
+    } catch (err) {
+      this.logger.debug({ err, agentId: agent.id }, "brain: prompt recall failed");
+      return prompt;
+    }
   }
 
   private finalizeForegroundTurn(agent: ActiveManagedAgent, turnId?: string): void {

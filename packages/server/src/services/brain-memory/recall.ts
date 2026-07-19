@@ -1,4 +1,10 @@
 import type { AgentManager } from "../../server/agent/agent-manager.js";
+import type { AgentStorage } from "../../server/agent/agent-storage.js";
+import {
+  type ProjectRegistry,
+  resolveProjectDisplayName,
+  type WorkspaceRegistry,
+} from "../../server/workspace-registry.js";
 import {
   type BrainMemoryClient,
   formatRecall,
@@ -23,6 +29,69 @@ export interface BrainRecallDeps {
 export interface BrainScope {
   projet: string | undefined;
   cwd: string | null;
+}
+
+export interface BrainScopeDeps {
+  agentStorage: Pick<AgentStorage, "get">;
+  workspaceRegistry: Pick<WorkspaceRegistry, "get">;
+  projectRegistry: Pick<ProjectRegistry, "get">;
+  logger: BrainRecallLogger;
+}
+
+/**
+ * Resolve the Cerveau scope for an agent: the project display name when the
+ * agent belongs to a workspace, otherwise the last segment of its working
+ * directory, plus the cwd the curator's internal agents run in. Best-effort —
+ * empty scope on any failure.
+ */
+export async function resolveBrainScope(
+  deps: BrainScopeDeps,
+  agentId: string,
+): Promise<BrainScope> {
+  try {
+    const agent = await deps.agentStorage.get(agentId);
+    if (!agent) {
+      return { projet: undefined, cwd: null };
+    }
+    if (agent.workspaceId) {
+      const workspace = await deps.workspaceRegistry.get(agent.workspaceId);
+      if (workspace) {
+        const project = await deps.projectRegistry.get(workspace.projectId);
+        if (project) {
+          return { projet: resolveProjectDisplayName(project), cwd: agent.cwd };
+        }
+      }
+    }
+    const segments = agent.cwd.replace(/\\/g, "/").split("/").filter(Boolean);
+    return { projet: segments[segments.length - 1] ?? undefined, cwd: agent.cwd };
+  } catch (err) {
+    deps.logger.debug({ err, agentId }, "brain: scope resolution failed");
+    return { projet: undefined, cwd: null };
+  }
+}
+
+/**
+ * Prompt-level recall hook installed on the AgentManager at bootstrap and
+ * applied to every foreground prompt of every non-internal agent — whatever
+ * the entrypoint (session message, MCP send_agent_prompt, schedules, loops,
+ * task launches, notify-on-finish). Takes the prompt text, returns it
+ * augmented with the Cerveau recall block (or unchanged on outage).
+ */
+export type BrainRecallPromptHook = (input: { agentId: string; text: string }) => Promise<string>;
+
+/**
+ * Build the AgentManager prompt hook: resolve the agent's scope, then run the
+ * standard recall (yellow pill + <contexte_memoire> injection). One hook at
+ * the dispatch choke point instead of a recall call per entrypoint — new
+ * prompt paths get the Cerveau for free.
+ */
+export function createBrainRecallHook(
+  deps: BrainRecallDeps & BrainScopeDeps,
+): BrainRecallPromptHook {
+  return async ({ agentId, text }) => {
+    const scope = await resolveBrainScope(deps, agentId);
+    return recallAndInjectBrainContext(deps, { agentId, text, scope });
+  };
 }
 
 /**
