@@ -21,14 +21,18 @@ import { Plus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import type { KanbanTask, TaskColumn } from "@/data/tasks";
+import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
+import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
   buildColumnModels,
+  EMPTY_COLUMN_CONTROLS,
   KANBAN_COLUMN_MAX_WIDTH,
   useColumnLabels,
+  type ColumnControls,
+  type ColumnControlsMap,
   type KanbanBoardProps,
 } from "./kanban-columns";
 
@@ -78,15 +82,16 @@ export function KanbanBoard({
   onRunTask,
   onReanalyzeTask,
   columnExtras,
-  query,
-  sortMode,
-  filter,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
+  const [controls, setControls] = useState<ColumnControlsMap>({});
+  const setColumnControls = useCallback((column: TaskColumn, next: ColumnControls) => {
+    setControls((prev) => ({ ...prev, [column]: next }));
+  }, []);
   const columns = useMemo(
-    () => buildColumnModels(board, folderId, { query, sortMode, filter }),
-    [board, folderId, query, sortMode, filter],
+    () => buildColumnModels(board, folderId, controls),
+    [board, folderId, controls],
   );
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 
@@ -167,11 +172,15 @@ export function KanbanBoard({
           {columns.map(({ column, tasks }) => (
             <DroppableColumn
               key={column}
+              board={board}
+              folderId={folderId}
               column={column}
               label={labels[column]}
               labels={labels}
               tasks={tasks}
               compact={isCompact}
+              controls={controls[column] ?? EMPTY_COLUMN_CONTROLS}
+              onControlsChange={setColumnControls}
               extras={columnExtras?.column === column ? columnExtras.node : null}
               onAddTask={onAddTask}
               onPressTask={onPressTask}
@@ -194,11 +203,15 @@ export function KanbanBoard({
 }
 
 const DroppableColumn = memo(function DroppableColumn({
+  board,
+  folderId,
   column,
   label,
   labels,
   tasks,
   compact,
+  controls,
+  onControlsChange,
   extras,
   onAddTask,
   onPressTask,
@@ -206,11 +219,15 @@ const DroppableColumn = memo(function DroppableColumn({
   onRunTask,
   onReanalyzeTask,
 }: {
+  board: TaskBoard | null;
+  folderId: string;
   column: TaskColumn;
   label: string;
   labels: Record<TaskColumn, string>;
   tasks: KanbanTask[];
   compact: boolean;
+  controls: ColumnControls;
+  onControlsChange: (column: TaskColumn, next: ColumnControls) => void;
   extras: React.ReactNode;
   onAddTask: KanbanBoardProps["onAddTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -232,6 +249,10 @@ const DroppableColumn = memo(function DroppableColumn({
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
+  const handleControlsChange = useCallback(
+    (next: ColumnControls) => onControlsChange(column, next),
+    [onControlsChange, column],
+  );
 
   return (
     <View style={columnStyle}>
@@ -251,6 +272,13 @@ const DroppableColumn = memo(function DroppableColumn({
           <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         </Pressable>
       </View>
+      <BoardColumnToolbar
+        board={board}
+        folderId={folderId}
+        column={column}
+        controls={controls}
+        onChange={handleControlsChange}
+      />
       <div ref={setNodeRef} style={webColumnBodyStyle}>
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>

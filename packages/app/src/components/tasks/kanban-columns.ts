@@ -128,12 +128,21 @@ export interface BoardFacets {
 
 const PRIORITY_FILTER_ORDER: FilterPriorityLevel[] = ["high", "medium", "low"];
 
-export function collectBoardFacets(board: TaskBoard | null, folderId: string): BoardFacets {
+export function collectBoardFacets(
+  board: TaskBoard | null,
+  folderId: string,
+  // Scope the facets to a single column so each column's filter menu only
+  // offers priorities/tags that can actually match a card sitting in it.
+  column?: TaskColumn,
+): BoardFacets {
   const priorities = new Set<FilterPriorityLevel>();
   const tags = new Set<string>();
   let hasDeadlines = false;
   for (const task of board?.tasks ?? []) {
     if (task.folderId !== folderId) {
+      continue;
+    }
+    if (column && task.column !== column) {
       continue;
     }
     const parsed = parseTaskTags(task.tags);
@@ -184,35 +193,48 @@ function matchesFilter(task: KanbanTask, filter: TaskFilter, now: Date): boolean
   return true;
 }
 
-export interface BuildColumnOptions {
-  query?: string;
-  sortMode?: TaskSortMode;
-  filter?: TaskFilter;
-  // Injected so the "overdue" deadline facet is deterministic in tests.
-  now?: Date;
+// The search/filter/sort state of a single column's toolbar. Each column owns
+// its own copy — the board no longer has one shared toolbar.
+export interface ColumnControls {
+  query: string;
+  sortMode: TaskSortMode;
+  filter: TaskFilter;
 }
+
+export const EMPTY_COLUMN_CONTROLS: ColumnControls = {
+  query: "",
+  sortMode: "deadline",
+  filter: EMPTY_TASK_FILTER,
+};
+
+// Per-column controls, keyed by column. A missing entry means "untouched"
+// (empty query, default sort, no filter).
+export type ColumnControlsMap = Partial<Record<TaskColumn, ColumnControls>>;
 
 export function buildColumnModels(
   board: TaskBoard | null,
   folderId: string,
-  options?: BuildColumnOptions,
+  controls?: ColumnControlsMap,
+  // Injected so the "overdue" deadline facet is deterministic in tests.
+  now: Date = new Date(),
 ): KanbanColumnModel[] {
-  const needle = options?.query?.trim() ?? "";
-  const compare = comparatorFor(options?.sortMode ?? "deadline");
-  const filter = options?.filter ?? EMPTY_TASK_FILTER;
-  const now = options?.now ?? new Date();
-  return KANBAN_COLUMNS.map((column) => ({
-    column,
-    tasks: (board?.tasks ?? [])
-      .filter(
-        (task) =>
-          task.folderId === folderId &&
-          task.column === column &&
-          (needle === "" || matchesQuery(task, needle)) &&
-          matchesFilter(task, filter, now),
-      )
-      .sort(compare),
-  }));
+  return KANBAN_COLUMNS.map((column) => {
+    const control = controls?.[column] ?? EMPTY_COLUMN_CONTROLS;
+    const needle = control.query.trim();
+    const compare = comparatorFor(control.sortMode);
+    return {
+      column,
+      tasks: (board?.tasks ?? [])
+        .filter(
+          (task) =>
+            task.folderId === folderId &&
+            task.column === column &&
+            (needle === "" || matchesQuery(task, needle)) &&
+            matchesFilter(task, control.filter, now),
+        )
+        .sort(compare),
+    };
+  });
 }
 
 export interface FilterLabels {
@@ -289,8 +311,4 @@ export interface KanbanBoardProps {
   onReanalyzeTask: (taskId: string) => void;
   // Node rendered at the top of one column's body (inline new-task draft).
   columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
-  // Board-level search, faceted filter, and ordering, driven by the toolbar.
-  query?: string;
-  sortMode?: TaskSortMode;
-  filter?: TaskFilter;
 }

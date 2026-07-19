@@ -11,14 +11,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowDownAZ,
-  ArrowUpDown,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
   Folder,
   LayoutGrid,
-  ListFilter,
   MoreVertical,
   Pencil,
   Plus,
@@ -35,27 +33,12 @@ import { FormTextInput } from "@/components/ui/form-field";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuHint,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
-import {
-  collectBoardFacets,
-  EMPTY_TASK_FILTER,
-  KANBAN_COLUMNS,
-  KANBAN_COLUMN_MAX_WIDTH,
-  TASK_SORT_MODES,
-  taskFilterCount,
-  useFilterLabels,
-  useTaskSortLabels,
-  type DeadlineFilter,
-  type FilterPriorityLevel,
-  type TaskFilter,
-  type TaskSortMode,
-} from "@/components/tasks/kanban-columns";
+import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
@@ -67,13 +50,7 @@ import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/s
 import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import {
-  useTaskBoard,
-  type KanbanTask,
-  type TaskBoard,
-  type TaskColumn,
-  type TaskFolder,
-} from "@/data/tasks";
+import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -138,8 +115,6 @@ const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
-const ThemedFilter = withUnistyles(ListFilter);
-const ThemedArrowUpDown = withUnistyles(ArrowUpDown);
 const ThemedZap = withUnistyles(Zap);
 
 const MENU_ICON_SIZE = 16;
@@ -853,172 +828,6 @@ const renderTimelineIcon = ({ color, size }: { color: string; size: number }) =>
   <Clock color={color} size={size} />
 );
 
-const SortMenuItem = memo(function SortMenuItem({
-  mode,
-  label,
-  selected,
-  onSelect,
-}: {
-  mode: TaskSortMode;
-  label: string;
-  selected: boolean;
-  onSelect: (mode: TaskSortMode) => void;
-}) {
-  const handleSelect = useCallback(() => onSelect(mode), [onSelect, mode]);
-  return (
-    <DropdownMenuItem selected={selected} showSelectedCheck onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
-  );
-});
-
-// A single toggle row inside the filter menu. closeOnSelect is false so the
-// user can flip several facets in one open of the menu.
-const FilterCheckItem = memo(function FilterCheckItem({
-  label,
-  selected,
-  onToggle,
-}: {
-  label: string;
-  selected: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <DropdownMenuItem
-      selected={selected}
-      showSelectedCheck
-      closeOnSelect={false}
-      onSelect={onToggle}
-    >
-      {label}
-    </DropdownMenuItem>
-  );
-});
-
-// Faceted filter behind the funnel button: only the facets present on the board
-// are offered (priorities, deadline states, thematic tags), plus a Clear row
-// once anything is active. A dot on the trigger signals an active filter.
-const BoardFilterMenu = memo(function BoardFilterMenu({
-  board,
-  folderId,
-  filter,
-  onChange,
-}: {
-  board: TaskBoard | null;
-  folderId: string;
-  filter: TaskFilter;
-  onChange: (next: TaskFilter) => void;
-}) {
-  const labels = useFilterLabels();
-  const facets = useMemo(() => collectBoardFacets(board, folderId), [board, folderId]);
-  const activeCount = taskFilterCount(filter);
-
-  const togglePriority = useCallback(
-    (level: FilterPriorityLevel) => {
-      onChange({
-        ...filter,
-        priorities: filter.priorities.includes(level)
-          ? filter.priorities.filter((value) => value !== level)
-          : [...filter.priorities, level],
-      });
-    },
-    [filter, onChange],
-  );
-  const toggleDeadline = useCallback(
-    (value: DeadlineFilter) => {
-      onChange({
-        ...filter,
-        deadline: filter.deadline.includes(value)
-          ? filter.deadline.filter((entry) => entry !== value)
-          : [...filter.deadline, value],
-      });
-    },
-    [filter, onChange],
-  );
-  const toggleTag = useCallback(
-    (tag: string) => {
-      onChange({
-        ...filter,
-        tags: filter.tags.includes(tag)
-          ? filter.tags.filter((entry) => entry !== tag)
-          : [...filter.tags, tag],
-      });
-    },
-    [filter, onChange],
-  );
-  const clear = useCallback(() => onChange(EMPTY_TASK_FILTER), [onChange]);
-
-  const hasFacets = facets.priorities.length > 0 || facets.hasDeadlines || facets.tags.length > 0;
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        style={sortButtonStyle}
-        accessibilityRole="button"
-        accessibilityLabel={labels.title}
-        testID="tasks-board-filter"
-      >
-        <View style={styles.filterTriggerInner}>
-          <ThemedFilter size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          {activeCount > 0 ? <View style={styles.filterActiveDot} /> : null}
-        </View>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" minWidth={200} scrollable maxHeight={360}>
-        {!hasFacets ? <DropdownMenuHint>{labels.empty}</DropdownMenuHint> : null}
-        {facets.priorities.length > 0 ? (
-          <>
-            <DropdownMenuLabel>{labels.priorityHeading}</DropdownMenuLabel>
-            {facets.priorities.map((level) => (
-              <FilterCheckItem
-                key={`priority-${level}`}
-                label={labels.priority[level]}
-                selected={filter.priorities.includes(level)}
-                onToggle={() => togglePriority(level)}
-              />
-            ))}
-          </>
-        ) : null}
-        {facets.hasDeadlines ? (
-          <>
-            <DropdownMenuLabel>{labels.deadlineHeading}</DropdownMenuLabel>
-            <FilterCheckItem
-              label={labels.deadline.overdue}
-              selected={filter.deadline.includes("overdue")}
-              onToggle={() => toggleDeadline("overdue")}
-            />
-            <FilterCheckItem
-              label={labels.deadline.none}
-              selected={filter.deadline.includes("none")}
-              onToggle={() => toggleDeadline("none")}
-            />
-          </>
-        ) : null}
-        {facets.tags.length > 0 ? (
-          <>
-            <DropdownMenuLabel>{labels.tagsHeading}</DropdownMenuLabel>
-            {facets.tags.map((tag) => (
-              <FilterCheckItem
-                key={`tag-${tag}`}
-                label={tag}
-                selected={filter.tags.includes(tag)}
-                onToggle={() => toggleTag(tag)}
-              />
-            ))}
-          </>
-        ) : null}
-        {activeCount > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem destructive closeOnSelect={false} onSelect={clear}>
-              {labels.clear}
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-});
-
 function BoardContent({
   serverId,
   folderId,
@@ -1040,10 +849,6 @@ function BoardContent({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
-  const [boardQuery, setBoardQuery] = useState("");
-  const [sortMode, setSortMode] = useState<TaskSortMode>("deadline");
-  const [boardFilter, setBoardFilter] = useState<TaskFilter>(EMPTY_TASK_FILTER);
-  const sortLabels = useTaskSortLabels();
 
   const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
     () => [
@@ -1232,58 +1037,16 @@ function BoardContent({
         />
       ) : null}
       {showBoard ? (
-        <>
-          <View style={styles.boardToolbar}>
-            <FormTextInput
-              size="sm"
-              value={boardQuery}
-              onChangeText={setBoardQuery}
-              placeholder={t("tasks.searchTasks")}
-              style={styles.boardSearchInput}
-              testID="tasks-board-search-input"
-            />
-            <BoardFilterMenu
-              board={boardHandle.board}
-              folderId={folderId}
-              filter={boardFilter}
-              onChange={setBoardFilter}
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                style={sortButtonStyle}
-                accessibilityRole="button"
-                accessibilityLabel={t("tasks.sortTasks")}
-                testID="tasks-board-sort"
-              >
-                <ThemedArrowUpDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {TASK_SORT_MODES.map((mode) => (
-                  <SortMenuItem
-                    key={mode}
-                    mode={mode}
-                    label={sortLabels[mode]}
-                    selected={mode === sortMode}
-                    onSelect={setSortMode}
-                  />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </View>
-          <KanbanBoard
-            board={boardHandle.board}
-            folderId={folderId}
-            onMoveTask={handleMoveTask}
-            onPressTask={handlePressTask}
-            onAddTask={setNewTaskColumn}
-            onRunTask={handleRunTaskNow}
-            onReanalyzeTask={handleEstimateTask}
-            columnExtras={columnExtras}
-            query={boardQuery}
-            sortMode={sortMode}
-            filter={boardFilter}
-          />
-        </>
+        <KanbanBoard
+          board={boardHandle.board}
+          folderId={folderId}
+          onMoveTask={handleMoveTask}
+          onPressTask={handlePressTask}
+          onAddTask={setNewTaskColumn}
+          onRunTask={handleRunTaskNow}
+          onReanalyzeTask={handleEstimateTask}
+          columnExtras={columnExtras}
+        />
       ) : null}
     </View>
   );
@@ -1823,32 +1586,6 @@ const styles = StyleSheet.create((theme) => ({
   resizeHandle: {
     width: 6,
     backgroundColor: theme.colors.border,
-  },
-  // Always-visible search field + filter (funnel) + sort menu, sitting above
-  // the columns and aligned to the same board inset.
-  boardToolbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-  },
-  boardSearchInput: {
-    flex: 1,
-    backgroundColor: theme.colors.surface0,
-  },
-  // Funnel icon + the "filter active" dot badge stacked in the trigger.
-  filterTriggerInner: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterActiveDot: {
-    position: "absolute",
-    top: -5,
-    right: -5,
-    width: 7,
-    height: 7,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.palette.blue[500],
   },
   // Compact board/timeline tab switch — full width, aligned to the board inset
   // (12) with breathing room below the header so it isn't glued to it.

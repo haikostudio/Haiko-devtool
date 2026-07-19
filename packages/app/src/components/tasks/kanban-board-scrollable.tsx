@@ -1,14 +1,22 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Plus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import type { KanbanTask, TaskColumn } from "@/data/tasks";
+import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
-import { buildColumnModels, useColumnLabels, type KanbanBoardProps } from "./kanban-columns";
+import { BoardColumnToolbar } from "./kanban-column-toolbar";
+import {
+  buildColumnModels,
+  EMPTY_COLUMN_CONTROLS,
+  useColumnLabels,
+  type ColumnControls,
+  type ColumnControlsMap,
+  type KanbanBoardProps,
+} from "./kanban-columns";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedPlus = withUnistyles(Plus);
@@ -36,15 +44,16 @@ export function ScrollableKanbanBoard({
   onRunTask,
   onReanalyzeTask,
   columnExtras,
-  query,
-  sortMode,
-  filter,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
+  const [controls, setControls] = useState<ColumnControlsMap>({});
+  const setColumnControls = useCallback((column: TaskColumn, next: ColumnControls) => {
+    setControls((prev) => ({ ...prev, [column]: next }));
+  }, []);
   const columns = useMemo(
-    () => buildColumnModels(board, folderId, { query, sortMode, filter }),
-    [board, folderId, query, sortMode, filter],
+    () => buildColumnModels(board, folderId, controls),
+    [board, folderId, controls],
   );
 
   return (
@@ -62,10 +71,14 @@ export function ScrollableKanbanBoard({
         {columns.map(({ column, tasks }) => (
           <BoardColumn
             key={column}
+            board={board}
+            folderId={folderId}
             column={column}
             label={labels[column]}
             labels={labels}
             tasks={tasks}
+            controls={controls[column] ?? EMPTY_COLUMN_CONTROLS}
+            onControlsChange={setColumnControls}
             extras={columnExtras?.column === column ? columnExtras.node : null}
             onMoveTask={onMoveTask}
             onPressTask={onPressTask}
@@ -80,10 +93,14 @@ export function ScrollableKanbanBoard({
 }
 
 const BoardColumn = memo(function BoardColumn({
+  board,
+  folderId,
   column,
   label,
   labels,
   tasks,
+  controls,
+  onControlsChange,
   extras,
   onMoveTask,
   onPressTask,
@@ -91,10 +108,14 @@ const BoardColumn = memo(function BoardColumn({
   onRunTask,
   onReanalyzeTask,
 }: {
+  board: TaskBoard | null;
+  folderId: string;
   column: TaskColumn;
   label: string;
   labels: Record<TaskColumn, string>;
   tasks: KanbanTask[];
+  controls: ColumnControls;
+  onControlsChange: (column: TaskColumn, next: ColumnControls) => void;
   extras: React.ReactNode;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -106,6 +127,10 @@ const BoardColumn = memo(function BoardColumn({
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
+  const handleControlsChange = useCallback(
+    (next: ColumnControls) => onControlsChange(column, next),
+    [onControlsChange, column],
+  );
 
   return (
     <View style={styles.column}>
@@ -125,6 +150,13 @@ const BoardColumn = memo(function BoardColumn({
           <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
         </Pressable>
       </View>
+      <BoardColumnToolbar
+        board={board}
+        folderId={folderId}
+        column={column}
+        controls={controls}
+        onChange={handleControlsChange}
+      />
       <ScrollView style={styles.columnScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.columnContent}>
           {extras}
