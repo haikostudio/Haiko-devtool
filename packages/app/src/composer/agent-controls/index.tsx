@@ -1062,6 +1062,9 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
         header={optionsSheetHeader}
         visible={activeSheet === "options"}
         onClose={handleCloseSheet}
+        // Dense list: hug the edges instead of the default spacing[6] header
+        // indent. The ComboboxItem rows already carry their own inset.
+        contentPaddingScale={2}
         testID="agent-options-sheet"
       >
         <View style={drawerBodyStyle}>
@@ -1846,14 +1849,15 @@ const styles = StyleSheet.create((theme) => ({
   // No negative top margin: the sheet header keeps its divider and the content
   // starts cleanly below it. Sections stay compact.
   drawerBody: {
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
+    // No horizontal padding here: the sheet body already insets via
+    // contentPaddingScale and each row carries its own inset. Stacking a third
+    // pad just pushes everything toward the middle.
+    gap: theme.spacing[1],
   },
-  // Without a leading context row, the first section title sits flush under the
-  // header divider and reads as glued to it. Add breathing room so the section
-  // header stands apart, matching the space the context row used to provide.
+  // Without a leading context row, the first section title would sit flush under
+  // the header divider. A single step of breathing room is enough.
   drawerBodyNoContext: {
-    paddingTop: theme.spacing[2],
+    paddingTop: theme.spacing[1],
   },
   drawerSection: {
     gap: 0,
