@@ -25,6 +25,7 @@ interface SegmentedControlProps<T extends string> {
   onValueChange: (value: T) => void;
   size?: SegmentedControlSize;
   hideLabels?: boolean;
+  fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -50,6 +51,7 @@ export function SegmentedControl<T extends string>({
   onValueChange,
   size = "md",
   hideLabels = false,
+  fullWidth = false,
   style,
   testID,
 }: SegmentedControlProps<T>) {
@@ -59,8 +61,8 @@ export function SegmentedControl<T extends string>({
   const iconSize = segmentedIconSize[size];
 
   const containerStyle = useMemo(
-    () => [styles.container, containerSizeStyle, style],
-    [containerSizeStyle, style],
+    () => [styles.container, containerSizeStyle, fullWidth && styles.containerFullWidth, style],
+    [containerSizeStyle, fullWidth, style],
   );
 
   return (
@@ -77,6 +79,7 @@ export function SegmentedControl<T extends string>({
             hideLabels={hideLabels}
             segmentSizeStyle={segmentSizeStyle}
             labelSizeStyle={labelSizeStyle}
+            fullWidth={fullWidth}
             currentValue={value}
             onValueChange={onValueChange}
           />
@@ -93,6 +96,7 @@ function SegmentItem<T extends string>({
   hideLabels,
   segmentSizeStyle,
   labelSizeStyle,
+  fullWidth,
   currentValue,
   onValueChange,
 }: {
@@ -102,6 +106,7 @@ function SegmentItem<T extends string>({
   hideLabels: boolean;
   segmentSizeStyle: StyleProp<ViewStyle>;
   labelSizeStyle: StyleProp<TextStyle>;
+  fullWidth: boolean;
   currentValue: T;
   onValueChange: (value: T) => void;
 }) {
@@ -118,12 +123,13 @@ function SegmentItem<T extends string>({
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.segment,
       segmentSizeStyle,
+      fullWidth && styles.segmentFullWidth,
       isSelected && styles.segmentSelected,
       Boolean(hovered) && !isSelected && styles.segmentHover,
       pressed && !isSelected && styles.segmentPressed,
       option.disabled && styles.segmentDisabled,
     ],
-    [isSelected, option.disabled, segmentSizeStyle],
+    [fullWidth, isSelected, option.disabled, segmentSizeStyle],
   );
   const accessibilityState = useMemo(
     () => ({ selected: isSelected, disabled: option.disabled }),
@@ -165,6 +171,9 @@ const styles = StyleSheet.create((theme) => {
       backgroundColor: theme.colors.surface2,
       gap: 2,
     },
+    containerFullWidth: {
+      alignSelf: "stretch",
+    },
     containerSm: {
       ...geometry.segmentedContainerSm,
     },
@@ -177,6 +186,10 @@ const styles = StyleSheet.create((theme) => {
       justifyContent: "center",
       flexShrink: 0,
       gap: theme.spacing[1],
+    },
+    segmentFullWidth: {
+      flex: 1,
+      flexShrink: 1,
     },
     segmentSm: {
       ...geometry.segmentedSegmentSm,

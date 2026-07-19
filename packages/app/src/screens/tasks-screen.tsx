@@ -35,11 +35,14 @@ import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanb
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
+import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
+import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
+import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
@@ -340,18 +343,17 @@ export function TasksScreen() {
 
   const title = tasksHeaderTitle(t, isCompact, selectedFolder, selectedProject);
 
-  // In a folder board on mobile, the header owns the navigation: a back chevron
-  // returns to the folder list and the folder name is a dropdown that switches
-  // folders in place — no separate breadcrumb row below the header.
-  const showBoardHeader = isCompact && !!selectedFolder && supportsTasksBoard;
-
   return (
     <View style={styles.container}>
-      {showBoardHeader && selectedFolder ? (
-        <CompactBoardHeader currentFolder={selectedFolder} folders={sortedFolders} />
-      ) : (
-        <MenuHeader title={title} />
-      )}
+      <TasksHeader
+        title={title}
+        isCompact={isCompact}
+        supportsTasksBoard={supportsTasksBoard}
+        selectedProject={selectedProject}
+        selectedFolder={selectedFolder}
+        projects={projects}
+        folders={sortedFolders}
+      />
       {isCompact ? (
         <CompactFlow
           serverId={serverId}
@@ -783,6 +785,8 @@ function BoardContent({
   const { t } = useTranslation();
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
+  const { config } = useDaemonConfig(serverId);
+  const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
@@ -914,50 +918,53 @@ function BoardContent({
   const showBoard = !isCompact || compactView === "board";
 
   return (
-    <View style={styles.boardContainer}>
-      {isCompact ? (
-        <View style={styles.compactViewSwitch}>
-          <SegmentedControl
-            options={viewOptions}
-            value={compactView}
-            onValueChange={setCompactView}
-            size="sm"
-            testID="tasks-view-switch"
+    <TaskScheduleProvider value={quietHours}>
+      <View style={styles.boardContainer}>
+        {isCompact ? (
+          <View style={styles.compactViewSwitch}>
+            <SegmentedControl
+              options={viewOptions}
+              value={compactView}
+              onValueChange={setCompactView}
+              size="sm"
+              fullWidth
+              testID="tasks-view-switch"
+            />
+          </View>
+        ) : null}
+        {boardHandle.board && showTimeline ? (
+          <TaskGantt
+            board={boardHandle.board}
+            onPressTask={handlePressTask}
+            containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
+            fill={isCompact}
           />
-        </View>
-      ) : null}
-      {boardHandle.board && showTimeline ? (
-        <TaskGantt
-          board={boardHandle.board}
-          onPressTask={handlePressTask}
-          containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
-          fill={isCompact}
+        ) : null}
+        {showBoard ? (
+          <KanbanBoard
+            board={boardHandle.board}
+            folderId={folderId}
+            onMoveTask={handleMoveTask}
+            onPressTask={handlePressTask}
+            onAddTask={setNewTaskColumn}
+            onRunTask={handleRunTaskNow}
+            onReanalyzeTask={handleEstimateTask}
+            columnExtras={columnExtras}
+          />
+        ) : null}
+        <TaskDetailSheet
+          serverId={serverId}
+          task={detailTask}
+          visible={detailTask !== null}
+          onClose={handleCloseDetail}
+          onSave={handleSaveTask}
+          onDelete={handleDeleteTask}
+          onEstimate={handleEstimateTask}
+          onRunNow={handleRunTaskNow}
+          onApprove={handleApproveTask}
         />
-      ) : null}
-      {showBoard ? (
-        <KanbanBoard
-          board={boardHandle.board}
-          folderId={folderId}
-          onMoveTask={handleMoveTask}
-          onPressTask={handlePressTask}
-          onAddTask={setNewTaskColumn}
-          onRunTask={handleRunTaskNow}
-          onReanalyzeTask={handleEstimateTask}
-          columnExtras={columnExtras}
-        />
-      ) : null}
-      <TaskDetailSheet
-        serverId={serverId}
-        task={detailTask}
-        visible={detailTask !== null}
-        onClose={handleCloseDetail}
-        onSave={handleSaveTask}
-        onDelete={handleDeleteTask}
-        onEstimate={handleEstimateTask}
-        onRunNow={handleRunTaskNow}
-        onApprove={handleApproveTask}
-      />
-    </View>
+      </View>
+    </TaskScheduleProvider>
   );
 }
 
@@ -1026,6 +1033,35 @@ const FolderSelectorItem = memo(function FolderSelectorItem({ folder }: { folder
   );
 });
 
+// Picks the right header for the current drill-down level. On mobile the header
+// owns navigation: at the folder-list level it switches projects, on a board it
+// switches folders; everywhere else it's the plain menu header.
+function TasksHeader({
+  title,
+  isCompact,
+  supportsTasksBoard,
+  selectedProject,
+  selectedFolder,
+  projects,
+  folders,
+}: {
+  title: string;
+  isCompact: boolean;
+  supportsTasksBoard: boolean;
+  selectedProject: ProjectEntry | null;
+  selectedFolder: TaskFolder | null;
+  projects: ProjectEntry[];
+  folders: TaskFolder[];
+}) {
+  if (isCompact && supportsTasksBoard && selectedFolder) {
+    return <CompactBoardHeader currentFolder={selectedFolder} folders={folders} />;
+  }
+  if (isCompact && supportsTasksBoard && selectedProject) {
+    return <CompactProjectHeader currentProject={selectedProject} projects={projects} />;
+  }
+  return <MenuHeader title={title} />;
+}
+
 // Mobile board header: hamburger + back-to-folders chevron + a folder-name
 // dropdown that switches folders in place. Replaces the old separate "‹ Dossiers"
 // row so the navigation lives in a single, obvious bar.
@@ -1070,6 +1106,78 @@ function CompactBoardHeader({
             <DropdownMenuContent align="start" width={240}>
               {folders.map((folder) => (
                 <FolderSelectorItem key={folder.id} folder={folder} />
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      }
+    />
+  );
+}
+
+const ProjectSelectorItem = memo(function ProjectSelectorItem({ entry }: { entry: ProjectEntry }) {
+  const leading = useMemo(
+    () => <ProjectColorMark projectKey={entry.projectId} />,
+    [entry.projectId],
+  );
+  const handleSelect = useCallback(() => {
+    selectProject(entry);
+  }, [entry]);
+  return (
+    <DropdownMenuItem
+      leading={leading}
+      onSelect={handleSelect}
+      testID={`tasks-header-project-${entry.projectId}`}
+    >
+      {entry.displayName}
+    </DropdownMenuItem>
+  );
+});
+
+// Mobile folder-list header: hamburger + back-to-projects chevron + a
+// project-name dropdown that switches projects in place. Mirrors
+// CompactBoardHeader so the two drill-down levels share one navigation pattern.
+function CompactProjectHeader({
+  currentProject,
+  projects,
+}: {
+  currentProject: ProjectEntry;
+  projects: ProjectEntry[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <ScreenHeader
+      leftStyle={styles.boardHeaderLeft}
+      left={
+        <>
+          <SidebarMenuToggle />
+          <Pressable
+            onPress={clearTasksSelection}
+            hitSlop={8}
+            style={styles.boardHeaderBack}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.allProjects")}
+            testID="tasks-back-to-projects"
+          >
+            <ThemedChevronLeft size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+          </Pressable>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              style={styles.folderSelector}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t("tasks.pickProject")}
+              testID="tasks-header-project-selector"
+            >
+              <ProjectColorMark projectKey={currentProject.projectId} />
+              <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+                {currentProject.displayName}
+              </Text>
+              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" width={240}>
+              {projects.map((entry) => (
+                <ProjectSelectorItem key={`${entry.serverId}:${entry.projectId}`} entry={entry} />
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1141,14 +1249,6 @@ function CompactFolderList({
   return (
     <View style={styles.compactListWrap}>
       <ScrollView contentContainerStyle={styles.listContent}>
-        <Pressable
-          style={styles.backRow}
-          onPress={clearTasksSelection}
-          testID="tasks-back-to-projects"
-        >
-          <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          <Text style={styles.rowSubtitle}>{t("tasks.allProjects")}</Text>
-        </Pressable>
         <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
         {folders.map((folder) => (
           <CompactFolderRow
@@ -1352,11 +1452,12 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     gap: theme.spacing[3],
   },
-  // Compact board/timeline tab switch — natural width, aligned to the board
-  // inset (12) so it shares the same left edge as the back row and columns.
+  // Compact board/timeline tab switch — full width, aligned to the board inset
+  // (12) with breathing room below the header so it isn't glued to it.
   compactViewSwitch: {
     paddingHorizontal: theme.spacing[3],
-    alignItems: "flex-start",
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[1],
   },
   // Aligns the timeline strip to the columns block below: same horizontal inset
   // as the board, capped to the columns' total width so its edges meet the
@@ -1423,14 +1524,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textAlign: "center",
     paddingVertical: theme.spacing[4],
-  },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    alignSelf: "flex-start",
   },
   // Mobile board header: back chevron + folder-name dropdown selector.
   boardHeaderLeft: {
