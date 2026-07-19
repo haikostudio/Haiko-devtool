@@ -19,6 +19,7 @@ import { useClearWorkspaceAttention } from "@/hooks/use-clear-workspace-attentio
 import { redirectIfArchivingActiveWorkspace } from "@/utils/sidebar-workspace-archive-redirect";
 import { requireWorkspaceDirectory } from "@/utils/workspace-directory";
 import { isNative as platformIsNative } from "@/constants/platform";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useLongPressDragInteraction } from "@/components/sidebar/use-long-press-drag-interaction";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import {
@@ -252,6 +253,9 @@ function WorkspaceRowBody({
   archiveShortcutKeys,
 }: WorkspaceRowBodyProps) {
   const isTouchPlatform = platformIsNative;
+  // Web PWA on a phone reports isNative === false, so hover-to-reveal never fires
+  // on touch. Treat the compact layout as always-visible for trailing controls.
+  const isCompact = useIsCompactFormFactor();
   const draggable = Boolean(drag);
   const interaction = useLongPressDragInteraction({
     drag: drag ?? noop,
@@ -323,6 +327,7 @@ function WorkspaceRowBody({
                   workspace={workspace}
                   isHovered={isHovered}
                   isTouchPlatform={isTouchPlatform}
+                  isCompact={isCompact}
                   isCreating={isCreating}
                   showShortcutBadge={showShortcutBadge}
                   shortcutNumber={shortcutNumber}
@@ -349,6 +354,7 @@ function WorkspaceRowTrailingActions({
   workspace,
   isHovered,
   isTouchPlatform,
+  isCompact,
   isCreating,
   showShortcutBadge,
   shortcutNumber,
@@ -365,6 +371,7 @@ function WorkspaceRowTrailingActions({
   workspace: SidebarWorkspaceEntry;
   isHovered: boolean;
   isTouchPlatform: boolean;
+  isCompact: boolean;
   isCreating: boolean;
   showShortcutBadge: boolean;
   shortcutNumber: number | null;
@@ -380,7 +387,7 @@ function WorkspaceRowTrailingActions({
 }) {
   const { t } = useTranslation();
   const showShortcut = showShortcutBadge && shortcutNumber !== null;
-  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+  const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompact));
   const showKebabInSlot = showKebab && !showShortcut;
   const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
 
