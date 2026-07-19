@@ -620,6 +620,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    hash: "ffcae10485ad2be9cb08f8b7ef2aa81518793ce9",
+    shortHash: "ffcae1048",
+    date: "2026-07-19T23:52:29+02:00",
+    author: "haikostudio",
+    subject: "Tâches : filet 1px pleine hauteur entre le tableau et le panneau chat",
+  },
+  {
     hash: "7812f58dbdcfb57ed2a6b7d542b57a5f455365c2",
     shortHash: "7812f58db",
     date: "2026-07-19T23:02:12+02:00",
@@ -2721,15 +2728,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "docs: add 0.1.108 changelog",
   },
-  {
-    hash: "3bee51d2a2375867cdba953194bf8395f8d53a07",
-    shortHash: "3bee51d2a",
-    date: "2026-07-16T00:13:15+02:00",
-    author: "haikostudio",
-    subject:
-      "index on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-19T23:02:12+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-19T23:52:29+02:00";

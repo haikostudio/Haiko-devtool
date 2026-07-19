@@ -1590,10 +1590,11 @@ const styles = StyleSheet.create((theme) => ({
   panelHost: {
     height: "100%",
   },
-  // Wide, transparent grab zone so the col-resize drag stays easy to hit…
+  // Wide, transparent grab zone so the col-resize drag stays easy to hit; the
+  // visible hairline hugs the panel edge (flex-end) rather than floating mid-gap.
   resizeHandle: {
     width: 9,
-    alignItems: "center",
+    alignItems: "flex-end",
     backgroundColor: "transparent",
   },
   // …while the visible divider is a full-height 1px hairline running to the top.
