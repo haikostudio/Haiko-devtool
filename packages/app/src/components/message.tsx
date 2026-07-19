@@ -53,12 +53,6 @@ import {
   ListChecks,
   ClipboardList,
   CircleDot,
-  Wrench,
-  RefreshCw,
-  Target,
-  MessageSquare,
-  TrendingUp,
-  ReceiptText,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
@@ -75,6 +69,7 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
+import { resolveSectionIcon, SECTION_ICON_COLOR } from "@/components/markdown/section-icons";
 import type {
   BrainContextItem,
   RemoteUserMessageImage,
@@ -1495,30 +1490,12 @@ const CALLOUT_PALETTE: Record<
   caution: { color: "#f87171", background: "rgba(248, 113, 113, 0.13)", icon: ShieldAlert },
 };
 
-// Neutral (grey) callouts carry no colored accent. The icon is a muted grey
-// that reads on both light and dark themes (hard-coded like the palette tints
-// so we don't reach for the forbidden useUnistyles()).
-const NEUTRAL_ICON_COLOR = "#9ca3af";
-
-// Title → icon for a neutral card. Matched loosely against the bold heading so
-// the fixed task-report sections each get a fitting lucide glyph; anything else
-// falls back to a plain dot.
-const NEUTRAL_ICON_BY_HEADING: { match: RegExp; icon: CalloutIcon }[] = [
-  { match: /fait|réalis|realis/i, icon: Wrench },
-  { match: /change|modif/i, icon: RefreshCw },
-  { match: /impact/i, icon: Target },
-  { match: /expliqu|tiers|client/i, icon: MessageSquare },
-  { match: /évolu|evolu|amélior|ameli|piste/i, icon: TrendingUp },
-  { match: /factur|temps|coût|cout|tarif/i, icon: ReceiptText },
-];
-
+// Neutral (grey) callouts carry no colored accent. Their icon is resolved from
+// the shared section map (same glyphs as the `## N. …` heading rule) so a
+// `> **Title**` block and a numbered heading stay visually in sync; anything
+// unmatched falls back to a plain dot.
 function resolveNeutralIcon(heading: string | null): CalloutIcon {
-  if (heading) {
-    for (const entry of NEUTRAL_ICON_BY_HEADING) {
-      if (entry.match.test(heading)) return entry.icon;
-    }
-  }
-  return CircleDot;
+  return resolveSectionIcon(heading) ?? CircleDot;
 }
 
 const calloutStylesheet = StyleSheet.create((theme) => ({
@@ -1573,7 +1550,7 @@ const MarkdownCallout = memo(function MarkdownCallout({
 }: MarkdownCalloutProps) {
   const palette = callout.type === "neutral" ? null : CALLOUT_PALETTE[callout.type];
   const HeaderIcon = palette ? palette.icon : resolveNeutralIcon(callout.heading);
-  const iconColor = palette ? palette.color : NEUTRAL_ICON_COLOR;
+  const iconColor = palette ? palette.color : SECTION_ICON_COLOR;
   const containerStyle = useMemo(
     () =>
       palette
