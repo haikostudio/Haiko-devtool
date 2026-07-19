@@ -104,43 +104,51 @@ export class WorkspaceAutoName {
   }
 
   /**
-   * Re-derive the workspace title from the latest user message so the tab name
-   * tracks the current subject of the conversation "au fil des requêtes". Unlike
-   * the first-agent worktree path this is TITLE-ONLY — it never renames the git
-   * branch. Best-effort and async; a generation failure leaves the title as-is.
+   * Re-derive the workspace title from the given text — the agent's latest
+   * response — so the tab name tracks what the agent actually addressed "au fil
+   * des requêtes". Unlike the first-agent worktree path this is TITLE-ONLY — it
+   * never renames the git branch. Best-effort and async; a generation failure
+   * leaves the title as-is. Skips workspaces the user has renamed by hand
+   * (titleLockedByUser).
    */
-  scheduleRenameFromMessage(input: { workspaceId: string; cwd: string; message: string }): void {
-    const message = input.message.trim();
-    if (!message) {
+  scheduleRenameFromText(input: { workspaceId: string; cwd: string; text: string }): void {
+    const text = input.text.trim();
+    if (!text) {
       return;
     }
     this.schedule(
       () =>
-        this.renameWorkspaceTitleFromMessage({
+        this.renameWorkspaceTitleFromText({
           workspaceId: input.workspaceId,
           cwd: input.cwd,
-          message,
+          text,
         }),
-      { cwd: input.cwd, message: "Failed to auto-rename workspace from latest message" },
+      { cwd: input.cwd, message: "Failed to auto-rename workspace from latest response" },
     );
   }
 
-  private async renameWorkspaceTitleFromMessage(input: {
+  private async renameWorkspaceTitleFromText(input: {
     workspaceId: string;
     cwd: string;
-    message: string;
+    text: string;
   }): Promise<void> {
+    // Read the lock before spending a model call on a title we'd discard anyway.
+    const before = await this.workspaceRegistry.get(input.workspaceId);
+    if (!before || before.archivedAt || before.titleLockedByUser) {
+      return;
+    }
     const generated = await this.generateFromContext({
       cwd: input.cwd,
-      firstAgentContext: { prompt: input.message },
+      firstAgentContext: { prompt: input.text },
       currentSelection: null,
     });
     const title = generated?.title ?? null;
     if (!title) {
       return;
     }
+    // Re-read after the async generation: a hand-rename may have landed meanwhile.
     const current = await this.workspaceRegistry.get(input.workspaceId);
-    if (!current || current.archivedAt) {
+    if (!current || current.archivedAt || current.titleLockedByUser) {
       return;
     }
     if (current.title === title) {

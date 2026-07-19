@@ -62,6 +62,14 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  // True once the user has renamed this workspace by hand. The per-turn auto-namer
+  // (which re-derives the tab title from the agent's latest response) defers to it
+  // and never clobbers a hand-picked title. Clearing the title (setting it back to
+  // null via the title-set RPC) resets this so auto-naming resumes.
+  titleLockedByUser: z
+    .boolean()
+    .optional()
+    .transform((value) => value ?? false),
 });
 
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;

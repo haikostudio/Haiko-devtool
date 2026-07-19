@@ -2512,6 +2512,9 @@ export class Session {
       const updated = await this.workspaceRegistry.update(workspaceId, (existing) => ({
         ...existing,
         title: nextTitle,
+        // A hand-picked title locks out the per-turn auto-namer; clearing the title
+        // (nextTitle === null) unlocks it so auto-naming resumes from the next turn.
+        titleLockedByUser: nextTitle !== null,
         updatedAt,
       }));
       if (!updated) {
@@ -6280,10 +6283,12 @@ export class Session {
         return;
       }
 
-      // Keep the workspace tab name tracking the current subject: re-derive the
-      // title from this message ("au fil des requêtes"). Best-effort, async,
-      // title-only — never touches the git branch.
-      this.scheduleWorkspaceRenameFromMessage(agentId, msg.text);
+      // Keep the workspace tab name tracking the current subject: after the turn
+      // settles, re-derive the title from the agent's *response* so the tab
+      // reflects what was actually addressed, not just what was asked ("au fil
+      // des requêtes"). Best-effort, async, title-only — never touches the git
+      // branch, and defers to a title the user set by hand.
+      this.scheduleWorkspaceRenameFromResponse(agentId);
 
       // Keep the floating conversation-synthesis block fresh: re-summarize the
       // whole discussion twice per exchange so the banner tracks where we are.
@@ -6563,14 +6568,61 @@ export class Session {
       .join("\n\n");
   }
 
-  private scheduleWorkspaceRenameFromMessage(agentId: string, message: string): void {
+  /**
+   * After the next turn completes, re-derive the workspace/tab title from the
+   * agent's latest response so the tab tracks what was actually addressed. Waits
+   * for the turn to settle (one-shot subscription mirroring
+   * {@link scheduleSynthesisFromTurn}); a failed or canceled turn leaves the
+   * title untouched. Title-only and best-effort — the auto-namer itself skips
+   * hand-renamed workspaces.
+   */
+  private scheduleWorkspaceRenameFromResponse(agentId: string): void {
     const agent = this.agentManager.getAgent(agentId);
     const workspaceId = agent?.workspaceId;
     const cwd = agent?.cwd;
-    if (!workspaceId || !cwd) {
+    if (!workspaceId || !cwd || agent.internal) {
       return;
     }
-    this.workspaceAutoName.scheduleRenameFromMessage({ workspaceId, cwd, message });
+    const unsubscribe = this.agentManager.subscribe(
+      (event) => {
+        if (event.type !== "agent_stream") {
+          return;
+        }
+        const eventType = event.event.type;
+        if (
+          eventType !== "turn_completed" &&
+          eventType !== "turn_failed" &&
+          eventType !== "turn_canceled"
+        ) {
+          return;
+        }
+        unsubscribe();
+        if (eventType !== "turn_completed") {
+          return;
+        }
+        const text = this.latestAssistantText(agentId);
+        if (!text) {
+          return;
+        }
+        this.workspaceAutoName.scheduleRenameFromText({ workspaceId, cwd, text });
+      },
+      { agentId, replayState: false },
+    );
+  }
+
+  /**
+   * The agent's most recent assistant message from the loaded timeline, capped so
+   * a long response stays a cheap title seed (the opening lines carry the gist).
+   * Empty when the turn produced no assistant text (e.g. tool-only turns).
+   */
+  private latestAssistantText(agentId: string): string | undefined {
+    const turns = this.buildConversationTurns(agentId);
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].role === "assistant") {
+        return turns[i].text.slice(0, 2000);
+      }
+    }
+    return undefined;
   }
 
   private async handleWaitForFinish(

@@ -17,6 +17,7 @@ function makeRecord(overrides: Partial<PersistedWorkspaceRecord> = {}): Persiste
     updatedAt: "2026-01-01T00:00:00.000Z",
     archivedAt: null,
     pinnedAt: null,
+    titleLockedByUser: false,
     ...overrides,
   };
 }
@@ -59,17 +60,17 @@ function makeHarness(input: {
   return { autoName, upsert, emit, generate };
 }
 
-describe("WorkspaceAutoName.scheduleRenameFromMessage", () => {
-  it("re-derives and persists the workspace title from the latest message", async () => {
+describe("WorkspaceAutoName.scheduleRenameFromText", () => {
+  it("re-derives and persists the workspace title from the agent response", async () => {
     const { autoName, upsert, emit } = makeHarness({
       record: makeRecord({ title: "Old subject" }),
       generatedTitle: "New subject",
     });
 
-    autoName.scheduleRenameFromMessage({
+    autoName.scheduleRenameFromText({
       workspaceId: "ws-1",
       cwd: "/tmp/project",
-      message: "let's talk about the new subject",
+      text: "I deployed the new subject and verified it live",
     });
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
@@ -77,16 +78,16 @@ describe("WorkspaceAutoName.scheduleRenameFromMessage", () => {
     expect(emit).toHaveBeenCalledWith("ws-1");
   });
 
-  it("never touches the git branch when renaming from a message", async () => {
+  it("never touches the git branch when renaming from a response", async () => {
     const { autoName, upsert } = makeHarness({
       record: makeRecord({ title: "Old", branch: "feature/keep-me" }),
       generatedTitle: "Fresh title",
     });
 
-    autoName.scheduleRenameFromMessage({
+    autoName.scheduleRenameFromText({
       workspaceId: "ws-1",
       cwd: "/tmp/project",
-      message: "change the subject",
+      text: "changed the subject",
     });
 
     await vi.waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
@@ -99,10 +100,10 @@ describe("WorkspaceAutoName.scheduleRenameFromMessage", () => {
       generatedTitle: "Same title",
     });
 
-    autoName.scheduleRenameFromMessage({
+    autoName.scheduleRenameFromText({
       workspaceId: "ws-1",
       cwd: "/tmp/project",
-      message: "no meaningful change",
+      text: "no meaningful change",
     });
 
     await vi.waitFor(() => expect(true).toBe(true));
@@ -111,16 +112,33 @@ describe("WorkspaceAutoName.scheduleRenameFromMessage", () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it("ignores blank messages without invoking generation", async () => {
+  it("defers to a hand-picked title without invoking generation", async () => {
+    const { autoName, generate, upsert } = makeHarness({
+      record: makeRecord({ title: "My manual title", titleLockedByUser: true }),
+      generatedTitle: "auto title",
+    });
+
+    autoName.scheduleRenameFromText({
+      workspaceId: "ws-1",
+      cwd: "/tmp/project",
+      text: "a substantive response",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(generate).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("ignores blank text without invoking generation", async () => {
     const { autoName, generate, upsert } = makeHarness({
       record: makeRecord(),
       generatedTitle: "unused",
     });
 
-    autoName.scheduleRenameFromMessage({
+    autoName.scheduleRenameFromText({
       workspaceId: "ws-1",
       cwd: "/tmp/project",
-      message: "   ",
+      text: "   ",
     });
 
     await new Promise((resolve) => setTimeout(resolve, 5));
