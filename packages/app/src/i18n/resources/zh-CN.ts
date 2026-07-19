@@ -459,6 +459,7 @@ export const zhCN: TranslationResources = {
   agentTasksToast: {
     collapse: "收起",
     expand: "显示全部 ({{count}})",
+    drag: "拖动以移动",
   },
   agentList: {
     fallbackTitle: "新会话",

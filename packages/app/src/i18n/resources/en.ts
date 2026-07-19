@@ -458,6 +458,7 @@ export const en = {
   agentTasksToast: {
     collapse: "Collapse",
     expand: "Show all ({{count}})",
+    drag: "Drag to move",
   },
   agentList: {
     fallbackTitle: "New session",

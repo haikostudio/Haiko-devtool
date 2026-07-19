@@ -464,6 +464,7 @@ export const ptBR: TranslationResources = {
   agentTasksToast: {
     collapse: "Recolher",
     expand: "Mostrar tudo ({{count}})",
+    drag: "Arraste para mover",
   },
   agentList: {
     fallbackTitle: "Nova sessão",

@@ -464,6 +464,7 @@ export const fr: TranslationResources = {
   agentTasksToast: {
     collapse: "Réduire",
     expand: "Tout afficher ({{count}})",
+    drag: "Glisser pour déplacer",
   },
   agentList: {
     fallbackTitle: "Nouvelle séance",

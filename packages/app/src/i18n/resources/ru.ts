@@ -462,6 +462,7 @@ export const ru: TranslationResources = {
   agentTasksToast: {
     collapse: "Свернуть",
     expand: "Показать все ({{count}})",
+    drag: "Перетащите, чтобы переместить",
   },
   agentList: {
     fallbackTitle: "Новая сессия",

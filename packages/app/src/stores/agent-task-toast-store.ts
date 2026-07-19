@@ -37,6 +37,13 @@ interface AgentTaskToastState {
    */
   collapsed: boolean | null;
   setCollapsed: (collapsed: boolean) => void;
+  /**
+   * Horizontal offset (in px) the user has dragged the floating pile by, relative
+   * to its default bottom-right anchor. Negative moves it left into the pane;
+   * persisted so the chosen position survives a reload.
+   */
+  offsetX: number;
+  setOffsetX: (offsetX: number) => void;
 }
 
 export const useAgentTaskToastStore = create<AgentTaskToastState>()(
@@ -46,6 +53,8 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
       seq: 0,
       collapsed: null,
       setCollapsed: (collapsed) => set({ collapsed }),
+      offsetX: 0,
+      setOffsetX: (offsetX) => set({ offsetX }),
       reconcile: ({ activeKeys, existingKeys }) =>
         set((state) => {
           let changed = false;
@@ -83,9 +92,9 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
     {
       name: "agent-task-toast",
       storage: createJSONStorage(() => AsyncStorage),
-      // Only the fold preference is durable; the tracked-toast bookkeeping is
-      // rebuilt from the live agent list on every load.
-      partialize: (state) => ({ collapsed: state.collapsed }),
+      // Only the fold preference and drag position are durable; the tracked-toast
+      // bookkeeping is rebuilt from the live agent list on every load.
+      partialize: (state) => ({ collapsed: state.collapsed, offsetX: state.offsetX }),
     },
   ),
 );

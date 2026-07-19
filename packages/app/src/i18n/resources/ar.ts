@@ -459,6 +459,7 @@ export const ar: TranslationResources = {
   agentTasksToast: {
     collapse: "طي",
     expand: "عرض الكل ({{count}})",
+    drag: "اسحب للتحريك",
   },
   agentList: {
     fallbackTitle: "جلسة جديدة",

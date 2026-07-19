@@ -3,12 +3,19 @@ import {
   type LayoutChangeEvent,
   Pressable,
   Text,
+  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { ChevronsDownUp, ChevronsUpDown } from "lucide-react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { ChevronsDownUp, ChevronsUpDown, GripVertical } from "lucide-react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -16,6 +23,7 @@ import {
   deriveAgentStateBucket,
   type WorkspaceStateBucket,
 } from "@getpaseo/protocol/agent-state-bucket";
+import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -281,6 +289,24 @@ function CollapseToggle({
   );
 }
 
+// A grab handle sitting next to the collapse toggle. Dragging it slides the whole
+// pile horizontally (see the Pan gesture in the stack). Pure affordance — it has no
+// tap behaviour, just a grab cursor on web and the drag gesture attached by the host.
+function DragHandle({ gesture }: { gesture: ReturnType<typeof Gesture.Pan> }): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <GestureDetector gesture={gesture}>
+      <View
+        style={dragHandleStyle}
+        accessibilityLabel={t("agentTasksToast.drag")}
+        testID="agent-tasks-toast-drag"
+      >
+        <GripVertical size={13} color={styles.collapseToggleLabel.color} />
+      </View>
+    </GestureDetector>
+  );
+}
+
 // One row in the pile. Reports its natural height back to the stack so the
 // collapsed layout can overlap it, and animates the fold offset + z-order.
 function ToastStackItem({
@@ -319,12 +345,21 @@ function ToastStackItem({
 export function AgentTasksToastStack(): ReactElement | null {
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const visible = useTrackedTasks();
   const collapsed = useAgentTaskToastStore((state) => state.collapsed);
   const setCollapsed = useAgentTaskToastStore((state) => state.setCollapsed);
+  const persistedOffsetX = useAgentTaskToastStore((state) => state.offsetX);
+  const setOffsetX = useAgentTaskToastStore((state) => state.setOffsetX);
   // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
   // can pull each card up over the one behind it and leave only a top sliver.
   const [heights, setHeights] = useState<Record<string, number>>({});
+  // Web-only: while the cursor is over the collapsed pile, unfold it so the user
+  // can glance at every card without committing a click. No-op on native (the
+  // pointer events never fire) and irrelevant when the pile isn't collapsed.
+  const [isHovered, setIsHovered] = useState(false);
+  const handleHoverEnter = useCallback(() => setIsHovered(true), []);
+  const handleHoverLeave = useCallback(() => setIsHovered(false), []);
 
   const containerStyle = useMemo(
     () => [styles.container, inlineUnistylesStyle({ bottom: BASE_BOTTOM_OFFSET + insets.bottom })],
@@ -335,12 +370,53 @@ export function AgentTasksToastStack(): ReactElement | null {
     setHeights((prev) => (prev[key] === height ? prev : { ...prev, [key]: height }));
   }, []);
 
+  // Horizontal drag: the pile rides on a translateX we clamp so it can slide left
+  // into the pane but never off either edge. Seeded from the persisted position and
+  // written back on release.
+  const offsetX = useSharedValue(persistedOffsetX);
+  const dragStartX = useSharedValue(0);
+  useEffect(() => {
+    offsetX.value = persistedOffsetX;
+  }, [offsetX, persistedOffsetX]);
+  // Keep the widest possible card (320) on-screen when dragged fully left; allow a
+  // little rightward travel so the pile can tuck into the very corner if wanted.
+  const minOffsetX = Math.min(0, -(windowWidth - RAIL_CLEARANCE - 340));
+  const maxOffsetX = RAIL_CLEARANCE - 8;
+  const dragGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onStart(() => {
+          dragStartX.value = offsetX.value;
+        })
+        .onUpdate((event) => {
+          const next = dragStartX.value + event.translationX;
+          offsetX.value = Math.min(Math.max(next, minOffsetX), maxOffsetX);
+        })
+        .onEnd(() => {
+          runOnJS(setOffsetX)(offsetX.value);
+        }),
+    [dragStartX, offsetX, minOffsetX, maxOffsetX, setOffsetX],
+  );
+  const dragAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offsetX.value }],
+  }));
+  const animatedContainerStyle = useMemo(
+    () => [containerStyle, dragAnimatedStyle],
+    [containerStyle, dragAnimatedStyle],
+  );
+
   const canCollapse = visible.length > 1;
   // `null` = auto: fold once the corner gets busy; an explicit choice always wins.
   const wantsCollapsed = collapsed ?? visible.length >= AUTO_COLLAPSE_COUNT;
-  const isCollapsed = wantsCollapsed && canCollapse;
+  // The sticky (persisted) fold state drives the toggle; hover only relaxes the
+  // *visual* fold so peeking at the pile doesn't flip the user's saved choice.
+  const stickyCollapsed = wantsCollapsed && canCollapse;
+  const isCollapsed = stickyCollapsed && !isHovered;
 
-  const handleToggle = useCallback(() => setCollapsed(!isCollapsed), [setCollapsed, isCollapsed]);
+  const handleToggle = useCallback(
+    () => setCollapsed(!stickyCollapsed),
+    [setCollapsed, stickyCollapsed],
+  );
 
   if (isCompact || visible.length === 0) {
     return null;
@@ -351,25 +427,38 @@ export function AgentTasksToastStack(): ReactElement | null {
   const lastIndex = visible.length - 1;
 
   return (
-    <View style={containerStyle} pointerEvents="box-none">
-      {visible.map((task, index) => {
-        const isFront = index === lastIndex;
-        const overlap =
-          isCollapsed && !isFront ? -Math.max((heights[task.key] ?? 0) - COLLAPSED_PEEK, 0) : 0;
-        return (
-          <ToastStackItem
-            key={task.key}
-            task={task}
-            overlap={overlap}
-            zIndex={index}
-            onMeasure={handleMeasure}
-          />
-        );
-      })}
-      {canCollapse ? (
-        <CollapseToggle collapsed={isCollapsed} count={visible.length} onPress={handleToggle} />
-      ) : null}
-    </View>
+    <Animated.View style={animatedContainerStyle} pointerEvents="box-none">
+      <View
+        style={styles.hoverWrapper}
+        onPointerEnter={handleHoverEnter}
+        onPointerLeave={handleHoverLeave}
+      >
+        {visible.map((task, index) => {
+          const isFront = index === lastIndex;
+          const overlap =
+            isCollapsed && !isFront ? -Math.max((heights[task.key] ?? 0) - COLLAPSED_PEEK, 0) : 0;
+          return (
+            <ToastStackItem
+              key={task.key}
+              task={task}
+              overlap={overlap}
+              zIndex={index}
+              onMeasure={handleMeasure}
+            />
+          );
+        })}
+        <View style={styles.controlsRow}>
+          <DragHandle gesture={dragGesture} />
+          {canCollapse ? (
+            <CollapseToggle
+              collapsed={stickyCollapsed}
+              count={visible.length}
+              onPress={handleToggle}
+            />
+          ) : null}
+        </View>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -378,9 +467,15 @@ const styles = StyleSheet.create((theme) => ({
     position: "absolute",
     right: RAIL_CLEARANCE,
     alignItems: "flex-end",
-    gap: theme.spacing[2],
     maxWidth: 320,
     zIndex: 1000,
+  },
+  // Hover target that hugs the pile + controls. It has to be a plain (pointer-events
+  // auto) child of the box-none container so `onPointerEnter`/`Leave` actually fire —
+  // a box-none node is transparent to the pointer and never gets them.
+  hoverWrapper: {
+    alignItems: "flex-end",
+    gap: theme.spacing[2],
   },
   toast: {
     flexDirection: "row",
@@ -482,13 +577,30 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     color: theme.colors.popoverForeground,
   },
-  collapseToggle: {
+  // Drag handle + collapse toggle share one right-aligned row below the pile.
+  controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
     marginTop: theme.spacing[1],
+  },
+  collapseToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
     paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    ...theme.shadow.sm,
+  },
+  dragHandle: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.surface2,
     borderWidth: theme.borderWidth[1],
@@ -514,6 +626,9 @@ function collapseToggleStyle({
 }) {
   return [styles.collapseToggle, (hovered || pressed) && styles.collapseToggleHovered];
 }
+
+// Grab cursor on web signals the handle is draggable; native ignores the cast.
+const dragHandleStyle = [styles.dragHandle, isWeb && ({ cursor: "grab" } as object)];
 
 // Declared after `styles` so the referenced style identities exist. `done` maps to
 // no dot (finished tasks show only the provider icon).

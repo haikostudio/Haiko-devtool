@@ -462,6 +462,7 @@ export const ja: TranslationResources = {
   agentTasksToast: {
     collapse: "折りたたむ",
     expand: "すべて表示 ({{count}})",
+    drag: "ドラッグして移動",
   },
   agentList: {
     fallbackTitle: "新しいセッション",
