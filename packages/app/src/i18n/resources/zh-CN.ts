@@ -456,6 +456,10 @@ export const zhCN: TranslationResources = {
     drawerTitle: "任务",
     drawerEmpty: "没有正在进行的任务。",
   },
+  agentTasksToast: {
+    collapse: "收起",
+    expand: "显示全部 ({{count}})",
+  },
   agentList: {
     fallbackTitle: "新会话",
     runningFor: "已运行 {{duration}}",

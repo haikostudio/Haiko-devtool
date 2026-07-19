@@ -459,6 +459,10 @@ export const ja: TranslationResources = {
     drawerTitle: "タスク",
     drawerEmpty: "進行中のタスクはありません。",
   },
+  agentTasksToast: {
+    collapse: "折りたたむ",
+    expand: "すべて表示 ({{count}})",
+  },
   agentList: {
     fallbackTitle: "新しいセッション",
     runningFor: "{{duration}} 実行中",

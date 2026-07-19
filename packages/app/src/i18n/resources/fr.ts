@@ -461,6 +461,10 @@ export const fr: TranslationResources = {
     drawerTitle: "Tâches",
     drawerEmpty: "Aucune tâche en cours.",
   },
+  agentTasksToast: {
+    collapse: "Réduire",
+    expand: "Tout afficher ({{count}})",
+  },
   agentList: {
     fallbackTitle: "Nouvelle séance",
     runningFor: "En cours depuis {{duration}}",

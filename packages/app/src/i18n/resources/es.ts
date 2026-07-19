@@ -460,6 +460,10 @@ export const es: TranslationResources = {
     drawerTitle: "Tareas",
     drawerEmpty: "No hay tareas en curso.",
   },
+  agentTasksToast: {
+    collapse: "Contraer",
+    expand: "Mostrar todo ({{count}})",
+  },
   agentList: {
     fallbackTitle: "Nueva sesión",
     runningFor: "En ejecución desde hace {{duration}}",

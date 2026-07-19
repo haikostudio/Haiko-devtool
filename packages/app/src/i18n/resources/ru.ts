@@ -459,6 +459,10 @@ export const ru: TranslationResources = {
     drawerTitle: "Задачи",
     drawerEmpty: "Нет задач в процессе.",
   },
+  agentTasksToast: {
+    collapse: "Свернуть",
+    expand: "Показать все ({{count}})",
+  },
   agentList: {
     fallbackTitle: "Новая сессия",
     runningFor: "Выполняется уже {{duration}}",

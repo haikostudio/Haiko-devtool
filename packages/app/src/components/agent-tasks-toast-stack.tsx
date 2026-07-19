@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -25,6 +33,9 @@ const BASE_BOTTOM_OFFSET = 16;
 // the rightmost ~32px of the pane. Offset the toast stack past it (plus a small
 // gap) so the rail stays visible instead of hiding behind the toasts.
 const RAIL_CLEARANCE = 44;
+// How much of each card behind the front one peeks out at the top when the stack
+// is collapsed into a pile — just enough to show the status pip and a sliver.
+const COLLAPSED_PEEK = 10;
 
 export interface TrackedTask {
   key: string;
@@ -236,25 +247,111 @@ export function TaskToast({
   );
 }
 
+// A small pill anchored below the pile that folds the stack up or unfolds it
+// again. The chevrons point together when the stack is open (tap to collapse)
+// and apart when it is folded (tap to expand), with the task count alongside.
+function CollapseToggle({
+  collapsed,
+  count,
+  onPress,
+}: {
+  collapsed: boolean;
+  count: number;
+  onPress: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const Icon = collapsed ? ChevronsUpDown : ChevronsDownUp;
+  const label = collapsed ? t("agentTasksToast.expand", { count }) : t("agentTasksToast.collapse");
+  return (
+    <Pressable
+      onPress={onPress}
+      style={collapseToggleStyle}
+      hitSlop={6}
+      testID="agent-tasks-toast-collapse"
+    >
+      <Icon size={13} color={styles.collapseToggleLabel.color} />
+      <Text style={styles.collapseToggleLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// One row in the pile. Reports its natural height back to the stack so the
+// collapsed layout can overlap it, and applies the fold offset + z-order.
+function ToastStackItem({
+  task,
+  overlap,
+  zIndex,
+  onMeasure,
+}: {
+  task: TrackedTask;
+  overlap: number;
+  zIndex: number;
+  onMeasure: (key: string, height: number) => void;
+}): ReactElement {
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => onMeasure(task.key, event.nativeEvent.layout.height),
+    [onMeasure, task.key],
+  );
+  return (
+    <View
+      onLayout={handleLayout}
+      // Later cards sit on top so the ones behind only show their top sliver.
+      style={inlineUnistylesStyle({ marginBottom: overlap, zIndex })}
+      pointerEvents="box-none"
+    >
+      <TaskToast task={task} />
+    </View>
+  );
+}
+
 export function AgentTasksToastStack(): ReactElement | null {
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
   const visible = useTrackedTasks();
+  const collapsed = useAgentTaskToastStore((state) => state.collapsed);
+  const toggleCollapsed = useAgentTaskToastStore((state) => state.toggleCollapsed);
+  // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
+  // can pull each card up over the one behind it and leave only a top sliver.
+  const [heights, setHeights] = useState<Record<string, number>>({});
 
   const containerStyle = useMemo(
     () => [styles.container, inlineUnistylesStyle({ bottom: BASE_BOTTOM_OFFSET + insets.bottom })],
     [insets.bottom],
   );
 
+  const handleMeasure = useCallback((key: string, height: number) => {
+    setHeights((prev) => (prev[key] === height ? prev : { ...prev, [key]: height }));
+  }, []);
+
   if (isCompact || visible.length === 0) {
     return null;
   }
 
+  const canCollapse = visible.length > 1;
+  const isCollapsed = collapsed && canCollapse;
+  // The front (fully visible) card is the last one — nearest the bottom-right
+  // corner. Cards above it fold up behind it, so their status pips peek out.
+  const lastIndex = visible.length - 1;
+
   return (
     <View style={containerStyle} pointerEvents="box-none">
-      {visible.map((task) => (
-        <TaskToast key={task.key} task={task} />
-      ))}
+      {visible.map((task, index) => {
+        const isFront = index === lastIndex;
+        const overlap =
+          isCollapsed && !isFront ? -Math.max((heights[task.key] ?? 0) - COLLAPSED_PEEK, 0) : 0;
+        return (
+          <ToastStackItem
+            key={task.key}
+            task={task}
+            overlap={overlap}
+            zIndex={index}
+            onMeasure={handleMeasure}
+          />
+        );
+      })}
+      {canCollapse ? (
+        <CollapseToggle collapsed={isCollapsed} count={visible.length} onPress={toggleCollapsed} />
+      ) : null}
     </View>
   );
 }
@@ -368,7 +465,38 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     color: theme.colors.popoverForeground,
   },
+  collapseToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface2,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    ...theme.shadow.sm,
+  },
+  collapseToggleHovered: {
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
+  },
+  collapseToggleLabel: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
 }));
+
+function collapseToggleStyle({
+  hovered = false,
+  pressed,
+}: {
+  hovered?: boolean;
+  pressed: boolean;
+}) {
+  return [styles.collapseToggle, (hovered || pressed) && styles.collapseToggleHovered];
+}
 
 // Declared after `styles` so the referenced style identities exist. `done` maps to
 // no dot (finished tasks show only the provider icon).

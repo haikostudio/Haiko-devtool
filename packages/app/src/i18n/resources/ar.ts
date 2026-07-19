@@ -456,6 +456,10 @@ export const ar: TranslationResources = {
     drawerTitle: "المهام",
     drawerEmpty: "لا توجد مهام قيد التنفيذ.",
   },
+  agentTasksToast: {
+    collapse: "طي",
+    expand: "عرض الكل ({{count}})",
+  },
   agentList: {
     fallbackTitle: "جلسة جديدة",
     runningFor: "قيد التشغيل منذ {{duration}}",

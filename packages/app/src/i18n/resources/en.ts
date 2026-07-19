@@ -455,6 +455,10 @@ export const en = {
     drawerTitle: "Tasks",
     drawerEmpty: "No tasks in progress.",
   },
+  agentTasksToast: {
+    collapse: "Collapse",
+    expand: "Show all ({{count}})",
+  },
   agentList: {
     fallbackTitle: "New session",
     runningFor: "Running for {{duration}}",

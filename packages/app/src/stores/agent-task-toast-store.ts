@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
 // Tracks which agent "tasks" are surfaced as floating toasts in the bottom-right
 // stack. A toast appears the moment an agent becomes active (running / needs
@@ -26,42 +28,62 @@ interface AgentTaskToastState {
   reconcile: (input: { activeKeys: readonly string[]; existingKeys: ReadonlySet<string> }) => void;
   /** Hide a toast (used when a finished task is clicked). */
   dismiss: (key: AgentTaskToastKey) => void;
+  /**
+   * When true the floating stack is folded into an overlapping pile. Persisted so
+   * the user's choice survives a reload; the live `order`/`seq` bookkeeping is not
+   * persisted (it's rebuilt from the agent list on every load).
+   */
+  collapsed: boolean;
+  toggleCollapsed: () => void;
 }
 
-export const useAgentTaskToastStore = create<AgentTaskToastState>((set) => ({
-  order: new Map(),
-  seq: 0,
-  reconcile: ({ activeKeys, existingKeys }) =>
-    set((state) => {
-      let changed = false;
-      const next = new Map(state.order);
-      let seq = state.seq;
+export const useAgentTaskToastStore = create<AgentTaskToastState>()(
+  persist(
+    (set) => ({
+      order: new Map(),
+      seq: 0,
+      collapsed: false,
+      toggleCollapsed: () => set((state) => ({ collapsed: !state.collapsed })),
+      reconcile: ({ activeKeys, existingKeys }) =>
+        set((state) => {
+          let changed = false;
+          const next = new Map(state.order);
+          let seq = state.seq;
 
-      for (const key of activeKeys) {
-        if (!next.has(key)) {
-          next.set(key, seq++);
-          changed = true;
-        }
-      }
-      for (const key of next.keys()) {
-        if (!existingKeys.has(key)) {
+          for (const key of activeKeys) {
+            if (!next.has(key)) {
+              next.set(key, seq++);
+              changed = true;
+            }
+          }
+          for (const key of next.keys()) {
+            if (!existingKeys.has(key)) {
+              next.delete(key);
+              changed = true;
+            }
+          }
+
+          if (!changed) {
+            return state;
+          }
+          return { order: next, seq };
+        }),
+      dismiss: (key) =>
+        set((state) => {
+          if (!state.order.has(key)) {
+            return state;
+          }
+          const next = new Map(state.order);
           next.delete(key);
-          changed = true;
-        }
-      }
-
-      if (!changed) {
-        return state;
-      }
-      return { order: next, seq };
+          return { order: next };
+        }),
     }),
-  dismiss: (key) =>
-    set((state) => {
-      if (!state.order.has(key)) {
-        return state;
-      }
-      const next = new Map(state.order);
-      next.delete(key);
-      return { order: next };
-    }),
-}));
+    {
+      name: "agent-task-toast",
+      storage: createJSONStorage(() => AsyncStorage),
+      // Only the fold preference is durable; the tracked-toast bookkeeping is
+      // rebuilt from the live agent list on every load.
+      partialize: (state) => ({ collapsed: state.collapsed }),
+    },
+  ),
+);

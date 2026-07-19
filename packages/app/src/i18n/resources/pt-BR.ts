@@ -461,6 +461,10 @@ export const ptBR: TranslationResources = {
     drawerTitle: "Tarefas",
     drawerEmpty: "Nenhuma tarefa em andamento.",
   },
+  agentTasksToast: {
+    collapse: "Recolher",
+    expand: "Mostrar tudo ({{count}})",
+  },
   agentList: {
     fallbackTitle: "Nova sessão",
     runningFor: "Em execução há {{duration}}",
