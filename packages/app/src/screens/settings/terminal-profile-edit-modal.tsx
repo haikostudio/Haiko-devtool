@@ -5,6 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
+import { Check, X } from "lucide-react-native";
 
 export interface ProfileDraft {
   name: string;
@@ -214,19 +215,23 @@ export function TerminalProfileEditModal({
         <View style={styles.actions}>
           <Button
             variant="secondary"
+            size="sm"
             style={styles.actionButton}
             onPress={handleCancel}
             disabled={isPending}
             testID="terminal-profile-cancel-button"
+            leftIcon={X}
           >
             {t("common.actions.cancel")}
           </Button>
           <Button
             variant="default"
+            size="sm"
             style={styles.actionButton}
             onPress={handleSave}
             disabled={isPending}
             testID="terminal-profile-save-button"
+            leftIcon={Check}
           >
             {isPending
               ? t("settings.host.terminalProfiles.saving")

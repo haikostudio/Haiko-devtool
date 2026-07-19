@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2 } from "lucide-react-native";
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2, X } from "lucide-react-native";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import {
@@ -125,7 +125,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   actions: {
     flexDirection: "row",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     marginTop: theme.spacing[2],
   },
   helper: {
@@ -318,10 +318,6 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
     bumpInputResetKey();
   }, []);
 
-  const connectIcon = useMemo(
-    () => <Link2 size={16} color={theme.colors.accentForeground} />,
-    [theme.colors.accentForeground],
-  );
   const hostFieldStyle = useMemo(() => [styles.field, styles.hostField], []);
   const portFieldStyle = useMemo(() => [styles.field, styles.portField], []);
   const checkboxStyle = useMemo(
@@ -634,18 +630,21 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       <View style={styles.actions}>
         <Button
           style={FLEX_ONE_STYLE}
+          size="sm"
           variant="secondary"
           onPress={handleCancel}
           disabled={isSaving}
+          leftIcon={X}
         >
           {t("pairing.direct.actions.cancel")}
         </Button>
         <Button
           style={FLEX_ONE_STYLE}
+          size="sm"
           variant="default"
           onPress={handleSavePress}
           disabled={isSaving}
-          leftIcon={connectIcon}
+          leftIcon={Link2}
           testID="direct-host-submit"
         >
           {isSaving ? t("pairing.direct.actions.connecting") : t("pairing.direct.actions.connect")}

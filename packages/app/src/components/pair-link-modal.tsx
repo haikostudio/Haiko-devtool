@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { Link } from "lucide-react-native";
+import { Link, X } from "lucide-react-native";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
@@ -42,7 +42,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   actions: {
     flexDirection: "row",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     marginTop: theme.spacing[2],
   },
 }));
@@ -75,11 +75,6 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
     offerUrlRef.current = "";
     inputRef.current?.clear();
   }, []);
-
-  const pairIcon = useMemo(
-    () => <Link size={16} color={theme.colors.accentForeground} />,
-    [theme.colors.accentForeground],
-  );
 
   const handleClose = useCallback(() => {
     if (isSaving) return;
@@ -203,24 +198,27 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
       <View style={styles.actions}>
         <Button
           style={FLEX_ONE_STYLE}
+          size="sm"
           variant="secondary"
           onPress={handleCancel}
           disabled={isSaving}
           testID="pair-link-cancel"
           accessibilityRole="button"
           accessibilityLabel={t("pairing.link.actions.cancel")}
+          leftIcon={X}
         >
           {t("pairing.link.actions.cancel")}
         </Button>
         <Button
           style={FLEX_ONE_STYLE}
+          size="sm"
           variant="default"
           onPress={handleSavePress}
           disabled={isSaving}
           testID="pair-link-submit"
           accessibilityRole="button"
           accessibilityLabel={t("pairing.link.actions.pair")}
-          leftIcon={pairIcon}
+          leftIcon={Link}
         >
           {isSaving ? t("pairing.link.actions.pairing") : t("pairing.link.actions.pair")}
         </Button>
