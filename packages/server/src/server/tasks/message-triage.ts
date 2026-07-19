@@ -233,8 +233,8 @@ export class MessageTriage {
   }): Promise<MessageTriageResult | null> {
     const folderList = input.folderNames.length > 0 ? input.folderNames.join(", ") : "(aucun)";
     const basePrompt = [
-      "Tu es un agent de tri de tâches. On te donne UN message envoyé par un utilisateur dans une conversation de développement, et la liste des dossiers de tâches du projet.",
-      "Détermine si ce message exprime l'intention de créer une ou plusieurs tâches.",
+      "Tu es un agent de tri de tâches. On te donne UN message qu'un utilisateur vient d'envoyer à son agent de code — l'agent principal traite déjà ce message et va agir dessus. On te donne aussi la liste des dossiers de tâches du projet.",
+      "Détermine si ce message demande d'ajouter une ou plusieurs tâches au board du projet, EN PLUS du travail que l'agent principal fait déjà.",
       "Tu peux lire quelques fichiers du dépôt (lecture seule) UNIQUEMENT si c'est nécessaire pour formuler des titres pertinents.",
       "",
       "Message de l'utilisateur :",
@@ -245,10 +245,11 @@ export class MessageTriage {
       `Dossiers existants du projet : ${folderList}`,
       "",
       "Réponds avec :",
-      "- kind=\"tasks\" et un tableau de tâches si l'intention est claire. Chaque tâche : titre court à l'impératif, description optionnelle reprenant le contexte utile, folderName choisi parmi les dossiers existants ou un nouveau nom pertinent, tags optionnels.",
-      '- kind="questions" et 1 à 3 questions courtes si l\'intention est probable mais ambiguë (dossier incertain, périmètre flou).',
-      '- kind="none" si le message ne demande PAS de créer de tâche (bavardage, simple question de code, remerciement).',
-      "Ne crée jamais de tâche pour du bavardage ou une simple question technique.",
+      "- kind=\"tasks\" et un tableau de tâches si l'utilisateur demande explicitement d'ajouter des tâches (« ajoute ça aux tâches », « crée une tâche pour », « note pour plus tard »). Chaque tâche : titre court à l'impératif, description optionnelle reprenant le contexte utile, folderName choisi parmi les dossiers existants ou un nouveau nom pertinent, tags optionnels.",
+      '- kind="questions" et 1 à 3 questions courtes UNIQUEMENT si l\'utilisateur demande explicitement des tâches mais que le découpage ou le dossier reste ambigu.',
+      '- kind="none" dans tous les autres cas.',
+      "IMPORTANT : du feedback direct à l'agent, un signalement de bug ou une instruction immédiate (« corrige X », « le champ doit prendre toute la largeur », « il faut que Y ») n'est PAS une demande de création de tâche — l'agent principal s'en occupe déjà. Réponds none. Dans le doute, réponds none.",
+      "Ne crée jamais de tâche pour du bavardage, une simple question technique, ou une instruction que l'agent principal exécute déjà.",
     ].join("\n");
 
     let agentId: string | null = null;

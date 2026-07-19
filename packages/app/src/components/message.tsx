@@ -2638,6 +2638,12 @@ const taskTriageStylesheet = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: 18,
   },
+  hintText: {
+    marginTop: theme.spacing[1],
+    color: theme.colors.mutedForeground,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+  },
 }));
 
 export const TaskTriagePill = memo(function TaskTriagePill({ item }: TaskTriagePillProps) {
@@ -2674,6 +2680,12 @@ export const TaskTriagePill = memo(function TaskTriagePill({ item }: TaskTriageP
                   </Text>
                 ))}
               </View>
+            )}
+            {isQuestions && (
+              <Text style={taskTriageStylesheet.hintText}>
+                Répondez dans le chat pour préciser (avec une intention claire, ex. « crée une tâche
+                pour… »), ou ignorez ce message — rien à valider ici.
+              </Text>
             )}
           </View>
         </View>
