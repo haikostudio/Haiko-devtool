@@ -303,4 +303,34 @@ export const UNRELEASED_FR = {
     "Libellé affiché sous chaque colonne du graphique d'usage",
   "Allow remote project ids in tasks board store":
     "Prise en charge des identifiants de projet distants dans le stockage du tableau des tâches",
+  // Backfill — commits arrivés après la traduction initiale
+  "Status-driven, compact actions in task detail sheet":
+    "Actions compactes et adaptées au statut dans la feuille de détail d'une tâche",
+  "Full-screen agent drawer (Chat + Details) on mobile task tap":
+    "Tiroir d'agent plein écran (Chat + Détails) au toucher d'une tâche sur mobile",
+  "Cerveau recall on every prompt via AgentManager choke point":
+    "Rappel du Cerveau à chaque prompt via le point de passage AgentManager",
+  "Per-column search/filter/sort toolbar on the board":
+    "Barre de recherche, filtre et tri par colonne sur le tableau",
+  "Mirror the selected task's agent in a resizable desktop side panel":
+    "Reflète l'agent de la tâche sélectionnée dans un panneau latéral redimensionnable sur bureau",
+  "Live tab title + one-sentence banner headline from the response":
+    "Titre d'onglet en direct + bannière d'une phrase tirée de la réponse",
+  "Auto lucide icons on task-report section headings":
+    "Icônes Lucide automatiques sur les titres de sections du compte-rendu de tâche",
+  "Grey card callouts with lucide icons, drop left border":
+    "Encadrés gris avec icônes Lucide, bordure gauche supprimée",
+  "Timeline shows only planned + running, colored by column; visible search bar + faceted filter":
+    "La chronologie n'affiche que le planifié et l'en-cours, coloré par colonne ; barre de recherche visible + filtre à facettes",
+  "Auto-title the tab from the agent's response each turn":
+    "Titre automatique de l'onglet à partir de la réponse de l'agent à chaque tour",
+  "Search field + sort menu on the board": "Champ de recherche + menu de tri sur le tableau",
+  "Compress from held base64, not a store object-URL round-trip":
+    "Compression depuis le base64 conservé, sans détour par une object-URL du store",
+  "Downscale images for Codex, not just the relay budget":
+    "Réduction des images pour Codex, pas seulement pour le budget du relais",
+  "Per-column search field white + full-width in toolbar":
+    "Champ de recherche par colonne blanc et pleine largeur dans la barre d'outils",
+  "Stop double-opening a background tab for a just-created agent":
+    "N'ouvre plus deux fois un onglet en arrière-plan pour un agent tout juste créé",
 };
