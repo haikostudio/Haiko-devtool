@@ -21,6 +21,13 @@ const ThemedBot = withUnistyles(Bot);
 const ThemedClock = withUnistyles(Clock);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 
+// The triage prefixes generated descriptions with a "Priorité : … — Date
+// objectif : …" line that only restates the chip + deadline already on the card.
+const BOILERPLATE_DESCRIPTION = /^\s*priorit[ée]\s*:/i;
+
+// Tags past this cap collapse into a "+N" chip to keep the card compact.
+const MAX_VISIBLE_TAGS = 3;
+
 interface TaskCardProps {
   task: KanbanTask;
   onPress: (task: KanbanTask) => void;
@@ -84,6 +91,17 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
 
   const hasChipRow = Boolean(priority || scheduleBadge);
 
+  // The triage writes a "Priorité : … — Date objectif : …" boilerplate into the
+  // description that just restates the priority chip and deadline row. Hide it so
+  // only a genuine, human-written description ever shows on the card.
+  const description = useMemo(() => {
+    const text = task.description?.trim();
+    return text && !BOILERPLATE_DESCRIPTION.test(text) ? text : null;
+  }, [task.description]);
+
+  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
+  const hiddenTagCount = tags.length - visibleTags.length;
+
   return (
     <Pressable
       onPress={handlePress}
@@ -103,20 +121,24 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
       <Text style={styles.title} numberOfLines={3}>
         {task.title}
       </Text>
-      {task.description ? (
+      {description ? (
         <Text style={styles.description} numberOfLines={2}>
-          {task.description}
+          {description}
         </Text>
       ) : null}
-      {deadline ? <DeadlineRow deadline={deadline} /> : null}
-      <CardMetaRow task={task} />
-      {tags.length > 0 ? (
+      <CardMetaRow task={task} deadline={deadline} />
+      {visibleTags.length > 0 ? (
         <View style={styles.tagsRow}>
-          {tags.map((tag) => (
+          {visibleTags.map((tag) => (
             <View key={tag} style={styles.tagChip}>
               <Text style={styles.tagText}>{tag}</Text>
             </View>
           ))}
+          {hiddenTagCount > 0 ? (
+            <View style={styles.tagChip}>
+              <Text style={styles.tagText}>{`+${hiddenTagCount}`}</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
       {task.schedule?.lastError ? (
@@ -128,32 +150,40 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   );
 });
 
-// Muted single-line footer: quota share, duration, model, linked agent, PR.
+// One muted footer line: deadline (colored) leads, then the middot-separated
+// estimates (duration, quota), then the linked-agent icon and PR chip. Keeping
+// everything on a single row is the whole point — the card stays glanceable.
 // Split out of TaskCard to keep the card render under the complexity budget.
-const CardMetaRow = memo(function CardMetaRow({ task }: { task: KanbanTask }) {
+const CardMetaRow = memo(function CardMetaRow({
+  task,
+  deadline,
+}: {
+  task: KanbanTask;
+  deadline: ParsedDeadline | null;
+}) {
   const { t } = useTranslation();
-  const modelLabel = task.runConfig ? (task.runConfig.model ?? task.runConfig.provider) : null;
+  const estimates: string[] = [];
+  if (task.estimate?.estimatedMinutes !== undefined) {
+    estimates.push(t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes }));
+  }
+  if (task.estimate) {
+    estimates.push(
+      t("tasks.card.quotaEstimate", { percent: Math.round(task.estimate.quotaPercent) }),
+    );
+  }
+
   const hasMetaRow = Boolean(
-    task.estimate || modelLabel || task.links.primaryAgentId || task.links.prUrl,
+    deadline || estimates.length || task.links.primaryAgentId || task.links.prUrl,
   );
   if (!hasMetaRow) {
     return null;
   }
   return (
     <View style={styles.metaRow}>
-      {task.estimate ? (
-        <Text style={styles.estimateText}>
-          {t("tasks.card.quotaEstimate", {
-            percent: Math.round(task.estimate.quotaPercent),
-          })}
-        </Text>
+      {deadline ? <DeadlineRow deadline={deadline} /> : null}
+      {estimates.length ? (
+        <Text style={styles.estimateText}>{`${deadline ? "· " : ""}${estimates.join(" · ")}`}</Text>
       ) : null}
-      {task.estimate?.estimatedMinutes !== undefined ? (
-        <Text style={styles.estimateText}>
-          {t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })}
-        </Text>
-      ) : null}
-      {modelLabel ? <Text style={styles.estimateText}>{modelLabel}</Text> : null}
       {task.links.primaryAgentId ? (
         <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       ) : null}
