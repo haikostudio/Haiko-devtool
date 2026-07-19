@@ -201,7 +201,7 @@ describe("TaskScheduler", () => {
     expect(board.tasks[0]?.schedule?.state).toBe("awaiting_slot");
   });
 
-  test("returns the task to awaiting_slot with an error when the run is canceled", async () => {
+  test("auto-re-queues a canceled run without a lasting error or a spent attempt", async () => {
     const task = await seedScheduledTask();
     const { scheduler } = buildScheduler({
       remainingPct: 90,
@@ -209,19 +209,45 @@ describe("TaskScheduler", () => {
     });
 
     await scheduler.tick();
-    const findScheduleError = async () => {
+    const findState = async () => {
       const board = await service.getBoard("proj-1");
-      return board.tasks.find((entry) => entry.id === task.id)?.schedule?.lastError;
+      return board.tasks.find((entry) => entry.id === task.id)?.schedule;
     };
     await vi.waitFor(async () => {
-      expect(await findScheduleError()).toBeTruthy();
+      expect((await findState())?.cancelRequeues).toBe(1);
     });
 
     const board = await service.getBoard("proj-1");
-    const failed = board.tasks.find((entry) => entry.id === task.id);
-    expect(failed?.column).toBe("scheduled");
-    expect(failed?.schedule?.attempts).toBe(1);
-    expect(failed?.schedule?.lastError).toContain("canceled");
+    const requeued = board.tasks.find((entry) => entry.id === task.id);
+    // Re-queued for the next slot, no red error, and no real attempt burned.
+    expect(requeued?.column).toBe("scheduled");
+    expect(requeued?.schedule?.state).toBe("awaiting_slot");
+    expect(requeued?.schedule?.attempts).toBe(0);
+    expect(requeued?.schedule?.lastError).toBeFalsy();
+  });
+
+  test("gives up on a task that keeps getting canceled", async () => {
+    const task = await seedScheduledTask();
+    const { scheduler } = buildScheduler({
+      remainingPct: 90,
+      runAgent: async () => ({ canceled: true, finalText: "", timeline: [] }),
+    });
+
+    const findState = async () => {
+      const board = await service.getBoard("proj-1");
+      return board.tasks.find((entry) => entry.id === task.id)?.schedule;
+    };
+    // Keep ticking; each canceled run re-queues to awaiting_slot until the
+    // re-queue budget (MAX_CANCEL_REQUEUES = 5) is spent and it lands "failed".
+    await vi.waitFor(
+      async () => {
+        await scheduler.tick();
+        expect((await findState())?.state).toBe("failed");
+      },
+      { timeout: 5000, interval: 50 },
+    );
+
+    expect((await findState())?.lastError).toContain("canceled");
   });
 
   test("never launches a task awaiting user approval", async () => {

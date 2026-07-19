@@ -57,6 +57,10 @@ export type TaskSchedulePreference = z.infer<typeof TaskSchedulePreferenceSchema
 export const TaskScheduleStateSchema = z.object({
   state: z.enum(["pending_estimate", "awaiting_slot", "launching", "running", "failed"]),
   attempts: z.number().int().nonnegative(),
+  // How many times an interrupted (canceled) run was auto-re-queued. Kept
+  // separate from `attempts` so a daemon restart / manual stop doesn't burn a
+  // real execution attempt and prematurely mark the task "failed".
+  cancelRequeues: z.number().int().nonnegative().optional(),
   lastError: z.string().nullable().optional(),
   lastAttemptAt: z.string().optional(),
   // Why an awaiting_slot task is not launching yet (display-only refinement; a new

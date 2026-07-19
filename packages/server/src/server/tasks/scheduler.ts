@@ -18,6 +18,9 @@ const TICK_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT_TASK_AGENTS = 6;
 const QUOTA_SAFETY_MARGIN_PCT = 10;
 const MAX_ATTEMPTS = 3;
+// Interrupted (canceled) runs auto-re-queue without spending a real attempt.
+// This bounds that so an instantly-canceling run can't retry forever.
+const MAX_CANCEL_REQUEUES = 5;
 // "Light" tasks (below both thresholds) may launch outside quiet hours in
 // "auto" mode; anything heavier waits for the off-peak window.
 const LIGHT_TASK_MAX_QUOTA_PCT = 25;
@@ -429,6 +432,11 @@ export class TaskScheduler {
       schedule: {
         state: "launching",
         attempts: current.schedule?.attempts ?? 0,
+        // Carry the cancel-requeue counter across the launch so an interrupted
+        // task that keeps re-launching eventually exhausts its budget.
+        ...(current.schedule?.cancelRequeues
+          ? { cancelRequeues: current.schedule.cancelRequeues }
+          : {}),
         lastAttemptAt: new Date().toISOString(),
       },
     }));
@@ -484,6 +492,9 @@ export class TaskScheduler {
         schedule: {
           state: "running",
           attempts: (current.schedule?.attempts ?? 0) + 1,
+          ...(current.schedule?.cancelRequeues
+            ? { cancelRequeues: current.schedule.cancelRequeues }
+            : {}),
           lastAttemptAt: new Date().toISOString(),
         },
         links: {
@@ -502,7 +513,33 @@ export class TaskScheduler {
       const prompt = this.buildTaskPrompt({ task, planMode, branch });
       const result = await this.agentManager.runAgent(agent.id, prompt);
       if (result.canceled) {
-        throw new Error("Task agent run was canceled");
+        // A cancellation isn't a task failure — it usually means the run was
+        // interrupted (daemon restart, manual stop, quiet-hours window closed).
+        // Auto-re-queue for the next slot WITHOUT counting it against
+        // MAX_ATTEMPTS, so an interrupted task keeps trying instead of burning
+        // attempts and getting stuck as "failed". Bounded by MAX_CANCEL_REQUEUES
+        // so a run that cancels instantly every time can't loop forever.
+        await this.taskBoardService.patchTask(projectId, task.id, (current) => {
+          const cancelRequeues = (current.schedule?.cancelRequeues ?? 0) + 1;
+          const attempts = Math.max(0, (current.schedule?.attempts ?? 1) - 1);
+          const exhausted = cancelRequeues > MAX_CANCEL_REQUEUES;
+          return {
+            ...current,
+            column: "scheduled",
+            schedule: {
+              state: exhausted ? ("failed" as const) : ("awaiting_slot" as const),
+              attempts,
+              cancelRequeues,
+              lastAttemptAt: new Date().toISOString(),
+              ...(exhausted ? { lastError: "Task agent run was canceled too many times" } : {}),
+            },
+          };
+        });
+        this.logger.info(
+          { taskId: task.id, agentId: agent.id },
+          "Task run canceled; re-queued for next slot",
+        );
+        return;
       }
 
       if (planMode) {
