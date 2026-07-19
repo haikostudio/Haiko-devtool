@@ -101,7 +101,11 @@ function ResizeHandle({ onResize }: { onResize: (deltaX: number) => void }) {
       onMoveShouldSetResponder={alwaysCapture}
       onResponderGrant={handleGrant}
       onResponderMove={handleMove}
-    />
+    >
+      {/* The divider itself is a 1px hairline; the surrounding handle stays wide
+          enough to grab comfortably (transparent hit zone around the line). */}
+      <View style={styles.resizeHandleLine} />
+    </View>
   );
 }
 
@@ -1567,13 +1571,15 @@ const styles = StyleSheet.create((theme) => ({
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
   },
+  // No top padding here: the split row (divider + agent panel) must reach the
+  // very top. The board's own breathing room lives on boardContainer instead.
   boardArea: {
     flex: 1,
-    paddingTop: theme.spacing[4],
   },
   boardContainer: {
     flex: 1,
     gap: theme.spacing[3],
+    paddingTop: theme.spacing[4],
   },
   // Desktop split: board on the left (flex), resizable agent panel on the right.
   boardSplitRow: {
@@ -1584,8 +1590,16 @@ const styles = StyleSheet.create((theme) => ({
   panelHost: {
     height: "100%",
   },
+  // Wide, transparent grab zone so the col-resize drag stays easy to hit…
   resizeHandle: {
-    width: 6,
+    width: 9,
+    alignItems: "center",
+    backgroundColor: "transparent",
+  },
+  // …while the visible divider is a full-height 1px hairline running to the top.
+  resizeHandleLine: {
+    width: 1,
+    height: "100%",
     backgroundColor: theme.colors.border,
   },
   // Compact board/timeline tab switch — full width, aligned to the board inset

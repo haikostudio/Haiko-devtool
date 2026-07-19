@@ -121,7 +121,7 @@ export class BrainMemoryClient {
    */
   async search(
     query: string,
-    options?: { k?: number; projet?: string; session?: string },
+    options?: { k?: number; projet?: string; session?: string; contexteConversation?: string },
   ): Promise<BrainSouvenir[]> {
     const trimmed = (query ?? "").trim();
     if (!trimmed) {
@@ -131,6 +131,13 @@ export class BrainMemoryClient {
     const url = new URL(`${this.baseUrl}/v1/memories/search`);
     url.searchParams.set("q", trimmed.slice(0, 500));
     url.searchParams.set("k", String(k));
+    // Short excerpt of the ongoing conversation: the Cerveau uses it to enrich
+    // the embedding AND to disambiguate polysemous prompt words ("espace" in a
+    // design conversation = layout spacing, not the whitespace character).
+    const ctx = (options?.contexteConversation ?? "").trim();
+    if (ctx) {
+      url.searchParams.set("contexte_conversation", ctx.slice(0, 500));
+    }
     try {
       const resp = await this.fetchImpl(url, {
         method: "GET",
@@ -195,15 +202,18 @@ export class BrainMemoryClient {
    */
   async recall(
     query: string,
-    options?: { k?: number; projet?: string; session?: string },
+    options?: { k?: number; projet?: string; session?: string; contexteConversation?: string },
   ): Promise<BrainRecallResult> {
     const k = options?.k ?? 5;
     const projet = options?.projet;
     const session = options?.session;
+    const contexteConversation = options?.contexteConversation;
     const [scopedRaw, globalRaw, skillsRaw] = await Promise.all([
-      projet ? this.search(query, { k, projet, session }) : Promise.resolve([]),
+      projet
+        ? this.search(query, { k, projet, session, contexteConversation })
+        : Promise.resolve([]),
       !projet || this.globalFallback
-        ? this.search(query, { k, session })
+        ? this.search(query, { k, session, contexteConversation })
         : Promise.resolve<BrainSouvenir[]>([]),
       this.listSkills(query, { projet, session }),
     ]);

@@ -108,6 +108,19 @@ export function createBrainRecallHook(
  * Entirely best-effort: a Cerveau outage returns the text unchanged and never
  * blocks the prompt.
  */
+/**
+ * Tail of the last assistant message = "what the conversation is about" right
+ * now. The Cerveau uses it as a sense witness to disambiguate polysemous
+ * prompt words ("espace" in a design conversation = layout spacing) — see
+ * contexte_conversation in the search API.
+ */
+function conversationWitness(lastAssistant: string | null): string | undefined {
+  if (!lastAssistant) {
+    return undefined;
+  }
+  return lastAssistant.replace(/\s+/g, " ").trim().slice(-400);
+}
+
 export async function recallAndInjectBrainContext(
   deps: BrainRecallDeps,
   input: { agentId: string; text: string; scope: BrainScope },
@@ -122,14 +135,17 @@ export async function recallAndInjectBrainContext(
   // below still filters to what matters, so bare follow-ups usually surface
   // nothing.
   let isFirstPrompt = false;
+  let lastAssistant: string | null = null;
   try {
-    isFirstPrompt = (await agentManager.getLastAssistantMessage(agentId)) === null;
+    lastAssistant = await agentManager.getLastAssistantMessage(agentId);
+    isFirstPrompt = lastAssistant === null;
   } catch (err) {
     logger.debug({ err, agentId }, "brain: first-prompt detection failed");
   }
+  const contexteConversation = conversationWitness(lastAssistant);
   let recall: Awaited<ReturnType<BrainMemoryClient["recall"]>>;
   try {
-    recall = await brain.recall(text, { projet: scope.projet });
+    recall = await brain.recall(text, { projet: scope.projet, contexteConversation });
   } catch (err) {
     logger.debug({ err, agentId }, "brain: recall failed");
     return text;
