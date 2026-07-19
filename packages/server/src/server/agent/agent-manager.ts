@@ -67,6 +67,7 @@ import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js";
+import type { BrainCapturePromptHook } from "../../services/brain-memory/capture.js";
 import type { BrainRecallPromptHook } from "../../services/brain-memory/recall.js";
 import {
   hasResponseFormatDirective,
@@ -661,6 +662,7 @@ export class AgentManager {
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private brainRecallHook: BrainRecallPromptHook | null = null;
+  private brainCaptureHook: BrainCapturePromptHook | null = null;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -749,6 +751,16 @@ export class AgentManager {
    */
   setBrainRecallHook(hook: BrainRecallPromptHook | null): void {
     this.brainRecallHook = hook;
+  }
+
+  /**
+   * Install the end-of-turn Cerveau capture hook. Symmetric to the recall hook:
+   * fires for every fresh foreground prompt of every non-internal agent at this
+   * choke point, so autonomous work (schedules, loops, tasks) is distilled into
+   * the brain just like an interactive chat. Set once at bootstrap.
+   */
+  setBrainCaptureHook(hook: BrainCapturePromptHook | null): void {
+    this.brainCaptureHook = hook;
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -2191,6 +2203,9 @@ export class AgentManager {
         if (hasResponseFormatDirective(text) || parseBrainContextEnvelope(text)) {
           return text;
         }
+        // Fresh prompt: schedule the end-of-turn capture (fire-and-forget) at the
+        // same choke point as recall, so every entrypoint's turn is distilled.
+        this.brainCaptureHook?.({ agentId: agent.id, text });
         const recalled = hook ? await hook({ agentId: agent.id, text }) : text;
         return injectResponseFormat(recalled);
       };

@@ -210,10 +210,6 @@ import {
   type GitHubService,
 } from "../services/github-service.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
-import type { BrainMemoryClient } from "../services/brain-memory/client.js";
-import type { BrainCurator } from "../services/brain-memory/curator.js";
-import { resolveBrainScope } from "../services/brain-memory/recall.js";
-import { summarizeTurnActions } from "../services/brain-memory/turn-actions.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -482,8 +478,6 @@ export interface SessionOptions {
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
-  brainMemory?: BrainMemoryClient | null;
-  brainCurator?: BrainCurator | null;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -648,8 +642,6 @@ export class Session {
   } | null = null;
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
-  private readonly brainMemory: BrainMemoryClient | null;
-  private readonly brainCurator: BrainCurator | null;
   private readonly messageTriage: MessageTriage | null;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -719,8 +711,6 @@ export class Session {
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
-      brainMemory,
-      brainCurator,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -976,8 +966,6 @@ export class Session {
       logger: this.sessionLogger,
     });
     this.providerSnapshotManager = providerSnapshotManager;
-    this.brainMemory = brainMemory ?? null;
-    this.brainCurator = brainCurator ?? null;
     this.messageTriage = messageTriage ?? null;
     this.serviceProxy = serviceProxy ?? null;
     this.scriptRuntimeStore = scriptRuntimeStore ?? null;
@@ -6090,109 +6078,6 @@ export class Session {
     }
   }
 
-  /**
-   * Resolve the Cerveau scope for an agent (shared resolver — project display
-   * name, else last cwd segment). Used by the end-of-turn capture; the recall
-   * itself now happens at the AgentManager choke point.
-   */
-  private async resolveBrainScope(
-    agentId: string,
-  ): Promise<{ projet: string | undefined; cwd: string | null }> {
-    return resolveBrainScope(
-      {
-        agentStorage: this.agentStorage,
-        workspaceRegistry: this.workspaceRegistry,
-        projectRegistry: this.projectRegistry,
-        logger: this.sessionLogger,
-      },
-      agentId,
-    );
-  }
-
-  /**
-   * After the next turn ends, capture the exchange into the Cerveau. With the
-   * curator (scribe): completed turns only, distilled into durable facts plus
-   * a fiche refresh — trivia never reaches the brain. Without it: legacy raw
-   * note. One-shot subscription mirroring the auto-archive terminal listener.
-   */
-  private scheduleBrainCapture(
-    agentId: string,
-    userText: string,
-    scope: { projet: string | undefined; cwd: string | null },
-  ): void {
-    const brain = this.brainMemory;
-    if (!brain || !userText.trim()) {
-      return;
-    }
-    // Snapshot the timeline length now so we can isolate THIS turn's items at
-    // completion and distill the durable actions the agent took (commits,
-    // deploys) — not just what it said. Best-effort: 0 means "whole timeline".
-    let fromIndex = 0;
-    try {
-      fromIndex = this.agentManager.getTimeline(agentId).length;
-    } catch {
-      fromIndex = 0;
-    }
-    const unsubscribe = this.agentManager.subscribe(
-      (event) => {
-        if (event.type !== "agent_stream") {
-          return;
-        }
-        const eventType = event.event.type;
-        if (
-          eventType !== "turn_completed" &&
-          eventType !== "turn_failed" &&
-          eventType !== "turn_canceled"
-        ) {
-          return;
-        }
-        unsubscribe();
-        void (async () => {
-          try {
-            const finalText =
-              eventType === "turn_completed"
-                ? ((await this.agentManager.getLastAssistantMessage(agentId)) ?? "")
-                : "";
-            const curator = this.brainCurator;
-            if (curator) {
-              if (eventType !== "turn_completed" || !scope.cwd) {
-                return;
-              }
-              let actions: string | null = null;
-              try {
-                actions = summarizeTurnActions(
-                  this.agentManager.getTimeline(agentId).slice(fromIndex),
-                );
-              } catch {
-                actions = null;
-              }
-              await curator.distillExchange({
-                userText,
-                assistantText: finalText,
-                projet: scope.projet,
-                cwd: scope.cwd,
-                discussionId: agentId,
-                actions,
-              });
-              return;
-            }
-            const note = finalText
-              ? `Utilisateur: ${userText}\n\nAssistant: ${finalText}`
-              : `Utilisateur: ${userText}`;
-            await brain.note(note, {
-              source: "paseo-daemon",
-              projet: scope.projet,
-              discussionId: agentId,
-            });
-          } catch (err) {
-            this.sessionLogger.debug({ err, agentId }, "brain: exchange capture failed");
-          }
-        })();
-      },
-      { agentId, replayState: false },
-    );
-  }
-
   private async handleSendAgentMessageRequest(
     msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
   ): Promise<void> {
@@ -6213,13 +6098,9 @@ export class Session {
     try {
       const agentId = resolved.agentId;
 
-      // Cerveau memory: recall + injection happen at the AgentManager choke
-      // point (every entrypoint, every prompt — see applyBrainRecall). Here we
-      // only schedule the end-of-turn capture, which needs the raw user text.
-      if (this.brainMemory) {
-        const scope = await this.resolveBrainScope(agentId);
-        this.scheduleBrainCapture(agentId, msg.text, scope);
-      }
+      // Cerveau memory: BOTH recall+injection AND the end-of-turn capture now
+      // live at the AgentManager choke point (every entrypoint, every prompt —
+      // see applyBrainRecall + the capture hook), so nothing to schedule here.
 
       // Inline task-intent triage: if the message reads like a task request,
       // propose tasks (awaiting approval) or ask clarifying questions in-thread.

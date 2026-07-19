@@ -482,7 +482,6 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
   private readonly brainMemory: BrainMemoryClient | null;
-  private readonly brainCurator: BrainCurator | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private taskBoardService: TaskBoardService | null = null;
   private taskEstimator: TaskEstimator | null = null;
@@ -651,7 +650,6 @@ export class VoiceAssistantWebSocketServer {
     });
 
     this.brainMemory = brainMemoryServices?.client ?? null;
-    this.brainCurator = brainMemoryServices?.curator ?? null;
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
     this.startRuntimeMetricsInterval();
@@ -1117,8 +1115,6 @@ export class VoiceAssistantWebSocketServer {
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
-      brainMemory: this.brainMemory,
-      brainCurator: this.brainCurator,
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,

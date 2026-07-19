@@ -137,6 +137,7 @@ import { MessageTriage } from "./tasks/message-triage.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
 import { ProjectBriefStore } from "../services/brain-memory/project-brief.js";
+import { createBrainCaptureHook } from "../services/brain-memory/capture.js";
 import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
@@ -1205,6 +1206,20 @@ export async function createPaseoDaemon(
         brain: brainMemoryServices.client,
         curator: brainMemoryServices.curator,
         recentFacts: brainMemoryServices.recentFacts,
+        agentManager,
+        agentStorage,
+        workspaceRegistry,
+        projectRegistry,
+        logger,
+      }),
+    );
+    // Symmetric end-of-turn capture at the same choke point: every entrypoint's
+    // completed turn is distilled (session, MCP, schedules, loops, tasks), not
+    // just the interactive session path that used to schedule this by hand.
+    agentManager.setBrainCaptureHook(
+      createBrainCaptureHook({
+        brain: brainMemoryServices.client,
+        curator: brainMemoryServices.curator,
         agentManager,
         agentStorage,
         workspaceRegistry,
