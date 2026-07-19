@@ -304,6 +304,14 @@ export const fr: TranslationResources = {
     foldersSummary: "{{folders}} dossier(s) · {{tasks}} tâche(s)",
     searchProjects: "Rechercher un projet",
     sortProjects: "Trier les projets",
+    searchTasks: "Rechercher une tâche",
+    sortTasks: "Trier les tâches",
+    sort: {
+      deadline: "Par échéance",
+      priority: "Par priorité",
+      title: "Alphabétique",
+      created: "Plus récentes",
+    },
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {
       backlog: "À faire",
@@ -321,6 +329,7 @@ export const fr: TranslationResources = {
       estimating: "Estimation…",
       awaiting: "En attente de créneau",
       awaitingWindow: "Attente heures creuses",
+      nextRun: "Vers {{when}}",
     },
     card: {
       quotaEstimate: "~{{percent}} % quota",

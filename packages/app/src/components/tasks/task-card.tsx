@@ -11,6 +11,13 @@ import {
   type ParsedDeadline,
   type ParsedPriority,
 } from "@/components/tasks/task-tags";
+import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
+import {
+  isQuietTime,
+  nextQuietHoursStartMs,
+  waitsForOffPeak,
+  type QuietHours,
+} from "@/components/tasks/task-schedule";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 
@@ -73,6 +80,28 @@ function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   return { labelKey: "tasks.schedule.awaiting" };
 }
 
+// When a validated/planned task will actually launch: the scheduler holds
+// heavy (or off-peak-preferring) tasks until the next quiet-hours window, so we
+// surface that opening time as a concrete hint. Returns null for tasks that run
+// on the next tick anyway (light "auto"/"asap"), already-running/failed tasks,
+// or when the window is open right now (launch is imminent — the badge says so).
+function computeNextRunAt(task: KanbanTask, quietHours: QuietHours, nowMs: number): number | null {
+  if (task.column !== "validated" && task.column !== "scheduled") {
+    return null;
+  }
+  if (!task.estimate || task.approval?.state === "pending") {
+    return null;
+  }
+  const state = task.schedule?.state;
+  if (state === "running" || state === "launching" || state === "failed") {
+    return null;
+  }
+  if (!waitsForOffPeak(task) || isQuietTime(nowMs, quietHours)) {
+    return null;
+  }
+  return nextQuietHoursStartMs(nowMs, quietHours);
+}
+
 /**
  * A single kanban card, ticket-style: a soft tinted priority chip on top, the
  * title, an optional two-line description, then deadline / meta / tags. Flat
@@ -80,7 +109,8 @@ function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
  * folder-tinted column, generous padding so the board breathes.
  */
 export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const quietHours = useTaskQuietHours();
 
   const handlePress = useCallback(() => {
     onPress(task);
@@ -88,6 +118,22 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
 
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
+
+  // Concrete "runs around 01:00" hint for tasks the scheduler parks until the
+  // next off-peak window. Formatted in the window's timezone and the UI locale.
+  const nextRunLabel = useMemo(() => {
+    const nextRunAt = computeNextRunAt(task, quietHours, Date.now());
+    if (nextRunAt === null) {
+      return null;
+    }
+    const when = new Intl.DateTimeFormat(i18n.language, {
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: quietHours.timeZone,
+    }).format(new Date(nextRunAt));
+    return t("tasks.schedule.nextRun", { when });
+  }, [task, quietHours, i18n.language, t]);
 
   // The triage writes a "Priorité : … — Date objectif : …" boilerplate into the
   // description that just restates the priority dot and deadline row. Hide it so
@@ -119,6 +165,12 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
       {scheduleBadge ? (
         <View style={styles.chipRow}>
           <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
+        </View>
+      ) : null}
+      {nextRunLabel ? (
+        <View style={styles.nextRunRow}>
+          <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <Text style={styles.nextRunText}>{nextRunLabel}</Text>
         </View>
       ) : null}
       {description ? (
@@ -338,6 +390,17 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+  },
+  nextRunRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    // Clears the absolute move-to trigger the touch board overlays top-right.
+    paddingRight: theme.spacing[4],
+  },
+  nextRunText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   deadlineDate: {
     color: theme.colors.foregroundMuted,

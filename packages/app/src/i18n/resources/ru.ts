@@ -302,6 +302,14 @@ export const ru: TranslationResources = {
     foldersSummary: "Папок: {{folders}} · задач: {{tasks}}",
     searchProjects: "Поиск проектов",
     sortProjects: "Сортировать проекты",
+    searchTasks: "Поиск задач",
+    sortTasks: "Сортировать задачи",
+    sort: {
+      deadline: "По сроку",
+      priority: "По приоритету",
+      title: "По алфавиту",
+      created: "Сначала новые",
+    },
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
       backlog: "К выполнению",
@@ -319,6 +327,7 @@ export const ru: TranslationResources = {
       estimating: "Оценка…",
       awaiting: "Ожидает слот",
       awaitingWindow: "Ожидание тихих часов",
+      nextRun: "Около {{when}}",
     },
     card: {
       quotaEstimate: "~{{percent}}% квоты",

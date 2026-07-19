@@ -299,6 +299,14 @@ export const zhCN: TranslationResources = {
     foldersSummary: "{{folders}} 个文件夹 · {{tasks}} 个任务",
     searchProjects: "搜索项目",
     sortProjects: "排序项目",
+    searchTasks: "搜索任务",
+    sortTasks: "排序任务",
+    sort: {
+      deadline: "按截止日期",
+      priority: "按优先级",
+      title: "按名称",
+      created: "最新优先",
+    },
     updateHost: "请更新主机以使用任务功能。",
     columns: {
       backlog: "待办",
@@ -316,6 +324,7 @@ export const zhCN: TranslationResources = {
       estimating: "估算中…",
       awaiting: "等待时段",
       awaitingWindow: "等待空闲时段",
+      nextRun: "约 {{when}} 运行",
     },
     card: {
       quotaEstimate: "约 {{percent}}% 配额",

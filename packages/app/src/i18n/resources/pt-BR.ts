@@ -304,6 +304,14 @@ export const ptBR: TranslationResources = {
     foldersSummary: "{{folders}} pasta(s) · {{tasks}} tarefa(s)",
     searchProjects: "Buscar projetos",
     sortProjects: "Ordenar projetos",
+    searchTasks: "Buscar tarefas",
+    sortTasks: "Ordenar tarefas",
+    sort: {
+      deadline: "Por prazo",
+      priority: "Por prioridade",
+      title: "Alfabética",
+      created: "Mais recentes",
+    },
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {
       backlog: "A fazer",
@@ -321,6 +329,7 @@ export const ptBR: TranslationResources = {
       estimating: "Estimando…",
       awaiting: "Aguardando janela",
       awaitingWindow: "Aguardando horário de baixa",
+      nextRun: "Por volta de {{when}}",
     },
     card: {
       quotaEstimate: "~{{percent}}% da cota",

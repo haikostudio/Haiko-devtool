@@ -36,10 +36,15 @@ export function ScrollableKanbanBoard({
   onRunTask,
   onReanalyzeTask,
   columnExtras,
+  query,
+  sortMode,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
-  const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
+  const columns = useMemo(
+    () => buildColumnModels(board, folderId, { query, sortMode }),
+    [board, folderId, query, sortMode],
+  );
 
   return (
     // Board padding/gap live on an inner View, NOT on contentContainerStyle —

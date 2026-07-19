@@ -302,6 +302,14 @@ export const ja: TranslationResources = {
     foldersSummary: "{{folders}} フォルダ · {{tasks}} タスク",
     searchProjects: "プロジェクトを検索",
     sortProjects: "プロジェクトを並べ替え",
+    searchTasks: "タスクを検索",
+    sortTasks: "タスクを並べ替え",
+    sort: {
+      deadline: "期限順",
+      priority: "優先度順",
+      title: "名前順",
+      created: "新しい順",
+    },
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
       backlog: "未着手",
@@ -319,6 +327,7 @@ export const ja: TranslationResources = {
       estimating: "見積もり中…",
       awaiting: "実行待ち",
       awaitingWindow: "オフピーク待ち",
+      nextRun: "{{when}}頃に実行",
     },
     card: {
       quotaEstimate: "クォータ約{{percent}}%",

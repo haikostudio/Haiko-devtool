@@ -303,6 +303,14 @@ export const es: TranslationResources = {
     foldersSummary: "{{folders}} carpeta(s) · {{tasks}} tarea(s)",
     searchProjects: "Buscar proyectos",
     sortProjects: "Ordenar proyectos",
+    searchTasks: "Buscar tareas",
+    sortTasks: "Ordenar tareas",
+    sort: {
+      deadline: "Por fecha límite",
+      priority: "Por prioridad",
+      title: "Alfabético",
+      created: "Más recientes",
+    },
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {
       backlog: "Por hacer",
@@ -320,6 +328,7 @@ export const es: TranslationResources = {
       estimating: "Estimando…",
       awaiting: "Esperando hueco",
       awaitingWindow: "Esperando horas valle",
+      nextRun: "Hacia {{when}}",
     },
     card: {
       quotaEstimate: "~{{percent}}% cuota",

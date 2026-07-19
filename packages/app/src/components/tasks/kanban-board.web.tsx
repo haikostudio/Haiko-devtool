@@ -78,10 +78,15 @@ export function KanbanBoard({
   onRunTask,
   onReanalyzeTask,
   columnExtras,
+  query,
+  sortMode,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
   const isCompact = useIsCompactFormFactor();
-  const columns = useMemo(() => buildColumnModels(board, folderId), [board, folderId]);
+  const columns = useMemo(
+    () => buildColumnModels(board, folderId, { query, sortMode }),
+    [board, folderId, query, sortMode],
+  );
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 
   const sensors = useSensors(

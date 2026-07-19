@@ -19,2711 +19,2609 @@ export interface ChangelogCommit {
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
   {
-    version: "Unreleased",
-    date: "2026-07-18",
-    markdown:
-      "### Added\n\n- Redesign triage carousel — violet block, dots, full field set\n- Show the tasks timeline on the mobile project screen\n- Always show the Cerveau pill, even on empty recall\n- Recall Cerveau on every prompt (drop substance gate)\n- In-chat approval carousel for triage-proposed tasks\n- Project-colored Gantt timeline above the kanban board\n- Exact model + reasoning, dual cost, run in current workspace\n- Align agent and schedule automation\n- Tighter dashboard stats padding on compact screens\n- Taller activity bar with a percentage in every slice\n- Multi-select project filter + percentages on the activity bar\n- Single stacked project bar + colored project tags on Activity\n- Deterministic per-interaction synthesis banner (no LLM)\n- Colored per-project activity chart on the Activity screen\n- Task board — folder/task counts, priority flags, deadlines, project search\n- Global activity log — one line per agent per turn\n- Plain-language end-of-turn recap block + colored callouts\n- Brain memory curation — librarian filter, project fiche, scribe distillation\n- Running conversation-synthesis thread, content-width banner\n- Inline LLM task-intent triage from chat messages\n- Show project name + request duration in every task toast\n- Per-task run config, approval gate, quiet-hours scheduling, MCP task tools\n- Floating conversation-synthesis block per agent\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Make project imports pluggable\n\n### Fixed\n\n- Preserve branch and schedule identity\n- Show backlog tasks in the tasks timeline too\n- Update lockfile signatures and Nix hash [skip ci]\n- Fall back to inline read when binary file transfer stalls\n- Preserve creation intent\n- Alias/family-tolerant project matching (mirror of Cerveau scope resolution)\n- Align the tasks timeline strip with the kanban columns\n- Stop stale sync snapshots from spawning a second tab after draft submit\n- Align MCP lifecycle resolution\n- Preserve compatibility edges\n- Preserve workspace and schedule compatibility\n- Show user-sent images on every client, not just the sender\n- Keep new-agent draft focused after submit\n- Reuse existing workspace for external/internal agent creation\n- Enforce one-workspace-per-directory invariant at the registry\n- Enforce one workspace per directory at creation chokepoint\n- Collapse local workspace create to one-per-directory\n- Activity filter chips rendered as full-height capsules\n- Stack synthesis banner labels above values, add separator\n- Give the attachment thumbnail image an explicit plain-object size\n- Tighten relay backpressure accounting\n- Bound stale websocket connections\n- Align thinking section scroll layout with other detail sections (#1884)\n- Stop syncing active-agent composer drafts (broke image send)\n- Keep composer-held attachment blobs from being garbage collected\n- Reject imported port offsets\n- Refresh import availability previews\n- Expose remaining import errors\n- Tighten conductor service imports\n- Preserve conductor migration context\n- Report remaining import gaps\n- Inset transcript below the floating synthesis banner\n- Stop pasted image being cleared by a stale draft tombstone\n- Wait for import preview before setup callout\n- Keep project imports current and complete\n- Give release builds more memory\n- Handle remaining import edge cases\n- Update lockfile signatures and Nix hash [skip ci]\n- Close project import edge cases\n- Harden conductor imports\n- Straddle toast status dot over the top-left corner\n- Pin toast status dot to the top-left corner\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Bound magic scrollbar above the composer on mobile\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Live-adopt remote draft text into an open composer\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store",
+    "version": "Unreleased",
+    "date": "2026-07-19",
+    "markdown": "### Added\n\n- Add task-schedule module required by tasks screen\n- Move new-workspace to a + button in the Workspaces header\n- Full-width compact view tabs with header spacing\n- Inline primary actions in mobile sidebar\n- Folder nav in the board header + fixed full-width new-folder footer\n- Include daemon version in logs (#2155)\n- Declutter kanban cards — hide priority boilerplate, single meta line, cap tags\n- Steer replies toward simple, playful, non-technical tone\n- Add \"Validated\" column as the analysis/execution gate\n- Migrate existing projects and worktrees\n- Restore recent chat while reconnecting (#2206)\n- Connect daemons to Hub through browser approval\n- Per-card overflow menu to launch or re-analyze a task from the board\n- Instant in-chat feedback when sending a prompt\n- Project rail counts + visible search field\n- Floating task badge + drawer for agent toasts\n- Structured recall pill + startup/emit diagnostics\n- Redesign the tasks board — pastel columns, soft chips, real timeline\n- Edit priority and deadline as dedicated fields in the task sheet\n- Show real app in homepage hero\n- Drive task concurrency by quota budget, not a fixed count\n- Autopilot folders, per-task worktrees, backlog estimation, quota packing\n- Hide provider-internal subagent rows from the track\n- Triage tray pinned above the composer, chat-styled and fully editable\n- Redesign triage carousel — violet block, dots, full field set\n- Show the tasks timeline on the mobile project screen\n- Always show the Cerveau pill, even on empty recall\n- Recall Cerveau on every prompt (drop substance gate)\n- In-chat approval carousel for triage-proposed tasks\n- Project-colored Gantt timeline above the kanban board\n- Exact model + reasoning, dual cost, run in current workspace\n- Tighter dashboard stats padding on compact screens\n- Taller activity bar with a percentage in every slice\n- Multi-select project filter + percentages on the activity bar\n- Single stacked project bar + colored project tags on Activity\n- Deterministic per-interaction synthesis banner (no LLM)\n- Colored per-project activity chart on the Activity screen\n- Task board — folder/task counts, priority flags, deadlines, project search\n- Global activity log — one line per agent per turn\n- Plain-language end-of-turn recap block + colored callouts\n- Brain memory curation — librarian filter, project fiche, scribe distillation\n- Running conversation-synthesis thread, content-width banner\n- Inline LLM task-intent triage from chat messages\n- Show project name + request duration in every task toast\n- Per-task run config, approval gate, quiet-hours scheduling, MCP task tools\n- Floating conversation-synthesis block per agent\n- Replace pulsing toast border with a colored status dot + running timer\n- Auto-sort task toasts by lifecycle + show project/time when done\n- Loop-free cross-device sync of draft agent config\n- Highlight sidebar resize handles\n- Auto-refresh changelog snapshot on every commit\n- Folder card kebab menu to edit or delete a task folder\n- Include daemon version in logs (#2155)\n- Import existing project setup\n- Pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)\n- Diffuse radar ping + full-height magic scrollbar rail\n- Pulsing amber/green border on agent task toasts\n- Re-derive workspace title from each user message\n- In-app changelog page with releases + commits tabs\n- Active dot with radar ping on the magic scrollbar\n- Magic scrollbar on the agent conversation\n- Folder creation modal with colors, inline ticket drafts on the board\n\n### Improved\n\n- Remove unused websocket close codes\n- Reuse client heartbeat for socket liveness\n- Make project imports pluggable\n\n### Fixed\n\n- Show workspace kebab on compact in the real project list\n- Tighten padding in the agent Options sheet\n- Always show workspace row kebab on compact web PWA\n- Align thinking section scroll layout with other detail sections (#1884)\n- Keep message input visible after dictation (#2194)\n- Stop phantom parent subagents (#2214)\n- Drawer owns its bottom safe-area so PWA cards clear the home indicator\n- NFC-normalize tags so priority/deadline stop leaking as raw chips\n- Task drawer badge headroom + bottom safe-area fallback\n- Stop phantom parent subagents (#2214)\n- Stop flagging direct agent feedback + explain the questions pill\n- Authorize active workspace config\n- Reject nested command substitutions\n- Refresh managed checkout config\n- Preserve adopted workspace config\n- Validate source refs and expansions\n- Preserve direct port arithmetic\n- Release workspace watchers on shutdown\n- Normalize checkout branch refs\n- Validate live source state\n- Share service command semantics\n- Normalize source references\n- Preserve Windows shell semantics\n- Preserve consistent source state\n- Gate automatic source discovery\n- Validate workspace connection targets\n- Preserve source command semantics\n- Preserve checkout and shell semantics\n- Harden Hub approval transport\n- Flush migration output before completion\n- Restrict Hub activation URLs\n- Bound Hub registration startup\n- Keep Hub approval polling within expiry\n- Raise task badge above the composer\n- Neutral gray board, grayscale timeline, tighter mobile spacing\n- Mobile timeline tab + fix Gantt axis label overlap\n- Highlight changes that apply next turn (#2201)\n- Keep queued follow-ups visible until the daemon confirms delivery\n- Preserve persisted theme styles after startup\n- Always show user-message actions, not just on hover\n- Never drop a queued follow-up when the client is unavailable\n- Always show message timestamps and turn completion time\n- Accept thinkingLevel \"max\" when importing OMP sessions (#2191)\n- Remove wall-clock timeout for Pi compact RPC (#2181)\n- Keep message input visible after dictation (#2194)\n- Make bottom-sheet rows and sections much tighter\n- Stop stale UI-state snapshots resurrecting empty draft tabs\n- Tighten bottom-sheet padding and row heights\n- Show backlog tasks in the tasks timeline too\n- Update lockfile signatures and Nix hash [skip ci]\n- Fall back to inline read when binary file transfer stalls\n- Alias/family-tolerant project matching (mirror of Cerveau scope resolution)\n- Align the tasks timeline strip with the kanban columns\n- Stop stale sync snapshots from spawning a second tab after draft submit\n- Show user-sent images on every client, not just the sender\n- Keep new-agent draft focused after submit\n- Reuse existing workspace for external/internal agent creation\n- Enforce one-workspace-per-directory invariant at the registry\n- Enforce one workspace per directory at creation chokepoint\n- Collapse local workspace create to one-per-directory\n- Activity filter chips rendered as full-height capsules\n- Stack synthesis banner labels above values, add separator\n- Give the attachment thumbnail image an explicit plain-object size\n- Tighten relay backpressure accounting\n- Bound stale websocket connections\n- Align thinking section scroll layout with other detail sections (#1884)\n- Stop syncing active-agent composer drafts (broke image send)\n- Keep composer-held attachment blobs from being garbage collected\n- Reject imported port offsets\n- Refresh import availability previews\n- Expose remaining import errors\n- Tighten conductor service imports\n- Preserve conductor migration context\n- Report remaining import gaps\n- Inset transcript below the floating synthesis banner\n- Stop pasted image being cleared by a stale draft tombstone\n- Wait for import preview before setup callout\n- Keep project imports current and complete\n- Give release builds more memory\n- Handle remaining import edge cases\n- Update lockfile signatures and Nix hash [skip ci]\n- Close project import edge cases\n- Harden conductor imports\n- Straddle toast status dot over the top-left corner\n- Pin toast status dot to the top-left corner\n- Render attachment thumbnails with expo-image\n- Update provider icon\n- Propagate draft clear/send to other devices\n- Fix draft image race + sync active-agent composer content\n- Bound magic scrollbar above the composer on mobile\n- Make sidebar reordering respond immediately\n- Revert live draft-config sync that caused a cross-device loop\n- Apply materialized image attachments to a focused composer\n- Refresh stale config import apply\n- Normalize conductor import paths\n- Rappel Cerveau projet-d'abord + complément global + procédures\n- Apply remote draft agent config to an open composer\n- Live-adopt remote draft text into an open composer\n- Sync draft composer text + agent config across devices\n- Shift task toasts left so the magic scrollbar stays visible\n- Kanban drag-and-drop everywhere + full-width cards\n- Tasks board + sheet layout on compact/mobile web\n- Stop raw <contexte_memoire> blocks leaking into replayed user messages\n- Stop the tasks board flashing a stale/empty note on project open\n- Stop injecting broad overview memories on brain recall miss\n- Tasks page sidebar toggle + one-page three-pane layout\n- Show a label under every usage chart column\n- Allow remote project ids in tasks board store"
   },
   {
-    version: "0.1.108",
-    date: "2026-07-16",
-    markdown:
-      "### Added\n\n- Create a new project folder or clone a GitHub repository from Add Project ([#1331](https://github.com/getpaseo/paseo/pull/1331), [#2045](https://github.com/getpaseo/paseo/pull/2045), [#2097](https://github.com/getpaseo/paseo/pull/2097) by [@mcowger](https://github.com/mcowger))\n- Search for and open workspaces from the search menu ([#2096](https://github.com/getpaseo/paseo/pull/2096))\n- Pin workspaces to the top of the sidebar ([#1981](https://github.com/getpaseo/paseo/pull/1981) by [@half144](https://github.com/half144))\n- Summarize tool calls in a single collapsed item with a new appearance setting ([#2031](https://github.com/getpaseo/paseo/pull/2031), [#2069](https://github.com/getpaseo/paseo/pull/2069), [#2090](https://github.com/getpaseo/paseo/pull/2090) by [@mcowger](https://github.com/mcowger))\n- Save browser cookies and site data across tabs and restarts ([#2089](https://github.com/getpaseo/paseo/pull/2089))\n- Claude and Codex subagents now show their actual names, with a new option to archive finished Claude Code, Codex, and OpenCode subagents ([#2073](https://github.com/getpaseo/paseo/pull/2073))\n- Fork chats from failed turns ([#2063](https://github.com/getpaseo/paseo/pull/2063))\n\n### Improved\n\n- Permission modes have clearer icons ([#1980](https://github.com/getpaseo/paseo/pull/1980) by [@cleiter](https://github.com/cleiter))\n- Desktop stays usable in narrower windows ([#1983](https://github.com/getpaseo/paseo/pull/1983))\n- Sidebar controls stay in place when desktop panels open and close ([#2078](https://github.com/getpaseo/paseo/pull/2078))\n- Typing in long drafts is smoother ([#2086](https://github.com/getpaseo/paseo/pull/2086))\n- Codex terminal commands always appear in chat, even when they have no output ([#2037](https://github.com/getpaseo/paseo/pull/2037))\n\n### Fixed\n\n- New Workspace keeps your prompt and attachments when you switch projects or hosts ([#2030](https://github.com/getpaseo/paseo/pull/2030), [#2036](https://github.com/getpaseo/paseo/pull/2036))\n- OpenCode sessions close without crashing Paseo ([#2027](https://github.com/getpaseo/paseo/pull/2027) by [@mcowger](https://github.com/mcowger))\n- Pi slash commands no longer leave chats stuck as running ([#2066](https://github.com/getpaseo/paseo/pull/2066) by [@ebg1223](https://github.com/ebg1223))\n- Background-agent updates now appear after the main reply ([#2058](https://github.com/getpaseo/paseo/pull/2058) by [@1254087415](https://github.com/1254087415))\n- Codex subagents no longer disappear from the Subagents track ([#2068](https://github.com/getpaseo/paseo/pull/2068))\n- Forked chats open ready to edit in their new tab ([#2038](https://github.com/getpaseo/paseo/pull/2038))\n- Paseo Desktop opens normally after an interrupted shutdown ([#1962](https://github.com/getpaseo/paseo/pull/1962))\n- Keyboard shortcuts now work with `-`, `=`, `;`, and `'` ([#2047](https://github.com/getpaseo/paseo/pull/2047) by [@OnCloud125252](https://github.com/OnCloud125252))\n- Codebuddy Code models now appear in the model picker ([#1979](https://github.com/getpaseo/paseo/pull/1979) by [@park0er](https://github.com/park0er))\n- Workspace search now includes OpenCode commands and workflows ([#2049](https://github.com/getpaseo/paseo/pull/2049))\n- Nix installations now include the Paseo web app ([#1978](https://github.com/getpaseo/paseo/pull/1978) by [@liamdiprose](https://github.com/liamdiprose))",
+    "version": "0.1.108",
+    "date": "2026-07-16",
+    "markdown": "### Added\n\n- Create a new project folder or clone a GitHub repository from Add Project ([#1331](https://github.com/getpaseo/paseo/pull/1331), [#2045](https://github.com/getpaseo/paseo/pull/2045), [#2097](https://github.com/getpaseo/paseo/pull/2097) by [@mcowger](https://github.com/mcowger))\n- Search for and open workspaces from the search menu ([#2096](https://github.com/getpaseo/paseo/pull/2096))\n- Pin workspaces to the top of the sidebar ([#1981](https://github.com/getpaseo/paseo/pull/1981) by [@half144](https://github.com/half144))\n- Summarize tool calls in a single collapsed item with a new appearance setting ([#2031](https://github.com/getpaseo/paseo/pull/2031), [#2069](https://github.com/getpaseo/paseo/pull/2069), [#2090](https://github.com/getpaseo/paseo/pull/2090) by [@mcowger](https://github.com/mcowger))\n- Save browser cookies and site data across tabs and restarts ([#2089](https://github.com/getpaseo/paseo/pull/2089))\n- Claude and Codex subagents now show their actual names, with a new option to archive finished Claude Code, Codex, and OpenCode subagents ([#2073](https://github.com/getpaseo/paseo/pull/2073))\n- Fork chats from failed turns ([#2063](https://github.com/getpaseo/paseo/pull/2063))\n\n### Improved\n\n- Permission modes have clearer icons ([#1980](https://github.com/getpaseo/paseo/pull/1980) by [@cleiter](https://github.com/cleiter))\n- Desktop stays usable in narrower windows ([#1983](https://github.com/getpaseo/paseo/pull/1983))\n- Sidebar controls stay in place when desktop panels open and close ([#2078](https://github.com/getpaseo/paseo/pull/2078))\n- Typing in long drafts is smoother ([#2086](https://github.com/getpaseo/paseo/pull/2086))\n- Codex terminal commands always appear in chat, even when they have no output ([#2037](https://github.com/getpaseo/paseo/pull/2037))\n\n### Fixed\n\n- New Workspace keeps your prompt and attachments when you switch projects or hosts ([#2030](https://github.com/getpaseo/paseo/pull/2030), [#2036](https://github.com/getpaseo/paseo/pull/2036))\n- OpenCode sessions close without crashing Paseo ([#2027](https://github.com/getpaseo/paseo/pull/2027) by [@mcowger](https://github.com/mcowger))\n- Pi slash commands no longer leave chats stuck as running ([#2066](https://github.com/getpaseo/paseo/pull/2066) by [@ebg1223](https://github.com/ebg1223))\n- Background-agent updates now appear after the main reply ([#2058](https://github.com/getpaseo/paseo/pull/2058) by [@1254087415](https://github.com/1254087415))\n- Codex subagents no longer disappear from the Subagents track ([#2068](https://github.com/getpaseo/paseo/pull/2068))\n- Forked chats open ready to edit in their new tab ([#2038](https://github.com/getpaseo/paseo/pull/2038))\n- Paseo Desktop opens normally after an interrupted shutdown ([#1962](https://github.com/getpaseo/paseo/pull/1962))\n- Keyboard shortcuts now work with `-`, `=`, `;`, and `'` ([#2047](https://github.com/getpaseo/paseo/pull/2047) by [@OnCloud125252](https://github.com/OnCloud125252))\n- Codebuddy Code models now appear in the model picker ([#1979](https://github.com/getpaseo/paseo/pull/1979) by [@park0er](https://github.com/park0er))\n- Workspace search now includes OpenCode commands and workflows ([#2049](https://github.com/getpaseo/paseo/pull/2049))\n- Nix installations now include the Paseo web app ([#1978](https://github.com/getpaseo/paseo/pull/1978) by [@liamdiprose](https://github.com/liamdiprose))"
   },
   {
-    version: "0.1.107",
-    date: "2026-07-13",
-    markdown:
-      "### Added\n\n- Inspect provider-created subagents and their live conversations from the Subagents track ([#2013](https://github.com/getpaseo/paseo/pull/2013) by [@omercnet](https://github.com/omercnet))\n- Fork chats with every supported agent provider ([#2022](https://github.com/getpaseo/paseo/pull/2022))\n\n### Improved\n\n- Add projects directly from New Workspace when none are configured ([#2026](https://github.com/getpaseo/paseo/pull/2026))\n- New terminals open at the correct size immediately ([#2023](https://github.com/getpaseo/paseo/pull/2023) by [@cleiter](https://github.com/cleiter))\n- Sidebar footer actions now explain themselves with tooltips ([#2025](https://github.com/getpaseo/paseo/pull/2025))\n- Codex shell tool calls show only the command being run ([#2029](https://github.com/getpaseo/paseo/pull/2029))\n- Custom ACP providers keep file and terminal work in the agent environment by default ([#2024](https://github.com/getpaseo/paseo/pull/2024))\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Large tables no longer make iOS chats unresponsive\n- Chat controls remain clickable near the scroll-to-bottom button ([#2007](https://github.com/getpaseo/paseo/pull/2007))\n- Oversized tool output no longer slows or floods chat timelines ([#2020](https://github.com/getpaseo/paseo/pull/2020))\n- Cross-provider subagents can use providers without mode settings ([#2000](https://github.com/getpaseo/paseo/pull/2000) by [@githubbzxs](https://github.com/githubbzxs))\n- Pi's internal metadata tasks no longer clutter normal session history ([#1999](https://github.com/getpaseo/paseo/pull/1999) by [@githubbzxs](https://github.com/githubbzxs))\n- Pi chats remain usable after canceling extension commands ([#2019](https://github.com/getpaseo/paseo/pull/2019))",
+    "version": "0.1.107",
+    "date": "2026-07-13",
+    "markdown": "### Added\n\n- Inspect provider-created subagents and their live conversations from the Subagents track ([#2013](https://github.com/getpaseo/paseo/pull/2013) by [@omercnet](https://github.com/omercnet))\n- Fork chats with every supported agent provider ([#2022](https://github.com/getpaseo/paseo/pull/2022))\n\n### Improved\n\n- Add projects directly from New Workspace when none are configured ([#2026](https://github.com/getpaseo/paseo/pull/2026))\n- New terminals open at the correct size immediately ([#2023](https://github.com/getpaseo/paseo/pull/2023) by [@cleiter](https://github.com/cleiter))\n- Sidebar footer actions now explain themselves with tooltips ([#2025](https://github.com/getpaseo/paseo/pull/2025))\n- Codex shell tool calls show only the command being run ([#2029](https://github.com/getpaseo/paseo/pull/2029))\n- Custom ACP providers keep file and terminal work in the agent environment by default ([#2024](https://github.com/getpaseo/paseo/pull/2024))\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Large tables no longer make iOS chats unresponsive\n- Chat controls remain clickable near the scroll-to-bottom button ([#2007](https://github.com/getpaseo/paseo/pull/2007))\n- Oversized tool output no longer slows or floods chat timelines ([#2020](https://github.com/getpaseo/paseo/pull/2020))\n- Cross-provider subagents can use providers without mode settings ([#2000](https://github.com/getpaseo/paseo/pull/2000) by [@githubbzxs](https://github.com/githubbzxs))\n- Pi's internal metadata tasks no longer clutter normal session history ([#1999](https://github.com/getpaseo/paseo/pull/1999) by [@githubbzxs](https://github.com/githubbzxs))\n- Pi chats remain usable after canceling extension commands ([#2019](https://github.com/getpaseo/paseo/pull/2019))"
   },
   {
-    version: "0.1.106",
-    date: "2026-07-12",
-    markdown:
-      "### Added\n\n- Approve Codex MCP permission requests in Paseo ([#2001](https://github.com/getpaseo/paseo/pull/2001))\n\n### Improved\n\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Reduced mobile chat freezes and blank screens when switching workspaces while agents are streaming ([#1989](https://github.com/getpaseo/paseo/pull/1989))\n- OpenCode sessions start reliably instead of occasionally losing the first turn ([#2015](https://github.com/getpaseo/paseo/pull/2015) by [@mcowger](https://github.com/mcowger))\n- Switching between workspaces no longer flashes a white screen\n- Pi keeps your existing MCP tools and settings when Paseo adds its own ([#1990](https://github.com/getpaseo/paseo/pull/1990) by [@mcowger](https://github.com/mcowger))",
+    "version": "0.1.106",
+    "date": "2026-07-12",
+    "markdown": "### Added\n\n- Approve Codex MCP permission requests in Paseo ([#2001](https://github.com/getpaseo/paseo/pull/2001))\n\n### Improved\n\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Reduced mobile chat freezes and blank screens when switching workspaces while agents are streaming ([#1989](https://github.com/getpaseo/paseo/pull/1989))\n- OpenCode sessions start reliably instead of occasionally losing the first turn ([#2015](https://github.com/getpaseo/paseo/pull/2015) by [@mcowger](https://github.com/mcowger))\n- Switching between workspaces no longer flashes a white screen\n- Pi keeps your existing MCP tools and settings when Paseo adds its own ([#1990](https://github.com/getpaseo/paseo/pull/1990) by [@mcowger](https://github.com/mcowger))"
   },
   {
-    version: "0.1.105",
-    date: "2026-07-10",
-    markdown:
-      "### Added\n\n- Browse changed files as a collapsible folder tree or flat list ([#1918](https://github.com/getpaseo/paseo/pull/1918), [#1945](https://github.com/getpaseo/paseo/pull/1945) by [@cleiter](https://github.com/cleiter))\n- Always expand agent reasoning with a new appearance setting ([#1943](https://github.com/getpaseo/paseo/pull/1943) by [@mcowger](https://github.com/mcowger))\n\n### Improved\n\n- Project picker finds folders with fuzzy search and native desktop browsing ([#1968](https://github.com/getpaseo/paseo/pull/1968))\n- Large workspace sidebars stay responsive ([#1966](https://github.com/getpaseo/paseo/pull/1966))\n- Generated workspace names and Git text can use MiniMax M3 ([#1955](https://github.com/getpaseo/paseo/pull/1955) by [@octo-patch](https://github.com/octo-patch))\n- Cursor now exposes thinking and fast mode ([#1952](https://github.com/getpaseo/paseo/pull/1952))\n\n### Fixed\n\n- Codex stays active and streams correctly while subagents run ([#1967](https://github.com/getpaseo/paseo/pull/1967))\n- Android audio interruptions no longer crash voice mode or leave dictation stuck ([#1941](https://github.com/getpaseo/paseo/pull/1941))\n- Mobile sidebars stay in sync and retain swipe-to-open gestures ([#1953](https://github.com/getpaseo/paseo/pull/1953), [#1976](https://github.com/getpaseo/paseo/pull/1976))\n- Pi text-only models accept image prompts without breaking the session ([#1960](https://github.com/getpaseo/paseo/pull/1960))\n- App render failures show a retryable recovery screen instead of a blank screen ([#1924](https://github.com/getpaseo/paseo/pull/1924))\n- Pi context usage remains visible with older Oh My Pi versions ([#1886](https://github.com/getpaseo/paseo/pull/1886) by [@theslava](https://github.com/theslava))\n- Provider usage popovers no longer error when opened and closed quickly ([#1885](https://github.com/getpaseo/paseo/pull/1885) by [@theslava](https://github.com/theslava))\n- Mobile workspace menus hide desktop-only shortcut badges ([#1964](https://github.com/getpaseo/paseo/pull/1964))",
+    "version": "0.1.105",
+    "date": "2026-07-10",
+    "markdown": "### Added\n\n- Browse changed files as a collapsible folder tree or flat list ([#1918](https://github.com/getpaseo/paseo/pull/1918), [#1945](https://github.com/getpaseo/paseo/pull/1945) by [@cleiter](https://github.com/cleiter))\n- Always expand agent reasoning with a new appearance setting ([#1943](https://github.com/getpaseo/paseo/pull/1943) by [@mcowger](https://github.com/mcowger))\n\n### Improved\n\n- Project picker finds folders with fuzzy search and native desktop browsing ([#1968](https://github.com/getpaseo/paseo/pull/1968))\n- Large workspace sidebars stay responsive ([#1966](https://github.com/getpaseo/paseo/pull/1966))\n- Generated workspace names and Git text can use MiniMax M3 ([#1955](https://github.com/getpaseo/paseo/pull/1955) by [@octo-patch](https://github.com/octo-patch))\n- Cursor now exposes thinking and fast mode ([#1952](https://github.com/getpaseo/paseo/pull/1952))\n\n### Fixed\n\n- Codex stays active and streams correctly while subagents run ([#1967](https://github.com/getpaseo/paseo/pull/1967))\n- Android audio interruptions no longer crash voice mode or leave dictation stuck ([#1941](https://github.com/getpaseo/paseo/pull/1941))\n- Mobile sidebars stay in sync and retain swipe-to-open gestures ([#1953](https://github.com/getpaseo/paseo/pull/1953), [#1976](https://github.com/getpaseo/paseo/pull/1976))\n- Pi text-only models accept image prompts without breaking the session ([#1960](https://github.com/getpaseo/paseo/pull/1960))\n- App render failures show a retryable recovery screen instead of a blank screen ([#1924](https://github.com/getpaseo/paseo/pull/1924))\n- Pi context usage remains visible with older Oh My Pi versions ([#1886](https://github.com/getpaseo/paseo/pull/1886) by [@theslava](https://github.com/theslava))\n- Provider usage popovers no longer error when opened and closed quickly ([#1885](https://github.com/getpaseo/paseo/pull/1885) by [@theslava](https://github.com/theslava))\n- Mobile workspace menus hide desktop-only shortcut badges ([#1964](https://github.com/getpaseo/paseo/pull/1964))"
   },
   {
-    version: "0.1.104",
-    date: "2026-07-08",
-    markdown:
-      "### Added\n\n- Agents can drive the in-app browser with page snapshots, trusted input, dialogs, and tab controls ([#1881](https://github.com/getpaseo/paseo/pull/1881))\n- Inspect, annotate, and send page elements from a browser tab to the agent ([#1708](https://github.com/getpaseo/paseo/pull/1708) by [@huiliaoning](https://github.com/huiliaoning))\n- Schedules screen to create and manage recurring agents ([#1246](https://github.com/getpaseo/paseo/pull/1246))\n- Open a project from anywhere with Cmd+O ([#1849](https://github.com/getpaseo/paseo/pull/1849))\n- Agents can rename workspaces after they understand the task ([#1876](https://github.com/getpaseo/paseo/pull/1876))\n- Claude Ultra Code is available for supported Claude models ([#1872](https://github.com/getpaseo/paseo/pull/1872))\n- ByteDance TRAE CLI available as an agent provider ([#1831](https://github.com/getpaseo/paseo/pull/1831), [#1896](https://github.com/getpaseo/paseo/pull/1896) by [@park0er](https://github.com/park0er))\n\n### Improved\n\n- Manage the built-in daemon from one place in desktop settings ([#1938](https://github.com/getpaseo/paseo/pull/1938))\n- Scheduled and loop runs each get their own workspace in the sidebar ([#1909](https://github.com/getpaseo/paseo/pull/1909), [#1934](https://github.com/getpaseo/paseo/pull/1934))\n- Large provider and model refreshes load faster in the app ([#1895](https://github.com/getpaseo/paseo/pull/1895))\n- Workspaces created by agents now get readable generated names ([#1887](https://github.com/getpaseo/paseo/pull/1887))\n- Browser tabs opened by agents stay in the background until you switch to them ([#1875](https://github.com/getpaseo/paseo/pull/1875))\n- Clearer cards when an agent asks a question ([#1643](https://github.com/getpaseo/paseo/pull/1643) by [@cleiter](https://github.com/cleiter))\n- Diagnostic reports include desktop app logs ([#1914](https://github.com/getpaseo/paseo/pull/1914))\n- Paseo's built-in tools take less context ([#1939](https://github.com/getpaseo/paseo/pull/1939))\n\n### Fixed\n\n- Renamed hosts keep their name after reconnecting ([#1940](https://github.com/getpaseo/paseo/pull/1940))\n- Desktop finds your installed CLIs even when your shell is slow to start ([#1916](https://github.com/getpaseo/paseo/pull/1916))\n- Restarting the daemon from desktop settings works reliably ([#1915](https://github.com/getpaseo/paseo/pull/1915))\n- Restarting the daemon from the bundled CLI keeps it managed by the desktop app ([#1919](https://github.com/getpaseo/paseo/pull/1919))\n- Web UI loads when the daemon is started from the bundled CLI ([#1899](https://github.com/getpaseo/paseo/pull/1899) by [@yzim](https://github.com/yzim))\n- Worktree setup scripts keep your PATH ([#1908](https://github.com/getpaseo/paseo/pull/1908))\n- Docker images keep running during provider cleanup and diagnostics ([#1877](https://github.com/getpaseo/paseo/pull/1877))\n- New Workspace drafts survive archiving a workspace ([#1838](https://github.com/getpaseo/paseo/pull/1838))\n- Composer autocomplete stays open after switching screens ([#1851](https://github.com/getpaseo/paseo/pull/1851))\n- Claude usage appears when a quota window has no scheduled reset ([#1855](https://github.com/getpaseo/paseo/pull/1855))\n- New workspace action shows for non-git projects in the sidebar ([#1857](https://github.com/getpaseo/paseo/pull/1857) by [@cleiter](https://github.com/cleiter))",
+    "version": "0.1.104",
+    "date": "2026-07-08",
+    "markdown": "### Added\n\n- Agents can drive the in-app browser with page snapshots, trusted input, dialogs, and tab controls ([#1881](https://github.com/getpaseo/paseo/pull/1881))\n- Inspect, annotate, and send page elements from a browser tab to the agent ([#1708](https://github.com/getpaseo/paseo/pull/1708) by [@huiliaoning](https://github.com/huiliaoning))\n- Schedules screen to create and manage recurring agents ([#1246](https://github.com/getpaseo/paseo/pull/1246))\n- Open a project from anywhere with Cmd+O ([#1849](https://github.com/getpaseo/paseo/pull/1849))\n- Agents can rename workspaces after they understand the task ([#1876](https://github.com/getpaseo/paseo/pull/1876))\n- Claude Ultra Code is available for supported Claude models ([#1872](https://github.com/getpaseo/paseo/pull/1872))\n- ByteDance TRAE CLI available as an agent provider ([#1831](https://github.com/getpaseo/paseo/pull/1831), [#1896](https://github.com/getpaseo/paseo/pull/1896) by [@park0er](https://github.com/park0er))\n\n### Improved\n\n- Manage the built-in daemon from one place in desktop settings ([#1938](https://github.com/getpaseo/paseo/pull/1938))\n- Scheduled and loop runs each get their own workspace in the sidebar ([#1909](https://github.com/getpaseo/paseo/pull/1909), [#1934](https://github.com/getpaseo/paseo/pull/1934))\n- Large provider and model refreshes load faster in the app ([#1895](https://github.com/getpaseo/paseo/pull/1895))\n- Workspaces created by agents now get readable generated names ([#1887](https://github.com/getpaseo/paseo/pull/1887))\n- Browser tabs opened by agents stay in the background until you switch to them ([#1875](https://github.com/getpaseo/paseo/pull/1875))\n- Clearer cards when an agent asks a question ([#1643](https://github.com/getpaseo/paseo/pull/1643) by [@cleiter](https://github.com/cleiter))\n- Diagnostic reports include desktop app logs ([#1914](https://github.com/getpaseo/paseo/pull/1914))\n- Paseo's built-in tools take less context ([#1939](https://github.com/getpaseo/paseo/pull/1939))\n\n### Fixed\n\n- Renamed hosts keep their name after reconnecting ([#1940](https://github.com/getpaseo/paseo/pull/1940))\n- Desktop finds your installed CLIs even when your shell is slow to start ([#1916](https://github.com/getpaseo/paseo/pull/1916))\n- Restarting the daemon from desktop settings works reliably ([#1915](https://github.com/getpaseo/paseo/pull/1915))\n- Restarting the daemon from the bundled CLI keeps it managed by the desktop app ([#1919](https://github.com/getpaseo/paseo/pull/1919))\n- Web UI loads when the daemon is started from the bundled CLI ([#1899](https://github.com/getpaseo/paseo/pull/1899) by [@yzim](https://github.com/yzim))\n- Worktree setup scripts keep your PATH ([#1908](https://github.com/getpaseo/paseo/pull/1908))\n- Docker images keep running during provider cleanup and diagnostics ([#1877](https://github.com/getpaseo/paseo/pull/1877))\n- New Workspace drafts survive archiving a workspace ([#1838](https://github.com/getpaseo/paseo/pull/1838))\n- Composer autocomplete stays open after switching screens ([#1851](https://github.com/getpaseo/paseo/pull/1851))\n- Claude usage appears when a quota window has no scheduled reset ([#1855](https://github.com/getpaseo/paseo/pull/1855))\n- New workspace action shows for non-git projects in the sidebar ([#1857](https://github.com/getpaseo/paseo/pull/1857) by [@cleiter](https://github.com/cleiter))"
   },
   {
-    version: "0.1.103",
-    date: "2026-07-01",
-    markdown:
-      "### Added\n\n- Claude Sonnet 5 is available in the Claude model picker ([#1850](https://github.com/getpaseo/paseo/pull/1850))",
+    "version": "0.1.103",
+    "date": "2026-07-01",
+    "markdown": "### Added\n\n- Claude Sonnet 5 is available in the Claude model picker ([#1850](https://github.com/getpaseo/paseo/pull/1850))"
   },
   {
-    version: "0.1.102",
-    date: "2026-06-30",
-    markdown:
-      "### Added\n\n- Fork chats into a new tab or new worktree ([#1788](https://github.com/getpaseo/paseo/pull/1788))\n- See workspaces from all connected hosts ([#1538](https://github.com/getpaseo/paseo/pull/1538), [#1775](https://github.com/getpaseo/paseo/pull/1775), [#1825](https://github.com/getpaseo/paseo/pull/1825))\n- Daemon can now serve the web UI ([#1635](https://github.com/getpaseo/paseo/pull/1635), [#1739](https://github.com/getpaseo/paseo/pull/1739))\n- Run Paseo from an official Docker image ([#1740](https://github.com/getpaseo/paseo/pull/1740) by [@Herbrant](https://github.com/Herbrant))\n- Update a daemon remotely from the app ([#1513](https://github.com/getpaseo/paseo/pull/1513) by [@thedavidweng](https://github.com/thedavidweng))\n- Configure separate OpenAI endpoints for speech-to-text and text-to-speech ([#1823](https://github.com/getpaseo/paseo/pull/1823))\n- Drop files into any composer ([#1750](https://github.com/getpaseo/paseo/pull/1750), [#1801](https://github.com/getpaseo/paseo/pull/1801))\n- Show MiniMax usage in quota views ([#1662](https://github.com/getpaseo/paseo/pull/1662) by [@ilteoood](https://github.com/ilteoood))\n- Highlight C# code blocks ([#1651](https://github.com/getpaseo/paseo/pull/1651) by [@dev693](https://github.com/dev693))\n\n### Improved\n\n- New Workspace opens from anywhere ([#1746](https://github.com/getpaseo/paseo/pull/1746), [#1806](https://github.com/getpaseo/paseo/pull/1806))\n- Project search shows loading progress ([#1762](https://github.com/getpaseo/paseo/pull/1762))\n- Desktop update checks show clearer status ([#1808](https://github.com/getpaseo/paseo/pull/1808), [#1815](https://github.com/getpaseo/paseo/pull/1815))\n- Slow remote hosts time out less aggressively ([#1789](https://github.com/getpaseo/paseo/pull/1789))\n- Pi waits longer for extension results ([#1732](https://github.com/getpaseo/paseo/pull/1732) by [@theslava](https://github.com/theslava))\n- Open file tabs refresh when you revisit them ([#1699](https://github.com/getpaseo/paseo/pull/1699) by [@cleiter](https://github.com/cleiter))\n- Web terminals scroll more smoothly ([#1622](https://github.com/getpaseo/paseo/pull/1622) by [@TommyLike](https://github.com/TommyLike))\n\n### Fixed\n\n- Freshly added projects can be edited without restarting ([#1761](https://github.com/getpaseo/paseo/pull/1761) by [@huiliaoning](https://github.com/huiliaoning))\n- Large repos open more reliably ([#1620](https://github.com/getpaseo/paseo/pull/1620) by [@jms830](https://github.com/jms830))\n- Mobile restores the saved workspace on launch ([#1777](https://github.com/getpaseo/paseo/pull/1777))\n- Agent prompts no longer rename workspaces ([#1779](https://github.com/getpaseo/paseo/pull/1779))\n- Chat stays put when delayed history arrives ([#1776](https://github.com/getpaseo/paseo/pull/1776))\n- Streamed chat images stay in order ([#1805](https://github.com/getpaseo/paseo/pull/1805))\n- Chat actions stay below tool output ([#1827](https://github.com/getpaseo/paseo/pull/1827))\n- Claude subagent narration stays out of chat ([#1807](https://github.com/getpaseo/paseo/pull/1807))\n- Kiro slash commands and skills appear in Paseo ([#1792](https://github.com/getpaseo/paseo/pull/1792) by [@park0er](https://github.com/park0er))\n- Agent lists survive stale project records ([#1812](https://github.com/getpaseo/paseo/pull/1812))\n- Windows image previews handle drive-letter paths ([#1811](https://github.com/getpaseo/paseo/pull/1811))\n- OpenCode closes cleanly on Windows ([#1771](https://github.com/getpaseo/paseo/pull/1771) by [@agamotto](https://github.com/agamotto))\n- Desktop file uploads keep their extensions ([#1741](https://github.com/getpaseo/paseo/pull/1741))\n- Claude Code cleanup kills child processes ([#1540](https://github.com/getpaseo/paseo/pull/1540) by [@TommyLike](https://github.com/TommyLike))\n- OpenCode no longer indexes your home directory ([#1704](https://github.com/getpaseo/paseo/pull/1704) by [@rex-chang](https://github.com/rex-chang))\n- Packaged macOS CLI daemon no longer shows extra Dock icons ([#1759](https://github.com/getpaseo/paseo/pull/1759) by [@yzim](https://github.com/yzim))\n- `paseo daemon status` works without loading agents ([#1810](https://github.com/getpaseo/paseo/pull/1810))\n- PR worktrees show pushed state correctly ([#1804](https://github.com/getpaseo/paseo/pull/1804))",
+    "version": "0.1.102",
+    "date": "2026-06-30",
+    "markdown": "### Added\n\n- Fork chats into a new tab or new worktree ([#1788](https://github.com/getpaseo/paseo/pull/1788))\n- See workspaces from all connected hosts ([#1538](https://github.com/getpaseo/paseo/pull/1538), [#1775](https://github.com/getpaseo/paseo/pull/1775), [#1825](https://github.com/getpaseo/paseo/pull/1825))\n- Daemon can now serve the web UI ([#1635](https://github.com/getpaseo/paseo/pull/1635), [#1739](https://github.com/getpaseo/paseo/pull/1739))\n- Run Paseo from an official Docker image ([#1740](https://github.com/getpaseo/paseo/pull/1740) by [@Herbrant](https://github.com/Herbrant))\n- Update a daemon remotely from the app ([#1513](https://github.com/getpaseo/paseo/pull/1513) by [@thedavidweng](https://github.com/thedavidweng))\n- Configure separate OpenAI endpoints for speech-to-text and text-to-speech ([#1823](https://github.com/getpaseo/paseo/pull/1823))\n- Drop files into any composer ([#1750](https://github.com/getpaseo/paseo/pull/1750), [#1801](https://github.com/getpaseo/paseo/pull/1801))\n- Show MiniMax usage in quota views ([#1662](https://github.com/getpaseo/paseo/pull/1662) by [@ilteoood](https://github.com/ilteoood))\n- Highlight C# code blocks ([#1651](https://github.com/getpaseo/paseo/pull/1651) by [@dev693](https://github.com/dev693))\n\n### Improved\n\n- New Workspace opens from anywhere ([#1746](https://github.com/getpaseo/paseo/pull/1746), [#1806](https://github.com/getpaseo/paseo/pull/1806))\n- Project search shows loading progress ([#1762](https://github.com/getpaseo/paseo/pull/1762))\n- Desktop update checks show clearer status ([#1808](https://github.com/getpaseo/paseo/pull/1808), [#1815](https://github.com/getpaseo/paseo/pull/1815))\n- Slow remote hosts time out less aggressively ([#1789](https://github.com/getpaseo/paseo/pull/1789))\n- Pi waits longer for extension results ([#1732](https://github.com/getpaseo/paseo/pull/1732) by [@theslava](https://github.com/theslava))\n- Open file tabs refresh when you revisit them ([#1699](https://github.com/getpaseo/paseo/pull/1699) by [@cleiter](https://github.com/cleiter))\n- Web terminals scroll more smoothly ([#1622](https://github.com/getpaseo/paseo/pull/1622) by [@TommyLike](https://github.com/TommyLike))\n\n### Fixed\n\n- Freshly added projects can be edited without restarting ([#1761](https://github.com/getpaseo/paseo/pull/1761) by [@huiliaoning](https://github.com/huiliaoning))\n- Large repos open more reliably ([#1620](https://github.com/getpaseo/paseo/pull/1620) by [@jms830](https://github.com/jms830))\n- Mobile restores the saved workspace on launch ([#1777](https://github.com/getpaseo/paseo/pull/1777))\n- Agent prompts no longer rename workspaces ([#1779](https://github.com/getpaseo/paseo/pull/1779))\n- Chat stays put when delayed history arrives ([#1776](https://github.com/getpaseo/paseo/pull/1776))\n- Streamed chat images stay in order ([#1805](https://github.com/getpaseo/paseo/pull/1805))\n- Chat actions stay below tool output ([#1827](https://github.com/getpaseo/paseo/pull/1827))\n- Claude subagent narration stays out of chat ([#1807](https://github.com/getpaseo/paseo/pull/1807))\n- Kiro slash commands and skills appear in Paseo ([#1792](https://github.com/getpaseo/paseo/pull/1792) by [@park0er](https://github.com/park0er))\n- Agent lists survive stale project records ([#1812](https://github.com/getpaseo/paseo/pull/1812))\n- Windows image previews handle drive-letter paths ([#1811](https://github.com/getpaseo/paseo/pull/1811))\n- OpenCode closes cleanly on Windows ([#1771](https://github.com/getpaseo/paseo/pull/1771) by [@agamotto](https://github.com/agamotto))\n- Desktop file uploads keep their extensions ([#1741](https://github.com/getpaseo/paseo/pull/1741))\n- Claude Code cleanup kills child processes ([#1540](https://github.com/getpaseo/paseo/pull/1540) by [@TommyLike](https://github.com/TommyLike))\n- OpenCode no longer indexes your home directory ([#1704](https://github.com/getpaseo/paseo/pull/1704) by [@rex-chang](https://github.com/rex-chang))\n- Packaged macOS CLI daemon no longer shows extra Dock icons ([#1759](https://github.com/getpaseo/paseo/pull/1759) by [@yzim](https://github.com/yzim))\n- `paseo daemon status` works without loading agents ([#1810](https://github.com/getpaseo/paseo/pull/1810))\n- PR worktrees show pushed state correctly ([#1804](https://github.com/getpaseo/paseo/pull/1804))"
   },
   {
-    version: "0.1.101",
-    date: "2026-06-26",
-    markdown:
-      "### Added\n\n- Copy a troubleshooting report from Settings when support needs host, daemon, provider, and log details ([#1728](https://github.com/getpaseo/paseo/pull/1728))\n- Claude image tool results now render as images in chat ([#1717](https://github.com/getpaseo/paseo/pull/1717))\n- Added Japanese ([#1694](https://github.com/getpaseo/paseo/pull/1694) by [@sysCat64](https://github.com/sysCat64))\n- Added Brazilian Portuguese ([#1653](https://github.com/getpaseo/paseo/pull/1653) by [@Alcimerio](https://github.com/Alcimerio))\n\n### Improved\n\n- Provider diagnostics stay useful even when model discovery is slow ([#1724](https://github.com/getpaseo/paseo/pull/1724))\n- Slow provider requests no longer make the app look disconnected ([#1723](https://github.com/getpaseo/paseo/pull/1723))\n- Worktrees linked to differently named tracked branches find their PRs correctly ([#1718](https://github.com/getpaseo/paseo/pull/1718))\n- Workspaces started from slash-command prompts get clearer names ([#1709](https://github.com/getpaseo/paseo/pull/1709))\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Pi no longer creates empty sessions while loading new-agent options ([#1727](https://github.com/getpaseo/paseo/pull/1727))\n- Windows daemon status finds the daemon process more reliably ([#1725](https://github.com/getpaseo/paseo/pull/1725))\n- OpenAI voice credentials no longer affect other OpenAI-backed tools\n- Provider model lists no longer disappear during refresh",
+    "version": "0.1.101",
+    "date": "2026-06-26",
+    "markdown": "### Added\n\n- Copy a troubleshooting report from Settings when support needs host, daemon, provider, and log details ([#1728](https://github.com/getpaseo/paseo/pull/1728))\n- Claude image tool results now render as images in chat ([#1717](https://github.com/getpaseo/paseo/pull/1717))\n- Added Japanese ([#1694](https://github.com/getpaseo/paseo/pull/1694) by [@sysCat64](https://github.com/sysCat64))\n- Added Brazilian Portuguese ([#1653](https://github.com/getpaseo/paseo/pull/1653) by [@Alcimerio](https://github.com/Alcimerio))\n\n### Improved\n\n- Provider diagnostics stay useful even when model discovery is slow ([#1724](https://github.com/getpaseo/paseo/pull/1724))\n- Slow provider requests no longer make the app look disconnected ([#1723](https://github.com/getpaseo/paseo/pull/1723))\n- Worktrees linked to differently named tracked branches find their PRs correctly ([#1718](https://github.com/getpaseo/paseo/pull/1718))\n- Workspaces started from slash-command prompts get clearer names ([#1709](https://github.com/getpaseo/paseo/pull/1709))\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Pi no longer creates empty sessions while loading new-agent options ([#1727](https://github.com/getpaseo/paseo/pull/1727))\n- Windows daemon status finds the daemon process more reliably ([#1725](https://github.com/getpaseo/paseo/pull/1725))\n- OpenAI voice credentials no longer affect other OpenAI-backed tools\n- Provider model lists no longer disappear during refresh"
   },
   {
-    version: "0.1.100",
-    date: "2026-06-24",
-    markdown:
-      "### Added\n\n- Cycle agent modes with Shift+Tab\n- Select a custom Copilot agent when starting or mid-session ([#1700](https://github.com/getpaseo/paseo/pull/1700))\n\n### Improved\n\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Claude no longer sends an extra API request after each message ([#1701](https://github.com/getpaseo/paseo/pull/1701))\n- OpenCode no longer leaves stray background servers running after sessions end ([#1697](https://github.com/getpaseo/paseo/pull/1697))\n- Slash commands and skills now load in OMP agents ([#1698](https://github.com/getpaseo/paseo/pull/1698))",
+    "version": "0.1.100",
+    "date": "2026-06-24",
+    "markdown": "### Added\n\n- Cycle agent modes with Shift+Tab\n- Select a custom Copilot agent when starting or mid-session ([#1700](https://github.com/getpaseo/paseo/pull/1700))\n\n### Improved\n\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Claude no longer sends an extra API request after each message ([#1701](https://github.com/getpaseo/paseo/pull/1701))\n- OpenCode no longer leaves stray background servers running after sessions end ([#1697](https://github.com/getpaseo/paseo/pull/1697))\n- Slash commands and skills now load in OMP agents ([#1698](https://github.com/getpaseo/paseo/pull/1698))"
   },
   {
-    version: "0.1.99",
-    date: "2026-06-23",
-    markdown:
-      "### Improved\n\n- The PR panel now has a refresh button and clearer loading states ([#1664](https://github.com/getpaseo/paseo/pull/1664))\n- Provider diagnostics and model lists now stay in sync ([#1660](https://github.com/getpaseo/paseo/pull/1660))\n\n### Fixed\n\n- ACP providers like Grok no longer show duplicate user messages\n- Saved composer modes no longer reset while provider data is loading ([#1658](https://github.com/getpaseo/paseo/pull/1658))\n- The right sidebar no longer gets stuck on mobile ([#1661](https://github.com/getpaseo/paseo/pull/1661))",
+    "version": "0.1.99",
+    "date": "2026-06-23",
+    "markdown": "### Improved\n\n- The PR panel now has a refresh button and clearer loading states ([#1664](https://github.com/getpaseo/paseo/pull/1664))\n- Provider diagnostics and model lists now stay in sync ([#1660](https://github.com/getpaseo/paseo/pull/1660))\n\n### Fixed\n\n- ACP providers like Grok no longer show duplicate user messages\n- Saved composer modes no longer reset while provider data is loading ([#1658](https://github.com/getpaseo/paseo/pull/1658))\n- The right sidebar no longer gets stuck on mobile ([#1661](https://github.com/getpaseo/paseo/pull/1661))"
   },
   {
-    version: "0.1.98",
-    date: "2026-06-21",
-    markdown:
-      "### Added\n\n- See plan usage in-app for Claude, Codex, Copilot, Cursor, Z.AI, Grok, and Kimi ([#1278](https://github.com/getpaseo/paseo/pull/1278) by [@ABorakati](https://github.com/ABorakati))\n- Added Ultracode for Claude ([#1625](https://github.com/getpaseo/paseo/pull/1625))\n- Detach a subagent to run it on its own ([#1612](https://github.com/getpaseo/paseo/pull/1612))\n- Add a project without creating a workspace\n- Add a setting to show branch names instead of titles in the sidebar\n\n### Improved\n\n- Mid-turn thinking and mode changes now say they apply next turn\n- PR merge options name their method: squash, merge, or rebase ([#1608](https://github.com/getpaseo/paseo/pull/1608) by [@mcowger](https://github.com/mcowger))\n- A running agent's mode change is remembered for new agents\n- Copy a provider's launch diagnostic in one tap ([#1611](https://github.com/getpaseo/paseo/pull/1611))\n\n### Fixed\n\n- OpenCode no longer scans your whole disk on macOS desktop ([#1626](https://github.com/getpaseo/paseo/pull/1626))\n- Daemon no longer crashes when OpenAI speech has no API key ([#1368](https://github.com/getpaseo/paseo/pull/1368) by [@mcowger](https://github.com/mcowger))\n- Reopening an archived Codex agent no longer hangs\n- Claude's context meter no longer jumps to subagent usage\n- Claude's context meter fills from the first message in a new session\n- OpenCode's mode picker now respects your disabled modes ([#1366](https://github.com/getpaseo/paseo/pull/1366) by [@mcowger](https://github.com/mcowger))\n- File links and @-mentions find files in dot-folders and deep paths ([#1609](https://github.com/getpaseo/paseo/pull/1609))\n- Archiving a project's last workspace no longer makes it vanish ([#1631](https://github.com/getpaseo/paseo/pull/1631))\n- Collapsed sidebar projects stay collapsed",
+    "version": "0.1.98",
+    "date": "2026-06-21",
+    "markdown": "### Added\n\n- See plan usage in-app for Claude, Codex, Copilot, Cursor, Z.AI, Grok, and Kimi ([#1278](https://github.com/getpaseo/paseo/pull/1278) by [@ABorakati](https://github.com/ABorakati))\n- Added Ultracode for Claude ([#1625](https://github.com/getpaseo/paseo/pull/1625))\n- Detach a subagent to run it on its own ([#1612](https://github.com/getpaseo/paseo/pull/1612))\n- Add a project without creating a workspace\n- Add a setting to show branch names instead of titles in the sidebar\n\n### Improved\n\n- Mid-turn thinking and mode changes now say they apply next turn\n- PR merge options name their method: squash, merge, or rebase ([#1608](https://github.com/getpaseo/paseo/pull/1608) by [@mcowger](https://github.com/mcowger))\n- A running agent's mode change is remembered for new agents\n- Copy a provider's launch diagnostic in one tap ([#1611](https://github.com/getpaseo/paseo/pull/1611))\n\n### Fixed\n\n- OpenCode no longer scans your whole disk on macOS desktop ([#1626](https://github.com/getpaseo/paseo/pull/1626))\n- Daemon no longer crashes when OpenAI speech has no API key ([#1368](https://github.com/getpaseo/paseo/pull/1368) by [@mcowger](https://github.com/mcowger))\n- Reopening an archived Codex agent no longer hangs\n- Claude's context meter no longer jumps to subagent usage\n- Claude's context meter fills from the first message in a new session\n- OpenCode's mode picker now respects your disabled modes ([#1366](https://github.com/getpaseo/paseo/pull/1366) by [@mcowger](https://github.com/mcowger))\n- File links and @-mentions find files in dot-folders and deep paths ([#1609](https://github.com/getpaseo/paseo/pull/1609))\n- Archiving a project's last workspace no longer makes it vanish ([#1631](https://github.com/getpaseo/paseo/pull/1631))\n- Collapsed sidebar projects stay collapsed"
   },
   {
-    version: "0.1.97",
-    date: "2026-06-18",
-    markdown:
-      "### Added\n\n- **Simplify workspace model** — run multiple workspaces on the same code without a worktree, each with its own agents, terminals, and status ([#1539](https://github.com/getpaseo/paseo/pull/1539))\n- **Reopen archived workspaces from History** — restore a past workspace even after its worktree was removed\n- **Terminals show when their agent is working, idle, or waiting for input** ([#1507](https://github.com/getpaseo/paseo/pull/1507))\n- **Attach files to agents on mobile** ([#1501](https://github.com/getpaseo/paseo/pull/1501))\n- **Hide dotfiles in the file explorer** ([#1516](https://github.com/getpaseo/paseo/pull/1516) by [@yuruiz](https://github.com/yuruiz))\n- **Pin terminal, browser, and new-tab buttons to the tab row and sidebar**\n- **Create a new workspace with a keyboard shortcut**\n\n### Improved\n\n- Workspace titles come from your first prompt and are shorter ([#1563](https://github.com/getpaseo/paseo/pull/1563))\n- Copy a workspace's branch or path from its hover card\n- Terminals stay smooth under heavy output ([#1500](https://github.com/getpaseo/paseo/pull/1500))\n- Worktrees are removed when their last workspace is archived ([#1562](https://github.com/getpaseo/paseo/pull/1562))\n- Finish notifications include subagent results ([#1558](https://github.com/getpaseo/paseo/pull/1558))\n- Cursor lists only models you can select ([#1556](https://github.com/getpaseo/paseo/pull/1556))\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Brief daemon slowdowns no longer drop your connection\n- Linux AppImage updates no longer hang on quit or delete the app ([#1485](https://github.com/getpaseo/paseo/pull/1485) by [@xpufx](https://github.com/xpufx))\n- Opening Providers settings no longer crashes on Android ([#1537](https://github.com/getpaseo/paseo/pull/1537))\n- Coding-agent terminal shortcuts work on Windows ([#1509](https://github.com/getpaseo/paseo/pull/1509))\n- ACP and Kimi sessions can be imported again ([#1510](https://github.com/getpaseo/paseo/pull/1510) by [@wbxl2000](https://github.com/wbxl2000))\n- ACP agents shut down without leaving orphaned processes ([#1460](https://github.com/getpaseo/paseo/pull/1460) by [@yeshan333](https://github.com/yeshan333))\n- Imported session previews show clean prompts ([#1502](https://github.com/getpaseo/paseo/pull/1502))\n- Local pairing offers use the correct app URL ([#1187](https://github.com/getpaseo/paseo/pull/1187) by [@aibaiiqpl](https://github.com/aibaiiqpl))\n- The app no longer freezes from repeated provider re-probes\n- Removing a project from the sidebar now removes the project itself instead of leaving it behind\n- Workspace shortcut numbers no longer appear for the wrong key ([#1580](https://github.com/getpaseo/paseo/pull/1580) by [@cleiter](https://github.com/cleiter))\n- Chats no longer hang when a message contains unmatched backticks ([#1585](https://github.com/getpaseo/paseo/pull/1585) by [@thaning0](https://github.com/thaning0))",
+    "version": "0.1.97",
+    "date": "2026-06-18",
+    "markdown": "### Added\n\n- **Simplify workspace model** — run multiple workspaces on the same code without a worktree, each with its own agents, terminals, and status ([#1539](https://github.com/getpaseo/paseo/pull/1539))\n- **Reopen archived workspaces from History** — restore a past workspace even after its worktree was removed\n- **Terminals show when their agent is working, idle, or waiting for input** ([#1507](https://github.com/getpaseo/paseo/pull/1507))\n- **Attach files to agents on mobile** ([#1501](https://github.com/getpaseo/paseo/pull/1501))\n- **Hide dotfiles in the file explorer** ([#1516](https://github.com/getpaseo/paseo/pull/1516) by [@yuruiz](https://github.com/yuruiz))\n- **Pin terminal, browser, and new-tab buttons to the tab row and sidebar**\n- **Create a new workspace with a keyboard shortcut**\n\n### Improved\n\n- Workspace titles come from your first prompt and are shorter ([#1563](https://github.com/getpaseo/paseo/pull/1563))\n- Copy a workspace's branch or path from its hover card\n- Terminals stay smooth under heavy output ([#1500](https://github.com/getpaseo/paseo/pull/1500))\n- Worktrees are removed when their last workspace is archived ([#1562](https://github.com/getpaseo/paseo/pull/1562))\n- Finish notifications include subagent results ([#1558](https://github.com/getpaseo/paseo/pull/1558))\n- Cursor lists only models you can select ([#1556](https://github.com/getpaseo/paseo/pull/1556))\n- ACP provider catalog updated to the latest registry versions\n\n### Fixed\n\n- Brief daemon slowdowns no longer drop your connection\n- Linux AppImage updates no longer hang on quit or delete the app ([#1485](https://github.com/getpaseo/paseo/pull/1485) by [@xpufx](https://github.com/xpufx))\n- Opening Providers settings no longer crashes on Android ([#1537](https://github.com/getpaseo/paseo/pull/1537))\n- Coding-agent terminal shortcuts work on Windows ([#1509](https://github.com/getpaseo/paseo/pull/1509))\n- ACP and Kimi sessions can be imported again ([#1510](https://github.com/getpaseo/paseo/pull/1510) by [@wbxl2000](https://github.com/wbxl2000))\n- ACP agents shut down without leaving orphaned processes ([#1460](https://github.com/getpaseo/paseo/pull/1460) by [@yeshan333](https://github.com/yeshan333))\n- Imported session previews show clean prompts ([#1502](https://github.com/getpaseo/paseo/pull/1502))\n- Local pairing offers use the correct app URL ([#1187](https://github.com/getpaseo/paseo/pull/1187) by [@aibaiiqpl](https://github.com/aibaiiqpl))\n- The app no longer freezes from repeated provider re-probes\n- Removing a project from the sidebar now removes the project itself instead of leaving it behind\n- Workspace shortcut numbers no longer appear for the wrong key ([#1580](https://github.com/getpaseo/paseo/pull/1580) by [@cleiter](https://github.com/cleiter))\n- Chats no longer hang when a message contains unmatched backticks ([#1585](https://github.com/getpaseo/paseo/pull/1585) by [@thaning0](https://github.com/thaning0))"
   },
   {
-    version: "0.1.96",
-    date: "2026-06-13",
-    markdown:
-      "_This release only fixes an Android issue — desktop users don't need to update._\n\n### Fixed\n\n- On Android, the sidebar no longer reappears and gets stuck after you open a chat",
+    "version": "0.1.96",
+    "date": "2026-06-13",
+    "markdown": "_This release only fixes an Android issue — desktop users don't need to update._\n\n### Fixed\n\n- On Android, the sidebar no longer reappears and gets stuck after you open a chat"
   },
   {
-    version: "0.1.95",
-    date: "2026-06-13",
-    markdown:
-      "### Added\n\n- **Attach any file to agents on desktop** ([#1474](https://github.com/getpaseo/paseo/pull/1474))\n\n### Improved\n\n- The git push button shows before merge actions when your branch is ahead ([#1488](https://github.com/getpaseo/paseo/pull/1488))\n- SVG attachments are uploaded to disk\n- Switching workspaces feels smoother\n\n### Fixed\n\n- Fixed cases where outdated GitHub data could be shown ([#1491](https://github.com/getpaseo/paseo/pull/1491))\n- Uploaded images in PR comments and review threads now load in the PR panel ([#1486](https://github.com/getpaseo/paseo/pull/1486))\n- Opening a project whose folder is missing shows a clear error ([#1490](https://github.com/getpaseo/paseo/pull/1490))\n- The new workspace title moves out of the way of the keyboard ([#1489](https://github.com/getpaseo/paseo/pull/1489))\n- Sidebars no longer open on their own on Android",
+    "version": "0.1.95",
+    "date": "2026-06-13",
+    "markdown": "### Added\n\n- **Attach any file to agents on desktop** ([#1474](https://github.com/getpaseo/paseo/pull/1474))\n\n### Improved\n\n- The git push button shows before merge actions when your branch is ahead ([#1488](https://github.com/getpaseo/paseo/pull/1488))\n- SVG attachments are uploaded to disk\n- Switching workspaces feels smoother\n\n### Fixed\n\n- Fixed cases where outdated GitHub data could be shown ([#1491](https://github.com/getpaseo/paseo/pull/1491))\n- Uploaded images in PR comments and review threads now load in the PR panel ([#1486](https://github.com/getpaseo/paseo/pull/1486))\n- Opening a project whose folder is missing shows a clear error ([#1490](https://github.com/getpaseo/paseo/pull/1490))\n- The new workspace title moves out of the way of the keyboard ([#1489](https://github.com/getpaseo/paseo/pull/1489))\n- Sidebars no longer open on their own on Android"
   },
   {
-    version: "0.1.94",
-    date: "2026-06-12",
-    markdown:
-      "### Added\n\n- **Attach pull request comments, reviews, threads, and failed check logs to chat from the PR panel** ([#1400](https://github.com/getpaseo/paseo/pull/1400))\n- **Use Paseo in Arabic, Chinese, English, French, Russian, and Spanish** ([#1282](https://github.com/getpaseo/paseo/pull/1282), [#1478](https://github.com/getpaseo/paseo/pull/1478) by [@chyendongnhanh338](https://github.com/chyendongnhanh338), [@dwyanewang](https://github.com/dwyanewang))\n- **Create reusable terminal profiles from Host settings**\n- **Open workspaces in Antigravity** ([#1424](https://github.com/getpaseo/paseo/pull/1424) by [@krumpyzoid](https://github.com/krumpyzoid))\n\n### Improved\n\n- Claude skills appear in prompt autocomplete as you type ([#1464](https://github.com/getpaseo/paseo/pull/1464))\n- Copy file paths directly from file preview tab menus ([#1473](https://github.com/getpaseo/paseo/pull/1473))\n- PR status stays current after an agent merges a branch ([#1455](https://github.com/getpaseo/paseo/pull/1455))\n- Workspace tabs stay fast by retaining only the active workspace screens ([#1472](https://github.com/getpaseo/paseo/pull/1472))\n\n### Fixed\n\n- Composer send shortcuts no longer conflict with other keyboard shortcuts\n- Multi-question prompts advance one answer at a time ([#1462](https://github.com/getpaseo/paseo/pull/1462))\n- Imported Pi sessions keep their original model and thinking settings ([#1441](https://github.com/getpaseo/paseo/pull/1441) by [@thomasaull](https://github.com/thomasaull))\n- Reconnecting to a desktop host keeps the saved shell and workspace route\n- Worktree terminals no longer appear in parent workspaces\n- Mobile reconnects show the welcome screen correctly",
+    "version": "0.1.94",
+    "date": "2026-06-12",
+    "markdown": "### Added\n\n- **Attach pull request comments, reviews, threads, and failed check logs to chat from the PR panel** ([#1400](https://github.com/getpaseo/paseo/pull/1400))\n- **Use Paseo in Arabic, Chinese, English, French, Russian, and Spanish** ([#1282](https://github.com/getpaseo/paseo/pull/1282), [#1478](https://github.com/getpaseo/paseo/pull/1478) by [@chyendongnhanh338](https://github.com/chyendongnhanh338), [@dwyanewang](https://github.com/dwyanewang))\n- **Create reusable terminal profiles from Host settings**\n- **Open workspaces in Antigravity** ([#1424](https://github.com/getpaseo/paseo/pull/1424) by [@krumpyzoid](https://github.com/krumpyzoid))\n\n### Improved\n\n- Claude skills appear in prompt autocomplete as you type ([#1464](https://github.com/getpaseo/paseo/pull/1464))\n- Copy file paths directly from file preview tab menus ([#1473](https://github.com/getpaseo/paseo/pull/1473))\n- PR status stays current after an agent merges a branch ([#1455](https://github.com/getpaseo/paseo/pull/1455))\n- Workspace tabs stay fast by retaining only the active workspace screens ([#1472](https://github.com/getpaseo/paseo/pull/1472))\n\n### Fixed\n\n- Composer send shortcuts no longer conflict with other keyboard shortcuts\n- Multi-question prompts advance one answer at a time ([#1462](https://github.com/getpaseo/paseo/pull/1462))\n- Imported Pi sessions keep their original model and thinking settings ([#1441](https://github.com/getpaseo/paseo/pull/1441) by [@thomasaull](https://github.com/thomasaull))\n- Reconnecting to a desktop host keeps the saved shell and workspace route\n- Worktree terminals no longer appear in parent workspaces\n- Mobile reconnects show the welcome screen correctly"
   },
   {
-    version: "0.1.93",
-    date: "2026-06-10",
-    markdown:
-      "### Added\n\n- **Claude Fable 5 is available in the Claude model picker** ([#1443](https://github.com/getpaseo/paseo/pull/1443) by [@0-Captain](https://github.com/0-Captain))",
+    "version": "0.1.93",
+    "date": "2026-06-10",
+    "markdown": "### Added\n\n- **Claude Fable 5 is available in the Claude model picker** ([#1443](https://github.com/getpaseo/paseo/pull/1443) by [@0-Captain](https://github.com/0-Captain))"
   },
   {
-    version: "0.1.92",
-    date: "2026-06-10",
-    markdown:
-      "### Added\n\n- **Skills autocomplete inside prompts**\n\n### Improved\n\n- Provider catalog is inline in Host settings ([#1423](https://github.com/getpaseo/paseo/pull/1423))\n- Manual update checks skip staged rollout delays\n- CodeWhale replaces DeepSeek TUI in the provider catalog\n- ACP provider catalog entries are updated for Cline, Codebuddy Code, DimCode, Factory Droid, Gemini, Nova, and Qoder\n- OMP has its own icon and website page\n- Model selector descriptions are clearer\n- ACP provider errors show the provider's real failure message\n\n### Fixed\n\n- New Paseo worktree branches can push their first commits\n- Imported sessions no longer open blank or in the wrong workspace\n- Windows Explorer opens the selected workspace instead of Documents ([#1412](https://github.com/getpaseo/paseo/pull/1412) by [@bjspi](https://github.com/bjspi))\n- Windows editor shortcuts installed as command shims launch correctly ([#1387](https://github.com/getpaseo/paseo/pull/1387) by [@Peter7896](https://github.com/Peter7896))\n- ACP providers that cannot use MCP servers can start correctly\n- Removed hosts no longer leave host pages stuck connecting\n- File preview links open in your external browser\n- Chat stays pinned to the latest message while output streams\n- The mobile composer send button no longer shifts while typing",
+    "version": "0.1.92",
+    "date": "2026-06-10",
+    "markdown": "### Added\n\n- **Skills autocomplete inside prompts**\n\n### Improved\n\n- Provider catalog is inline in Host settings ([#1423](https://github.com/getpaseo/paseo/pull/1423))\n- Manual update checks skip staged rollout delays\n- CodeWhale replaces DeepSeek TUI in the provider catalog\n- ACP provider catalog entries are updated for Cline, Codebuddy Code, DimCode, Factory Droid, Gemini, Nova, and Qoder\n- OMP has its own icon and website page\n- Model selector descriptions are clearer\n- ACP provider errors show the provider's real failure message\n\n### Fixed\n\n- New Paseo worktree branches can push their first commits\n- Imported sessions no longer open blank or in the wrong workspace\n- Windows Explorer opens the selected workspace instead of Documents ([#1412](https://github.com/getpaseo/paseo/pull/1412) by [@bjspi](https://github.com/bjspi))\n- Windows editor shortcuts installed as command shims launch correctly ([#1387](https://github.com/getpaseo/paseo/pull/1387) by [@Peter7896](https://github.com/Peter7896))\n- ACP providers that cannot use MCP servers can start correctly\n- Removed hosts no longer leave host pages stuck connecting\n- File preview links open in your external browser\n- Chat stays pinned to the latest message while output streams\n- The mobile composer send button no longer shifts while typing"
   },
   {
-    version: "0.1.91",
-    date: "2026-06-08",
-    markdown:
-      "### Added\n\n- **Open multiple desktop windows** ([#1355](https://github.com/getpaseo/paseo/pull/1355) by [@arieel-ost](https://github.com/arieel-ost))\n- **Open browser pop-ups and links inside workspace tabs** ([#1375](https://github.com/getpaseo/paseo/pull/1375))\n- **Use the command center from mobile**\n- **Add OMP as a provider** ([#1388](https://github.com/getpaseo/paseo/pull/1388))\n\n### Improved\n\n- New workspaces remember your last provider, mode, and thinking choices\n- Git controls now default ready branches to pull requests and hide unavailable pull or push actions\n- Desktop-managed hosts recover more reliably after stale daemon state\n- Daemon status now explains authentication failures\n- Project search skips Python virtual environments ([#1356](https://github.com/getpaseo/paseo/pull/1356))\n- Config files can include `$schema` for editor help\n- Claude MCP servers preserve always-load tool settings ([#1333](https://github.com/getpaseo/paseo/pull/1333) by [@nodomain](https://github.com/nodomain))\n- Claude profiles keep their configured models ([#1311](https://github.com/getpaseo/paseo/pull/1311) by [@ilteoood](https://github.com/ilteoood))\n- Provider loading can wait longer on slow machines ([#1346](https://github.com/getpaseo/paseo/pull/1346) by [@nodomain](https://github.com/nodomain))\n- The Kimi catalog entry now points to Kimi Code CLI ([#1403](https://github.com/getpaseo/paseo/pull/1403) by [@wbxl2000](https://github.com/wbxl2000))\n- ACP provider catalog entries are updated for Auggie, Claude Agent, Cline, Codebuddy Code, DimCode, Factory Droid, fast-agent, Gemini, GitHub Copilot, and Nova\n- Local dictation crash reports show more useful details ([#1379](https://github.com/getpaseo/paseo/pull/1379))\n- Daemon logs show why managed workers exit\n\n### Fixed\n\n- Pi compaction slash commands run correctly ([#1338](https://github.com/getpaseo/paseo/pull/1338) by [@chyendongnhanh338](https://github.com/chyendongnhanh338))\n- Auto-archiving still works after a merged PR branch is deleted ([#1378](https://github.com/getpaseo/paseo/pull/1378))\n- Worktrees can check out existing branch refs correctly ([#1358](https://github.com/getpaseo/paseo/pull/1358) by [@dixonl90](https://github.com/dixonl90))\n- File downloads work when daemon password protection is enabled ([#1351](https://github.com/getpaseo/paseo/pull/1351) by [@nodomain](https://github.com/nodomain))\n- iOS markdown links are tappable again ([#1334](https://github.com/getpaseo/paseo/pull/1334) by [@kaspesi](https://github.com/kaspesi))\n- iOS markdown images render correctly\n- Windows workspaces load their providers correctly ([#1329](https://github.com/getpaseo/paseo/pull/1329))\n- Removing a localhost host stops its local daemon ([#1297](https://github.com/getpaseo/paseo/pull/1297) by [@mcowger](https://github.com/mcowger))\n- Provider settings sheets stack correctly\n- The new workspace screen no longer opens behind the mobile sidebar\n- Global agent listing works again ([#1420](https://github.com/getpaseo/paseo/pull/1420))\n- OpenCode compaction summaries stay out of chat\n- OpenCode agents sharing a workspace keep their own Paseo tools",
+    "version": "0.1.91",
+    "date": "2026-06-08",
+    "markdown": "### Added\n\n- **Open multiple desktop windows** ([#1355](https://github.com/getpaseo/paseo/pull/1355) by [@arieel-ost](https://github.com/arieel-ost))\n- **Open browser pop-ups and links inside workspace tabs** ([#1375](https://github.com/getpaseo/paseo/pull/1375))\n- **Use the command center from mobile**\n- **Add OMP as a provider** ([#1388](https://github.com/getpaseo/paseo/pull/1388))\n\n### Improved\n\n- New workspaces remember your last provider, mode, and thinking choices\n- Git controls now default ready branches to pull requests and hide unavailable pull or push actions\n- Desktop-managed hosts recover more reliably after stale daemon state\n- Daemon status now explains authentication failures\n- Project search skips Python virtual environments ([#1356](https://github.com/getpaseo/paseo/pull/1356))\n- Config files can include `$schema` for editor help\n- Claude MCP servers preserve always-load tool settings ([#1333](https://github.com/getpaseo/paseo/pull/1333) by [@nodomain](https://github.com/nodomain))\n- Claude profiles keep their configured models ([#1311](https://github.com/getpaseo/paseo/pull/1311) by [@ilteoood](https://github.com/ilteoood))\n- Provider loading can wait longer on slow machines ([#1346](https://github.com/getpaseo/paseo/pull/1346) by [@nodomain](https://github.com/nodomain))\n- The Kimi catalog entry now points to Kimi Code CLI ([#1403](https://github.com/getpaseo/paseo/pull/1403) by [@wbxl2000](https://github.com/wbxl2000))\n- ACP provider catalog entries are updated for Auggie, Claude Agent, Cline, Codebuddy Code, DimCode, Factory Droid, fast-agent, Gemini, GitHub Copilot, and Nova\n- Local dictation crash reports show more useful details ([#1379](https://github.com/getpaseo/paseo/pull/1379))\n- Daemon logs show why managed workers exit\n\n### Fixed\n\n- Pi compaction slash commands run correctly ([#1338](https://github.com/getpaseo/paseo/pull/1338) by [@chyendongnhanh338](https://github.com/chyendongnhanh338))\n- Auto-archiving still works after a merged PR branch is deleted ([#1378](https://github.com/getpaseo/paseo/pull/1378))\n- Worktrees can check out existing branch refs correctly ([#1358](https://github.com/getpaseo/paseo/pull/1358) by [@dixonl90](https://github.com/dixonl90))\n- File downloads work when daemon password protection is enabled ([#1351](https://github.com/getpaseo/paseo/pull/1351) by [@nodomain](https://github.com/nodomain))\n- iOS markdown links are tappable again ([#1334](https://github.com/getpaseo/paseo/pull/1334) by [@kaspesi](https://github.com/kaspesi))\n- iOS markdown images render correctly\n- Windows workspaces load their providers correctly ([#1329](https://github.com/getpaseo/paseo/pull/1329))\n- Removing a localhost host stops its local daemon ([#1297](https://github.com/getpaseo/paseo/pull/1297) by [@mcowger](https://github.com/mcowger))\n- Provider settings sheets stack correctly\n- The new workspace screen no longer opens behind the mobile sidebar\n- Global agent listing works again ([#1420](https://github.com/getpaseo/paseo/pull/1420))\n- OpenCode compaction summaries stay out of chat\n- OpenCode agents sharing a workspace keep their own Paseo tools"
   },
   {
-    version: "0.1.90",
-    date: "2026-06-04",
-    markdown:
-      "### Added\n\n- **Group the sidebar by status so workspaces waiting on you, ready to review, working, and done are visible at a glance** ([#1317](https://github.com/getpaseo/paseo/pull/1317))\n- **Start a new workspace from the global sidebar button without choosing a project first** ([#1324](https://github.com/getpaseo/paseo/pull/1324))\n- **Open the active file directly in your editor, file manager, or GitHub instead of only opening the workspace root** ([#1285](https://github.com/getpaseo/paseo/pull/1285) by [@aaronzhongg](https://github.com/aaronzhongg))\n- **Automatically archive clean PR workspaces after the PR is merged from host settings** ([#1313](https://github.com/getpaseo/paseo/pull/1313))\n- **Desktop-managed Paseo skills stay current after installing a newer desktop build** ([#1309](https://github.com/getpaseo/paseo/pull/1309))\n- **Dart files and Dart code blocks are now syntax-highlighted** ([#1326](https://github.com/getpaseo/paseo/pull/1326))\n\n### Improved\n\n- Sidebar workspaces can be marked as read when they are ready to review or failed ([#1317](https://github.com/getpaseo/paseo/pull/1317))\n- Child agents keep unattended permissions when delegated across providers ([#1315](https://github.com/getpaseo/paseo/pull/1315))\n- Scheduled agents open with the real prompt and title instead of looking empty ([#1316](https://github.com/getpaseo/paseo/pull/1316))\n- Git controls prioritize the action that gets a ready branch shipped ([#1316](https://github.com/getpaseo/paseo/pull/1316))\n- Multiple agent questions are shown one at a time\n- OpenCode questions with free-write answers show the typed response in Paseo\n- Delegated agent activity is visible on the parent workspace\n- Sessions are ordered by latest activity\n- ACP provider catalog entries are updated for Claude Agent, Cline, Codebuddy Code, Factory Droid, and Qoder\n\n### Fixed\n\n- Timeline catch-up no longer leaves older messages unloaded\n- Markdown code in file previews renders correctly\n- Long dictation retries no longer stall new audio\n- Settings host picker navigation works from host settings pages\n- Diff gutter rows stay aligned with changed code\n- Mobile sidebar gestures stay responsive under load\n- Compact sheets keep their footer and bottom spacing visible",
+    "version": "0.1.90",
+    "date": "2026-06-04",
+    "markdown": "### Added\n\n- **Group the sidebar by status so workspaces waiting on you, ready to review, working, and done are visible at a glance** ([#1317](https://github.com/getpaseo/paseo/pull/1317))\n- **Start a new workspace from the global sidebar button without choosing a project first** ([#1324](https://github.com/getpaseo/paseo/pull/1324))\n- **Open the active file directly in your editor, file manager, or GitHub instead of only opening the workspace root** ([#1285](https://github.com/getpaseo/paseo/pull/1285) by [@aaronzhongg](https://github.com/aaronzhongg))\n- **Automatically archive clean PR workspaces after the PR is merged from host settings** ([#1313](https://github.com/getpaseo/paseo/pull/1313))\n- **Desktop-managed Paseo skills stay current after installing a newer desktop build** ([#1309](https://github.com/getpaseo/paseo/pull/1309))\n- **Dart files and Dart code blocks are now syntax-highlighted** ([#1326](https://github.com/getpaseo/paseo/pull/1326))\n\n### Improved\n\n- Sidebar workspaces can be marked as read when they are ready to review or failed ([#1317](https://github.com/getpaseo/paseo/pull/1317))\n- Child agents keep unattended permissions when delegated across providers ([#1315](https://github.com/getpaseo/paseo/pull/1315))\n- Scheduled agents open with the real prompt and title instead of looking empty ([#1316](https://github.com/getpaseo/paseo/pull/1316))\n- Git controls prioritize the action that gets a ready branch shipped ([#1316](https://github.com/getpaseo/paseo/pull/1316))\n- Multiple agent questions are shown one at a time\n- OpenCode questions with free-write answers show the typed response in Paseo\n- Delegated agent activity is visible on the parent workspace\n- Sessions are ordered by latest activity\n- ACP provider catalog entries are updated for Claude Agent, Cline, Codebuddy Code, Factory Droid, and Qoder\n\n### Fixed\n\n- Timeline catch-up no longer leaves older messages unloaded\n- Markdown code in file previews renders correctly\n- Long dictation retries no longer stall new audio\n- Settings host picker navigation works from host settings pages\n- Diff gutter rows stay aligned with changed code\n- Mobile sidebar gestures stay responsive under load\n- Compact sheets keep their footer and bottom spacing visible"
   },
   {
-    version: "0.1.89",
-    date: "2026-06-02",
-    markdown:
-      "### Added\n\n- **Open workspace services through public service proxy links** ([#1280](https://github.com/getpaseo/paseo/pull/1280) by [@mcowger](https://github.com/mcowger))\n- **Choose where new worktrees are created** ([#1230](https://github.com/getpaseo/paseo/pull/1230) by [@mcowger](https://github.com/mcowger))\n- **Desktop windows reopen at the same size and position** ([#1224](https://github.com/getpaseo/paseo/pull/1224) by [@everton-dgn](https://github.com/everton-dgn))\n- **Delegated agents can run independently and send recurring heartbeat updates**\n\n### Improved\n\n- Composer controls fit better in narrow panes\n- Fork pull request badges stay visible in worktrees\n- Cline in the ACP catalog is updated to v3\n\n### Fixed\n\n- Archiving a worktree finishes even if teardown hits an error ([#1260](https://github.com/getpaseo/paseo/pull/1260) by [@mcowger](https://github.com/mcowger))\n- iOS chat messages render bold, italics, strikethrough, and line breaks correctly ([#1254](https://github.com/getpaseo/paseo/pull/1254) by [@outofrange-consulting](https://github.com/outofrange-consulting))\n- Right-edge split pane resizing no longer clips ([#1261](https://github.com/getpaseo/paseo/pull/1261) by [@everton-dgn](https://github.com/everton-dgn))\n- Pi extension command output no longer hangs\n- Delegated agents no longer appear in workspace alert counts",
+    "version": "0.1.89",
+    "date": "2026-06-02",
+    "markdown": "### Added\n\n- **Open workspace services through public service proxy links** ([#1280](https://github.com/getpaseo/paseo/pull/1280) by [@mcowger](https://github.com/mcowger))\n- **Choose where new worktrees are created** ([#1230](https://github.com/getpaseo/paseo/pull/1230) by [@mcowger](https://github.com/mcowger))\n- **Desktop windows reopen at the same size and position** ([#1224](https://github.com/getpaseo/paseo/pull/1224) by [@everton-dgn](https://github.com/everton-dgn))\n- **Delegated agents can run independently and send recurring heartbeat updates**\n\n### Improved\n\n- Composer controls fit better in narrow panes\n- Fork pull request badges stay visible in worktrees\n- Cline in the ACP catalog is updated to v3\n\n### Fixed\n\n- Archiving a worktree finishes even if teardown hits an error ([#1260](https://github.com/getpaseo/paseo/pull/1260) by [@mcowger](https://github.com/mcowger))\n- iOS chat messages render bold, italics, strikethrough, and line breaks correctly ([#1254](https://github.com/getpaseo/paseo/pull/1254) by [@outofrange-consulting](https://github.com/outofrange-consulting))\n- Right-edge split pane resizing no longer clips ([#1261](https://github.com/getpaseo/paseo/pull/1261) by [@everton-dgn](https://github.com/everton-dgn))\n- Pi extension command output no longer hangs\n- Delegated agents no longer appear in workspace alert counts"
   },
   {
-    version: "0.1.88",
-    date: "2026-06-01",
-    markdown:
-      "### Added\n\n- **Choose an app theme from the new Appearance settings**\n- **Set a custom interface font**\n- **Set a custom code font**\n- **Adjust the interface text size**\n- **Adjust the code text size**\n- **Choose a syntax highlighting theme**\n- **Keep cron schedules aligned to a chosen time zone** ([#1232](https://github.com/getpaseo/paseo/pull/1232) by [@damselem](https://github.com/damselem))\n\n### Improved\n\n- Settings now has a flatter sidebar with a host picker\n- Workspace tab switching is faster\n- Compact composers now show context usage as a percentage\n- Agent terminals opened in workspace subdirectories now appear with the rest of the workspace terminals\n- macOS displays can idle normally while the desktop app is open ([#1242](https://github.com/getpaseo/paseo/pull/1242) by [@fireblue](https://github.com/fireblue))\n- Large generated diffs now show a clear too-large placeholder instead of trying to render the whole file\n\n### Fixed\n\n- Chat history catches up correctly around long-running tool updates\n- Terminal panes keep the right size after splitting or resizing panes\n- Restored terminal snapshots reflow correctly after the pane size changes\n- Workspace scripts menus keep the right size after launching a service\n- iOS chat messages no longer hide inline links, URLs, or linked file paths ([#1257](https://github.com/getpaseo/paseo/pull/1257) by [@outofrange-consulting](https://github.com/outofrange-consulting))",
+    "version": "0.1.88",
+    "date": "2026-06-01",
+    "markdown": "### Added\n\n- **Choose an app theme from the new Appearance settings**\n- **Set a custom interface font**\n- **Set a custom code font**\n- **Adjust the interface text size**\n- **Adjust the code text size**\n- **Choose a syntax highlighting theme**\n- **Keep cron schedules aligned to a chosen time zone** ([#1232](https://github.com/getpaseo/paseo/pull/1232) by [@damselem](https://github.com/damselem))\n\n### Improved\n\n- Settings now has a flatter sidebar with a host picker\n- Workspace tab switching is faster\n- Compact composers now show context usage as a percentage\n- Agent terminals opened in workspace subdirectories now appear with the rest of the workspace terminals\n- macOS displays can idle normally while the desktop app is open ([#1242](https://github.com/getpaseo/paseo/pull/1242) by [@fireblue](https://github.com/fireblue))\n- Large generated diffs now show a clear too-large placeholder instead of trying to render the whole file\n\n### Fixed\n\n- Chat history catches up correctly around long-running tool updates\n- Terminal panes keep the right size after splitting or resizing panes\n- Restored terminal snapshots reflow correctly after the pane size changes\n- Workspace scripts menus keep the right size after launching a service\n- iOS chat messages no longer hide inline links, URLs, or linked file paths ([#1257](https://github.com/getpaseo/paseo/pull/1257) by [@outofrange-consulting](https://github.com/outofrange-consulting))"
   },
   {
-    version: "0.1.87",
-    date: "2026-05-30",
-    markdown:
-      "### Added\n\n- Permission prompts from OpenCode subagents now surface in Paseo so you can approve or deny them\n\n### Fixed\n\n- Fixed an intermittent Android crash while animated views were drawing\n- Fixed mobile bottom sheets not reopening after being dismissed",
+    "version": "0.1.87",
+    "date": "2026-05-30",
+    "markdown": "### Added\n\n- Permission prompts from OpenCode subagents now surface in Paseo so you can approve or deny them\n\n### Fixed\n\n- Fixed an intermittent Android crash while animated views were drawing\n- Fixed mobile bottom sheets not reopening after being dismissed"
   },
   {
-    version: "0.1.86",
-    date: "2026-05-29",
-    markdown:
-      "### Added\n\n- **Launch Grok (xAI) as a coding agent**\n- **Fast mode for Claude Opus**\n- **Multilingual local dictation with the new Parakeet v3 speech model**\n\n### Improved\n\n- Edit, Write, and Read tool calls are now syntax-highlighted\n- The model selector shows the error when a provider fails to load\n- The About page shows the versions of connected host daemons\n- Refresh git diffs on demand with a new refresh button\n- Previews can open readable files outside the current workspace\n- Projects without an icon now show a colored icon instead of a grey placeholder\n- Auto-generated agent titles and worktree branch names now use your configured provider fallbacks ([#1219](https://github.com/getpaseo/paseo/pull/1219) by [@mcowger](https://github.com/mcowger))\n- Local dictation keeps its speech models out of the daemon, lowering its memory use\n\n### Fixed\n\n- On mobile, the whole composer now stays above the keyboard so the subagents track and draft pills no longer hide behind it\n- The mobile agent timeline now catches up fully after reconnecting, so no messages go missing\n- The slash command menu no longer shows /clear twice",
+    "version": "0.1.86",
+    "date": "2026-05-29",
+    "markdown": "### Added\n\n- **Launch Grok (xAI) as a coding agent**\n- **Fast mode for Claude Opus**\n- **Multilingual local dictation with the new Parakeet v3 speech model**\n\n### Improved\n\n- Edit, Write, and Read tool calls are now syntax-highlighted\n- The model selector shows the error when a provider fails to load\n- The About page shows the versions of connected host daemons\n- Refresh git diffs on demand with a new refresh button\n- Previews can open readable files outside the current workspace\n- Projects without an icon now show a colored icon instead of a grey placeholder\n- Auto-generated agent titles and worktree branch names now use your configured provider fallbacks ([#1219](https://github.com/getpaseo/paseo/pull/1219) by [@mcowger](https://github.com/mcowger))\n- Local dictation keeps its speech models out of the daemon, lowering its memory use\n\n### Fixed\n\n- On mobile, the whole composer now stays above the keyboard so the subagents track and draft pills no longer hide behind it\n- The mobile agent timeline now catches up fully after reconnecting, so no messages go missing\n- The slash command menu no longer shows /clear twice"
   },
   {
-    version: "0.1.85",
-    date: "2026-05-29",
-    markdown:
-      "### Added\n\n- **Opus 4.8 in the Claude model picker**, with a 1M-context variant\n\n### Improved\n\n- Archiving a worktree now keeps its agents under the archived list instead of removing them\n- Archiving an agent cleans up any schedules targeting it",
+    "version": "0.1.85",
+    "date": "2026-05-29",
+    "markdown": "### Added\n\n- **Opus 4.8 in the Claude model picker**, with a 1M-context variant\n\n### Improved\n\n- Archiving a worktree now keeps its agents under the archived list instead of removing them\n- Archiving an agent cleans up any schedules targeting it"
   },
   {
-    version: "0.1.84",
-    date: "2026-05-28",
-    markdown:
-      "### Added\n\n- **Auto-accept tool calls for OpenCode agents**\n\n### Improved\n\n- Copy an OpenCode resume command to continue the session outside Paseo\n- Model selector lists every enabled provider, with a Retry button when one fails to load\n- Provider settings are easier to search and manage\n- Other agents connecting to Paseo via MCP see the same providers, models, and modes as the app ([#1198](https://github.com/getpaseo/paseo/pull/1198))\n- OpenCode Edit tool calls render as inline diffs\n- Typing a slash command shows the best match first\n- Daemon starts faster on workspaces with many git folders\n- Markdown lists have tighter spacing\n- Less jank when streaming agent responses\n- User message footer controls align with the rest of the chat\n- Agent mode controls use a cleaner monochrome treatment\n- Compact layouts move the context ring to the footer right edge\n\n### Fixed\n\n- Allow selecting text in the chat on mobile ([#1153](https://github.com/getpaseo/paseo/pull/1153) by [@muzhi1991](https://github.com/muzhi1991))\n- Submitting a Pi question no longer looks like a second prompt opened ([#1188](https://github.com/getpaseo/paseo/pull/1188) by [@yuruiz](https://github.com/yuruiz))\n- Daemon memory leak from unbounded workspace git caches ([#1200](https://github.com/getpaseo/paseo/pull/1200))\n- Provider diagnostics include the command override binary path ([#1191](https://github.com/getpaseo/paseo/pull/1191))\n- OpenCode MCP servers connect correctly when the daemon binds to wildcard addresses\n- Tool calls from MCP servers that return non-spec output no longer fail validation",
+    "version": "0.1.84",
+    "date": "2026-05-28",
+    "markdown": "### Added\n\n- **Auto-accept tool calls for OpenCode agents**\n\n### Improved\n\n- Copy an OpenCode resume command to continue the session outside Paseo\n- Model selector lists every enabled provider, with a Retry button when one fails to load\n- Provider settings are easier to search and manage\n- Other agents connecting to Paseo via MCP see the same providers, models, and modes as the app ([#1198](https://github.com/getpaseo/paseo/pull/1198))\n- OpenCode Edit tool calls render as inline diffs\n- Typing a slash command shows the best match first\n- Daemon starts faster on workspaces with many git folders\n- Markdown lists have tighter spacing\n- Less jank when streaming agent responses\n- User message footer controls align with the rest of the chat\n- Agent mode controls use a cleaner monochrome treatment\n- Compact layouts move the context ring to the footer right edge\n\n### Fixed\n\n- Allow selecting text in the chat on mobile ([#1153](https://github.com/getpaseo/paseo/pull/1153) by [@muzhi1991](https://github.com/muzhi1991))\n- Submitting a Pi question no longer looks like a second prompt opened ([#1188](https://github.com/getpaseo/paseo/pull/1188) by [@yuruiz](https://github.com/yuruiz))\n- Daemon memory leak from unbounded workspace git caches ([#1200](https://github.com/getpaseo/paseo/pull/1200))\n- Provider diagnostics include the command override binary path ([#1191](https://github.com/getpaseo/paseo/pull/1191))\n- OpenCode MCP servers connect correctly when the daemon binds to wildcard addresses\n- Tool calls from MCP servers that return non-spec output no longer fail validation"
   },
   {
-    version: "0.1.83",
-    date: "2026-05-26",
-    markdown:
-      "### Fixed\n\n- Creating an agent via MCP now waits for it to actually start, so failures surface as a clear create error\n- Scheduling an agent via MCP no longer rejects blank cadence placeholders\n- Draft messages show the agent mode chip again on models without thinking options",
+    "version": "0.1.83",
+    "date": "2026-05-26",
+    "markdown": "### Fixed\n\n- Creating an agent via MCP now waits for it to actually start, so failures surface as a clear create error\n- Scheduling an agent via MCP no longer rejects blank cadence placeholders\n- Draft messages show the agent mode chip again on models without thinking options"
   },
   {
-    version: "0.1.82",
-    date: "2026-05-26",
-    markdown:
-      "### Added\n\n- **Rewind chat or files from any user message** ([#1154](https://github.com/getpaseo/paseo/pull/1154))\n- **See the cumulative cost of an agent session** ([#1163](https://github.com/getpaseo/paseo/pull/1163))\n- **Drop files onto the terminal to insert their paths** ([#1173](https://github.com/getpaseo/paseo/pull/1173))\n- **Tap a file path in the terminal to open it in the workspace preview** ([#1174](https://github.com/getpaseo/paseo/pull/1174))\n- **Approve OpenCode permissions for the whole session** ([#1168](https://github.com/getpaseo/paseo/pull/1168))\n- **Workspace scripts now appear on the mobile header** ([#1093](https://github.com/getpaseo/paseo/pull/1093) by [@ayhanmalkoc](https://github.com/ayhanmalkoc))\n- Devin CLI in the ACP provider catalog (by [@Alcimerio](https://github.com/Alcimerio))\n- OpenCode agents show their mode colors\n\n### Improved\n\n- Mobile terminal keyboard hides when you open a sidebar\n- Tool activity for read, write, and OpenCode tools renders more consistently ([#1171](https://github.com/getpaseo/paseo/pull/1171))\n- Compact workspace header actions are tidier\n- Settings latency readouts are easier to scan ([#1170](https://github.com/getpaseo/paseo/pull/1170))\n- Pull request merge is available as soon as GitHub reports the PR is ready ([#1172](https://github.com/getpaseo/paseo/pull/1172))\n\n### Fixed\n\n- Mobile slash command autocomplete no longer flickers or mis-layers\n- Interrupting an OpenCode agent returns it to idle instead of showing an error ([#1169](https://github.com/getpaseo/paseo/pull/1169))\n- Provider model selection per workspace is honored ([#1167](https://github.com/getpaseo/paseo/pull/1167))\n- Draft composer keeps the permission mode you selected ([#1175](https://github.com/getpaseo/paseo/pull/1175))\n- Terminal color queries no longer return malformed replies\n- File links in chat no longer crash when a message contains a bare '%' (by [@Elliotwu-7](https://github.com/Elliotwu-7))",
+    "version": "0.1.82",
+    "date": "2026-05-26",
+    "markdown": "### Added\n\n- **Rewind chat or files from any user message** ([#1154](https://github.com/getpaseo/paseo/pull/1154))\n- **See the cumulative cost of an agent session** ([#1163](https://github.com/getpaseo/paseo/pull/1163))\n- **Drop files onto the terminal to insert their paths** ([#1173](https://github.com/getpaseo/paseo/pull/1173))\n- **Tap a file path in the terminal to open it in the workspace preview** ([#1174](https://github.com/getpaseo/paseo/pull/1174))\n- **Approve OpenCode permissions for the whole session** ([#1168](https://github.com/getpaseo/paseo/pull/1168))\n- **Workspace scripts now appear on the mobile header** ([#1093](https://github.com/getpaseo/paseo/pull/1093) by [@ayhanmalkoc](https://github.com/ayhanmalkoc))\n- Devin CLI in the ACP provider catalog (by [@Alcimerio](https://github.com/Alcimerio))\n- OpenCode agents show their mode colors\n\n### Improved\n\n- Mobile terminal keyboard hides when you open a sidebar\n- Tool activity for read, write, and OpenCode tools renders more consistently ([#1171](https://github.com/getpaseo/paseo/pull/1171))\n- Compact workspace header actions are tidier\n- Settings latency readouts are easier to scan ([#1170](https://github.com/getpaseo/paseo/pull/1170))\n- Pull request merge is available as soon as GitHub reports the PR is ready ([#1172](https://github.com/getpaseo/paseo/pull/1172))\n\n### Fixed\n\n- Mobile slash command autocomplete no longer flickers or mis-layers\n- Interrupting an OpenCode agent returns it to idle instead of showing an error ([#1169](https://github.com/getpaseo/paseo/pull/1169))\n- Provider model selection per workspace is honored ([#1167](https://github.com/getpaseo/paseo/pull/1167))\n- Draft composer keeps the permission mode you selected ([#1175](https://github.com/getpaseo/paseo/pull/1175))\n- Terminal color queries no longer return malformed replies\n- File links in chat no longer crash when a message contains a bare '%' (by [@Elliotwu-7](https://github.com/Elliotwu-7))"
   },
   {
-    version: "0.1.81",
-    date: "2026-05-24",
-    markdown:
-      "### Added\n\n- **Paseo can now be installed as a web app from supported browsers** ([#1144](https://github.com/getpaseo/paseo/pull/1144))\n- **Pi extension dialogs now appear as Paseo permission prompts** ([#1134](https://github.com/getpaseo/paseo/pull/1134) by [@yuruiz](https://github.com/yuruiz))\n- Added community links and a home button to the sidebar\n\n### Improved\n\n- **Mobile terminals load faster and restore existing output more smoothly** ([#1147](https://github.com/getpaseo/paseo/pull/1147))\n- Copying assistant messages preserves formatting\n- Agent metadata fallback failures now log each provider attempt for easier debugging\n\n### Fixed\n\n- Android: slash command suggestions stay interactive when opened from the composer\n- macOS: Alt+letter shortcuts work again\n- Terminal panes no longer flicker during resize\n- OpenCode MCP servers are injected once instead of being connected twice\n- Import session no longer shows empty sessions\n- Worktree archive status no longer reports false unpushed commits ([#1158](https://github.com/getpaseo/paseo/pull/1158))\n- The `/exit`, `/quit`, and `/q` slash command aliases now show as one row\n- Shortcut chord badges are readable in light mode\n- Segmented controls show their track under every segment\n- Sheet header search text is readable in dark mode",
+    "version": "0.1.81",
+    "date": "2026-05-24",
+    "markdown": "### Added\n\n- **Paseo can now be installed as a web app from supported browsers** ([#1144](https://github.com/getpaseo/paseo/pull/1144))\n- **Pi extension dialogs now appear as Paseo permission prompts** ([#1134](https://github.com/getpaseo/paseo/pull/1134) by [@yuruiz](https://github.com/yuruiz))\n- Added community links and a home button to the sidebar\n\n### Improved\n\n- **Mobile terminals load faster and restore existing output more smoothly** ([#1147](https://github.com/getpaseo/paseo/pull/1147))\n- Copying assistant messages preserves formatting\n- Agent metadata fallback failures now log each provider attempt for easier debugging\n\n### Fixed\n\n- Android: slash command suggestions stay interactive when opened from the composer\n- macOS: Alt+letter shortcuts work again\n- Terminal panes no longer flicker during resize\n- OpenCode MCP servers are injected once instead of being connected twice\n- Import session no longer shows empty sessions\n- Worktree archive status no longer reports false unpushed commits ([#1158](https://github.com/getpaseo/paseo/pull/1158))\n- The `/exit`, `/quit`, and `/q` slash command aliases now show as one row\n- Shortcut chord badges are readable in light mode\n- Segmented controls show their track under every segment\n- Sheet header search text is readable in dark mode"
   },
   {
-    version: "0.1.80",
-    date: "2026-05-21",
-    markdown: "### Fixed\n\n- Opening dropdown menus no longer crashes on mobile",
+    "version": "0.1.80",
+    "date": "2026-05-21",
+    "markdown": "### Fixed\n\n- Opening dropdown menus no longer crashes on mobile"
   },
   {
-    version: "0.1.79",
-    date: "2026-05-21",
-    markdown:
-      "### Added\n\n- **Pi has been revamped with first-class support**\n  - Runs through your installed Pi CLI, so your Pi extensions and configuration carry over\n  - Pi agents can call Paseo tools when you have the Pi MCP extension installed\n  - Import a Pi session you started in the terminal\n  - Copy Pi's resume command from any agent to continue the session in your terminal\n  - Windows: Pi sessions match correctly across symlinked and junctioned workspace paths\n- **New home screen with quick tiles for adding a project, importing a session, setting up providers, and pairing a device**\n- **Create an agent directly into a fresh worktree that auto-archives when the run finishes**\n- **Set a custom system prompt that applies to every agent you start**\n- **Rename workspaces, terminals, and agent tabs** ([#531](https://github.com/getpaseo/paseo/pull/531))\n- **DeepSeek TUI in the ACP provider catalog** ([#1096](https://github.com/getpaseo/paseo/pull/1096))\n- **Kiro CLI in the ACP provider catalog** (by [@huhusmang](https://github.com/huhusmang))\n- Catalog providers show their icons in the model picker ([#1098](https://github.com/getpaseo/paseo/pull/1098))\n- Custom environment variables passed when creating an agent now reach the agent process ([#1112](https://github.com/getpaseo/paseo/pull/1112))\n- NixOS module supports the public TLS option for self-hosted relays ([#1106](https://github.com/getpaseo/paseo/pull/1106) by [@yzx9](https://github.com/yzx9))\n\n### Improved\n\n- **Stale host connections recover automatically without a manual refresh**\n- Paseo opens to the workspace you were on last time you used it ([#1101](https://github.com/getpaseo/paseo/pull/1101))\n- Workspaces remember which editor you opened them in\n- Outdated daemons now suggest an upgrade when they receive a command they don't understand\n- Voice mode is hidden while an agent is running\n- Agent file-link tooltips show the full resolved file path ([#1088](https://github.com/getpaseo/paseo/pull/1088))\n- Workspace git status refreshes less aggressively in the background ([#1102](https://github.com/getpaseo/paseo/pull/1102))\n\n### Fixed\n\n- macOS desktop no longer freezes after the display wakes from sleep ([#745](https://github.com/getpaseo/paseo/pull/745))\n- Windows: Codex picks up the Microsoft Store install correctly ([#1020](https://github.com/getpaseo/paseo/pull/1020) by [@32r4](https://github.com/32r4))\n- Workspace selection survives a daemon restart ([#1111](https://github.com/getpaseo/paseo/pull/1111))\n- Cursor agents wait for slash commands to load before listing them ([#1099](https://github.com/getpaseo/paseo/pull/1099) by [@chrisbanes](https://github.com/chrisbanes))\n- Codex sub-agents keep running through transient child process errors (by [@xy-plus](https://github.com/xy-plus))\n- iPad terminals send Ctrl+C correctly from a hardware keyboard (by [@samatar26](https://github.com/samatar26))\n- Git filenames with non-ASCII characters render correctly (by [@samatar26](https://github.com/samatar26))\n- Paste shortcuts work on Dvorak keyboard layouts (by [@qin-nz](https://github.com/qin-nz))\n- Claude file links resolve correctly for projects whose paths need SDK encoding\n- Duplicate Claude result text no longer appears in chat ([#1095](https://github.com/getpaseo/paseo/pull/1095))\n- Dynamic UI styles no longer leak CSS rules across the page ([#1103](https://github.com/getpaseo/paseo/pull/1103))\n- Relay handshakes reject sessions that try to change encryption keys mid-flight ([#1037](https://github.com/getpaseo/paseo/pull/1037) by [@joaosa](https://github.com/joaosa))",
+    "version": "0.1.79",
+    "date": "2026-05-21",
+    "markdown": "### Added\n\n- **Pi has been revamped with first-class support**\n  - Runs through your installed Pi CLI, so your Pi extensions and configuration carry over\n  - Pi agents can call Paseo tools when you have the Pi MCP extension installed\n  - Import a Pi session you started in the terminal\n  - Copy Pi's resume command from any agent to continue the session in your terminal\n  - Windows: Pi sessions match correctly across symlinked and junctioned workspace paths\n- **New home screen with quick tiles for adding a project, importing a session, setting up providers, and pairing a device**\n- **Create an agent directly into a fresh worktree that auto-archives when the run finishes**\n- **Set a custom system prompt that applies to every agent you start**\n- **Rename workspaces, terminals, and agent tabs** ([#531](https://github.com/getpaseo/paseo/pull/531))\n- **DeepSeek TUI in the ACP provider catalog** ([#1096](https://github.com/getpaseo/paseo/pull/1096))\n- **Kiro CLI in the ACP provider catalog** (by [@huhusmang](https://github.com/huhusmang))\n- Catalog providers show their icons in the model picker ([#1098](https://github.com/getpaseo/paseo/pull/1098))\n- Custom environment variables passed when creating an agent now reach the agent process ([#1112](https://github.com/getpaseo/paseo/pull/1112))\n- NixOS module supports the public TLS option for self-hosted relays ([#1106](https://github.com/getpaseo/paseo/pull/1106) by [@yzx9](https://github.com/yzx9))\n\n### Improved\n\n- **Stale host connections recover automatically without a manual refresh**\n- Paseo opens to the workspace you were on last time you used it ([#1101](https://github.com/getpaseo/paseo/pull/1101))\n- Workspaces remember which editor you opened them in\n- Outdated daemons now suggest an upgrade when they receive a command they don't understand\n- Voice mode is hidden while an agent is running\n- Agent file-link tooltips show the full resolved file path ([#1088](https://github.com/getpaseo/paseo/pull/1088))\n- Workspace git status refreshes less aggressively in the background ([#1102](https://github.com/getpaseo/paseo/pull/1102))\n\n### Fixed\n\n- macOS desktop no longer freezes after the display wakes from sleep ([#745](https://github.com/getpaseo/paseo/pull/745))\n- Windows: Codex picks up the Microsoft Store install correctly ([#1020](https://github.com/getpaseo/paseo/pull/1020) by [@32r4](https://github.com/32r4))\n- Workspace selection survives a daemon restart ([#1111](https://github.com/getpaseo/paseo/pull/1111))\n- Cursor agents wait for slash commands to load before listing them ([#1099](https://github.com/getpaseo/paseo/pull/1099) by [@chrisbanes](https://github.com/chrisbanes))\n- Codex sub-agents keep running through transient child process errors (by [@xy-plus](https://github.com/xy-plus))\n- iPad terminals send Ctrl+C correctly from a hardware keyboard (by [@samatar26](https://github.com/samatar26))\n- Git filenames with non-ASCII characters render correctly (by [@samatar26](https://github.com/samatar26))\n- Paste shortcuts work on Dvorak keyboard layouts (by [@qin-nz](https://github.com/qin-nz))\n- Claude file links resolve correctly for projects whose paths need SDK encoding\n- Duplicate Claude result text no longer appears in chat ([#1095](https://github.com/getpaseo/paseo/pull/1095))\n- Dynamic UI styles no longer leak CSS rules across the page ([#1103](https://github.com/getpaseo/paseo/pull/1103))\n- Relay handshakes reject sessions that try to change encryption keys mid-flight ([#1037](https://github.com/getpaseo/paseo/pull/1037) by [@joaosa](https://github.com/joaosa))"
   },
   {
-    version: "0.1.78",
-    date: "2026-05-18",
-    markdown:
-      "### Improved\n\n- **Mobile model selector is faster and more straightforward** Picking a model, mode, or thinking option takes fewer taps\n\n### Fixed\n\n- Splitting a pane no longer loses your scroll position\n- Typing in mobile sheets no longer flickers\n- Sheets on mobile web no longer crash when swiped to dismiss",
+    "version": "0.1.78",
+    "date": "2026-05-18",
+    "markdown": "### Improved\n\n- **Mobile model selector is faster and more straightforward** Picking a model, mode, or thinking option takes fewer taps\n\n### Fixed\n\n- Splitting a pane no longer loses your scroll position\n- Typing in mobile sheets no longer flickers\n- Sheets on mobile web no longer crash when swiped to dismiss"
   },
   {
-    version: "0.1.77",
-    date: "2026-05-18",
-    markdown:
-      "### Added\n\n- **Slash commands to end and restart an agent**\n- **Syntax highlighting for code blocks in chat**\n- **Copy button on code blocks in chat**\n- **Configurable terminal scrollback** ([#1021](https://github.com/getpaseo/paseo/pull/1021) by [@32r4](https://github.com/32r4))\n- Assistant file links open at a specific line range when one is included\n- Mode icons appear in the agent status menu ([#1059](https://github.com/getpaseo/paseo/pull/1059) by [@32r4](https://github.com/32r4))\n- MCP exposes schedule update, logs, and run-once tools ([#1032](https://github.com/getpaseo/paseo/pull/1032) by [@skevetter](https://github.com/skevetter))\n- Self-hosted relays can use a different TLS setting for the public endpoint ([#1045](https://github.com/getpaseo/paseo/pull/1045) by [@yzx9](https://github.com/yzx9))\n\n### Improved\n\n- User messages now have a distinct bubble fill for clearer chat hierarchy\n- Closing a tab returns to its parent tab\n- Diff rows show the full file path on hover ([#1061](https://github.com/getpaseo/paseo/pull/1061) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))\n- The CLI shows the remote daemon host when `ls` cannot connect ([#1043](https://github.com/getpaseo/paseo/pull/1043) by [@mturac](https://github.com/mturac))\n- Nix install of the daemon is smaller ([#966](https://github.com/getpaseo/paseo/pull/966) by [@ixxie](https://github.com/ixxie))\n- Nix install honors home-manager profile paths when inheriting the user PATH ([#1040](https://github.com/getpaseo/paseo/pull/1040) by [@ixxie](https://github.com/ixxie))\n\n### Fixed\n\n- OpenCode probes no longer create empty sessions\n- OpenCode custom commands no longer hang\n- OpenCode session imports succeed across more environments\n- Native diff rows expand correctly ([#940](https://github.com/getpaseo/paseo/pull/940) by [@bolasblack](https://github.com/bolasblack))\n- Mobile sidebar interactions work correctly on web ([#900](https://github.com/getpaseo/paseo/pull/900) by [@nikuscs](https://github.com/nikuscs))\n- Mobile web drag gestures fire reliably ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- Mobile web drag-and-drop activates correctly ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- iOS Safari no longer zooms when focusing the composer ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- Enter behavior in the mobile web composer is consistent ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- Composer no longer flickers when resizing with long prompts\n- Inline code links in assistant messages open the correct file\n- Host switcher popover is wide enough to show host names ([#981](https://github.com/getpaseo/paseo/pull/981) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))\n- Windows: importing existing sessions matches paths correctly ([#1012](https://github.com/getpaseo/paseo/pull/1012) by [@kj1534](https://github.com/kj1534))",
+    "version": "0.1.77",
+    "date": "2026-05-18",
+    "markdown": "### Added\n\n- **Slash commands to end and restart an agent**\n- **Syntax highlighting for code blocks in chat**\n- **Copy button on code blocks in chat**\n- **Configurable terminal scrollback** ([#1021](https://github.com/getpaseo/paseo/pull/1021) by [@32r4](https://github.com/32r4))\n- Assistant file links open at a specific line range when one is included\n- Mode icons appear in the agent status menu ([#1059](https://github.com/getpaseo/paseo/pull/1059) by [@32r4](https://github.com/32r4))\n- MCP exposes schedule update, logs, and run-once tools ([#1032](https://github.com/getpaseo/paseo/pull/1032) by [@skevetter](https://github.com/skevetter))\n- Self-hosted relays can use a different TLS setting for the public endpoint ([#1045](https://github.com/getpaseo/paseo/pull/1045) by [@yzx9](https://github.com/yzx9))\n\n### Improved\n\n- User messages now have a distinct bubble fill for clearer chat hierarchy\n- Closing a tab returns to its parent tab\n- Diff rows show the full file path on hover ([#1061](https://github.com/getpaseo/paseo/pull/1061) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))\n- The CLI shows the remote daemon host when `ls` cannot connect ([#1043](https://github.com/getpaseo/paseo/pull/1043) by [@mturac](https://github.com/mturac))\n- Nix install of the daemon is smaller ([#966](https://github.com/getpaseo/paseo/pull/966) by [@ixxie](https://github.com/ixxie))\n- Nix install honors home-manager profile paths when inheriting the user PATH ([#1040](https://github.com/getpaseo/paseo/pull/1040) by [@ixxie](https://github.com/ixxie))\n\n### Fixed\n\n- OpenCode probes no longer create empty sessions\n- OpenCode custom commands no longer hang\n- OpenCode session imports succeed across more environments\n- Native diff rows expand correctly ([#940](https://github.com/getpaseo/paseo/pull/940) by [@bolasblack](https://github.com/bolasblack))\n- Mobile sidebar interactions work correctly on web ([#900](https://github.com/getpaseo/paseo/pull/900) by [@nikuscs](https://github.com/nikuscs))\n- Mobile web drag gestures fire reliably ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- Mobile web drag-and-drop activates correctly ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- iOS Safari no longer zooms when focusing the composer ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- Enter behavior in the mobile web composer is consistent ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))\n- Composer no longer flickers when resizing with long prompts\n- Inline code links in assistant messages open the correct file\n- Host switcher popover is wide enough to show host names ([#981](https://github.com/getpaseo/paseo/pull/981) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))\n- Windows: importing existing sessions matches paths correctly ([#1012](https://github.com/getpaseo/paseo/pull/1012) by [@kj1534](https://github.com/kj1534))"
   },
   {
-    version: "0.1.76",
-    date: "2026-05-15",
-    markdown:
-      "### Added\n\n- **Chat timestamps and turn durations** Every message shows when it was sent, and each turn surfaces how long the agent took\n- **Auto Review permission mode for Claude Code and Codex** Agents stop after each assistant turn for review instead of running unattended ([#928](https://github.com/getpaseo/paseo/pull/928), [#963](https://github.com/getpaseo/paseo/pull/963) by [@bolasblack](https://github.com/bolasblack))\n- Surface Codex's context compaction events and the `/compact` command in chat\n- Optional auto-archive for worktrees once their PR merges\n- Paste a GitHub PR or issue URL into the composer to attach it as context\n- Surface GitHub auto-merge actions in the PR hover card\n- Show all PR check counts in the PR hover card\n- Rename a project to disambiguate duplicates that share a folder name\n- Confirm before archiving a worktree with uncommitted or unpushed work\n- Claude Code now picks up models from `~/.claude/settings.json` so custom model lists show up in the model picker\n- Local Claude Code settings (`.claude/settings.local.json`) apply per workspace\n- Diagnostics for generic ACP providers surface in the model picker\n- Allow setting fast mode for Paseo subagents ([#909](https://github.com/getpaseo/paseo/pull/909), [#910](https://github.com/getpaseo/paseo/pull/910) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))\n\n### Improved\n\n- Surface Claude error messages in chat instead of ending the turn silently\n- Workspace checkout picker auto-selects when a single PR is attached\n- New workspace flow honors the currently checked-out branch when branching off ([#909](https://github.com/getpaseo/paseo/pull/908) by [@sbtobb](https://github.com/sbtobb))\n- OpenCode models from console subscription providers now appear in the model picker ([#917](https://github.com/getpaseo/paseo/pull/917) by [@t2o2](https://github.com/t2o2))\n- Cursor model picker reflects the models advertised by the Cursor ACP client ([#958](https://github.com/getpaseo/paseo/pull/958) by [@chrisbanes](https://github.com/chrisbanes))\n\n### Fixed\n\n- iPad hardware Enter submits the composer ([#919](https://github.com/getpaseo/paseo/pull/919) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))\n- PR status falls back to a non-checks query for fine-grained GitHub tokens ([#932](https://github.com/getpaseo/paseo/pull/932) by [@32r4](https://github.com/32r4))\n- ACP errors display as readable text instead of `[object Object]`\n- OpenCode no longer hangs on retry when the upstream provider stalls\n- Worktree ahead count is correct when the upstream branch has been deleted\n- Branch-off worktrees track the correct upstream\n- File changes view works on empty repositories with no commits yet\n- Assistant message file links open the correct file\n- Default thinking option matches the selected model's capabilities\n- Shift+Enter works again in terminal input modes\n- Duplicate project entries no longer appear after reopening a project\n- Pi-backed sessions recover after a Copilot 413 instead of staying stuck\n- Skip probing unrelated executable candidates when launching agents\n- Relay E2EE reconnects cleanly under racing connect/disconnect\n- Workspace kind stays in sync with project kind after reconfiguration\n- zsh integration files install with usable runtime modes\n- MCP worktree cache refreshes after create and archive ([#911](https://github.com/getpaseo/paseo/pull/911) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))",
+    "version": "0.1.76",
+    "date": "2026-05-15",
+    "markdown": "### Added\n\n- **Chat timestamps and turn durations** Every message shows when it was sent, and each turn surfaces how long the agent took\n- **Auto Review permission mode for Claude Code and Codex** Agents stop after each assistant turn for review instead of running unattended ([#928](https://github.com/getpaseo/paseo/pull/928), [#963](https://github.com/getpaseo/paseo/pull/963) by [@bolasblack](https://github.com/bolasblack))\n- Surface Codex's context compaction events and the `/compact` command in chat\n- Optional auto-archive for worktrees once their PR merges\n- Paste a GitHub PR or issue URL into the composer to attach it as context\n- Surface GitHub auto-merge actions in the PR hover card\n- Show all PR check counts in the PR hover card\n- Rename a project to disambiguate duplicates that share a folder name\n- Confirm before archiving a worktree with uncommitted or unpushed work\n- Claude Code now picks up models from `~/.claude/settings.json` so custom model lists show up in the model picker\n- Local Claude Code settings (`.claude/settings.local.json`) apply per workspace\n- Diagnostics for generic ACP providers surface in the model picker\n- Allow setting fast mode for Paseo subagents ([#909](https://github.com/getpaseo/paseo/pull/909), [#910](https://github.com/getpaseo/paseo/pull/910) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))\n\n### Improved\n\n- Surface Claude error messages in chat instead of ending the turn silently\n- Workspace checkout picker auto-selects when a single PR is attached\n- New workspace flow honors the currently checked-out branch when branching off ([#909](https://github.com/getpaseo/paseo/pull/908) by [@sbtobb](https://github.com/sbtobb))\n- OpenCode models from console subscription providers now appear in the model picker ([#917](https://github.com/getpaseo/paseo/pull/917) by [@t2o2](https://github.com/t2o2))\n- Cursor model picker reflects the models advertised by the Cursor ACP client ([#958](https://github.com/getpaseo/paseo/pull/958) by [@chrisbanes](https://github.com/chrisbanes))\n\n### Fixed\n\n- iPad hardware Enter submits the composer ([#919](https://github.com/getpaseo/paseo/pull/919) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))\n- PR status falls back to a non-checks query for fine-grained GitHub tokens ([#932](https://github.com/getpaseo/paseo/pull/932) by [@32r4](https://github.com/32r4))\n- ACP errors display as readable text instead of `[object Object]`\n- OpenCode no longer hangs on retry when the upstream provider stalls\n- Worktree ahead count is correct when the upstream branch has been deleted\n- Branch-off worktrees track the correct upstream\n- File changes view works on empty repositories with no commits yet\n- Assistant message file links open the correct file\n- Default thinking option matches the selected model's capabilities\n- Shift+Enter works again in terminal input modes\n- Duplicate project entries no longer appear after reopening a project\n- Pi-backed sessions recover after a Copilot 413 instead of staying stuck\n- Skip probing unrelated executable candidates when launching agents\n- Relay E2EE reconnects cleanly under racing connect/disconnect\n- Workspace kind stays in sync with project kind after reconfiguration\n- zsh integration files install with usable runtime modes\n- MCP worktree cache refreshes after create and archive ([#911](https://github.com/getpaseo/paseo/pull/911) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))"
   },
   {
-    version: "0.1.75",
-    date: "2026-05-12",
-    markdown:
-      "### Added\n\n- Set the speech-to-text language used by dictation and voice mode from settings ([#941](https://github.com/getpaseo/paseo/pull/941))\n\n### Fixed\n\n- Codex resume failures now surface as explicit errors instead of leaving the agent silently stuck ([#947](https://github.com/getpaseo/paseo/pull/947))\n- Custom providers extending Codex now route correctly when they set a custom `OPENAI_BASE_URL` ([#915](https://github.com/getpaseo/paseo/pull/915))\n- Fixed Copilot's **Allow All** mode (renamed from Autopilot) ([#935](https://github.com/getpaseo/paseo/pull/935))\n- Desktop: daemon startup no longer fails when a stale PID file is left next to a still-running daemon ([#913](https://github.com/getpaseo/paseo/pull/913) by [@biaoma-ty](https://github.com/biaoma-ty))\n- iPhone HEIC photos now attach correctly from the image picker ([#934](https://github.com/getpaseo/paseo/pull/934))\n- Scheduled agents now archive automatically after each run ([#945](https://github.com/getpaseo/paseo/pull/945))\n- Windows: Codex command summaries trim `pwsh`, `powershell`, or `cmd` wrappers ([#931](https://github.com/getpaseo/paseo/pull/931) by [@32r4](https://github.com/32r4))\n- iPad: settings sidebar and main sidebar respect the top safe area in wide layouts ([#922](https://github.com/getpaseo/paseo/pull/922), [#937](https://github.com/getpaseo/paseo/pull/937) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))",
+    "version": "0.1.75",
+    "date": "2026-05-12",
+    "markdown": "### Added\n\n- Set the speech-to-text language used by dictation and voice mode from settings ([#941](https://github.com/getpaseo/paseo/pull/941))\n\n### Fixed\n\n- Codex resume failures now surface as explicit errors instead of leaving the agent silently stuck ([#947](https://github.com/getpaseo/paseo/pull/947))\n- Custom providers extending Codex now route correctly when they set a custom `OPENAI_BASE_URL` ([#915](https://github.com/getpaseo/paseo/pull/915))\n- Fixed Copilot's **Allow All** mode (renamed from Autopilot) ([#935](https://github.com/getpaseo/paseo/pull/935))\n- Desktop: daemon startup no longer fails when a stale PID file is left next to a still-running daemon ([#913](https://github.com/getpaseo/paseo/pull/913) by [@biaoma-ty](https://github.com/biaoma-ty))\n- iPhone HEIC photos now attach correctly from the image picker ([#934](https://github.com/getpaseo/paseo/pull/934))\n- Scheduled agents now archive automatically after each run ([#945](https://github.com/getpaseo/paseo/pull/945))\n- Windows: Codex command summaries trim `pwsh`, `powershell`, or `cmd` wrappers ([#931](https://github.com/getpaseo/paseo/pull/931) by [@32r4](https://github.com/32r4))\n- iPad: settings sidebar and main sidebar respect the top safe area in wide layouts ([#922](https://github.com/getpaseo/paseo/pull/922), [#937](https://github.com/getpaseo/paseo/pull/937) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))"
   },
   {
-    version: "0.1.74",
-    date: "2026-05-11",
-    markdown:
-      "### Fixed\n\n- **OpenCode agent turns no longer stall** Paseo now follows OpenCode's global event stream, so turns stream reliably without falling back to fragile recovery paths ([#916](https://github.com/getpaseo/paseo/pull/916))",
+    "version": "0.1.74",
+    "date": "2026-05-11",
+    "markdown": "### Fixed\n\n- **OpenCode agent turns no longer stall** Paseo now follows OpenCode's global event stream, so turns stream reliably without falling back to fragile recovery paths ([#916](https://github.com/getpaseo/paseo/pull/916))"
   },
   {
-    version: "0.1.73",
-    date: "2026-05-10",
-    markdown:
-      '### Fixed\n\n- **OpenCode agents work again on OpenCode 1.14.42+** ([#895](https://github.com/getpaseo/paseo/pull/895), [#902](https://github.com/getpaseo/paseo/pull/902), [#904](https://github.com/getpaseo/paseo/pull/904) by [@atomlink-ye](https://github.com/atomlink-ye), [@plutofog](https://github.com/plutofog))\n- Web: opening a workspace no longer hangs in browsers without `crypto.randomUUID` ([#858](https://github.com/getpaseo/paseo/pull/858) by [@cokekitten](https://github.com/cokekitten))\n- Codex sub-agent child tool calls now report a final failure state instead of staying as "running" ([#899](https://github.com/getpaseo/paseo/pull/899))\n- Old relay pairing URLs without an explicit TLS flag work again ([#896](https://github.com/getpaseo/paseo/pull/896))\n- macOS: the tab-jump shortcut no longer collides with system shortcuts ([#859](https://github.com/getpaseo/paseo/pull/859) by [@nikuscs](https://github.com/nikuscs))\n- Web: the composer no longer triggers a bottom-sheet keyboard on desktop browsers ([#898](https://github.com/getpaseo/paseo/pull/898) by [@nikuscs](https://github.com/nikuscs))\n- Windows: git operations no longer flash a console window on each invocation ([#897](https://github.com/getpaseo/paseo/pull/897))\n- File explorer no longer follows symlinks outside the workspace root ([#847](https://github.com/getpaseo/paseo/pull/847) by [@joaosa](https://github.com/joaosa))\n- Desktop only opens external URLs via http(s) and mailto schemes ([#845](https://github.com/getpaseo/paseo/pull/845) by [@joaosa](https://github.com/joaosa))\n- MCP debug request logs now redact request bodies ([#842](https://github.com/getpaseo/paseo/pull/842) by [@joaosa](https://github.com/joaosa))',
+    "version": "0.1.73",
+    "date": "2026-05-10",
+    "markdown": "### Fixed\n\n- **OpenCode agents work again on OpenCode 1.14.42+** ([#895](https://github.com/getpaseo/paseo/pull/895), [#902](https://github.com/getpaseo/paseo/pull/902), [#904](https://github.com/getpaseo/paseo/pull/904) by [@atomlink-ye](https://github.com/atomlink-ye), [@plutofog](https://github.com/plutofog))\n- Web: opening a workspace no longer hangs in browsers without `crypto.randomUUID` ([#858](https://github.com/getpaseo/paseo/pull/858) by [@cokekitten](https://github.com/cokekitten))\n- Codex sub-agent child tool calls now report a final failure state instead of staying as \"running\" ([#899](https://github.com/getpaseo/paseo/pull/899))\n- Old relay pairing URLs without an explicit TLS flag work again ([#896](https://github.com/getpaseo/paseo/pull/896))\n- macOS: the tab-jump shortcut no longer collides with system shortcuts ([#859](https://github.com/getpaseo/paseo/pull/859) by [@nikuscs](https://github.com/nikuscs))\n- Web: the composer no longer triggers a bottom-sheet keyboard on desktop browsers ([#898](https://github.com/getpaseo/paseo/pull/898) by [@nikuscs](https://github.com/nikuscs))\n- Windows: git operations no longer flash a console window on each invocation ([#897](https://github.com/getpaseo/paseo/pull/897))\n- File explorer no longer follows symlinks outside the workspace root ([#847](https://github.com/getpaseo/paseo/pull/847) by [@joaosa](https://github.com/joaosa))\n- Desktop only opens external URLs via http(s) and mailto schemes ([#845](https://github.com/getpaseo/paseo/pull/845) by [@joaosa](https://github.com/joaosa))\n- MCP debug request logs now redact request bodies ([#842](https://github.com/getpaseo/paseo/pull/842) by [@joaosa](https://github.com/joaosa))"
   },
   {
-    version: "0.1.72",
-    date: "2026-05-10",
-    markdown:
-      '### Fixed\n\n- **Codex approval prompts no longer hang** Fixes a regression introduced in 0.1.70 where Codex agents would wait forever on command and file approvals — the prompt never reached the app and the agent stayed stuck in "running" ([#866](https://github.com/getpaseo/paseo/pull/866), [#869](https://github.com/getpaseo/paseo/pull/869))\n- **Windows: daemon no longer crashes when Codex emits non-JSON output** Localized stdout lines from the Codex CLI are now ignored instead of taking down the daemon worker ([#866](https://github.com/getpaseo/paseo/pull/866))\n- Drag-and-drop images onto the new workspace screen now works ([#850](https://github.com/getpaseo/paseo/pull/850))\n- Archiving a worktree from the toolbar redirects you immediately instead of leaving you on the dead screen for a beat ([#852](https://github.com/getpaseo/paseo/pull/852))\n- Pi-backed sessions now shut down cleanly when you close them, releasing extension resources on the Pi side ([#863](https://github.com/getpaseo/paseo/pull/863))',
+    "version": "0.1.72",
+    "date": "2026-05-10",
+    "markdown": "### Fixed\n\n- **Codex approval prompts no longer hang** Fixes a regression introduced in 0.1.70 where Codex agents would wait forever on command and file approvals — the prompt never reached the app and the agent stayed stuck in \"running\" ([#866](https://github.com/getpaseo/paseo/pull/866), [#869](https://github.com/getpaseo/paseo/pull/869))\n- **Windows: daemon no longer crashes when Codex emits non-JSON output** Localized stdout lines from the Codex CLI are now ignored instead of taking down the daemon worker ([#866](https://github.com/getpaseo/paseo/pull/866))\n- Drag-and-drop images onto the new workspace screen now works ([#850](https://github.com/getpaseo/paseo/pull/850))\n- Archiving a worktree from the toolbar redirects you immediately instead of leaving you on the dead screen for a beat ([#852](https://github.com/getpaseo/paseo/pull/852))\n- Pi-backed sessions now shut down cleanly when you close them, releasing extension resources on the Pi side ([#863](https://github.com/getpaseo/paseo/pull/863))"
   },
   {
-    version: "0.1.71",
-    date: "2026-05-09",
-    markdown:
-      "### Added\n\n- **Import existing Claude, Codex, and OpenCode sessions** into Paseo — pick up a conversation you started in the terminal and keep going from the app, with the full timeline ([#766](https://github.com/getpaseo/paseo/pull/766), [#833](https://github.com/getpaseo/paseo/pull/833))\n- **Subagents now appear in a collapsible section above the composer** so you can jump into agents your main agent spawned ([#532](https://github.com/getpaseo/paseo/pull/532))\n- Merge a pull request directly from the checkout pane ([#814](https://github.com/getpaseo/paseo/pull/814))\n- Customize the per-project prompts Paseo uses to auto-generate agent titles, branch names, commit messages, and pull request descriptions ([#836](https://github.com/getpaseo/paseo/pull/836))\n- Open an empty workspace without typing a prompt first ([#834](https://github.com/getpaseo/paseo/pull/834))\n- Project settings are now grouped with inline links to the relevant docs ([#837](https://github.com/getpaseo/paseo/pull/837))\n- Rich context menu on desktop — copy link, copy image, and spellcheck suggestions\n- Archiving a Codex-backed agent now archives the underlying native Codex thread too ([#827](https://github.com/getpaseo/paseo/pull/827) by [@32r4](https://github.com/32r4))\n\n### Improved\n\n- Opening a workspace auto-focuses the agent that needs your attention ([#828](https://github.com/getpaseo/paseo/pull/828))\n- An unattended agent that spawns a sub-agent on a different provider via MCP now starts the sub-agent in unattended mode too\n\n### Fixed\n\n- iOS project picker now submits the typed path ([#831](https://github.com/getpaseo/paseo/pull/831))\n- System messages and chat mentions routed to multiple agents now reach every recipient consistently ([#830](https://github.com/getpaseo/paseo/pull/830))\n- Clicking a Markdown link in agent output no longer reloads the desktop app on top of opening the link\n- macOS desktop tab-jump shortcuts now use Cmd+Option+1-9, avoiding conflicts with Option-based international keyboard characters such as `@`\n\n### Security\n\n- Local state files (daemon keypair, stored credentials, persisted config) are now readable only by the owning user ([#825](https://github.com/getpaseo/paseo/pull/825) by [@joaosa](https://github.com/joaosa))",
+    "version": "0.1.71",
+    "date": "2026-05-09",
+    "markdown": "### Added\n\n- **Import existing Claude, Codex, and OpenCode sessions** into Paseo — pick up a conversation you started in the terminal and keep going from the app, with the full timeline ([#766](https://github.com/getpaseo/paseo/pull/766), [#833](https://github.com/getpaseo/paseo/pull/833))\n- **Subagents now appear in a collapsible section above the composer** so you can jump into agents your main agent spawned ([#532](https://github.com/getpaseo/paseo/pull/532))\n- Merge a pull request directly from the checkout pane ([#814](https://github.com/getpaseo/paseo/pull/814))\n- Customize the per-project prompts Paseo uses to auto-generate agent titles, branch names, commit messages, and pull request descriptions ([#836](https://github.com/getpaseo/paseo/pull/836))\n- Open an empty workspace without typing a prompt first ([#834](https://github.com/getpaseo/paseo/pull/834))\n- Project settings are now grouped with inline links to the relevant docs ([#837](https://github.com/getpaseo/paseo/pull/837))\n- Rich context menu on desktop — copy link, copy image, and spellcheck suggestions\n- Archiving a Codex-backed agent now archives the underlying native Codex thread too ([#827](https://github.com/getpaseo/paseo/pull/827) by [@32r4](https://github.com/32r4))\n\n### Improved\n\n- Opening a workspace auto-focuses the agent that needs your attention ([#828](https://github.com/getpaseo/paseo/pull/828))\n- An unattended agent that spawns a sub-agent on a different provider via MCP now starts the sub-agent in unattended mode too\n\n### Fixed\n\n- iOS project picker now submits the typed path ([#831](https://github.com/getpaseo/paseo/pull/831))\n- System messages and chat mentions routed to multiple agents now reach every recipient consistently ([#830](https://github.com/getpaseo/paseo/pull/830))\n- Clicking a Markdown link in agent output no longer reloads the desktop app on top of opening the link\n- macOS desktop tab-jump shortcuts now use Cmd+Option+1-9, avoiding conflicts with Option-based international keyboard characters such as `@`\n\n### Security\n\n- Local state files (daemon keypair, stored credentials, persisted config) are now readable only by the owning user ([#825](https://github.com/getpaseo/paseo/pull/825) by [@joaosa](https://github.com/joaosa))"
   },
   {
-    version: "0.1.70",
-    date: "2026-05-08",
-    markdown:
-      "### Breaking\n\n- **Claude agents now require `claude` on your PATH** Install Claude Code globally (`npm install -g @anthropic-ai/claude-code`) before running a Claude agent — Paseo no longer ships a bundled fallback binary. Same posture as Codex and OpenCode, and shrinks the desktop install by ~210 MB per platform\n\n### Added\n\n- **One-click ACP providers** — add Cursor, Hermes, Qwen Coder, Kimi Code, and other ACP agents from a built-in catalog instead of writing config by hand\n- Codex `/goal` slash command — set or update the goal mid-turn while a Codex agent is running\n- Claude's Sonnet 4.6 1M context model is now selectable in the model picker\n- Detect GitHub issue and PR URLs pasted into the composer search\n- `paseo worktree create` CLI command, with parity to the MCP `create_worktree` tool\n- `paseo schedule update` to edit a schedule in place without recreating it\n- `paseo schedule run-once` for cron-style triggers, plus `--mode` on `schedule` and `loop`. Background runs now default to unattended mode\n- Projects settings now lists workspaces from any remote — GitLab, Gitea, Bitbucket, self-hosted, and SSH-style URLs, not just GitHub ([#681](https://github.com/getpaseo/paseo/pull/681) by [@krumpyzoid](https://github.com/krumpyzoid))\n\n### Improved\n\n- Skills now install, update, and uninstall on demand instead of silently auto-syncing on every desktop launch\n- Self-hosted relays can opt into `wss://` for TLS connections\n- Workspace open targets only show options reachable from the current daemon\n- Combobox search matches model descriptions, not just names\n- Codex image attachments render inline as path markdown\n- Subagent task notifications no longer clutter the parent agent's timeline\n- Voice mode: quieter thinking tone and small UI polish\n- Settings sidebar order: Projects now appears after General\n- Electron upgraded to 41.2.0 for the desktop app\n\n### Fixed\n\n- **Claude agent: daemon no longer crashes mid-turn** when the underlying SDK fires a stray control message after the connection has been torn down\n- **Windows:** Terminals start reliably and shut down cleanly without leaving stuck processes behind\n- **Linux:** Workspace file watchers no longer storm with events on busy working trees, fixing CPU spikes on large repos ([#794](https://github.com/getpaseo/paseo/pull/794) by [@312223105](https://github.com/312223105))\n- ACP-based agents launch terminal shell commands reliably ([#793](https://github.com/getpaseo/paseo/pull/793) by [@ebg1223](https://github.com/ebg1223))\n- Checkout shortstat now counts untracked files ([#608](https://github.com/getpaseo/paseo/issues/608), [#762](https://github.com/getpaseo/paseo/pull/762) by [@somus](https://github.com/somus))\n- Relay endpoints on port 443 use TLS automatically ([#774](https://github.com/getpaseo/paseo/pull/774) by [@caoer](https://github.com/caoer))\n- Desktop CLI passthrough TTY handling — interactive commands now behave correctly when launched from the desktop app\n- The CLI honors the `PASEO_PASSWORD` environment variable for password-protected daemons\n- Daemon shutdown terminates all child processes cleanly using tree-kill\n- Agent spawn paths handle missing executables and unusual install layouts more reliably\n- OpenCode now forwards provider retry errors instead of silently swallowing them\n- Codex import no longer reverts to the wrong default mode\n- Pane keyboard shortcuts no longer fire while you're typing in an editable field\n- Cold workspace URL navigation now lands in the correct sidebar entry on web\n- Workspace navigation regression on web fixed\n- Duplicate workspace shell navigation eliminated\n- The 'Update installed' callout no longer flashes incorrectly\n- Browser pane reload focus and devtools handling\n- MCP terminal capture now includes scrollback\n- Worktree branches no longer get renamed when an agent is created against an existing worktree from MCP\n- Creating an agent in a subdirectory of a registered workspace now runs in that subdirectory instead of jumping up to the parent ([#551](https://github.com/getpaseo/paseo/issues/551))\n- Non-GitHub project display names are derived from the remote owner/repo instead of the local path\n- Desktop IPC wrapped in shared mutation/query hooks, fixing stale state and intermittent failures ([#761](https://github.com/getpaseo/paseo/issues/761))\n- `paseo schedule create --host` now requires `--cwd` to avoid running schedules in the wrong directory\n- `paseo schedule create --every` runs once immediately by default, then on the configured interval\n- MCP `create_agent` validates the requested mode and refuses silent cross-provider inheritance",
+    "version": "0.1.70",
+    "date": "2026-05-08",
+    "markdown": "### Breaking\n\n- **Claude agents now require `claude` on your PATH** Install Claude Code globally (`npm install -g @anthropic-ai/claude-code`) before running a Claude agent — Paseo no longer ships a bundled fallback binary. Same posture as Codex and OpenCode, and shrinks the desktop install by ~210 MB per platform\n\n### Added\n\n- **One-click ACP providers** — add Cursor, Hermes, Qwen Coder, Kimi Code, and other ACP agents from a built-in catalog instead of writing config by hand\n- Codex `/goal` slash command — set or update the goal mid-turn while a Codex agent is running\n- Claude's Sonnet 4.6 1M context model is now selectable in the model picker\n- Detect GitHub issue and PR URLs pasted into the composer search\n- `paseo worktree create` CLI command, with parity to the MCP `create_worktree` tool\n- `paseo schedule update` to edit a schedule in place without recreating it\n- `paseo schedule run-once` for cron-style triggers, plus `--mode` on `schedule` and `loop`. Background runs now default to unattended mode\n- Projects settings now lists workspaces from any remote — GitLab, Gitea, Bitbucket, self-hosted, and SSH-style URLs, not just GitHub ([#681](https://github.com/getpaseo/paseo/pull/681) by [@krumpyzoid](https://github.com/krumpyzoid))\n\n### Improved\n\n- Skills now install, update, and uninstall on demand instead of silently auto-syncing on every desktop launch\n- Self-hosted relays can opt into `wss://` for TLS connections\n- Workspace open targets only show options reachable from the current daemon\n- Combobox search matches model descriptions, not just names\n- Codex image attachments render inline as path markdown\n- Subagent task notifications no longer clutter the parent agent's timeline\n- Voice mode: quieter thinking tone and small UI polish\n- Settings sidebar order: Projects now appears after General\n- Electron upgraded to 41.2.0 for the desktop app\n\n### Fixed\n\n- **Claude agent: daemon no longer crashes mid-turn** when the underlying SDK fires a stray control message after the connection has been torn down\n- **Windows:** Terminals start reliably and shut down cleanly without leaving stuck processes behind\n- **Linux:** Workspace file watchers no longer storm with events on busy working trees, fixing CPU spikes on large repos ([#794](https://github.com/getpaseo/paseo/pull/794) by [@312223105](https://github.com/312223105))\n- ACP-based agents launch terminal shell commands reliably ([#793](https://github.com/getpaseo/paseo/pull/793) by [@ebg1223](https://github.com/ebg1223))\n- Checkout shortstat now counts untracked files ([#608](https://github.com/getpaseo/paseo/issues/608), [#762](https://github.com/getpaseo/paseo/pull/762) by [@somus](https://github.com/somus))\n- Relay endpoints on port 443 use TLS automatically ([#774](https://github.com/getpaseo/paseo/pull/774) by [@caoer](https://github.com/caoer))\n- Desktop CLI passthrough TTY handling — interactive commands now behave correctly when launched from the desktop app\n- The CLI honors the `PASEO_PASSWORD` environment variable for password-protected daemons\n- Daemon shutdown terminates all child processes cleanly using tree-kill\n- Agent spawn paths handle missing executables and unusual install layouts more reliably\n- OpenCode now forwards provider retry errors instead of silently swallowing them\n- Codex import no longer reverts to the wrong default mode\n- Pane keyboard shortcuts no longer fire while you're typing in an editable field\n- Cold workspace URL navigation now lands in the correct sidebar entry on web\n- Workspace navigation regression on web fixed\n- Duplicate workspace shell navigation eliminated\n- The 'Update installed' callout no longer flashes incorrectly\n- Browser pane reload focus and devtools handling\n- MCP terminal capture now includes scrollback\n- Worktree branches no longer get renamed when an agent is created against an existing worktree from MCP\n- Creating an agent in a subdirectory of a registered workspace now runs in that subdirectory instead of jumping up to the parent ([#551](https://github.com/getpaseo/paseo/issues/551))\n- Non-GitHub project display names are derived from the remote owner/repo instead of the local path\n- Desktop IPC wrapped in shared mutation/query hooks, fixing stale state and intermittent failures ([#761](https://github.com/getpaseo/paseo/issues/761))\n- `paseo schedule create --host` now requires `--cwd` to avoid running schedules in the wrong directory\n- `paseo schedule create --every` runs once immediately by default, then on the configured interval\n- MCP `create_agent` validates the requested mode and refuses silent cross-provider inheritance"
   },
   {
-    version: "0.1.69",
-    date: "2026-05-05",
-    markdown:
-      "### Fixed\n\n- Paseo now recovers automatically when an internal daemon process crashes — your agents stay connected instead of getting stuck and you don't have to restart anything\n- Answering an interactive question from a Claude agent now reaches Claude correctly instead of being dropped ([#760](https://github.com/getpaseo/paseo/pull/760) by [@somus](https://github.com/somus))",
+    "version": "0.1.69",
+    "date": "2026-05-05",
+    "markdown": "### Fixed\n\n- Paseo now recovers automatically when an internal daemon process crashes — your agents stay connected instead of getting stuck and you don't have to restart anything\n- Answering an interactive question from a Claude agent now reaches Claude correctly instead of being dropped ([#760](https://github.com/getpaseo/paseo/pull/760) by [@somus](https://github.com/somus))"
   },
   {
-    version: "0.1.68",
-    date: "2026-05-05",
-    markdown:
-      "### Fixed\n\n- The desktop app no longer fails on first launch after a fresh install",
+    "version": "0.1.68",
+    "date": "2026-05-05",
+    "markdown": "### Fixed\n\n- The desktop app no longer fails on first launch after a fresh install"
   },
   {
-    version: "0.1.67",
-    date: "2026-05-03",
-    markdown:
-      "### Fixed\n\n- Archiving a worktree or workspace feels instant instead of waiting on the daemon, with automatic rollback if it fails\n- The built-in daemon toggle in desktop settings now actually takes effect\n- Desktop settings no longer reset on app launch after a legacy migration\n- Desktop daemon startup failures now surface on the splash screen and respond to retry, instead of leaving the app silently stuck\n- Internal LLM calls (branch names, commit messages, PR text) no longer leave behind ephemeral agent sessions in your provider history",
+    "version": "0.1.67",
+    "date": "2026-05-03",
+    "markdown": "### Fixed\n\n- Archiving a worktree or workspace feels instant instead of waiting on the daemon, with automatic rollback if it fails\n- The built-in daemon toggle in desktop settings now actually takes effect\n- Desktop settings no longer reset on app launch after a legacy migration\n- Desktop daemon startup failures now surface on the splash screen and respond to retry, instead of leaving the app silently stuck\n- Internal LLM calls (branch names, commit messages, PR text) no longer leave behind ephemeral agent sessions in your provider history"
   },
   {
-    version: "0.1.66",
-    date: "2026-05-03",
-    markdown:
-      "### Fixed\n\n- Streaming markdown preserves trailing newlines so paragraph spacing stays correct while the agent is still typing\n- Agent initialization failures surface within 30 seconds instead of 5 minutes\n- Terminals reply to ANSI cursor-position queries, so tools that ask for cursor location no longer hang",
+    "version": "0.1.66",
+    "date": "2026-05-03",
+    "markdown": "### Fixed\n\n- Streaming markdown preserves trailing newlines so paragraph spacing stays correct while the agent is still typing\n- Agent initialization failures surface within 30 seconds instead of 5 minutes\n- Terminals reply to ANSI cursor-position queries, so tools that ask for cursor location no longer hang"
   },
   {
-    version: "0.1.65",
-    date: "2026-05-03",
-    markdown:
-      "### Added\n\n- **In-app browser** — open a real web browser in any workspace to test your app ([#670](https://github.com/getpaseo/paseo/pull/670) by [@jasonkneen](https://github.com/jasonkneen))\n- Inline review comments in the git diff pane. Tap a line number to start a comment ([#530](https://github.com/getpaseo/paseo/pull/530))\n- Sub-agent activity is now shown for Codex, OpenCode, and Claude ([#672](https://github.com/getpaseo/paseo/pull/672), [#658](https://github.com/getpaseo/paseo/pull/658) by [@thisisryanswift](https://github.com/thisisryanswift))\n- Pull and push your branch in one step from the git actions menu in the changes pane\n- Resume existing agent sessions with `paseo import --provider <name> <id>` ([#632](https://github.com/getpaseo/paseo/pull/632))\n- Password authentication and SSL support for daemon connections ([#635](https://github.com/getpaseo/paseo/pull/635))\n- Connect to a daemon via relay using a pairing offer URL from the CLI ([#639](https://github.com/getpaseo/paseo/pull/639))\n- **Windows:** Native ARM64 builds are now available\n- Bundled Paseo skills now refresh automatically on desktop app launch\n\n### Improved\n\n- Codex streaming feels more responsive — message boundaries are preserved and output arrives sooner\n- Terminal sessions run in a dedicated worker process for better stability\n- New worktree branch names are derived from your prompt and attachments instead of a generic placeholder\n- Review comment UI is cleaner and easier to scan\n- The daemon's `/api/status` endpoint is now protected by password auth when one is configured\n\n### Fixed\n\n- **Apple Silicon Mac:** The desktop update pipeline now publishes manifests atomically, closing a race that could install the Intel build on Apple Silicon Macs and cause 100%+ renderer CPU usage. Affected users will self-heal — electron-updater's Rosetta detection migrates back to arm64 on the next update poll ([#555](https://github.com/getpaseo/paseo/issues/555))\n- **Linux:** `.deb` and `.rpm` packages now show as `Paseo` in the dock and process list instead of `Paseo.bin`. `--no-sandbox` is now scoped to AppImage only, matching VS Code's sandbox handling ([#602](https://github.com/getpaseo/paseo/issues/602))\n- **Windows:** Git diff commands no longer break on paths with special characters ([#629](https://github.com/getpaseo/paseo/pull/629))\n- Cursor CLI and other ACP custom providers launch reliably ([#628](https://github.com/getpaseo/paseo/pull/628))\n- Daemon stays up when WebSocket clients disconnect mid-stream, and crashes now write a fatal log entry instead of disappearing silently ([#613](https://github.com/getpaseo/paseo/pull/613) by [@yuruiz](https://github.com/yuruiz))\n- Long agent timelines reconnect cleanly over the relay instead of looping through disconnects while catching up ([#657](https://github.com/getpaseo/paseo/pull/657) by [@fireblue](https://github.com/fireblue))\n- Agent timelines refresh with smaller catch-up requests when you reopen an agent\n- Terminal snapshots flush reliably before clients reconnect\n- Workspace reconnects avoid unnecessary refresh work when the focused workspace is already current\n- Voice dictation keeps recording when the agent tab loses focus\n- OpenCode mode picker now lists agents available in every mode ([#606](https://github.com/getpaseo/paseo/pull/606) by [@thisisryanswift](https://github.com/thisisryanswift))\n- Codex plan approval panels no longer duplicate\n- Imported agents display the correct title immediately\n- OpenCode surfaces invalid mode/model errors instead of hanging\n- Archived worktrees stay hidden without flashing back into the list ([#640](https://github.com/getpaseo/paseo/pull/640))\n- Web dropdown menus no longer resize unexpectedly\n- The visible changes pane keeps in sync with the working tree diff\n- Tool detail rows on the timeline are selectable again\n- `paseo.json` parse errors in setup, teardown, and terminal actions now surface a clear error instead of failing silently\n- Diff gutter line numbers were shifted one row out of alignment in some cases on web\n- Streamed agent output reconciles cleanly when the timeline hydrates mid-turn ([#663](https://github.com/getpaseo/paseo/pull/663))\n- Images in assistant messages show a loading spinner while they load and an \"Image unavailable\" fallback if they fail, instead of a blank space\n- Isolated bottom sheet modals close and re-open without getting stuck",
+    "version": "0.1.65",
+    "date": "2026-05-03",
+    "markdown": "### Added\n\n- **In-app browser** — open a real web browser in any workspace to test your app ([#670](https://github.com/getpaseo/paseo/pull/670) by [@jasonkneen](https://github.com/jasonkneen))\n- Inline review comments in the git diff pane. Tap a line number to start a comment ([#530](https://github.com/getpaseo/paseo/pull/530))\n- Sub-agent activity is now shown for Codex, OpenCode, and Claude ([#672](https://github.com/getpaseo/paseo/pull/672), [#658](https://github.com/getpaseo/paseo/pull/658) by [@thisisryanswift](https://github.com/thisisryanswift))\n- Pull and push your branch in one step from the git actions menu in the changes pane\n- Resume existing agent sessions with `paseo import --provider <name> <id>` ([#632](https://github.com/getpaseo/paseo/pull/632))\n- Password authentication and SSL support for daemon connections ([#635](https://github.com/getpaseo/paseo/pull/635))\n- Connect to a daemon via relay using a pairing offer URL from the CLI ([#639](https://github.com/getpaseo/paseo/pull/639))\n- **Windows:** Native ARM64 builds are now available\n- Bundled Paseo skills now refresh automatically on desktop app launch\n\n### Improved\n\n- Codex streaming feels more responsive — message boundaries are preserved and output arrives sooner\n- Terminal sessions run in a dedicated worker process for better stability\n- New worktree branch names are derived from your prompt and attachments instead of a generic placeholder\n- Review comment UI is cleaner and easier to scan\n- The daemon's `/api/status` endpoint is now protected by password auth when one is configured\n\n### Fixed\n\n- **Apple Silicon Mac:** The desktop update pipeline now publishes manifests atomically, closing a race that could install the Intel build on Apple Silicon Macs and cause 100%+ renderer CPU usage. Affected users will self-heal — electron-updater's Rosetta detection migrates back to arm64 on the next update poll ([#555](https://github.com/getpaseo/paseo/issues/555))\n- **Linux:** `.deb` and `.rpm` packages now show as `Paseo` in the dock and process list instead of `Paseo.bin`. `--no-sandbox` is now scoped to AppImage only, matching VS Code's sandbox handling ([#602](https://github.com/getpaseo/paseo/issues/602))\n- **Windows:** Git diff commands no longer break on paths with special characters ([#629](https://github.com/getpaseo/paseo/pull/629))\n- Cursor CLI and other ACP custom providers launch reliably ([#628](https://github.com/getpaseo/paseo/pull/628))\n- Daemon stays up when WebSocket clients disconnect mid-stream, and crashes now write a fatal log entry instead of disappearing silently ([#613](https://github.com/getpaseo/paseo/pull/613) by [@yuruiz](https://github.com/yuruiz))\n- Long agent timelines reconnect cleanly over the relay instead of looping through disconnects while catching up ([#657](https://github.com/getpaseo/paseo/pull/657) by [@fireblue](https://github.com/fireblue))\n- Agent timelines refresh with smaller catch-up requests when you reopen an agent\n- Terminal snapshots flush reliably before clients reconnect\n- Workspace reconnects avoid unnecessary refresh work when the focused workspace is already current\n- Voice dictation keeps recording when the agent tab loses focus\n- OpenCode mode picker now lists agents available in every mode ([#606](https://github.com/getpaseo/paseo/pull/606) by [@thisisryanswift](https://github.com/thisisryanswift))\n- Codex plan approval panels no longer duplicate\n- Imported agents display the correct title immediately\n- OpenCode surfaces invalid mode/model errors instead of hanging\n- Archived worktrees stay hidden without flashing back into the list ([#640](https://github.com/getpaseo/paseo/pull/640))\n- Web dropdown menus no longer resize unexpectedly\n- The visible changes pane keeps in sync with the working tree diff\n- Tool detail rows on the timeline are selectable again\n- `paseo.json` parse errors in setup, teardown, and terminal actions now surface a clear error instead of failing silently\n- Diff gutter line numbers were shifted one row out of alignment in some cases on web\n- Streamed agent output reconciles cleanly when the timeline hydrates mid-turn ([#663](https://github.com/getpaseo/paseo/pull/663))\n- Images in assistant messages show a loading spinner while they load and an \"Image unavailable\" fallback if they fail, instead of a blank space\n- Isolated bottom sheet modals close and re-open without getting stuck"
   },
   {
-    version: "0.1.64",
-    date: "2026-04-28",
-    markdown:
-      "### Added\n\n- OpenCode now has a Full Access mode that auto-approves tool calls ([#595](https://github.com/getpaseo/paseo/pull/595) by [@tmih06](https://github.com/tmih06))\n- OpenCode supports executable slash commands ([#597](https://github.com/getpaseo/paseo/pull/597) by [@tmih06](https://github.com/tmih06))\n\n### Improved\n\n- `@`-mention stays responsive on very large projects ([#600](https://github.com/getpaseo/paseo/pull/600) by [@yuruiz](https://github.com/yuruiz))\n\n### Fixed\n\n- Workspaces still load when `paseo.json` has a parse error",
+    "version": "0.1.64",
+    "date": "2026-04-28",
+    "markdown": "### Added\n\n- OpenCode now has a Full Access mode that auto-approves tool calls ([#595](https://github.com/getpaseo/paseo/pull/595) by [@tmih06](https://github.com/tmih06))\n- OpenCode supports executable slash commands ([#597](https://github.com/getpaseo/paseo/pull/597) by [@tmih06](https://github.com/tmih06))\n\n### Improved\n\n- `@`-mention stays responsive on very large projects ([#600](https://github.com/getpaseo/paseo/pull/600) by [@yuruiz](https://github.com/yuruiz))\n\n### Fixed\n\n- Workspaces still load when `paseo.json` has a parse error"
   },
   {
-    version: "0.1.63",
-    date: "2026-04-28",
-    markdown:
-      "### Added\n\n- Project settings page with a built-in `paseo.json` editor\n- Cold start restores your last open workspace\n- Tool call badges have a button to open the referenced file directly\n- Open the current branch on GitHub from a workspace's open menu ([#583](https://github.com/getpaseo/paseo/pull/583) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))\n- Enable or disable providers from Settings without editing config files\n- Paseo prompts you to configure a worktree setup script when one is missing\n- Choose whether the daemon shuts down when you close the desktop app\n\n### Improved\n\n- Provider settings and model selection have been redesigned\n- Voice mode transcription endpoint is configurable for OpenAI-compatible providers ([#570](https://github.com/getpaseo/paseo/pull/570) by [@yuruiz](https://github.com/yuruiz))\n- Adding a project no longer waits for GitHub PR status to load\n- Startup splash screen is cleaner — just the logo with a subtle shimmer\n- `paseo.json` setup and teardown accept a single command string, not just an array\n- Archiving a worktree is instant instead of waiting for the backend to confirm\n- Agent timelines and git diff lists no longer jump around while loading or streaming\n\n### Fixed\n\n- `paseo loop run` and `paseo run` now respect the `--provider` and `--model` flags ([#594](https://github.com/getpaseo/paseo/pull/594) by [@VincenzoRocchi](https://github.com/VincenzoRocchi))\n- Pi provider shows up when only DeepSeek or other non-OpenAI/Anthropic/OpenRouter API keys are set\n- Custom models from `additionalModels` and `profileModels` are honored when picking a default for new agents\n- File preview line numbers stay on one line past line 99\n- Cmd+Q on macOS quits the desktop app instead of leaving it running in the background\n- Terminal sessions recover cleanly after rendering hiccups, including the initial resize for nvim\n- Terminal protocol query responses no longer leak into the browser\n- Assistant link color matches the theme again\n- File links with line numbers (like `foo.ts:42`) open correctly from assistant messages\n- Claude's Grep results show up in the search detail body\n- Reopening a worktree lands under the right project\n- Agents from disabled or unavailable providers stay visible in history\n- New CLI agents now require a provider instead of failing silently\n- Git diff headers no longer truncate\n- Provider diagnostic modal scrolls on short screens\n- Provider diagnostics show the real error and underlying child-process output instead of a generic message\n- Archived workspaces no longer interfere with working-directory resolution\n- Triple-click on a message no longer extends the selection into adjacent bubbles\n- The packaged desktop app preserves your zsh prompt",
+    "version": "0.1.63",
+    "date": "2026-04-28",
+    "markdown": "### Added\n\n- Project settings page with a built-in `paseo.json` editor\n- Cold start restores your last open workspace\n- Tool call badges have a button to open the referenced file directly\n- Open the current branch on GitHub from a workspace's open menu ([#583](https://github.com/getpaseo/paseo/pull/583) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))\n- Enable or disable providers from Settings without editing config files\n- Paseo prompts you to configure a worktree setup script when one is missing\n- Choose whether the daemon shuts down when you close the desktop app\n\n### Improved\n\n- Provider settings and model selection have been redesigned\n- Voice mode transcription endpoint is configurable for OpenAI-compatible providers ([#570](https://github.com/getpaseo/paseo/pull/570) by [@yuruiz](https://github.com/yuruiz))\n- Adding a project no longer waits for GitHub PR status to load\n- Startup splash screen is cleaner — just the logo with a subtle shimmer\n- `paseo.json` setup and teardown accept a single command string, not just an array\n- Archiving a worktree is instant instead of waiting for the backend to confirm\n- Agent timelines and git diff lists no longer jump around while loading or streaming\n\n### Fixed\n\n- `paseo loop run` and `paseo run` now respect the `--provider` and `--model` flags ([#594](https://github.com/getpaseo/paseo/pull/594) by [@VincenzoRocchi](https://github.com/VincenzoRocchi))\n- Pi provider shows up when only DeepSeek or other non-OpenAI/Anthropic/OpenRouter API keys are set\n- Custom models from `additionalModels` and `profileModels` are honored when picking a default for new agents\n- File preview line numbers stay on one line past line 99\n- Cmd+Q on macOS quits the desktop app instead of leaving it running in the background\n- Terminal sessions recover cleanly after rendering hiccups, including the initial resize for nvim\n- Terminal protocol query responses no longer leak into the browser\n- Assistant link color matches the theme again\n- File links with line numbers (like `foo.ts:42`) open correctly from assistant messages\n- Claude's Grep results show up in the search detail body\n- Reopening a worktree lands under the right project\n- Agents from disabled or unavailable providers stay visible in history\n- New CLI agents now require a provider instead of failing silently\n- Git diff headers no longer truncate\n- Provider diagnostic modal scrolls on short screens\n- Provider diagnostics show the real error and underlying child-process output instead of a generic message\n- Archived workspaces no longer interfere with working-directory resolution\n- Triple-click on a message no longer extends the selection into adjacent bubbles\n- The packaged desktop app preserves your zsh prompt"
   },
   {
-    version: "0.1.62",
-    date: "2026-04-23",
-    markdown:
-      "### Added\n\n- Sidebar warning when your app and daemon versions drift apart, with a shortcut to settings\n\n### Improved\n\n- Workspaces appear in the sidebar immediately on startup instead of waiting for git registration\n\n### Fixed\n\n- Pull request status resolves correctly for PRs opened from forks\n- Installing the paseo CLI from the macOS desktop app now works in packaged builds\n- Agents launched from the desktop app no longer inherit Electron-only environment variables",
+    "version": "0.1.62",
+    "date": "2026-04-23",
+    "markdown": "### Added\n\n- Sidebar warning when your app and daemon versions drift apart, with a shortcut to settings\n\n### Improved\n\n- Workspaces appear in the sidebar immediately on startup instead of waiting for git registration\n\n### Fixed\n\n- Pull request status resolves correctly for PRs opened from forks\n- Installing the paseo CLI from the macOS desktop app now works in packaged builds\n- Agents launched from the desktop app no longer inherit Electron-only environment variables"
   },
   {
-    version: "0.1.61",
-    date: "2026-04-23",
-    markdown:
-      "### Added\n\n- `additionalModels` option in provider config lets you add or relabel models without replacing the full list — entries merge with runtime-discovered models (ACP) or your static `models` list. See the [Providers docs](https://paseo.sh/docs/providers)\n- New [Providers docs page](https://paseo.sh/docs/providers) covering first-class providers and every custom provider config pattern in one place\n\n### Improved\n\n- Pi loads your installed extensions on startup so their models show up in the model picker\n- Resizing the explorer sidebar no longer rerenders the rest of the workspace\n- Images in assistant messages (both file paths and inline data URLs) persist as local attachments and open in the file pane",
+    "version": "0.1.61",
+    "date": "2026-04-23",
+    "markdown": "### Added\n\n- `additionalModels` option in provider config lets you add or relabel models without replacing the full list — entries merge with runtime-discovered models (ACP) or your static `models` list. See the [Providers docs](https://paseo.sh/docs/providers)\n- New [Providers docs page](https://paseo.sh/docs/providers) covering first-class providers and every custom provider config pattern in one place\n\n### Improved\n\n- Pi loads your installed extensions on startup so their models show up in the model picker\n- Resizing the explorer sidebar no longer rerenders the rest of the workspace\n- Images in assistant messages (both file paths and inline data URLs) persist as local attachments and open in the file pane"
   },
   {
-    version: "0.1.60",
-    date: "2026-04-22",
-    markdown:
-      "### Added\n\n- Scripts and services per worktree — define named commands in `paseo.json`, and long-running services get supervised with their own ports and nice proxy URLs like `http://web.my-app.localhost:6767`. See the [worktrees guide](https://paseo.sh/docs/worktrees)\n- Launch scripts and services for a worktree directly from the workspace header\n- New Setup tab in every workspace showing setup, teardown, and script progress live\n- GitHub checks and PR reviews in the explorer sidebar, with a hover card for the full breakdown\n- New worktree creation flow lets you pick a base branch or check out an existing GitHub pull request\n- Attach GitHub issues and pull requests to an agent as part of its prompt context\n- Pull request pane in the workspace sidebar\n- Redesigned Settings screen with modular section navigation\n- Per-host provider configuration — set providers, models, and credentials independently on each remote host\n- Direct Pi integration replaces the ACP bridge, with faster streaming and fewer hiccups\n- Beta release channel — opt in from Settings to receive beta desktop builds before they are promoted to stable\n- New-workspace picker ranks branches by recency with fast search\n\n### Improved\n\n- Workspace and tab switching are dramatically faster on desktop and mobile — you can keep many workspaces open in parallel without lag\n- Agent streams render more smoothly during heavy tool output\n- App startup routes through a stable connection and lands on the right screen without flicker\n- Provider refresh is reliable and no longer stalls on transient failures\n- Git and GitHub state stay in sync with local changes like commits, branch switches, and pushes\n- Composer attachments redesigned with a cleaner pill layout and an image lightbox\n- In-app notifications route to whichever surface you're actually looking at\n- Keyboard shortcuts keep working while Settings is open\n- Escape reliably interrupts the active agent\n- Checking out a pull request from a fork lands on an owner-prefixed branch so multiple forks don't collide\n- `paseo ls` defaults to active agents; pass `-a` to include archived\n- GitHub branch and PR picker loads faster — queries are deferred until the picker opens\n\n### Fixed\n\n- Composer textarea shrinks back down after sending on web\n- New workspace drafts clear after submit instead of sticking around\n- Replacing a running agent cleans up the previous one without leaving it behind\n- Agent notifications no longer get swallowed by a backgrounded focused client\n- Removed workspace folders disappear from the workspace list again\n- Codex keeps fast mode after you approve a plan ([#526](https://github.com/getpaseo/paseo/pull/526) by [@therainisme](https://github.com/therainisme))\n- Workspace tab focus is preserved across page refreshes\n- Settings screen no longer pushes its header down with extra spacing\n- Branch switcher title no longer overflows on narrow rows\n- iOS image picker no longer leaves the screen unresponsive after cancelling\n- Archiving a worktree recovers cleanly if a previous attempt was interrupted\n- Images in agent messages with `~`-prefixed paths load instead of spinning forever\n- Tool call blocks expand correctly on mobile while an agent is still streaming\n- Timeline no longer stutters when catch-up and projected ranges overlap\n- Codex no longer flashes idle when a replacement turn is in progress\n- Branch state recovers correctly when a rebase is in progress\n- Workspace hover card no longer clips near screen edges",
+    "version": "0.1.60",
+    "date": "2026-04-22",
+    "markdown": "### Added\n\n- Scripts and services per worktree — define named commands in `paseo.json`, and long-running services get supervised with their own ports and nice proxy URLs like `http://web.my-app.localhost:6767`. See the [worktrees guide](https://paseo.sh/docs/worktrees)\n- Launch scripts and services for a worktree directly from the workspace header\n- New Setup tab in every workspace showing setup, teardown, and script progress live\n- GitHub checks and PR reviews in the explorer sidebar, with a hover card for the full breakdown\n- New worktree creation flow lets you pick a base branch or check out an existing GitHub pull request\n- Attach GitHub issues and pull requests to an agent as part of its prompt context\n- Pull request pane in the workspace sidebar\n- Redesigned Settings screen with modular section navigation\n- Per-host provider configuration — set providers, models, and credentials independently on each remote host\n- Direct Pi integration replaces the ACP bridge, with faster streaming and fewer hiccups\n- Beta release channel — opt in from Settings to receive beta desktop builds before they are promoted to stable\n- New-workspace picker ranks branches by recency with fast search\n\n### Improved\n\n- Workspace and tab switching are dramatically faster on desktop and mobile — you can keep many workspaces open in parallel without lag\n- Agent streams render more smoothly during heavy tool output\n- App startup routes through a stable connection and lands on the right screen without flicker\n- Provider refresh is reliable and no longer stalls on transient failures\n- Git and GitHub state stay in sync with local changes like commits, branch switches, and pushes\n- Composer attachments redesigned with a cleaner pill layout and an image lightbox\n- In-app notifications route to whichever surface you're actually looking at\n- Keyboard shortcuts keep working while Settings is open\n- Escape reliably interrupts the active agent\n- Checking out a pull request from a fork lands on an owner-prefixed branch so multiple forks don't collide\n- `paseo ls` defaults to active agents; pass `-a` to include archived\n- GitHub branch and PR picker loads faster — queries are deferred until the picker opens\n\n### Fixed\n\n- Composer textarea shrinks back down after sending on web\n- New workspace drafts clear after submit instead of sticking around\n- Replacing a running agent cleans up the previous one without leaving it behind\n- Agent notifications no longer get swallowed by a backgrounded focused client\n- Removed workspace folders disappear from the workspace list again\n- Codex keeps fast mode after you approve a plan ([#526](https://github.com/getpaseo/paseo/pull/526) by [@therainisme](https://github.com/therainisme))\n- Workspace tab focus is preserved across page refreshes\n- Settings screen no longer pushes its header down with extra spacing\n- Branch switcher title no longer overflows on narrow rows\n- iOS image picker no longer leaves the screen unresponsive after cancelling\n- Archiving a worktree recovers cleanly if a previous attempt was interrupted\n- Images in agent messages with `~`-prefixed paths load instead of spinning forever\n- Tool call blocks expand correctly on mobile while an agent is still streaming\n- Timeline no longer stutters when catch-up and projected ranges overlap\n- Codex no longer flashes idle when a replacement turn is in progress\n- Branch state recovers correctly when a rebase is in progress\n- Workspace hover card no longer clips near screen edges"
   },
   {
-    version: "0.1.59",
-    date: "2026-04-16",
-    markdown:
-      "### Added\n\n- Opus 4.7 in the Claude model picker, with a 1M-context variant\n- Extra High reasoning effort for Opus 4.7, between High and Max",
+    "version": "0.1.59",
+    "date": "2026-04-16",
+    "markdown": "### Added\n\n- Opus 4.7 in the Claude model picker, with a 1M-context variant\n- Extra High reasoning effort for Opus 4.7, between High and Max"
   },
   {
-    version: "0.1.58",
-    date: "2026-04-16",
-    markdown:
-      "### Added\n\n- Markdown files render as formatted markdown in the file pane ([#427](https://github.com/getpaseo/paseo/pull/427) by [@aaronflorey](https://github.com/aaronflorey))\n- Cmd+L (Ctrl+L on Windows/Linux) focuses the agent message input\n- Provider models refresh on a freshness TTL; Settings shows last-updated time and any fetch errors ([#426](https://github.com/getpaseo/paseo/pull/426))\n- `disallowedTools` option in provider config to block specific tools from an agent\n\n### Improved\n\n- Windows: agents launch reliably from npm `.cmd` shims, paths with spaces, and JSON config args — fixes `spawn EINVAL` startup errors ([#454](https://github.com/getpaseo/paseo/pull/454))\n- OpenCode permission prompts include the requesting tool's context ([#398](https://github.com/getpaseo/paseo/pull/398) by [@aaronflorey](https://github.com/aaronflorey))\n- OpenCode todo and compaction events render in the timeline ([#429](https://github.com/getpaseo/paseo/pull/429) by [@aaronflorey](https://github.com/aaronflorey))\n- OpenCode sessions archive cleanly when closed ([#408](https://github.com/getpaseo/paseo/pull/408) by [@aaronflorey](https://github.com/aaronflorey))\n- OpenCode slash commands recover from SSE timeouts ([#407](https://github.com/getpaseo/paseo/pull/407) by [@aaronflorey](https://github.com/aaronflorey))\n- Paseo MCP tools work against archived agents, matching the CLI ([#423](https://github.com/getpaseo/paseo/pull/423))\n- Native scrollbars match the active theme across all web views ([#399](https://github.com/getpaseo/paseo/pull/399) by [@ethersh](https://github.com/ethersh))\n\n### Fixed\n\n- Code file previews can be selected and copied on iOS ([#447](https://github.com/getpaseo/paseo/pull/447) by [@muzhi1991](https://github.com/muzhi1991))\n- File preview no longer shows stale content when reopening the same file ([#411](https://github.com/getpaseo/paseo/pull/411) by [@muzhi1991](https://github.com/muzhi1991))\n- File explorer reinitialises when the client reconnects after a page refresh ([#442](https://github.com/getpaseo/paseo/pull/442) by [@1996fanrui](https://github.com/1996fanrui))\n- Generic ACP providers no longer receive duplicated command arguments ([#444](https://github.com/getpaseo/paseo/pull/444) by [@edvardchen](https://github.com/edvardchen))\n- Workspace headers no longer show a branch icon for non-git workspaces\n- Branch switcher layout is stable on mobile\n- Model names no longer truncate mid-word in the picker rows\n- Messages appear in the correct order after reconnecting on mobile\n- Clearing agent attention no longer throws on timeout",
+    "version": "0.1.58",
+    "date": "2026-04-16",
+    "markdown": "### Added\n\n- Markdown files render as formatted markdown in the file pane ([#427](https://github.com/getpaseo/paseo/pull/427) by [@aaronflorey](https://github.com/aaronflorey))\n- Cmd+L (Ctrl+L on Windows/Linux) focuses the agent message input\n- Provider models refresh on a freshness TTL; Settings shows last-updated time and any fetch errors ([#426](https://github.com/getpaseo/paseo/pull/426))\n- `disallowedTools` option in provider config to block specific tools from an agent\n\n### Improved\n\n- Windows: agents launch reliably from npm `.cmd` shims, paths with spaces, and JSON config args — fixes `spawn EINVAL` startup errors ([#454](https://github.com/getpaseo/paseo/pull/454))\n- OpenCode permission prompts include the requesting tool's context ([#398](https://github.com/getpaseo/paseo/pull/398) by [@aaronflorey](https://github.com/aaronflorey))\n- OpenCode todo and compaction events render in the timeline ([#429](https://github.com/getpaseo/paseo/pull/429) by [@aaronflorey](https://github.com/aaronflorey))\n- OpenCode sessions archive cleanly when closed ([#408](https://github.com/getpaseo/paseo/pull/408) by [@aaronflorey](https://github.com/aaronflorey))\n- OpenCode slash commands recover from SSE timeouts ([#407](https://github.com/getpaseo/paseo/pull/407) by [@aaronflorey](https://github.com/aaronflorey))\n- Paseo MCP tools work against archived agents, matching the CLI ([#423](https://github.com/getpaseo/paseo/pull/423))\n- Native scrollbars match the active theme across all web views ([#399](https://github.com/getpaseo/paseo/pull/399) by [@ethersh](https://github.com/ethersh))\n\n### Fixed\n\n- Code file previews can be selected and copied on iOS ([#447](https://github.com/getpaseo/paseo/pull/447) by [@muzhi1991](https://github.com/muzhi1991))\n- File preview no longer shows stale content when reopening the same file ([#411](https://github.com/getpaseo/paseo/pull/411) by [@muzhi1991](https://github.com/muzhi1991))\n- File explorer reinitialises when the client reconnects after a page refresh ([#442](https://github.com/getpaseo/paseo/pull/442) by [@1996fanrui](https://github.com/1996fanrui))\n- Generic ACP providers no longer receive duplicated command arguments ([#444](https://github.com/getpaseo/paseo/pull/444) by [@edvardchen](https://github.com/edvardchen))\n- Workspace headers no longer show a branch icon for non-git workspaces\n- Branch switcher layout is stable on mobile\n- Model names no longer truncate mid-word in the picker rows\n- Messages appear in the correct order after reconnecting on mobile\n- Clearing agent attention no longer throws on timeout"
   },
   {
-    version: "0.1.56",
-    date: "2026-04-14",
-    markdown:
-      "### Fixed\n\n- Projects with empty git repositories (no commits yet) no longer crash the app on startup\n- A single problematic project can no longer prevent the rest of your workspaces from loading",
+    "version": "0.1.56",
+    "date": "2026-04-14",
+    "markdown": "### Fixed\n\n- Projects with empty git repositories (no commits yet) no longer crash the app on startup\n- A single problematic project can no longer prevent the rest of your workspaces from loading"
   },
   {
-    version: "0.1.55",
-    date: "2026-04-14",
-    markdown:
-      '### Added\n\n- Provider profiles — define custom providers in your Paseo config that appear alongside built-ins. Override a built-in\'s binary, env, or models, or create entirely new providers. See the [configuration guide](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)\n- ACP agent support — add any ACP-compatible agent to Paseo with `extends: "acp"` in your provider config. No code changes needed\n- Choose provider and model when creating scheduled agents\n- Max reasoning effort option for Opus 4.6 models\n- Cmd+, (Ctrl+, on Windows/Linux) opens settings\n\n### Improved\n\n- Git operations are dramatically faster — workspace status, PR checks, and branch data all use a shared cached snapshot service instead of shelling out to git on every request. Running 20+ workspaces simultaneously is now smooth\n- Windows support — the daemon and CLI run natively on Windows with proper shell quoting, executable resolution, and path handling\n- iPad and tablet layouts work correctly across all screen sizes\n- IME composition (Chinese, Japanese, Korean input) no longer submits prematurely when pressing Enter\n\n### Fixed\n\n- Creating a worktree no longer briefly flashes it as a standalone project before placing it under the correct repository\n- Worktree creation spinner stays visible throughout the process instead of disappearing on mouse-out\n- Workspace navigation updates correctly when switching between workspaces in the same project\n- Desktop workspace header alignment and model selector no longer overflow on narrow windows\n- Loading indicators are visible in light mode',
+    "version": "0.1.55",
+    "date": "2026-04-14",
+    "markdown": "### Added\n\n- Provider profiles — define custom providers in your Paseo config that appear alongside built-ins. Override a built-in's binary, env, or models, or create entirely new providers. See the [configuration guide](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)\n- ACP agent support — add any ACP-compatible agent to Paseo with `extends: \"acp\"` in your provider config. No code changes needed\n- Choose provider and model when creating scheduled agents\n- Max reasoning effort option for Opus 4.6 models\n- Cmd+, (Ctrl+, on Windows/Linux) opens settings\n\n### Improved\n\n- Git operations are dramatically faster — workspace status, PR checks, and branch data all use a shared cached snapshot service instead of shelling out to git on every request. Running 20+ workspaces simultaneously is now smooth\n- Windows support — the daemon and CLI run natively on Windows with proper shell quoting, executable resolution, and path handling\n- iPad and tablet layouts work correctly across all screen sizes\n- IME composition (Chinese, Japanese, Korean input) no longer submits prematurely when pressing Enter\n\n### Fixed\n\n- Creating a worktree no longer briefly flashes it as a standalone project before placing it under the correct repository\n- Worktree creation spinner stays visible throughout the process instead of disappearing on mouse-out\n- Workspace navigation updates correctly when switching between workspaces in the same project\n- Desktop workspace header alignment and model selector no longer overflow on narrow windows\n- Loading indicators are visible in light mode"
   },
   {
-    version: "0.1.54",
-    date: "2026-04-12",
-    markdown:
-      "### Added\n\n- Inline image previews in agent messages — screenshots and images generated by agents render directly in the conversation instead of showing as raw markdown links\n\n### Improved\n\n- Paseo tools are no longer injected into agents by default — opt in from Settings when you need agent-to-agent orchestration\n- Agent provider and mode are now resolved server-side, so CLI commands like `paseo run` use consistent defaults without client-side lookups\n\n### Fixed\n\n- Shift+Enter now correctly inserts a newline in agent terminal input instead of submitting\n- Windows: MCP configuration is no longer mangled when spawning Claude agents\n- Branch ahead/behind count no longer errors for branches with no remote tracking branch",
+    "version": "0.1.54",
+    "date": "2026-04-12",
+    "markdown": "### Added\n\n- Inline image previews in agent messages — screenshots and images generated by agents render directly in the conversation instead of showing as raw markdown links\n\n### Improved\n\n- Paseo tools are no longer injected into agents by default — opt in from Settings when you need agent-to-agent orchestration\n- Agent provider and mode are now resolved server-side, so CLI commands like `paseo run` use consistent defaults without client-side lookups\n\n### Fixed\n\n- Shift+Enter now correctly inserts a newline in agent terminal input instead of submitting\n- Windows: MCP configuration is no longer mangled when spawning Claude agents\n- Branch ahead/behind count no longer errors for branches with no remote tracking branch"
   },
   {
-    version: "0.1.53",
-    date: "2026-04-12",
-    markdown:
-      '### Added\n\n- Agents get Paseo tools automatically — every new agent gets access to terminals, schedules, worktrees, and other agents through MCP. Toggle it off in Settings under "Inject Paseo tools"\n- Git pull — pull remote changes directly from the workspace header. Promoted to the primary action when your branch is behind origin\n- Child agent notifications — parent agents are automatically notified when a child agent finishes, errors, or needs permission approval\n- Agent reload — `paseo agent reload` restarts an agent\'s underlying process from the CLI\n- Middle-click to close tabs on desktop\n- Keyboard shortcut to cycle themes\n\n### Improved\n\n- Unavailable git actions now explain why in a toast instead of being silently greyed out\n- Streaming markdown on mobile renders significantly faster\n- Sidebar, branch switcher, and agent panel no longer re-render unnecessarily — noticeable on large workspaces\n- Paseo tool calls in agent timelines show the Paseo logo and human-readable names\n- Relay and pairing URLs are stripped from daemon logs\n\n### Fixed\n\n- Closed agent tabs no longer reappear after reconnecting\n- Desktop notification badge counts match across all workspaces\n- Host switcher status syncs correctly when switching between hosts',
+    "version": "0.1.53",
+    "date": "2026-04-12",
+    "markdown": "### Added\n\n- Agents get Paseo tools automatically — every new agent gets access to terminals, schedules, worktrees, and other agents through MCP. Toggle it off in Settings under \"Inject Paseo tools\"\n- Git pull — pull remote changes directly from the workspace header. Promoted to the primary action when your branch is behind origin\n- Child agent notifications — parent agents are automatically notified when a child agent finishes, errors, or needs permission approval\n- Agent reload — `paseo agent reload` restarts an agent's underlying process from the CLI\n- Middle-click to close tabs on desktop\n- Keyboard shortcut to cycle themes\n\n### Improved\n\n- Unavailable git actions now explain why in a toast instead of being silently greyed out\n- Streaming markdown on mobile renders significantly faster\n- Sidebar, branch switcher, and agent panel no longer re-render unnecessarily — noticeable on large workspaces\n- Paseo tool calls in agent timelines show the Paseo logo and human-readable names\n- Relay and pairing URLs are stripped from daemon logs\n\n### Fixed\n\n- Closed agent tabs no longer reappear after reconnecting\n- Desktop notification badge counts match across all workspaces\n- Host switcher status syncs correctly when switching between hosts"
   },
   {
-    version: "0.1.52",
-    date: "2026-04-10",
-    markdown:
-      "### Added\n\n- Theme selector — choose from six themes including Midnight, Claude, and Ghostty dark variants\n- Branch switching — switch git branches directly from the workspace header, with automatic stash and restore for uncommitted changes\n- Auto-download updates — desktop updates download silently in the background so they're ready to install when you are\n\n### Fixed\n\n- Layout now responds correctly when resizing the window or rotating a tablet — previously the app could get stuck in mobile layout on a large screen\n- Terminal no longer causes massive memory spikes from snapshot thrashing during heavy output\n- Typing in the terminal works reliably — special keys, Ctrl combos, and paste are handled natively by the terminal emulator\n- Initializing agents no longer show a loading spinner as if they're running\n- Reconnecting to a running agent now works even when session persistence is unavailable\n- Error screens on desktop are now scrollable\n- Model list refreshes in the background when you open the model selector\n- Draft agent feature preferences (like thinking mode) are remembered across sessions",
+    "version": "0.1.52",
+    "date": "2026-04-10",
+    "markdown": "### Added\n\n- Theme selector — choose from six themes including Midnight, Claude, and Ghostty dark variants\n- Branch switching — switch git branches directly from the workspace header, with automatic stash and restore for uncommitted changes\n- Auto-download updates — desktop updates download silently in the background so they're ready to install when you are\n\n### Fixed\n\n- Layout now responds correctly when resizing the window or rotating a tablet — previously the app could get stuck in mobile layout on a large screen\n- Terminal no longer causes massive memory spikes from snapshot thrashing during heavy output\n- Typing in the terminal works reliably — special keys, Ctrl combos, and paste are handled natively by the terminal emulator\n- Initializing agents no longer show a loading spinner as if they're running\n- Reconnecting to a running agent now works even when session persistence is unavailable\n- Error screens on desktop are now scrollable\n- Model list refreshes in the background when you open the model selector\n- Draft agent feature preferences (like thinking mode) are remembered across sessions"
   },
   {
-    version: "0.1.51",
-    date: "2026-04-09",
-    markdown:
-      '### Added\n\n- Image attachments for OpenCode — attach screenshots and images to OpenCode agent prompts\n- WebStorm — added to the "Open in editor" list alongside Cursor, VS Code, and Zed\n- Send behavior setting — choose whether pressing Enter while an agent is running interrupts immediately or queues your message\n\n### Fixed\n\n- Model selector no longer crashes on iPad\n- Pairing now uses the correct hostname, fixing connection failures on some network setups\n- OpenCode agents show the correct terminal state and refresh models reliably\n- Follow-up messages to agents that just finished a turn now work correctly\n- Commands now load properly for Pi agents\n- Internal debug output no longer appears in Claude agent timelines\n- QR scan screen cleaned up with simpler visuals',
+    "version": "0.1.51",
+    "date": "2026-04-09",
+    "markdown": "### Added\n\n- Image attachments for OpenCode — attach screenshots and images to OpenCode agent prompts\n- WebStorm — added to the \"Open in editor\" list alongside Cursor, VS Code, and Zed\n- Send behavior setting — choose whether pressing Enter while an agent is running interrupts immediately or queues your message\n\n### Fixed\n\n- Model selector no longer crashes on iPad\n- Pairing now uses the correct hostname, fixing connection failures on some network setups\n- OpenCode agents show the correct terminal state and refresh models reliably\n- Follow-up messages to agents that just finished a turn now work correctly\n- Commands now load properly for Pi agents\n- Internal debug output no longer appears in Claude agent timelines\n- QR scan screen cleaned up with simpler visuals"
   },
   {
-    version: "0.1.50",
-    date: "2026-04-07",
-    markdown:
-      '### Added\n\n- Context window meter — see how much of the context window your agent has used, with color thresholds at 70% and 90%. Works with Claude Code, Codex, and OpenCode\n- Open in editor — jump from any workspace straight into Cursor, VS Code, Zed, or your file manager. Paseo remembers your choice\n- Side-by-side diffs — toggle between unified and split-column diff views, with a whitespace visibility option\n- Spoken messages — when using voice mode, agent speech now appears as regular messages in the conversation instead of raw tool output\n- Plan actions — plan cards now show the actions your agent supports (e.g. "Implement", "Deny") instead of generic accept/reject buttons\n- Background git fetch — ahead/behind counts in the Changes pane stay up to date automatically\n\n### Improved\n\n- Workspaces load instantly on connect instead of waiting for a full sync\n- File explorer and diff pane remember which folders are expanded when you switch tabs\n- Closing a workspace tab is now instant\n- Settings shows a Refresh button for providers and displays error details inline\n- Reload agent moved away from the close button to prevent accidental taps\n\n### Fixed\n\n- Voice mode no longer drifts into false speech detection during long sessions\n- Garbled overlapping text on plan cards\n- Changes pane could show stale diffs when working with git worktrees\n- Restarting an agent quickly could crash the session\n- Copilot no longer pauses for permission prompts in autopilot mode\n- Connection and pairing dialogs now display correctly on tablets\n- Orchestration errors from agents are now surfaced instead of silently lost\n- Diff stats no longer reset to zero when reconnecting',
+    "version": "0.1.50",
+    "date": "2026-04-07",
+    "markdown": "### Added\n\n- Context window meter — see how much of the context window your agent has used, with color thresholds at 70% and 90%. Works with Claude Code, Codex, and OpenCode\n- Open in editor — jump from any workspace straight into Cursor, VS Code, Zed, or your file manager. Paseo remembers your choice\n- Side-by-side diffs — toggle between unified and split-column diff views, with a whitespace visibility option\n- Spoken messages — when using voice mode, agent speech now appears as regular messages in the conversation instead of raw tool output\n- Plan actions — plan cards now show the actions your agent supports (e.g. \"Implement\", \"Deny\") instead of generic accept/reject buttons\n- Background git fetch — ahead/behind counts in the Changes pane stay up to date automatically\n\n### Improved\n\n- Workspaces load instantly on connect instead of waiting for a full sync\n- File explorer and diff pane remember which folders are expanded when you switch tabs\n- Closing a workspace tab is now instant\n- Settings shows a Refresh button for providers and displays error details inline\n- Reload agent moved away from the close button to prevent accidental taps\n\n### Fixed\n\n- Voice mode no longer drifts into false speech detection during long sessions\n- Garbled overlapping text on plan cards\n- Changes pane could show stale diffs when working with git worktrees\n- Restarting an agent quickly could crash the session\n- Copilot no longer pauses for permission prompts in autopilot mode\n- Connection and pairing dialogs now display correctly on tablets\n- Orchestration errors from agents are now surfaced instead of silently lost\n- Diff stats no longer reset to zero when reconnecting"
   },
   {
-    version: "0.1.49",
-    date: "2026-04-07",
-    markdown:
-      "### Fixed\n\n- Models and providers now load reliably on first connect instead of requiring a manual refresh\n- Model picker only shows models from the agent's own provider, not every provider on the server\n- Model lists stay consistent regardless of which screen you open first",
+    "version": "0.1.49",
+    "date": "2026-04-07",
+    "markdown": "### Fixed\n\n- Models and providers now load reliably on first connect instead of requiring a manual refresh\n- Model picker only shows models from the agent's own provider, not every provider on the server\n- Model lists stay consistent regardless of which screen you open first"
   },
   {
-    version: "0.1.48",
-    date: "2026-04-05",
-    markdown:
-      "### Added\n\n- Provider diagnostics — tap a provider in Settings to see binary path, version, model count, and status at a glance. Helps troubleshoot why an agent type isn't available\n- Provider snapshot system — daemon now pushes real-time provider availability and model lists to the app, replacing the old poll-based approach. Models and modes update live as providers come online or go offline\n- Codex question handling — Codex agents can now ask the user questions mid-session (e.g. \"which file?\") and receive answers inline, matching the Claude Code question flow\n- Reload tab action — right-click a workspace tab to reload its agent list without restarting the app\n\n### Improved\n\n- Model selector redesigned — grouped by provider with status badges, search, and better touch targets on mobile\n- Enter key now submits question card answers and confirms dictation, matching the expected keyboard flow\n- Removed noisy agent lifecycle toasts that fired on every state change\n\n### Fixed\n\n- Desktop app now resolves the user's full login shell environment at startup, fixing tools like `codex`, `node`, `bun`, and `direnv` not being found when Paseo is launched from Finder or Dock. Terminals spawned by Paseo now inherit the same PATH and environment variables as a normal terminal session. Approach adapted from VS Code's battle-tested shell environment resolution\n- Input field on running agent screens now correctly receives keyboard focus\n- Mobile model selector alignment and sizing",
+    "version": "0.1.48",
+    "date": "2026-04-05",
+    "markdown": "### Added\n\n- Provider diagnostics — tap a provider in Settings to see binary path, version, model count, and status at a glance. Helps troubleshoot why an agent type isn't available\n- Provider snapshot system — daemon now pushes real-time provider availability and model lists to the app, replacing the old poll-based approach. Models and modes update live as providers come online or go offline\n- Codex question handling — Codex agents can now ask the user questions mid-session (e.g. \"which file?\") and receive answers inline, matching the Claude Code question flow\n- Reload tab action — right-click a workspace tab to reload its agent list without restarting the app\n\n### Improved\n\n- Model selector redesigned — grouped by provider with status badges, search, and better touch targets on mobile\n- Enter key now submits question card answers and confirms dictation, matching the expected keyboard flow\n- Removed noisy agent lifecycle toasts that fired on every state change\n\n### Fixed\n\n- Desktop app now resolves the user's full login shell environment at startup, fixing tools like `codex`, `node`, `bun`, and `direnv` not being found when Paseo is launched from Finder or Dock. Terminals spawned by Paseo now inherit the same PATH and environment variables as a normal terminal session. Approach adapted from VS Code's battle-tested shell environment resolution\n- Input field on running agent screens now correctly receives keyboard focus\n- Mobile model selector alignment and sizing"
   },
   {
-    version: "0.1.47",
-    date: "2026-04-05",
-    markdown:
-      '### Fixed\n\n- Voice TTS in Electron — sherpa now requests copied buffers and the voice MCP bridge sets `ELECTRON_RUN_AS_NODE`, preventing "external buffers not allowed" crashes\n- QR pairing in desktop — CLI JSON output parsing now tolerates Node deprecation warnings in stdout\n- STT segment race condition — segment ID and audio buffer are snapshotted before the async transcription call, so rapid commits no longer interleave\n- Per-host "Add connection" button removed — it blocked multi-host setups by scoping new connections to a single server',
+    "version": "0.1.47",
+    "date": "2026-04-05",
+    "markdown": "### Fixed\n\n- Voice TTS in Electron — sherpa now requests copied buffers and the voice MCP bridge sets `ELECTRON_RUN_AS_NODE`, preventing \"external buffers not allowed\" crashes\n- QR pairing in desktop — CLI JSON output parsing now tolerates Node deprecation warnings in stdout\n- STT segment race condition — segment ID and audio buffer are snapshotted before the async transcription call, so rapid commits no longer interleave\n- Per-host \"Add connection\" button removed — it blocked multi-host setups by scoping new connections to a single server"
   },
   {
-    version: "0.1.46",
-    date: "2026-04-04",
-    markdown:
-      "### Fixed\n\n- Voice activation in packaged builds — Silero VAD model is now copied out of the Electron asar archive so native code can read it\n- App version sent in probe client hello so the daemon's version gate no longer hides Pi/Copilot from reconnected sessions\n- `worktreeRoot` schema made backward-compatible for old clients and daemons that don't send the field\n- Punycode deprecation warning (DEP0040) suppressed in CLI and desktop daemon entrypoints",
+    "version": "0.1.46",
+    "date": "2026-04-04",
+    "markdown": "### Fixed\n\n- Voice activation in packaged builds — Silero VAD model is now copied out of the Electron asar archive so native code can read it\n- App version sent in probe client hello so the daemon's version gate no longer hides Pi/Copilot from reconnected sessions\n- `worktreeRoot` schema made backward-compatible for old clients and daemons that don't send the field\n- Punycode deprecation warning (DEP0040) suppressed in CLI and desktop daemon entrypoints"
   },
   {
-    version: "0.1.45",
-    date: "2026-04-04",
-    markdown:
-      "### Added\n\n- Pi (pi.dev) agent provider — connect Pi as a new agent type with thinking levels and tool call support\n- Copilot agent provider re-enabled after ACP compatibility fixes\n- `paseo .` and `paseo <path>` open the desktop app with the given project, similar to `code .`\n- Provider-declared features system — providers can expose dynamic toggles and selects that the app renders automatically. First consumer: Codex fast mode\n- Codex plan mode — start agents in plan-only mode with a dedicated plan card UI for reviewing proposed changes before execution\n- OpenCode custom agents and slash commands — user-defined agents from opencode.json now appear in the mode picker, and slash commands accept optional arguments\n- Desktop Integrations settings — install the Paseo CLI and orchestration skills directly from the app without touching the terminal\n- Daemon status dialog in desktop settings for quick health checks\n- Auto-restart daemon on version mismatch — the desktop app detects when the running daemon is outdated and restarts it automatically\n- Setup hint and paseo.sh link on the mobile welcome screen so new App Store users know what to do next\n\n### Improved\n\n- Desktop startup is faster — existing daemon connections are raced against bootstrap so the app is usable sooner\n- Settings sections reordered for better grouping (integrations and daemon together)\n- Sidebar projects and workspaces now persist across sessions, with a context menu to remove projects\n\n### Fixed\n\n- Sidebar crash when switching iOS theme (Unistyles/Reanimated interaction)\n- Silero VAD crash caused by external buffer mode in CircularBuffer\n- Bulk close now correctly archives stored agents instead of leaving orphans\n- Pinned archived agents are no longer pruned when closing tabs\n- OpenCode event stream starvation during slash command execution\n- Duplicate workspaces when multiple git worktrees share the same root\n- `gh` executable resolution for desktop users whose login shell sets a different PATH\n- Agent creation timeout increased to 60s to handle slow first-launch scenarios\n- Forward-compatible provider handling so older app clients don't break on new provider types\n- Input event listener race condition in the web scrollbar hook\n- Open-project screen content now vertically centered\n- Website download page fetches the release version at runtime with asset validation, fixing stale links",
+    "version": "0.1.45",
+    "date": "2026-04-04",
+    "markdown": "### Added\n\n- Pi (pi.dev) agent provider — connect Pi as a new agent type with thinking levels and tool call support\n- Copilot agent provider re-enabled after ACP compatibility fixes\n- `paseo .` and `paseo <path>` open the desktop app with the given project, similar to `code .`\n- Provider-declared features system — providers can expose dynamic toggles and selects that the app renders automatically. First consumer: Codex fast mode\n- Codex plan mode — start agents in plan-only mode with a dedicated plan card UI for reviewing proposed changes before execution\n- OpenCode custom agents and slash commands — user-defined agents from opencode.json now appear in the mode picker, and slash commands accept optional arguments\n- Desktop Integrations settings — install the Paseo CLI and orchestration skills directly from the app without touching the terminal\n- Daemon status dialog in desktop settings for quick health checks\n- Auto-restart daemon on version mismatch — the desktop app detects when the running daemon is outdated and restarts it automatically\n- Setup hint and paseo.sh link on the mobile welcome screen so new App Store users know what to do next\n\n### Improved\n\n- Desktop startup is faster — existing daemon connections are raced against bootstrap so the app is usable sooner\n- Settings sections reordered for better grouping (integrations and daemon together)\n- Sidebar projects and workspaces now persist across sessions, with a context menu to remove projects\n\n### Fixed\n\n- Sidebar crash when switching iOS theme (Unistyles/Reanimated interaction)\n- Silero VAD crash caused by external buffer mode in CircularBuffer\n- Bulk close now correctly archives stored agents instead of leaving orphans\n- Pinned archived agents are no longer pruned when closing tabs\n- OpenCode event stream starvation during slash command execution\n- Duplicate workspaces when multiple git worktrees share the same root\n- `gh` executable resolution for desktop users whose login shell sets a different PATH\n- Agent creation timeout increased to 60s to handle slow first-launch scenarios\n- Forward-compatible provider handling so older app clients don't break on new provider types\n- Input event listener race condition in the web scrollbar hook\n- Open-project screen content now vertically centered\n- Website download page fetches the release version at runtime with asset validation, fixing stale links"
   },
   {
-    version: "0.1.44",
-    date: "2026-04-03",
-    markdown:
-      "### Fixed\n\n- Desktop app now stops the daemon cleanly before auto-update restarts\n- Disabled claude-acp and copilot providers from the agent registry\n- Keyboard focus scope resolution now checks multiple candidates for broader compatibility\n- OpenCode interrupt now reaches correct terminal state parity with tool-call flows\n- Shell injection, symlink escape, and pairing endpoint security hardening",
+    "version": "0.1.44",
+    "date": "2026-04-03",
+    "markdown": "### Fixed\n\n- Desktop app now stops the daemon cleanly before auto-update restarts\n- Disabled claude-acp and copilot providers from the agent registry\n- Keyboard focus scope resolution now checks multiple candidates for broader compatibility\n- OpenCode interrupt now reaches correct terminal state parity with tool-call flows\n- Shell injection, symlink escape, and pairing endpoint security hardening"
   },
   {
-    version: "0.1.43",
-    date: "2026-04-02",
-    markdown:
-      '### Added\n\n- Copilot agent support via ACP base provider — connect GitHub Copilot as a new agent type\n- Searchable model favorites — quickly find and pin preferred models\n- Slash command support for OpenCode agents\n\n### Improved\n\n- Refined model selector UX with better mobile sheet behavior\n- Workspace status now uses amber alert styling for "needs input" state\n- Themed scrollbar on message input for consistent styling\n\n### Fixed\n\n- Ctrl+C/V copy and paste now works correctly in the terminal on Windows and Linux\n- Shell arguments with spaces are now properly quoted on Windows\n- Claude models with 1M context support are now correctly reported',
+    "version": "0.1.43",
+    "date": "2026-04-02",
+    "markdown": "### Added\n\n- Copilot agent support via ACP base provider — connect GitHub Copilot as a new agent type\n- Searchable model favorites — quickly find and pin preferred models\n- Slash command support for OpenCode agents\n\n### Improved\n\n- Refined model selector UX with better mobile sheet behavior\n- Workspace status now uses amber alert styling for \"needs input\" state\n- Themed scrollbar on message input for consistent styling\n\n### Fixed\n\n- Ctrl+C/V copy and paste now works correctly in the terminal on Windows and Linux\n- Shell arguments with spaces are now properly quoted on Windows\n- Claude models with 1M context support are now correctly reported"
   },
   {
-    version: "0.1.42",
-    date: "2026-04-01",
-    markdown:
-      "### Fixed\n\n- Fixed Claude Code failing to launch on Windows when installed to a path with spaces (e.g. `C:\\Program Files\\...`)",
+    "version": "0.1.42",
+    "date": "2026-04-01",
+    "markdown": "### Fixed\n\n- Fixed Claude Code failing to launch on Windows when installed to a path with spaces (e.g. `C:\\Program Files\\...`)"
   },
   {
-    version: "0.1.41",
-    date: "2026-04-01",
-    markdown:
-      "### Fixed\n\n- Fixed agent spawning on Windows — all providers (Claude, Codex, OpenCode) now use shell mode so npm shims and `.cmd` wrappers resolve correctly\n- Fixed terminal creation on Windows defaulting to a Unix shell instead of `cmd.exe`\n- Fixed path handling across the app to support Windows drive-letter paths (`C:\\...`) and UNC paths (`\\\\...`)\n- Fixed executable resolution on Windows to work with `nvm4w` and similar Node version managers\n- Eliminated white flash on window resize in dark mode by setting the native window background color to match the theme\n- Fixed titlebar drag region — replaced the fragile pointer-event approach with VS Code's proven static CSS `app-region: drag` pattern\n- Fixed context menu for copy/paste across the desktop app\n- Fixed shortcut rebinding UI to show held modifier keys and recognize additional keys (Tab, Delete, Home, End, Page Up/Down, Insert, F1–F12)\n- Removed the 40-item cap on activity timeline output so long agent sessions display their full history\n\n### Improved\n\n- Improved light mode theming with dedicated workspace background, scrollbar handle colors, and lighter shadows\n- Window controls overlay on Windows/Linux reduced from 48px to 29px height for a more compact titlebar",
+    "version": "0.1.41",
+    "date": "2026-04-01",
+    "markdown": "### Fixed\n\n- Fixed agent spawning on Windows — all providers (Claude, Codex, OpenCode) now use shell mode so npm shims and `.cmd` wrappers resolve correctly\n- Fixed terminal creation on Windows defaulting to a Unix shell instead of `cmd.exe`\n- Fixed path handling across the app to support Windows drive-letter paths (`C:\\...`) and UNC paths (`\\\\...`)\n- Fixed executable resolution on Windows to work with `nvm4w` and similar Node version managers\n- Eliminated white flash on window resize in dark mode by setting the native window background color to match the theme\n- Fixed titlebar drag region — replaced the fragile pointer-event approach with VS Code's proven static CSS `app-region: drag` pattern\n- Fixed context menu for copy/paste across the desktop app\n- Fixed shortcut rebinding UI to show held modifier keys and recognize additional keys (Tab, Delete, Home, End, Page Up/Down, Insert, F1–F12)\n- Removed the 40-item cap on activity timeline output so long agent sessions display their full history\n\n### Improved\n\n- Improved light mode theming with dedicated workspace background, scrollbar handle colors, and lighter shadows\n- Window controls overlay on Windows/Linux reduced from 48px to 29px height for a more compact titlebar"
   },
   {
-    version: "0.1.40",
-    date: "2026-04-01",
-    markdown:
-      "### Added\n\n- Workspace tabs can now be closed in batches\n\n### Improved\n\n- Provider model lists are now cached per server and provider, reducing redundant model lookups in the UI\n\n### Fixed\n\n- OpenCode reasoning content no longer appears duplicated as assistant text\n- Daemon no longer crashes when a Codex binary is missing or fails to spawn\n- Archive tab now correctly reconciles agent visibility after archiving\n- File diff tracking in workspaces now works correctly on Linux\n- iPad layout now renders correctly in desktop mode\n- macOS auto-updater now correctly delivers both arm64 and x64 binaries — previously whichever architecture finished building last would overwrite the other's update manifest",
+    "version": "0.1.40",
+    "date": "2026-04-01",
+    "markdown": "### Added\n\n- Workspace tabs can now be closed in batches\n\n### Improved\n\n- Provider model lists are now cached per server and provider, reducing redundant model lookups in the UI\n\n### Fixed\n\n- OpenCode reasoning content no longer appears duplicated as assistant text\n- Daemon no longer crashes when a Codex binary is missing or fails to spawn\n- Archive tab now correctly reconciles agent visibility after archiving\n- File diff tracking in workspaces now works correctly on Linux\n- iPad layout now renders correctly in desktop mode\n- macOS auto-updater now correctly delivers both arm64 and x64 binaries — previously whichever architecture finished building last would overwrite the other's update manifest"
   },
   {
-    version: "0.1.39",
-    date: "2026-03-30",
-    markdown:
-      "### Added\n\n- **Terminal management from the CLI** — new `paseo terminal` command group lets you list, create, and interact with workspace terminals without leaving your terminal\n- **Material file icons in the explorer** — the file explorer tree now shows language-specific icons (TypeScript, JSON, Markdown, etc.) so you can spot files at a glance\n\n### Fixed\n\n- Fixed iOS sidebar scroll flicker caused by redundant overflow clipping\n- Centralized window controls padding into a shared hook, eliminating layout inconsistencies across platforms",
+    "version": "0.1.39",
+    "date": "2026-03-30",
+    "markdown": "### Added\n\n- **Terminal management from the CLI** — new `paseo terminal` command group lets you list, create, and interact with workspace terminals without leaving your terminal\n- **Material file icons in the explorer** — the file explorer tree now shows language-specific icons (TypeScript, JSON, Markdown, etc.) so you can spot files at a glance\n\n### Fixed\n\n- Fixed iOS sidebar scroll flicker caused by redundant overflow clipping\n- Centralized window controls padding into a shared hook, eliminating layout inconsistencies across platforms"
   },
   {
-    version: "0.1.38",
-    date: "2026-03-30",
-    markdown:
-      "### Fixed\n\n- Fixed daemon startup race where the app could time out connecting on first launch because the PID file advertised a listen address before the server was ready\n- Fixed daemon log rotation losing startup traces — trace-level WebSocket logs no longer include full message payloads",
+    "version": "0.1.38",
+    "date": "2026-03-30",
+    "markdown": "### Fixed\n\n- Fixed daemon startup race where the app could time out connecting on first launch because the PID file advertised a listen address before the server was ready\n- Fixed daemon log rotation losing startup traces — trace-level WebSocket logs no longer include full message payloads"
   },
   {
-    version: "0.1.37",
-    date: "2026-03-29",
-    markdown:
-      "### Added\n\n- Custom window controls on Windows and Linux — the native titlebar is replaced with overlay controls that match the app's design\n- Desktop file logging with electron-log for easier debugging of daemon and app issues\n\n### Fixed\n\n- Fixed broken PATH propagation and Claude binary resolution on Windows\n- Dictation errors now show a visible toast instead of failing silently",
+    "version": "0.1.37",
+    "date": "2026-03-29",
+    "markdown": "### Added\n\n- Custom window controls on Windows and Linux — the native titlebar is replaced with overlay controls that match the app's design\n- Desktop file logging with electron-log for easier debugging of daemon and app issues\n\n### Fixed\n\n- Fixed broken PATH propagation and Claude binary resolution on Windows\n- Dictation errors now show a visible toast instead of failing silently"
   },
   {
-    version: "0.1.36",
-    date: "2026-03-27",
-    markdown:
-      "### Fixed\n\n- Fixed Windows drive-letter path handling across the codebase\n- Fixed stale Nix hash with automatic lockfile-change detection\n\n### Added\n\n- Added metrics collection and terminal performance tests",
+    "version": "0.1.36",
+    "date": "2026-03-27",
+    "markdown": "### Fixed\n\n- Fixed Windows drive-letter path handling across the codebase\n- Fixed stale Nix hash with automatic lockfile-change detection\n\n### Added\n\n- Added metrics collection and terminal performance tests"
   },
   {
-    version: "0.1.35",
-    date: "2026-03-26",
-    markdown:
-      "### Improved\n\n- Faster app startup by redirecting to the welcome screen immediately and showing host connection status inline\n- Codex file deletions now display correctly as removed lines in diffs\n- OpenCode questions are now surfaced in the permission UI\n\n### Fixed\n\n- Fixed queued prompt dispatch after idle transition\n- Replaced bash-only `mapfile` with a portable `while-read` loop in the chat script\n\n### Added\n\n- Added support for Nix and NixOS installation",
+    "version": "0.1.35",
+    "date": "2026-03-26",
+    "markdown": "### Improved\n\n- Faster app startup by redirecting to the welcome screen immediately and showing host connection status inline\n- Codex file deletions now display correctly as removed lines in diffs\n- OpenCode questions are now surfaced in the permission UI\n\n### Fixed\n\n- Fixed queued prompt dispatch after idle transition\n- Replaced bash-only `mapfile` with a portable `while-read` loop in the chat script\n\n### Added\n\n- Added support for Nix and NixOS installation"
   },
   {
-    version: "0.1.34",
-    date: "2026-03-25",
-    markdown:
-      "### Added\n\n- Added `paseo archive` as a top-level alias for `paseo agent archive`\n- Added the `PASEO_AGENT_ID` environment variable for Claude and Codex agents\n- Added a redesigned command autocomplete with a detail card and dropdown styling\n- Linked Android download surfaces to the Google Play Store\n\n### Improved\n\n- Autonomous turns now complete gracefully on interrupt instead of being canceled\n- Thinking/model selection now always resolves to a real option instead of showing a generic Default choice\n- Restored per-provider form preferences and removed the Auto model fallback\n- Improved Codex activity logs with clearer tool-call summaries\n- Reduced unnecessary re-renders in the agent panel and input area for smoother interaction\n- Improved chat transcript readability\n\n### Fixed\n\n- Fixed `paseo send --no-wait` not taking effect\n- Fixed stale abort results contaminating replacement turns after an interrupt\n- Fixed Claude interrupt handling and autonomous wake reliability\n- Fixed nested Claude Code session detection and provider availability checks\n- Fixed agent input focus scoping across panels\n- Fixed terminal snapshot ordering when subscribing\n- Fixed `chat read --since` to accept message IDs\n- Fixed keyboard pane focus syncing with the active panel\n- Fixed assistant text selection on web\n- Fixed archived-agent notifications still appearing in chat rooms\n- Fixed the attach-images button interaction in the message composer\n- Pruned wrong-platform native binaries from Electron desktop builds",
+    "version": "0.1.34",
+    "date": "2026-03-25",
+    "markdown": "### Added\n\n- Added `paseo archive` as a top-level alias for `paseo agent archive`\n- Added the `PASEO_AGENT_ID` environment variable for Claude and Codex agents\n- Added a redesigned command autocomplete with a detail card and dropdown styling\n- Linked Android download surfaces to the Google Play Store\n\n### Improved\n\n- Autonomous turns now complete gracefully on interrupt instead of being canceled\n- Thinking/model selection now always resolves to a real option instead of showing a generic Default choice\n- Restored per-provider form preferences and removed the Auto model fallback\n- Improved Codex activity logs with clearer tool-call summaries\n- Reduced unnecessary re-renders in the agent panel and input area for smoother interaction\n- Improved chat transcript readability\n\n### Fixed\n\n- Fixed `paseo send --no-wait` not taking effect\n- Fixed stale abort results contaminating replacement turns after an interrupt\n- Fixed Claude interrupt handling and autonomous wake reliability\n- Fixed nested Claude Code session detection and provider availability checks\n- Fixed agent input focus scoping across panels\n- Fixed terminal snapshot ordering when subscribing\n- Fixed `chat read --since` to accept message IDs\n- Fixed keyboard pane focus syncing with the active panel\n- Fixed assistant text selection on web\n- Fixed archived-agent notifications still appearing in chat rooms\n- Fixed the attach-images button interaction in the message composer\n- Pruned wrong-platform native binaries from Electron desktop builds"
   },
   {
-    version: "0.1.33",
-    date: "2026-03-23",
-    markdown:
-      "### Fixed\n\n- Fixed the desktop app failing to reopen after closing on macOS — the daemon and agent processes were registering with Launch Services as instances of the main app, blocking subsequent launches\n- Fixed dictation not working in the packaged desktop app — the microphone entitlement was missing from the hardened runtime configuration\n- Fixed leaked Claude Code child processes when agents were closed — the SDK query stream was not being properly shut down\n- The notification test button now surfaces errors instead of failing silently",
+    "version": "0.1.33",
+    "date": "2026-03-23",
+    "markdown": "### Fixed\n\n- Fixed the desktop app failing to reopen after closing on macOS — the daemon and agent processes were registering with Launch Services as instances of the main app, blocking subsequent launches\n- Fixed dictation not working in the packaged desktop app — the microphone entitlement was missing from the hardened runtime configuration\n- Fixed leaked Claude Code child processes when agents were closed — the SDK query stream was not being properly shut down\n- The notification test button now surfaces errors instead of failing silently"
   },
   {
-    version: "0.1.32",
-    date: "2026-03-23",
-    markdown:
-      "### Added\n\n- Fully rebindable keyboard shortcuts with chord support — all shortcuts are now declarative with proper Cmd (Mac) vs Ctrl (Windows/Linux) separation\n- Migrated the desktop app from Tauri to Electron, with macOS notarization, code signing, and Linux Wayland support\n- Added line numbers and word-wrap toggle to file previews\n- Added an archived agent callout with an unarchive button so you can restore agents directly from the chat view\n- Added workspace kind indicators in the sidebar (e.g. worktree vs standalone)\n- Expanded diff syntax highlighting to cover more languages\n- Added status bar tooltips for project and agent status\n\n### Improved\n\n- Redesigned the mobile tab switcher as a compact header row with quick access to new agents and terminals\n- Streamlined workspace creation — worktrees are now created inline with a single action instead of a multi-step flow\n- Agent history now streams from disk on reconnect, so you see past messages immediately instead of a blank screen\n- Automatic cleanup of stale workspaces: deleted worktree directories and fully-archived workspaces are pruned automatically\n- After archiving a workspace, the app now redirects to the next available workspace instead of leaving you on a dead screen\n- Reopening an archived agent tab now keeps it open instead of collapsing back to archived state\n- Reduced unnecessary re-renders across the workspace screen, sidebar, and agent list for smoother scrolling and interaction\n- Agent list no longer refreshes in the background when the screen is unfocused, saving resources\n- Desktop key repeat now works correctly on macOS\n- Desktop notifications on macOS are more reliable\n- Daemon startup no longer blocks on model downloads\n- Better error messages from the daemon — RPC errors now include the actual underlying details\n\n### Fixed\n\n- Fixed user messages appearing as assistant output in the timeline when messages contained structured content blocks\n- Fixed archived workspace routing so navigating to an archived session no longer breaks the app\n- Fixed Linux AppImage failing to launch on Wayland-only desktops\n- Fixed desktop window drag coordinates being applied when they shouldn't be",
+    "version": "0.1.32",
+    "date": "2026-03-23",
+    "markdown": "### Added\n\n- Fully rebindable keyboard shortcuts with chord support — all shortcuts are now declarative with proper Cmd (Mac) vs Ctrl (Windows/Linux) separation\n- Migrated the desktop app from Tauri to Electron, with macOS notarization, code signing, and Linux Wayland support\n- Added line numbers and word-wrap toggle to file previews\n- Added an archived agent callout with an unarchive button so you can restore agents directly from the chat view\n- Added workspace kind indicators in the sidebar (e.g. worktree vs standalone)\n- Expanded diff syntax highlighting to cover more languages\n- Added status bar tooltips for project and agent status\n\n### Improved\n\n- Redesigned the mobile tab switcher as a compact header row with quick access to new agents and terminals\n- Streamlined workspace creation — worktrees are now created inline with a single action instead of a multi-step flow\n- Agent history now streams from disk on reconnect, so you see past messages immediately instead of a blank screen\n- Automatic cleanup of stale workspaces: deleted worktree directories and fully-archived workspaces are pruned automatically\n- After archiving a workspace, the app now redirects to the next available workspace instead of leaving you on a dead screen\n- Reopening an archived agent tab now keeps it open instead of collapsing back to archived state\n- Reduced unnecessary re-renders across the workspace screen, sidebar, and agent list for smoother scrolling and interaction\n- Agent list no longer refreshes in the background when the screen is unfocused, saving resources\n- Desktop key repeat now works correctly on macOS\n- Desktop notifications on macOS are more reliable\n- Daemon startup no longer blocks on model downloads\n- Better error messages from the daemon — RPC errors now include the actual underlying details\n\n### Fixed\n\n- Fixed user messages appearing as assistant output in the timeline when messages contained structured content blocks\n- Fixed archived workspace routing so navigating to an archived session no longer breaks the app\n- Fixed Linux AppImage failing to launch on Wayland-only desktops\n- Fixed desktop window drag coordinates being applied when they shouldn't be"
   },
   {
-    version: "0.1.30",
-    date: "2026-03-19",
-    markdown:
-      "### Added\n\n- Added terminal tabs, split pane controls, and drop previews for workspace layouts\n- Added a combined model selector and agent mode visuals across key UI surfaces\n- Added Open Graph metadata improvements for richer website sharing previews\n\n### Improved\n\n- Improved workspace navigation with better active-workspace tracking and keyboard-driven pane interactions\n- Improved terminal scrollbar behavior, pane focus handling, and status bar/message input spacing\n- Improved project picker path display and general workspace UI polish\n\n### Fixed\n\n- Fixed agent startup reliability by tightening PATH resolution and surfacing missing provider binaries in status\n- Fixed workspace route syncing, drag hit areas, and git diff panel header styling regressions\n- Fixed website mobile horizontal scrolling and ensured the workspace audio module builds during EAS installs",
+    "version": "0.1.30",
+    "date": "2026-03-19",
+    "markdown": "### Added\n\n- Added terminal tabs, split pane controls, and drop previews for workspace layouts\n- Added a combined model selector and agent mode visuals across key UI surfaces\n- Added Open Graph metadata improvements for richer website sharing previews\n\n### Improved\n\n- Improved workspace navigation with better active-workspace tracking and keyboard-driven pane interactions\n- Improved terminal scrollbar behavior, pane focus handling, and status bar/message input spacing\n- Improved project picker path display and general workspace UI polish\n\n### Fixed\n\n- Fixed agent startup reliability by tightening PATH resolution and surfacing missing provider binaries in status\n- Fixed workspace route syncing, drag hit areas, and git diff panel header styling regressions\n- Fixed website mobile horizontal scrolling and ensured the workspace audio module builds during EAS installs"
   },
   {
-    version: "0.1.28",
-    date: "2026-03-15",
-    markdown:
-      "### Added\n\n- Added OpenCode build and plan modes\n- Added website landing pages for Claude Code, Codex, and OpenCode\n\n### Improved\n\n- Improved the git action menu for more reliable repository actions\n- Improved the mobile settings screen, workspace header actions, and welcome screen presentation\n- Updated the website hero copy and added a sponsor callout section\n\n### Fixed\n\n- Fixed assistant file links so they open the correct workspace files from chat",
+    "version": "0.1.28",
+    "date": "2026-03-15",
+    "markdown": "### Added\n\n- Added OpenCode build and plan modes\n- Added website landing pages for Claude Code, Codex, and OpenCode\n\n### Improved\n\n- Improved the git action menu for more reliable repository actions\n- Improved the mobile settings screen, workspace header actions, and welcome screen presentation\n- Updated the website hero copy and added a sponsor callout section\n\n### Fixed\n\n- Fixed assistant file links so they open the correct workspace files from chat"
   },
   {
-    version: "0.1.27",
-    date: "2026-03-13",
-    markdown:
-      "### Added\n\n- Added voice runtime with new audio engine architecture for voice interactions\n- Added Grep tool support in Claude tool-call mapping\n- Added ability to open workspace files directly from agent chat messages\n- Added desktop notifications via a custom native bridge\n\n### Improved\n\n- Improved image picker, markdown rendering, and UI interactions\n- Improved shell environment detection using shell-env\n\n### Fixed\n\n- Fixed platform-specific markdown link rendering\n- Fixed Linux AppImage CLI resource paths\n- Fixed Codex replacement stream being killed by stale turn notifications",
+    "version": "0.1.27",
+    "date": "2026-03-13",
+    "markdown": "### Added\n\n- Added voice runtime with new audio engine architecture for voice interactions\n- Added Grep tool support in Claude tool-call mapping\n- Added ability to open workspace files directly from agent chat messages\n- Added desktop notifications via a custom native bridge\n\n### Improved\n\n- Improved image picker, markdown rendering, and UI interactions\n- Improved shell environment detection using shell-env\n\n### Fixed\n\n- Fixed platform-specific markdown link rendering\n- Fixed Linux AppImage CLI resource paths\n- Fixed Codex replacement stream being killed by stale turn notifications"
   },
   {
-    version: "0.1.26",
-    date: "2026-03-12",
-    markdown:
-      "### Added\n\n- Added single-instance desktop behavior, Android APK download access, and refreshed splash screen styling\n- Added bundled Codex and OpenCode binaries in the server so setup no longer depends on global installs\n- Added Windows support with improved cross-platform shell execution\n\n### Improved\n\n- Improved desktop runtime behavior on Windows by suppressing console windows and defaulting app data to `~/.paseo`\n- Added a Discord link to the website navigation\n\n### Fixed\n\n- Fixed desktop Claude agent startup from the managed runtime and rotated logs correctly on restart\n- Fixed the home route to hide browser chrome when appropriate\n- Fixed Expo Metro compatibility by updating the `exclusionList` import\n- Fixed noisy shell output interfering with executable lookup\n- Fixed Windows resource-path handling by stripping the extended-length path prefix",
+    "version": "0.1.26",
+    "date": "2026-03-12",
+    "markdown": "### Added\n\n- Added single-instance desktop behavior, Android APK download access, and refreshed splash screen styling\n- Added bundled Codex and OpenCode binaries in the server so setup no longer depends on global installs\n- Added Windows support with improved cross-platform shell execution\n\n### Improved\n\n- Improved desktop runtime behavior on Windows by suppressing console windows and defaulting app data to `~/.paseo`\n- Added a Discord link to the website navigation\n\n### Fixed\n\n- Fixed desktop Claude agent startup from the managed runtime and rotated logs correctly on restart\n- Fixed the home route to hide browser chrome when appropriate\n- Fixed Expo Metro compatibility by updating the `exclusionList` import\n- Fixed noisy shell output interfering with executable lookup\n- Fixed Windows resource-path handling by stripping the extended-length path prefix"
   },
   {
-    version: "0.1.25",
-    date: "2026-03-11",
-    markdown:
-      "### Fixed\n\n- Fixed desktop app failing to start the built-in daemon on fresh macOS installs. The DMG was not notarized and code-signing stripped entitlements from the bundled Node runtime, causing Gatekeeper to block execution\n- Fixed Linux AppImage build by restoring the AppImage bundle format and stripping CUDA dependencies from onnxruntime",
+    "version": "0.1.25",
+    "date": "2026-03-11",
+    "markdown": "### Fixed\n\n- Fixed desktop app failing to start the built-in daemon on fresh macOS installs. The DMG was not notarized and code-signing stripped entitlements from the bundled Node runtime, causing Gatekeeper to block execution\n- Fixed Linux AppImage build by restoring the AppImage bundle format and stripping CUDA dependencies from onnxruntime"
   },
   {
-    version: "0.1.24",
-    date: "2026-03-10",
-    markdown:
-      "### Improved\n\n- Improved command center keyboard navigation and new tab shortcut\n- Simplified desktop release pipeline for faster and more reliable builds",
+    "version": "0.1.24",
+    "date": "2026-03-10",
+    "markdown": "### Improved\n\n- Improved command center keyboard navigation and new tab shortcut\n- Simplified desktop release pipeline for faster and more reliable builds"
   },
   {
-    version: "0.1.21",
-    date: "2026-03-10",
-    markdown:
-      "### Improved\n\n- Improved desktop release reliability by fixing the Windows managed-runtime build path during GitHub Actions releases\n\n### Fixed\n\n- Fixed a desktop release CI failure caused by a Unix-only server build script on Windows runners\n- Fixed server CI to build the relay dependency before running tests, restoring relay E2EE test coverage on clean runners\n- Fixed a Claude redesign test that depended on the local Claude CLI being installed",
+    "version": "0.1.21",
+    "date": "2026-03-10",
+    "markdown": "### Improved\n\n- Improved desktop release reliability by fixing the Windows managed-runtime build path during GitHub Actions releases\n\n### Fixed\n\n- Fixed a desktop release CI failure caused by a Unix-only server build script on Windows runners\n- Fixed server CI to build the relay dependency before running tests, restoring relay E2EE test coverage on clean runners\n- Fixed a Claude redesign test that depended on the local Claude CLI being installed"
   },
   {
-    version: "0.1.20",
-    date: "2026-03-10",
-    markdown:
-      "### Added\n\n- Added workspace sidebar git actions with quick diff stats and archive controls\n- Added refreshed website downloads and homepage presentation for desktop installs\n\n### Improved\n\n- Desktop release packaging now rebuilds and validates the bundled managed runtime during CI, improving installer reliability for macOS users\n- Improved desktop and web stream rendering, settings polish, and React 19.1.4 compatibility\n\n### Fixed\n\n- Fixed Claude interrupt/restart regressions and strengthened managed-daemon smoke coverage for desktop releases",
+    "version": "0.1.20",
+    "date": "2026-03-10",
+    "markdown": "### Added\n\n- Added workspace sidebar git actions with quick diff stats and archive controls\n- Added refreshed website downloads and homepage presentation for desktop installs\n\n### Improved\n\n- Desktop release packaging now rebuilds and validates the bundled managed runtime during CI, improving installer reliability for macOS users\n- Improved desktop and web stream rendering, settings polish, and React 19.1.4 compatibility\n\n### Fixed\n\n- Fixed Claude interrupt/restart regressions and strengthened managed-daemon smoke coverage for desktop releases"
   },
   {
-    version: "0.1.19",
-    date: "2026-03-09",
-    markdown:
-      "### Added\n\n- Added a draft GitHub release flow so maintainers can upload and review desktop and Android release assets before publishing the final release",
+    "version": "0.1.19",
+    "date": "2026-03-09",
+    "markdown": "### Added\n\n- Added a draft GitHub release flow so maintainers can upload and review desktop and Android release assets before publishing the final release"
   },
   {
-    version: "0.1.18",
-    date: "2026-03-06",
-    markdown:
-      "### Added\n\n- Added a desktop `Mod+W` shortcut to close the current tab\n\n### Improved\n\n- New and newly selected terminals now take focus automatically so you can type immediately\n- Kept newly created workspaces and projects in a more stable order in the sidebar\n- Improved project naming for GitHub remotes and expanded project icon discovery to Phoenix `priv/static` assets\n- Updated the website desktop download link to use the universal macOS DMG\n\n### Fixed\n\n- Restored automatic agent metadata generation for Claude runs",
+    "version": "0.1.18",
+    "date": "2026-03-06",
+    "markdown": "### Added\n\n- Added a desktop `Mod+W` shortcut to close the current tab\n\n### Improved\n\n- New and newly selected terminals now take focus automatically so you can type immediately\n- Kept newly created workspaces and projects in a more stable order in the sidebar\n- Improved project naming for GitHub remotes and expanded project icon discovery to Phoenix `priv/static` assets\n- Updated the website desktop download link to use the universal macOS DMG\n\n### Fixed\n\n- Restored automatic agent metadata generation for Claude runs"
   },
   {
-    version: "0.1.17",
-    date: "2026-03-06",
-    markdown:
-      "### Added\n\n- New workspace-first navigation model with workspace tabs, file tabs, and sortable tab groups\n- Keyboard shortcuts for workspace and tab navigation, with shortcut badges in the sidebar\n- Workspace-level archive actions with improved worktree archiving flow and context menu support\n- In-chat task notifications rendered as synthetic tool-call events for clearer status tracking\n\n### Improved\n\n- Desktop builds now ship as a universal macOS binary (Apple Silicon + Intel)\n- More reliable workspace routing and tab identity handling across refreshes and deep links\n- Better sidebar drag-and-drop behavior with explicit drag handles and nested list interactions\n- Smoother terminal/file rendering and WebGL-backed terminal performance improvements\n- Stronger provider error surfacing and updated Claude model/runtime handling\n\n### Fixed\n\n- Fixed orphan workspace runs caused by non-canonical tab routes\n- Fixed mobile terminal tab remount/routing restore issues\n- Fixed agent metadata title/branch update reliability\n- Fixed stream/timeline ordering and cursor synchronization issues in the app\n- Fixed reversed edge-wheel scroll behavior in chat/tool stream views",
+    "version": "0.1.17",
+    "date": "2026-03-06",
+    "markdown": "### Added\n\n- New workspace-first navigation model with workspace tabs, file tabs, and sortable tab groups\n- Keyboard shortcuts for workspace and tab navigation, with shortcut badges in the sidebar\n- Workspace-level archive actions with improved worktree archiving flow and context menu support\n- In-chat task notifications rendered as synthetic tool-call events for clearer status tracking\n\n### Improved\n\n- Desktop builds now ship as a universal macOS binary (Apple Silicon + Intel)\n- More reliable workspace routing and tab identity handling across refreshes and deep links\n- Better sidebar drag-and-drop behavior with explicit drag handles and nested list interactions\n- Smoother terminal/file rendering and WebGL-backed terminal performance improvements\n- Stronger provider error surfacing and updated Claude model/runtime handling\n\n### Fixed\n\n- Fixed orphan workspace runs caused by non-canonical tab routes\n- Fixed mobile terminal tab remount/routing restore issues\n- Fixed agent metadata title/branch update reliability\n- Fixed stream/timeline ordering and cursor synchronization issues in the app\n- Fixed reversed edge-wheel scroll behavior in chat/tool stream views"
   },
   {
-    version: "0.1.16",
-    date: "2026-02-22",
-    markdown:
-      '### Added\n\n- Update the Paseo desktop app and local daemon directly from Settings\n- Microphone and notification permission controls in Settings\n- Thinking/reasoning mode — agents can use extended thinking when the provider supports it\n- Autonomous run mode — let agents keep working without manual approval at each step\n- `paseo wait` now shows a snapshot of recent agent activity while you wait\n\n### Improved\n\n- Smoother streaming with less UI flicker and scroll jumping during long agent runs\n- Faster agent sidebar list rendering\n- Archiving an agent now stops it first instead of archiving a half-running session\n- Agent titles no longer reset when refreshing\n- More reliable relay connections\n\n### Fixed\n\n- Fixed Claude background tasks desyncing the chat\n- Fixed duplicate user messages appearing in the timeline\n- Fixed a startup crash caused by an OpenCode SDK update\n- Fixed spurious "needs attention" notifications from background agent activity',
+    "version": "0.1.16",
+    "date": "2026-02-22",
+    "markdown": "### Added\n\n- Update the Paseo desktop app and local daemon directly from Settings\n- Microphone and notification permission controls in Settings\n- Thinking/reasoning mode — agents can use extended thinking when the provider supports it\n- Autonomous run mode — let agents keep working without manual approval at each step\n- `paseo wait` now shows a snapshot of recent agent activity while you wait\n\n### Improved\n\n- Smoother streaming with less UI flicker and scroll jumping during long agent runs\n- Faster agent sidebar list rendering\n- Archiving an agent now stops it first instead of archiving a half-running session\n- Agent titles no longer reset when refreshing\n- More reliable relay connections\n\n### Fixed\n\n- Fixed Claude background tasks desyncing the chat\n- Fixed duplicate user messages appearing in the timeline\n- Fixed a startup crash caused by an OpenCode SDK update\n- Fixed spurious \"needs attention\" notifications from background agent activity"
   },
   {
-    version: "0.1.15",
-    date: "2026-02-19",
-    markdown:
-      "### Added\n\n- Added a public changelog page on the website so users can browse release notes\n\n### Improved\n\n- Redesigned the website get-started experience into a clearer two-step flow\n- Simplified website GitHub navigation and changelog headings\n- Improved app draft/new-agent UX with clearer working directory placeholder and empty-state messaging\n- Enabled drag interactions in previously unhandled areas on the desktop draft screen\n- Hid empty filter groups in the left sidebar\n\n### Fixed\n\n- Fixed archived-agent navigation by redirecting archived agent routes to draft\n- Fixed duplicate `/rewind` user-message behavior",
+    "version": "0.1.15",
+    "date": "2026-02-19",
+    "markdown": "### Added\n\n- Added a public changelog page on the website so users can browse release notes\n\n### Improved\n\n- Redesigned the website get-started experience into a clearer two-step flow\n- Simplified website GitHub navigation and changelog headings\n- Improved app draft/new-agent UX with clearer working directory placeholder and empty-state messaging\n- Enabled drag interactions in previously unhandled areas on the desktop draft screen\n- Hid empty filter groups in the left sidebar\n\n### Fixed\n\n- Fixed archived-agent navigation by redirecting archived agent routes to draft\n- Fixed duplicate `/rewind` user-message behavior"
   },
   {
-    version: "0.1.14",
-    date: "2026-02-19",
-    markdown:
-      "### Added\n\n- Added Claude `/rewind` command support\n- Added slash command access in the draft agent composer\n- Added `@` workspace file autocomplete in chat prompts\n- Added support for pasting images directly into prompt attachments\n- Added optimistic image previews for pending user message attachments\n- Added shared desktop/web overlay scroll handles, including file preview panes\n\n### Improved\n\n- Improved worktree flow after shipping, including better merged PR detection\n- Improved draft workflow by enabling the explorer sidebar immediately after CWD selection\n- Improved new worktree-agent defaults by prefilling CWD to the main repository\n- Improved desktop command autocomplete behavior to match combobox interactions\n- Improved git sync UX by simplifying sync labels and only showing Sync when a branch diverges from origin\n- Improved desktop settings and permissions UX on desktop\n- Improved scrollbar visibility, drag interactions, tracking, and animation timing on web/desktop\n\n### Fixed\n\n- Fixed worktree archive/setup lifecycle issues, including terminal cleanup and archive timing\n- Fixed worktree path collisions by hashing CWD for collision-safe worktree roots\n- Fixed terminal sizing when switching back to an agent session\n- Fixed accidental terminal closure risk by adding confirmation for running shell commands\n- Fixed archive loading-state consistency across the sidebar and agent screen\n- Fixed autocomplete popover stability and workspace suggestion ranking\n- Fixed dictation timeouts caused by dangling non-final segments\n- Fixed server lock ownership when spawned as a child process by using parent PID ownership\n- Fixed hidden directory leakage in server CWD suggestions\n- Fixed agent attention notification payload consistency across providers\n- Fixed daemon version badge visibility in settings when daemon version data is unavailable",
+    "version": "0.1.14",
+    "date": "2026-02-19",
+    "markdown": "### Added\n\n- Added Claude `/rewind` command support\n- Added slash command access in the draft agent composer\n- Added `@` workspace file autocomplete in chat prompts\n- Added support for pasting images directly into prompt attachments\n- Added optimistic image previews for pending user message attachments\n- Added shared desktop/web overlay scroll handles, including file preview panes\n\n### Improved\n\n- Improved worktree flow after shipping, including better merged PR detection\n- Improved draft workflow by enabling the explorer sidebar immediately after CWD selection\n- Improved new worktree-agent defaults by prefilling CWD to the main repository\n- Improved desktop command autocomplete behavior to match combobox interactions\n- Improved git sync UX by simplifying sync labels and only showing Sync when a branch diverges from origin\n- Improved desktop settings and permissions UX on desktop\n- Improved scrollbar visibility, drag interactions, tracking, and animation timing on web/desktop\n\n### Fixed\n\n- Fixed worktree archive/setup lifecycle issues, including terminal cleanup and archive timing\n- Fixed worktree path collisions by hashing CWD for collision-safe worktree roots\n- Fixed terminal sizing when switching back to an agent session\n- Fixed accidental terminal closure risk by adding confirmation for running shell commands\n- Fixed archive loading-state consistency across the sidebar and agent screen\n- Fixed autocomplete popover stability and workspace suggestion ranking\n- Fixed dictation timeouts caused by dangling non-final segments\n- Fixed server lock ownership when spawned as a child process by using parent PID ownership\n- Fixed hidden directory leakage in server CWD suggestions\n- Fixed agent attention notification payload consistency across providers\n- Fixed daemon version badge visibility in settings when daemon version data is unavailable"
   },
   {
-    version: "0.1.9",
-    date: "2026-02-17",
-    markdown:
-      "### Improved\n\n- Unified structured-output generation through a single shared schema-validation and retry pipeline\n- Reused provider availability checks for structured generation fallback selection\n- Added structured generation waterfall ordering for internal metadata and git text generation: Claude Haiku, then Codex, then OpenCode\n\n### Fixed\n\n- Fixed CLI `run --output-schema` to use the shared structured-output path instead of ad-hoc JSON parsing\n- Fixed `run --output-schema` failures where providers returned empty `lastMessage` by recovering from timeline assistant output\n- Fixed internal commit message, pull request text, and agent metadata generation to follow one consistent structured pipeline",
+    "version": "0.1.9",
+    "date": "2026-02-17",
+    "markdown": "### Improved\n\n- Unified structured-output generation through a single shared schema-validation and retry pipeline\n- Reused provider availability checks for structured generation fallback selection\n- Added structured generation waterfall ordering for internal metadata and git text generation: Claude Haiku, then Codex, then OpenCode\n\n### Fixed\n\n- Fixed CLI `run --output-schema` to use the shared structured-output path instead of ad-hoc JSON parsing\n- Fixed `run --output-schema` failures where providers returned empty `lastMessage` by recovering from timeline assistant output\n- Fixed internal commit message, pull request text, and agent metadata generation to follow one consistent structured pipeline"
   },
   {
-    version: "0.1.8",
-    date: "2026-02-17",
-    markdown:
-      '### Added\n\n- Added a cross-platform confirm dialog flow for daemon restarts\n\n### Improved\n\n- Simplified local speech bootstrap and daemon startup locking behavior\n- Updated website hero copy to emphasize local execution\n\n### Fixed\n\n- Fixed stuck "send while running" recovery across app and server session handling\n- Fixed Claude session identity preservation when reloading existing agents\n- Fixed combobox option behavior and related interactions\n- Fixed desktop file-drop listener cleanup to avoid uncaught unlisten errors\n- Fixed web tool-detail wheel event routing at scroll edges',
+    "version": "0.1.8",
+    "date": "2026-02-17",
+    "markdown": "### Added\n\n- Added a cross-platform confirm dialog flow for daemon restarts\n\n### Improved\n\n- Simplified local speech bootstrap and daemon startup locking behavior\n- Updated website hero copy to emphasize local execution\n\n### Fixed\n\n- Fixed stuck \"send while running\" recovery across app and server session handling\n- Fixed Claude session identity preservation when reloading existing agents\n- Fixed combobox option behavior and related interactions\n- Fixed desktop file-drop listener cleanup to avoid uncaught unlisten errors\n- Fixed web tool-detail wheel event routing at scroll edges"
   },
   {
-    version: "0.1.7",
-    date: "2026-02-16",
-    markdown:
-      "### Added\n\n- Improved agent workspace flows with better directory suggestions\n- Added iOS TestFlight and Android app access request forms on the website\n\n### Improved\n\n- Unified daemon startup behavior between dev and CLI paths for more predictable local runs\n- Improved website app download and update guidance\n\n### Fixed\n\n- Prevented an initial desktop combobox `0,0` position flash\n- Fixed CLI version output issues\n- Hardened server runtime loading for local speech dependencies",
+    "version": "0.1.7",
+    "date": "2026-02-16",
+    "markdown": "### Added\n\n- Improved agent workspace flows with better directory suggestions\n- Added iOS TestFlight and Android app access request forms on the website\n\n### Improved\n\n- Unified daemon startup behavior between dev and CLI paths for more predictable local runs\n- Improved website app download and update guidance\n\n### Fixed\n\n- Prevented an initial desktop combobox `0,0` position flash\n- Fixed CLI version output issues\n- Hardened server runtime loading for local speech dependencies"
   },
   {
-    version: "0.1.6",
-    date: "2026-02-16",
-    markdown: "### Notes\n\n- No major visible product changes in this patch release",
+    "version": "0.1.6",
+    "date": "2026-02-16",
+    "markdown": "### Notes\n\n- No major visible product changes in this patch release"
   },
   {
-    version: "0.1.5",
-    date: "2026-02-16",
-    markdown:
-      "### Added\n\n- Added terminal reattach support and better worktree terminal handling\n- Added global keyboard shortcut help in the app\n- Added sidebar host filtering and improved agent workflow controls\n\n### Improved\n\n- Improved worktree setup visibility by streaming setup progress\n- Improved terminal streaming reliability and lifecycle handling\n- Preserved explorer tab state so context survives navigation better",
+    "version": "0.1.5",
+    "date": "2026-02-16",
+    "markdown": "### Added\n\n- Added terminal reattach support and better worktree terminal handling\n- Added global keyboard shortcut help in the app\n- Added sidebar host filtering and improved agent workflow controls\n\n### Improved\n\n- Improved worktree setup visibility by streaming setup progress\n- Improved terminal streaming reliability and lifecycle handling\n- Preserved explorer tab state so context survives navigation better"
   },
   {
-    version: "0.1.4",
-    date: "2026-02-14",
-    markdown:
-      "### Added\n\n- Added voice capability status reporting in the client\n- Added background local speech model downloads with runtime gating\n- Added adaptive dictation finish timing based on server-provided budgets\n- Added relay reconnect behavior with grace periods and branch suggestions\n\n### Improved\n\n- Improved connection selection and agent hydration reliability\n- Improved timeline loading with cursor-based fetch behavior\n- Improved first-run experience by bootstrapping a default localhost connection\n- Improved inline code rendering by auto-linkifying URLs\n\n### Fixed\n\n- Fixed Linux checkout diff watch behavior to avoid recursive watches\n- Fixed stale relay client timer behavior\n- Fixed unnecessary git diff header auto-scroll on collapse",
+    "version": "0.1.4",
+    "date": "2026-02-14",
+    "markdown": "### Added\n\n- Added voice capability status reporting in the client\n- Added background local speech model downloads with runtime gating\n- Added adaptive dictation finish timing based on server-provided budgets\n- Added relay reconnect behavior with grace periods and branch suggestions\n\n### Improved\n\n- Improved connection selection and agent hydration reliability\n- Improved timeline loading with cursor-based fetch behavior\n- Improved first-run experience by bootstrapping a default localhost connection\n- Improved inline code rendering by auto-linkifying URLs\n\n### Fixed\n\n- Fixed Linux checkout diff watch behavior to avoid recursive watches\n- Fixed stale relay client timer behavior\n- Fixed unnecessary git diff header auto-scroll on collapse"
   },
   {
-    version: "0.1.3",
-    date: "2026-02-12",
-    markdown:
-      "### Added\n\n- Added CLI onboarding command\n- Added CLI `--output-schema` support for structured agent output\n- Added CLI agent metadata update support for names and labels\n- Added provider availability detection with normalization of legacy default model IDs\n\n### Improved\n\n- Improved file explorer refresh feedback and unresolved checkout fallback handling\n- Added better voice interrupt handling with a speech-start grace period\n- Improved CLI defaults to list all non-archived agents by default\n- Improved website UX with clearer install CTA and privacy policy access\n\n### Fixed\n\n- Fixed dev runner entry issues and sherpa TTS initialization behavior",
+    "version": "0.1.3",
+    "date": "2026-02-12",
+    "markdown": "### Added\n\n- Added CLI onboarding command\n- Added CLI `--output-schema` support for structured agent output\n- Added CLI agent metadata update support for names and labels\n- Added provider availability detection with normalization of legacy default model IDs\n\n### Improved\n\n- Improved file explorer refresh feedback and unresolved checkout fallback handling\n- Added better voice interrupt handling with a speech-start grace period\n- Improved CLI defaults to list all non-archived agents by default\n- Improved website UX with clearer install CTA and privacy policy access\n\n### Fixed\n\n- Fixed dev runner entry issues and sherpa TTS initialization behavior"
   },
   {
-    version: "0.1.2",
-    date: "2026-02-11",
-    markdown: "### Notes\n\n- No major visible product changes in this patch release",
+    "version": "0.1.2",
+    "date": "2026-02-11",
+    "markdown": "### Notes\n\n- No major visible product changes in this patch release"
   },
   {
-    version: "0.1.1",
-    date: "2026-02-11",
-    markdown: "### Added\n\n- Initial `0.1.x` release line",
-  },
+    "version": "0.1.1",
+    "date": "2026-02-11",
+    "markdown": "### Added\n\n- Initial `0.1.x` release line"
+  }
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
-    hash: "98f6611362e39cbd351cb6456cc642bd0dd79f27",
-    shortHash: "98f661136",
-    date: "2026-07-18T13:49:32+02:00",
-    author: "Mohamed Boudra",
-    subject: "Fix duplicated and out-of-order agent chat messages (#2185)",
+    "hash": "81eb34f2ef049579317b96250156b33ede380b79",
+    "shortHash": "81eb34f2e",
+    "date": "2026-07-19T14:40:46+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): add task-schedule module required by tasks screen"
   },
   {
-    hash: "1b80705065b8039ee9ccbbdd18b7e764fecc6138",
-    shortHash: "1b8070506",
-    date: "2026-07-18T13:38:58+02:00",
-    author: "haikostudio",
-    subject: "feat(tasks): redesign triage carousel — violet block, dots, full field set",
+    "hash": "88c56a739b6403cf7ca6e29ce07ed1184add17f7",
+    "shortHash": "88c56a739",
+    "date": "2026-07-19T14:37:52+02:00",
+    "author": "haikostudio",
+    "subject": "feat(sidebar): move new-workspace to a + button in the Workspaces header"
   },
   {
-    hash: "87e3352bc9ac632a67d2497bb3873fdd2f1fdbbf",
-    shortHash: "87e3352bc",
-    date: "2026-07-18T13:14:29+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(workspaces): preserve branch and schedule identity",
+    "hash": "550daa9ee156ca8448618715abb10c5ea73f38b9",
+    "shortHash": "550daa9ee",
+    "date": "2026-07-19T14:36:38+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): full-width compact view tabs with header spacing"
   },
   {
-    hash: "e0cd76e45eaf18f4690a2635991c851e38113f45",
-    shortHash: "e0cd76e45",
-    date: "2026-07-18T13:13:45+02:00",
-    author: "haikostudio",
-    subject: "fix(app): show backlog tasks in the tasks timeline too",
+    "hash": "440dadb928e5b1bb8e4297a99c40e0a2c62b4c2d",
+    "shortHash": "440dadb92",
+    "date": "2026-07-19T14:36:06+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): show workspace kebab on compact in the real project list"
   },
   {
-    hash: "99a58676c2f5521c84e608d7b20fa116c25af47c",
-    shortHash: "99a58676c",
-    date: "2026-07-18T13:03:00+02:00",
-    author: "haikostudio",
-    subject: "feat(app): show the tasks timeline on the mobile project screen",
+    "hash": "fce7941d8d566a9b7e074569824404de5cdab33d",
+    "shortHash": "fce7941d8",
+    "date": "2026-07-19T14:23:15+02:00",
+    "author": "haikostudio",
+    "subject": "fix(composer): tighten padding in the agent Options sheet"
   },
   {
-    hash: "9051fa9253233db59018a492fc3d77e453aa4580",
-    shortHash: "9051fa925",
-    date: "2026-07-18T12:55:00+02:00",
-    author: "haikostudio",
-    subject: "feat(brain-memory): always show the Cerveau pill, even on empty recall",
+    "hash": "bb1f53958c3688638b60a49e1fd28915f8696715",
+    "shortHash": "bb1f53958",
+    "date": "2026-07-19T14:19:07+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): always show workspace row kebab on compact web PWA"
   },
   {
-    hash: "99da5736db11b51bd6493604e53444aff9c4e317",
-    shortHash: "99da5736d",
-    date: "2026-07-18T10:51:30+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "8b86ba5a406add91daae8e4683c1b01777f3bcba",
+    "shortHash": "8b86ba5a4",
+    "date": "2026-07-19T14:18:43+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): inline primary actions in mobile sidebar"
   },
   {
-    hash: "d75c2db7d9fd45ab9129068427aee00302aa54c6",
-    shortHash: "d75c2db7d",
-    date: "2026-07-18T12:49:33+02:00",
-    author: "haikostudio",
-    subject: "fix(client): fall back to inline read when binary file transfer stalls",
+    "hash": "a23915f122dc081e66d06736f304f0173718ea69",
+    "shortHash": "a23915f12",
+    "date": "2026-07-19T14:14:11+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): folder nav in the board header + fixed full-width new-folder footer"
   },
   {
-    hash: "d9abac0f8e4675c808377d24610a345cd9ca1978",
-    shortHash: "d9abac0f8",
-    date: "2026-07-18T12:43:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(server): update Claude Agent SDK (#2189)",
+    "hash": "cbc30668a6dd622905b46555682fbaa32064853a",
+    "shortHash": "cbc30668a",
+    "date": "2026-07-17T10:07:50+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep terminal sizing reliable through focus changes (#2154)"
   },
   {
-    hash: "95a0a537eb0b97075d697bb49176d459648f1f0e",
-    shortHash: "95a0a537e",
-    date: "2026-07-18T12:41:01+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(workspaces): preserve creation intent",
+    "hash": "cce43964691d2f09166ff4634619f57ed3b5eaf9",
+    "shortHash": "cce439646",
+    "date": "2026-07-16T23:47:09+02:00",
+    "author": "Christoph Leiter",
+    "subject": "Fix terminal resize race (#2059)"
   },
   {
-    hash: "156380084c361a7f4fc479d8840ac49080f0346b",
-    shortHash: "156380084",
-    date: "2026-07-18T12:34:47+02:00",
-    author: "haikostudio",
-    subject: "feat(server): recall Cerveau on every prompt (drop substance gate)",
+    "hash": "11cf2c5ff218f5f75e60c17d08d0da72eff1ca52",
+    "shortHash": "11cf2c5ff",
+    "date": "2026-07-16T16:44:01+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Show agent history errors without a one-minute wait (#2124)"
   },
   {
-    hash: "7b815f7f2679f4e0465e9c16ae05658fbe0a356c",
-    shortHash: "7b815f7f2",
-    date: "2026-07-18T12:21:59+02:00",
-    author: "haikostudio",
-    subject:
-      "fix(brain-memory): alias/family-tolerant project matching (mirror of Cerveau scope resolution)",
+    "hash": "5fadf419ac30b2648befa169242b7df93a862d0f",
+    "shortHash": "5fadf419a",
+    "date": "2026-07-17T15:07:44-04:00",
+    "author": "Slava Goltser",
+    "subject": "fix(app): align thinking section scroll layout with other detail sections (#1884)"
   },
   {
-    hash: "5f293a9801c8424ba3a42843e4c6ac486c9a5878",
-    shortHash: "5f293a980",
-    date: "2026-07-18T12:11:13+02:00",
-    author: "haikostudio",
-    subject: "fix(app): align the tasks timeline strip with the kanban columns",
+    "hash": "5c37566137335bed141f2e1e0798946d91d0b58b",
+    "shortHash": "5c3756613",
+    "date": "2026-07-18T15:15:25+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(composer): keep message input visible after dictation (#2194)"
   },
   {
-    hash: "3f5031778ebcfc6cdecc5e77ace0cedbab8d8182",
-    shortHash: "3f5031778",
-    date: "2026-07-18T12:10:27+02:00",
-    author: "haikostudio",
-    subject: "feat(tasks): in-chat approval carousel for triage-proposed tasks",
+    "hash": "d4f9d25858d8c9fa84f71cdf4c394626bc2a5e3b",
+    "shortHash": "d4f9d2585",
+    "date": "2026-07-17T11:17:21+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(server): include daemon version in logs (#2155)"
   },
   {
-    hash: "0bb49c69da747e572b78f91b86b8145b06950860",
-    shortHash: "0bb49c69d",
-    date: "2026-07-18T12:08:41+02:00",
-    author: "haikostudio",
-    subject: "fix(app): stop stale sync snapshots from spawning a second tab after draft submit",
+    "hash": "93d6145e385e917898ba0004c77967c946f3c367",
+    "shortHash": "93d6145e3",
+    "date": "2026-07-16T20:49:00+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(acp): keep foreground agents running (#2148)"
   },
   {
-    hash: "580b9c96ae128effe9db34191033d71a7b7ec4a2",
-    shortHash: "580b9c96a",
-    date: "2026-07-18T12:07:19+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(workspaces): align MCP lifecycle resolution",
+    "hash": "32fb9618e5a6ce18190cc37cab35ff697807070d",
+    "shortHash": "32fb9618e",
+    "date": "2026-07-19T09:10:11+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(codex): stop phantom parent subagents (#2214)"
   },
   {
-    hash: "745e8afe45f04374e26e85e69aa47bc52a11b390",
-    shortHash: "745e8afe4",
-    date: "2026-07-18T11:54:49+02:00",
-    author: "Mohamed Boudra",
-    subject: "Make keyboard shortcuts searchable (#2160)",
+    "hash": "86bd4f87826f260bcd9fd7c9b16057eb154c3a50",
+    "shortHash": "86bd4f878",
+    "date": "2026-07-19T13:30:16+02:00",
+    "author": "haikostudio",
+    "subject": "fix(mobile): drawer owns its bottom safe-area so PWA cards clear the home indicator"
   },
   {
-    hash: "1a254ba8ba87a3f86a24502c56bfda4b7d9b3ffd",
-    shortHash: "1a254ba8b",
-    date: "2026-07-18T11:49:11+02:00",
-    author: "haikostudio",
-    subject: "feat(app): project-colored Gantt timeline above the kanban board",
+    "hash": "b8b7dd5bec0539d5b4925a038b043289fc3250d7",
+    "shortHash": "b8b7dd5be",
+    "date": "2026-07-19T13:21:26+02:00",
+    "author": "haikostudio",
+    "subject": "fix(tasks): NFC-normalize tags so priority/deadline stop leaking as raw chips"
   },
   {
-    hash: "b4a5b6a3ff94af056e30231b19cbdacbe0566c8f",
-    shortHash: "b4a5b6a3f",
-    date: "2026-07-18T11:49:11+02:00",
-    author: "Mohamed Boudra",
-    subject: "Add non-Git projects across filesystem mounts (#2187)",
+    "hash": "5635fff9bee72105a54f31318500b203728e49a4",
+    "shortHash": "5635fff9b",
+    "date": "2026-07-19T11:33:32+02:00",
+    "author": "haikostudio",
+    "subject": "style(app): tighten mobile paddings across list/detail screens"
   },
   {
-    hash: "eba7613747f1df9e533d618e9dd6b7e01e9551c3",
-    shortHash: "eba761374",
-    date: "2026-07-18T11:31:07+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(automation): preserve compatibility edges",
+    "hash": "0ecf3f3b50215dd2554d1eb110b476b4929d8344",
+    "shortHash": "0ecf3f3b5",
+    "date": "2026-07-19T11:27:10+02:00",
+    "author": "haikostudio",
+    "subject": "fix(mobile): task drawer badge headroom + bottom safe-area fallback"
   },
   {
-    hash: "9b5b97147c1779ec11c92d1cf24fa48034aafc5d",
-    shortHash: "9b5b97147",
-    date: "2026-07-18T11:19:43+02:00",
-    author: "haikostudio",
-    subject: "feat(tasks): exact model + reasoning, dual cost, run in current workspace",
+    "hash": "09f2e508b63e34dcbab6f961d54eec889d7a4890",
+    "shortHash": "09f2e508b",
+    "date": "2026-07-19T11:19:58+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): declutter kanban cards — hide priority boilerplate, single meta line, cap tags"
   },
   {
-    hash: "50b0391ae462a47d221a3c39af9d248b045f0e33",
-    shortHash: "50b0391ae",
-    date: "2026-07-18T10:56:29+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(automation): preserve workspace and schedule compatibility",
+    "hash": "a42d1f64083138195b29605852c4ac1d690cf5cc",
+    "shortHash": "a42d1f640",
+    "date": "2026-07-19T09:40:06+02:00",
+    "author": "haikostudio",
+    "subject": "feat(agent): steer replies toward simple, playful, non-technical tone"
   },
   {
-    hash: "3997391927bfac878b0d6eccb666ed0835086a57",
-    shortHash: "399739192",
-    date: "2026-07-18T10:38:04+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(cli): expect canonical schedule cadence",
+    "hash": "3d86c738ff70a9815cdd86c5602c9a5c420df619",
+    "shortHash": "3d86c738f",
+    "date": "2026-07-19T09:10:11+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(codex): stop phantom parent subagents (#2214)"
   },
   {
-    hash: "3acde4dd6c53e25016bc2b9df770888777f93af5",
-    shortHash: "3acde4dd6",
-    date: "2026-07-18T10:35:17+02:00",
-    author: "haikostudio",
-    subject: "fix(agent): show user-sent images on every client, not just the sender",
+    "hash": "4c78c41a46010809625cfc13007f1a3f2127048d",
+    "shortHash": "4c78c41a4",
+    "date": "2026-07-19T09:02:29+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): add \"Validated\" column as the analysis/execution gate"
   },
   {
-    hash: "dfa12aa8160c1dfe5cf25091f6cfc55c7eb42684",
-    shortHash: "dfa12aa81",
-    date: "2026-07-18T10:28:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(workspaces): align agent and schedule automation",
+    "hash": "ff774b552acc2bca77f672b46b4d78c94e4e03be",
+    "shortHash": "ff774b552",
+    "date": "2026-07-19T08:29:57+02:00",
+    "author": "haikostudio",
+    "subject": "style(app): homogenize modal action buttons"
   },
   {
-    hash: "3f89ec85ba9382832f799fa05b5f3d3d263e1e9e",
-    shortHash: "3f89ec85b",
-    date: "2026-07-18T09:57:05+02:00",
-    author: "haikostudio",
-    subject: "feat(app): tighter dashboard stats padding on compact screens",
+    "hash": "bffb886b068d45872d309d6d87ef6f5b1d966814",
+    "shortHash": "bffb886b0",
+    "date": "2026-07-19T08:20:44+02:00",
+    "author": "haikostudio",
+    "subject": "fix(triage): stop flagging direct agent feedback + explain the questions pill"
   },
   {
-    hash: "7b23cef199034e382e0dae87109e2430a81125ed",
-    shortHash: "7b23cef19",
-    date: "2026-07-18T09:39:47+02:00",
-    author: "haikostudio",
-    subject: "fix(app): keep new-agent draft focused after submit",
+    "hash": "194822b939e0656918eaddf6411e9fda418495be",
+    "shortHash": "194822b93",
+    "date": "2026-07-19T07:28:45+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(server): authorize active workspace config"
   },
   {
-    hash: "6bb7c511bea4d851cf46fbe0eb1c12a8e99dc6d9",
-    shortHash: "6bb7c511b",
-    date: "2026-07-18T09:35:53+02:00",
-    author: "haikostudio",
-    subject: "fix(server): reuse existing workspace for external/internal agent creation",
+    "hash": "2505075beb3da573e1e96d27b4ffd7f0012c595a",
+    "shortHash": "2505075be",
+    "date": "2026-07-19T06:30:11+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): reject nested command substitutions"
   },
   {
-    hash: "a03c109b670c931ad7e2aa4b7e5845beccf0932a",
-    shortHash: "a03c109b6",
-    date: "2026-07-18T09:32:09+02:00",
-    author: "haikostudio",
-    subject: "feat(app): taller activity bar with a percentage in every slice",
+    "hash": "0c3c61be94de6cef9623e1727a004eb0a376d22a",
+    "shortHash": "0c3c61be9",
+    "date": "2026-07-19T06:09:20+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): refresh managed checkout config"
   },
   {
-    hash: "2bab9ba7018806b7decb29581cbc7ef2d2ca8b7b",
-    shortHash: "2bab9ba70",
-    date: "2026-07-18T03:42:46+02:00",
-    author: "haikostudio",
-    subject: "fix(server): enforce one-workspace-per-directory invariant at the registry",
+    "hash": "7046b118e9b5fc1859fc4db857c6b1dabb5f5f42",
+    "shortHash": "7046b118e",
+    "date": "2026-07-19T05:39:59+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): preserve adopted workspace config"
   },
   {
-    hash: "d53e606c868319b55085fd8c3a45797cac2ce20c",
-    shortHash: "d53e606c8",
-    date: "2026-07-18T03:18:02+02:00",
-    author: "haikostudio",
-    subject: "fix(server): enforce one workspace per directory at creation chokepoint",
+    "hash": "3fed2f2cd930fa382264b619039ce20b215fd1bf",
+    "shortHash": "3fed2f2cd",
+    "date": "2026-07-19T05:02:59+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): validate source refs and expansions"
   },
   {
-    hash: "7664e8511e3ce1cec77b9142808ba990d1b379dc",
-    shortHash: "7664e8511",
-    date: "2026-07-18T03:15:21+02:00",
-    author: "haikostudio",
-    subject: "feat(app): multi-select project filter + percentages on the activity bar",
+    "hash": "234f0d9b7535c153a395ec26556ae3a32e7d04d8",
+    "shortHash": "234f0d9b7",
+    "date": "2026-07-19T04:28:05+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "test(migrate): cover deleted checkout recreation"
   },
   {
-    hash: "616d159765074f3aa9d703aee8201b6ebccc7c04",
-    shortHash: "616d15976",
-    date: "2026-07-18T02:59:48+02:00",
-    author: "haikostudio",
-    subject: "fix(server): collapse local workspace create to one-per-directory",
+    "hash": "548e15c177fa82057fc3001172588f0fa3d53440",
+    "shortHash": "548e15c17",
+    "date": "2026-07-19T03:53:07+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): preserve direct port arithmetic"
   },
   {
-    hash: "d9384ae016dc931695548766a07a2c76c3936d44",
-    shortHash: "d9384ae01",
-    date: "2026-07-18T02:55:48+02:00",
-    author: "haikostudio",
-    subject: "feat(app): single stacked project bar + colored project tags on Activity",
+    "hash": "6240b2d17cff57402af11ab67226581c4070e8fc",
+    "shortHash": "6240b2d17",
+    "date": "2026-07-19T03:39:32+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "test(server): tolerate delayed Windows handle release"
   },
   {
-    hash: "a01b922e0ba582e7fad4e2da4e0f30403d103d3b",
-    shortHash: "a01b922e0",
-    date: "2026-07-18T02:46:55+02:00",
-    author: "haikostudio",
-    subject: "fix(app): activity filter chips rendered as full-height capsules",
+    "hash": "4e99e4c18c599b5d77c90341b896e98e3e87cfd7",
+    "shortHash": "4e99e4c18",
+    "date": "2026-07-19T03:06:48+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(server): release workspace watchers on shutdown"
   },
   {
-    hash: "a69d69e403dc49f895c0cd95ebb688aa9361aaf2",
-    shortHash: "a69d69e40",
-    date: "2026-07-18T02:06:15+02:00",
-    author: "haikostudio",
-    subject: "feat(server): deterministic per-interaction synthesis banner (no LLM)",
+    "hash": "2f07c5918f79339c4553f873863fdf8025dc11e2",
+    "shortHash": "2f07c5918",
+    "date": "2026-07-19T02:47:23+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "test(migrate): compare checkout identities portably"
   },
   {
-    hash: "e0ebe97462f608e6c05b1f2f74250e03cfb74d0d",
-    shortHash: "e0ebe9746",
-    date: "2026-07-18T01:55:23+02:00",
-    author: "haikostudio",
-    subject: "feat(app): colored per-project activity chart on the Activity screen",
+    "hash": "3e6061b1699731b3b7fc91182fbd6df912d30459",
+    "shortHash": "3e6061b16",
+    "date": "2026-07-19T02:27:46+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(client): normalize checkout branch refs"
   },
   {
-    hash: "49a2ddbf8d18048ebdce49a31fc52bdab924ea0a",
-    shortHash: "49a2ddbf8",
-    date: "2026-07-18T01:53:39+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(app): task board — folder/task counts, priority flags, deadlines, project search",
+    "hash": "4ed944db2f271f9e7574fb843bf1ff114f8d96c8",
+    "shortHash": "4ed944db2",
+    "date": "2026-07-19T02:12:29+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): validate live source state"
   },
   {
-    hash: "f6be79a77917f576c78abff8dbb34f93f1329c7d",
-    shortHash: "f6be79a77",
-    date: "2026-07-18T01:30:17+02:00",
-    author: "haikostudio",
-    subject: "fix(app): stack synthesis banner labels above values, add separator",
+    "hash": "af244d0f025887df705a27a09a484bd599ee708f",
+    "shortHash": "af244d0f0",
+    "date": "2026-07-19T02:01:39+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): share service command semantics"
   },
   {
-    hash: "fe0741f953bd4b22985455eb2470a3d363028db0",
-    shortHash: "fe0741f95",
-    date: "2026-07-18T00:50:34+02:00",
-    author: "haikostudio",
-    subject: "feat: global activity log — one line per agent per turn",
+    "hash": "f2124f8cf92f973f5e7f68133c383cb067c04a33",
+    "shortHash": "f2124f8cf",
+    "date": "2026-07-19T01:50:04+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): normalize source references"
   },
   {
-    hash: "c93080a0b70b05197dbf04f208f91fc0c73c2b81",
-    shortHash: "c93080a0b",
-    date: "2026-07-18T00:48:01+02:00",
-    author: "haikostudio",
-    subject: "feat(app): plain-language end-of-turn recap block + colored callouts",
+    "hash": "152cdcabadc525808deba3781989953d2983340b",
+    "shortHash": "152cdcaba",
+    "date": "2026-07-19T01:39:15+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): preserve Windows shell semantics"
   },
   {
-    hash: "4f9bb22d4d292d19c57831f80c4d6ae97159338b",
-    shortHash: "4f9bb22d4",
-    date: "2026-07-18T00:45:48+02:00",
-    author: "haikostudio",
-    subject: "chore(server): brain curation config — curation flag + internal provider model",
+    "hash": "44da3cdf058a8a90493f48623af3c293ddf36ec6",
+    "shortHash": "44da3cdf0",
+    "date": "2026-07-19T01:33:48+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): preserve consistent source state"
   },
   {
-    hash: "8a511df92719c282b9c3e5f481001edd3d98401a",
-    shortHash: "8a511df92",
-    date: "2026-07-18T00:11:54+02:00",
-    author: "haikostudio",
-    subject: "fix(app): give the attachment thumbnail image an explicit plain-object size",
+    "hash": "a8c6c2f4bca4f799856c317bfef13e1696d3930c",
+    "shortHash": "a8c6c2f4b",
+    "date": "2026-07-19T01:21:02+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): gate automatic source discovery"
   },
   {
-    hash: "8cf190e516f6a4c6e1ee4ea295803e5384aa17c0",
-    shortHash: "8cf190e51",
-    date: "2026-07-17T20:01:06+00:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): tighten relay backpressure accounting",
+    "hash": "faccbaae596cd01b53ccc7fce5cb28e859b9153a",
+    "shortHash": "faccbaae5",
+    "date": "2026-07-19T01:10:18+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): validate workspace connection targets"
   },
   {
-    hash: "5feaa01dc24c00b1d44ceed8bb695afab00f948d",
-    shortHash: "5feaa01dc",
-    date: "2026-07-17T19:38:48+00:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): bound stale websocket connections",
+    "hash": "1d02b972d86b49932cc8f5f4011ef004d36b3449",
+    "shortHash": "1d02b972d",
+    "date": "2026-07-19T01:09:38+02:00",
+    "author": "haikostudio",
+    "subject": "style(app): tighten mobile chat paddings to recover width"
   },
   {
-    hash: "a1de743ef67dde4fe7c48d045a3714f65dfa5e90",
-    shortHash: "a1de743ef",
-    date: "2026-07-17T15:07:44-04:00",
-    author: "Slava Goltser",
-    subject: "fix(app): align thinking section scroll layout with other detail sections (#1884)",
+    "hash": "e61c06706c5c92b1664c6f7820db94ecc5b22ccc",
+    "shortHash": "e61c06706",
+    "date": "2026-07-19T01:03:00+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): preserve source command semantics"
   },
   {
-    hash: "27faeac81e1649e9fb7f7d6523cc9e0a45c32e9b",
-    shortHash: "27faeac81",
-    date: "2026-07-17T20:47:55+02:00",
-    author: "haikostudio",
-    subject: "fix(app): stop syncing active-agent composer drafts (broke image send)",
+    "hash": "c54ddfd07f364f9de41ffbaca23c3bf007c76f9f",
+    "shortHash": "c54ddfd07",
+    "date": "2026-07-19T00:48:41+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(migrate): preserve checkout and shell semantics"
   },
   {
-    hash: "a414f8ea8572412cae498bcb62cac9429cc13bdf",
-    shortHash: "a414f8ea8",
-    date: "2026-07-17T20:20:57+02:00",
-    author: "Mohamed Boudra",
-    subject: "Connect your Paseo daemon to Hub (#2035)",
+    "hash": "e1b73cde9a21d3a35a0eb886a7863185a9e00129",
+    "shortHash": "e1b73cde9",
+    "date": "2026-07-19T00:36:27+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(cli): harden Hub approval transport"
   },
   {
-    hash: "08681fb7018db176baad259043f6d4b40a5bc06e",
-    shortHash: "08681fb70",
-    date: "2026-07-17T20:04:03+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(server): brain memory curation — librarian filter, project fiche, scribe distillation",
+    "hash": "ddaaaa27be9ae3c275bd466311731c717b3ca6cf",
+    "shortHash": "ddaaaa27b",
+    "date": "2026-07-19T00:29:50+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(desktop): flush migration output before completion"
   },
   {
-    hash: "2f44821d075def223c6ae9f565412e1c7cdea877",
-    shortHash: "2f44821d0",
-    date: "2026-07-17T19:47:46+02:00",
-    author: "haikostudio",
-    subject: "feat(app): running conversation-synthesis thread, content-width banner",
+    "hash": "b447a650a7a43ec556e78871e8256f3c5cf0f9d7",
+    "shortHash": "b447a650a",
+    "date": "2026-07-19T00:22:17+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(desktop): migrate existing projects and worktrees"
   },
   {
-    hash: "e6a6c6b02b23314f85f3e3f65b9b1f723246254a",
-    shortHash: "e6a6c6b02",
-    date: "2026-07-17T19:47:45+02:00",
-    author: "haikostudio",
-    subject: "fix(app): keep composer-held attachment blobs from being garbage collected",
+    "hash": "0e996b3617b4ffdc3e4da5ae92e3522fa8838364",
+    "shortHash": "0e996b361",
+    "date": "2026-07-19T00:15:00+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(cli): restrict Hub activation URLs"
   },
   {
-    hash: "39cb3dbb9c8784f9f25fce54fc429b848076fe0e",
-    shortHash: "39cb3dbb9",
-    date: "2026-07-17T19:30:17+02:00",
-    author: "Mohamed Boudra",
-    subject: "Treat every added folder as an independent project (#2098)",
+    "hash": "c9bcfa7638a8d3fb4b29784938d3c0f04e84f79b",
+    "shortHash": "c9bcfa763",
+    "date": "2026-07-18T23:03:39+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Use safer automatic approval modes by default (#2213)"
   },
   {
-    hash: "4d2acfbeb552e8730eff94bb7e5aec8344592965",
-    shortHash: "4d2acfbeb",
-    date: "2026-07-17T18:28:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): reject imported port offsets",
+    "hash": "d4ad548a52965fe9538bc103ee2c1a1a237bf298",
+    "shortHash": "d4ad548a5",
+    "date": "2026-07-18T22:49:13+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(cli): bound Hub registration startup"
   },
   {
-    hash: "d6bc201f4628aae56b47690b96757d09bdcb2271",
-    shortHash: "d6bc201f4",
-    date: "2026-07-17T18:10:55+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): refresh import availability previews",
+    "hash": "28beaad48ba00f5f09b0675720bad34135f86f5e",
+    "shortHash": "28beaad48",
+    "date": "2026-07-18T22:30:35+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(cli): keep Hub approval polling within expiry"
   },
   {
-    hash: "5e75e463ec6dabd2a6b95522ebc2da3d5b9243c5",
-    shortHash: "5e75e463e",
-    date: "2026-07-17T17:47:16+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): expose remaining import errors",
+    "hash": "0cfb9b6b94429e08d1832fdcaf794904ccf327bc",
+    "shortHash": "0cfb9b6b9",
+    "date": "2026-07-18T22:26:31+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep sidebar pins visible while reopening (#2210)"
   },
   {
-    hash: "94e83055b76588f94f5c267208365d2970b20950",
-    shortHash: "94e83055b",
-    date: "2026-07-17T17:29:46+02:00",
-    author: "haikostudio",
-    subject: "feat(server): inline LLM task-intent triage from chat messages",
+    "hash": "8cc2ae0ba434ed4c500a7580fcab94f10cd53523",
+    "shortHash": "8cc2ae0ba",
+    "date": "2026-07-18T22:15:27+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Resume collected agents before pane actions (#2209)"
   },
   {
-    hash: "35d4ae201a68c8b2b15db381f173cb2e11e8977e",
-    shortHash: "35d4ae201",
-    date: "2026-07-17T17:21:23+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): tighten conductor service imports",
+    "hash": "99dc8ddda5c823fbe1c7d7016840c8275e75e652",
+    "shortHash": "99dc8ddda",
+    "date": "2026-07-18T21:21:05+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Free resources from idle agents automatically (#2203)"
   },
   {
-    hash: "1977d330edefb8d7c8c0f0673e911586d40a6262",
-    shortHash: "1977d330e",
-    date: "2026-07-17T17:03:34+02:00",
-    author: "Mohamed Boudra",
-    subject: "Reduce workspace, agent, and chat sync traffic (#2028)",
+    "hash": "b6bc70101d22326b78cd71243897a6c40a19c8c2",
+    "shortHash": "b6bc70101",
+    "date": "2026-07-18T21:20:48+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "ci: build server before CLI tests"
   },
   {
-    hash: "a382fb99f42c4a3c993125b5d6d1c486e3a75002",
-    shortHash: "a382fb99f",
-    date: "2026-07-17T17:02:48+02:00",
-    author: "haikostudio",
-    subject: "feat(app): show project name + request duration in every task toast",
+    "hash": "5ea311f243649571cf782c6cc1b078a06955b33f",
+    "shortHash": "5ea311f24",
+    "date": "2026-07-18T21:08:46+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(app): restore recent chat while reconnecting (#2206)"
   },
   {
-    hash: "b93d326fb29932ea1e82d8ad6252eccdd8d0bdc1",
-    shortHash: "b93d326fb",
-    date: "2026-07-17T17:00:30+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): preserve conductor migration context",
+    "hash": "d66251ccff29804ed5010effd497cf3314a04b62",
+    "shortHash": "d66251ccf",
+    "date": "2026-07-18T21:04:30+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(cli): connect daemons to Hub through browser approval"
   },
   {
-    hash: "9505e4392579ac09af0f24a671332ec6bae50f43",
-    shortHash: "9505e4392",
-    date: "2026-07-17T16:42:07+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): report remaining import gaps",
+    "hash": "579ba5c7e9d0f61ba03d3e2b671d0ff341d5a2b0",
+    "shortHash": "579ba5c7e",
+    "date": "2026-07-18T20:12:06+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): per-card overflow menu to launch or re-analyze a task from the board"
   },
   {
-    hash: "f8733ec1fb1d6cb85fd69f31ecd35d7212750e78",
-    shortHash: "f8733ec1f",
-    date: "2026-07-17T16:33:15+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(tasks): per-task run config, approval gate, quiet-hours scheduling, MCP task tools",
+    "hash": "a3d247e4ef99e1d992f6b782581eb4491b6b48cf",
+    "shortHash": "a3d247e4e",
+    "date": "2026-07-18T19:53:57+02:00",
+    "author": "haikostudio",
+    "subject": "fix(mobile): raise task badge above the composer"
   },
   {
-    hash: "c0bd158ce65b4474e750402aea4c5cf8c6dad5bb",
-    shortHash: "c0bd158ce",
-    date: "2026-07-17T16:29:57+02:00",
-    author: "haikostudio",
-    subject: "fix(app): inset transcript below the floating synthesis banner",
+    "hash": "ab3d65a3aa77558803691f883a10678540396885",
+    "shortHash": "ab3d65a3a",
+    "date": "2026-07-18T19:43:49+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): instant in-chat feedback when sending a prompt"
   },
   {
-    hash: "711f58f9aa30c2038219cf55740e467fcc374126",
-    shortHash: "711f58f9a",
-    date: "2026-07-17T16:26:14+02:00",
-    author: "haikostudio",
-    subject: "fix(app): stop pasted image being cleared by a stale draft tombstone",
+    "hash": "7c8dc586f8974bfd991645d63bde370412d62174",
+    "shortHash": "7c8dc586f",
+    "date": "2026-07-18T19:34:54+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): project rail counts + visible search field"
   },
   {
-    hash: "2f0e3451dee259aff649e9816badd432d4cc5b24",
-    shortHash: "2f0e3451d",
-    date: "2026-07-17T16:22:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): wait for import preview before setup callout",
+    "hash": "edb388ecc9a522123b1bf5ca2e49475436a177f0",
+    "shortHash": "edb388ecc",
+    "date": "2026-07-18T19:30:03+02:00",
+    "author": "haikostudio",
+    "subject": "feat(mobile): floating task badge + drawer for agent toasts"
   },
   {
-    hash: "28cac5859a84144661213b2bc7c7eea075410b17",
-    shortHash: "28cac5859",
-    date: "2026-07-17T15:56:04+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): keep project imports current and complete",
+    "hash": "30fd9444beff4ba24a4582f6cb1ef79b4ca6c92b",
+    "shortHash": "30fd9444b",
+    "date": "2026-07-18T19:25:01+02:00",
+    "author": "haikostudio",
+    "subject": "fix(tasks): neutral gray board, grayscale timeline, tighter mobile spacing"
   },
   {
-    hash: "6c99efae52cccb5426f9c300fafaf50ab5447027",
-    shortHash: "6c99efae5",
-    date: "2026-07-17T15:48:06+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(android): give release builds more memory",
+    "hash": "587c2d2d96b6c1510e8bdb765877a40d2972ad7f",
+    "shortHash": "587c2d2d9",
+    "date": "2026-07-18T19:08:13+02:00",
+    "author": "haikostudio",
+    "subject": "feat(brain-memory): structured recall pill + startup/emit diagnostics"
   },
   {
-    hash: "59d9a25a0d61360350408453bf12a9b05c313153",
-    shortHash: "59d9a25a0",
-    date: "2026-07-17T15:32:27+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): handle remaining import edge cases",
+    "hash": "7990706acf7f2ca98577559348b3c5de585f351f",
+    "shortHash": "7990706ac",
+    "date": "2026-07-18T18:56:47+02:00",
+    "author": "haikostudio",
+    "subject": "fix(tasks): mobile timeline tab + fix Gantt axis label overlap"
   },
   {
-    hash: "6f753a142d5e276e4a7089ad17f76997ca44863f",
-    shortHash: "6f753a142",
-    date: "2026-07-17T13:18:56+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "2185779d6c51137006f6f52256c60dce118efae4",
+    "shortHash": "2185779d6",
+    "date": "2026-07-18T18:45:23+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): highlight changes that apply next turn (#2201)"
   },
   {
-    hash: "60462337b69126c0cd906303800c260cf76d65ff",
-    shortHash: "60462337b",
-    date: "2026-07-17T15:11:04+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): close project import edge cases",
+    "hash": "480a39cca2bb43caaf7b68b74b9cb60322b4d7a3",
+    "shortHash": "480a39cca",
+    "date": "2026-07-18T18:30:30+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): keep queued follow-ups visible until the daemon confirms delivery"
   },
   {
-    hash: "0bec06c2db7d3ee071416cde80229eabd682b03e",
-    shortHash: "0bec06c2d",
-    date: "2026-07-17T15:10:06+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.2.0-beta.1",
+    "hash": "c0bb5006ccd84e62d5e0980cae37e40d56340bb8",
+    "shortHash": "c0bb5006c",
+    "date": "2026-07-18T18:19:06+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): redesign the tasks board — pastel columns, soft chips, real timeline"
   },
   {
-    hash: "c0f80e2477d1c3781381d3a69dab6b35365bcf4b",
-    shortHash: "c0f80e247",
-    date: "2026-07-17T15:07:21+02:00",
-    author: "Mohamed Boudra",
-    subject: "Prepare 0.2.0 beta changelog",
+    "hash": "acfcbf70cccc3b595ab0e39fa36e858c47277f6f",
+    "shortHash": "acfcbf70c",
+    "date": "2026-07-18T18:04:27+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): edit priority and deadline as dedicated fields in the task sheet"
   },
   {
-    hash: "293f55afc43200c69c9392b3b688be5580c658ab",
-    shortHash: "293f55afc",
-    date: "2026-07-17T15:07:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "Update ACP provider catalog versions",
+    "hash": "e0e50c9a8e1b9604a44b3cd57ac6c4ed518da061",
+    "shortHash": "e0e50c9a8",
+    "date": "2026-07-18T17:45:02+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): preserve persisted theme styles after startup"
   },
   {
-    hash: "df2b7cab46f42538c3c7240da14a8bc426eb0354",
-    shortHash: "df2b7cab4",
-    date: "2026-07-17T15:07:08+02:00",
-    author: "Mohamed Boudra",
-    subject: "Document release version classification",
+    "hash": "c0622a7046651e6b3a9c43718df5f5a09703dd15",
+    "shortHash": "c0622a704",
+    "date": "2026-07-18T17:42:06+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(website): show real app in homepage hero"
   },
   {
-    hash: "f44ef807efcb6b79ca5f7b2d0acc4e2e6925c23d",
-    shortHash: "f44ef807e",
-    date: "2026-07-17T14:48:54+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(settings): harden conductor imports",
+    "hash": "05d319866a77b732069eb67c8bbe6c645c4186d0",
+    "shortHash": "05d319866",
+    "date": "2026-07-18T17:28:56+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): always show user-message actions, not just on hover"
   },
   {
-    hash: "f030ddefb16ff519acddf1347ff4f1ef960aab0a",
-    shortHash: "f030ddefb",
-    date: "2026-07-17T14:42:02+02:00",
-    author: "Mohamed Boudra",
-    subject: "refactor(settings): make project imports pluggable",
+    "hash": "45bbb973a3a3d4b386b67f219dd2944b19c369c1",
+    "shortHash": "45bbb973a",
+    "date": "2026-07-18T16:54:41+02:00",
+    "author": "Michał Kędrzyński",
+    "subject": "Switch models from the Command Center (#2147)"
   },
   {
-    hash: "b9b68bb3591e1e31b2503fc14eb24597e4d7b5ed",
-    shortHash: "b9b68bb35",
-    date: "2026-07-17T14:29:07+02:00",
-    author: "haikostudio",
-    subject: "fix(app): straddle toast status dot over the top-left corner",
+    "hash": "3dd48e9c733bd275344ee709fde3528d273430ef",
+    "shortHash": "3dd48e9c7",
+    "date": "2026-07-18T16:44:31+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): never drop a queued follow-up when the client is unavailable"
   },
   {
-    hash: "6dd5749316ffad2496322bdcdc9c19990490dd67",
-    shortHash: "6dd574931",
-    date: "2026-07-17T14:19:25+02:00",
-    author: "haikostudio",
-    subject: "fix(app): pin toast status dot to the top-left corner",
+    "hash": "791753271665c215c4f15569491d88f27d123edc",
+    "shortHash": "791753271",
+    "date": "2026-07-18T16:30:59+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep focused agent timelines live and catch up instantly (#2196)"
   },
   {
-    hash: "04bca84754065db531b7131e3ea605ed668128b7",
-    shortHash: "04bca8475",
-    date: "2026-07-17T14:15:39+02:00",
-    author: "haikostudio",
-    subject: "fix(app): render attachment thumbnails with expo-image",
+    "hash": "d5acfb392416f545dda2e81c6786b75a6fc51b44",
+    "shortHash": "d5acfb392",
+    "date": "2026-07-18T16:20:53+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): always show message timestamps and turn completion time"
   },
   {
-    hash: "84f3f9aa076f9e6871f532a31169515d2633bfc1",
-    shortHash: "84f3f9aa0",
-    date: "2026-07-17T14:13:09+02:00",
-    author: "haikostudio",
-    subject: "feat(app): floating conversation-synthesis block per agent",
+    "hash": "e256ed4669d76aba656fc36037d896e31174be78",
+    "shortHash": "e256ed466",
+    "date": "2026-07-18T16:08:31+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): drive task concurrency by quota budget, not a fixed count"
   },
   {
-    hash: "97248edc241db018e36f18e97f5d12be368c3c90",
-    shortHash: "97248edc2",
-    date: "2026-07-17T14:10:23+02:00",
-    author: "haikostudio",
-    subject: "feat(app): replace pulsing toast border with a colored status dot + running timer",
+    "hash": "fcaa84f0e4e8a60486cd7051fc55b979c851c6e9",
+    "shortHash": "fcaa84f0e",
+    "date": "2026-07-18T06:44:34-07:00",
+    "author": "Matt Van Horn",
+    "subject": "fix(omp): accept thinkingLevel \"max\" when importing OMP sessions (#2191)"
   },
   {
-    hash: "dfada2a556a5013899214dea75fad874723f084c",
-    shortHash: "dfada2a55",
-    date: "2026-07-17T14:03:43+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): update provider icon",
+    "hash": "870e08feee1045c90a47d897a46a26527c5a9f00",
+    "shortHash": "870e08fee",
+    "date": "2026-07-18T13:39:54+00:00",
+    "author": "Mohamed Boudra",
+    "subject": "refactor(server): remove unused websocket close codes"
   },
   {
-    hash: "7ee8a5d49da9720c5b28ac0006fbdc62b65bc402",
-    shortHash: "7ee8a5d49",
-    date: "2026-07-17T14:02:19+02:00",
-    author: "haikostudio",
-    subject: "fix(app): propagate draft clear/send to other devices",
+    "hash": "abe91201f01d6ffcbf51f84ab7d8354c6117bdc8",
+    "shortHash": "abe91201f",
+    "date": "2026-07-18T13:34:33+00:00",
+    "author": "Mohamed Boudra",
+    "subject": "refactor(server): reuse client heartbeat for socket liveness"
   },
   {
-    hash: "c938156ac4f8ffedee3e993f38784847cc53a0bd",
-    shortHash: "c938156ac",
-    date: "2026-07-17T13:57:20+02:00",
-    author: "haikostudio",
-    subject: "feat(app): auto-sort task toasts by lifecycle + show project/time when done",
+    "hash": "b4518cbf3352210cefec1715c00ad000c4abd20f",
+    "shortHash": "b4518cbf3",
+    "date": "2026-07-18T22:20:03+09:00",
+    "author": "Jason@HND",
+    "subject": "fix(server): remove wall-clock timeout for Pi compact RPC (#2181)"
   },
   {
-    hash: "bd83642220b23b6593daa23f6069bb35722dae98",
-    shortHash: "bd8364222",
-    date: "2026-07-17T13:45:50+02:00",
-    author: "haikostudio",
-    subject: "fix(app): fix draft image race + sync active-agent composer content",
+    "hash": "72752b7db6e7e98b87ee7e8ef8318a51272b8fb5",
+    "shortHash": "72752b7db",
+    "date": "2026-07-18T15:18:05+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Document workspace-first agent automation (#2192)"
   },
   {
-    hash: "11cb3b4b43f5ebf077a71295e188da62fc7a5d6a",
-    shortHash: "11cb3b4b4",
-    date: "2026-07-17T13:12:12+02:00",
-    author: "haikostudio",
-    subject: "fix(app): bound magic scrollbar above the composer on mobile",
+    "hash": "05d1f838d83a8a6156365438f2a1baf0aac114b5",
+    "shortHash": "05d1f838d",
+    "date": "2026-07-18T15:15:25+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(composer): keep message input visible after dictation (#2194)"
   },
   {
-    hash: "388f1d426c01a9b492d084c207dfd99ff2bc33af",
-    shortHash: "388f1d426",
-    date: "2026-07-17T13:02:09+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep agent browser tabs connected across workspace switches (#2156)",
+    "hash": "245b9a5191cd9563ff3747056124b1afc9c2c8d3",
+    "shortHash": "245b9a519",
+    "date": "2026-07-18T14:28:46+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): autopilot folders, per-task worktrees, backlog estimation, quota packing"
   },
   {
-    hash: "a7cbf4f61ddd5adf78970e8c6584b6e8f5c78880",
-    shortHash: "a7cbf4f61",
-    date: "2026-07-17T13:00:47+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): make sidebar reordering respond immediately",
+    "hash": "294e426e425d9992266daadaf56191a65779466b",
+    "shortHash": "294e426e4",
+    "date": "2026-07-18T14:27:29+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): make bottom-sheet rows and sections much tighter"
   },
   {
-    hash: "074ea1f4f9520dfc5c99c0acd5775a50a53fac87",
-    shortHash: "074ea1f4f",
-    date: "2026-07-17T12:47:49+02:00",
-    author: "haikostudio",
-    subject: "feat(app): loop-free cross-device sync of draft agent config",
+    "hash": "c97f823236107280eefcbff176e7c6676304e4bd",
+    "shortHash": "c97f82323",
+    "date": "2026-07-18T14:21:10+02:00",
+    "author": "nllptrx",
+    "subject": "Fix commit-aware PR resolution across forges"
   },
   {
-    hash: "266d54463be65f01ef3e5e0d57505427d70e598e",
-    shortHash: "266d54463",
-    date: "2026-07-17T12:27:15+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(app): highlight sidebar resize handles",
+    "hash": "c51a45cc4af7bdb9fdc1acc6b79f97fe73b00d61",
+    "shortHash": "c51a45cc4",
+    "date": "2026-07-18T14:19:41+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stop stale UI-state snapshots resurrecting empty draft tabs"
   },
   {
-    hash: "fcd093b9eb0eff83a897847fa3f93e7e009066cb",
-    shortHash: "fcd093b9e",
-    date: "2026-07-17T12:24:07+02:00",
-    author: "haikostudio",
-    subject: "fix(app): revert live draft-config sync that caused a cross-device loop",
+    "hash": "e0fbcbf6129be75f287de3d2f3068403f7492203",
+    "shortHash": "e0fbcbf61",
+    "date": "2026-07-18T14:19:08+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): hide provider-internal subagent rows from the track"
   },
   {
-    hash: "ca41ab73232320e74518db4fdcd4604dc4627287",
-    shortHash: "ca41ab732",
-    date: "2026-07-17T12:15:14+02:00",
-    author: "haikostudio",
-    subject: "feat(app): auto-refresh changelog snapshot on every commit",
+    "hash": "ffe76a7e5702d60d32c9c770dab9e7985cc1917a",
+    "shortHash": "ffe76a7e5",
+    "date": "2026-07-18T14:04:48+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Make workspace, agent, and schedule automation consistent (#2186)"
   },
   {
-    hash: "5ae48b5d50435d0240638b735963ec2ab53b801c",
-    shortHash: "5ae48b5d5",
-    date: "2026-07-17T11:52:01+02:00",
-    author: "haikostudio",
-    subject: "feat(app): folder card kebab menu to edit or delete a task folder",
+    "hash": "168feb42096e068ea2e2c6ddcb4efe6c224c1006",
+    "shortHash": "168feb420",
+    "date": "2026-07-18T14:04:34+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): tighten bottom-sheet padding and row heights"
   },
   {
-    hash: "87877918a6c36a856830d4f89d40323cd94fc47d",
-    shortHash: "87877918a",
-    date: "2026-07-17T11:44:34+02:00",
-    author: "haikostudio",
-    subject: "fix(app): apply materialized image attachments to a focused composer",
+    "hash": "04f06eb9aa336bbc2dc0168fb3c5e131162c0c9e",
+    "shortHash": "04f06eb9a",
+    "date": "2026-07-18T14:03:55+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): triage tray pinned above the composer, chat-styled and fully editable"
   },
   {
-    hash: "f7a6548b68ad279ad390c5d76ffeff46db6b2f20",
-    shortHash: "f7a6548b6",
-    date: "2026-07-17T11:33:56+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): refresh stale config import apply",
+    "hash": "98f6611362e39cbd351cb6456cc642bd0dd79f27",
+    "shortHash": "98f661136",
+    "date": "2026-07-18T13:49:32+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Fix duplicated and out-of-order agent chat messages (#2185)"
   },
   {
-    hash: "ab9c9b96a72ab4374bf92951f9784597cc5e135a",
-    shortHash: "ab9c9b96a",
-    date: "2026-07-17T11:31:52+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): normalize conductor import paths",
+    "hash": "1b80705065b8039ee9ccbbdd18b7e764fecc6138",
+    "shortHash": "1b8070506",
+    "date": "2026-07-18T13:38:58+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): redesign triage carousel — violet block, dots, full field set"
   },
   {
-    hash: "557fc42c890b8badcb60249fd0b30a2396f2b112",
-    shortHash: "557fc42c8",
-    date: "2026-07-17T11:17:21+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(server): include daemon version in logs (#2155)",
+    "hash": "e0cd76e45eaf18f4690a2635991c851e38113f45",
+    "shortHash": "e0cd76e45",
+    "date": "2026-07-18T13:13:45+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): show backlog tasks in the tasks timeline too"
   },
   {
-    hash: "8fe11e3bb0d3bccdd71ac2a802dbe17dc4ad9e35",
-    shortHash: "8fe11e3bb",
-    date: "2026-07-17T11:15:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(settings): import existing project setup",
+    "hash": "99a58676c2f5521c84e608d7b20fa116c25af47c",
+    "shortHash": "99a58676c",
+    "date": "2026-07-18T13:03:00+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): show the tasks timeline on the mobile project screen"
   },
   {
-    hash: "dcae7c68459d3f8bdbd846109519f858ec600219",
-    shortHash: "dcae7c684",
-    date: "2026-07-17T11:05:50+02:00",
-    author: "haikostudio",
-    subject: "fix(server): rappel Cerveau projet-d'abord + complément global + procédures",
+    "hash": "9051fa9253233db59018a492fc3d77e453aa4580",
+    "shortHash": "9051fa925",
+    "date": "2026-07-18T12:55:00+02:00",
+    "author": "haikostudio",
+    "subject": "feat(brain-memory): always show the Cerveau pill, even on empty recall"
   },
   {
-    hash: "c97296ccda8cb4ded0827741be198b2ab4d9162b",
-    shortHash: "c97296ccd",
-    date: "2026-07-17T11:04:08+02:00",
-    author: "haikostudio",
-    subject: "fix(app): apply remote draft agent config to an open composer",
+    "hash": "99da5736db11b51bd6493604e53444aff9c4e317",
+    "shortHash": "99da5736d",
+    "date": "2026-07-18T10:51:30+00:00",
+    "author": "paseo-ai[bot]",
+    "subject": "fix: update lockfile signatures and Nix hash [skip ci]"
   },
   {
-    hash: "f5608482ae1b872000c774797e3aa3da2ccb01f8",
-    shortHash: "f5608482a",
-    date: "2026-07-17T10:20:45+02:00",
-    author: "haikostudio",
-    subject: "fix(app): live-adopt remote draft text into an open composer",
+    "hash": "d75c2db7d9fd45ab9129068427aee00302aa54c6",
+    "shortHash": "d75c2db7d",
+    "date": "2026-07-18T12:49:33+02:00",
+    "author": "haikostudio",
+    "subject": "fix(client): fall back to inline read when binary file transfer stalls"
   },
   {
-    hash: "bce2c50b9e16831ab395e1ea313698ba4dfa0b22",
-    shortHash: "bce2c50b9",
-    date: "2026-07-17T10:07:50+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep terminal sizing reliable through focus changes (#2154)",
+    "hash": "d9abac0f8e4675c808377d24610a345cd9ca1978",
+    "shortHash": "d9abac0f8",
+    "date": "2026-07-18T12:43:14+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "chore(server): update Claude Agent SDK (#2189)"
   },
   {
-    hash: "70472dc945753c745de008d627035b549b150e31",
-    shortHash: "70472dc94",
-    date: "2026-07-17T10:06:32+02:00",
-    author: "Mohamed Boudra",
-    subject: "Always install the newest eligible desktop update (#2149)",
+    "hash": "156380084c361a7f4fc479d8840ac49080f0346b",
+    "shortHash": "156380084",
+    "date": "2026-07-18T12:34:47+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): recall Cerveau on every prompt (drop substance gate)"
   },
   {
-    hash: "a8ebd390fabb88e00b1c2d54890b6cf758eeb103",
-    shortHash: "a8ebd390f",
-    date: "2026-07-17T09:03:26+02:00",
-    author: "nllptrx",
-    subject: "feat(forge): pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)",
+    "hash": "7b815f7f2679f4e0465e9c16ae05658fbe0a356c",
+    "shortHash": "7b815f7f2",
+    "date": "2026-07-18T12:21:59+02:00",
+    "author": "haikostudio",
+    "subject": "fix(brain-memory): alias/family-tolerant project matching (mirror of Cerveau scope resolution)"
   },
   {
-    hash: "cd17e59d6ffdf7c9ef5713d01aba738319f81c97",
-    shortHash: "cd17e59d6",
-    date: "2026-07-17T08:34:49+02:00",
-    author: "haikostudio",
-    subject: "feat(app): diffuse radar ping + full-height magic scrollbar rail",
+    "hash": "5f293a9801c8424ba3a42843e4c6ac486c9a5878",
+    "shortHash": "5f293a980",
+    "date": "2026-07-18T12:11:13+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): align the tasks timeline strip with the kanban columns"
   },
   {
-    hash: "04d1ebdce037180d31d9449adfa847468d90589a",
-    shortHash: "04d1ebdce",
-    date: "2026-07-17T08:29:19+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep browser input from submitting Paseo prompts (#1982)",
+    "hash": "3f5031778ebcfc6cdecc5e77ace0cedbab8d8182",
+    "shortHash": "3f5031778",
+    "date": "2026-07-18T12:10:27+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): in-chat approval carousel for triage-proposed tasks"
   },
   {
-    hash: "348437182f8ff0f87b16bd6729b73f0201eea1d4",
-    shortHash: "348437182",
-    date: "2026-07-17T08:18:37+02:00",
-    author: "haikostudio",
-    subject: "fix(app): sync draft composer text + agent config across devices",
+    "hash": "0bb49c69da747e572b78f91b86b8145b06950860",
+    "shortHash": "0bb49c69d",
+    "date": "2026-07-18T12:08:41+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stop stale sync snapshots from spawning a second tab after draft submit"
   },
   {
-    hash: "8984ca9e5bfcab2961afb817f39e0f2dc625a62f",
-    shortHash: "8984ca9e5",
-    date: "2026-07-17T08:16:44+02:00",
-    author: "haikostudio",
-    subject: "fix(app): shift task toasts left so the magic scrollbar stays visible",
+    "hash": "745e8afe45f04374e26e85e69aa47bc52a11b390",
+    "shortHash": "745e8afe4",
+    "date": "2026-07-18T11:54:49+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Make keyboard shortcuts searchable (#2160)"
   },
   {
-    hash: "d6963108d0cbe99743b555fab77b2e12d0af0aaf",
-    shortHash: "d6963108d",
-    date: "2026-07-17T08:14:38+02:00",
-    author: "haikostudio",
-    subject: "feat(app): pulsing amber/green border on agent task toasts",
+    "hash": "1a254ba8ba87a3f86a24502c56bfda4b7d9b3ffd",
+    "shortHash": "1a254ba8b",
+    "date": "2026-07-18T11:49:11+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): project-colored Gantt timeline above the kanban board"
   },
   {
-    hash: "32a52c588a2f17ac52a8485c8653c27f81afb168",
-    shortHash: "32a52c588",
-    date: "2026-07-17T08:12:42+02:00",
-    author: "haikostudio",
-    subject: "fix(app): kanban drag-and-drop everywhere + full-width cards",
+    "hash": "b4a5b6a3ff94af056e30231b19cbdacbe0566c8f",
+    "shortHash": "b4a5b6a3f",
+    "date": "2026-07-18T11:49:11+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Add non-Git projects across filesystem mounts (#2187)"
   },
   {
-    hash: "2257e0a9006d805aad78c839b4d95c37616213b4",
-    shortHash: "2257e0a90",
-    date: "2026-07-17T07:55:28+02:00",
-    author: "haikostudio",
-    subject: "feat(server): re-derive workspace title from each user message",
+    "hash": "9b5b97147c1779ec11c92d1cf24fa48034aafc5d",
+    "shortHash": "9b5b97147",
+    "date": "2026-07-18T11:19:43+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): exact model + reasoning, dual cost, run in current workspace"
   },
   {
-    hash: "3112f4d2fe0a2d2b6934fc24761875278feb2316",
-    shortHash: "3112f4d2f",
-    date: "2026-07-17T07:54:53+02:00",
-    author: "haikostudio",
-    subject: "feat(app): in-app changelog page with releases + commits tabs",
+    "hash": "3acde4dd6c53e25016bc2b9df770888777f93af5",
+    "shortHash": "3acde4dd6",
+    "date": "2026-07-18T10:35:17+02:00",
+    "author": "haikostudio",
+    "subject": "fix(agent): show user-sent images on every client, not just the sender"
   },
   {
-    hash: "4189ddf39859eee78426292f13138298521b9031",
-    shortHash: "4189ddf39",
-    date: "2026-07-17T02:21:05+02:00",
-    author: "haikostudio",
-    subject: "fix(app): tasks board + sheet layout on compact/mobile web",
+    "hash": "3f89ec85ba9382832f799fa05b5f3d3d263e1e9e",
+    "shortHash": "3f89ec85b",
+    "date": "2026-07-18T09:57:05+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): tighter dashboard stats padding on compact screens"
   },
   {
-    hash: "0775d463d4cd7fa4c77a2f7c10374fd1f5a75107",
-    shortHash: "0775d463d",
-    date: "2026-07-17T01:53:41+02:00",
-    author: "haikostudio",
-    subject: "feat(app): active dot with radar ping on the magic scrollbar",
+    "hash": "7b23cef199034e382e0dae87109e2430a81125ed",
+    "shortHash": "7b23cef19",
+    "date": "2026-07-18T09:39:47+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): keep new-agent draft focused after submit"
   },
   {
-    hash: "a56428d03936b6b72b1b893fe159b9fe799138c0",
-    shortHash: "a56428d03",
-    date: "2026-07-17T01:35:54+02:00",
-    author: "haikostudio",
-    subject: "feat(app): magic scrollbar on the agent conversation",
+    "hash": "6bb7c511bea4d851cf46fbe0eb1c12a8e99dc6d9",
+    "shortHash": "6bb7c511b",
+    "date": "2026-07-18T09:35:53+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): reuse existing workspace for external/internal agent creation"
   },
   {
-    hash: "f030057a7206909e7e7453a17d0144637d0824f1",
-    shortHash: "f030057a7",
-    date: "2026-07-17T01:20:24+02:00",
-    author: "haikostudio",
-    subject: "fix(server): stop raw <contexte_memoire> blocks leaking into replayed user messages",
+    "hash": "a03c109b670c931ad7e2aa4b7e5845beccf0932a",
+    "shortHash": "a03c109b6",
+    "date": "2026-07-18T09:32:09+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): taller activity bar with a percentage in every slice"
   },
   {
-    hash: "ef8c8dd929b0fac315d1eba0aeb03d1f29daaab8",
-    shortHash: "ef8c8dd92",
-    date: "2026-07-17T01:00:16+02:00",
-    author: "haikostudio",
-    subject: "feat(app): folder creation modal with colors, inline ticket drafts on the board",
+    "hash": "2bab9ba7018806b7decb29581cbc7ef2d2ca8b7b",
+    "shortHash": "2bab9ba70",
+    "date": "2026-07-18T03:42:46+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): enforce one-workspace-per-directory invariant at the registry"
   },
   {
-    hash: "1e620054bd50e7dbb525f9b18ce98ef01eb19721",
-    shortHash: "1e620054b",
-    date: "2026-07-17T00:27:39+02:00",
-    author: "haikostudio",
-    subject: "fix(app): stop the tasks board flashing a stale/empty note on project open",
+    "hash": "d53e606c868319b55085fd8c3a45797cac2ce20c",
+    "shortHash": "d53e606c8",
+    "date": "2026-07-18T03:18:02+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): enforce one workspace per directory at creation chokepoint"
   },
   {
-    hash: "20e5b2e4eb543600c2e107a5b22b41fd8deb59ee",
-    shortHash: "20e5b2e4e",
-    date: "2026-07-17T00:24:22+02:00",
-    author: "haikostudio",
-    subject: "fix(server): stop injecting broad overview memories on brain recall miss",
+    "hash": "7664e8511e3ce1cec77b9142808ba990d1b379dc",
+    "shortHash": "7664e8511",
+    "date": "2026-07-18T03:15:21+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): multi-select project filter + percentages on the activity bar"
   },
   {
-    hash: "96a1305a1b876b524b526eb8e43f34d15b370329",
-    shortHash: "96a1305a1",
-    date: "2026-07-17T00:21:43+02:00",
-    author: "haikostudio",
-    subject: "fix(app): tasks page sidebar toggle + one-page three-pane layout",
+    "hash": "616d159765074f3aa9d703aee8201b6ebccc7c04",
+    "shortHash": "616d15976",
+    "date": "2026-07-18T02:59:48+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): collapse local workspace create to one-per-directory"
   },
   {
-    hash: "ab3aa243efbf6bf0feabeae013e2b0e50409c73c",
-    shortHash: "ab3aa243e",
-    date: "2026-07-17T00:18:34+02:00",
-    author: "haikostudio",
-    subject: "fix(app): show a label under every usage chart column",
+    "hash": "d9384ae016dc931695548766a07a2c76c3936d44",
+    "shortHash": "d9384ae01",
+    "date": "2026-07-18T02:55:48+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): single stacked project bar + colored project tags on Activity"
   },
   {
-    hash: "edc98fbc5c21552924ad8fb2e946e088a8d9d8f9",
-    shortHash: "edc98fbc5",
-    date: "2026-07-17T00:10:19+02:00",
-    author: "haikostudio",
-    subject: "fix(server): allow remote project ids in tasks board store",
+    "hash": "a01b922e0ba582e7fad4e2da4e0f30403d103d3b",
+    "shortHash": "a01b922e0",
+    "date": "2026-07-18T02:46:55+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): activity filter chips rendered as full-height capsules"
   },
   {
-    hash: "9f5f5fce620684a5a5d2c74940c37482eb45feeb",
-    shortHash: "9f5f5fce6",
-    date: "2026-07-16T23:47:09+02:00",
-    author: "Christoph Leiter",
-    subject: "Fix terminal resize race (#2059)",
+    "hash": "a69d69e403dc49f895c0cd95ebb688aa9361aaf2",
+    "shortHash": "a69d69e40",
+    "date": "2026-07-18T02:06:15+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): deterministic per-interaction synthesis banner (no LLM)"
   },
   {
-    hash: "a622860a3e37ce0a4fb657a3273cfaa5fa08d710",
-    shortHash: "a622860a3",
-    date: "2026-07-16T23:46:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep workspace focus mode scoped and easy to exit (#2151)",
+    "hash": "e0ebe97462f608e6c05b1f2f74250e03cfb74d0d",
+    "shortHash": "e0ebe9746",
+    "date": "2026-07-18T01:55:23+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): colored per-project activity chart on the Activity screen"
   },
   {
-    hash: "d2308f483558d19bf5121cc0c2ad310f34d67f41",
-    shortHash: "d2308f483",
-    date: "2026-07-16T14:20:59-07:00",
-    author: "Ethan Greenfeld",
-    subject: "feat(omp): add native OMP provider (#2067)",
+    "hash": "49a2ddbf8d18048ebdce49a31fc52bdab924ea0a",
+    "shortHash": "49a2ddbf8",
+    "date": "2026-07-18T01:53:39+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): task board — folder/task counts, priority flags, deadlines, project search"
   },
   {
-    hash: "d9a0b3e8d84d75b9b7fba6bb6d99ac3000190198",
-    shortHash: "d9a0b3e8d",
-    date: "2026-07-16T21:10:04+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "f6be79a77917f576c78abff8dbb34f93f1329c7d",
+    "shortHash": "f6be79a77",
+    "date": "2026-07-18T01:30:17+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stack synthesis banner labels above values, add separator"
   },
   {
-    hash: "6db7e53b6e0bf5eb69a11fb592480088828d38ad",
-    shortHash: "6db7e53b6",
-    date: "2026-07-16T23:01:31+02:00",
-    author: "Mohamed Boudra",
-    subject: "Record the 0.1.110 ACP hotfix release (#2150)",
+    "hash": "fe0741f953bd4b22985455eb2470a3d363028db0",
+    "shortHash": "fe0741f95",
+    "date": "2026-07-18T00:50:34+02:00",
+    "author": "haikostudio",
+    "subject": "feat: global activity log — one line per agent per turn"
   },
   {
-    hash: "5afc8b43f428f0ccc7f628814597d469300804ef",
-    shortHash: "5afc8b43f",
-    date: "2026-07-16T22:28:58+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.1.110",
+    "hash": "c93080a0b70b05197dbf04f208f91fc0c73c2b81",
+    "shortHash": "c93080a0b",
+    "date": "2026-07-18T00:48:01+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): plain-language end-of-turn recap block + colored callouts"
   },
   {
-    hash: "d13b94e943ddbae49d6c50da1b9ac23102959b5f",
-    shortHash: "d13b94e94",
-    date: "2026-07-16T22:25:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs: add 0.1.110 changelog",
+    "hash": "4f9bb22d4d292d19c57831f80c4d6ae97159338b",
+    "shortHash": "4f9bb22d4",
+    "date": "2026-07-18T00:45:48+02:00",
+    "author": "haikostudio",
+    "subject": "chore(server): brain curation config — curation flag + internal provider model"
   },
   {
-    hash: "737f30c339bbd80390e9ffe8d67ad6b7fe939d24",
-    shortHash: "737f30c33",
-    date: "2026-07-16T22:15:04+02:00",
-    author: "Mohamed Boudra",
-    subject: "Make commit history easier to scan and review (#2146)",
+    "hash": "8a511df92719c282b9c3e5f481001edd3d98401a",
+    "shortHash": "8a511df92",
+    "date": "2026-07-18T00:11:54+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): give the attachment thumbnail image an explicit plain-object size"
   },
   {
-    hash: "60855a0f3a7c13c2f22e07a0ae15657e57197cfe",
-    shortHash: "60855a0f3",
-    date: "2026-07-16T22:11:02+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(website): group changelog patches by minor release",
+    "hash": "8cf190e516f6a4c6e1ee4ea295803e5384aa17c0",
+    "shortHash": "8cf190e51",
+    "date": "2026-07-17T20:01:06+00:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(server): tighten relay backpressure accounting"
   },
   {
-    hash: "623c05aa4d01e824d6381ba5d547a17834fa157f",
-    shortHash: "623c05aa4",
-    date: "2026-07-16T21:20:41+02:00",
-    author: "Mohamed Boudra",
-    subject: 'Revert "Always revalidate desktop updates before install"',
+    "hash": "5feaa01dc24c00b1d44ceed8bb695afab00f948d",
+    "shortHash": "5feaa01dc",
+    "date": "2026-07-17T19:38:48+00:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(server): bound stale websocket connections"
   },
   {
-    hash: "42cf3e12ddff6c41be3ff6b6f434672984fc2c57",
-    shortHash: "42cf3e12d",
-    date: "2026-07-16T20:49:00+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(acp): keep foreground agents running (#2148)",
+    "hash": "a1de743ef67dde4fe7c48d045a3714f65dfa5e90",
+    "shortHash": "a1de743ef",
+    "date": "2026-07-17T15:07:44-04:00",
+    "author": "Slava Goltser",
+    "subject": "fix(app): align thinking section scroll layout with other detail sections (#1884)"
   },
   {
-    hash: "d5baf1a7e6e6b5c4e32d1a57372a9703bc1a5e41",
-    shortHash: "d5baf1a7e",
-    date: "2026-07-16T20:49:00+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(acp): keep foreground agents running (#2148)",
+    "hash": "27faeac81e1649e9fb7f7d6523cc9e0a45c32e9b",
+    "shortHash": "27faeac81",
+    "date": "2026-07-17T20:47:55+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stop syncing active-agent composer drafts (broke image send)"
   },
   {
-    hash: "a1cd50c2ae45c11e618d34f55e7bb410d6cde9aa",
-    shortHash: "a1cd50c2a",
-    date: "2026-07-16T20:25:50+02:00",
-    author: "Mohamed Boudra",
-    subject: "Reimport archived sessions into the current workspace (#2123)",
+    "hash": "a414f8ea8572412cae498bcb62cac9429cc13bdf",
+    "shortHash": "a414f8ea8",
+    "date": "2026-07-17T20:20:57+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Connect your Paseo daemon to Hub (#2035)"
   },
   {
-    hash: "7d80fdfd12c35a345c7220f5d1070aab9d1cf3d7",
-    shortHash: "7d80fdfd1",
-    date: "2026-07-16T20:17:58+02:00",
-    author: "Mohamed Boudra",
-    subject: "Always revalidate desktop updates before install",
+    "hash": "08681fb7018db176baad259043f6d4b40a5bc06e",
+    "shortHash": "08681fb70",
+    "date": "2026-07-17T20:04:03+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): brain memory curation — librarian filter, project fiche, scribe distillation"
   },
   {
-    hash: "04c71c5890ed2980f258ed1859805a2343b905ec",
-    shortHash: "04c71c589",
-    date: "2026-07-16T20:01:59+02:00",
-    author: "Mohamed Boudra",
-    subject: "Style the 0.1.109 update notice as a callout",
+    "hash": "2f44821d075def223c6ae9f565412e1c7cdea877",
+    "shortHash": "2f44821d0",
+    "date": "2026-07-17T19:47:46+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): running conversation-synthesis thread, content-width banner"
   },
   {
-    hash: "721ef03779fe4d3829a624926b852425b08e4ed6",
-    shortHash: "721ef0377",
-    date: "2026-07-16T19:54:31+02:00",
-    author: "Mohamed Boudra",
-    subject: "Warn desktop users about the 0.1.108 update",
+    "hash": "e6a6c6b02b23314f85f3e3f65b9b1f723246254a",
+    "shortHash": "e6a6c6b02",
+    "date": "2026-07-17T19:47:45+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): keep composer-held attachment blobs from being garbage collected"
   },
   {
-    hash: "758b79eddf24256ff20051701925fec0d41ecdaa",
-    shortHash: "758b79edd",
-    date: "2026-07-16T19:22:41+02:00",
-    author: "haikostudio",
-    subject: "feat: cross-device session UI state sync, usage stats dashboard, agent task toasts",
+    "hash": "39cb3dbb9c8784f9f25fce54fc429b848076fe0e",
+    "shortHash": "39cb3dbb9",
+    "date": "2026-07-17T19:30:17+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Treat every added folder as an independent project (#2098)"
   },
   {
-    hash: "2a896d9862a09390740e42dd10b7925e4832f368",
-    shortHash: "2a896d986",
-    date: "2026-07-16T19:11:38+02:00",
-    author: "haikostudio",
-    subject: "feat: per-project kanban task manager with agent sync and quota-aware scheduler",
+    "hash": "4d2acfbeb552e8730eff94bb7e5aec8344592965",
+    "shortHash": "4d2acfbeb",
+    "date": "2026-07-17T18:28:10+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(server): reject imported port offsets"
   },
   {
-    hash: "ccf29f4c5034fc1682e571eada1e501f2ae98b01",
-    shortHash: "ccf29f4c5",
-    date: "2026-07-16T18:45:32+02:00",
-    author: "Mohamed Boudra",
-    subject: "Fix sign-in popups in the desktop browser (#2137)",
+    "hash": "d6bc201f4628aae56b47690b96757d09bdcb2271",
+    "shortHash": "d6bc201f4",
+    "date": "2026-07-17T18:10:55+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): refresh import availability previews"
   },
   {
-    hash: "46aef6864a53503b1c20313e8ac92423d1fc36d7",
-    shortHash: "46aef6864",
-    date: "2026-07-16T17:58:40+02:00",
-    author: "haikostudio",
-    subject: "feat(app): reveal collapsed sidebar on left-edge hover",
+    "hash": "5e75e463ec6dabd2a6b95522ebc2da3d5b9243c5",
+    "shortHash": "5e75e463e",
+    "date": "2026-07-17T17:47:16+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): expose remaining import errors"
   },
   {
-    hash: "5e8eec44c15c2d123df7e1093c5a8af9d6fa0a1f",
-    shortHash: "5e8eec44c",
-    date: "2026-07-16T17:53:20+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(android): keep signing secrets out of build logs",
+    "hash": "94e83055b76588f94f5c267208365d2970b20950",
+    "shortHash": "94e83055b",
+    "date": "2026-07-17T17:29:46+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): inline LLM task-intent triage from chat messages"
   },
   {
-    hash: "0b820d729afe5d2ea3d81413a060e825b03f6630",
-    shortHash: "0b820d729",
-    date: "2026-07-16T17:42:56+02:00",
-    author: "Mohamed Boudra",
-    subject: "ci(android): stop consuming EAS credits for APKs",
+    "hash": "35d4ae201a68c8b2b15db381f173cb2e11e8977e",
+    "shortHash": "35d4ae201",
+    "date": "2026-07-17T17:21:23+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): tighten conductor service imports"
   },
   {
-    hash: "0d3b717cf35ed5bb7887cb658631d5531333104b",
-    shortHash: "0d3b717cf",
-    date: "2026-07-16T17:36:41+02:00",
-    author: "adradr",
-    subject: "Git commit history (#1534)",
+    "hash": "1977d330edefb8d7c8c0f0673e911586d40a6262",
+    "shortHash": "1977d330e",
+    "date": "2026-07-17T17:03:34+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Reduce workspace, agent, and chat sync traffic (#2028)"
   },
   {
-    hash: "5da6548affc750e888db88ec3ded127dce649c0b",
-    shortHash: "5da6548af",
-    date: "2026-07-16T17:22:37+02:00",
-    author: "Mohamed Boudra",
-    subject: "Improve the archived workspace restore flow (#2002)",
+    "hash": "a382fb99f42c4a3c993125b5d6d1c486e3a75002",
+    "shortHash": "a382fb99f",
+    "date": "2026-07-17T17:02:48+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): show project name + request duration in every task toast"
   },
   {
-    hash: "6f25355c9929993b8397b7f765e887ed11bfa0a9",
-    shortHash: "6f25355c9",
-    date: "2026-07-16T17:10:08+02:00",
-    author: "haikostudio",
-    subject: "feat(app): grouped sidebar menus + glanceable agent dashboard",
+    "hash": "b93d326fb29932ea1e82d8ad6252eccdd8d0bdc1",
+    "shortHash": "b93d326fb",
+    "date": "2026-07-17T17:00:30+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): preserve conductor migration context"
   },
   {
-    hash: "7e4f06ee3dc3e68d940e92690e3017d2b42459d9",
-    shortHash: "7e4f06ee3",
-    date: "2026-07-16T16:49:44+02:00",
-    author: "haikostudio",
-    subject: "feat(server): recall Cerveau memory before each prompt, note after",
+    "hash": "9505e4392579ac09af0f24a671332ec6bae50f43",
+    "shortHash": "9505e4392",
+    "date": "2026-07-17T16:42:07+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): report remaining import gaps"
   },
   {
-    hash: "d42ab91971a92bf2e2a981848989c7ca6536a18e",
-    shortHash: "d42ab9197",
-    date: "2026-07-16T16:44:01+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show agent history errors without a one-minute wait (#2124)",
+    "hash": "f8733ec1fb1d6cb85fd69f31ecd35d7212750e78",
+    "shortHash": "f8733ec1f",
+    "date": "2026-07-17T16:33:15+02:00",
+    "author": "haikostudio",
+    "subject": "feat(tasks): per-task run config, approval gate, quiet-hours scheduling, MCP task tools"
   },
   {
-    hash: "e528a0db067cf32f2a615347290a1f72ac40a010",
-    shortHash: "e528a0db0",
-    date: "2026-07-16T16:11:51+02:00",
-    author: "Mohamed Boudra",
-    subject: "Remove custom providers from settings (#1951)",
+    "hash": "c0bd158ce65b4474e750402aea4c5cf8c6dad5bb",
+    "shortHash": "c0bd158ce",
+    "date": "2026-07-17T16:29:57+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): inset transcript below the floating synthesis banner"
   },
   {
-    hash: "6aba0370aeea9973260a9dd594097d127e7dc834",
-    shortHash: "6aba0370a",
-    date: "2026-07-16T15:04:31+02:00",
-    author: "Mohamed Boudra",
-    subject: "Make remote daemon update failures actionable (#2120)",
+    "hash": "711f58f9aa30c2038219cf55740e467fcc374126",
+    "shortHash": "711f58f9a",
+    "date": "2026-07-17T16:26:14+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stop pasted image being cleared by a stale draft tombstone"
   },
   {
-    hash: "f4509fe04450be76eac7ab574b3944590f46f571",
-    shortHash: "f4509fe04",
-    date: "2026-07-16T14:39:55+02:00",
-    author: "Mohamed Boudra",
-    subject: "Open files in more installed editors (#2119)",
+    "hash": "2f0e3451dee259aff649e9816badd432d4cc5b24",
+    "shortHash": "2f0e3451d",
+    "date": "2026-07-17T16:22:10+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): wait for import preview before setup callout"
   },
   {
-    hash: "3e8dce7d7c9b1a3ef8e1ed8c18faa3d6f36da113",
-    shortHash: "3e8dce7d7",
-    date: "2026-07-16T21:36:20+09:00",
-    author: "Jason@HND",
-    subject: "Hide browser shortcuts outside the desktop app (#2116)",
+    "hash": "28cac5859a84144661213b2bc7c7eea075410b17",
+    "shortHash": "28cac5859",
+    "date": "2026-07-17T15:56:04+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): keep project imports current and complete"
   },
   {
-    hash: "204b70c47abe2318bc1c012495e24dd149ab8e04",
-    shortHash: "204b70c47",
-    date: "2026-07-16T13:46:05+02:00",
-    author: "haikostudio",
-    subject: "fix(app): sheet spacing, image-attachment budget, upstream-sync docs",
+    "hash": "6c99efae52cccb5426f9c300fafaf50ab5447027",
+    "shortHash": "6c99efae5",
+    "date": "2026-07-17T15:48:06+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(android): give release builds more memory"
   },
   {
-    hash: "990d795042eb27891ed1fc2d65f0aa7eb7658a0d",
-    shortHash: "990d79504",
-    date: "2026-07-16T13:46:05+02:00",
-    author: "haikostudio",
-    subject: "fix(app): keep bottom-sheet headers below the status bar with keyboard open",
+    "hash": "59d9a25a0d61360350408453bf12a9b05c313153",
+    "shortHash": "59d9a25a0",
+    "date": "2026-07-17T15:32:27+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): handle remaining import edge cases"
   },
   {
-    hash: "0780ab492f3bbca8ff8dc721e652695a36fee658",
-    shortHash: "0780ab492",
-    date: "2026-07-16T13:40:43+02:00",
-    author: "haikostudio",
-    subject: "chore(server): log quota keep-alive watcher startup",
+    "hash": "6f753a142d5e276e4a7089ad17f76997ca44863f",
+    "shortHash": "6f753a142",
+    "date": "2026-07-17T13:18:56+00:00",
+    "author": "paseo-ai[bot]",
+    "subject": "fix: update lockfile signatures and Nix hash [skip ci]"
   },
   {
-    hash: "09842823953b02a5e738f65cbb98a3c6d04d27b4",
-    shortHash: "098428239",
-    date: "2026-07-16T13:34:41+02:00",
-    author: "haikostudio",
-    subject: "feat(server): pause quota keep-alive during overnight quiet hours",
+    "hash": "60462337b69126c0cd906303800c260cf76d65ff",
+    "shortHash": "60462337b",
+    "date": "2026-07-17T15:11:04+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): close project import edge cases"
   },
   {
-    hash: "f80d4c9000939a5d0934b212fa7a8cc94658ee14",
-    shortHash: "f80d4c900",
-    date: "2026-07-16T13:20:32+02:00",
-    author: "haikostudio",
-    subject: "feat(server): keep Claude 5h quota window perpetually running",
+    "hash": "0bec06c2db7d3ee071416cde80229eabd682b03e",
+    "shortHash": "0bec06c2d",
+    "date": "2026-07-17T15:10:06+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "chore(release): cut 0.2.0-beta.1"
   },
   {
-    hash: "f7f207593cecb770db0850b88634c93a24e61f6f",
-    shortHash: "f7f207593",
-    date: "2026-07-16T12:51:49+02:00",
-    author: "haikostudio",
-    subject: "fix(app): keep the options-drawer header divider and clean content offset",
+    "hash": "c0f80e2477d1c3781381d3a69dab6b35365bcf4b",
+    "shortHash": "c0f80e247",
+    "date": "2026-07-17T15:07:21+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Prepare 0.2.0 beta changelog"
   },
   {
-    hash: "9b9001527fb35f70cc54452a8252737b09a8f234",
-    shortHash: "9b9001527",
-    date: "2026-07-16T12:38:16+02:00",
-    author: "haikostudio",
-    subject: "fix(app): stop clipping the drawer context row and tighten section spacing",
+    "hash": "293f55afc43200c69c9392b3b688be5580c658ab",
+    "shortHash": "293f55afc",
+    "date": "2026-07-17T15:07:14+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Update ACP provider catalog versions"
   },
   {
-    hash: "b71b8acb7f30fd51fc692b80d7b94b1df75774c2",
-    shortHash: "b71b8acb7",
-    date: "2026-07-16T12:28:29+02:00",
-    author: "haikostudio",
-    subject: 'feat(app): label the options-drawer context meter as "Context saturation"',
+    "hash": "df2b7cab46f42538c3c7240da14a8bc426eb0354",
+    "shortHash": "df2b7cab4",
+    "date": "2026-07-17T15:07:08+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Document release version classification"
   },
   {
-    hash: "4c2e28d9d5af0d1ffa3ac29416f8720030104fce",
-    shortHash: "4c2e28d9d",
-    date: "2026-07-16T12:14:35+02:00",
-    author: "haikostudio",
-    subject: "fix(app): align options-drawer sections and tighten the header gap",
+    "hash": "f44ef807efcb6b79ca5f7b2d0acc4e2e6925c23d",
+    "shortHash": "f44ef807e",
+    "date": "2026-07-17T14:48:54+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(settings): harden conductor imports"
   },
   {
-    hash: "47532952f325912094593889b65c98ea5aa49912",
-    shortHash: "47532952f",
-    date: "2026-07-16T12:04:45+02:00",
-    author: "Mohamed Boudra",
-    subject: "Catch broken desktop packages before release (#2114)",
+    "hash": "f030ddefb16ff519acddf1347ff4f1ef960aab0a",
+    "shortHash": "f030ddefb",
+    "date": "2026-07-17T14:42:02+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "refactor(settings): make project imports pluggable"
   },
   {
-    hash: "0b9abd2622063276a4df353120c4f902958b95a3",
-    shortHash: "0b9abd262",
-    date: "2026-07-16T11:32:38+02:00",
-    author: "haikostudio",
-    subject: "fix(app): resolve mode controller outside the options-drawer portal",
+    "hash": "b9b68bb3591e1e31b2503fc14eb24597e4d7b5ed",
+    "shortHash": "b9b68bb35",
+    "date": "2026-07-17T14:29:07+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): straddle toast status dot over the top-left corner"
   },
   {
-    hash: "296c95b040bea42ccc96504a479065a484c91a01",
-    shortHash: "296c95b04",
-    date: "2026-07-16T11:14:29+02:00",
-    author: "haikostudio",
-    subject: "feat(sidebar): sync project/workspace order across devices via daemon",
+    "hash": "6dd5749316ffad2496322bdcdc9c19990490dd67",
+    "shortHash": "6dd574931",
+    "date": "2026-07-17T14:19:25+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): pin toast status dot to the top-left corner"
   },
   {
-    hash: "c824fe97bb353759df3ae152458bdd2dfd9faa57",
-    shortHash: "c824fe97b",
-    date: "2026-07-16T11:12:13+02:00",
-    author: "haikostudio",
-    subject: "feat(app): group compact composer controls behind a kebab + bottom drawer",
+    "hash": "04bca84754065db531b7131e3ea605ed668128b7",
+    "shortHash": "04bca8475",
+    "date": "2026-07-17T14:15:39+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): render attachment thumbnails with expo-image"
   },
   {
-    hash: "d7ca1b5a03f812d4147695c54ec55b58b72d8b79",
-    shortHash: "d7ca1b5a0",
-    date: "2026-07-16T07:55:15+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "84f3f9aa076f9e6871f532a31169515d2633bfc1",
+    "shortHash": "84f3f9aa0",
+    "date": "2026-07-17T14:13:09+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): floating conversation-synthesis block per agent"
   },
   {
-    hash: "42e101c81ea6a1ab9da6c49b36a55cafc1df9c8e",
-    shortHash: "42e101c81",
-    date: "2026-07-16T09:46:41+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.1.109",
+    "hash": "97248edc241db018e36f18e97f5d12be368c3c90",
+    "shortHash": "97248edc2",
+    "date": "2026-07-17T14:10:23+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): replace pulsing toast border with a colored status dot + running timer"
   },
   {
-    hash: "75d784534f07b0ebb1a7ff35de7f15783e7000ac",
-    shortHash: "75d784534",
-    date: "2026-07-16T09:43:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs: add 0.1.109 changelog",
+    "hash": "dfada2a556a5013899214dea75fad874723f084c",
+    "shortHash": "dfada2a55",
+    "date": "2026-07-17T14:03:43+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): update provider icon"
   },
   {
-    hash: "64c819efeb6fa301b751f5382468ab1beaaa68af",
-    shortHash: "64c819efe",
-    date: "2026-07-16T09:39:51+02:00",
-    author: "Christoph Leiter",
-    subject: "fix(desktop): stop sandboxed preload from requiring a local module (#2111)",
+    "hash": "7ee8a5d49da9720c5b28ac0006fbdc62b65bc402",
+    "shortHash": "7ee8a5d49",
+    "date": "2026-07-17T14:02:19+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): propagate draft clear/send to other devices"
   },
   {
-    hash: "f9f2bcd8373c8849b3fd951e9a7aaa34bdf97137",
-    shortHash: "f9f2bcd83",
-    date: "2026-07-16T08:37:18+02:00",
-    author: "haikostudio",
-    subject: "fix(app): fill full screen height on installed iOS PWAs",
+    "hash": "c938156ac4f8ffedee3e993f38784847cc53a0bd",
+    "shortHash": "c938156ac",
+    "date": "2026-07-17T13:57:20+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): auto-sort task toasts by lifecycle + show project/time when done"
   },
   {
-    hash: "96e906074befc8f0a0599ef1a6cd69c8065e2d2a",
-    shortHash: "96e906074",
-    date: "2026-07-16T01:21:47+02:00",
-    author: "haikostudio",
-    subject: "fix(app): drop bottom safe-area inset on the mobile sidebar",
+    "hash": "bd83642220b23b6593daa23f6069bb35722dae98",
+    "shortHash": "bd8364222",
+    "date": "2026-07-17T13:45:50+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): fix draft image race + sync active-agent composer content"
   },
   {
-    hash: "df5c3dcc14993be9f7e152e6856c8c92268807dd",
-    shortHash: "df5c3dcc1",
-    date: "2026-07-16T00:52:17+02:00",
-    author: "haikostudio",
-    subject: "docs(selfhost): document the systemd timer sync mechanism",
+    "hash": "11cb3b4b43f5ebf077a71295e188da62fc7a5d6a",
+    "shortHash": "11cb3b4b4",
+    "date": "2026-07-17T13:12:12+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): bound magic scrollbar above the composer on mobile"
   },
   {
-    hash: "97070e31ea42fe0e8aa44b9cbbaaac5bbfaf96fe",
-    shortHash: "97070e31e",
-    date: "2026-07-16T00:45:22+02:00",
-    author: "haikostudio",
-    subject: "chore(selfhost): add upstream sync script + docs",
+    "hash": "388f1d426c01a9b492d084c207dfd99ff2bc33af",
+    "shortHash": "388f1d426",
+    "date": "2026-07-17T13:02:09+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep agent browser tabs connected across workspace switches (#2156)"
   },
   {
-    hash: "a2bc9a0562896f6d2f9d2834200e4c076fdc9fd2",
-    shortHash: "a2bc9a056",
-    date: "2026-07-16T00:39:25+02:00",
-    author: "haikostudio",
-    subject: "style: apply oxfmt + oxlint fix to self-host custom layer",
+    "hash": "a7cbf4f61ddd5adf78970e8c6584b6e8f5c78880",
+    "shortHash": "a7cbf4f61",
+    "date": "2026-07-17T13:00:47+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): make sidebar reordering respond immediately"
   },
   {
-    hash: "1f540bcb9894bfb9a9a2c7150927a6e4675718b9",
-    shortHash: "1f540bcb9",
-    date: "2026-07-16T00:27:14+02:00",
-    author: "haikostudio",
-    subject: "feat(relay): self-host chunking + e2ee for large payloads",
+    "hash": "074ea1f4f9520dfc5c99c0acd5775a50a53fac87",
+    "shortHash": "074ea1f4f",
+    "date": "2026-07-17T12:47:49+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): loop-free cross-device sync of draft agent config"
   },
   {
-    hash: "6592250d51dbe70dc37ae76bec47cf6098de1d54",
-    shortHash: "6592250d5",
-    date: "2026-07-14T00:11:53+02:00",
-    author: "haikostudio",
-    subject: "fix(attachments): compress oversized images and guard the send budget",
+    "hash": "266d54463be65f01ef3e5e0d57505427d70e598e",
+    "shortHash": "266d54463",
+    "date": "2026-07-17T12:27:15+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(app): highlight sidebar resize handles"
   },
   {
-    hash: "3d86ea26de0b995607f06ce9322bc414c884f4a8",
-    shortHash: "3d86ea26d",
-    date: "2026-07-15T23:17:12+02:00",
-    author: "haikostudio",
-    subject: "ci: add self-host web build workflow",
+    "hash": "fcd093b9eb0eff83a897847fa3f93e7e009066cb",
+    "shortHash": "fcd093b9e",
+    "date": "2026-07-17T12:24:07+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): revert live draft-config sync that caused a cross-device loop"
   },
   {
-    hash: "5ad731e3abb7ea475a9696d39abbd6b840c33643",
-    shortHash: "5ad731e3a",
-    date: "2026-06-05T14:43:52+00:00",
-    author: "haikostudio",
-    subject: "Add project autostart and launcher infrastructure",
+    "hash": "ca41ab73232320e74518db4fdcd4604dc4627287",
+    "shortHash": "ca41ab732",
+    "date": "2026-07-17T12:15:14+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): auto-refresh changelog snapshot on every commit"
   },
   {
-    hash: "ab52bfb9636a763ce03e529fc8cd6ba4ea9f890f",
-    shortHash: "ab52bfb96",
-    date: "2026-07-16T00:45:22+02:00",
-    author: "haikostudio",
-    subject: "chore(selfhost): add upstream sync script + docs",
+    "hash": "5ae48b5d50435d0240638b735963ec2ab53b801c",
+    "shortHash": "5ae48b5d5",
+    "date": "2026-07-17T11:52:01+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): folder card kebab menu to edit or delete a task folder"
   },
   {
-    hash: "97938684381e589ded22a6471c4c50a38772ac93",
-    shortHash: "979386843",
-    date: "2026-07-16T00:39:25+02:00",
-    author: "haikostudio",
-    subject: "style: apply oxfmt + oxlint fix to self-host custom layer",
+    "hash": "87877918a6c36a856830d4f89d40323cd94fc47d",
+    "shortHash": "87877918a",
+    "date": "2026-07-17T11:44:34+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): apply materialized image attachments to a focused composer"
   },
   {
-    hash: "2ec1ff0eb609025c3b4c8f3679d7e66823b9522d",
-    shortHash: "2ec1ff0eb",
-    date: "2026-07-16T00:27:14+02:00",
-    author: "haikostudio",
-    subject: "feat(relay): self-host chunking + e2ee for large payloads",
+    "hash": "f7a6548b68ad279ad390c5d76ffeff46db6b2f20",
+    "shortHash": "f7a6548b6",
+    "date": "2026-07-17T11:33:56+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): refresh stale config import apply"
   },
   {
-    hash: "2b9674001ba1778c442b92457cc613958cfefd30",
-    shortHash: "2b9674001",
-    date: "2026-07-14T00:11:53+02:00",
-    author: "haikostudio",
-    subject: "fix(attachments): compress oversized images and guard the send budget",
+    "hash": "ab9c9b96a72ab4374bf92951f9784597cc5e135a",
+    "shortHash": "ab9c9b96a",
+    "date": "2026-07-17T11:31:52+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(server): normalize conductor import paths"
   },
   {
-    hash: "bf3ff8320dbaab5689c5b8a05017e5e10e872311",
-    shortHash: "bf3ff8320",
-    date: "2026-07-15T23:17:12+02:00",
-    author: "haikostudio",
-    subject: "ci: add self-host web build workflow",
+    "hash": "557fc42c890b8badcb60249fd0b30a2396f2b112",
+    "shortHash": "557fc42c8",
+    "date": "2026-07-17T11:17:21+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(server): include daemon version in logs (#2155)"
   },
   {
-    hash: "369c5cec51f5cf541e53a00a26ccfe17fe1377b9",
-    shortHash: "369c5cec5",
-    date: "2026-06-05T14:43:52+00:00",
-    author: "haikostudio",
-    subject: "Add project autostart and launcher infrastructure",
+    "hash": "8fe11e3bb0d3bccdd71ac2a802dbe17dc4ad9e35",
+    "shortHash": "8fe11e3bb",
+    "date": "2026-07-17T11:15:10+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(settings): import existing project setup"
   },
   {
-    hash: "8554b94cdb3c6374ce3fb10ac5dafb7a15eb3364",
-    shortHash: "8554b94cd",
-    date: "2026-07-15T22:24:07+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "dcae7c68459d3f8bdbd846109519f858ec600219",
+    "shortHash": "dcae7c684",
+    "date": "2026-07-17T11:05:50+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): rappel Cerveau projet-d'abord + complément global + procédures"
   },
   {
-    hash: "75ea0d4534a2922e6f3072d805008474ac4728bd",
-    shortHash: "75ea0d453",
-    date: "2026-07-16T00:15:57+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.1.108",
+    "hash": "c97296ccda8cb4ded0827741be198b2ab4d9162b",
+    "shortHash": "c97296ccd",
+    "date": "2026-07-17T11:04:08+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): apply remote draft agent config to an open composer"
   },
   {
-    hash: "d791a0aa91236a28fe23b0be362f0baf0abf2fd1",
-    shortHash: "d791a0aa9",
-    date: "2026-07-16T00:13:46+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs: add 0.1.108 changelog",
+    "hash": "f5608482ae1b872000c774797e3aa3da2ccb01f8",
+    "shortHash": "f5608482a",
+    "date": "2026-07-17T10:20:45+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): live-adopt remote draft text into an open composer"
   },
   {
-    hash: "3bee51d2a2375867cdba953194bf8395f8d53a07",
-    shortHash: "3bee51d2a",
-    date: "2026-07-16T00:13:15+02:00",
-    author: "haikostudio",
-    subject:
-      "index on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area",
+    "hash": "bce2c50b9e16831ab395e1ea313698ba4dfa0b22",
+    "shortHash": "bce2c50b9",
+    "date": "2026-07-17T10:07:50+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep terminal sizing reliable through focus changes (#2154)"
   },
   {
-    hash: "94fbae108a0f555b5349137a40cc608ae5340632",
-    shortHash: "94fbae108",
-    date: "2026-07-16T00:13:15+02:00",
-    author: "haikostudio",
-    subject:
-      "untracked files on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area",
+    "hash": "70472dc945753c745de008d627035b549b150e31",
+    "shortHash": "70472dc94",
+    "date": "2026-07-17T10:06:32+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Always install the newest eligible desktop update (#2149)"
   },
   {
-    hash: "181f972eb32ca6113205f209b1645740a9336bba",
-    shortHash: "181f972eb",
-    date: "2026-07-15T23:55:39+02:00",
-    author: "haikostudio",
-    subject: "fix(sidebar): paint mobile sidebar footer through the bottom safe area",
+    "hash": "a8ebd390fabb88e00b1c2d54890b6cf758eeb103",
+    "shortHash": "a8ebd390f",
+    "date": "2026-07-17T09:03:26+02:00",
+    "author": "nllptrx",
+    "subject": "feat(forge): pluggable forge abstraction + GitLab and Gitea/Forgejo/Codeberg (#1913)"
   },
   {
-    hash: "af61e41eb9f4abe49a648ddde3488ce3436c41c6",
-    shortHash: "af61e41eb",
-    date: "2026-07-15T23:17:12+02:00",
-    author: "haikostudio",
-    subject: "ci: add self-host web build workflow",
+    "hash": "cd17e59d6ffdf7c9ef5713d01aba738319f81c97",
+    "shortHash": "cd17e59d6",
+    "date": "2026-07-17T08:34:49+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): diffuse radar ping + full-height magic scrollbar rail"
   },
   {
-    hash: "943d03ad995a613558752d2863b51e78419fba54",
-    shortHash: "943d03ad9",
-    date: "2026-07-15T23:13:55+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(projects): separate registration from workspace setup",
+    "hash": "04d1ebdce037180d31d9449adfa847468d90589a",
+    "shortHash": "04d1ebdce",
+    "date": "2026-07-17T08:29:19+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep browser input from submitting Paseo prompts (#1982)"
   },
   {
-    hash: "cd4c5a6a3f146f33361644761da5df86c6670d7f",
-    shortHash: "cd4c5a6a3",
-    date: "2026-07-15T23:09:46+02:00",
-    author: "haikostudio",
-    subject: "wip(github-picker): snapshot for self-hosted app deployment",
+    "hash": "348437182f8ff0f87b16bd6729b73f0201eea1d4",
+    "shortHash": "348437182",
+    "date": "2026-07-17T08:18:37+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): sync draft composer text + agent config across devices"
   },
   {
-    hash: "38cfe109c937a8bd8c33e7c5a2b5d625e252103f",
-    shortHash: "38cfe109c",
-    date: "2026-07-15T19:26:41+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "8984ca9e5bfcab2961afb817f39e0f2dc625a62f",
+    "shortHash": "8984ca9e5",
+    "date": "2026-07-17T08:16:44+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): shift task toasts left so the magic scrollbar stays visible"
   },
   {
-    hash: "5ef1b9dbb118001729ac13ffc03b26d121bce809",
-    shortHash: "5ef1b9dbb",
-    date: "2026-07-15T21:19:40+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(website): include test dependency in deploy install",
+    "hash": "d6963108d0cbe99743b555fab77b2e12d0af0aaf",
+    "shortHash": "d6963108d",
+    "date": "2026-07-17T08:14:38+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): pulsing amber/green border on agent task toasts"
   },
   {
-    hash: "dfe3330ef837d801dd8c4de499247aa7d7a63896",
-    shortHash: "dfe3330ef",
-    date: "2026-07-15T21:16:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "Add a keyboard-driven project setup flow (#2097)",
+    "hash": "32a52c588a2f17ac52a8485c8653c27f81afb168",
+    "shortHash": "32a52c588",
+    "date": "2026-07-17T08:12:42+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): kanban drag-and-drop everywhere + full-width cards"
   },
   {
-    hash: "90e0a0e353a90e12d91d88a91e64dda7984928c0",
-    shortHash: "90e0a0e35",
-    date: "2026-07-15T20:40:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "Find and open workspaces from the command center (#2096)",
+    "hash": "2257e0a9006d805aad78c839b4d95c37616213b4",
+    "shortHash": "2257e0a90",
+    "date": "2026-07-17T07:55:28+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): re-derive workspace title from each user message"
   },
   {
-    hash: "37bde90d9f4aaf45c755f828ee25a6b189f18065",
-    shortHash: "37bde90d9",
-    date: "2026-07-15T18:54:04+02:00",
-    author: "Mohamed Boudra",
-    subject: "refactor(app): unify assistant fork boundary resolution (#2091)",
+    "hash": "3112f4d2fe0a2d2b6934fc24761875278feb2316",
+    "shortHash": "3112f4d2f",
+    "date": "2026-07-17T07:54:53+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): in-app changelog page with releases + commits tabs"
   },
   {
-    hash: "6804882761fcb9a511338f1fed19b9ed45e99e45",
-    shortHash: "680488276",
-    date: "2026-07-15T18:44:17+02:00",
-    author: "Christoph Leiter",
-    subject: "Document iOS/Android local dev setup and fix the mise Android toolchain (#2092)",
+    "hash": "4189ddf39859eee78426292f13138298521b9031",
+    "shortHash": "4189ddf39",
+    "date": "2026-07-17T02:21:05+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): tasks board + sheet layout on compact/mobile web"
   },
   {
-    hash: "13e92f8a3075ef815da143573c5f6a78cd2458f9",
-    shortHash: "13e92f8a3",
-    date: "2026-07-16T00:42:10+08:00",
-    author: "1254087415",
-    subject: "fix(server): create autonomous turns for spontaneous ACP session updates (#2058)",
+    "hash": "0775d463d4cd7fa4c77a2f7c10374fd1f5a75107",
+    "shortHash": "0775d463d",
+    "date": "2026-07-17T01:53:41+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): active dot with radar ping on the magic scrollbar"
   },
   {
-    hash: "328361667f20a74c791f18454e6a7de8576b3279",
-    shortHash: "328361667",
-    date: "2026-07-15T18:40:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep browser sign-ins across tabs and restarts (#2089)",
+    "hash": "a56428d03936b6b72b1b893fe159b9fe799138c0",
+    "shortHash": "a56428d03",
+    "date": "2026-07-17T01:35:54+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): magic scrollbar on the agent conversation"
   },
   {
-    hash: "9423b091b9ebe944dced8e1a28f698e27aa7c784",
-    shortHash: "9423b091b",
-    date: "2026-07-15T18:34:30+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): keep tool call summaries neutral (#2090)",
+    "hash": "f030057a7206909e7e7453a17d0144637d0824f1",
+    "shortHash": "f030057a7",
+    "date": "2026-07-17T01:20:24+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): stop raw <contexte_memoire> blocks leaking into replayed user messages"
   },
   {
-    hash: "04e893417e2e95c77a25a413edb675557813d727",
-    shortHash: "04e893417",
-    date: "2026-07-15T16:30:42+02:00",
-    author: "Mohamed Boudra",
-    subject: "Allow failed agent turns to be forked (#2063)",
+    "hash": "ef8c8dd929b0fac315d1eba0aeb03d1f29daaab8",
+    "shortHash": "ef8c8dd92",
+    "date": "2026-07-17T01:00:16+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): folder creation modal with colors, inline ticket drafts on the board"
   },
   {
-    hash: "f06792ae89d6be21457b025a98d336929730e287",
-    shortHash: "f06792ae8",
-    date: "2026-07-15T15:48:09+02:00",
-    author: "Mohamed Boudra",
-    subject: "Recover desktop startup from stale daemon locks",
+    "hash": "1e620054bd50e7dbb525f9b18ce98ef01eb19721",
+    "shortHash": "1e620054b",
+    "date": "2026-07-17T00:27:39+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stop the tasks board flashing a stale/empty note on project open"
   },
   {
-    hash: "7f011d16c5785f02581d53f943a44cc811b8cb78",
-    shortHash: "7f011d16c",
-    date: "2026-07-15T15:40:11+02:00",
-    author: "Mohamed Boudra",
-    subject: "Reduce composer overhead while typing (#2086)",
+    "hash": "20e5b2e4eb543600c2e107a5b22b41fd8deb59ee",
+    "shortHash": "20e5b2e4e",
+    "date": "2026-07-17T00:24:22+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): stop injecting broad overview memories on brain recall miss"
   },
   {
-    hash: "319d9017c225a7b2d38027959f7de7a71d320ee9",
-    shortHash: "319d9017c",
-    date: "2026-07-15T15:38:52+02:00",
-    author: "Mohamed Boudra",
-    subject: "Publish the latest Android version code (#2085)",
+    "hash": "96a1305a1b876b524b526eb8e43f34d15b370329",
+    "shortHash": "96a1305a1",
+    "date": "2026-07-17T00:21:43+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): tasks page sidebar toggle + one-page three-pane layout"
   },
   {
-    hash: "4a5630bfcefc728b57cd8fcc5efc4923e786fe17",
-    shortHash: "4a5630bfc",
-    date: "2026-07-15T12:04:53+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): stop composer height flicker",
+    "hash": "ab3aa243efbf6bf0feabeae013e2b0e50409c73c",
+    "shortHash": "ab3aa243e",
+    "date": "2026-07-17T00:18:34+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): show a label under every usage chart column"
   },
   {
-    hash: "5ddd5f3726782ef6793b6cfd304aab0097b089c0",
-    shortHash: "5ddd5f372",
-    date: "2026-07-15T11:54:59+02:00",
-    author: "Mohamed Boudra",
-    subject: "perf(app): keep desktop sidebar ready to reopen",
+    "hash": "edc98fbc5c21552924ad8fb2e946e088a8d9d8f9",
+    "shortHash": "edc98fbc5",
+    "date": "2026-07-17T00:10:19+02:00",
+    "author": "haikostudio",
+    "subject": "fix(server): allow remote project ids in tasks board store"
   },
   {
-    hash: "36738464339ff6d39c983294acfd2b82db762b3d",
-    shortHash: "367384643",
-    date: "2026-07-15T11:50:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): keep single tool calls in overview list",
+    "hash": "9f5f5fce620684a5a5d2c74940c37482eb45feeb",
+    "shortHash": "9f5f5fce6",
+    "date": "2026-07-16T23:47:09+02:00",
+    "author": "Christoph Leiter",
+    "subject": "Fix terminal resize race (#2059)"
   },
   {
-    hash: "abfe955867f036e6e32d67cd9ab2d06c43c9e1b1",
-    shortHash: "abfe95586",
-    date: "2026-07-15T11:58:31+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show friendly native subagent names and hide finished work (#2073)",
+    "hash": "a622860a3e37ce0a4fb657a3273cfaa5fa08d710",
+    "shortHash": "a622860a3",
+    "date": "2026-07-16T23:46:24+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep workspace focus mode scoped and easy to exit (#2151)"
   },
   {
-    hash: "38e4d9ad5d2498e228bd1d6215576763b21cc719",
-    shortHash: "38e4d9ad5",
-    date: "2026-07-15T11:24:05+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(app): polish sidebar and tool call summaries",
+    "hash": "d2308f483558d19bf5121cc0c2ad310f34d67f41",
+    "shortHash": "d2308f483",
+    "date": "2026-07-16T14:20:59-07:00",
+    "author": "Ethan Greenfeld",
+    "subject": "feat(omp): add native OMP provider (#2067)"
   },
   {
-    hash: "77f6069ec142f58f3ccb85ed016adc90d076cfa1",
-    shortHash: "77f6069ec",
-    date: "2026-07-15T09:30:57+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep desktop sidebar controls stable across panel changes (#2078)",
+    "hash": "d9a0b3e8d84d75b9b7fba6bb6d99ac3000190198",
+    "shortHash": "d9a0b3e8d",
+    "date": "2026-07-16T21:10:04+00:00",
+    "author": "paseo-ai[bot]",
+    "subject": "fix: update lockfile signatures and Nix hash [skip ci]"
   },
   {
-    hash: "9c40cb76371247c2249e20fc708b4e02cd3360c6",
-    shortHash: "9c40cb763",
-    date: "2026-07-15T00:10:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "Render provider images from paths with spaces (#2074)",
+    "hash": "6db7e53b6e0bf5eb69a11fb592480088828d38ad",
+    "shortHash": "6db7e53b6",
+    "date": "2026-07-16T23:01:31+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Record the 0.1.110 ACP hotfix release (#2150)"
   },
   {
-    hash: "d706c4339b0e98133b839771b756accc4ea87078",
-    shortHash: "d706c4339",
-    date: "2026-07-15T00:01:58+02:00",
-    author: "Mohamed Boudra",
-    subject: "Fix hidden Codex subagents and stuck parent sessions (#2068)",
+    "hash": "5afc8b43f428f0ccc7f628814597d469300804ef",
+    "shortHash": "5afc8b43f",
+    "date": "2026-07-16T22:28:58+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "chore(release): cut 0.1.110"
   },
   {
-    hash: "50ed0d0ab11d8f5d9543096329436bb37c303ff0",
-    shortHash: "50ed0d0ab",
-    date: "2026-07-14T23:01:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "Fix desktop layout and window controls at half-screen width (#1983)",
+    "hash": "d13b94e943ddbae49d6c50da1b9ac23102959b5f",
+    "shortHash": "d13b94e94",
+    "date": "2026-07-16T22:25:24+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "docs: add 0.1.110 changelog"
   },
   {
-    hash: "1b8af2e58ee872014f5940071a924b24e25c65f3",
-    shortHash: "1b8af2e58",
-    date: "2026-07-14T21:16:29+02:00",
-    author: "Mohamed Boudra",
-    subject: "Refine tool call summaries and scrolling (#2069)",
+    "hash": "737f30c339bbd80390e9ffe8d67ad6b7fe939d24",
+    "shortHash": "737f30c33",
+    "date": "2026-07-16T22:15:04+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Make commit history easier to scan and review (#2146)"
   },
   {
-    hash: "d781b687115b65058d4a8ad2b9abdc9a4d0e9ef3",
-    shortHash: "d781b6871",
-    date: "2026-07-14T21:06:25+02:00",
-    author: "Mohamed Boudra",
-    subject: "Polish release notes and in-app help (#2070)",
+    "hash": "60855a0f3a7c13c2f22e07a0ae15657e57197cfe",
+    "shortHash": "60855a0f3",
+    "date": "2026-07-16T22:11:02+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(website): group changelog patches by minor release"
   },
   {
-    hash: "cd6c608c9e25a0a1c1332c70bb68209d4c612094",
-    shortHash: "cd6c608c9",
-    date: "2026-07-14T11:29:42-07:00",
-    author: "Ethan Greenfeld",
-    subject: "Fix Pi slash commands hanging after local completion (#2066)",
+    "hash": "623c05aa4d01e824d6381ba5d547a17834fa157f",
+    "shortHash": "623c05aa4",
+    "date": "2026-07-16T21:20:41+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Revert \"Always revalidate desktop updates before install\""
   },
   {
-    hash: "1f5283f5a36926f31ec9cbf020072fe1dc35dfa7",
-    shortHash: "1f5283f5a",
-    date: "2026-07-14T14:22:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "Surface cross-workspace subagents in their workspaces (#2061)",
+    "hash": "42cf3e12ddff6c41be3ff6b6f434672984fc2c57",
+    "shortHash": "42cf3e12d",
+    "date": "2026-07-16T20:49:00+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(acp): keep foreground agents running (#2148)"
   },
   {
-    hash: "c0b801b80590d6bc75a72ca6de501d065c193cc7",
-    shortHash: "c0b801b80",
-    date: "2026-07-14T19:30:32+08:00",
-    author: "OnCloud",
-    subject: "Fix shortcut capture ignoring - = ; ' keys (#2047)",
+    "hash": "d5baf1a7e6e6b5c4e32d1a57372a9703bc1a5e41",
+    "shortHash": "d5baf1a7e",
+    "date": "2026-07-16T20:49:00+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(acp): keep foreground agents running (#2148)"
   },
   {
-    hash: "9ea58aae0cfece29a8ca0b696bc5e197e550a69b",
-    shortHash: "9ea58aae0",
-    date: "2026-07-14T04:00:53-07:00",
-    author: "Matt Cowger",
-    subject: "fix(server): stop OpenCode daemon crash on session close, fix #2014 (#2027)",
+    "hash": "a1cd50c2ae45c11e618d34f55e7bb410d6cde9aa",
+    "shortHash": "a1cd50c2a",
+    "date": "2026-07-16T20:25:50+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Reimport archived sessions into the current workspace (#2123)"
   },
   {
-    hash: "f35b16b316594b693018cb5740b096fca99d5be1",
-    shortHash: "f35b16b31",
-    date: "2026-07-14T12:56:45+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs(orchestration): explain cross-provider workflows (#2062)",
+    "hash": "7d80fdfd12c35a345c7220f5d1070aab9d1cf3d7",
+    "shortHash": "7d80fdfd1",
+    "date": "2026-07-16T20:17:58+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Always revalidate desktop updates before install"
   },
   {
-    hash: "81113d15829ccbc890096929cf0532d1f325309c",
-    shortHash: "81113d158",
-    date: "2026-07-14T03:55:06-07:00",
-    author: "Matt Cowger",
-    subject: "feat(app): add tool call detail levels (#2031)",
+    "hash": "04c71c5890ed2980f258ed1859805a2343b905ec",
+    "shortHash": "04c71c589",
+    "date": "2026-07-16T20:01:59+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Style the 0.1.109 update notice as a callout"
   },
   {
-    hash: "3b078240a84d55c88f16ee425e1489003235c678",
-    shortHash: "3b078240a",
-    date: "2026-07-14T22:50:09+12:00",
-    author: "Liam Diprose",
-    subject: "Serve the daemon web UI from Nix packages (#1978)",
+    "hash": "721ef03779fe4d3829a624926b852425b08e4ed6",
+    "shortHash": "721ef0377",
+    "date": "2026-07-16T19:54:31+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Warn desktop users about the 0.1.108 update"
   },
   {
-    hash: "279e1aa91c0e8c1a3afa1ef0f4e1094e8ebbb239",
-    shortHash: "279e1aa91",
-    date: "2026-07-14T18:15:36+08:00",
-    author: "Xisheng Parker Zhao",
-    subject: "Fix Codebuddy Code model discovery (#1979)",
+    "hash": "758b79eddf24256ff20051701925fec0d41ecdaa",
+    "shortHash": "758b79edd",
+    "date": "2026-07-16T19:22:41+02:00",
+    "author": "haikostudio",
+    "subject": "feat: cross-device session UI state sync, usage stats dashboard, agent task toasts"
   },
   {
-    hash: "1f684b933d912e361401a93024a2be4a441f1f5f",
-    shortHash: "1f684b933",
-    date: "2026-07-14T00:11:53+02:00",
-    author: "haikostudio",
-    subject: "fix(attachments): compress oversized images and guard the send budget",
+    "hash": "2a896d9862a09390740e42dd10b7925e4832f368",
+    "shortHash": "2a896d986",
+    "date": "2026-07-16T19:11:38+02:00",
+    "author": "haikostudio",
+    "subject": "feat: per-project kanban task manager with agent sync and quota-aware scheduler"
   },
   {
-    hash: "7b26fbc129795cd623f8382c3b2b215fa56e3199",
-    shortHash: "7b26fbc12",
-    date: "2026-07-14T00:11:53+02:00",
-    author: "haikostudio",
-    subject: "fix(attachments): compress oversized images and guard the send budget",
+    "hash": "ccf29f4c5034fc1682e571eada1e501f2ae98b01",
+    "shortHash": "ccf29f4c5",
+    "date": "2026-07-16T18:45:32+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Fix sign-in popups in the desktop browser (#2137)"
   },
   {
-    hash: "b4ab0d9db6e5668218e5aaa34f15ef3dd133e3ec",
-    shortHash: "b4ab0d9db",
-    date: "2026-07-13T22:50:34+02:00",
-    author: "Mohamed Boudra",
-    subject: "Find .opencode files in workspace search (#2049)",
+    "hash": "46aef6864a53503b1c20313e8ac92423d1fc36d7",
+    "shortHash": "46aef6864",
+    "date": "2026-07-16T17:58:40+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): reveal collapsed sidebar on left-edge hover"
   },
   {
-    hash: "fc8ed248407736e499e457aa55aa3ac058b7ae4c",
-    shortHash: "fc8ed2484",
-    date: "2026-07-13T19:07:07+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): retain local execution grants",
+    "hash": "5e8eec44c15c2d123df7e1093c5a8af9d6fa0a1f",
+    "shortHash": "5e8eec44c",
+    "date": "2026-07-16T17:53:20+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(android): keep signing secrets out of build logs"
   },
   {
-    hash: "6472d9dcbd4492b4e414e41c8b9837b04a41988d",
-    shortHash: "6472d9dcb",
-    date: "2026-07-13T18:48:13+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): validate persisted origins",
+    "hash": "0b820d729afe5d2ea3d81413a060e825b03f6630",
+    "shortHash": "0b820d729",
+    "date": "2026-07-16T17:42:56+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "ci(android): stop consuming EAS credits for APKs"
   },
   {
-    hash: "16c7fe9709146b8353f001711c64fda9d326f52e",
-    shortHash: "16c7fe970",
-    date: "2026-07-13T18:41:35+02:00",
-    author: "Mohamed Boudra",
-    subject: "refactor(hub): authorize execution through sessions",
+    "hash": "0d3b717cf35ed5bb7887cb658631d5531333104b",
+    "shortHash": "0d3b717cf",
+    "date": "2026-07-16T17:36:41+02:00",
+    "author": "adradr",
+    "subject": "Git commit history (#1534)"
   },
   {
-    hash: "5e2a8b6633fe66a93cf17254a4f7db7969573f07",
-    shortHash: "5e2a8b663",
-    date: "2026-07-13T18:02:53+02:00",
-    author: "Mohamed Boudra",
-    subject: "Make help easier to find and cloned workspaces open reliably (#2045)",
+    "hash": "5da6548affc750e888db88ec3ded127dce649c0b",
+    "shortHash": "5da6548af",
+    "date": "2026-07-16T17:22:37+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Improve the archived workspace restore flow (#2002)"
   },
   {
-    hash: "dfcaa9bf896fa6f755f8aaafb954e77338589b4e",
-    shortHash: "dfcaa9bf8",
-    date: "2026-07-13T17:47:40+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): correct relationship trust boundaries",
+    "hash": "6f25355c9929993b8397b7f765e887ed11bfa0a9",
+    "shortHash": "6f25355c9",
+    "date": "2026-07-16T17:10:08+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): grouped sidebar menus + glanceable agent dashboard"
   },
   {
-    hash: "3772a8a118c191689d341373842103d8034a90ad",
-    shortHash: "3772a8a11",
-    date: "2026-07-13T17:07:30+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): preserve workspace navigation compatibility",
+    "hash": "7e4f06ee3dc3e68d940e92690e3017d2b42459d9",
+    "shortHash": "7e4f06ee3",
+    "date": "2026-07-16T16:49:44+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): recall Cerveau memory before each prompt, note after"
   },
   {
-    hash: "7371fff5785debcc207123d76906e5d81fc85042",
-    shortHash: "7371fff57",
-    date: "2026-07-13T16:46:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): return relationship command errors",
+    "hash": "d42ab91971a92bf2e2a981848989c7ca6536a18e",
+    "shortHash": "d42ab9197",
+    "date": "2026-07-16T16:44:01+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Show agent history errors without a one-minute wait (#2124)"
   },
   {
-    hash: "b653719281300bbd56851bb6d5c34143a57d0551",
-    shortHash: "b65371928",
-    date: "2026-07-13T16:44:05+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): close execution authority races",
+    "hash": "e528a0db067cf32f2a615347290a1f72ac40a010",
+    "shortHash": "e528a0db0",
+    "date": "2026-07-16T16:11:51+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Remove custom providers from settings (#1951)"
   },
   {
-    hash: "9c30982e6b0e552ab5a041d1885a844f3b59a4f3",
-    shortHash: "9c30982e6",
-    date: "2026-07-13T16:32:27+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(hub): stabilize lifecycle coverage on Windows",
+    "hash": "6aba0370aeea9973260a9dd594097d127e7dc834",
+    "shortHash": "6aba0370a",
+    "date": "2026-07-16T15:04:31+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Make remote daemon update failures actionable (#2120)"
   },
   {
-    hash: "f2ebac931c60ed423968f1aa07ba78c0a0b2776c",
-    shortHash: "f2ebac931",
-    date: "2026-07-13T15:54:32+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep CI moving through transient npm failures (#2039)",
+    "hash": "f4509fe04450be76eac7ab574b3944590f46f571",
+    "shortHash": "f4509fe04",
+    "date": "2026-07-16T14:39:55+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Open files in more installed editors (#2119)"
   },
   {
-    hash: "3c5921f14379544e82a801a49a78330660ca4fde",
-    shortHash: "3c5921f14",
-    date: "2026-07-13T15:53:17+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): close relationship lifecycle gaps",
+    "hash": "3e8dce7d7c9b1a3ef8e1ed8c18faa3d6f36da113",
+    "shortHash": "3e8dce7d7",
+    "date": "2026-07-16T21:36:20+09:00",
+    "author": "Jason@HND",
+    "subject": "Hide browser shortcuts outside the desktop app (#2116)"
   },
   {
-    hash: "f62aec1a030df929f4827fb2dde5b4cf6bda50d2",
-    shortHash: "f62aec1a0",
-    date: "2026-07-13T15:39:41+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): bind socket transport to Hub authority",
+    "hash": "204b70c47abe2318bc1c012495e24dd149ab8e04",
+    "shortHash": "204b70c47",
+    "date": "2026-07-16T13:46:05+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): sheet spacing, image-attachment budget, upstream-sync docs"
   },
   {
-    hash: "f350c716b9fe671233b7466935e64449cb7875de",
-    shortHash: "f350c716b",
-    date: "2026-07-13T15:38:09+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep forked chats focused in new tabs (#2038)",
+    "hash": "990d795042eb27891ed1fc2d65f0aa7eb7658a0d",
+    "shortHash": "990d79504",
+    "date": "2026-07-16T13:46:05+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): keep bottom-sheet headers below the status bar with keyboard open"
   },
   {
-    hash: "fe9a486ac148c17a21e6464f1e9bc81ecf956502",
-    shortHash: "fe9a486ac",
-    date: "2026-07-13T15:37:28+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show every Codex terminal command in agent timelines (#2037)",
+    "hash": "0780ab492f3bbca8ff8dc721e652695a36fee658",
+    "shortHash": "0780ab492",
+    "date": "2026-07-16T13:40:43+02:00",
+    "author": "haikostudio",
+    "subject": "chore(server): log quota keep-alive watcher startup"
   },
   {
-    hash: "13d6ad598e58bdce4be6292fa994804a8eba35d1",
-    shortHash: "13d6ad598",
-    date: "2026-07-13T15:36:48+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep New Workspace prompts when switching projects or hosts (#2036)",
+    "hash": "09842823953b02a5e738f65cbb98a3c6d04d27b4",
+    "shortHash": "098428239",
+    "date": "2026-07-16T13:34:41+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): pause quota keep-alive during overnight quiet hours"
   },
   {
-    hash: "64df1896d07807ce572701d710fff3248f048000",
-    shortHash: "64df1896d",
-    date: "2026-07-13T15:13:48+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): reject invalid socket transport URLs",
+    "hash": "f80d4c9000939a5d0934b212fa7a8cc94658ee14",
+    "shortHash": "f80d4c900",
+    "date": "2026-07-16T13:20:32+02:00",
+    "author": "haikostudio",
+    "subject": "feat(server): keep Claude 5h quota window perpetually running"
   },
   {
-    hash: "02adae8499e3f538b009fd8deb63691f66b90bb6",
-    shortHash: "02adae849",
-    date: "2026-07-13T15:00:09+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): contain enrollment retry failures",
+    "hash": "f7f207593cecb770db0850b88634c93a24e61f6f",
+    "shortHash": "f7f207593",
+    "date": "2026-07-16T12:51:49+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): keep the options-drawer header divider and clean content offset"
   },
   {
-    hash: "6768e6843c8c2fd5fe8d97e4757d53672aaa804f",
-    shortHash: "6768e6843",
-    date: "2026-07-13T14:47:46+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): preserve fresh enrollment authority",
+    "hash": "9b9001527fb35f70cc54452a8252737b09a8f234",
+    "shortHash": "9b9001527",
+    "date": "2026-07-16T12:38:16+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): stop clipping the drawer context row and tighten section spacing"
   },
   {
-    hash: "6777bfb924d963f65c57308b7d2e12380d97d4bc",
-    shortHash: "6777bfb92",
-    date: "2026-07-13T14:32:14+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix: make Hub lifecycle cleanup deterministic",
+    "hash": "b71b8acb7f30fd51fc692b80d7b94b1df75774c2",
+    "shortHash": "b71b8acb7",
+    "date": "2026-07-16T12:28:29+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): label the options-drawer context meter as \"Context saturation\""
   },
   {
-    hash: "b23b4002121c04b84c7a229a982f1175a1b1d1d3",
-    shortHash: "b23b40021",
-    date: "2026-07-13T13:26:20+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): fail creates when prompts cannot start",
+    "hash": "4c2e28d9d5af0d1ffa3ac29416f8720030104fce",
+    "shortHash": "4c2e28d9d",
+    "date": "2026-07-16T12:14:35+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): align options-drawer sections and tighten the header gap"
   },
   {
-    hash: "6ad70c1b1e61d6e2f9b16170c4161f5ac18b43d2",
-    shortHash: "6ad70c1b1",
-    date: "2026-07-13T13:23:10+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): stop replaying interrupted turns",
+    "hash": "47532952f325912094593889b65c98ea5aa49912",
+    "shortHash": "47532952f",
+    "date": "2026-07-16T12:04:45+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Catch broken desktop packages before release (#2114)"
   },
   {
-    hash: "218097b7ccf413d9daf1afe841a2fed84debeeed",
-    shortHash: "218097b7c",
-    date: "2026-07-13T04:15:40-07:00",
-    author: "Matt Cowger",
-    subject: "feat: clone GitHub repo into a workspace (#1331)",
+    "hash": "0b9abd2622063276a4df353120c4f902958b95a3",
+    "shortHash": "0b9abd262",
+    "date": "2026-07-16T11:32:38+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): resolve mode controller outside the options-drawer portal"
   },
   {
-    hash: "9d9797c9e2abc2612cbf1474422e5fac83ec4909",
-    shortHash: "9d9797c9e",
-    date: "2026-07-13T12:58:06+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): harden relationship lifecycle",
+    "hash": "296c95b040bea42ccc96504a479065a484c91a01",
+    "shortHash": "296c95b04",
+    "date": "2026-07-16T11:14:29+02:00",
+    "author": "haikostudio",
+    "subject": "feat(sidebar): sync project/workspace order across devices via daemon"
   },
   {
-    hash: "8f5685b4c4d2964afb70152d11a839327a45689f",
-    shortHash: "8f5685b4c",
-    date: "2026-07-13T12:50:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): resume interrupted owned turns",
+    "hash": "c824fe97bb353759df3ae152458bdd2dfd9faa57",
+    "shortHash": "c824fe97b",
+    "date": "2026-07-16T11:12:13+02:00",
+    "author": "haikostudio",
+    "subject": "feat(app): group compact composer controls behind a kebab + bottom drawer"
   },
   {
-    hash: "ca393ab4367e3a141fa8af6db1b4e3566a1b3f00",
-    shortHash: "ca393ab43",
-    date: "2026-07-13T12:28:20+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): settle failed relationship connections",
+    "hash": "d7ca1b5a03f812d4147695c54ec55b58b72d8b79",
+    "shortHash": "d7ca1b5a0",
+    "date": "2026-07-16T07:55:15+00:00",
+    "author": "paseo-ai[bot]",
+    "subject": "fix: update lockfile signatures and Nix hash [skip ci]"
   },
   {
-    hash: "7c5bb7c4ae938ce3734006c4a171a3bc89e1488b",
-    shortHash: "7c5bb7c4a",
-    date: "2026-07-13T12:00:49+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): run CLI tests from workspace source",
+    "hash": "42e101c81ea6a1ab9da6c49b36a55cafc1df9c8e",
+    "shortHash": "42e101c81",
+    "date": "2026-07-16T09:46:41+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "chore(release): cut 0.1.109"
   },
   {
-    hash: "1bbc8fee1df5bab2130563c32d198dad123cae9c",
-    shortHash: "1bbc8fee1",
-    date: "2026-07-13T11:48:38+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): isolate CLI test entrypoint",
+    "hash": "75d784534f07b0ebb1a7ff35de7f15783e7000ac",
+    "shortHash": "75d784534",
+    "date": "2026-07-16T09:43:10+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "docs: add 0.1.109 changelog"
   },
   {
-    hash: "bac302626f8e547616576925e368ee5b9676bc93",
-    shortHash: "bac302626",
-    date: "2026-07-13T11:45:42+02:00",
-    author: "Christoph Leiter",
-    subject: "feat(app): give each permission mode a distinct icon (#1980)",
+    "hash": "64c819efeb6fa301b751f5382468ab1beaaa68af",
+    "shortHash": "64c819efe",
+    "date": "2026-07-16T09:39:51+02:00",
+    "author": "Christoph Leiter",
+    "subject": "fix(desktop): stop sandboxed preload from requiring a local module (#2111)"
   },
   {
-    hash: "51de9660f95dab86bf63c0f904f9f84cde3041e8",
-    shortHash: "51de9660f",
-    date: "2026-07-13T11:38:39+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): harden relationship lifecycle",
+    "hash": "f9f2bcd8373c8849b3fd951e9a7aaa34bdf97137",
+    "shortHash": "f9f2bcd83",
+    "date": "2026-07-16T08:37:18+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): fill full screen height on installed iOS PWAs"
   },
   {
-    hash: "056b2a47d98835e17452f418c01cc0f3c1a82d91",
-    shortHash: "056b2a47d",
-    date: "2026-07-13T11:23:19+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(hub): harden relationship boundaries",
+    "hash": "96e906074befc8f0a0599ef1a6cd69c8065e2d2a",
+    "shortHash": "96e906074",
+    "date": "2026-07-16T01:21:47+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): drop bottom safe-area inset on the mobile sidebar"
   },
   {
-    hash: "18ba23e10a23795f200b827132a4a7d9f5f28138",
-    shortHash: "18ba23e10",
-    date: "2026-07-13T11:10:04+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(hub): connect daemons to Paseo Hub",
+    "hash": "df5c3dcc14993be9f7e152e6856c8c92268807dd",
+    "shortHash": "df5c3dcc1",
+    "date": "2026-07-16T00:52:17+02:00",
+    "author": "haikostudio",
+    "subject": "docs(selfhost): document the systemd timer sync mechanism"
   },
   {
-    hash: "d8a8ac252f39c97f05a3c91fbe901e7d889eb8f8",
-    shortHash: "d8a8ac252",
-    date: "2026-07-13T09:23:37+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "97070e31ea42fe0e8aa44b9cbbaaac5bbfaf96fe",
+    "shortHash": "97070e31e",
+    "date": "2026-07-16T00:45:22+02:00",
+    "author": "haikostudio",
+    "subject": "chore(selfhost): add upstream sync script + docs"
   },
   {
-    hash: "b6d49da4df380c3ece1176c3ad4af44ab7357763",
-    shortHash: "b6d49da4d",
-    date: "2026-07-13T11:18:19+02:00",
-    author: "Mohamed Boudra",
-    subject: "Support F-Droid Android builds (#1768)",
+    "hash": "a2bc9a0562896f6d2f9d2834200e4c076fdc9fd2",
+    "shortHash": "a2bc9a056",
+    "date": "2026-07-16T00:39:25+02:00",
+    "author": "haikostudio",
+    "subject": "style: apply oxfmt + oxlint fix to self-host custom layer"
   },
   {
-    hash: "1f7efbd18590b1d5e90798bd9e30671829c520e6",
-    shortHash: "1f7efbd18",
-    date: "2026-07-13T11:05:07+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep attachments visible after creating an agent (#2030)",
+    "hash": "1f540bcb9894bfb9a9a2c7150927a6e4675718b9",
+    "shortHash": "1f540bcb9",
+    "date": "2026-07-16T00:27:14+02:00",
+    "author": "haikostudio",
+    "subject": "feat(relay): self-host chunking + e2ee for large payloads"
   },
   {
-    hash: "a1e81685a126a8a7b97626ed1bcc5495a1f7a395",
-    shortHash: "a1e81685a",
-    date: "2026-07-13T05:59:02-03:00",
-    author: "rafavncxs",
-    subject: "feat(app): pin chats to the top of the sidebar (#1981)",
+    "hash": "6592250d51dbe70dc37ae76bec47cf6098de1d54",
+    "shortHash": "6592250d5",
+    "date": "2026-07-14T00:11:53+02:00",
+    "author": "haikostudio",
+    "subject": "fix(attachments): compress oversized images and guard the send budget"
   },
   {
-    hash: "33a5c3c1e8e5fd2877573c6467a78560661b14a2",
-    shortHash: "33a5c3c1e",
-    date: "2026-07-13T01:05:24+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): preserve sync state across retries",
+    "hash": "3d86ea26de0b995607f06ce9322bc414c884f4a8",
+    "shortHash": "3d86ea26d",
+    "date": "2026-07-15T23:17:12+02:00",
+    "author": "haikostudio",
+    "subject": "ci: add self-host web build workflow"
   },
   {
-    hash: "44135b18e08f3d1a71a9518f126b90cd8af5afde",
-    shortHash: "44135b18e",
-    date: "2026-07-13T00:46:12+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(app): normalize split-pane shortcut setup",
+    "hash": "5ad731e3abb7ea475a9696d39abbd6b840c33643",
+    "shortHash": "5ad731e3a",
+    "date": "2026-06-05T14:43:52+00:00",
+    "author": "haikostudio",
+    "subject": "Add project autostart and launcher infrastructure"
   },
   {
-    hash: "8cd83b3a915f56910b0dddd082a6bbeafa693e0c",
-    shortHash: "8cd83b3a9",
-    date: "2026-07-12T22:33:52+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "ab52bfb9636a763ce03e529fc8cd6ba4ea9f890f",
+    "shortHash": "ab52bfb96",
+    "date": "2026-07-16T00:45:22+02:00",
+    "author": "haikostudio",
+    "subject": "chore(selfhost): add upstream sync script + docs"
   },
   {
-    hash: "9553f4b32864707853723cdf8dcbebcd7bf4a6ea",
-    shortHash: "9553f4b32",
-    date: "2026-07-13T00:27:43+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.1.107",
+    "hash": "97938684381e589ded22a6471c4c50a38772ac93",
+    "shortHash": "979386843",
+    "date": "2026-07-16T00:39:25+02:00",
+    "author": "haikostudio",
+    "subject": "style: apply oxfmt + oxlint fix to self-host custom layer"
   },
   {
-    hash: "3a32de6d9cd11c2739af7556bea94c8bd8528fbe",
-    shortHash: "3a32de6d9",
-    date: "2026-07-13T00:26:21+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): keep hidden timelines dormant",
+    "hash": "2ec1ff0eb609025c3b4c8f3679d7e66823b9522d",
+    "shortHash": "2ec1ff0eb",
+    "date": "2026-07-16T00:27:14+02:00",
+    "author": "haikostudio",
+    "subject": "feat(relay): self-host chunking + e2ee for large payloads"
   },
   {
-    hash: "8aa5928252a4e6bd21151ea92caaaf94630b9979",
-    shortHash: "8aa592825",
-    date: "2026-07-13T00:24:20+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(app): use platform shortcut for split-pane coverage",
+    "hash": "2b9674001ba1778c442b92457cc613958cfefd30",
+    "shortHash": "2b9674001",
+    "date": "2026-07-14T00:11:53+02:00",
+    "author": "haikostudio",
+    "subject": "fix(attachments): compress oversized images and guard the send budget"
   },
   {
-    hash: "fc7c753382c113443d716e40c79acd9706a7b814",
-    shortHash: "fc7c75338",
-    date: "2026-07-12T23:46:53+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs: add 0.1.107 changelog",
+    "hash": "bf3ff8320dbaab5689c5b8a05017e5e10e872311",
+    "shortHash": "bf3ff8320",
+    "date": "2026-07-15T23:17:12+02:00",
+    "author": "haikostudio",
+    "subject": "ci: add self-host web build workflow"
   },
   {
-    hash: "96e68fea76d9fc5e0a15a19e72396f9326a09dc4",
-    shortHash: "96e68fea7",
-    date: "2026-07-12T23:46:44+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore: refresh ACP provider catalog",
+    "hash": "369c5cec51f5cf541e53a00a26ccfe17fe1377b9",
+    "shortHash": "369c5cec5",
+    "date": "2026-06-05T14:43:52+00:00",
+    "author": "haikostudio",
+    "subject": "Add project autostart and launcher infrastructure"
   },
   {
-    hash: "69f1b22cedd8474c8fa072cc4ee1dbe0429ca884",
-    shortHash: "69f1b22ce",
-    date: "2026-07-13T00:01:59+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(server): model socket capability lookup",
+    "hash": "8554b94cdb3c6374ce3fb10ac5dafb7a15eb3364",
+    "shortHash": "8554b94cd",
+    "date": "2026-07-15T22:24:07+00:00",
+    "author": "paseo-ai[bot]",
+    "subject": "fix: update lockfile signatures and Nix hash [skip ci]"
   },
   {
-    hash: "f3fd009e3488aceaa6e6cbdda17c05f5417a7d72",
-    shortHash: "f3fd009e3",
-    date: "2026-07-12T23:53:45+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(sync): replay live deltas after refresh failures",
+    "hash": "75ea0d4534a2922e6f3072d805008474ac4728bd",
+    "shortHash": "75ea0d453",
+    "date": "2026-07-16T00:15:57+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "chore(release): cut 0.1.108"
   },
   {
-    hash: "1a4d7852a8b828ebb4a556a522a587d2caea0213",
-    shortHash: "1a4d7852a",
-    date: "2026-07-13T05:47:02+08:00",
-    author: "psyche",
-    subject: "fix(agent): allow cross-provider creation for modeless providers (#2000)",
+    "hash": "d791a0aa91236a28fe23b0be362f0baf0abf2fd1",
+    "shortHash": "d791a0aa9",
+    "date": "2026-07-16T00:13:46+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "docs: add 0.1.108 changelog"
   },
   {
-    hash: "c52d7d5c1ed5381a9287aceaf497e7093b910564",
-    shortHash: "c52d7d5c1",
-    date: "2026-07-12T23:37:09+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(sync): finish paged history before advancing",
+    "hash": "3bee51d2a2375867cdba953194bf8395f8d53a07",
+    "shortHash": "3bee51d2a",
+    "date": "2026-07-16T00:13:15+02:00",
+    "author": "haikostudio",
+    "subject": "index on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area"
   },
   {
-    hash: "c2a1ac7c3b2f349bdf0295922ee11c2a9728640c",
-    shortHash: "c2a1ac7c3",
-    date: "2026-07-13T05:35:38+08:00",
-    author: "psyche",
-    subject: "Stop Pi metadata tasks from cluttering session history (#1999)",
+    "hash": "94fbae108a0f555b5349137a40cc608ae5340632",
+    "shortHash": "94fbae108",
+    "date": "2026-07-16T00:13:15+02:00",
+    "author": "haikostudio",
+    "subject": "untracked files on feat/github-repo-picker: 181f972eb fix(sidebar): paint mobile sidebar footer through the bottom safe area"
   },
   {
-    hash: "1ee3b6c63d32b94cd501f5bf7a493dec7d19dd13",
-    shortHash: "1ee3b6c63",
-    date: "2026-07-12T23:13:27+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(sync): preserve mixed-client delivery guarantees",
+    "hash": "181f972eb32ca6113205f209b1645740a9336bba",
+    "shortHash": "181f972eb",
+    "date": "2026-07-15T23:55:39+02:00",
+    "author": "haikostudio",
+    "subject": "fix(sidebar): paint mobile sidebar footer through the bottom safe area"
   },
   {
-    hash: "4a1534cacdb9c6767427319e21b2dd772e4438c3",
-    shortHash: "4a1534cac",
-    date: "2026-07-12T23:12:20+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show only commands in Codex shell tool calls (#2029)",
+    "hash": "af61e41eb9f4abe49a648ddde3488ce3436c41c6",
+    "shortHash": "af61e41eb",
+    "date": "2026-07-15T23:17:12+02:00",
+    "author": "haikostudio",
+    "subject": "ci: add self-host web build workflow"
   },
   {
-    hash: "5bf3fff8b58d0cf189e1e2ab0ce64940282ad5b1",
-    shortHash: "5bf3fff8b",
-    date: "2026-07-12T23:08:33+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(app): align browser fixtures with runtime contracts",
+    "hash": "943d03ad995a613558752d2863b51e78419fba54",
+    "shortHash": "943d03ad9",
+    "date": "2026-07-15T23:13:55+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(projects): separate registration from workspace setup"
   },
   {
-    hash: "1c0dd1dd9023d0832fbb85df0d2bf1282a840e42",
-    shortHash: "1c0dd1dd9",
-    date: "2026-07-12T22:39:15+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(sync): preserve selective delivery boundaries",
+    "hash": "cd4c5a6a3f146f33361644761da5df86c6670d7f",
+    "shortHash": "cd4c5a6a3",
+    "date": "2026-07-15T23:09:46+02:00",
+    "author": "haikostudio",
+    "subject": "wip(github-picker): snapshot for self-hosted app deployment"
   },
   {
-    hash: "c13be3012323d2dbd1c2e5e25661d7e3af29db8b",
-    shortHash: "c13be3012",
-    date: "2026-07-12T22:18:15+02:00",
-    author: "Mohamed Boudra",
-    subject: "feat(sync): keep live data scoped and current",
+    "hash": "38cfe109c937a8bd8c33e7c5a2b5d625e252103f",
+    "shortHash": "38cfe109c",
+    "date": "2026-07-15T19:26:41+00:00",
+    "author": "paseo-ai[bot]",
+    "subject": "fix: update lockfile signatures and Nix hash [skip ci]"
   },
   {
-    hash: "a788a0f84317a05cb45e8525830315bff0f11af4",
-    shortHash: "a788a0f84",
-    date: "2026-07-12T22:30:02+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep agent stream controls clickable under the scroll button (#2007)",
+    "hash": "5ef1b9dbb118001729ac13ffc03b26d121bce809",
+    "shortHash": "5ef1b9dbb",
+    "date": "2026-07-15T21:19:40+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(website): include test dependency in deploy install"
   },
   {
-    hash: "a1581e66b05a786d234566898fcdce56cb13d95c",
-    shortHash: "a1581e66b",
-    date: "2026-07-12T22:15:42+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(chat): keep large tables responsive on iOS",
+    "hash": "dfe3330ef837d801dd8c4de499247aa7d7a63896",
+    "shortHash": "dfe3330ef",
+    "date": "2026-07-15T21:16:10+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Add a keyboard-driven project setup flow (#2097)"
   },
   {
-    hash: "2658132384281de3c79db7d9bab5ec7996daefa3",
-    shortHash: "265813238",
-    date: "2026-07-12T21:26:52+02:00",
-    author: "Christoph Leiter",
-    subject: "fix(terminal): create PTYs at the client viewport size, not 80x24 (#2023)",
+    "hash": "90e0a0e353a90e12d91d88a91e64dda7984928c0",
+    "shortHash": "90e0a0e35",
+    "date": "2026-07-15T20:40:24+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Find and open workspaces from the command center (#2096)"
   },
   {
-    hash: "ec93ca866e0f7d0d1110f7ca5d58a9b7da4e5c45",
-    shortHash: "ec93ca866",
-    date: "2026-07-12T21:20:31+02:00",
-    author: "Mohamed Boudra",
-    subject: "Make adding projects discoverable in new workspaces (#2026)",
+    "hash": "37bde90d9f4aaf45c755f828ee25a6b189f18065",
+    "shortHash": "37bde90d9",
+    "date": "2026-07-15T18:54:04+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "refactor(app): unify assistant fork boundary resolution (#2091)"
   },
   {
-    hash: "66445adc078004021413f3eb6b54ea68229d2bb5",
-    shortHash: "66445adc0",
-    date: "2026-07-12T21:13:00+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show provider subagents in the subagents track (#2013)",
+    "hash": "6804882761fcb9a511338f1fed19b9ed45e99e45",
+    "shortHash": "680488276",
+    "date": "2026-07-15T18:44:17+02:00",
+    "author": "Christoph Leiter",
+    "subject": "Document iOS/Android local dev setup and fix the mise Android toolchain (#2092)"
   },
   {
-    hash: "41d882859cae1cea403cac05d66c4521b0d37e3b",
-    shortHash: "41d882859",
-    date: "2026-07-12T21:01:08+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show Fork chat for every agent provider (#2022)",
+    "hash": "13e92f8a3075ef815da143573c5f6a78cd2458f9",
+    "shortHash": "13e92f8a3",
+    "date": "2026-07-16T00:42:10+08:00",
+    "author": "1254087415",
+    "subject": "fix(server): create autonomous turns for spontaneous ACP session updates (#2058)"
   },
   {
-    hash: "88397655f740fd9f4908f037bebfb0f78a3c5ae8",
-    shortHash: "88397655f",
-    date: "2026-07-12T20:43:40+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(acp): keep tool execution with agents by default (#2024)",
+    "hash": "328361667f20a74c791f18454e6a7de8576b3279",
+    "shortHash": "328361667",
+    "date": "2026-07-15T18:40:24+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep browser sign-ins across tabs and restarts (#2089)"
   },
   {
-    hash: "18de06c2a44bad63069951eec25038aa0aa8ae32",
-    shortHash: "18de06c2a",
-    date: "2026-07-12T20:36:01+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show tooltips for sidebar footer actions (#2025)",
+    "hash": "9423b091b9ebe944dced8e1a28f698e27aa7c784",
+    "shortHash": "9423b091b",
+    "date": "2026-07-15T18:34:30+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): keep tool call summaries neutral (#2090)"
   },
   {
-    hash: "a9ba0392b79f98ab8503822875fcb957f20f24b5",
-    shortHash: "a9ba0392b",
-    date: "2026-07-12T15:10:35-03:00",
-    author: "Victor Araújo",
-    subject: "feat(acp): configure generic client capabilities",
+    "hash": "04e893417e2e95c77a25a413edb675557813d727",
+    "shortHash": "04e893417",
+    "date": "2026-07-15T16:30:42+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Allow failed agent turns to be forked (#2063)"
   },
   {
-    hash: "0c05f69402ce262031b307698073f7e9a6f8d1db",
-    shortHash: "0c05f6940",
-    date: "2026-07-12T14:28:33+00:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): cap shell timeline text by UTF-8 bytes",
+    "hash": "f06792ae89d6be21457b025a98d336929730e287",
+    "shortHash": "f06792ae8",
+    "date": "2026-07-15T15:48:09+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Recover desktop startup from stale daemon locks"
   },
   {
-    hash: "cf6c014b6b99d62d51ede9d2c17f3c67e45c287b",
-    shortHash: "cf6c014b6",
-    date: "2026-07-12T16:24:18+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep oversized tool output out of chat timelines (#2020)",
+    "hash": "7f011d16c5785f02581d53f943a44cc811b8cb78",
+    "shortHash": "7f011d16c",
+    "date": "2026-07-15T15:40:11+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Reduce composer overhead while typing (#2086)"
   },
   {
-    hash: "8fdc41f06c238f6310f751bddc9de59a8f84fe73",
-    shortHash: "8fdc41f06",
-    date: "2026-07-12T16:08:15+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): cover imported and failed shell output",
+    "hash": "319d9017c225a7b2d38027959f7de7a71d320ee9",
+    "shortHash": "319d9017c",
+    "date": "2026-07-15T15:38:52+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Publish the latest Android version code (#2085)"
   },
   {
-    hash: "928c12435627b47e9678398fb626842822df5c22",
-    shortHash: "928c12435",
-    date: "2026-07-12T16:01:11+02:00",
-    author: "Mohamed Boudra",
-    subject: "refactor(server): slice oversized tool output directly",
+    "hash": "4a5630bfcefc728b57cd8fcc5efc4923e786fe17",
+    "shortHash": "4a5630bfc",
+    "date": "2026-07-15T12:04:53+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): stop composer height flicker"
   },
   {
-    hash: "0a398833d8d3c836d0df01d27d485d34ba16a6c6",
-    shortHash: "0a398833d",
-    date: "2026-07-12T15:55:13+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): bound shell tool output in timelines",
+    "hash": "5ddd5f3726782ef6793b6cfd304aab0097b089c0",
+    "shortHash": "5ddd5f372",
+    "date": "2026-07-15T11:54:59+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "perf(app): keep desktop sidebar ready to reopen"
   },
   {
-    hash: "e18cfb7639e76c4be52f891228fd98583cce8946",
-    shortHash: "e18cfb763",
-    date: "2026-07-12T15:33:51+02:00",
-    author: "Mohamed Boudra",
-    subject: "Keep Pi chats usable after canceling extension commands (#2019)",
+    "hash": "36738464339ff6d39c983294acfd2b82db762b3d",
+    "shortHash": "367384643",
+    "date": "2026-07-15T11:50:10+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "fix(app): keep single tool calls in overview list"
   },
   {
-    hash: "c05e337cde9c88d3c86dc82d9e8bc26b336603b3",
-    shortHash: "c05e337cd",
-    date: "2026-07-12T13:40:39+02:00",
-    author: "Christoph Leiter",
-    subject: "fix(dev): drop unneeded cross-env from paseo.json dev scripts (#1637)",
+    "hash": "abfe955867f036e6e32d67cd9ab2d06c43c9e1b1",
+    "shortHash": "abfe95586",
+    "date": "2026-07-15T11:58:31+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Show friendly native subagent names and hide finished work (#2073)"
   },
   {
-    hash: "71c66823aa972dd176b6a5017066da405896102d",
-    shortHash: "71c66823a",
-    date: "2026-07-12T08:47:55+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
+    "hash": "38e4d9ad5d2498e228bd1d6215576763b21cc719",
+    "shortHash": "38e4d9ad5",
+    "date": "2026-07-15T11:24:05+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "feat(app): polish sidebar and tool call summaries"
   },
   {
-    hash: "a1821d5863a8a4a78eb8a1124f13568bf26f33ff",
-    shortHash: "a1821d586",
-    date: "2026-07-12T10:42:56+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.1.106",
-  },
+    "hash": "77f6069ec142f58f3ccb85ed016adc90d076cfa1",
+    "shortHash": "77f6069ec",
+    "date": "2026-07-15T09:30:57+02:00",
+    "author": "Mohamed Boudra",
+    "subject": "Keep desktop sidebar controls stable across panel changes (#2078)"
+  }
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-18T13:49:32+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-19T14:40:46+02:00";

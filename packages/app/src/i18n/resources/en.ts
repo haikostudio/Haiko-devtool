@@ -298,6 +298,14 @@ export const en = {
     foldersSummary: "{{folders}} folder(s) · {{tasks}} task(s)",
     searchProjects: "Search projects",
     sortProjects: "Sort projects",
+    searchTasks: "Search tasks",
+    sortTasks: "Sort tasks",
+    sort: {
+      deadline: "By deadline",
+      priority: "By priority",
+      title: "Alphabetical",
+      created: "Most recent",
+    },
     updateHost: "Update the host to use Tasks.",
     columns: {
       backlog: "To do",
@@ -315,6 +323,7 @@ export const en = {
       estimating: "Estimating…",
       awaiting: "Awaiting slot",
       awaitingWindow: "Waiting for off-peak",
+      nextRun: "Runs ~{{when}}",
     },
     card: {
       quotaEstimate: "~{{percent}}% quota",

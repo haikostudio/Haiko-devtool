@@ -299,6 +299,14 @@ export const ar: TranslationResources = {
     foldersSummary: "{{folders}} مجلد · {{tasks}} مهمة",
     searchProjects: "بحث في المشاريع",
     sortProjects: "ترتيب المشاريع",
+    searchTasks: "بحث في المهام",
+    sortTasks: "ترتيب المهام",
+    sort: {
+      deadline: "حسب الموعد النهائي",
+      priority: "حسب الأولوية",
+      title: "أبجديًا",
+      created: "الأحدث",
+    },
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {
       backlog: "للإنجاز",
@@ -316,6 +324,7 @@ export const ar: TranslationResources = {
       estimating: "جارٍ التقدير…",
       awaiting: "بانتظار فترة",
       awaitingWindow: "بانتظار ساعات الهدوء",
+      nextRun: "حوالي {{when}}",
     },
     card: {
       quotaEstimate: "~{{percent}}% من الحصة",

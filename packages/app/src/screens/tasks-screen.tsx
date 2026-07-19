@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowDownAZ,
+  ArrowUpDown,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -13,7 +14,9 @@ import {
   MoreVertical,
   Pencil,
   Plus,
+  Search,
   Trash2,
+  X,
   Zap,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -31,7 +34,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
-import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
+import {
+  KANBAN_COLUMNS,
+  KANBAN_COLUMN_MAX_WIDTH,
+  TASK_SORT_MODES,
+  useTaskSortLabels,
+  type TaskSortMode,
+} from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { TaskDetailSheet, type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
@@ -60,6 +69,9 @@ const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
+const ThemedSearch = withUnistyles(Search);
+const ThemedArrowUpDown = withUnistyles(ArrowUpDown);
+const ThemedX = withUnistyles(X);
 const ThemedZap = withUnistyles(Zap);
 
 const MENU_ICON_SIZE = 16;
@@ -773,6 +785,25 @@ const renderTimelineIcon = ({ color, size }: { color: string; size: number }) =>
   <Clock color={color} size={size} />
 );
 
+const SortMenuItem = memo(function SortMenuItem({
+  mode,
+  label,
+  selected,
+  onSelect,
+}: {
+  mode: TaskSortMode;
+  label: string;
+  selected: boolean;
+  onSelect: (mode: TaskSortMode) => void;
+}) {
+  const handleSelect = useCallback(() => onSelect(mode), [onSelect, mode]);
+  return (
+    <DropdownMenuItem selected={selected} showSelectedCheck onSelect={handleSelect}>
+      {label}
+    </DropdownMenuItem>
+  );
+});
+
 function BoardContent({
   serverId,
   folderId,
@@ -790,6 +821,19 @@ function BoardContent({
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [boardQuery, setBoardQuery] = useState("");
+  const [sortMode, setSortMode] = useState<TaskSortMode>("deadline");
+  const sortLabels = useTaskSortLabels();
+
+  const toggleSearch = useCallback(() => {
+    setSearchOpen((prev) => {
+      if (prev) {
+        setBoardQuery("");
+      }
+      return !prev;
+    });
+  }, []);
 
   const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
     () => [
@@ -941,16 +985,69 @@ function BoardContent({
           />
         ) : null}
         {showBoard ? (
-          <KanbanBoard
-            board={boardHandle.board}
-            folderId={folderId}
-            onMoveTask={handleMoveTask}
-            onPressTask={handlePressTask}
-            onAddTask={setNewTaskColumn}
-            onRunTask={handleRunTaskNow}
-            onReanalyzeTask={handleEstimateTask}
-            columnExtras={columnExtras}
-          />
+          <>
+            <View style={styles.boardToolbar}>
+              {searchOpen ? (
+                <FormTextInput
+                  size="sm"
+                  autoFocus
+                  value={boardQuery}
+                  onChangeText={setBoardQuery}
+                  placeholder={t("tasks.searchTasks")}
+                  style={styles.boardSearchInput}
+                  testID="tasks-board-search-input"
+                />
+              ) : (
+                <View style={styles.boardToolbarSpacer} />
+              )}
+              <Pressable
+                style={sortButtonStyle}
+                onPress={toggleSearch}
+                accessibilityRole="button"
+                accessibilityLabel={t("tasks.searchTasks")}
+                testID="tasks-board-search"
+              >
+                {searchOpen ? (
+                  <ThemedX size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+                ) : (
+                  <ThemedSearch size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+                )}
+              </Pressable>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  style={sortButtonStyle}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("tasks.sortTasks")}
+                  testID="tasks-board-sort"
+                >
+                  <ThemedArrowUpDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {TASK_SORT_MODES.map((mode) => (
+                    <SortMenuItem
+                      key={mode}
+                      mode={mode}
+                      label={sortLabels[mode]}
+                      selected={mode === sortMode}
+                      onSelect={setSortMode}
+                    />
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </View>
+            <KanbanBoard
+              board={boardHandle.board}
+              folderId={folderId}
+              onMoveTask={handleMoveTask}
+              onPressTask={handlePressTask}
+              onAddTask={setNewTaskColumn}
+              onRunTask={handleRunTaskNow}
+              onReanalyzeTask={handleEstimateTask}
+              columnExtras={columnExtras}
+              query={boardQuery}
+              sortMode={sortMode}
+            />
+          </>
         ) : null}
         <TaskDetailSheet
           serverId={serverId}
@@ -1451,6 +1548,21 @@ const styles = StyleSheet.create((theme) => ({
   boardContainer: {
     flex: 1,
     gap: theme.spacing[3],
+  },
+  // Search field (revealed) + search toggle + sort menu, sitting above the
+  // columns and aligned to the same board inset.
+  boardToolbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+  },
+  boardToolbarSpacer: {
+    flex: 1,
+  },
+  boardSearchInput: {
+    flex: 1,
+    backgroundColor: theme.colors.surface0,
   },
   // Compact board/timeline tab switch — full width, aligned to the board inset
   // (12) with breathing room below the header so it isn't glued to it.
