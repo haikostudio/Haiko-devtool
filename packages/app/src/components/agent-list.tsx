@@ -663,7 +663,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   listContent: {
     paddingHorizontal: {
-      xs: theme.spacing[3],
+      xs: theme.spacing[2],
       md: theme.spacing[6],
     },
     paddingTop: theme.spacing[4],

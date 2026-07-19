@@ -376,7 +376,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing[3],
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
+    paddingHorizontal: { xs: theme.spacing[2], md: theme.spacing[6] },
     paddingTop: theme.spacing[4],
   },
   filterRowControls: {
@@ -397,7 +397,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing[6],
   },
   errorsBannerWrap: {
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
+    paddingHorizontal: { xs: theme.spacing[2], md: theme.spacing[6] },
   },
   errorsBanner: {
     borderWidth: 1,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   filterEmpty: {
     flexGrow: 1,
-    paddingHorizontal: { xs: theme.spacing[3], md: theme.spacing[6] },
+    paddingHorizontal: { xs: theme.spacing[2], md: theme.spacing[6] },
     paddingVertical: theme.spacing[6],
     alignItems: "center",
     justifyContent: "center",
