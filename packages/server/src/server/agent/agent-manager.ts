@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import {
   AGENT_LIFECYCLE_STATUSES,
@@ -68,6 +68,11 @@ import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
 import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js";
 import type { BrainRecallPromptHook } from "../../services/brain-memory/recall.js";
+import {
+  hasResponseFormatDirective,
+  injectResponseFormat,
+  stripResponseFormat,
+} from "../../services/response-format.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
@@ -125,6 +130,33 @@ interface PreparedSessionConfig {
 
 interface NormalizeConfigOptions {
   resolveDefaultModel?: boolean;
+  // When resuming a persisted agent whose worktree directory has been deleted
+  // (task cleanup, archived worktree, manual `rm -rf`), fall back to the nearest
+  // existing ancestor directory instead of hard-failing the load. Lets the user
+  // still open the conversation and read its history.
+  allowMissingCwd?: boolean;
+}
+
+// Walks up from a (now missing) directory to the nearest existing ancestor.
+// Used to recover a loadable cwd when an agent's worktree has been deleted.
+// Guaranteed to terminate: the filesystem root always exists.
+async function findNearestExistingDirectory(startDir: string): Promise<string> {
+  let current = resolve(startDir);
+  while (true) {
+    try {
+      const stats = await stat(current);
+      if (stats.isDirectory()) {
+        return current;
+      }
+    } catch {
+      // Keep climbing.
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    current = parent;
+  }
 }
 
 interface TimeoutOptions {
@@ -530,9 +562,15 @@ function unwrapBrainContextUserMessage(
   if (item.type !== "user_message") {
     return [item];
   }
-  const parsed = parseBrainContextEnvelope(item.text);
+  // Strip the response-format directive (outermost, injected on every dispatch)
+  // before the brain envelope, so neither leaks as raw XML in the displayed
+  // user message.
+  const withoutFormat = stripResponseFormat(item.text);
+  const formatItem: AgentTimelineItem =
+    withoutFormat === item.text ? item : { ...item, text: withoutFormat };
+  const parsed = parseBrainContextEnvelope(withoutFormat);
   if (!parsed || !parsed.userText.trim()) {
-    return [item];
+    return [formatItem];
   }
   const stripped: AgentTimelineItem = { ...item, text: parsed.userText };
   if (!options.reconstructPill) {
@@ -1130,6 +1168,7 @@ export class AgentManager {
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(
       mergedConfig,
       resolvedAgentId,
+      { allowMissingCwd: true },
     );
 
     const client = this.requireClient(handle.provider);
@@ -2133,16 +2172,33 @@ export class AgentManager {
     agent: ActiveManagedAgent,
     prompt: AgentPromptInput,
   ): Promise<AgentPromptInput> {
-    const hook = this.brainRecallHook;
-    if (!hook || agent.internal) {
+    // Internal agents (curator/librarian, keep-alive) get neither the Cerveau
+    // recall (recursion) nor the response-format directive (they emit data, not
+    // user-facing reports).
+    if (agent.internal) {
       return prompt;
     }
+    const hook = this.brainRecallHook;
     try {
+      // Applied to the single non-empty text of the prompt: run the Cerveau
+      // recall first (its envelope wraps the user text), then prepend the
+      // response-format directive so it sits ahead of the recall block. Both
+      // are idempotent, so requeues/replays don't double-wrap.
+      const augment = async (text: string): Promise<string> => {
+        // Requeues/replays echo the already-augmented prompt: the directive
+        // envelope (outermost) or a bare recall envelope (older messages) both
+        // mean "already processed" — leave it untouched to avoid double-wrap.
+        if (hasResponseFormatDirective(text) || parseBrainContextEnvelope(text)) {
+          return text;
+        }
+        const recalled = hook ? await hook({ agentId: agent.id, text }) : text;
+        return injectResponseFormat(recalled);
+      };
       if (typeof prompt === "string") {
-        if (!prompt.trim() || parseBrainContextEnvelope(prompt)) {
+        if (!prompt.trim()) {
           return prompt;
         }
-        return await hook({ agentId: agent.id, text: prompt });
+        return await augment(prompt);
       }
       const textIndex = prompt.findIndex(
         (block) => block.type === "text" && !("mimeType" in block) && block.text.trim().length > 0,
@@ -2151,10 +2207,7 @@ export class AgentManager {
         return prompt;
       }
       const textBlock = prompt[textIndex] as { type: "text"; text: string };
-      if (parseBrainContextEnvelope(textBlock.text)) {
-        return prompt;
-      }
-      const augmented = await hook({ agentId: agent.id, text: textBlock.text });
+      const augmented = await augment(textBlock.text);
       if (augmented === textBlock.text) {
         return prompt;
       }
@@ -4166,7 +4219,18 @@ export class AgentManager {
           "code" in error &&
           (error as NodeJS.ErrnoException).code === "ENOENT"
         ) {
-          throw new Error(`Working directory does not exist: ${normalized.cwd}`, { cause: error });
+          if (options.allowMissingCwd) {
+            const fallback = await findNearestExistingDirectory(normalized.cwd);
+            console.warn(
+              `[agent-manager] Working directory missing (${normalized.cwd}); ` +
+                `falling back to ${fallback} so the conversation can still be opened.`,
+            );
+            normalized.cwd = fallback;
+          } else {
+            throw new Error(`Working directory does not exist: ${normalized.cwd}`, {
+              cause: error,
+            });
+          }
         }
         if (error instanceof Error) {
           throw error;
@@ -4221,8 +4285,12 @@ export class AgentManager {
   private async prepareSessionConfig(
     config: AgentSessionConfig,
     agentId: string,
+    normalizeOptions: NormalizeConfigOptions = {},
   ): Promise<PreparedSessionConfig> {
-    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config));
+    const storedConfig = await this.normalizeConfig(
+      stripInternalPaseoMcpServer(config),
+      normalizeOptions,
+    );
     const launchConfig = this.applyDaemonAppendSystemPrompt(
       withRuntimePaseoMcpServer({
         config: storedConfig,
