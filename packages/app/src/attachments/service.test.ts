@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttachmentMetadata, AttachmentStore, SaveAttachmentInput } from "@/attachments/types";
-import { AttachmentTooLargeError, IMAGE_COMPRESS_TRIGGER_BASE64_CHARS } from "./image-compression";
+import {
+  AttachmentTooLargeError,
+  IMAGE_COMPRESS_TRIGGER_BASE64_CHARS,
+  MAX_TOTAL_ATTACHMENT_BASE64_CHARS,
+} from "./image-compression";
 import { __setAttachmentStoreForTests } from "./store";
 import {
   __setImageCompressorForTests,
@@ -115,13 +119,20 @@ describe("attachment service", () => {
       { data: "compressed", mimeType: "image/jpeg" },
     ]);
     expect(compress).toHaveBeenCalledOnce();
-    expect(store.releasedUrls).toEqual(["blob:att_big"]);
+    // Compresses from the base64 we already hold (as a data URL); no object-URL
+    // round-trip through the store, so nothing to release.
+    expect(compress).toHaveBeenCalledWith({
+      url: `data:image/png;base64,${big}`,
+      mimeType: "image/png",
+      targetBytes: expect.any(Number),
+    });
+    expect(store.releasedUrls).toEqual([]);
   });
 
   it("throws AttachmentTooLargeError when an image stays over budget", async () => {
     const store = createRecordingStore();
-    const big = "x".repeat(IMAGE_COMPRESS_TRIGGER_BASE64_CHARS + 10);
-    store.encodeBase64 = async () => big.repeat(3);
+    // Over the total budget and un-shrinkable (compressor returns null).
+    store.encodeBase64 = async () => "x".repeat(MAX_TOTAL_ATTACHMENT_BASE64_CHARS + 100_000);
     __setAttachmentStoreForTests(store);
     __setImageCompressorForTests(async () => null);
 

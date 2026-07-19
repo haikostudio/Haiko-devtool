@@ -17,8 +17,6 @@ function att(id: string, mimeType = "image/png"): BudgetAttachment {
 function deps(overrides: Partial<EncodeBudgetDeps>): EncodeBudgetDeps {
   return {
     encodeBase64: async (id) => `${id}:base64`,
-    resolvePreviewUrl: async (id) => `blob:${id}`,
-    releasePreviewUrl: async () => {},
     compress: async () => null,
     ...overrides,
   };
@@ -59,21 +57,21 @@ describe("encodeAttachmentsToBudget", () => {
   it("compresses attachments whose base64 exceeds the trigger", async () => {
     const big = "x".repeat(IMAGE_COMPRESS_TRIGGER_BASE64_CHARS + 10);
     const compress = vi.fn(async () => ({ data: "small", mimeType: "image/jpeg" }));
-    const release = vi.fn(async () => {});
 
     const result = await encodeAttachmentsToBudget(
       [att("big", "image/png")],
-      deps({ encodeBase64: async () => big, compress, releasePreviewUrl: release }),
+      deps({ encodeBase64: async () => big, compress }),
     );
 
+    // Compresses straight from the base64 we already hold, handed over as a data
+    // URL — no object-URL round-trip through the store (which failed on some
+    // browsers and left the original oversized).
     expect(compress).toHaveBeenCalledWith({
-      url: "blob:big",
+      url: `data:image/png;base64,${big}`,
       mimeType: "image/png",
       targetBytes: expect.any(Number),
     });
     expect(result).toEqual([{ data: "small", mimeType: "image/jpeg" }]);
-    // preview url is released even on the success path
-    expect(release).toHaveBeenCalledWith("big", "blob:big");
   });
 
   it("keeps the original when compression returns a larger result", async () => {

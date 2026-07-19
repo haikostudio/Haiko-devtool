@@ -92,10 +92,6 @@ export async function encodeAttachmentsForSend(
     attachments.map((attachment) => ({ id: attachment.id, mimeType: attachment.mimeType })),
     {
       encodeBase64: (id) => store.encodeBase64({ attachment: byId.get(id)! }),
-      resolvePreviewUrl: (id) => store.resolvePreviewUrl({ attachment: byId.get(id)! }),
-      releasePreviewUrl: store.releasePreviewUrl
-        ? (id, url) => store.releasePreviewUrl!({ attachment: byId.get(id)!, url })
-        : undefined,
       compress: lazyImageCompressor,
     },
   );

@@ -99,8 +99,6 @@ export function isCompressibleImage(mimeType: string): boolean {
 
 export interface EncodeBudgetDeps {
   encodeBase64: (attachmentId: string) => Promise<string>;
-  resolvePreviewUrl: (attachmentId: string) => Promise<string>;
-  releasePreviewUrl?: (attachmentId: string, url: string) => Promise<void>;
   compress: ImageCompressor;
 }
 
@@ -119,15 +117,24 @@ const totalChars = (entries: readonly BudgetEntry[]): number =>
 
 /**
  * Compresses one entry toward `targetBytes` in place, keeping the result only if
- * it is actually smaller. Preview URL is always released. Failures are logged and
- * leave the entry untouched. Returns whether the entry shrank.
+ * it is actually smaller. Failures are logged and leave the entry untouched.
+ * Returns whether the entry shrank.
+ *
+ * We compress straight from the base64 we already hold, handed to the platform
+ * compressor as a data URL. The previous approach re-fetched the blob from the
+ * store to mint an object URL, and that round-trip was the fragile part: on some
+ * browsers an IndexedDB-backed blob becomes unreadable once its DB connection is
+ * closed, so the image never loaded, compression silently returned null, and the
+ * un-shrunk original tripped the budget guard ("too large even after
+ * compression"). A data URL is already in hand and loads reliably on web (canvas
+ * `Image`) and native (expo-image-manipulator accepts base64 data URIs).
  */
 async function compressEntry(
   entry: BudgetEntry,
   targetBytes: number,
   deps: EncodeBudgetDeps,
 ): Promise<boolean> {
-  const url = await deps.resolvePreviewUrl(entry.id);
+  const url = `data:${entry.mimeType};base64,${entry.data}`;
   try {
     const compressed = await deps.compress({ url, mimeType: entry.mimeType, targetBytes });
     if (compressed && compressed.data.length < entry.data.length) {
@@ -142,8 +149,6 @@ async function compressEntry(
       error,
     });
     return false;
-  } finally {
-    await deps.releasePreviewUrl?.(entry.id, url);
   }
 }
 
