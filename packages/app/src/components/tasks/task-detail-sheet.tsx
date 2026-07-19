@@ -1,7 +1,9 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet } from "react-native-unistyles";
+import { Trash2 } from "lucide-react-native";
+import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import type { Theme } from "@/styles/theme";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "@/components/ui/external-link";
@@ -31,6 +33,40 @@ import { useHostFeature } from "@/runtime/host-features";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 const DEFAULT_MODEL_OPTION_ID = "__default__";
+
+// Footer/action buttons stay compact (32px) so the sheet reads as a form, not a
+// wall of chunky CTAs — the field inputs keep the taller comfortable tap target.
+const ACTION_BUTTON_SIZE = "sm" as const;
+const ThemedTrash2 = withUnistyles(Trash2);
+const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+const DELETE_ICON = <ThemedTrash2 size={16} uniProps={destructiveColorMapping} />;
+
+// Which contextual actions a task exposes depends entirely on where it sits in
+// its lifecycle. Analysis and execution only ever start from a validated task
+// (the consent gate); a running/finished task offers a jump to its agent.
+interface TaskActionAvailability {
+  canRun: boolean;
+  canEstimate: boolean;
+  showViewAgent: boolean;
+  primaryAgentId: string | null;
+}
+
+function resolveTaskActions(task: KanbanTask): TaskActionAvailability {
+  const primaryAgentId = task.links.primaryAgentId ?? null;
+  const scheduleState = task.schedule?.state ?? null;
+  const isRunning =
+    task.column === "in_progress" || scheduleState === "launching" || scheduleState === "running";
+  const isDone = task.column === "done";
+  const isActive = isRunning || isDone;
+  return {
+    // Launching bypasses the queue, so it only makes sense once validated/scheduled.
+    canRun: !isActive && (task.column === "validated" || task.column === "scheduled"),
+    // Estimation is a read-only preview — allowed anywhere the task isn't already moving.
+    canEstimate: !isActive,
+    showViewAgent: isActive && primaryAgentId !== null,
+    primaryAgentId,
+  };
+}
 
 export interface TaskDetailSaveInput {
   taskId: string;
@@ -243,35 +279,33 @@ function TaskDetailSheetForm({
     onApprove(taskId);
   }, [taskId, onApprove]);
 
-  const planAgentId = task.planReadyAt ? (task.links.primaryAgentId ?? null) : null;
-  const planWorkspaceId = task.links.workspaceId ?? null;
+  const actions = useMemo(() => resolveTaskActions(task), [task]);
+  const planAgentId = task.planReadyAt ? actions.primaryAgentId : null;
+  const workspaceId = task.links.workspaceId ?? null;
   const handleViewPlan = useCallback(() => {
     if (!serverId || !planAgentId) {
       return;
     }
-    navigateToAgent({ serverId, agentId: planAgentId, workspaceId: planWorkspaceId });
+    navigateToAgent({ serverId, agentId: planAgentId, workspaceId });
     onClose();
-  }, [serverId, planAgentId, planWorkspaceId, onClose]);
+  }, [serverId, planAgentId, workspaceId, onClose]);
+
+  const viewAgentId = actions.showViewAgent ? actions.primaryAgentId : null;
+  const handleViewAgent = useCallback(() => {
+    if (!serverId || !viewAgentId) {
+      return;
+    }
+    navigateToAgent({ serverId, agentId: viewAgentId, workspaceId });
+    onClose();
+  }, [serverId, viewAgentId, workspaceId, onClose]);
 
   const approvalPending = task.approval?.state === "pending";
 
   const header = useMemo((): SheetHeader => ({ title: t("tasks.detail.title") }), [t]);
 
   const footer = useMemo(
-    () => (
-      <View style={styles.footerRow}>
-        <Button style={styles.footerButton} variant="destructive" onPress={handleDelete}>
-          {t("tasks.actions.delete")}
-        </Button>
-        <Button style={styles.footerButton} variant="secondary" onPress={onClose}>
-          {t("common.actions.cancel")}
-        </Button>
-        <Button style={styles.footerButton} onPress={handleSave}>
-          {t("tasks.actions.save")}
-        </Button>
-      </View>
-    ),
-    [handleDelete, onClose, handleSave, t],
+    () => <TaskFooter onDelete={handleDelete} onCancel={onClose} onSave={handleSave} />,
+    [handleDelete, onClose, handleSave],
   );
 
   const body = (
@@ -282,7 +316,12 @@ function TaskDetailSheetForm({
             <StatusBadge label={t("tasks.approval.pending")} variant="warning" />
             <Text style={styles.metaText}>{t("tasks.approval.explainer")}</Text>
           </View>
-          <Button onPress={handleApprove} testID="task-detail-approve">
+          <Button
+            variant="default"
+            size={ACTION_BUTTON_SIZE}
+            onPress={handleApprove}
+            testID="task-detail-approve"
+          >
             {t("tasks.approval.approve")}
           </Button>
         </View>
@@ -345,19 +384,15 @@ function TaskDetailSheetForm({
 
       <TaskMetaSection task={task} effective={effective} />
 
-      <View style={styles.actionsRow}>
-        <Button variant="outline" onPress={handleEstimate}>
-          {t("tasks.actions.reEstimate")}
-        </Button>
-        <Button variant="outline" onPress={handleRunNow}>
-          {t("tasks.actions.runNow")}
-        </Button>
-        {planAgentId ? (
-          <Button variant="outline" onPress={handleViewPlan} testID="task-detail-view-plan">
-            {t("tasks.detail.viewPlan")}
-          </Button>
-        ) : null}
-      </View>
+      <TaskActionsRow
+        actions={actions}
+        planAgentId={planAgentId}
+        viewAgentId={viewAgentId}
+        onRunNow={handleRunNow}
+        onEstimate={handleEstimate}
+        onViewAgent={handleViewAgent}
+        onViewPlan={handleViewPlan}
+      />
     </>
   );
 
@@ -371,6 +406,105 @@ function TaskDetailSheetForm({
     >
       {body}
     </TaskDetailShell>
+  );
+}
+
+// Persistent bottom bar: delete stays a quiet ghost pinned left (destructive but
+// not a giant red block), Cancel/Save sit right with Save as the only filled CTA.
+function TaskFooter({
+  onDelete,
+  onCancel,
+  onSave,
+}: {
+  onDelete: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.footerRow}>
+      <Button
+        variant="ghost"
+        size={ACTION_BUTTON_SIZE}
+        leftIcon={DELETE_ICON}
+        textStyle={styles.deleteText}
+        onPress={onDelete}
+        testID="task-detail-delete"
+      >
+        {t("tasks.actions.delete")}
+      </Button>
+      <View style={styles.footerSpacer} />
+      <Button variant="ghost" size={ACTION_BUTTON_SIZE} onPress={onCancel}>
+        {t("common.actions.cancel")}
+      </Button>
+      <Button variant="default" size={ACTION_BUTTON_SIZE} onPress={onSave}>
+        {t("tasks.actions.save")}
+      </Button>
+    </View>
+  );
+}
+
+// Contextual actions, gated by lifecycle: run + estimate before launch, jump to
+// the agent once running/done, view plan whenever a plan run has finished.
+function TaskActionsRow({
+  actions,
+  planAgentId,
+  viewAgentId,
+  onRunNow,
+  onEstimate,
+  onViewAgent,
+  onViewPlan,
+}: {
+  actions: TaskActionAvailability;
+  planAgentId: string | null;
+  viewAgentId: string | null;
+  onRunNow: () => void;
+  onEstimate: () => void;
+  onViewAgent: () => void;
+  onViewPlan: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!actions.canRun && !actions.canEstimate && !planAgentId && !viewAgentId) {
+    return null;
+  }
+  return (
+    <View style={styles.actionsRow}>
+      {actions.canRun ? (
+        <Button
+          variant="default"
+          size={ACTION_BUTTON_SIZE}
+          onPress={onRunNow}
+          testID="task-detail-run-now"
+        >
+          {t("tasks.actions.runNow")}
+        </Button>
+      ) : null}
+      {actions.canEstimate ? (
+        <Button variant="outline" size={ACTION_BUTTON_SIZE} onPress={onEstimate}>
+          {t("tasks.actions.reEstimate")}
+        </Button>
+      ) : null}
+      {viewAgentId ? (
+        <Button
+          variant="outline"
+          size={ACTION_BUTTON_SIZE}
+          onPress={onViewAgent}
+          testID="task-detail-view-agent"
+        >
+          {t("tasks.detail.viewAgent")}
+        </Button>
+      ) : null}
+      {planAgentId ? (
+        <Button
+          variant="outline"
+          size={ACTION_BUTTON_SIZE}
+          onPress={onViewPlan}
+          testID="task-detail-view-plan"
+        >
+          {t("tasks.detail.viewPlan")}
+        </Button>
+      ) : null}
+    </View>
   );
 }
 
@@ -862,9 +996,13 @@ const styles = StyleSheet.create((theme) => ({
   footerRow: {
     flex: 1,
     flexDirection: "row",
-    gap: theme.spacing[3],
+    alignItems: "center",
+    gap: theme.spacing[2],
   },
-  footerButton: {
+  footerSpacer: {
     flex: 1,
+  },
+  deleteText: {
+    color: theme.colors.destructive,
   },
 }));

@@ -396,6 +396,7 @@ export const zhCN: TranslationResources = {
       openPr: "打开 PR",
       branch: "分支：{{branch}}",
       viewPlan: "查看计划",
+      viewAgent: "查看代理",
       cost: {
         billable: "≈ {{amount}} · 时间",
         tokens: "≈ {{amount}} · 令牌",

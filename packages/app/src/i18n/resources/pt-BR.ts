@@ -401,6 +401,7 @@ export const ptBR: TranslationResources = {
       openPr: "Abrir PR",
       branch: "Branch: {{branch}}",
       viewPlan: "Ver o plano",
+      viewAgent: "Ver o agente",
       cost: {
         billable: "≈ {{amount}} · tempo",
         tokens: "≈ {{amount}} · tokens",

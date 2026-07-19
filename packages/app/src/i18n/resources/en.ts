@@ -395,6 +395,7 @@ export const en = {
       openPr: "Open PR",
       branch: "Branch: {{branch}}",
       viewPlan: "View the plan",
+      viewAgent: "View the agent",
       cost: {
         billable: "≈ {{amount}} · time",
         tokens: "≈ {{amount}} · tokens",

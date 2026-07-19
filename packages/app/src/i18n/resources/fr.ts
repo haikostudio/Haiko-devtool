@@ -401,6 +401,7 @@ export const fr: TranslationResources = {
       openPr: "Ouvrir la PR",
       branch: "Branche : {{branch}}",
       viewPlan: "Voir le plan",
+      viewAgent: "Voir l'agent",
       cost: {
         billable: "≈ {{amount}} · temps",
         tokens: "≈ {{amount}} · tokens",

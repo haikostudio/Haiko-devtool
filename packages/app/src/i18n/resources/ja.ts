@@ -399,6 +399,7 @@ export const ja: TranslationResources = {
       openPr: "PR を開く",
       branch: "ブランチ: {{branch}}",
       viewPlan: "プランを見る",
+      viewAgent: "エージェントを見る",
       cost: {
         billable: "≈ {{amount}} · 時間",
         tokens: "≈ {{amount}} · トークン",

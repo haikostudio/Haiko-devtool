@@ -399,6 +399,7 @@ export const ru: TranslationResources = {
       openPr: "Открыть PR",
       branch: "Ветка: {{branch}}",
       viewPlan: "Посмотреть план",
+      viewAgent: "Открыть агента",
       cost: {
         billable: "≈ {{amount}} · время",
         tokens: "≈ {{amount}} · токены",

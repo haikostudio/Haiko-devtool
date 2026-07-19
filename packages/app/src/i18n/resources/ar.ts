@@ -396,6 +396,7 @@ export const ar: TranslationResources = {
       openPr: "فتح PR",
       branch: "الفرع: {{branch}}",
       viewPlan: "عرض الخطة",
+      viewAgent: "عرض الوكيل",
       cost: {
         billable: "≈ {{amount}} · الوقت",
         tokens: "≈ {{amount}} · الرموز",
