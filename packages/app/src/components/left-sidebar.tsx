@@ -23,6 +23,7 @@ import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { resolveDesktopSidebarWidth } from "@/components/desktop-sidebar-layout";
 import { SidebarDisplayPreferencesMenu } from "@/components/sidebar/sidebar-display-preferences-menu";
 import { SidebarOptionsMenu } from "@/components/sidebar/sidebar-options-menu";
+import { SidebarPrimaryActions } from "@/components/sidebar/sidebar-primary-actions";
 import { SidebarPrimaryMenu } from "@/components/sidebar/sidebar-primary-menu";
 import { Shortcut } from "@/components/ui/shortcut";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -544,9 +545,8 @@ function MobileSidebar({
     >
       <View style={styles.sidebarContent} pointerEvents="auto">
         <WindowChromeSafeArea placement="below" />
-        <View style={styles.sidebarHeaderGroup}>
-          <SidebarPrimaryMenu
-            menuLabel={labels.menu}
+        <View style={styles.mobileHeaderGroup}>
+          <SidebarPrimaryActions
             newWorkspaceLabel={labels.newWorkspace}
             dashboardLabel={labels.dashboard}
             sessionsLabel={labels.sessions}
@@ -562,7 +562,6 @@ function MobileSidebar({
             onViewChangelog={handleViewChangelog}
             onViewActivity={handleViewActivity}
             onBeforeNavigate={closeSidebar}
-            testID="sidebar-primary-menu"
           />
         </View>
         <WindowChromeSafeArea placement="inline" style={styles.mobileCloseButtonRow}>
@@ -911,6 +910,15 @@ const styles = StyleSheet.create((theme) => ({
   },
   sidebarHeaderGroupBelowChrome: {
     paddingTop: 0,
+  },
+  // Mobile: the primary actions render as a full flat list, so leave room at the
+  // top for the floating close button and add the divider that separates them
+  // from the workspaces section below.
+  mobileHeaderGroup: {
+    paddingTop: theme.spacing[2],
+    paddingBottom: theme.spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   workspacesSectionHeader: {
     flexDirection: "row",
