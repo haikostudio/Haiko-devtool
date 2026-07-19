@@ -7,6 +7,7 @@ import type { AgentTimelineItem } from "../../server/agent/agent-sdk-types.js";
 import type { BrainMemoryClient, BrainSouvenir } from "./client.js";
 import type { ProjectBriefStore } from "./project-brief.js";
 import { hasRecallSubstance } from "./recall-gate.js";
+import type { RecentFactsStore } from "./recent-facts.js";
 
 /**
  * Intelligence layer between the Cerveau and the conversation, two roles:
@@ -39,6 +40,11 @@ const MIN_ASSISTANT_TEXT_FOR_TRIVIAL_PROMPT = 300;
 const MAX_PROMPT_USER_CHARS = 4_000;
 const MAX_PROMPT_ASSISTANT_CHARS = 6_000;
 const MAX_PROMPT_MEMORY_CHARS = 500;
+const MAX_PROMPT_ACTIONS_CHARS = 1_200;
+
+// Past this age, the fiche is nudged for a refresh even on an otherwise-modest
+// exchange, so a long-running project's snapshot doesn't silently drift stale.
+const FICHE_STALE_MS = 24 * 60 * 60 * 1000; // 24 h
 
 const RecallFilterSchema = z.object({
   garder: z.array(z.number().int().min(0)).default([]),
@@ -54,11 +60,61 @@ export function briefToSouvenir(projet: string, brief: string): BrainSouvenir {
   return { texte: `📁 Fiche projet — ${projet}\n${brief}` };
 }
 
+/** Assemble the scribe's distillation prompt (extracted to keep the method flat). */
+function buildScribePrompt(input: {
+  projet: string | undefined;
+  brief: string | null;
+  ficheStale: boolean;
+  userText: string;
+  assistantText: string;
+  actions: string | null;
+}): string {
+  return [
+    "Tu es le greffier de la mémoire long-terme (« Cerveau ») d'un assistant de développement. Tu relis un échange terminé et tu décides ce qui mérite d'être retenu durablement.",
+    "",
+    `Projet : « ${input.projet ?? "inconnu"} »`,
+    "Fiche projet actuelle :",
+    '"""',
+    input.brief ?? "(aucune fiche pour l'instant)",
+    '"""',
+    ...(input.ficheStale
+      ? [
+          "⚠️ Cette fiche n'a pas été retouchée depuis plus de 24 h. Relis-la avec un œil critique : si un chantier y est marqué « en cours » alors que l'échange montre qu'il est terminé/livré, ou si elle ne reflète plus l'état réel, renvoie une fiche à jour.",
+        ]
+      : []),
+    "",
+    "Échange :",
+    "Utilisateur :",
+    '"""',
+    input.userText.slice(0, MAX_PROMPT_USER_CHARS),
+    '"""',
+    "Assistant (fin de réponse) :",
+    '"""',
+    input.assistantText.slice(0, MAX_PROMPT_ASSISTANT_CHARS) || "(pas de réponse)",
+    '"""',
+    ...(input.actions
+      ? [
+          "Actions concrètes réalisées pendant l'échange (commits, déploiements) :",
+          '"""',
+          input.actions.slice(0, MAX_PROMPT_ACTIONS_CHARS),
+          '"""',
+          "Ces actions prouvent qu'un travail a été LIVRÉ : un chantier « en cours » qui vient d'être committé/déployé passe à « terminé » dans la fiche, et un livrable notable mérite souvent un souvenir.",
+        ]
+      : []),
+    "",
+    "Réponds avec :",
+    "1. \"souvenirs\" : 0 à 3 faits durables à retenir dans plusieurs mois — décision prise, préférence exprimée par l'utilisateur, contrainte ou gotcha découvert, piste écartée (et pourquoi), ou travail marquant livré (commit/déploiement). Chaque fait : une phrase autonome et précise qui nomme le projet ou le composant concerné. La PLUPART des échanges n'en méritent AUCUN : confirmations, bavardage, questions ponctuelles, détails d'implémentation visibles dans le code → tableau vide.",
+    "2. \"fiche\" : si l'échange change la vue d'ensemble du projet (nouveau chantier, chantier terminé ou livré, décision structurante, préférence durable), renvoie la fiche COMPLÈTE mise à jour ; sinon null.",
+    "   La fiche est un markdown court (≤ 3000 caractères) avec ces sections : « Quoi » (ce qu'est le projet), « Points clés » (structure, stack, particularités), « Chantiers en cours », « Décisions & préférences ». Fusionne et élague : elle doit rester une synthèse actuelle, pas un journal. S'il n'y a pas encore de fiche et que l'échange apprend quelque chose de structurant, crée-la.",
+  ].join("\n");
+}
+
 export interface BrainCuratorOptions {
   agentManager: Pick<AgentManager, "runAgent" | "archiveAgent">;
   createAgent: BoundCreateAgentCommand;
   brain: Pick<BrainMemoryClient, "note">;
   briefStore: ProjectBriefStore;
+  recentFacts?: RecentFactsStore | null;
   providerModel?: string;
   logger: Logger;
 }
@@ -68,6 +124,7 @@ export class BrainCurator {
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly brain: Pick<BrainMemoryClient, "note">;
   private readonly briefStore: ProjectBriefStore;
+  private readonly recentFacts: RecentFactsStore | null;
   private readonly providerModel: string;
   private readonly logger: Logger;
 
@@ -76,6 +133,7 @@ export class BrainCurator {
     this.createAgent = options.createAgent;
     this.brain = options.brain;
     this.briefStore = options.briefStore;
+    this.recentFacts = options.recentFacts ?? null;
     this.providerModel = options.providerModel ?? DEFAULT_CURATOR_PROVIDER_MODEL;
     this.logger = options.logger.child({ module: "brain-curator" });
   }
@@ -162,43 +220,35 @@ export class BrainCurator {
     projet: string | undefined;
     cwd: string;
     discussionId: string;
+    /** Compact bullet summary of durable actions taken this turn (commits, deploys). */
+    actions?: string | null;
   }): Promise<void> {
     const userText = input.userText.trim();
     const assistantText = input.assistantText.trim();
+    const actions = input.actions?.trim() || null;
     if (!userText) {
       return;
     }
+    // A turn that shipped something (commit/deploy) is always worth distilling
+    // even when the words were thin ("voilà, en ligne") — the actions carry the
+    // durable signal.
     if (
       !hasRecallSubstance(userText) &&
-      assistantText.length < MIN_ASSISTANT_TEXT_FOR_TRIVIAL_PROMPT
+      assistantText.length < MIN_ASSISTANT_TEXT_FOR_TRIVIAL_PROMPT &&
+      !actions
     ) {
       return;
     }
     const brief = input.projet ? await this.briefStore.load(input.projet) : null;
-    const prompt = [
-      "Tu es le greffier de la mémoire long-terme (« Cerveau ») d'un assistant de développement. Tu relis un échange terminé et tu décides ce qui mérite d'être retenu durablement.",
-      "",
-      `Projet : « ${input.projet ?? "inconnu"} »`,
-      "Fiche projet actuelle :",
-      '"""',
-      brief ?? "(aucune fiche pour l'instant)",
-      '"""',
-      "",
-      "Échange :",
-      "Utilisateur :",
-      '"""',
-      userText.slice(0, MAX_PROMPT_USER_CHARS),
-      '"""',
-      "Assistant (fin de réponse) :",
-      '"""',
-      assistantText.slice(0, MAX_PROMPT_ASSISTANT_CHARS) || "(pas de réponse)",
-      '"""',
-      "",
-      "Réponds avec :",
-      "1. \"souvenirs\" : 0 à 3 faits durables à retenir dans plusieurs mois — décision prise, préférence exprimée par l'utilisateur, contrainte ou gotcha découvert, piste écartée (et pourquoi). Chaque fait : une phrase autonome et précise qui nomme le projet ou le composant concerné. La PLUPART des échanges n'en méritent AUCUN : confirmations, bavardage, questions ponctuelles, détails d'implémentation visibles dans le code → tableau vide.",
-      "2. \"fiche\" : si l'échange change la vue d'ensemble du projet (nouveau chantier, chantier terminé ou livré, décision structurante, préférence durable), renvoie la fiche COMPLÈTE mise à jour ; sinon null.",
-      "   La fiche est un markdown court (≤ 3000 caractères) avec ces sections : « Quoi » (ce qu'est le projet), « Points clés » (structure, stack, particularités), « Chantiers en cours », « Décisions & préférences ». Fusionne et élague : elle doit rester une synthèse actuelle, pas un journal. S'il n'y a pas encore de fiche et que l'échange apprend quelque chose de structurant, crée-la.",
-    ].join("\n");
+    const ageMs = input.projet ? await this.briefStore.ageMs(input.projet) : null;
+    const prompt = buildScribePrompt({
+      projet: input.projet,
+      brief,
+      ficheStale: ageMs !== null && ageMs > FICHE_STALE_MS,
+      userText,
+      assistantText,
+      actions,
+    });
 
     const result = await this.runInternalAgent({
       title: "Greffier mémoire",
@@ -216,6 +266,12 @@ export class BrainCurator {
         projet: input.projet,
         discussionId: input.discussionId,
       });
+    }
+    // Write-through cache: the notes above land `pending_synthesis` on the
+    // Cerveau (not yet searchable), so mirror them locally to make them
+    // recallable on the very next prompt.
+    if (this.recentFacts && input.projet && result.souvenirs.length > 0) {
+      await this.recentFacts.add(input.projet, result.souvenirs);
     }
     if (result.fiche?.trim() && input.projet) {
       await this.briefStore.save(input.projet, result.fiche);

@@ -7,11 +7,13 @@ import {
 } from "../../server/workspace-registry.js";
 import {
   type BrainMemoryClient,
+  foldText,
   formatRecall,
   injectBrainContext,
   toTimelineMemories,
 } from "./client.js";
 import { type BrainCurator, briefToSouvenir } from "./curator.js";
+import type { RecentFactsStore } from "./recent-facts.js";
 
 /** Minimal logger surface — accepts pino-style child loggers. */
 interface BrainRecallLogger {
@@ -22,6 +24,7 @@ interface BrainRecallLogger {
 export interface BrainRecallDeps {
   brain: BrainMemoryClient | null;
   curator: BrainCurator | null;
+  recentFacts?: RecentFactsStore | null;
   agentManager: Pick<AgentManager, "appendTimelineItem" | "getLastAssistantMessage">;
   logger: BrainRecallLogger;
 }
@@ -109,7 +112,7 @@ export async function recallAndInjectBrainContext(
   deps: BrainRecallDeps,
   input: { agentId: string; text: string; scope: BrainScope },
 ): Promise<string> {
-  const { brain, curator, agentManager, logger } = deps;
+  const { brain, curator, recentFacts, agentManager, logger } = deps;
   const { agentId, text, scope } = input;
   if (!brain || !text.trim()) {
     return text;
@@ -133,6 +136,25 @@ export async function recallAndInjectBrainContext(
   }
   const brief = curator && scope.projet ? await curator.loadBrief(scope.projet) : null;
   let kept = recall.resultats;
+  // Fresh local facts (ev4): distilled this session but still `pending_synthesis`
+  // on the Cerveau (not yet searchable). Prepend them as recall candidates so a
+  // just-learned decision is available immediately, deduped by folded text
+  // against what the search already returned. The librarian below still filters
+  // them for relevance, so off-topic fresh facts drop out like any other.
+  if (recentFacts && scope.projet) {
+    try {
+      const fresh = await recentFacts.load(scope.projet);
+      if (fresh.length > 0) {
+        const seen = new Set(kept.map((memory) => foldText((memory.texte ?? "").trim())));
+        const extras = fresh
+          .filter((texte) => !seen.has(foldText(texte.trim())))
+          .map((texte) => ({ texte }));
+        kept = [...extras, ...kept];
+      }
+    } catch (err) {
+      logger.debug({ err, agentId }, "brain: recent-facts load failed");
+    }
+  }
   if (curator && scope.cwd && kept.length > 0) {
     const filtered = await curator.filterRecall({
       prompt: text,

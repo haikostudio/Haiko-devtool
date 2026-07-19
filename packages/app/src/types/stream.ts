@@ -487,6 +487,17 @@ function appendUserMessage(
     return next;
   }
 
+  // The Cerveau pill is emitted just BEFORE the user_message it was recalled
+  // for (live-observer + history-replay paths append them as [brain_context,
+  // user_message]). Semantically the pill belongs UNDER the message that
+  // triggered it, so when the last item is that pill, slot the message ahead of
+  // it. The sender's own optimistic path already yields [user_message,
+  // brain_context], so it never reaches here.
+  const last = state[state.length - 1];
+  if (last?.kind === "brain_context") {
+    return [...state.slice(0, -1), nextItem, last];
+  }
+
   return [...state, nextItem];
 }
 

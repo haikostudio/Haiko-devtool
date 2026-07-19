@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Logger } from "pino";
 import { foldText } from "./client.js";
@@ -43,6 +43,22 @@ export class ProjectBriefStore {
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
         this.logger.debug({ err, projet }, "fiche: load failed");
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Milliseconds since the fiche was last written, or null when absent. Feeds
+   * the scribe's staleness nudge so a long-untouched fiche gets re-examined.
+   */
+  async ageMs(projet: string): Promise<number | null> {
+    try {
+      const stats = await stat(this.filePath(projet));
+      return Math.max(0, Date.now() - stats.mtimeMs);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        this.logger.debug({ err, projet }, "fiche: stat failed");
       }
       return null;
     }

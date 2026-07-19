@@ -213,6 +213,7 @@ import type { ProviderUsageService } from "../services/quota-fetcher/service.js"
 import type { BrainMemoryClient } from "../services/brain-memory/client.js";
 import type { BrainCurator } from "../services/brain-memory/curator.js";
 import { resolveBrainScope } from "../services/brain-memory/recall.js";
+import { summarizeTurnActions } from "../services/brain-memory/turn-actions.js";
 import {
   summarizeFetchWorkspacesEntries,
   workspaceIdsOnCheckout,
@@ -6123,6 +6124,15 @@ export class Session {
     if (!brain || !userText.trim()) {
       return;
     }
+    // Snapshot the timeline length now so we can isolate THIS turn's items at
+    // completion and distill the durable actions the agent took (commits,
+    // deploys) — not just what it said. Best-effort: 0 means "whole timeline".
+    let fromIndex = 0;
+    try {
+      fromIndex = this.agentManager.getTimeline(agentId).length;
+    } catch {
+      fromIndex = 0;
+    }
     const unsubscribe = this.agentManager.subscribe(
       (event) => {
         if (event.type !== "agent_stream") {
@@ -6148,12 +6158,21 @@ export class Session {
               if (eventType !== "turn_completed" || !scope.cwd) {
                 return;
               }
+              let actions: string | null = null;
+              try {
+                actions = summarizeTurnActions(
+                  this.agentManager.getTimeline(agentId).slice(fromIndex),
+                );
+              } catch {
+                actions = null;
+              }
               await curator.distillExchange({
                 userText,
                 assistantText: finalText,
                 projet: scope.projet,
                 cwd: scope.cwd,
                 discussionId: agentId,
+                actions,
               });
               return;
             }

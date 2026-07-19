@@ -138,6 +138,7 @@ import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
 import { ProjectBriefStore } from "../services/brain-memory/project-brief.js";
 import { createBrainRecallHook } from "../services/brain-memory/recall.js";
+import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -489,7 +490,11 @@ function createBrainMemoryServices(input: {
   agentManager: AgentManager;
   createAgent: BoundCreateAgentCommand;
   logger: Logger;
-}): { client: BrainMemoryClient; curator: BrainCurator | null } | null {
+}): {
+  client: BrainMemoryClient;
+  curator: BrainCurator | null;
+  recentFacts: RecentFactsStore | null;
+} | null {
   const { brainConfig } = input;
   if (!brainConfig?.enabled || !brainConfig.apiKey) {
     input.logger.info(
@@ -508,6 +513,12 @@ function createBrainMemoryServices(input: {
     baseUrl: brainConfig.baseUrl,
     globalFallback: brainConfig.globalFallback,
   });
+  // Shared by the scribe (writes freshly distilled facts) and the recall path
+  // (reads them), so a just-learned fact is recallable before the Cerveau
+  // finishes synthesizing it. Only meaningful with curation on.
+  const recentFacts = brainConfig.curation
+    ? new RecentFactsStore(path.join(input.paseoHome, "brain", "recent"), input.logger)
+    : null;
   const curator = brainConfig.curation
     ? new BrainCurator({
         agentManager: input.agentManager,
@@ -517,6 +528,7 @@ function createBrainMemoryServices(input: {
           path.join(input.paseoHome, "brain", "fiches"),
           input.logger,
         ),
+        recentFacts,
         providerModel: brainConfig.providerModel,
         logger: input.logger,
       })
@@ -529,7 +541,7 @@ function createBrainMemoryServices(input: {
     },
     "Cerveau: ON (recall injected before every prompt)",
   );
-  return { client, curator };
+  return { client, curator, recentFacts };
 }
 
 function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
@@ -1192,6 +1204,7 @@ export async function createPaseoDaemon(
       createBrainRecallHook({
         brain: brainMemoryServices.client,
         curator: brainMemoryServices.curator,
+        recentFacts: brainMemoryServices.recentFacts,
         agentManager,
         agentStorage,
         workspaceRegistry,
