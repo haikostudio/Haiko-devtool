@@ -213,6 +213,66 @@ describe("session ui state draft config sync", () => {
     expect(tabs[0]?.target.kind).toBe("draft");
   });
 
+  it("preserves a local draft with unsent typed text when the host snapshot predates it", () => {
+    // The user typed into a brand-new draft and reloaded before the debounced
+    // push reached the host. Local state rehydrates from disk; the host snapshot
+    // does not know the draft yet. Adoption must NOT close it.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+    const draftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "d1", draftId: "d1" });
+    useDraftStore.setState((previous) => ({
+      drafts: {
+        ...previous.drafts,
+        [draftKey]: {
+          input: { text: "half-written prompt", attachments: [] },
+          lifecycle: "active",
+          updatedAt: 5,
+          version: 1,
+        } as unknown as (typeof previous.drafts)[string],
+      },
+    }));
+
+    const remote: WorkspaceUiState = {
+      tabs: [],
+      order: [],
+      focusedTabId: null,
+      drafts: {},
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    const tabs = collectAllTabs(layout.root);
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.target).toMatchObject({ kind: "draft", draftId: "d1" });
+    // The model setup rides along on the preserved tab.
+    expect(draftSetup(tabs[0]?.target).model).toBe("opus");
+  });
+
+  it("still closes an empty local draft the host dropped", () => {
+    // An empty draft carries no unsent work, so a genuine cross-device close
+    // must still propagate — we do not leak stale empty drafts.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+
+    const remote: WorkspaceUiState = {
+      tabs: [],
+      order: [],
+      focusedTabId: null,
+      drafts: {},
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    const tabs = collectAllTabs(layout.root);
+    expect(tabs).toHaveLength(0);
+  });
+
   it("applies a changed remote setup to an already-open draft tab", () => {
     useWorkspaceLayoutStore
       .getState()

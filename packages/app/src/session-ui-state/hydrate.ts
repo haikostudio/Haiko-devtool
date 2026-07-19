@@ -2,6 +2,7 @@ import type { WorkspaceUiState } from "@getpaseo/protocol/messages";
 import type { UserComposerAttachment } from "@/attachments/types";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { useDraftStore } from "@/stores/draft-store";
+import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { DraftLifecycleState, DraftRecord } from "@/stores/draft-store/state";
 import {
   buildWorkspaceTabPersistenceKey,
@@ -126,12 +127,47 @@ function resolveRemoteTabs(
   return { remoteTargets, remoteOrder, remoteFocusedTabId };
 }
 
+// A local new-agent DRAFT tab that still holds unsent work: typed text, attached
+// files, or an in-flight create. Host-state adoption must never close such a tab
+// just because a stale host snapshot predates it. On reload the local layout and
+// draft stores rehydrate from disk before the debounced push (see
+// useSessionUiStateSync) has necessarily reached the host, so a snapshot captured
+// before the draft existed lacks it — and closing the tab would wipe the whole
+// draft at once (text + attachments + model setup are all anchored to it). This
+// is exactly the "typed a new agent, reloaded, everything gone" report. An empty
+// draft (no content, no pending create) stays closeable, so genuine cross-device
+// tab closes still propagate.
+function hasUnsentDraftWork(input: {
+  serverId: string;
+  tab: { tabId: string; target: WorkspaceTabTarget };
+}): boolean {
+  const { target } = input.tab;
+  if (target.kind !== "draft") {
+    return false;
+  }
+  const pending = useCreateFlowStore.getState().pendingByDraftId[target.draftId];
+  if (pending?.serverId === input.serverId && pending.lifecycle === "active") {
+    return true;
+  }
+  const draftKey = buildDraftStoreKey({
+    serverId: input.serverId,
+    agentId: input.tab.tabId,
+    draftId: target.draftId,
+  });
+  const record = useDraftStore.getState().drafts[draftKey];
+  if (!record || record.lifecycle !== "active") {
+    return false;
+  }
+  return record.input.text.trim().length > 0 || record.input.attachments.length > 0;
+}
+
 /**
  * Applies a remote workspace UI state into the local layout + draft stores,
  * synchronously, so the caller can guard against the resulting store mutations
  * echoing back out as a local push. Opens tabs present remotely but missing
- * locally, closes local tabs absent remotely (full adoption of daemon state),
- * then applies order and focus. Split-pane geometry is left untouched.
+ * locally, closes local tabs absent remotely (full adoption of daemon state,
+ * except a local draft still holding unsent work), then applies order and focus.
+ * Split-pane geometry is left untouched.
  */
 export function hydrateWorkspaceUiState(input: {
   serverId: string;
@@ -159,11 +195,18 @@ export function hydrateWorkspaceUiState(input: {
   const localTabs = localLayout ? collectAllTabs(localLayout.root) : [];
   const localTabIds = new Set(localTabs.map((tab) => tab.tabId));
 
-  // Close local tabs the remote no longer has.
+  // Close local tabs the remote no longer has — but keep a local draft that
+  // still holds unsent work (see hasUnsentDraftWork). Preserved drafts are
+  // re-advertised by the corrective push in useSessionUiStateSync, so the host
+  // converges to include them instead of the device losing the user's input.
   for (const tab of localTabs) {
-    if (!remoteTargets.has(tab.tabId)) {
-      layoutStore.closeTab(workspaceKey, tab.tabId);
+    if (remoteTargets.has(tab.tabId)) {
+      continue;
     }
+    if (hasUnsentDraftWork({ serverId: input.serverId, tab })) {
+      continue;
+    }
+    layoutStore.closeTab(workspaceKey, tab.tabId);
   }
 
   // Open remote tabs missing locally (in remote order so appends land sensibly).
