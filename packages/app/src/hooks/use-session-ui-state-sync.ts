@@ -44,6 +44,13 @@ export function useSessionUiStateSync(
   // Do not push local state until the initial adopt-from-daemon pass has run, so
   // a device with a thin local set never clobbers the daemon before adopting it.
   const initializedRef = useRef(false);
+  // Corrective pushes are debounced per workspace (latest-wins). Fired
+  // immediately, two devices that disagree about a snapshot answer each other's
+  // broadcasts at network round-trip speed — observed live as 9 uiState sets in
+  // 27ms and a React #185 (max update depth) crash on the receiving phone. The
+  // debounce turns a persistent disagreement into a slow, visible trickle while
+  // the terminal-lifecycle rule in hydrateDrafts converges the actual content.
+  const correctiveTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const applyRemote = useCallback(
     (workspaceId: string, state: WorkspaceUiState) => {
@@ -64,15 +71,33 @@ export function useSessionUiStateSync(
         // the resurrected draft forever. The push is convergent: receivers
         // apply it fully, so their applied state matches and they stay silent.
         if (appliedCanonical !== canonicalizeWorkspaceUiState(state)) {
-          logTabSync("corrective push (device refused part of the host snapshot)", {
+          logTabSync("corrective push scheduled (device refused part of the host snapshot)", {
             workspaceId,
             remoteRevision: state.revision,
             remoteTabIds: state.tabs.map((tab) => tab.tabId),
             appliedTabIds: applied.tabs.map((tab) => tab.tabId),
           });
-          void client
-            .setWorkspaceUiState(workspaceId, { ...applied, revision: Date.now() })
-            .catch(() => undefined);
+          const timers = correctiveTimersRef.current;
+          const existing = timers.get(workspaceId);
+          if (existing) {
+            clearTimeout(existing);
+          }
+          timers.set(
+            workspaceId,
+            setTimeout(() => {
+              timers.delete(workspaceId);
+              // Re-snapshot at fire time: the local stores may have moved on
+              // (including having adopted a newer broadcast) since scheduling.
+              const current = buildWorkspaceUiState({ serverId, workspaceId, revision: 0 });
+              if (!current) {
+                return;
+              }
+              lastSyncedRef.current.set(workspaceId, canonicalizeWorkspaceUiState(current));
+              void client
+                .setWorkspaceUiState(workspaceId, { ...current, revision: Date.now() })
+                .catch(() => undefined);
+            }, PUSH_DEBOUNCE_MS),
+          );
         }
       }
       // Pull down any draft image bytes this device is missing. Runs after the
@@ -82,6 +107,17 @@ export function useSessionUiStateSync(
     },
     [serverId, client],
   );
+
+  // Pending corrective pushes die with the connection they were scheduled for.
+  useEffect(() => {
+    const timers = correctiveTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, [client]);
 
   // Fetch on connect: adopt the daemon's per-workspace state, then seed the
   // daemon (desktop only) for workspaces it does not know yet.

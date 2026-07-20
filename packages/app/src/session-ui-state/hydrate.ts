@@ -43,9 +43,27 @@ function hydrateDrafts(state: WorkspaceUiState): void {
         continue;
       }
       const existing = drafts[draftKey];
-      // Last-write-wins per draft: keep the newer record so a stale broadcast
-      // never clobbers freshly typed local text.
-      if (existing && existing.updatedAt >= record.updatedAt) {
+      const remoteLifecycle = coerceLifecycle(record.lifecycle);
+      // A terminal lifecycle ("sent"/"abandoned") is one-way: the composer that
+      // draftId represented no longer exists anywhere, so it wins even over a
+      // NEWER local "active" record. Without this, a device whose local record
+      // stayed active (e.g. its composer kept bumping updatedAt) re-advertises
+      // the zombie tab while the other device keeps scrubbing it — the two
+      // corrective pushes duel forever (observed live: 9 uiState sets in 27ms,
+      // ending in React #185 on the phone).
+      const remoteIsTerminal = remoteLifecycle !== "active";
+      const localIsTerminal = existing != null && existing.lifecycle !== "active";
+      // Last-write-wins per draft otherwise: keep the newer record so a stale
+      // broadcast never clobbers freshly typed local text.
+      if (
+        existing &&
+        existing.updatedAt >= record.updatedAt &&
+        !(remoteIsTerminal && !localIsTerminal)
+      ) {
+        continue;
+      }
+      // Never resurrect a locally-terminal draft from a stale active record.
+      if (localIsTerminal && !remoteIsTerminal) {
         continue;
       }
       const next: DraftRecord = {
@@ -53,7 +71,7 @@ function hydrateDrafts(state: WorkspaceUiState): void {
           text: record.input.text,
           attachments: record.input.attachments as unknown as UserComposerAttachment[],
         },
-        lifecycle: coerceLifecycle(record.lifecycle),
+        lifecycle: remoteLifecycle,
         updatedAt: record.updatedAt,
         version: record.version,
       };

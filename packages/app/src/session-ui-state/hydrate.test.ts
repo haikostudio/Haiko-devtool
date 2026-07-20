@@ -311,6 +311,102 @@ describe("session ui state draft config sync", () => {
     expect(collectAllTabs(layout.root)).toHaveLength(0);
   });
 
+  it("adopts a terminal draft lifecycle even when the local active record is newer", () => {
+    // The corrective-push duel: this device's record is still "active" (and
+    // NEWER — its composer kept bumping updatedAt), so plain last-write-wins
+    // would keep re-advertising the tab while the abandoning device keeps
+    // scrubbing it — the two devices answer each other's broadcasts forever
+    // (observed live as 9 uiState sets in 27ms and a React #185 phone crash).
+    // Terminal lifecycles are one-way: the abandon must win regardless of age.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+    const draftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "d1", draftId: "d1" });
+    useDraftStore.setState((previous) => ({
+      drafts: {
+        ...previous.drafts,
+        [draftKey]: {
+          input: { text: "typed text still here", attachments: [] },
+          lifecycle: "active",
+          updatedAt: 100,
+          version: 3,
+        } as unknown as (typeof previous.drafts)[string],
+      },
+    }));
+
+    const remote: WorkspaceUiState = {
+      tabs: [
+        { tabId: "d1", target: { kind: "draft", draftId: "d1", setup: BASE_SETUP }, createdAt: 1 },
+      ],
+      order: ["d1"],
+      focusedTabId: "d1",
+      drafts: {
+        [draftKey]: {
+          input: { text: "", attachments: [] },
+          lifecycle: "abandoned",
+          updatedAt: 50,
+          version: 7,
+        },
+      },
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    // The record turned terminal and the zombie tab closed — the snapshot this
+    // device now advertises no longer contains the tab, so the duel converges.
+    expect(useDraftStore.getState().drafts[draftKey]?.lifecycle).toBe("abandoned");
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    expect(collectAllTabs(layout.root)).toHaveLength(0);
+    const built = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 3,
+    });
+    expect(built?.tabs).toHaveLength(0);
+  });
+
+  it("keeps a locally-terminal draft dead when a stale active record arrives", () => {
+    // Mirror rule: once THIS device knows the draft is sent/abandoned, an old
+    // "active" record replayed by the daemon must not resurrect the composer.
+    const draftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "d1", draftId: "d1" });
+    useDraftStore.setState((previous) => ({
+      drafts: {
+        ...previous.drafts,
+        [draftKey]: {
+          input: { text: "", attachments: [] },
+          lifecycle: "abandoned",
+          updatedAt: 10,
+          version: 2,
+        } as unknown as (typeof previous.drafts)[string],
+      },
+    }));
+
+    const remote: WorkspaceUiState = {
+      tabs: [
+        { tabId: "d1", target: { kind: "draft", draftId: "d1", setup: BASE_SETUP }, createdAt: 1 },
+      ],
+      order: ["d1"],
+      focusedTabId: "d1",
+      drafts: {
+        [draftKey]: {
+          input: { text: "old text", attachments: [] },
+          lifecycle: "active",
+          updatedAt: 999,
+          version: 1,
+        },
+      },
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    expect(useDraftStore.getState().drafts[draftKey]?.lifecycle).toBe("abandoned");
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    const tabs = layout ? collectAllTabs(layout.root) : [];
+    expect(tabs).toHaveLength(0);
+  });
+
   it("does not open a zombie draft tab on a device that never had it", () => {
     const draftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "d1", draftId: "d1" });
     const remote: WorkspaceUiState = {
