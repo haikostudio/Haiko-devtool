@@ -161,7 +161,10 @@ import {
 } from "@/screens/workspace/workspace-pane-content";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
-import { shouldSeedEmptyWorkspaceDraft } from "@/screens/workspace/workspace-empty-draft-seed";
+import {
+  isWorkspaceEmpty,
+  isWorkspaceReadyForEmptyDraftSeed,
+} from "@/screens/workspace/workspace-empty-draft-seed";
 import {
   buildBulkCloseConfirmationMessage,
   type BulkCloseConfirmationLabels,
@@ -2171,20 +2174,23 @@ function WorkspaceScreenContent({
   ]);
 
   useEffect(() => {
-    if (
-      !shouldSeedEmptyWorkspaceDraft({
-        isRouteFocused,
-        hasPersistenceKey: Boolean(persistenceKey),
-        hasWorkspaceDirectory: Boolean(workspaceDirectory),
-        hasHydratedWorkspaceLayoutStore,
-        hasHydratedAgents,
-        hasLoadedTerminals: terminalsQuery.isSuccess,
-        activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
-        terminalCount: terminals.length,
-        tabCount: tabs.length,
-      })
-    ) {
-      emptyWorkspaceSeedRef.current = null;
+    // Seed a starting draft AT MOST ONCE per workspace visit. The gate
+    // (readiness) is kept distinct from emptiness on purpose: when the user
+    // closes their last/only empty tab the workspace momentarily reports empty
+    // again, and the old "reset the ref whenever non-empty" logic re-armed the
+    // seed — so the just-closed tab immediately reopened. By committing the
+    // decision the first time the workspace is fully hydrated (empty or not) and
+    // never re-arming within the same visit, a user-initiated close now stays
+    // closed. A fresh mount (reload / switching projects) re-arms naturally.
+    const ready = isWorkspaceReadyForEmptyDraftSeed({
+      isRouteFocused,
+      hasPersistenceKey: Boolean(persistenceKey),
+      hasWorkspaceDirectory: Boolean(workspaceDirectory),
+      hasHydratedWorkspaceLayoutStore,
+      hasHydratedAgents,
+      hasLoadedTerminals: terminalsQuery.isSuccess,
+    });
+    if (!ready) {
       return;
     }
     const workspaceKey = `${normalizedServerId}:${normalizedWorkspaceId}`;
@@ -2192,6 +2198,18 @@ function WorkspaceScreenContent({
       return;
     }
     emptyWorkspaceSeedRef.current = workspaceKey;
+    const empty = isWorkspaceEmpty({
+      activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
+      terminalCount: terminals.length,
+      tabCount: tabs.length,
+    });
+    if (!empty) {
+      return;
+    }
+    console.info(
+      "[paseo:tab-seed] seeding empty-workspace draft tab (workspace fully hydrated and empty on entry)",
+      { workspaceKey },
+    );
     openWorkspaceDraftTab();
   }, [
     normalizedServerId,

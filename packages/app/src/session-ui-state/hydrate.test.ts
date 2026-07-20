@@ -16,6 +16,7 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 });
 
 import type { WorkspaceUiState } from "@getpaseo/protocol/messages";
+import { resetTabCloseTombstonesForTest } from "@/session-ui-state/close-tombstones";
 import { hydrateWorkspaceUiState } from "@/session-ui-state/hydrate";
 import { buildWorkspaceUiState } from "@/session-ui-state/snapshot";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -57,6 +58,7 @@ describe("session ui state draft config sync", () => {
     useWorkspaceLayoutStore.setState({ layoutByWorkspace: {} });
     useDraftStore.setState({ drafts: {}, createModalDraft: null });
     useCreateFlowStore.getState().clearAll();
+    resetTabCloseTombstonesForTest();
   });
 
   it("does NOT capture the composer draft of an already-active agent tab", () => {
@@ -271,6 +273,109 @@ describe("session ui state draft config sync", () => {
     const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
     const tabs = collectAllTabs(layout.root);
     expect(tabs).toHaveLength(0);
+  });
+
+  it("drops a zombie draft tab whose synced record says the draft was already sent", () => {
+    // The daemon still advertises a draft tab (even focused), but the draft's
+    // own synced record is lifecycle "sent": the prompt became an agent long
+    // ago. No create-flow pending exists (the device reloaded since), so the
+    // handoff mapping cannot translate it. The zombie must not open — and if it
+    // is already open locally, it must close.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+    const draftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "d1", draftId: "d1" });
+
+    const remote: WorkspaceUiState = {
+      tabs: [
+        { tabId: "d1", target: { kind: "draft", draftId: "d1", setup: BASE_SETUP }, createdAt: 1 },
+      ],
+      order: ["d1"],
+      focusedTabId: "d1",
+      drafts: {
+        [draftKey]: {
+          input: { text: "", attachments: [] },
+          lifecycle: "sent",
+          updatedAt: 5,
+          version: 7,
+        },
+      },
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    expect(collectAllTabs(layout.root)).toHaveLength(0);
+  });
+
+  it("does not open a zombie draft tab on a device that never had it", () => {
+    const draftKey = buildDraftStoreKey({ serverId: SERVER_ID, agentId: "d1", draftId: "d1" });
+    const remote: WorkspaceUiState = {
+      tabs: [
+        { tabId: "d1", target: { kind: "draft", draftId: "d1", setup: BASE_SETUP }, createdAt: 1 },
+      ],
+      order: ["d1"],
+      focusedTabId: "d1",
+      drafts: {
+        [draftKey]: {
+          input: { text: "", attachments: [] },
+          lifecycle: "sent",
+          updatedAt: 5,
+          version: 7,
+        },
+      },
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    const tabs = layout ? collectAllTabs(layout.root) : [];
+    expect(tabs).toHaveLength(0);
+  });
+
+  it("does not reopen a tab the user closed after the snapshot was taken", () => {
+    // The user closes a tab; a snapshot captured BEFORE the close (stale
+    // broadcast, or the adopt-on-connect fetch racing the close) still lists
+    // it. Adoption must not resurrect it — the close wins.
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.closeTab(WORKSPACE_KEY, "agent_a1");
+
+    const remote: WorkspaceUiState = {
+      tabs: [{ tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 }],
+      order: ["agent_a1"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: 2, // predates the close
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    expect(collectAllTabs(layout.root)).toHaveLength(0);
+  });
+
+  it("still adopts a genuine cross-device reopen newer than the local close", () => {
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.closeTab(WORKSPACE_KEY, "agent_a1");
+
+    const remote: WorkspaceUiState = {
+      tabs: [{ tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 }],
+      order: ["agent_a1"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: Date.now() + 60_000, // pushed after the close: a real reopen
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    const tabs = collectAllTabs(layout.root);
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.target).toEqual({ kind: "agent", agentId: "a1" });
   });
 
   it("applies a changed remote setup to an already-open draft tab", () => {

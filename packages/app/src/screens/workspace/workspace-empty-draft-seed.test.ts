@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { shouldSeedEmptyWorkspaceDraft } from "./workspace-empty-draft-seed";
+import {
+  isWorkspaceEmpty,
+  isWorkspaceReadyForEmptyDraftSeed,
+  shouldSeedEmptyWorkspaceDraft,
+} from "./workspace-empty-draft-seed";
 
 const readyEmptyWorkspace = {
   isRouteFocused: true,
@@ -58,5 +62,29 @@ describe("shouldSeedEmptyWorkspaceDraft", () => {
 
   it("seeds once an empty focused workspace is fully known", () => {
     expect(shouldSeedEmptyWorkspaceDraft(readyEmptyWorkspace)).toBe(true);
+  });
+});
+
+describe("isWorkspaceReadyForEmptyDraftSeed", () => {
+  it("is ready only once every hydration gate has loaded", () => {
+    expect(isWorkspaceReadyForEmptyDraftSeed(readyEmptyWorkspace)).toBe(true);
+    // Readiness is independent of emptiness: a fully-hydrated workspace that
+    // already has tabs is still "ready to decide".
+    const readyWithTabs = { ...readyEmptyWorkspace, tabCount: 3 };
+    expect(isWorkspaceReadyForEmptyDraftSeed(readyWithTabs)).toBe(true);
+    expect(
+      isWorkspaceReadyForEmptyDraftSeed({
+        ...readyEmptyWorkspace,
+        hasHydratedAgents: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("isWorkspaceEmpty", () => {
+  it("is empty only with no agents, terminals, or tabs", () => {
+    expect(isWorkspaceEmpty({ activeAgentCount: 0, terminalCount: 0, tabCount: 0 })).toBe(true);
+    expect(isWorkspaceEmpty({ activeAgentCount: 0, terminalCount: 0, tabCount: 1 })).toBe(false);
+    expect(isWorkspaceEmpty({ activeAgentCount: 2, terminalCount: 0, tabCount: 0 })).toBe(false);
   });
 });

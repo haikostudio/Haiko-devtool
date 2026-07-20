@@ -45,6 +45,7 @@ import {
   type WorkspaceLayout,
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
+import { clearTabCloseTombstone, recordTabClose } from "@/session-ui-state/close-tombstones";
 
 export { buildWorkspaceTabPersistenceKey };
 export {
@@ -258,6 +259,7 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
           return result.tabId;
         },
         openChildTabFocused: (workspaceKey, target, parentTabId) => {
@@ -297,6 +299,7 @@ export function createWorkspaceLayoutStore(
             };
           });
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
           return result.tabId;
         },
         openTabInBackground: (workspaceKey, target) => {
@@ -327,6 +330,7 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
           return result.tabId;
         },
         closeTab: (workspaceKey, tabId) => {
@@ -336,6 +340,7 @@ export function createWorkspaceLayoutStore(
             return;
           }
 
+          let closed = false;
           set((state) => {
             const nextLayout = closeTabInLayout({
               layout: getWorkspaceLayout(state.layoutByWorkspace, normalizedWorkspaceKey),
@@ -344,6 +349,7 @@ export function createWorkspaceLayoutStore(
             if (!nextLayout) {
               return state;
             }
+            closed = true;
 
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
@@ -353,6 +359,12 @@ export function createWorkspaceLayoutStore(
               },
             };
           });
+          if (closed) {
+            // Tombstone the close so host-state adoption never resurrects the
+            // tab from a snapshot captured before this moment (see
+            // session-ui-state/close-tombstones).
+            recordTabClose(normalizedWorkspaceKey, normalizedTabId);
+          }
         },
         focusTab: (workspaceKey, tabId) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
@@ -414,6 +426,7 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
           return result.tabId;
         },
         convertDraftToAgent: (workspaceKey, tabId, agentId) => {
@@ -448,6 +461,7 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
           return result.tabId;
         },
         reconcileTabs: (workspaceKey, snapshot) => {

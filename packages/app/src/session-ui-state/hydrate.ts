@@ -15,6 +15,8 @@ import {
   normalizeWorkspaceTabTarget,
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
+import { getTabCloseTombstone } from "./close-tombstones";
+import { logTabSync } from "./sync-log";
 
 function coerceLifecycle(lifecycle: string): DraftLifecycleState {
   return lifecycle === "abandoned" || lifecycle === "sent" ? lifecycle : "active";
@@ -161,6 +163,33 @@ function hasUnsentDraftWork(input: {
   return record.input.text.trim().length > 0 || record.input.attachments.length > 0;
 }
 
+// A remote draft tab whose draft record reached a terminal lifecycle ("sent" or
+// "abandoned") is a zombie: the composer it represented no longer exists. The
+// create-flow mapping (resolveDraftHandoffTarget) can only translate such a tab
+// into its agent tab on the device that submitted it, and only until reload —
+// the pending map is in-memory. Any other device (or the same one after a
+// reload) would faithfully re-open it as an empty composer, forever, because
+// the daemon keeps re-advertising it as authoritative state. Observed live in a
+// daemon ui-state snapshot: a draft tab still listed (and focused) while its
+// own synced record said lifecycle "sent". hydrateDrafts has already merged the
+// remote records last-write-wins, so the local store is the authority here.
+function getTerminalDraftLifecycle(input: {
+  serverId: string;
+  tabId: string;
+  target: WorkspaceTabTarget;
+}): "sent" | "abandoned" | null {
+  if (input.target.kind !== "draft") {
+    return null;
+  }
+  const draftKey = buildDraftStoreKey({
+    serverId: input.serverId,
+    agentId: input.tabId,
+    draftId: input.target.draftId,
+  });
+  const lifecycle = useDraftStore.getState().drafts[draftKey]?.lifecycle;
+  return lifecycle === "sent" || lifecycle === "abandoned" ? lifecycle : null;
+}
+
 /**
  * Applies a remote workspace UI state into the local layout + draft stores,
  * synchronously, so the caller can guard against the resulting store mutations
@@ -195,6 +224,45 @@ export function hydrateWorkspaceUiState(input: {
   const localTabs = localLayout ? collectAllTabs(localLayout.root) : [];
   const localTabIds = new Set(localTabs.map((tab) => tab.tabId));
 
+  // Scrub the remote view BEFORE adopting it. Two classes of tabs are removed:
+  // zombie draft tabs (terminal draft lifecycle, see getTerminalDraftLifecycle)
+  // and tabs the user closed locally AFTER the snapshot was taken (close
+  // tombstones — a snapshot whose revision predates the close is a stale
+  // replay, not a genuine cross-device reopen). The corrective push in
+  // useSessionUiStateSync then advertises the scrubbed state, so the daemon
+  // converges on the cleanup instead of re-broadcasting the zombie forever.
+  for (const [tabId, target] of Array.from(remoteTargets)) {
+    const terminalLifecycle = getTerminalDraftLifecycle({
+      serverId: input.serverId,
+      tabId,
+      target,
+    });
+    if (terminalLifecycle) {
+      remoteTargets.delete(tabId);
+      logTabSync("dropping zombie draft tab from host snapshot", {
+        workspaceKey,
+        tabId,
+        lifecycle: terminalLifecycle,
+        remoteRevision: input.state.revision,
+      });
+      continue;
+    }
+    if (!localTabIds.has(tabId)) {
+      const closedAt = getTabCloseTombstone(workspaceKey, tabId);
+      if (closedAt !== null && input.state.revision <= closedAt) {
+        remoteTargets.delete(tabId);
+        logTabSync("suppressing reopen of a tab closed after this snapshot", {
+          workspaceKey,
+          tabId,
+          targetKind: target.kind,
+          closedAt,
+          remoteRevision: input.state.revision,
+        });
+      }
+    }
+  }
+  const effectiveOrder = remoteOrder.filter((tabId) => remoteTargets.has(tabId));
+
   // Close local tabs the remote no longer has — but keep a local draft that
   // still holds unsent work (see hasUnsentDraftWork). Preserved drafts are
   // re-advertised by the corrective push in useSessionUiStateSync, so the host
@@ -204,15 +272,35 @@ export function hydrateWorkspaceUiState(input: {
       continue;
     }
     if (hasUnsentDraftWork({ serverId: input.serverId, tab })) {
+      logTabSync("preserving local draft with unsent work", {
+        workspaceKey,
+        tabId: tab.tabId,
+        remoteRevision: input.state.revision,
+      });
       continue;
     }
+    logTabSync("closing local tab absent from host snapshot", {
+      workspaceKey,
+      tabId: tab.tabId,
+      targetKind: tab.target.kind,
+      remoteRevision: input.state.revision,
+    });
     layoutStore.closeTab(workspaceKey, tab.tabId);
   }
 
   // Open remote tabs missing locally (in remote order so appends land sensibly).
-  for (const tabId of remoteOrder) {
+  for (const tabId of effectiveOrder) {
     const target = remoteTargets.get(tabId);
     if (target && !localTabIds.has(tabId)) {
+      // Logged prominently: a tab reappearing here (rather than via the local
+      // empty-workspace seed) means the host snapshot still advertises a tab the
+      // user may have just closed on another device / before a reconnect.
+      logTabSync("reopening tab from host snapshot", {
+        workspaceKey,
+        tabId,
+        targetKind: target.kind,
+        remoteRevision: input.state.revision,
+      });
       layoutStore.openTabInBackground(workspaceKey, target);
     }
   }
@@ -228,8 +316,8 @@ export function hydrateWorkspaceUiState(input: {
     }
   }
 
-  if (remoteOrder.length > 0) {
-    layoutStore.reorderTabs(workspaceKey, remoteOrder);
+  if (effectiveOrder.length > 0) {
+    layoutStore.reorderTabs(workspaceKey, effectiveOrder);
   }
 
   if (remoteFocusedTabId && remoteTargets.has(remoteFocusedTabId)) {

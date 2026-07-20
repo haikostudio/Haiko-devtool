@@ -15,6 +15,7 @@ import {
   materializeDraftImageBytes,
   uploadDraftImageBytes,
 } from "@/session-ui-state/attachment-sync";
+import { logTabSync } from "@/session-ui-state/sync-log";
 
 const PUSH_DEBOUNCE_MS = 600;
 
@@ -63,6 +64,12 @@ export function useSessionUiStateSync(
         // the resurrected draft forever. The push is convergent: receivers
         // apply it fully, so their applied state matches and they stay silent.
         if (appliedCanonical !== canonicalizeWorkspaceUiState(state)) {
+          logTabSync("corrective push (device refused part of the host snapshot)", {
+            workspaceId,
+            remoteRevision: state.revision,
+            remoteTabIds: state.tabs.map((tab) => tab.tabId),
+            appliedTabIds: applied.tabs.map((tab) => tab.tabId),
+          });
           void client
             .setWorkspaceUiState(workspaceId, { ...applied, revision: Date.now() })
             .catch(() => undefined);
@@ -89,6 +96,11 @@ export function useSessionUiStateSync(
         return;
       }
       for (const [workspaceId, state] of Object.entries(remoteStates)) {
+        logTabSync("adopting host state on connect", {
+          workspaceId,
+          remoteRevision: state.revision,
+          remoteTabIds: state.tabs.map((tab) => tab.tabId),
+        });
         applyRemote(workspaceId, state);
       }
       if (getIsElectron()) {
@@ -134,6 +146,11 @@ export function useSessionUiStateSync(
       if (payload.status !== "session_ui_state_changed" || !payload.workspaceId || !payload.state) {
         return;
       }
+      logTabSync("applying host broadcast", {
+        workspaceId: payload.workspaceId,
+        remoteRevision: payload.state.revision,
+        remoteTabIds: payload.state.tabs.map((tab) => tab.tabId),
+      });
       applyRemote(payload.workspaceId, payload.state);
     });
     return unsub;
@@ -158,6 +175,11 @@ export function useSessionUiStateSync(
         }
         lastSyncedRef.current.set(workspaceId, serialized);
         const state: WorkspaceUiState = { ...probe, revision: Date.now() };
+        logTabSync("pushing local state to host", {
+          workspaceId,
+          revision: state.revision,
+          tabIds: state.tabs.map((tab) => tab.tabId),
+        });
         // Upload this device's draft image bytes BEFORE advertising the state, so
         // a device that receives the broadcast can always fetch the bytes. Pushing
         // first raced the upload: the receiver's materialize could run before the
