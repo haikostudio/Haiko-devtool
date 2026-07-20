@@ -37,6 +37,13 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { agentTaskToastKey, useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
+import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
+import {
+  buildWorkspaceTabPersistenceKey,
+  collectAllPanes,
+  collectAllTabs,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
 
 const ICON_SIZE = 16;
 // Matches theme.spacing[4]; kept as a literal so the container can add the
@@ -114,13 +121,48 @@ function TaskToastIcon({
   );
 }
 
+// The set of agent keys whose conversation is actually on screen right now: the
+// focused tab of every pane in the active workspace. A finished task's toast is
+// only dismissed once its agent is genuinely displayed (not merely clicked), so
+// the pile stays a reliable "go check these" list until you've opened each one.
+function useOnScreenAgentKeys(): ReadonlySet<string> {
+  const selection = useActiveWorkspaceSelection();
+  const serverId = selection?.serverId ?? null;
+  const persistenceKey = selection
+    ? buildWorkspaceTabPersistenceKey({
+        serverId: selection.serverId,
+        workspaceId: selection.workspaceId,
+      })
+    : null;
+  const layout = useWorkspaceLayoutStore((state) =>
+    persistenceKey ? (state.layoutByWorkspace[persistenceKey] ?? null) : null,
+  );
+
+  return useMemo(() => {
+    const keys = new Set<string>();
+    if (!layout || !serverId) {
+      return keys;
+    }
+    const tabs = collectAllTabs(layout.root);
+    for (const pane of collectAllPanes(layout.root)) {
+      const focusedTab = tabs.find((tab) => tab.tabId === pane.focusedTabId);
+      if (focusedTab?.target.kind === "agent") {
+        keys.add(agentTaskToastKey(serverId, focusedTab.target.agentId));
+      }
+    }
+    return keys;
+  }, [layout, serverId]);
+}
+
 // Shared source of truth for both the desktop toast stack and the mobile
 // floating button + drawer: reconciles the toast store against the live agent
 // list and returns the sorted, currently-visible tracked tasks.
 export function useTrackedTasks(): TrackedTask[] {
   const { agents } = useAggregatedAgents();
   const reconcile = useAgentTaskToastStore((state) => state.reconcile);
+  const dismiss = useAgentTaskToastStore((state) => state.dismiss);
   const order = useAgentTaskToastStore((state) => state.order);
+  const onScreenKeys = useOnScreenAgentKeys();
 
   const buckets = useMemo(() => {
     const map = new Map<string, TrackedTask>();
@@ -145,23 +187,37 @@ export function useTrackedTasks(): TrackedTask[] {
   // at the top, running in the middle, finished at the bottom (nearest the corner).
   // Within a lane, keep appearance order (oldest first) for stability. Any tracked
   // key whose agent has since disappeared is dropped.
-  return useMemo(() => {
-    const items: TrackedTask[] = [];
+  const items = useMemo(() => {
+    const list: TrackedTask[] = [];
     for (const key of order.keys()) {
       const task = buckets.get(key);
       if (task) {
-        items.push(task);
+        list.push(task);
       }
     }
-    items.sort((a, b) => {
+    list.sort((a, b) => {
       const rankDiff = BUCKET_GROUP_RANK[a.bucket] - BUCKET_GROUP_RANK[b.bucket];
       if (rankDiff !== 0) {
         return rankDiff;
       }
       return (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0);
     });
-    return items;
+    return list;
   }, [order, buckets]);
+
+  // Acknowledge a finished task once its agent is actually on screen: opening it
+  // (via a toast click or any other route) makes it a pane's focused tab, and only
+  // then does its card leave the pile. A finished agent you're already looking at
+  // needs no reminder, so it's dropped too.
+  useEffect(() => {
+    for (const task of items) {
+      if (task.bucket === "done" && onScreenKeys.has(task.key)) {
+        dismiss(task.key);
+      }
+    }
+  }, [items, onScreenKeys, dismiss]);
+
+  return items;
 }
 
 export function TaskToast({
@@ -182,7 +238,6 @@ export function TaskToast({
   contentStyle?: AnimatedStyle<ViewStyle>;
 }): ReactElement {
   const { t } = useTranslation();
-  const dismiss = useAgentTaskToastStore((state) => state.dismiss);
   const title = task.agent.title || t("agentList.fallbackTitle");
   const pipColorStyle = PIP_STYLE_BY_BUCKET[task.bucket];
   const isRunning = task.bucket === "running";
@@ -244,13 +299,11 @@ export function TaskToast({
       workspaceId: task.agent.workspaceId,
       pin: false,
     });
-    // A finished task is acknowledged on click and removed from the stack. A still
-    // active one is only opened — it stays visible until it too finishes.
-    if (task.bucket === "done") {
-      dismiss(task.key);
-    }
+    // No dismissal here: opening the agent makes it a pane's focused tab, and the
+    // stack drops the finished card only once that agent is genuinely on screen
+    // (see useTrackedTasks). A click that never surfaces the agent keeps the card.
     onActivate?.();
-  }, [dismiss, task, onActivate]);
+  }, [task, onActivate]);
 
   return (
     <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>

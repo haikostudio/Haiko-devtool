@@ -5,8 +5,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 // Tracks which agent "tasks" are surfaced as floating toasts in the bottom-right
 // stack. A toast appears the moment an agent becomes active (running / needs
 // input / attention / failed) and then persists — even after it finishes — until
-// the user dismisses it by clicking a finished one. Dismissing simply drops the
-// key from `order`; a finished-and-dismissed agent won't be re-added because
+// its agent is actually opened on screen (its conversation becomes a pane's
+// focused tab). Dismissing simply drops the key from `order`; a finished-and-
+// dismissed agent won't be re-added because
 // reconcile only ever re-adds keys that are currently active, so a later prompt
 // (which flips it back to active) makes its toast reappear as intended.
 
@@ -26,7 +27,7 @@ interface AgentTaskToastState {
    * keeps finished tasks visible until the user dismisses them.
    */
   reconcile: (input: { activeKeys: readonly string[]; existingKeys: ReadonlySet<string> }) => void;
-  /** Hide a toast (used when a finished task is clicked). */
+  /** Hide a toast (used once a finished task's agent is opened on screen). */
   dismiss: (key: AgentTaskToastKey) => void;
   /**
    * Fold preference for the floating pile, persisted so the user's choice survives
