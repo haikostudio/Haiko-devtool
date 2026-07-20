@@ -1765,13 +1765,14 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     paddingTop: theme.spacing[4],
   },
-  // Compact drops the board's top breathing room: the tab switch below carries
-  // its own small padding, so the tabs sit close under the header instead of
-  // floating in a big empty band.
+  // Compact keeps a single, even rhythm around the tab switch: the same 12px
+  // sits above it (paddingTop) and below it (the container gap to the board),
+  // so the tabs read as a balanced band under the header — not glued to it,
+  // not floating in a big empty gap.
   boardContainerCompact: {
     flex: 1,
     gap: theme.spacing[3],
-    paddingTop: 0,
+    paddingTop: theme.spacing[3],
   },
   // Desktop split: board on the left (flex), resizable agent panel on the right.
   boardSplitRow: {
@@ -1799,8 +1800,6 @@ const styles = StyleSheet.create((theme) => ({
   // (12) with breathing room below the header so it isn't glued to it.
   compactViewSwitch: {
     paddingHorizontal: theme.spacing[3],
-    paddingTop: theme.spacing[1],
-    paddingBottom: theme.spacing[1],
   },
   // Aligns the timeline strip to the columns block below: same horizontal inset
   // as the board, capped to the columns' total width so its edges meet the
