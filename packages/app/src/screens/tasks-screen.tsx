@@ -56,6 +56,7 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 
@@ -63,7 +64,6 @@ import { deriveProjectIconColor } from "@/utils/project-icon-color";
 const COLLAPSED_PANEL_WIDTH = 44;
 const MIN_PANEL_WIDTH = 320;
 const MAX_PANEL_WIDTH = 760;
-const DEFAULT_PANEL_WIDTH = 440;
 
 function clampPanelWidth(width: number): number {
   return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, width));
@@ -851,7 +851,10 @@ function BoardContent({
   // Desktop only: the task whose agent is mirrored in the right-hand side panel.
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  // Persisted so the width the user dragged the agent panel to is restored on
+  // reload / when returning to the board.
+  const panelWidth = useTasksBoardUiStore((state) => state.panelWidth);
+  const setPanelWidth = useTasksBoardUiStore((state) => state.setPanelWidth);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
 
@@ -922,10 +925,15 @@ function BoardContent({
     setPanelCollapsed((collapsed) => !collapsed);
   }, []);
 
-  const handleResizePanel = useCallback((deltaX: number) => {
-    // Panel sits on the right edge, so dragging the handle right shrinks it.
-    setPanelWidth((width) => clampPanelWidth(width - deltaX));
-  }, []);
+  const handleResizePanel = useCallback(
+    (deltaX: number) => {
+      // Panel sits on the right edge, so dragging the handle right shrinks it.
+      // Read the live width from the store so rapid drag deltas compose correctly.
+      const current = useTasksBoardUiStore.getState().panelWidth;
+      setPanelWidth(clampPanelWidth(current - deltaX));
+    },
+    [setPanelWidth],
+  );
 
   const panelHostStyle = useMemo(
     () => [styles.panelHost, { width: panelCollapsed ? COLLAPSED_PANEL_WIDTH : panelWidth }],
@@ -1020,7 +1028,7 @@ function BoardContent({
   const showPanel = !isCompact && selectedTask !== null;
 
   const boardStack = (
-    <View style={styles.boardContainer}>
+    <View style={isCompact ? styles.boardContainerCompact : styles.boardContainer}>
       {isCompact ? (
         <View style={styles.compactViewSwitch}>
           <SegmentedControl
@@ -1628,6 +1636,14 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     paddingTop: theme.spacing[4],
   },
+  // Compact drops the board's top breathing room: the tab switch below carries
+  // its own small padding, so the tabs sit close under the header instead of
+  // floating in a big empty band.
+  boardContainerCompact: {
+    flex: 1,
+    gap: theme.spacing[3],
+    paddingTop: 0,
+  },
   // Desktop split: board on the left (flex), resizable agent panel on the right.
   boardSplitRow: {
     flex: 1,
@@ -1654,7 +1670,7 @@ const styles = StyleSheet.create((theme) => ({
   // (12) with breathing room below the header so it isn't glued to it.
   compactViewSwitch: {
     paddingHorizontal: theme.spacing[3],
-    paddingTop: theme.spacing[2],
+    paddingTop: theme.spacing[1],
     paddingBottom: theme.spacing[1],
   },
   // Aligns the timeline strip to the columns block below: same horizontal inset
