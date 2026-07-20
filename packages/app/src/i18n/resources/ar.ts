@@ -257,6 +257,15 @@ export const ar: TranslationResources = {
       columnTokens: "الرموز",
       columnCost: "التكلفة",
     },
+    compta: {
+      title: "الفواتير",
+      thisMonth: "هذا الشهر",
+      invoiced: "المفوتر",
+      paid: "المحصّل",
+      outstanding: "غير المدفوع",
+      overdue: "{{count}} متأخرة",
+      drafts: "{{count}} مسودة",
+    },
     buckets: {
       needsInput: "بحاجة إلى إدخال",
       failed: "فشل",

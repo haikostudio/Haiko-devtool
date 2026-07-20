@@ -32,6 +32,9 @@ const RESPONSE_FORMAT_BODY = [
   "## 6. Activation & facturation",
   "",
   "Dans « 6. Activation & facturation », termine par un bloc récapitulatif : temps réel/estimé, taux (130 CHF/h) et coût.",
+  "Si le travail se rattache à un projet client identifiable (site/app d'un client, pas l'outillage interne),",
+  "ajoute après le bloc récapitulatif une proposition d'ajouter la prestation en ligne de facture brouillon",
+  "via la compétence compta (client, libellé, heures × 130 CHF) — ne jamais créer/modifier une facture sans accord explicite.",
   "Utilise des callouts colorés (> [!TIP], > [!NOTE], > [!WARNING], etc.) uniquement là où ils aident vraiment.",
   "Les icônes des titres sont ajoutées automatiquement par l'app — n'en mets pas toi-même.",
 ].join("\n");

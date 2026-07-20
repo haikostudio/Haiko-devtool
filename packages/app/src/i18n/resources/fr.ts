@@ -261,6 +261,15 @@ export const fr: TranslationResources = {
       columnTokens: "Tokens",
       columnCost: "Coût",
     },
+    compta: {
+      title: "Facturation",
+      thisMonth: "Ce mois",
+      invoiced: "Facturé",
+      paid: "Encaissé",
+      outstanding: "Impayés",
+      overdue: "{{count}} en retard",
+      drafts: "{{count}} brouillon(s)",
+    },
     buckets: {
       needsInput: "Action requise",
       failed: "Échec",

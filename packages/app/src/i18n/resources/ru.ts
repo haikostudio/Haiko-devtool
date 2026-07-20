@@ -259,6 +259,15 @@ export const ru: TranslationResources = {
       columnTokens: "Токены",
       columnCost: "Стоимость",
     },
+    compta: {
+      title: "Счета",
+      thisMonth: "Этот месяц",
+      invoiced: "Выставлено",
+      paid: "Получено",
+      outstanding: "Не оплачено",
+      overdue: "{{count}} просрочено",
+      drafts: "Черновиков: {{count}}",
+    },
     buckets: {
       needsInput: "Требуется ввод",
       failed: "Ошибка",

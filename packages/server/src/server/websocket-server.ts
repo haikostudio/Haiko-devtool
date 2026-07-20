@@ -18,6 +18,7 @@ import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
 import type { TaskBoardService } from "./tasks/service.js";
 import type { ActivityLogService } from "./activity/service.js";
+import type { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
@@ -487,6 +488,7 @@ export class VoiceAssistantWebSocketServer {
   private taskEstimator: TaskEstimator | null = null;
   private taskScheduler: TaskScheduler | null = null;
   private activityLogService: ActivityLogService | null = null;
+  private comptaSummaryService: ComptaSummaryService | null = null;
   private messageTriage: MessageTriage | null = null;
   private readonly browserToolsBroker: BrowserToolsBroker | null;
   private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
@@ -1102,6 +1104,7 @@ export class VoiceAssistantWebSocketServer {
       taskEstimator: this.taskEstimator,
       taskScheduler: this.taskScheduler,
       activityLogService: this.activityLogService ?? undefined,
+      comptaSummaryService: this.comptaSummaryService ?? undefined,
       messageTriage: this.messageTriage,
       checkoutDiffManager: this.checkoutDiffManager,
       github: this.github,
@@ -1298,6 +1301,10 @@ export class VoiceAssistantWebSocketServer {
     this.activityLogService = service;
   }
 
+  public setComptaSummaryService(service: ComptaSummaryService): void {
+    this.comptaSummaryService = service;
+  }
+
   /** Fire-and-forget push to all registered devices (task proposals, etc.). */
   public sendPush(payload: PushPayload): void {
     void this.pushNotificationSender.send(payload).catch((err) => {
@@ -1376,6 +1383,7 @@ export class VoiceAssistantWebSocketServer {
         tasksAutopilot: !!this.taskBoardService,
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: !!this.agentManager.getUsageStatsStore(),
+        comptaSummary: !!this.comptaSummaryService,
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
         agentSynthesis: true,
         // COMPAT(activityLog): added in v0.1.X, drop the gate when floor >= v0.1.X.

@@ -1061,6 +1061,11 @@ export const UsageStatsFetchRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const ComptaSummaryFetchRequestSchema = z.object({
+  type: z.literal("compta.summary.fetch.request"),
+  requestId: z.string(),
+});
+
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("set_voice_mode"),
   enabled: z.boolean(),
@@ -1794,6 +1799,35 @@ export const UsageStatsFetchResponseSchema = z.object({
   }),
 });
 
+// One row per issuing company + currency pair from the accounting instance.
+// Amounts are already aggregated daemon-side; the client only renders them.
+export const ComptaSummaryRowSchema = z.object({
+  company: z.string(),
+  currency: z.string(),
+  // Sum of invoice totals dated in the current month (drafts/cancelled excluded).
+  invoicedThisMonth: z.number(),
+  // Sum of payments received in the current month.
+  paidThisMonth: z.number(),
+  // Outstanding amount due across sent/partial/overdue invoices.
+  outstanding: z.number(),
+  outstandingCount: z.number().int(),
+  // Outstanding invoices whose due date is past (or already marked overdue).
+  overdueCount: z.number().int(),
+  draftCount: z.number().int(),
+});
+
+export const ComptaSummaryFetchResponseSchema = z.object({
+  type: z.literal("compta.summary.fetch.response"),
+  payload: z.object({
+    // YYYY-MM, daemon-local time.
+    month: z.string(),
+    rows: z.array(ComptaSummaryRowSchema),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const SetVoiceModeResponseMessageSchema = z.object({
   type: z.literal("set_voice_mode_response"),
   payload: z.object({
@@ -2473,6 +2507,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DraftAttachmentPutRequestSchema,
   DraftAttachmentGetRequestSchema,
   UsageStatsFetchRequestSchema,
+  ComptaSummaryFetchRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2831,6 +2866,8 @@ export const ServerInfoStatusPayloadSchema = z
         tasksAutopilot: z.boolean().optional(),
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: z.boolean().optional(),
+        // COMPAT(comptaSummary): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        comptaSummary: z.boolean().optional(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
         agentSynthesis: z.boolean().optional(),
         // COMPAT(activityLog): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -4891,6 +4928,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DraftAttachmentPutResponseSchema,
   DraftAttachmentGetResponseSchema,
   UsageStatsFetchResponseSchema,
+  ComptaSummaryFetchResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -5079,6 +5117,8 @@ export type UsageStatsProjectBucket = z.infer<typeof UsageStatsProjectBucketSche
 export type UsageStatsHourBucket = z.infer<typeof UsageStatsHourBucketSchema>;
 export type UsageStatsDay = z.infer<typeof UsageStatsDaySchema>;
 export type UsageStatsFetchResponse = z.infer<typeof UsageStatsFetchResponseSchema>;
+export type ComptaSummaryRow = z.infer<typeof ComptaSummaryRowSchema>;
+export type ComptaSummaryFetchResponse = z.infer<typeof ComptaSummaryFetchResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;
@@ -5214,6 +5254,7 @@ export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSc
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
 export type SidebarOrderGetRequest = z.infer<typeof SidebarOrderGetRequestSchema>;
 export type UsageStatsFetchRequest = z.infer<typeof UsageStatsFetchRequestSchema>;
+export type ComptaSummaryFetchRequest = z.infer<typeof ComptaSummaryFetchRequestSchema>;
 export type SidebarOrderSetRequest = z.infer<typeof SidebarOrderSetRequestSchema>;
 export type SidebarOrderChangedStatusPayload = z.infer<
   typeof SidebarOrderChangedStatusPayloadSchema

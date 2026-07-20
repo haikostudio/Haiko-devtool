@@ -10,8 +10,10 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { AgentList } from "@/components/agent-list";
 import { UsageStatsSection } from "@/components/usage-stats-section";
+import { ComptaSection } from "@/components/compta-section";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { useUsageStats } from "@/hooks/use-usage-stats";
+import { useComptaSummary } from "@/hooks/use-compta-summary";
 import type { Theme } from "@/styles/theme";
 import { buildOpenProjectRoute } from "@/utils/host-routes";
 
@@ -38,6 +40,11 @@ function DashboardScreenContent() {
     isSupported: usageSupported,
     refresh: refreshUsageStats,
   } = useUsageStats();
+  const {
+    rows: comptaRows,
+    isSupported: comptaSupported,
+    refresh: refreshComptaSummary,
+  } = useComptaSummary();
 
   const [isManualRefresh, setIsManualRefresh] = useState(false);
 
@@ -45,7 +52,8 @@ function DashboardScreenContent() {
     setIsManualRefresh(true);
     refreshAll();
     refreshUsageStats();
-  }, [refreshAll, refreshUsageStats]);
+    refreshComptaSummary();
+  }, [refreshAll, refreshUsageStats, refreshComptaSummary]);
 
   // refreshAll() is fire-and-forget, so clear the pull-to-refresh spinner once
   // the runtime finishes revalidating (mirrors the sidebar's manual-refresh gate).
@@ -59,10 +67,21 @@ function DashboardScreenContent() {
     router.navigate(buildOpenProjectRoute());
   }, []);
 
-  const statsHeader = useMemo(
-    () => (usageSupported && usageDays !== null ? <UsageStatsSection days={usageDays} /> : null),
-    [usageSupported, usageDays],
-  );
+  const statsHeader = useMemo(() => {
+    const compta =
+      comptaSupported && comptaRows !== null ? <ComptaSection rows={comptaRows} /> : null;
+    const usage =
+      usageSupported && usageDays !== null ? <UsageStatsSection days={usageDays} /> : null;
+    if (!compta && !usage) {
+      return null;
+    }
+    return (
+      <>
+        {compta}
+        {usage}
+      </>
+    );
+  }, [comptaSupported, comptaRows, usageSupported, usageDays]);
 
   return (
     <View style={styles.container}>

@@ -92,6 +92,7 @@ import type {
   SidebarOrder,
   WorkspaceUiState,
   UsageStatsDay,
+  ComptaSummaryRow,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2143,6 +2144,19 @@ export class DaemonClient {
       requestId,
       message: { type: "stats.usage.fetch.request", days },
       selectPayload: (payload) => payload.days,
+    });
+  }
+
+  async fetchComptaSummary(
+    requestId?: string,
+  ): Promise<{ month: string; rows: ComptaSummaryRow[] }> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.summary.fetch.response",
+      { month: string; rows: ComptaSummaryRow[] }
+    >({
+      requestId,
+      message: { type: "compta.summary.fetch.request" },
+      selectPayload: (payload) => ({ month: payload.month, rows: payload.rows }),
     });
   }
 

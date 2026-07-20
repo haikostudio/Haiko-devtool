@@ -256,6 +256,15 @@ export const en = {
       columnTokens: "Tokens",
       columnCost: "Cost",
     },
+    compta: {
+      title: "Billing",
+      thisMonth: "This month",
+      invoiced: "Invoiced",
+      paid: "Received",
+      outstanding: "Outstanding",
+      overdue: "{{count}} overdue",
+      drafts: "{{count}} draft(s)",
+    },
     buckets: {
       needsInput: "Needs input",
       failed: "Failed",

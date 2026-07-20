@@ -260,6 +260,15 @@ export const ja: TranslationResources = {
       columnTokens: "トークン",
       columnCost: "コスト",
     },
+    compta: {
+      title: "請求",
+      thisMonth: "今月",
+      invoiced: "請求額",
+      paid: "入金額",
+      outstanding: "未払い",
+      overdue: "期限超過 {{count}} 件",
+      drafts: "下書き {{count}} 件",
+    },
     buckets: {
       needsInput: "入力が必要",
       failed: "失敗",

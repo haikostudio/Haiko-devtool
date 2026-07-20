@@ -261,6 +261,15 @@ export const ptBR: TranslationResources = {
       columnTokens: "Tokens",
       columnCost: "Custo",
     },
+    compta: {
+      title: "Faturamento",
+      thisMonth: "Este mês",
+      invoiced: "Faturado",
+      paid: "Recebido",
+      outstanding: "Em aberto",
+      overdue: "{{count}} vencidas",
+      drafts: "{{count}} rascunho(s)",
+    },
     buckets: {
       needsInput: "Requer ação",
       failed: "Falhou",

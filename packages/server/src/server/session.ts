@@ -142,6 +142,7 @@ import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
 import type { UsageStatsStore } from "./stats/usage-stats-store.js";
+import type { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
 import { VoiceSession } from "./session/voice/voice-session.js";
@@ -453,6 +454,7 @@ export interface SessionOptions {
   sessionUiStateStore?: SessionUiStateStore;
   draftAttachmentStore?: DraftAttachmentStore;
   usageStatsStore?: UsageStatsStore;
+  comptaSummaryService?: ComptaSummaryService;
   filesystem?: SessionFileSystem;
   chatService: FileBackedChatService;
   scheduleService: ScheduleService;
@@ -619,6 +621,7 @@ export class Session {
   private readonly sessionUiStateStore: SessionUiStateStore;
   private readonly draftAttachmentStore: DraftAttachmentStore;
   private readonly usageStatsStore: UsageStatsStore | undefined;
+  private readonly comptaSummaryService: ComptaSummaryService | undefined;
   private readonly filesystem: SessionFileSystem;
   private readonly github: GitHubService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
@@ -690,6 +693,7 @@ export class Session {
       sessionUiStateStore,
       draftAttachmentStore,
       usageStatsStore,
+      comptaSummaryService,
       filesystem,
       chatService,
       scheduleService,
@@ -771,6 +775,7 @@ export class Session {
     this.sessionUiStateStore = fallbacks.sessionUiStateStore;
     this.draftAttachmentStore = fallbacks.draftAttachmentStore;
     this.usageStatsStore = usageStatsStore;
+    this.comptaSummaryService = comptaSummaryService;
     this.filesystem = fallbacks.filesystem;
     this.github = fallbacks.github;
     this.renameCurrentBranch = fallbacks.renameCurrentBranch;
@@ -1817,6 +1822,8 @@ export class Session {
         return this.handleDraftAttachmentGetRequest(msg.id, msg.requestId);
       case "stats.usage.fetch.request":
         return this.handleUsageStatsFetchRequest(msg.days, msg.requestId);
+      case "compta.summary.fetch.request":
+        return this.handleComptaSummaryFetchRequest(msg.requestId);
       default:
         return undefined;
     }
@@ -2811,6 +2818,40 @@ export class Session {
           days: [],
           success: false,
           error: getErrorMessageOr(error, "Failed to read usage stats"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleComptaSummaryFetchRequest(requestId: string): Promise<void> {
+    try {
+      if (!this.comptaSummaryService) {
+        throw new Error("Compta summary is not available on this daemon");
+      }
+      const summary = await this.comptaSummaryService.fetchSummary();
+      this.emit({
+        type: "compta.summary.fetch.response",
+        payload: {
+          month: summary.month,
+          rows: summary.rows,
+          success: true,
+          error: null,
+          requestId,
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: compta.summary.fetch.request error",
+      );
+      this.emit({
+        type: "compta.summary.fetch.response",
+        payload: {
+          month: "",
+          rows: [],
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read compta summary"),
           requestId,
         },
       });

@@ -257,6 +257,15 @@ export const zhCN: TranslationResources = {
       columnTokens: "令牌",
       columnCost: "成本",
     },
+    compta: {
+      title: "账单",
+      thisMonth: "本月",
+      invoiced: "已开票",
+      paid: "已收款",
+      outstanding: "未付款",
+      overdue: "{{count}} 张逾期",
+      drafts: "{{count}} 张草稿",
+    },
     buckets: {
       needsInput: "需要输入",
       failed: "失败",

@@ -104,6 +104,7 @@ import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { UsageStatsStore } from "./stats/usage-stats-store.js";
+import { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import { runClaudeTranscriptBackfill } from "./stats/claude-transcript-backfill.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
 import { createAgentMcpServer } from "./agent/mcp-server.js";
@@ -1641,6 +1642,14 @@ export async function createPaseoDaemon(
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);
+            {
+              // Dashboard accounting summary — enabled only when the machine
+              // holds a compta API key (env var or ~/.config/compta/api-key).
+              const comptaSummaryService = ComptaSummaryService.fromEnvironment(logger);
+              if (comptaSummaryService) {
+                wsServer.setComptaSummaryService(comptaSummaryService);
+              }
+            }
             {
               const boundWsServer = wsServer;
               taskProposalPush = (payload) => boundWsServer.sendPush(payload);
