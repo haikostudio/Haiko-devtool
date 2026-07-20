@@ -11,6 +11,7 @@ import {
 import { ChevronsDownUp, ChevronsUpDown, GripVertical } from "lucide-react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  type AnimatedStyle,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -161,6 +162,7 @@ export function TaskToast({
   task,
   onActivate,
   fullWidth = false,
+  contentStyle,
 }: {
   task: TrackedTask;
   // Fired after navigation so a host (e.g. the mobile drawer) can dismiss itself.
@@ -168,6 +170,10 @@ export function TaskToast({
   // When hosted in the mobile drawer the card should span the full width instead
   // of the floating-stack's capped 320px pill.
   fullWidth?: boolean;
+  // Depth fade for the collapsed pile. Applied to the *content* (icon + text) only,
+  // so the card's surface, border and shadow stay fully opaque while the readable
+  // bits recede into the distance. Absent (mobile drawer) = fully opaque content.
+  contentStyle?: AnimatedStyle<ViewStyle>;
 }): ReactElement {
   const { t } = useTranslation();
   const dismiss = useAgentTaskToastStore((state) => state.dismiss);
@@ -221,6 +227,10 @@ export function TaskToast({
     t,
   ]);
 
+  // Merge the static row layout with the (animated) depth-fade opacity once, so the
+  // JSX doesn't allocate a fresh style array every render.
+  const rowStyle = useMemo(() => [styles.contentRow, contentStyle], [contentStyle]);
+
   const handlePress = useCallback(() => {
     navigateToAgent({
       serverId: task.agent.serverId,
@@ -245,17 +255,19 @@ export function TaskToast({
           testID={`task-toast-${task.agent.serverId}-${task.agent.id}`}
         >
           {pipColorStyle ? <View style={pipColorStyle} /> : null}
-          <TaskToastIcon provider={task.agent.provider} bucket={task.bucket} />
-          <View style={styles.textColumn}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-            {subtitle ? (
-              <Text style={styles.meta} numberOfLines={1}>
-                {subtitle}
+          <Animated.View style={rowStyle}>
+            <TaskToastIcon provider={task.agent.provider} bucket={task.bucket} />
+            <View style={styles.textColumn}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
               </Text>
-            ) : null}
-          </View>
+              {subtitle ? (
+                <Text style={styles.meta} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+          </Animated.View>
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="left" align="center">
@@ -338,22 +350,24 @@ function ToastStackItem({
     foldOffset.value = withTiming(overlap, { duration: FOLD_DURATION_MS });
   }, [overlap, foldOffset]);
   // The depth fade rides the same timing as the fold, so cards dim into the pile
-  // as it collapses and brighten back to full as it opens.
-  const cardOpacity = useSharedValue(opacity);
+  // as it collapses and brighten back to full as it opens. It only touches the
+  // card *content* (icon + text) — the surface stays fully opaque — so the pile
+  // reads as solid cards receding, not translucent glass.
+  const contentOpacity = useSharedValue(opacity);
   useEffect(() => {
-    cardOpacity.value = withTiming(opacity, { duration: FOLD_DURATION_MS });
-  }, [opacity, cardOpacity]);
+    contentOpacity.value = withTiming(opacity, { duration: FOLD_DURATION_MS });
+  }, [opacity, contentOpacity]);
+  const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
   // zIndex rides along in the animated style so later (lower) cards stay on top
   // and the ones behind only show their top sliver — no second style prop needed.
-  const animatedStyle = useAnimatedStyle(() => ({
+  const wrapperStyle = useAnimatedStyle(() => ({
     marginBottom: foldOffset.value,
-    opacity: cardOpacity.value,
     zIndex,
   }));
 
   return (
-    <Animated.View onLayout={handleLayout} style={animatedStyle} pointerEvents="box-none">
-      <TaskToast task={task} />
+    <Animated.View onLayout={handleLayout} style={wrapperStyle} pointerEvents="box-none">
+      <TaskToast task={task} contentStyle={contentStyle} />
     </Animated.View>
   );
 }
@@ -582,6 +596,16 @@ const styles = StyleSheet.create((theme) => ({
       theme.colorScheme === "light"
         ? theme.colors.palette.amber[700]
         : theme.colors.palette.amber[500],
+  },
+  // Holds the icon + text row inside the opaque card. Carries the depth-fade
+  // opacity (via contentStyle) so the surface/border/shadow stay solid while the
+  // readable content dims. Reproduces the row layout the Pressable used to own.
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    flexShrink: 1,
+    minWidth: 0,
   },
   textColumn: {
     flexShrink: 1,
