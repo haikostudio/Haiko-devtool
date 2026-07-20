@@ -316,7 +316,8 @@ export const ptBR: TranslationResources = {
         rate: "Taxa",
         amount: "Valor",
         note: "Estimativa indicativa — esta linha ainda não foi faturada. Peça a um agente para adicioná-la a uma fatura.",
-        noEstimate: "Ainda sem estimativa. Execute a análise da tarefa para calcular tempo e custo.",
+        noEstimate:
+          "Ainda sem estimativa. Execute a análise da tarefa para calcular tempo e custo.",
       },
     },
     pickProject: "Escolha um projeto",

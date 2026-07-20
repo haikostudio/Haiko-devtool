@@ -112,20 +112,22 @@ export function CompactTaskAgentSheet(props: CompactTaskAgentSheetProps) {
                 <View style={styles.handle} />
               </View>
             </GestureDetector>
-            <TaskAgentPanel
-              key={props.task.id}
-              fullscreen
-              serverId={props.serverId}
-              task={props.task}
-              collapsed={false}
-              onToggleCollapse={noop}
-              onClose={handleClose}
-              onSave={props.onSave}
-              onDelete={props.onDelete}
-              onEstimate={props.onEstimate}
-              onRunNow={props.onRunNow}
-              onApprove={props.onApprove}
-            />
+            <View style={styles.panelHost}>
+              <TaskAgentPanel
+                key={props.task.id}
+                fullscreen
+                serverId={props.serverId}
+                task={props.task}
+                collapsed={false}
+                onToggleCollapse={noop}
+                onClose={handleClose}
+                onSave={props.onSave}
+                onDelete={props.onDelete}
+                onEstimate={props.onEstimate}
+                onRunNow={props.onRunNow}
+                onApprove={props.onApprove}
+              />
+            </View>
           </Animated.View>
         </View>
       </GestureHandlerRootView>
@@ -140,6 +142,9 @@ const styles = StyleSheet.create((theme) => ({
   host: {
     flex: 1,
     backgroundColor: theme.colors.surface0,
+  },
+  panelHost: {
+    flex: 1,
   },
   handleArea: {
     alignItems: "center",

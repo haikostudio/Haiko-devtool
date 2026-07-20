@@ -316,7 +316,8 @@ export const es: TranslationResources = {
         rate: "Tarifa",
         amount: "Importe",
         note: "Estimación indicativa: esta línea aún no está facturada. Pide a un agente que la añada a una factura.",
-        noEstimate: "Aún no hay estimación. Ejecuta el análisis de la tarea para calcular tiempo y coste.",
+        noEstimate:
+          "Aún no hay estimación. Ejecuta el análisis de la tarea para calcular tiempo y coste.",
       },
     },
     pickProject: "Elige un proyecto",

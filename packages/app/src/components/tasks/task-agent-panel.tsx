@@ -68,6 +68,36 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
 
   const handleSwitchToChat = useCallback(() => setView("chat"), []);
 
+  const renderBody = () => {
+    if (view === "chat") {
+      return (
+        <ChatView
+          serverId={serverId}
+          task={task}
+          agentId={agentId}
+          workspaceId={workspaceId}
+          onRunNow={props.onRunNow}
+        />
+      );
+    }
+    if (view === "billing") {
+      return <TaskBillingView task={task} />;
+    }
+    return (
+      <TaskDetailInlineForm
+        serverId={serverId}
+        task={task}
+        visible
+        onClose={handleSwitchToChat}
+        onSave={props.onSave}
+        onDelete={props.onDelete}
+        onEstimate={props.onEstimate}
+        onRunNow={props.onRunNow}
+        onApprove={props.onApprove}
+      />
+    );
+  };
+
   const viewOptions = useMemo<SegmentedControlOption<PanelView>[]>(
     () => [
       { value: "chat", label: t("tasks.panel.chat"), testID: "task-panel-view-chat" },
@@ -133,31 +163,7 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
         />
       </View>
 
-      <View style={styles.body}>
-        {view === "chat" ? (
-          <ChatView
-            serverId={serverId}
-            task={task}
-            agentId={agentId}
-            workspaceId={workspaceId}
-            onRunNow={props.onRunNow}
-          />
-        ) : view === "billing" ? (
-          <TaskBillingView task={task} />
-        ) : (
-          <TaskDetailInlineForm
-            serverId={serverId}
-            task={task}
-            visible
-            onClose={handleSwitchToChat}
-            onSave={props.onSave}
-            onDelete={props.onDelete}
-            onEstimate={props.onEstimate}
-            onRunNow={props.onRunNow}
-            onApprove={props.onApprove}
-          />
-        )}
-      </View>
+      <View style={styles.body}>{renderBody()}</View>
     </View>
   );
 }
