@@ -14,6 +14,18 @@ describe("getCompactSheetSafeAreaPadding", () => {
     ).toEqual({ footerPaddingBottom: 46 });
   });
 
+  it("keeps a minimum gap under compact footers when no inset is reported", () => {
+    expect(
+      getCompactSheetSafeAreaPadding({
+        isCompact: true,
+        hasFooter: true,
+        baseContentPadding: 24,
+        baseFooterPadding: 12,
+        safeAreaBottom: 0,
+      }),
+    ).toEqual({ footerPaddingBottom: 28 });
+  });
+
   it("adds the bottom inset to compact sheet content when there is no footer", () => {
     expect(
       getCompactSheetSafeAreaPadding({
