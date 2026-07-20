@@ -1181,7 +1181,14 @@ function TasksHeader({
   folders: TaskFolder[];
 }) {
   if (isCompact && supportsTasksBoard && selectedFolder) {
-    return <CompactBoardHeader currentFolder={selectedFolder} folders={folders} />;
+    return (
+      <CompactBoardHeader
+        currentFolder={selectedFolder}
+        folders={folders}
+        currentProject={selectedProject}
+        projects={projects}
+      />
+    );
   }
   if (isCompact && supportsTasksBoard && selectedProject) {
     return <CompactProjectHeader currentProject={selectedProject} projects={projects} />;
@@ -1195,9 +1202,13 @@ function TasksHeader({
 function CompactBoardHeader({
   currentFolder,
   folders,
+  currentProject,
+  projects,
 }: {
   currentFolder: TaskFolder;
   folders: TaskFolder[];
+  currentProject: ProjectEntry | null;
+  projects: ProjectEntry[];
 }) {
   const { t } = useTranslation();
   return (
@@ -1216,6 +1227,34 @@ function CompactBoardHeader({
           >
             <ThemedChevronLeft size={ICON_SIZE.md} uniProps={mutedColorMapping} />
           </Pressable>
+          {currentProject ? (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  style={styles.folderSelector}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("tasks.pickProject")}
+                  testID="tasks-header-board-project-selector"
+                >
+                  <ProjectColorMark projectKey={currentProject.projectId} />
+                  <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+                    {currentProject.displayName}
+                  </Text>
+                  <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" width={240}>
+                  {projects.map((entry) => (
+                    <ProjectSelectorItem
+                      key={`${entry.serverId}:${entry.projectId}`}
+                      entry={entry}
+                    />
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Text style={styles.headerSeparator}>/</Text>
+            </>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger
               style={styles.folderSelector}
@@ -1698,6 +1737,10 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
+  },
+  headerSeparator: {
+    fontSize: theme.fontSize.base,
+    color: theme.colors.mutedForeground,
   },
   // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
   compactListWrap: {
