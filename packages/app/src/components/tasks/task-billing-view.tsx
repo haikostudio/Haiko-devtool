@@ -1,10 +1,16 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Receipt } from "lucide-react-native";
+import type { ComptaProjectLink } from "@getpaseo/protocol/messages";
 import type { KanbanTask } from "@/data/tasks";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
+import { Button } from "@/components/ui/button";
+import { TaskBillingAddSheet } from "@/components/compta/task-billing-add-sheet";
+import { useHostFeature } from "@/runtime/host-features";
+import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   BILLABLE_HOURLY_RATE_CHF,
   computeBillableCostChf,
@@ -17,14 +23,58 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 /**
  * "Facturation" tab of the task drawer: presents the task as the billable line
  * it would become on an invoice — label (task title), estimated time, hourly
- * rate and the resulting amount. Read-only on purpose: it never touches the
- * billing app. Creating or editing an invoice always goes through an explicit
- * agent request (the compta skill), never a tap here.
+ * rate and the resulting amount — and, when the project is linked to a billing
+ * client, lets the user add that line to a draft quote/invoice. The write goes
+ * through the daemon's certified compta script; nothing is computed here.
  */
-export function TaskBillingView({ task }: { task: KanbanTask }) {
+export function TaskBillingView({
+  task,
+  serverId,
+  projectId,
+}: {
+  task: KanbanTask;
+  serverId: string | null;
+  projectId: string | null;
+}) {
   const { t } = useTranslation();
   const minutes = task.estimate?.estimatedMinutes;
   const hasBilling = minutes !== undefined && minutes > 0;
+  const billingSupported = useHostFeature(serverId, "comptaBilling");
+  const client = useHostRuntimeClient(serverId ?? "");
+  const [link, setLink] = useState<ComptaProjectLink | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  useEffect(() => {
+    if (!billingSupported || !client || !projectId) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fetched = await client.getComptaProjectLink(projectId);
+        if (!cancelled) {
+          setLink(fetched);
+        }
+      } catch {
+        // Non-fatal: the add action just stays hidden.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [billingSupported, client, projectId]);
+
+  const handleOpenAdd = useCallback(() => setAddOpen(true), []);
+  const handleCloseAdd = useCallback(() => setAddOpen(false), []);
+  const billingLine = useMemo(
+    () => ({
+      title: task.title,
+      description: task.description?.trim() ? task.description.trim() : undefined,
+      hours: (minutes ?? 0) / 60,
+      unitPrice: BILLABLE_HOURLY_RATE_CHF,
+    }),
+    [task.title, task.description, minutes],
+  );
 
   if (!hasBilling) {
     return (
@@ -38,6 +88,28 @@ export function TaskBillingView({ task }: { task: KanbanTask }) {
   const amount = computeBillableCostChf(minutes);
   const rateValue = `${BILLABLE_HOURLY_RATE_CHF} CHF/h`;
 
+  const renderAction = () => {
+    if (!billingSupported) {
+      return null;
+    }
+    if (!link) {
+      return <Text style={styles.note}>{t("tasks.panel.billingLine.linkHint")}</Text>;
+    }
+    return (
+      <View style={styles.actionBlock}>
+        <Text style={styles.linkedClient}>
+          {t("tasks.panel.billingLine.linkedClient", {
+            name: link.clientName,
+            company: link.company,
+          })}
+        </Text>
+        <Button onPress={handleOpenAdd} testID="task-billing-add">
+          {t("tasks.panel.billingLine.addButton")}
+        </Button>
+      </View>
+    );
+  };
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       <View style={styles.card}>
@@ -48,7 +120,21 @@ export function TaskBillingView({ task }: { task: KanbanTask }) {
         <View style={styles.divider} />
         <Row label={t("tasks.panel.billingLine.amount")} value={formatChf(amount)} emphasized />
       </View>
+
+      {renderAction()}
+
       <Text style={styles.note}>{t("tasks.panel.billingLine.note")}</Text>
+
+      {link && serverId ? (
+        <TaskBillingAddSheet
+          visible={addOpen}
+          onClose={handleCloseAdd}
+          serverId={serverId}
+          clientId={link.clientId}
+          documentTitle={task.title}
+          line={billingLine}
+        />
+      ) : null}
     </ScrollView>
   );
 }
@@ -127,6 +213,14 @@ const styles = StyleSheet.create((theme) => ({
   note: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    paddingHorizontal: theme.spacing[1],
+  },
+  actionBlock: {
+    gap: theme.spacing[2],
+  },
+  linkedClient: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
     paddingHorizontal: theme.spacing[1],
   },
   emptyState: {

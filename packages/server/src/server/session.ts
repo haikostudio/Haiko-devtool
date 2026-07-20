@@ -11,6 +11,7 @@ import {
   type FirstAgentContext,
   type SessionInboundMessage,
   type SessionOutboundMessage,
+  type ComptaProjectLink,
   type GitSetupOptions,
   type StartWorkspaceScriptRequest,
   type CloseItemsRequest,
@@ -142,6 +143,7 @@ import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
 import type { UsageStatsStore } from "./stats/usage-stats-store.js";
+import type { ComptaLinksStore } from "./compta/compta-links-store.js";
 import type { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
@@ -455,6 +457,7 @@ export interface SessionOptions {
   draftAttachmentStore?: DraftAttachmentStore;
   usageStatsStore?: UsageStatsStore;
   comptaSummaryService?: ComptaSummaryService;
+  comptaLinksStore?: ComptaLinksStore;
   filesystem?: SessionFileSystem;
   chatService: FileBackedChatService;
   scheduleService: ScheduleService;
@@ -622,6 +625,7 @@ export class Session {
   private readonly draftAttachmentStore: DraftAttachmentStore;
   private readonly usageStatsStore: UsageStatsStore | undefined;
   private readonly comptaSummaryService: ComptaSummaryService | undefined;
+  private readonly comptaLinksStore: ComptaLinksStore | undefined;
   private readonly filesystem: SessionFileSystem;
   private readonly github: GitHubService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
@@ -694,6 +698,7 @@ export class Session {
       draftAttachmentStore,
       usageStatsStore,
       comptaSummaryService,
+      comptaLinksStore,
       filesystem,
       chatService,
       scheduleService,
@@ -776,6 +781,7 @@ export class Session {
     this.draftAttachmentStore = fallbacks.draftAttachmentStore;
     this.usageStatsStore = usageStatsStore;
     this.comptaSummaryService = comptaSummaryService;
+    this.comptaLinksStore = comptaLinksStore;
     this.filesystem = fallbacks.filesystem;
     this.github = fallbacks.github;
     this.renameCurrentBranch = fallbacks.renameCurrentBranch;
@@ -1824,6 +1830,16 @@ export class Session {
         return this.handleUsageStatsFetchRequest(msg.days, msg.requestId);
       case "compta.summary.fetch.request":
         return this.handleComptaSummaryFetchRequest(msg.requestId);
+      case "compta.clients.list.request":
+        return this.handleComptaClientsListRequest(msg.requestId);
+      case "compta.project.link.get.request":
+        return this.handleComptaProjectLinkGetRequest(msg.projectId, msg.requestId);
+      case "compta.project.link.set.request":
+        return this.handleComptaProjectLinkSetRequest(msg.projectId, msg.clientId, msg.requestId);
+      case "compta.documents.list.request":
+        return this.handleComptaDocumentsListRequest(msg.clientId, msg.requestId);
+      case "compta.task.add.request":
+        return this.handleComptaTaskAddRequest(msg, msg.requestId);
       default:
         return undefined;
     }
@@ -2853,6 +2869,181 @@ export class Session {
           rows: [],
           success: false,
           error: getErrorMessageOr(error, "Failed to read compta summary"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleComptaClientsListRequest(requestId: string): Promise<void> {
+    try {
+      if (!this.comptaSummaryService) {
+        throw new Error("Compta is not available on this daemon");
+      }
+      const clients = await this.comptaSummaryService.listClients();
+      this.emit({
+        type: "compta.clients.list.response",
+        payload: { clients, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error, requestId }, "session: compta.clients.list error");
+      this.emit({
+        type: "compta.clients.list.response",
+        payload: {
+          clients: [],
+          success: false,
+          error: getErrorMessageOr(error, "Failed to list billing clients"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  // The link store keeps only ids; re-resolve the human labels from the live
+  // client list so a renamed client shows correctly without a migration.
+  private async resolveProjectLink(
+    record: { clientId: string; companyId: string } | null,
+  ): Promise<ComptaProjectLink | null> {
+    if (!record || !this.comptaSummaryService) {
+      return null;
+    }
+    const clients = await this.comptaSummaryService.listClients();
+    const match = clients.find((client) => client.id === record.clientId);
+    if (!match) {
+      return null;
+    }
+    return {
+      clientId: match.id,
+      clientName: match.name,
+      companyId: match.companyId,
+      company: match.company,
+      currency: match.currency,
+    };
+  }
+
+  private async handleComptaProjectLinkGetRequest(
+    projectId: string,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      if (!this.comptaLinksStore) {
+        throw new Error("Compta billing is not available on this daemon");
+      }
+      const record = await this.comptaLinksStore.get(projectId);
+      const link = await this.resolveProjectLink(record);
+      this.emit({
+        type: "compta.project.link.get.response",
+        payload: { link, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error, requestId }, "session: compta.project.link.get error");
+      this.emit({
+        type: "compta.project.link.get.response",
+        payload: {
+          link: null,
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read project link"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleComptaProjectLinkSetRequest(
+    projectId: string,
+    clientId: string | null,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      if (!this.comptaLinksStore || !this.comptaSummaryService) {
+        throw new Error("Compta billing is not available on this daemon");
+      }
+      if (clientId === null) {
+        await this.comptaLinksStore.set(projectId, null);
+        this.emit({
+          type: "compta.project.link.set.response",
+          payload: { link: null, success: true, error: null, requestId },
+        });
+        return;
+      }
+      const companyId = await this.comptaSummaryService.resolveClientCompany(clientId);
+      if (!companyId) {
+        throw new Error("Unknown billing client");
+      }
+      await this.comptaLinksStore.set(projectId, { clientId, companyId });
+      const link = await this.resolveProjectLink({ clientId, companyId });
+      this.emit({
+        type: "compta.project.link.set.response",
+        payload: { link, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error, requestId }, "session: compta.project.link.set error");
+      this.emit({
+        type: "compta.project.link.set.response",
+        payload: {
+          link: null,
+          success: false,
+          error: getErrorMessageOr(error, "Failed to save project link"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleComptaDocumentsListRequest(
+    clientId: string,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      if (!this.comptaSummaryService) {
+        throw new Error("Compta is not available on this daemon");
+      }
+      const documents = await this.comptaSummaryService.listDraftDocuments(clientId);
+      this.emit({
+        type: "compta.documents.list.response",
+        payload: { documents, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error, requestId }, "session: compta.documents.list error");
+      this.emit({
+        type: "compta.documents.list.response",
+        payload: {
+          documents: [],
+          success: false,
+          error: getErrorMessageOr(error, "Failed to list draft documents"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handleComptaTaskAddRequest(
+    msg: Extract<SessionInboundMessage, { type: "compta.task.add.request" }>,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      if (!this.comptaSummaryService?.billingEnabled) {
+        throw new Error("Compta billing is not available on this daemon");
+      }
+      const document = await this.comptaSummaryService.addTaskToDocument({
+        kind: msg.kind,
+        clientId: msg.clientId,
+        documentId: msg.documentId,
+        documentTitle: msg.documentTitle,
+        line: msg.line,
+      });
+      this.emit({
+        type: "compta.task.add.response",
+        payload: { document, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error({ err: error, requestId }, "session: compta.task.add error");
+      this.emit({
+        type: "compta.task.add.response",
+        payload: {
+          document: null,
+          success: false,
+          error: getErrorMessageOr(error, "Failed to add task to document"),
           requestId,
         },
       });

@@ -104,6 +104,7 @@ import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { UsageStatsStore } from "./stats/usage-stats-store.js";
+import { ComptaLinksStore } from "./compta/compta-links-store.js";
 import { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import { runClaudeTranscriptBackfill } from "./stats/claude-transcript-backfill.js";
 import { attachAgentStoragePersistence } from "./persistence-hooks.js";
@@ -1645,9 +1646,15 @@ export async function createPaseoDaemon(
             {
               // Dashboard accounting summary — enabled only when the machine
               // holds a compta API key (env var or ~/.config/compta/api-key).
+              // The same service also backs the billing write feature (project→
+              // client linking, add task to a document) when the certified CLI
+              // is present on the host.
               const comptaSummaryService = ComptaSummaryService.fromEnvironment(logger);
               if (comptaSummaryService) {
                 wsServer.setComptaSummaryService(comptaSummaryService);
+                wsServer.setComptaLinksStore(
+                  new ComptaLinksStore({ paseoHome: config.paseoHome, logger }),
+                );
               }
             }
             {

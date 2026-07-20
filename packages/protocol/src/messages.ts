@@ -1070,6 +1070,54 @@ export const ComptaSummaryFetchRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// --- Compta billing write feature: link a project to a billing client, then
+// add a task as a billable line to a draft quote/invoice. Inbound requests. ---
+
+export const ComptaClientsListRequestSchema = z.object({
+  type: z.literal("compta.clients.list.request"),
+  requestId: z.string(),
+});
+
+export const ComptaProjectLinkGetRequestSchema = z.object({
+  type: z.literal("compta.project.link.get.request"),
+  projectId: z.string(),
+  requestId: z.string(),
+});
+
+export const ComptaProjectLinkSetRequestSchema = z.object({
+  type: z.literal("compta.project.link.set.request"),
+  projectId: z.string(),
+  // Null clears the link.
+  clientId: z.string().nullable(),
+  requestId: z.string(),
+});
+
+export const ComptaDocumentsListRequestSchema = z.object({
+  type: z.literal("compta.documents.list.request"),
+  clientId: z.string(),
+  requestId: z.string(),
+});
+
+export const ComptaTaskAddRequestSchema = z.object({
+  type: z.literal("compta.task.add.request"),
+  // Which document family to target/create.
+  kind: z.enum(["quote", "invoice"]),
+  clientId: z.string(),
+  // Append to this existing draft; null creates a fresh draft for the client.
+  documentId: z.string().nullable(),
+  // Title used only when creating a new document (documentId null).
+  documentTitle: z.string().optional(),
+  // The billable line: label + hours × unit price. Amounts are (re)computed by
+  // the certified compta script daemon-side, never here.
+  line: z.object({
+    title: z.string(),
+    description: z.string().optional(),
+    hours: z.number(),
+    unitPrice: z.number(),
+  }),
+  requestId: z.string(),
+});
+
 export const SetVoiceModeMessageSchema = z.object({
   type: z.literal("set_voice_mode"),
   enabled: z.boolean(),
@@ -1863,6 +1911,87 @@ export const ComptaSummaryFetchResponseSchema = z.object({
   }),
 });
 
+// --- Compta billing write feature: shared data + outbound responses. ---
+
+// A billing client on the accounting instance, tagged with the issuing company.
+export const ComptaClientSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  companyId: z.string(),
+  company: z.string(),
+  currency: z.string(),
+});
+
+// The billing client a Paseo project is linked to (null when unlinked).
+export const ComptaProjectLinkSchema = z.object({
+  clientId: z.string(),
+  clientName: z.string(),
+  companyId: z.string(),
+  company: z.string(),
+  currency: z.string(),
+});
+
+// A draft quote/invoice a task line can be appended to.
+export const ComptaDocumentRefSchema = z.object({
+  kind: z.enum(["quote", "invoice"]),
+  id: z.string(),
+  number: z.string(),
+  title: z.string(),
+  total: z.number(),
+  currency: z.string(),
+  status: z.string(),
+});
+
+export const ComptaClientsListResponseSchema = z.object({
+  type: z.literal("compta.clients.list.response"),
+  payload: z.object({
+    clients: z.array(ComptaClientSchema),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const ComptaProjectLinkGetResponseSchema = z.object({
+  type: z.literal("compta.project.link.get.response"),
+  payload: z.object({
+    link: ComptaProjectLinkSchema.nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const ComptaProjectLinkSetResponseSchema = z.object({
+  type: z.literal("compta.project.link.set.response"),
+  payload: z.object({
+    link: ComptaProjectLinkSchema.nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const ComptaDocumentsListResponseSchema = z.object({
+  type: z.literal("compta.documents.list.response"),
+  payload: z.object({
+    documents: z.array(ComptaDocumentRefSchema),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const ComptaTaskAddResponseSchema = z.object({
+  type: z.literal("compta.task.add.response"),
+  payload: z.object({
+    document: ComptaDocumentRefSchema.nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const SetVoiceModeResponseMessageSchema = z.object({
   type: z.literal("set_voice_mode_response"),
   payload: z.object({
@@ -2543,6 +2672,11 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DraftAttachmentGetRequestSchema,
   UsageStatsFetchRequestSchema,
   ComptaSummaryFetchRequestSchema,
+  ComptaClientsListRequestSchema,
+  ComptaProjectLinkGetRequestSchema,
+  ComptaProjectLinkSetRequestSchema,
+  ComptaDocumentsListRequestSchema,
+  ComptaTaskAddRequestSchema,
   SetVoiceModeMessageSchema,
   SendAgentMessageRequestSchema,
   WaitForFinishRequestSchema,
@@ -2903,6 +3037,10 @@ export const ServerInfoStatusPayloadSchema = z
         usageStats: z.boolean().optional(),
         // COMPAT(comptaSummary): added in v0.1.X, drop the gate when floor >= v0.1.X.
         comptaSummary: z.boolean().optional(),
+        // COMPAT(comptaBilling): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        // Write capability: link a project to a client and add a task to a
+        // quote/invoice. Requires the certified compta script on the daemon host.
+        comptaBilling: z.boolean().optional(),
         // COMPAT(agentSynthesis): added in v0.1.X, drop the gate when floor >= v0.1.X.
         agentSynthesis: z.boolean().optional(),
         // COMPAT(activityLog): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -4964,6 +5102,11 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DraftAttachmentGetResponseSchema,
   UsageStatsFetchResponseSchema,
   ComptaSummaryFetchResponseSchema,
+  ComptaClientsListResponseSchema,
+  ComptaProjectLinkGetResponseSchema,
+  ComptaProjectLinkSetResponseSchema,
+  ComptaDocumentsListResponseSchema,
+  ComptaTaskAddResponseSchema,
   WaitForFinishResponseMessageSchema,
   AgentPermissionRequestMessageSchema,
   AgentPermissionResolvedMessageSchema,
@@ -5159,6 +5302,10 @@ export type ComptaMonthlyRevenue = NonNullable<
   z.infer<typeof ComptaSummaryFetchResponseSchema>["payload"]["monthly"]
 >;
 export type ComptaSummaryFetchResponse = z.infer<typeof ComptaSummaryFetchResponseSchema>;
+export type ComptaClient = z.infer<typeof ComptaClientSchema>;
+export type ComptaProjectLink = z.infer<typeof ComptaProjectLinkSchema>;
+export type ComptaDocumentRef = z.infer<typeof ComptaDocumentRefSchema>;
+export type ComptaTaskAddRequest = z.infer<typeof ComptaTaskAddRequestSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
 export type ProjectRenameResponsePayload = z.infer<typeof ProjectRenameResponsePayloadSchema>;

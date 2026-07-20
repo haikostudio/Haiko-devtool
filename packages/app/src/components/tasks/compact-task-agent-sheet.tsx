@@ -16,6 +16,7 @@ import type { KanbanTask } from "@/data/tasks";
 
 interface CompactTaskAgentSheetProps {
   serverId: string | null;
+  projectId: string | null;
   task: KanbanTask | null;
   visible: boolean;
   onClose: () => void;
@@ -117,6 +118,7 @@ export function CompactTaskAgentSheet(props: CompactTaskAgentSheetProps) {
                 key={props.task.id}
                 fullscreen
                 serverId={props.serverId}
+                projectId={props.projectId}
                 task={props.task}
                 collapsed={false}
                 onToggleCollapse={noop}

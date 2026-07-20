@@ -310,6 +310,16 @@ export const fr: TranslationResources = {
       expand: "Développer le panneau",
       billing: "Facturation",
       billingLine: {
+        added: "Ajouté à {{number}}",
+        addError: "Impossible d'ajouter la tâche au document.",
+        addTitle: "Ajouter à un document",
+        newInvoice: "Nouvelle facture",
+        newQuote: "Nouvelle offre",
+        existingDrafts: "Brouillons existants",
+        linkedClient: "Client : {{name}} · {{company}}",
+        linkHint:
+          "Lie ce projet à un client dans les réglages du projet pour l'ajouter à une facture.",
+        addButton: "Ajouter à une offre ou facture",
         title: "Ligne de facture",
         label: "Libellé",
         time: "Temps estimé",
@@ -2317,6 +2327,16 @@ export const fr: TranslationResources = {
         transportFallback: "L'hôte n'a pas répondu.",
         failedTitle: "Impossible de charger paseo.json",
         failedDescription: "Rechargez pour réessayer.",
+      },
+      billing: {
+        title: "Facturation",
+        info: "Associe ce projet à un client pour ajouter ses tâches à une offre ou une facture.",
+        client: "Client de facturation",
+        selectClient: "Choisir un client",
+        noClients: "Aucun client disponible",
+        none: "Non facturé",
+        loadError: "Impossible de charger les clients.",
+        saveError: "Impossible d'enregistrer le client.",
       },
       worktree: {
         title: "Crochets de cycle de vie Worktree",

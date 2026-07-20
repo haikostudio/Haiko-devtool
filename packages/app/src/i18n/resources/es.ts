@@ -310,6 +310,16 @@ export const es: TranslationResources = {
       expand: "Expandir panel",
       billing: "Facturación",
       billingLine: {
+        added: "Añadido a {{number}}",
+        addError: "No se pudo añadir la tarea al documento.",
+        addTitle: "Añadir a un documento",
+        newInvoice: "Nueva factura",
+        newQuote: "Nuevo presupuesto",
+        existingDrafts: "Borradores existentes",
+        linkedClient: "Cliente: {{name}} · {{company}}",
+        linkHint:
+          "Vincula este proyecto a un cliente en los ajustes del proyecto para añadirlo a una factura.",
+        addButton: "Añadir a un presupuesto o factura",
         title: "Línea de factura",
         label: "Descripción",
         time: "Tiempo estimado",
@@ -2312,6 +2322,16 @@ export const es: TranslationResources = {
         transportFallback: "El anfitrión no respondió.",
         failedTitle: "No se pudo cargar paseo.json",
         failedDescription: "Vuelva a cargar para intentarlo de nuevo.",
+      },
+      billing: {
+        title: "Facturación",
+        info: "Vincula este proyecto a un cliente para añadir sus tareas a un presupuesto o factura.",
+        client: "Cliente de facturación",
+        selectClient: "Elegir un cliente",
+        noClients: "No hay clientes disponibles",
+        none: "Sin facturar",
+        loadError: "No se pudieron cargar los clientes.",
+        saveError: "No se pudo guardar el cliente.",
       },
       worktree: {
         title: "Ganchos del ciclo de vida del árbol de trabajo",

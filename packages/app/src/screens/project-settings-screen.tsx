@@ -27,6 +27,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Switch } from "@/components/ui/switch";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { SettingsTextAreaCard } from "@/components/settings-textarea";
+import { ProjectBillingSection } from "@/components/compta/project-billing-section";
 import { SettingsGroup } from "@/screens/settings/settings-group";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { settingsStyles } from "@/styles/settings";
@@ -252,6 +253,7 @@ function ProjectSettingsBody({
         loadedRevision,
         readError,
         selectedHost,
+        projectId: project.projectKey,
         queryKey,
         client,
         onReload: handleReload,
@@ -268,6 +270,7 @@ interface RenderContentInput {
   loadedRevision: PaseoConfigRevision | null;
   readError: ProjectConfigRpcError | null;
   selectedHost: ProjectHostEntry;
+  projectId: string;
   queryKey: readonly [string, string, string];
   client: DaemonClient;
   onReload: () => void;
@@ -281,6 +284,7 @@ function renderContent({
   loadedRevision,
   readError,
   selectedHost,
+  projectId,
   queryKey,
   client,
   onReload,
@@ -336,6 +340,8 @@ function renderContent({
       baseConfig={loadedConfig}
       revision={loadedRevision}
       repoRoot={selectedHost.repoRoot}
+      serverId={selectedHost.serverId}
+      projectId={projectId}
       queryKey={queryKey}
       client={client}
       onReload={onReload}
@@ -421,6 +427,8 @@ interface ProjectConfigFormProps {
   baseConfig: PaseoConfigRaw;
   revision: PaseoConfigRevision | null;
   repoRoot: string;
+  serverId: string;
+  projectId: string;
   queryKey: readonly [string, string, string];
   client: DaemonClient;
   onReload: () => void;
@@ -430,6 +438,8 @@ function ProjectConfigForm({
   baseConfig,
   revision,
   repoRoot,
+  serverId,
+  projectId,
   queryKey,
   client,
   onReload,
@@ -632,6 +642,7 @@ function ProjectConfigForm({
 
   return (
     <View>
+      <ProjectBillingSection serverId={serverId} projectId={projectId} />
       <SettingsGroup
         title={t("settings.project.worktree.title")}
         info={t("settings.project.worktree.info")}

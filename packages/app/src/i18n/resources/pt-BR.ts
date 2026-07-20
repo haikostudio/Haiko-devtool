@@ -310,6 +310,16 @@ export const ptBR: TranslationResources = {
       expand: "Expandir painel",
       billing: "Faturamento",
       billingLine: {
+        added: "Adicionado a {{number}}",
+        addError: "Não foi possível adicionar a tarefa ao documento.",
+        addTitle: "Adicionar a um documento",
+        newInvoice: "Nova fatura",
+        newQuote: "Novo orçamento",
+        existingDrafts: "Rascunhos existentes",
+        linkedClient: "Cliente: {{name}} · {{company}}",
+        linkHint:
+          "Vincule este projeto a um cliente nas configurações do projeto para adicioná-lo a uma fatura.",
+        addButton: "Adicionar a um orçamento ou fatura",
         title: "Linha de fatura",
         label: "Descrição",
         time: "Tempo estimado",
@@ -2298,6 +2308,16 @@ export const ptBR: TranslationResources = {
         transportFallback: "O host não respondeu.",
         failedTitle: "Não foi possível carregar paseo.json",
         failedDescription: "Recarregue para tentar novamente.",
+      },
+      billing: {
+        title: "Faturamento",
+        info: "Vincule este projeto a um cliente para adicionar suas tarefas a um orçamento ou fatura.",
+        client: "Cliente de faturamento",
+        selectClient: "Escolher um cliente",
+        noClients: "Nenhum cliente disponível",
+        none: "Não faturado",
+        loadError: "Não foi possível carregar os clientes.",
+        saveError: "Não foi possível salvar o cliente.",
       },
       worktree: {
         title: "Hooks de ciclo de vida do worktree",

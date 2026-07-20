@@ -94,6 +94,9 @@ import type {
   UsageStatsDay,
   ComptaSummaryRow,
   ComptaMonthlyRevenue,
+  ComptaClient,
+  ComptaProjectLink,
+  ComptaDocumentRef,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2166,6 +2169,90 @@ export class DaemonClient {
         rows: payload.rows,
         monthly: payload.monthly ?? null,
       }),
+    });
+  }
+
+  async listComptaClients(requestId?: string): Promise<ComptaClient[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.clients.list.response",
+      ComptaClient[]
+    >({
+      requestId,
+      message: { type: "compta.clients.list.request" },
+      selectPayload: (payload) => payload.clients,
+    });
+  }
+
+  async getComptaProjectLink(
+    projectId: string,
+    requestId?: string,
+  ): Promise<ComptaProjectLink | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.project.link.get.response",
+      ComptaProjectLink | null
+    >({
+      requestId,
+      message: { type: "compta.project.link.get.request", projectId },
+      selectPayload: (payload) => payload.link ?? null,
+    });
+  }
+
+  async setComptaProjectLink(
+    input: { projectId: string; clientId: string | null },
+    requestId?: string,
+  ): Promise<ComptaProjectLink | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.project.link.set.response",
+      ComptaProjectLink | null
+    >({
+      requestId,
+      message: {
+        type: "compta.project.link.set.request",
+        projectId: input.projectId,
+        clientId: input.clientId,
+      },
+      selectPayload: (payload) => payload.link ?? null,
+    });
+  }
+
+  async listComptaDraftDocuments(
+    clientId: string,
+    requestId?: string,
+  ): Promise<ComptaDocumentRef[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.documents.list.response",
+      ComptaDocumentRef[]
+    >({
+      requestId,
+      message: { type: "compta.documents.list.request", clientId },
+      selectPayload: (payload) => payload.documents,
+    });
+  }
+
+  async addTaskToComptaDocument(
+    input: {
+      kind: "quote" | "invoice";
+      clientId: string;
+      documentId: string | null;
+      documentTitle?: string;
+      line: { title: string; description?: string; hours: number; unitPrice: number };
+    },
+    requestId?: string,
+  ): Promise<ComptaDocumentRef | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.task.add.response",
+      ComptaDocumentRef | null
+    >({
+      requestId,
+      message: {
+        type: "compta.task.add.request",
+        kind: input.kind,
+        clientId: input.clientId,
+        documentId: input.documentId,
+        documentTitle: input.documentTitle,
+        line: input.line,
+      },
+      selectPayload: (payload) => payload.document ?? null,
     });
   }
 

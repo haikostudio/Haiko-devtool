@@ -552,6 +552,7 @@ function DesktopLayout({
       <BoardContent
         key={`${serverId}:${projectId}:${folderId}`}
         serverId={serverId}
+        projectId={projectId}
         folderId={folderId}
         boardHandle={boardHandle}
       />
@@ -900,10 +901,12 @@ const renderTimelineIcon = ({ color, size }: { color: string; size: number }) =>
 
 function BoardContent({
   serverId,
+  projectId,
   folderId,
   boardHandle,
 }: {
   serverId: string | null;
+  projectId: string | null;
   folderId: string;
   boardHandle: BoardHandle;
 }) {
@@ -1138,6 +1141,7 @@ function BoardContent({
           <View style={panelHostStyle}>
             <TaskAgentPanel
               serverId={serverId}
+              projectId={projectId}
               task={selectedTask}
               collapsed={panelCollapsed}
               onToggleCollapse={handleToggleCollapsePanel}
@@ -1155,6 +1159,7 @@ function BoardContent({
       )}
       <CompactTaskAgentSheet
         serverId={serverId}
+        projectId={projectId}
         task={detailTask}
         visible={detailTask !== null}
         onClose={handleCloseDetail}
@@ -1204,7 +1209,12 @@ function CompactFlow({
   }
   return (
     <View style={styles.compactBoardWrap}>
-      <BoardContent serverId={serverId} folderId={folderId} boardHandle={boardHandle} />
+      <BoardContent
+        serverId={serverId}
+        projectId={projectId}
+        folderId={folderId}
+        boardHandle={boardHandle}
+      />
     </View>
   );
 }

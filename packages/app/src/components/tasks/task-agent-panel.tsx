@@ -29,6 +29,7 @@ type PanelView = "chat" | "details" | "billing";
 
 export interface TaskAgentPanelProps {
   serverId: string | null;
+  projectId: string | null;
   task: KanbanTask;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -54,7 +55,7 @@ export interface TaskAgentPanelProps {
  * one.
  */
 export function TaskAgentPanel(props: TaskAgentPanelProps) {
-  const { serverId, task, collapsed, onToggleCollapse, onClose, fullscreen } = props;
+  const { serverId, projectId, task, collapsed, onToggleCollapse, onClose, fullscreen } = props;
   const { t } = useTranslation();
   const [view, setView] = useState<PanelView>("chat");
 
@@ -81,7 +82,7 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
       );
     }
     if (view === "billing") {
-      return <TaskBillingView task={task} />;
+      return <TaskBillingView task={task} serverId={serverId} projectId={projectId} />;
     }
     return (
       <TaskDetailInlineForm
