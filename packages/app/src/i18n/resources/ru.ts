@@ -1784,6 +1784,13 @@ export const ru: TranslationResources = {
         success: "Данные браузера очищены.",
         error: "Не удалось очистить данные браузера.",
       },
+      webPush: {
+        label: "Веб-уведомления",
+        description: "Получайте оповещения в этом браузере, даже когда Paseo закрыт.",
+        enable: "Включить",
+        enabled: "Включено",
+        blocked: "Заблокировано",
+      },
       defaultSend: {
         label: "Отправка по умолчанию",
         descriptions: {

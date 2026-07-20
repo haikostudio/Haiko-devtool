@@ -66,6 +66,8 @@ import { AddHostModal } from "@/components/add-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { Button } from "@/components/ui/button";
+import { isWeb } from "@/constants/platform";
+import { enableWebPush, getWebPushState, type WebPushState } from "@/utils/web-push";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -295,6 +297,48 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
   );
 }
 
+function WebPushRow() {
+  const { t } = useTranslation();
+  const [state, setState] = useState<WebPushState>(() => getWebPushState());
+  const [busy, setBusy] = useState(false);
+
+  const handleEnable = useCallback(async () => {
+    setBusy(true);
+    try {
+      setState(await enableWebPush());
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  if (state === "unsupported") return null;
+
+  let actionLabel = t("settings.general.webPush.enable");
+  if (state === "enabled") {
+    actionLabel = t("settings.general.webPush.enabled");
+  } else if (state === "denied") {
+    actionLabel = t("settings.general.webPush.blocked");
+  }
+
+  return (
+    <View style={ROW_WITH_BORDER_STYLE}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.general.webPush.label")}</Text>
+        <Text style={settingsStyles.rowHint}>{t("settings.general.webPush.description")}</Text>
+      </View>
+      <Button
+        size="sm"
+        variant={state === "enabled" ? "outline" : "default"}
+        onPress={handleEnable}
+        loading={busy}
+        disabled={state === "enabled" || state === "denied"}
+      >
+        {actionLabel}
+      </Button>
+    </View>
+  );
+}
+
 function GeneralSection({
   settings,
   isDesktopApp,
@@ -386,6 +430,7 @@ function GeneralSection({
             </DropdownMenuContent>
           </DropdownMenu>
         </View>
+        {isWeb ? <WebPushRow /> : null}
         {isDesktopApp ? (
           <View style={ROW_WITH_BORDER_STYLE}>
             <View style={settingsStyles.rowContent}>

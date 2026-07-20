@@ -1735,6 +1735,13 @@ export const zhCN: TranslationResources = {
         success: "浏览器数据已清除。",
         error: "无法清除浏览器数据。",
       },
+      webPush: {
+        label: "网页通知",
+        description: "即使关闭 Paseo，也能在此浏览器接收推送提醒。",
+        enable: "启用",
+        enabled: "已启用",
+        blocked: "已阻止",
+      },
       defaultSend: {
         label: "默认发送",
         descriptions: {

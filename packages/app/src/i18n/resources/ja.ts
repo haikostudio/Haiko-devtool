@@ -1768,6 +1768,13 @@ export const ja: TranslationResources = {
         success: "ブラウザーデータを消去しました。",
         error: "ブラウザーデータを消去できませんでした。",
       },
+      webPush: {
+        label: "Web通知",
+        description: "Paseoを閉じていても、このブラウザで通知を受け取ります。",
+        enable: "有効にする",
+        enabled: "有効",
+        blocked: "ブロック中",
+      },
       defaultSend: {
         label: "デフォルトの送信",
         descriptions: {

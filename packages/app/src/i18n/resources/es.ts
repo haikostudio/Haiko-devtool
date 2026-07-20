@@ -1793,6 +1793,13 @@ export const es: TranslationResources = {
         success: "Datos del navegador borrados.",
         error: "No se pudieron borrar los datos del navegador.",
       },
+      webPush: {
+        label: "Notificaciones web",
+        description: "Recibe alertas en este navegador, incluso con Paseo cerrado.",
+        enable: "Activar",
+        enabled: "Activado",
+        blocked: "Bloqueado",
+      },
       defaultSend: {
         label: "Envío predeterminado",
         descriptions: {

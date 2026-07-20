@@ -1751,6 +1751,13 @@ export const ar: TranslationResources = {
         success: "تم مسح بيانات المتصفح.",
         error: "تعذر مسح بيانات المتصفح.",
       },
+      webPush: {
+        label: "إشعارات الويب",
+        description: "استلم التنبيهات في هذا المتصفح حتى عندما يكون Paseo مغلقًا.",
+        enable: "تفعيل",
+        enabled: "مُفعّل",
+        blocked: "محظور",
+      },
       defaultSend: {
         label: "إرسال افتراضي",
         descriptions: {

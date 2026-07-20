@@ -1796,6 +1796,13 @@ export const fr: TranslationResources = {
         success: "Données du navigateur effacées.",
         error: "Impossible d'effacer les données du navigateur.",
       },
+      webPush: {
+        label: "Notifications web",
+        description: "Recevez des alertes dans ce navigateur, même quand Paseo est fermé.",
+        enable: "Activer",
+        enabled: "Activé",
+        blocked: "Bloqué",
+      },
       defaultSend: {
         label: "Envoi par défaut",
         descriptions: {

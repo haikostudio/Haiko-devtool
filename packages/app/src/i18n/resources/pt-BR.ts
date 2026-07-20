@@ -1779,6 +1779,13 @@ export const ptBR: TranslationResources = {
         success: "Dados do navegador limpos.",
         error: "Não foi possível limpar os dados do navegador.",
       },
+      webPush: {
+        label: "Notificações web",
+        description: "Receba alertas neste navegador, mesmo com o Paseo fechado.",
+        enable: "Ativar",
+        enabled: "Ativado",
+        blocked: "Bloqueado",
+      },
       defaultSend: {
         label: "Envio padrão",
         descriptions: {

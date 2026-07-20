@@ -1759,6 +1759,13 @@ export const en = {
         success: "Browser data cleared.",
         error: "Couldn't clear browser data.",
       },
+      webPush: {
+        label: "Web notifications",
+        description: "Receive push alerts in this browser, even when Paseo is closed.",
+        enable: "Enable",
+        enabled: "Enabled",
+        blocked: "Blocked",
+      },
       defaultSend: {
         label: "Default send",
         descriptions: {
