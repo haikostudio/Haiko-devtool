@@ -345,6 +345,8 @@ export interface BrainContextMemory {
   texte: string;
   rejete?: boolean;
   motif?: string;
+  /** ISO date the memory was last confirmed in the Cerveau (optional). */
+  date?: string;
 }
 
 export interface BrainContextTimelineItem {

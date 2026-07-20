@@ -662,6 +662,10 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
         texte: z.string(),
         rejete: z.boolean().optional(),
         motif: z.string().optional(),
+        // ISO date the memory was last confirmed in the Cerveau. Additive:
+        // memories rebuilt from a transcript echo carry no date and render
+        // without one. COMPAT(brainMemoryDate): added in v0.1.X.
+        date: z.string().optional(),
       }),
     ),
     status: z.enum(["loading", "done"]).optional(),
@@ -1849,6 +1853,8 @@ export const ComptaSummaryFetchResponseSchema = z.object({
       .object({
         currency: z.string(),
         points: z.array(ComptaMonthPointSchema),
+        // User-defined monthly revenue goal, drawn as a target line on the chart.
+        goal: z.number().optional(),
       })
       .optional(),
     success: z.boolean(),

@@ -50,6 +50,8 @@ export interface BrainSouvenir {
   project?: string | null;
   /** Recall path that surfaced the memory ("concept:mot", "repechage", layers…). */
   via?: string | null;
+  /** ISO date the memory was last confirmed — the closest thing to an "age". */
+  date_derniere_confirmation?: string | null;
 }
 
 /** One stored procedure ("skill") as returned by GET /v1/skills (subset we use). */
@@ -523,17 +525,18 @@ function parseRecallBlob(blob: string): { texte: string; rejete?: boolean; motif
 /** Convert a memory list into the wire shape for the brain_context timeline item. */
 export function toTimelineMemories(
   resultats: BrainSouvenir[],
-): { texte: string; rejete?: boolean; motif?: string }[] {
-  const out: { texte: string; rejete?: boolean; motif?: string }[] = [];
+): { texte: string; rejete?: boolean; motif?: string; date?: string }[] {
+  const out: { texte: string; rejete?: boolean; motif?: string; date?: string }[] = [];
   for (const s of resultats) {
     const texte = (s.texte ?? "").trim();
     if (!texte) {
       continue;
     }
+    const date = (s.date_derniere_confirmation ?? "").trim() || undefined;
     if (s.statut === "rejete") {
-      out.push({ texte, rejete: true, motif: (s.motif ?? "").trim() || undefined });
+      out.push({ texte, rejete: true, motif: (s.motif ?? "").trim() || undefined, date });
     } else {
-      out.push({ texte });
+      out.push({ texte, date });
     }
   }
   return out;

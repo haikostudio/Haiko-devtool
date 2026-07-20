@@ -2466,8 +2466,10 @@ const brainContextStylesheet = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: 18,
   },
-  memoryText: {
+  memoryTextColumn: {
     flex: 1,
+  },
+  memoryText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     lineHeight: 18,
@@ -2481,6 +2483,12 @@ const brainContextStylesheet = StyleSheet.create((theme) => ({
   memoryMotif: {
     color: theme.colors.foregroundMuted,
     fontStyle: "italic",
+  },
+  memoryDate: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 14,
+    marginTop: 1,
   },
 }));
 
@@ -2507,6 +2515,26 @@ function categorizeBrainMemory(memory: BrainMemory): BrainMemoryKind {
 /** Strip the leading category emoji — the section header already conveys it. */
 function stripBrainPrefix(texte: string): string {
   return texte.replace(/^\s*(?:📁|📋)\s*/u, "").trim();
+}
+
+const BRAIN_DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** "18 juil. 2026 à 14:32" from the memory's ISO date, or null if unparseable. */
+function formatBrainMemoryDate(iso: string | undefined): string | null {
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return BRAIN_DATE_FORMATTER.format(date).replace(",", " à");
 }
 
 const BRAIN_SECTIONS: { kind: BrainMemoryKind; label: string }[] = [
@@ -2539,24 +2567,32 @@ function summarizeBrainMemories(memories: BrainMemory[]): string {
 }
 
 function BrainMemoryRow({ kind, memory }: { kind: BrainMemoryKind; memory: BrainMemory }) {
+  const dateLabel = formatBrainMemoryDate(memory.date);
   return (
     <View style={brainContextStylesheet.memoryRow}>
       <Text style={brainContextStylesheet.memoryBullet} selectable={false}>
         {kind === "rejete" ? "⛔" : "•"}
       </Text>
-      <Text
-        style={
-          kind === "rejete"
-            ? brainContextStylesheet.memoryTextRejected
-            : brainContextStylesheet.memoryText
-        }
-        selectable
-      >
-        {kind === "rejete" && memory.motif ? (
-          <Text style={brainContextStylesheet.memoryMotif}>{`(${memory.motif}) `}</Text>
+      <View style={brainContextStylesheet.memoryTextColumn}>
+        <Text
+          style={
+            kind === "rejete"
+              ? brainContextStylesheet.memoryTextRejected
+              : brainContextStylesheet.memoryText
+          }
+          selectable
+        >
+          {kind === "rejete" && memory.motif ? (
+            <Text style={brainContextStylesheet.memoryMotif}>{`(${memory.motif}) `}</Text>
+          ) : null}
+          {stripBrainPrefix(memory.texte)}
+        </Text>
+        {dateLabel ? (
+          <Text style={brainContextStylesheet.memoryDate} selectable={false}>
+            {dateLabel}
+          </Text>
         ) : null}
-        {stripBrainPrefix(memory.texte)}
-      </Text>
+      </View>
     </View>
   );
 }

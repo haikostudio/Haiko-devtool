@@ -212,6 +212,8 @@ export interface BrainContextMemoryEntry {
   texte: string;
   rejete?: boolean;
   motif?: string;
+  /** ISO date the memory was last confirmed in the Cerveau (optional). */
+  date?: string;
 }
 
 /** Cerveau recall performed by the daemon before dispatching the prompt. */
@@ -1029,6 +1031,7 @@ function reduceTimelineEvent(
           texte: memory.texte,
           rejete: memory.rejete,
           motif: memory.motif,
+          date: memory.date,
         })),
         status: item.status,
       };

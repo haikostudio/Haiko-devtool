@@ -14,6 +14,7 @@ import { baseColors } from "@/styles/theme";
 const CHART_HEIGHT = 96;
 const INVOICED_COLOR = baseColors.purple[500];
 const PAID_COLOR = baseColors.green[500];
+const GOAL_COLOR = baseColors.amber[500];
 
 interface ComptaSectionProps {
   rows: ComptaSummaryRow[];
@@ -100,6 +101,7 @@ export function ComptaSection({ rows, monthly }: ComptaSectionProps) {
               <Text style={styles.title}>{t("dashboard.compta.yearTitle")}</Text>
               <Text style={styles.monthLabel}>{monthly.currency}</Text>
             </View>
+            <GoalProgress monthly={monthly} />
             <YearChart monthly={monthly} />
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
@@ -110,6 +112,12 @@ export function ComptaSection({ rows, monthly }: ComptaSectionProps) {
                 <View style={styles.legendDot(PAID_COLOR)} />
                 <Text style={styles.legendLabel}>{t("dashboard.compta.paid")}</Text>
               </View>
+              {monthly.goal !== undefined && monthly.goal > 0 ? (
+                <View style={styles.legendItem}>
+                  <View style={styles.legendDash} />
+                  <Text style={styles.legendLabel}>{t("dashboard.compta.goalLegend")}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         ) : null}
@@ -246,13 +254,38 @@ function InvoiceLine({ invoice }: { invoice: ComptaInvoiceRef }) {
   );
 }
 
+// "This month: X / goal (N %)" progress line under the chart title.
+function GoalProgress({ monthly }: { monthly: ComptaMonthlyRevenue }) {
+  const { t } = useTranslation();
+  const goal = monthly.goal;
+  if (goal === undefined || goal <= 0) {
+    return null;
+  }
+  const current = monthly.points[monthly.points.length - 1]?.invoiced ?? 0;
+  const pct = Math.round((current / goal) * 100);
+  return (
+    <Text style={styles.goalLine}>
+      {t("dashboard.compta.goalLine", {
+        current: formatAmount(current),
+        goal: formatAmount(goal),
+        pct,
+      })}
+    </Text>
+  );
+}
+
 function YearChart({ monthly }: { monthly: ComptaMonthlyRevenue }) {
+  const goal = monthly.goal !== undefined && monthly.goal > 0 ? monthly.goal : null;
   const maxValue = Math.max(
     1,
+    goal ?? 0,
     ...monthly.points.map((point) => Math.max(point.invoiced, point.paid)),
   );
+  // Bars sit above an 18px label zone; the goal line offset accounts for it.
+  const goalBottom = goal !== null ? 18 + Math.round((goal / maxValue) * CHART_HEIGHT) : null;
   return (
     <View style={styles.chartArea}>
+      {goalBottom !== null ? <View style={styles.goalRule(goalBottom)} /> : null}
       {monthly.points.map((point, index) => {
         const invoicedHeight =
           point.invoiced > 0
@@ -448,6 +481,26 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "flex-end",
     gap: 3,
     height: CHART_HEIGHT + 18,
+  },
+  goalLine: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  goalRule: (bottom: number) => ({
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    bottom,
+    borderTopWidth: 1,
+    borderStyle: "dashed" as const,
+    borderColor: GOAL_COLOR,
+  }),
+  legendDash: {
+    width: 10,
+    height: 0,
+    borderTopWidth: 1,
+    borderStyle: "dashed" as const,
+    borderColor: GOAL_COLOR,
   },
   barColumn: {
     flex: 1,

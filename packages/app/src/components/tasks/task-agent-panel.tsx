@@ -9,6 +9,7 @@ import {
   TaskDetailInlineForm,
   type TaskDetailSaveInput,
 } from "@/components/tasks/task-detail-sheet";
+import { TaskBillingView } from "@/components/tasks/task-billing-view";
 import type { KanbanTask } from "@/data/tasks";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -24,7 +25,7 @@ const ThemedX = withUnistyles(X);
 const ThemedPanelClose = withUnistyles(PanelRightClose);
 const ThemedPanelOpen = withUnistyles(PanelRightOpen);
 
-type PanelView = "chat" | "details";
+type PanelView = "chat" | "details" | "billing";
 
 export interface TaskAgentPanelProps {
   serverId: string | null;
@@ -71,6 +72,7 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
     () => [
       { value: "chat", label: t("tasks.panel.chat"), testID: "task-panel-view-chat" },
       { value: "details", label: t("tasks.panel.details"), testID: "task-panel-view-details" },
+      { value: "billing", label: t("tasks.panel.billing"), testID: "task-panel-view-billing" },
     ],
     [t],
   );
@@ -140,6 +142,8 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
             workspaceId={workspaceId}
             onRunNow={props.onRunNow}
           />
+        ) : view === "billing" ? (
+          <TaskBillingView task={task} />
         ) : (
           <TaskDetailInlineForm
             serverId={serverId}
