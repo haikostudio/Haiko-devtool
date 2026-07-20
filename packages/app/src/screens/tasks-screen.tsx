@@ -1227,54 +1227,62 @@ function CompactBoardHeader({
           >
             <ThemedChevronLeft size={ICON_SIZE.md} uniProps={mutedColorMapping} />
           </Pressable>
-          {currentProject ? (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  style={styles.folderSelector}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("tasks.pickProject")}
-                  testID="tasks-header-board-project-selector"
-                >
-                  <ProjectColorMark projectKey={currentProject.projectId} />
-                  <Text style={styles.folderSelectorLabel} numberOfLines={1}>
-                    {currentProject.displayName}
-                  </Text>
-                  <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" width={240}>
-                  {projects.map((entry) => (
-                    <ProjectSelectorItem
-                      key={`${entry.serverId}:${entry.projectId}`}
-                      entry={entry}
-                    />
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Text style={styles.headerSeparator}>/</Text>
-            </>
-          ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              style={styles.folderSelector}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={t("tasks.folders")}
-              testID="tasks-header-folder-selector"
-            >
-              <FolderColorMark color={currentFolder.color} />
-              <Text style={styles.folderSelectorLabel} numberOfLines={1}>
-                {currentFolder.name}
-              </Text>
-              <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" width={240}>
-              {folders.map((folder) => (
-                <FolderSelectorItem key={folder.id} folder={folder} />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.boardHeaderScroll}
+            contentContainerStyle={styles.boardHeaderScrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {currentProject ? (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    style={styles.folderSelector}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("tasks.pickProject")}
+                    testID="tasks-header-board-project-selector"
+                  >
+                    <ProjectColorMark projectKey={currentProject.projectId} />
+                    <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+                      {currentProject.displayName}
+                    </Text>
+                    <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" width={240}>
+                    {projects.map((entry) => (
+                      <ProjectSelectorItem
+                        key={`${entry.serverId}:${entry.projectId}`}
+                        entry={entry}
+                      />
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Text style={styles.headerSeparator}>/</Text>
+              </>
+            ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                style={styles.folderSelector}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t("tasks.folders")}
+                testID="tasks-header-folder-selector"
+              >
+                <FolderColorMark color={currentFolder.color} />
+                <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+                  {currentFolder.name}
+                </Text>
+                <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" width={240}>
+                {folders.map((folder) => (
+                  <FolderSelectorItem key={folder.id} folder={folder} />
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </ScrollView>
         </>
       }
     />
@@ -1741,6 +1749,14 @@ const styles = StyleSheet.create((theme) => ({
   headerSeparator: {
     fontSize: theme.fontSize.base,
     color: theme.colors.mutedForeground,
+  },
+  boardHeaderScroll: {
+    flex: 1,
+  },
+  boardHeaderScrollContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
   },
   // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
   compactListWrap: {
