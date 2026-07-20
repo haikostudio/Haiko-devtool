@@ -13,6 +13,7 @@ const supervisorPath = fileURLToPath(new URL("./supervisor.ts", import.meta.url)
 async function runSupervisorFixture(options: {
   workerSource: string;
   restartOnCrash?: boolean;
+  setup?: (tempDir: string) => Promise<void>;
 }): Promise<{
   code: number | null;
   signal: NodeJS.Signals | null;
@@ -46,6 +47,8 @@ async function runSupervisorFixture(options: {
       });
     `,
   );
+
+  await options.setup?.(tempDir);
 
   const child = spawn(process.execPath, ["--import", "tsx", runnerPath], {
     cwd: repoRoot,
@@ -83,7 +86,9 @@ async function runSupervisorFixture(options: {
     });
   });
 
-  const log = await readFile(logPath, "utf8");
+  // A rotation-failure fixture can leave no daemon.log behind (the stream dies
+  // mid-rotation) — treat a missing file as empty output.
+  const log = await readFile(logPath, "utf8").catch(() => "");
   return { code, signal, log, stdout, stderr };
 }
 
@@ -184,6 +189,38 @@ describe("supervisor durable logging", () => {
     expect(result.log).toContain('"msg":"Supervisor sending signal to worker"');
     expect(result.log).toContain('"signal":"SIGTERM"');
     expect(result.log).toContain('"workerPid":');
+  });
+
+  test("survives a failing rotation history entry instead of crashing", async () => {
+    const result = await runSupervisorFixture({
+      setup: async (tempDir) => {
+        // Stale rotation-history entry whose stat() fails with ENOTDIR (a path "inside"
+        // a regular file) — same non-ENOENT shape as the EACCES a leftover entry from
+        // another install produces. Rotation must not crash the supervisor over it.
+        const plainFile = path.join(tempDir, "plain-file");
+        await writeFile(plainFile, "not a directory");
+        await writeFile(path.join(tempDir, "daemon.log.txt"), `${path.join(plainFile, "child")}\n`);
+      },
+      workerSource: `
+        // Write enough to cross the 1m rotation threshold, and only exit once every
+        // chunk is flushed to the pipe — process.exit() would truncate pending writes.
+        const chunk = "x".repeat(64 * 1024) + "\\n";
+        let pending = 0;
+        for (let i = 0; i < 20; i += 1) {
+          pending += 1;
+          process.stdout.write(chunk, () => {
+            pending -= 1;
+            if (pending === 0) {
+              process.exit(0);
+            }
+          });
+        }
+      `,
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.signal).toBeNull();
+    expect(result.stderr).toContain("durable file logging disabled");
   });
 
   // POSIX-only: Windows reports the worker self-kill as an exit code, not SIGKILL.
