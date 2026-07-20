@@ -93,6 +93,7 @@ import type {
   WorkspaceUiState,
   UsageStatsDay,
   ComptaSummaryRow,
+  ComptaMonthlyRevenue,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -312,6 +313,12 @@ export interface SendMessageOptions {
   messageId?: string;
   images?: Array<{ data: string; mimeType: string }>;
   attachments?: SendAgentMessageRequest["attachments"];
+}
+
+export interface ComptaSummaryData {
+  month: string;
+  rows: ComptaSummaryRow[];
+  monthly: ComptaMonthlyRevenue | null;
 }
 
 type AgentConfigOverrides = Partial<Omit<AgentSessionConfig, "provider" | "cwd">>;
@@ -2147,16 +2154,18 @@ export class DaemonClient {
     });
   }
 
-  async fetchComptaSummary(
-    requestId?: string,
-  ): Promise<{ month: string; rows: ComptaSummaryRow[] }> {
+  async fetchComptaSummary(requestId?: string): Promise<ComptaSummaryData> {
     return this.sendNamespacedCorrelatedSessionRequest<
       "compta.summary.fetch.response",
-      { month: string; rows: ComptaSummaryRow[] }
+      ComptaSummaryData
     >({
       requestId,
       message: { type: "compta.summary.fetch.request" },
-      selectPayload: (payload) => ({ month: payload.month, rows: payload.rows }),
+      selectPayload: (payload) => ({
+        month: payload.month,
+        rows: payload.rows,
+        monthly: payload.monthly ?? null,
+      }),
     });
   }
 

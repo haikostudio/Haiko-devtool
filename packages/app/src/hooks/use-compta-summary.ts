@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ComptaSummaryRow } from "@getpaseo/protocol/messages";
+import type { ComptaMonthlyRevenue, ComptaSummaryRow } from "@getpaseo/protocol/messages";
 import { getHostRuntimeStore, isHostRuntimeConnected, useHosts } from "@/runtime/host-runtime";
 import { useHostFeatureMap } from "@/runtime/host-features";
 
@@ -7,6 +7,8 @@ export interface ComptaSummaryResult {
   /** YYYY-MM of the summarized month, null before first load. */
   month: string | null;
   rows: ComptaSummaryRow[] | null;
+  /** 12-month revenue series (dominant currency), null when absent. */
+  monthly: ComptaMonthlyRevenue | null;
   isLoading: boolean;
   /** At least one connected host supports the comptaSummary feature. */
   isSupported: boolean;
@@ -25,6 +27,7 @@ export function useComptaSummary(): ComptaSummaryResult {
   const featureByServer = useHostFeatureMap(serverIds, "comptaSummary");
   const [month, setMonth] = useState<string | null>(null);
   const [rows, setRows] = useState<ComptaSummaryRow[] | null>(null);
+  const [monthly, setMonthly] = useState<ComptaMonthlyRevenue | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -52,6 +55,7 @@ export function useComptaSummary(): ComptaSummaryResult {
           if (!cancelled) {
             setMonth(summary.month);
             setRows(summary.rows);
+            setMonthly(summary.monthly);
           }
           break;
         } catch {
@@ -72,5 +76,5 @@ export function useComptaSummary(): ComptaSummaryResult {
     setRefreshKey((key) => key + 1);
   }, []);
 
-  return { month, rows, isLoading, isSupported, refresh };
+  return { month, rows, monthly, isLoading, isSupported, refresh };
 }

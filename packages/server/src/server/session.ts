@@ -2835,6 +2835,7 @@ export class Session {
         payload: {
           month: summary.month,
           rows: summary.rows,
+          monthly: summary.monthly,
           success: true,
           error: null,
           requestId,

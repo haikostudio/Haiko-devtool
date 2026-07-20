@@ -1,28 +1,24 @@
-import { memo, useMemo } from "react";
+import { memo, useId, useMemo } from "react";
 import { View } from "react-native";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { StyleSheet } from "react-native-unistyles";
+import MaskedView from "@react-native-masked-view/masked-view";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
-import type { Theme } from "@/styles/theme";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
 /**
- * Soft fade painted behind the floating synthesis banner. Without it, the
- * transcript scrolls up and butts against the banner with a hard edge — a
- * scrolled line pokes out right under the card and reads as a glitch. This scrim
- * keeps the panel background opaque behind the card, then fades to transparent
- * just below it, so content dissolves as it slides underneath instead of
- * cutting off abruptly.
+ * Soft fade painted behind the floating synthesis banner (native). Without it,
+ * the transcript butts against the banner with a hard edge — a scrolled line
+ * pokes out right under the card and reads as a glitch. This scrim keeps the
+ * panel background opaque behind the card, then fades to transparent just below
+ * it, so content dissolves as it slides underneath instead of cutting abruptly.
  *
- * Sits above the transcript but below the banner (zIndex between the two) and is
- * inert to touch. Renders nothing until the banner reports its extent.
+ * The panel color comes from a plain themed View (tracked by Unistyles); the
+ * gradient is a fixed white→transparent alpha mask, so no theme value has to be
+ * threaded through the SVG (wrapping an SVG <Stop> to theme it inserts a <div>
+ * that breaks the gradient on web). Sits above the transcript, below the banner,
+ * inert to touch. See the `.web.tsx` sibling for the CSS-gradient variant.
  */
 const FADE_TAIL = 28;
-
-const surface0StopMapping = (theme: Theme) => ({
-  stopColor: theme.colors.surface0,
-});
-
-const ThemedStop = withUnistyles(Stop);
 
 export const AgentSynthesisScrim = memo(function AgentSynthesisScrim({
   extent,
@@ -30,31 +26,40 @@ export const AgentSynthesisScrim = memo(function AgentSynthesisScrim({
   /** The banner's occupied vertical extent (its bottom edge from the panel top). */
   extent: number;
 }) {
+  const maskId = useId();
   const height = extent + FADE_TAIL;
   // Height is measured geometry: keep it off the Unistyles CSS registry.
   const hostStyle = useMemo(() => [styles.host, inlineUnistylesStyle({ height })], [height]);
+  // Opaque down to the card's bottom edge, then fade over the tail.
+  const solidOffset = extent / height;
+  const maskElement = useMemo(
+    () => (
+      <Svg width="100%" height="100%" preserveAspectRatio="none">
+        <Defs>
+          <SvgLinearGradient id={maskId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset={0} stopColor="#fff" stopOpacity={1} />
+            <Stop offset={solidOffset} stopColor="#fff" stopOpacity={1} />
+            <Stop offset={1} stopColor="#fff" stopOpacity={0} />
+          </SvgLinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${maskId})`} />
+      </Svg>
+    ),
+    [maskId, solidOffset],
+  );
   if (extent <= 0) {
     return null;
   }
-  // Opaque down to the card's bottom edge, then fade over the tail.
-  const solidOffset = extent / height;
   return (
     <View style={hostStyle} pointerEvents="none">
-      <Svg width="100%" height="100%" preserveAspectRatio="none">
-        <Defs>
-          <SvgLinearGradient id="synthesisScrim" x1="0" y1="0" x2="0" y2="1">
-            <ThemedStop offset={0} stopOpacity={1} uniProps={surface0StopMapping} />
-            <ThemedStop offset={solidOffset} stopOpacity={1} uniProps={surface0StopMapping} />
-            <ThemedStop offset={1} stopOpacity={0} uniProps={surface0StopMapping} />
-          </SvgLinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#synthesisScrim)" />
-      </Svg>
+      <MaskedView style={StyleSheet.absoluteFill} maskElement={maskElement}>
+        <View style={styles.fill} />
+      </MaskedView>
     </View>
   );
 });
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create((theme) => ({
   host: {
     position: "absolute",
     top: 0,
@@ -62,4 +67,8 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 20,
   },
-});
+  fill: {
+    flex: 1,
+    backgroundColor: theme.colors.surface0,
+  },
+}));

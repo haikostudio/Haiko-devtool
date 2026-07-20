@@ -115,6 +115,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     hasOlderHistory,
     scrollEnabled,
     isMobileBreakpoint,
+    topContentInset = 0,
   } = props;
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -652,13 +653,15 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       display: "flex",
       flexDirection: "column",
       minHeight: "100%",
-      paddingTop: 16,
+      // Reserve room for the floating synthesis banner at the top; later messages
+      // still scroll up under it (the scroll container is full-height behind it).
+      paddingTop: 16 + topContentInset,
       paddingBottom: 16,
       paddingLeft: isMobileBreakpoint ? 8 : 16,
       paddingRight: isMobileBreakpoint ? 8 : 16,
       boxSizing: "border-box",
     };
-  }, [isMobileBreakpoint]);
+  }, [isMobileBreakpoint, topContentInset]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     return {
       flex: 1,

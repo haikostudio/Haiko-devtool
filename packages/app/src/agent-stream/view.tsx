@@ -281,6 +281,10 @@ export interface AgentStreamViewProps {
   // inline, so it escapes the message pane's clip and spans the full panel
   // height (down past the composer). Only agent-panel provides one.
   magicScrollbarPortalHostName?: string;
+  // Space reserved at the visual top of the transcript for the floating
+  // synthesis banner. Lives in the list's own content padding so later messages
+  // can still scroll up under the banner and fade there. Defaults to 0.
+  topContentInset?: number;
 }
 
 const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
@@ -366,6 +370,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       readOnly = false,
       historyPagination,
       magicScrollbarPortalHostName,
+      topContentInset,
     },
     ref,
   ) {
@@ -1215,6 +1220,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+              topContentInset,
             })}
           </MessageOuterSpacingProvider>
           {!isNearBottom && (

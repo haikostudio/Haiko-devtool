@@ -85,6 +85,14 @@ export interface StreamRenderInput {
   listStyle: StyleProp<ViewStyle>;
   baseListContentContainerStyle: StyleProp<ViewStyle>;
   forwardListContentContainerStyle: StyleProp<ViewStyle>;
+  /**
+   * Extra space, in px, reserved at the visual top of the transcript so the
+   * first message clears the floating synthesis banner. Unlike the old wrapper
+   * padding, this lives in the list's own content so later messages can still
+   * scroll up *under* the banner and fade out there. Web adds it to paddingTop;
+   * the inverted native list adds it to paddingBottom (its visual top).
+   */
+  topContentInset?: number;
 }
 
 export interface ResolveStreamRenderStrategyInput {

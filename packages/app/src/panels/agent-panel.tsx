@@ -473,6 +473,11 @@ const MAGIC_SCROLLBAR_COMPOSER_MARGIN = 8;
 // Breathing room between the floating synthesis banner and the first transcript
 // message once the content is inset below it.
 const SYNTHESIS_BANNER_CONTENT_GAP = 12;
+// Height of the scrim's fade below the banner. MUST match FADE_TAIL in
+// agent-synthesis-scrim.{tsx,web.tsx}: the transcript's top inset clears the
+// banner *and* the fade so the first message rests fully opaque, while later
+// messages scroll up under the banner and dissolve through the fade.
+const SYNTHESIS_BANNER_SCRIM_FADE = 28;
 
 type RouteBottomAnchorRequest = ReturnType<typeof deriveRouteBottomAnchorRequest>;
 
@@ -1236,15 +1241,13 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   // transcript, hiding the first message. Inset the content by the banner's
   // occupied extent (plus a small gap) so the first message clears it.
   const [synthesisBannerExtent, setSynthesisBannerExtent] = useState(0);
-  const contentContainerStyle = useMemo(() => {
-    if (synthesisBannerExtent <= 0) {
-      return styles.contentContainer;
-    }
-    return [
-      styles.contentContainer,
-      { paddingTop: synthesisBannerExtent + SYNTHESIS_BANNER_CONTENT_GAP },
-    ];
-  }, [synthesisBannerExtent]);
+  // The transcript fills the whole panel (behind the banner); the banner
+  // clearance is applied as the list's own top content inset instead of a
+  // clipping wrapper, so messages can scroll up under the banner and fade there.
+  const synthesisTopInset =
+    synthesisBannerExtent > 0
+      ? synthesisBannerExtent + SYNTHESIS_BANNER_SCRIM_FADE + SYNTHESIS_BANNER_CONTENT_GAP
+      : 0;
   const streamSection = (
     <RenderProfile id={`AgentStreamSection:${agentId}`}>
       <AgentStreamSection
@@ -1257,6 +1260,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         toast={toastApi}
         onOpenWorkspaceFile={onOpenWorkspaceFile}
         magicScrollbarPortalHostName={magicScrollbarPortalHostName}
+        topContentInset={synthesisTopInset}
       />
     </RenderProfile>
   );
@@ -1281,7 +1285,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const streamContent = (
     <ReanimatedAnimated.View style={animatedContentStyle}>{streamSection}</ReanimatedAnimated.View>
   );
-  const contentContainer = <View style={contentContainerStyle}>{streamContent}</View>;
+  const contentContainer = <View style={styles.contentContainer}>{streamContent}</View>;
 
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
@@ -1337,6 +1341,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   toast,
   onOpenWorkspaceFile,
   magicScrollbarPortalHostName,
+  topContentInset,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
@@ -1347,6 +1352,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
   magicScrollbarPortalHostName?: string;
+  topContentInset?: number;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
     agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
@@ -1392,6 +1398,7 @@ const AgentStreamSection = memo(function AgentStreamSection({
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
       magicScrollbarPortalHostName={magicScrollbarPortalHostName}
+      topContentInset={topContentInset}
     />
   );
 });

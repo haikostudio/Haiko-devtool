@@ -1799,6 +1799,26 @@ export const UsageStatsFetchResponseSchema = z.object({
   }),
 });
 
+// Compact invoice reference behind the dashboard numbers (tap-to-expand detail).
+export const ComptaInvoiceRefSchema = z.object({
+  number: z.string(),
+  client: z.string(),
+  title: z.string(),
+  total: z.number(),
+  amountDue: z.number(),
+  // YYYY-MM-DD, empty string when the invoice has no due date.
+  dueDate: z.string(),
+  status: z.string(),
+});
+
+// One point of the 12-month revenue series.
+export const ComptaMonthPointSchema = z.object({
+  // YYYY-MM
+  month: z.string(),
+  invoiced: z.number(),
+  paid: z.number(),
+});
+
 // One row per issuing company + currency pair from the accounting instance.
 // Amounts are already aggregated daemon-side; the client only renders them.
 export const ComptaSummaryRowSchema = z.object({
@@ -1814,6 +1834,8 @@ export const ComptaSummaryRowSchema = z.object({
   // Outstanding invoices whose due date is past (or already marked overdue).
   overdueCount: z.number().int(),
   draftCount: z.number().int(),
+  // Invoices behind the numbers above: outstanding + drafts + this month's.
+  invoices: z.array(ComptaInvoiceRefSchema).optional(),
 });
 
 export const ComptaSummaryFetchResponseSchema = z.object({
@@ -1822,6 +1844,13 @@ export const ComptaSummaryFetchResponseSchema = z.object({
     // YYYY-MM, daemon-local time.
     month: z.string(),
     rows: z.array(ComptaSummaryRowSchema),
+    // 12-month revenue series for the dominant currency, all companies merged.
+    monthly: z
+      .object({
+        currency: z.string(),
+        points: z.array(ComptaMonthPointSchema),
+      })
+      .optional(),
     success: z.boolean(),
     error: z.string().nullable(),
     requestId: z.string(),
@@ -5118,6 +5147,11 @@ export type UsageStatsHourBucket = z.infer<typeof UsageStatsHourBucketSchema>;
 export type UsageStatsDay = z.infer<typeof UsageStatsDaySchema>;
 export type UsageStatsFetchResponse = z.infer<typeof UsageStatsFetchResponseSchema>;
 export type ComptaSummaryRow = z.infer<typeof ComptaSummaryRowSchema>;
+export type ComptaInvoiceRef = z.infer<typeof ComptaInvoiceRefSchema>;
+export type ComptaMonthPoint = z.infer<typeof ComptaMonthPointSchema>;
+export type ComptaMonthlyRevenue = NonNullable<
+  z.infer<typeof ComptaSummaryFetchResponseSchema>["payload"]["monthly"]
+>;
 export type ComptaSummaryFetchResponse = z.infer<typeof ComptaSummaryFetchResponseSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
 export type WorkspaceCreateResponse = z.infer<typeof WorkspaceCreateResponseSchema>;
