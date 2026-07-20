@@ -6,6 +6,7 @@ import {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
   type AnimatedStyle,
 } from "react-native-reanimated";
 import { useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
@@ -21,8 +22,7 @@ const DRAG_ACTIVATION_DISTANCE = 6;
 // top-level routes (tasks, dashboard…) keep their own bucket.
 export function useToastSection(): string {
   const pathname = usePathname();
-  const segments = pathname.split("/").filter(Boolean);
-  const first = segments[0];
+  const first = pathname.split("/").find(Boolean);
   if (!first) {
     return "index";
   }
@@ -33,10 +33,13 @@ export function useToastSection(): string {
 }
 
 export interface DraggableToast {
-  gesture: ReturnType<typeof Gesture.Pan>;
+  gesture: ReturnType<typeof Gesture.Race>;
   animatedStyle: AnimatedStyle<ViewStyle>;
   onLayout: (event: LayoutChangeEvent) => void;
 }
+
+// How long the snap-to-edge / reset glides take — quick but readable as motion.
+const SETTLE_DURATION_MS = 200;
 
 // Makes an absolutely-positioned floating element freely draggable and remembers
 // where the user parked it (per placement key). `rightOffset`/`bottomOffset` are
@@ -55,6 +58,22 @@ export function useDraggableToast({
   bottomOffset: number;
 }): DraggableToast {
   const { width, height } = useWindowDimensions();
+  // The on-screen keyboard shrinks the window height (Android adjustResize, web
+  // visualViewport). If we clamped the parked position to that shrunken height,
+  // a button the user dragged upward would get yanked back down and lose its
+  // spot every time the keyboard opened. So we track the tallest height we've
+  // seen at the current width and clamp against that stable viewport instead —
+  // the keyboard no longer moves the button. A real rotation changes the width,
+  // which resets the remembered height so orientation still clamps correctly.
+  const stableHeightRef = useRef(height);
+  const lastWidthRef = useRef(width);
+  if (lastWidthRef.current !== width) {
+    lastWidthRef.current = width;
+    stableHeightRef.current = height;
+  } else if (height > stableHeightRef.current) {
+    stableHeightRef.current = height;
+  }
+  const stableHeight = stableHeightRef.current;
   const key = `${placement}:${section}`;
   const persisted = useAgentTaskToastStore((state) => state.positions[key]);
   const setPosition = useAgentTaskToastStore((state) => state.setPosition);
@@ -87,14 +106,14 @@ export function useDraggableToast({
       return;
     }
     const left0 = width - rightOffset - w;
-    const top0 = height - bottomOffset - h;
+    const top0 = stableHeight - bottomOffset - h;
     minX.value = -left0;
     maxX.value = rightOffset;
     minY.value = -top0;
     maxY.value = bottomOffset;
     tx.value = Math.min(Math.max(tx.value, minX.value), maxX.value);
     ty.value = Math.min(Math.max(ty.value, minY.value), maxY.value);
-  }, [width, height, rightOffset, bottomOffset, boxW, boxH, minX, maxX, minY, maxY, tx, ty]);
+  }, [width, stableHeight, rightOffset, bottomOffset, boxW, boxH, minX, maxX, minY, maxY, tx, ty]);
 
   useEffect(() => {
     recomputeBounds();
@@ -109,7 +128,7 @@ export function useDraggableToast({
     [boxW, boxH, recomputeBounds],
   );
 
-  const gesture = useMemo(
+  const pan = useMemo(
     () =>
       Gesture.Pan()
         .minDistance(DRAG_ACTIVATION_DISTANCE)
@@ -122,10 +141,35 @@ export function useDraggableToast({
           ty.value = Math.min(Math.max(startY.value + event.translationY, minY.value), maxY.value);
         })
         .onEnd(() => {
-          runOnJS(setPosition)(key, { x: tx.value, y: ty.value });
+          // Light magnet: on release, glide horizontally to whichever side edge is
+          // nearer so the button parks cleanly against a side. Vertical stays where
+          // it was dropped, keeping the free up/down placement the user chose.
+          const snapX =
+            Math.abs(tx.value - minX.value) <= Math.abs(tx.value - maxX.value)
+              ? minX.value
+              : maxX.value;
+          tx.value = withTiming(snapX, { duration: SETTLE_DURATION_MS });
+          runOnJS(setPosition)(key, { x: snapX, y: ty.value });
         }),
     [key, setPosition, tx, ty, startX, startY, minX, maxX, minY, maxY],
   );
+
+  // Long-press sends the button back to its default corner (offset 0,0). A press
+  // (not a quick tap) so it never steals the button's tap-to-open, and a drag —
+  // which needs movement first — always wins the race before the press fires.
+  const reset = useMemo(
+    () =>
+      Gesture.LongPress()
+        .minDuration(500)
+        .onStart(() => {
+          tx.value = withTiming(0, { duration: SETTLE_DURATION_MS });
+          ty.value = withTiming(0, { duration: SETTLE_DURATION_MS });
+          runOnJS(setPosition)(key, { x: 0, y: 0 });
+        }),
+    [key, setPosition, tx, ty],
+  );
+
+  const gesture = useMemo(() => Gesture.Race(reset, pan), [reset, pan]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value }, { translateY: ty.value }],
