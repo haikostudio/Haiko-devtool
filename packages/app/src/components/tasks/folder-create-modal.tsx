@@ -113,6 +113,9 @@ export function FolderCreateModal({
         <FormTextInput
           size={controlSize}
           resetKey={resetKey}
+          // Native-owned input: seed the current folder name so the field
+          // remounts pre-filled when editing (empty when creating).
+          initialValue={initialFolder?.name ?? ""}
           onChangeText={setName}
           placeholder={t("tasks.newFolderPlaceholder")}
           onSubmitEditing={handleCreate}
