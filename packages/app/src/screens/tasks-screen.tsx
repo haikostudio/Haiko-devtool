@@ -128,20 +128,34 @@ const ThemedZap = withUnistyles(Zap);
 const ThemedGradientStop = withUnistyles(Stop);
 const surfaceStopColor = (theme: Theme) => ({ stopColor: theme.colors.surface0 });
 
-// A soft fade on the right edge of the scrollable header, hinting there's more
-// to slide into view. Fades from transparent to the header surface color so it
+// A soft fade on one edge of the scrollable header, hinting there's more to
+// slide into view. Fades from transparent to the header surface color so it
 // reads as the content dissolving under the edge. Purely decorative — no taps.
-function HeaderScrollFade() {
+// The opaque end sits on the given edge, so "left" fades toward the right and
+// vice-versa.
+function HeaderScrollFade({ side }: { side: "left" | "right" }) {
+  const isLeft = side === "left";
   return (
-    <View pointerEvents="none" style={styles.headerScrollFade}>
+    <View
+      pointerEvents="none"
+      style={isLeft ? styles.headerScrollFadeLeft : styles.headerScrollFadeRight}
+    >
       <Svg width="100%" height="100%">
         <Defs>
-          <SvgLinearGradient id="tasksHeaderFade" x1="0" y1="0" x2="1" y2="0">
-            <ThemedGradientStop offset="0" stopOpacity={0} uniProps={surfaceStopColor} />
-            <ThemedGradientStop offset="1" stopOpacity={1} uniProps={surfaceStopColor} />
+          <SvgLinearGradient id={`tasksHeaderFade-${side}`} x1="0" y1="0" x2="1" y2="0">
+            <ThemedGradientStop
+              offset="0"
+              stopOpacity={isLeft ? 1 : 0}
+              uniProps={surfaceStopColor}
+            />
+            <ThemedGradientStop
+              offset="1"
+              stopOpacity={isLeft ? 0 : 1}
+              uniProps={surfaceStopColor}
+            />
           </SvgLinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#tasksHeaderFade)" />
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#tasksHeaderFade-${side})`} />
       </Svg>
     </View>
   );
@@ -1319,14 +1333,20 @@ function CompactBoardHeader({
   const contentWidthRef = useRef(0);
   const offsetRef = useRef(0);
   const didAutoScrollRef = useRef(false);
-  const [showFade, setShowFade] = useState(false);
+  const [fades, setFades] = useState({ left: false, right: false });
 
-  // Fade shows only when content overflows AND we're not already scrolled to the
-  // far right — so it reads as "there's more to the right", and disappears once
-  // you reach the end.
+  // Each edge fades only when there's hidden content past it: the left fade means
+  // "scrolled-off content to the left", the right fade means "more to the right".
+  // Both vanish once you reach the corresponding end.
   const refreshFade = useCallback(() => {
     const overflow = contentWidthRef.current - containerWidthRef.current;
-    setShowFade(overflow > 1 && offsetRef.current < overflow - 1);
+    if (overflow <= 1) {
+      setFades((prev) => (prev.left || prev.right ? { left: false, right: false } : prev));
+      return;
+    }
+    const offset = offsetRef.current;
+    const next = { left: offset > 1, right: offset < overflow - 1 };
+    setFades((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
   }, []);
 
   const handleLayout = useCallback(
@@ -1393,7 +1413,8 @@ function CompactBoardHeader({
               ) : null}
               <BoardFolderSelector currentFolder={currentFolder} folders={folders} />
             </ScrollView>
-            {showFade ? <HeaderScrollFade /> : null}
+            {fades.left ? <HeaderScrollFade side="left" /> : null}
+            {fades.right ? <HeaderScrollFade side="right" /> : null}
           </View>
         </>
       }
@@ -1883,11 +1904,18 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1],
   },
-  headerScrollFade: {
+  headerScrollFadeRight: {
     position: "absolute",
     top: 0,
     bottom: 0,
     right: 0,
+    width: theme.spacing[6],
+  },
+  headerScrollFadeLeft: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
     width: theme.spacing[6],
   },
   // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
