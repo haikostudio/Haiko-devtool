@@ -169,7 +169,16 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
       const db = await openAttachmentDb();
       try {
         const blob = await loadBlob(db, attachment.storageKey);
-        return URL.createObjectURL(blob);
+        // Detach the bytes into an in-memory blob BEFORE closing the DB. An
+        // object URL created straight from an IndexedDB-backed blob becomes
+        // unreadable on some browsers once its `db.close()` runs (the blob is
+        // still tied to the connection), so the preview goes blank the moment
+        // the message is sent and the store connection is torn down. Copying
+        // the bytes here backs the object URL with a standalone blob that
+        // survives both the close and any later GC of the stored record, so a
+        // sent image stays visible for the whole life of the agent.
+        const bytes = await blob.arrayBuffer();
+        return URL.createObjectURL(new Blob([bytes], { type: blob.type }));
       } finally {
         db.close();
       }
