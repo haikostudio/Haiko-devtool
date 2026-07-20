@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { type LayoutChangeEvent, useWindowDimensions, type ViewStyle } from "react-native";
 import { usePathname } from "expo-router";
 import { Gesture } from "react-native-gesture-handler";

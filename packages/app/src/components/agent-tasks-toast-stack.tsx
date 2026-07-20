@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { ChevronsDownUp, ChevronsUpDown, GripVertical } from "lucide-react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   type AnimatedStyle,
   useAnimatedStyle,
@@ -24,7 +24,11 @@ import {
 } from "@getpaseo/protocol/agent-state-bucket";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
-import { useDraggableToast, useToastSection } from "@/hooks/use-draggable-toast";
+import {
+  type DraggableToast,
+  useDraggableToast,
+  useToastSection,
+} from "@/hooks/use-draggable-toast";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
@@ -307,7 +311,7 @@ function CollapseToggle({
 // A grab handle sitting next to the collapse toggle. Dragging it slides the whole
 // pile horizontally (see the Pan gesture in the stack). Pure affordance — it has no
 // tap behaviour, just a grab cursor on web and the drag gesture attached by the host.
-function DragHandle({ gesture }: { gesture: ReturnType<typeof Gesture.Pan> }): ReactElement {
+function DragHandle({ gesture }: { gesture: DraggableToast["gesture"] }): ReactElement {
   const { t } = useTranslation();
   return (
     <GestureDetector gesture={gesture}>
