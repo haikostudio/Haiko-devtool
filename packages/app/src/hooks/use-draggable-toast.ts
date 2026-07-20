@@ -40,6 +40,13 @@ export interface DraggableToast {
 
 // How long the snap-to-edge / reset glides take — quick but readable as motion.
 const SETTLE_DURATION_MS = 200;
+// The magnet only pulls the button in when it's released within this distance of a
+// side edge. Dropped further out, it stays exactly where the user put it — the
+// magnet assists the "park it neatly" case without hijacking free placement.
+const SNAP_THRESHOLD = 72;
+// Minimum breathing room kept between the button and the very screen edge when it
+// snaps, so it never sits flush against (or clipped by) the border.
+const EDGE_MARGIN = 12;
 
 // Makes an absolutely-positioned floating element freely draggable and remembers
 // where the user parked it (per placement key). `rightOffset`/`bottomOffset` are
@@ -141,15 +148,21 @@ export function useDraggableToast({
           ty.value = Math.min(Math.max(startY.value + event.translationY, minY.value), maxY.value);
         })
         .onEnd(() => {
-          // Light magnet: on release, glide horizontally to whichever side edge is
-          // nearer so the button parks cleanly against a side. Vertical stays where
-          // it was dropped, keeping the free up/down placement the user chose.
-          const snapX =
-            Math.abs(tx.value - minX.value) <= Math.abs(tx.value - maxX.value)
-              ? minX.value
-              : maxX.value;
-          tx.value = withTiming(snapX, { duration: SETTLE_DURATION_MS });
-          runOnJS(setPosition)(key, { x: snapX, y: ty.value });
+          // Light magnet: if released close to a side edge, glide to it (keeping a
+          // margin); if dropped further out than SNAP_THRESHOLD, stay put so free
+          // placement wins. Vertical always stays where it was dropped.
+          const distLeft = tx.value - minX.value;
+          const distRight = maxX.value - tx.value;
+          const nearLeft = distLeft <= distRight;
+          const nearestDist = nearLeft ? distLeft : distRight;
+          let targetX = tx.value;
+          if (nearestDist <= SNAP_THRESHOLD) {
+            targetX = nearLeft
+              ? Math.min(minX.value + EDGE_MARGIN, maxX.value)
+              : Math.max(maxX.value - EDGE_MARGIN, minX.value);
+          }
+          tx.value = withTiming(targetX, { duration: SETTLE_DURATION_MS });
+          runOnJS(setPosition)(key, { x: targetX, y: ty.value });
         }),
     [key, setPosition, tx, ty, startX, startY, minX, maxX, minY, maxY],
   );
