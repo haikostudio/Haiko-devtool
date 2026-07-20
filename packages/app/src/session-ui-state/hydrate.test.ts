@@ -17,6 +17,7 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 
 import type { WorkspaceUiState } from "@getpaseo/protocol/messages";
 import { resetTabCloseTombstonesForTest } from "@/session-ui-state/close-tombstones";
+import { resetLocalFocusIntentForTest } from "@/session-ui-state/focus-intent";
 import { hydrateWorkspaceUiState } from "@/session-ui-state/hydrate";
 import { buildWorkspaceUiState } from "@/session-ui-state/snapshot";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -59,6 +60,7 @@ describe("session ui state draft config sync", () => {
     useDraftStore.setState({ drafts: {}, createModalDraft: null });
     useCreateFlowStore.getState().clearAll();
     resetTabCloseTombstonesForTest();
+    resetLocalFocusIntentForTest();
   });
 
   it("does NOT capture the composer draft of an already-active agent tab", () => {
@@ -408,5 +410,63 @@ describe("session ui state draft config sync", () => {
     expect(tab).toBeDefined();
     expect(draftSetup(tab?.target).model).toBe("sonnet");
     expect(draftSetup(tab?.target).modeId).toBe("plan");
+  });
+
+  it("keeps a tab the user just focused when a stale broadcast points at the previous one", () => {
+    // The user has two agent tabs and clicks into agent_a2. Before the debounced
+    // local push reaches the daemon, a stale broadcast arrives still focusing the
+    // previous tab (agent_a1). Adoption must not steal focus back — the classic
+    // "click a tab, focus jumps to the previous one" race.
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a2" });
+    store.focusTab(WORKSPACE_KEY, "agent_a2"); // records local focus intent (now)
+
+    const stale: WorkspaceUiState = {
+      tabs: [
+        { tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 },
+        { tabId: "agent_a2", target: { kind: "agent", agentId: "a2" }, createdAt: 2 },
+      ],
+      order: ["agent_a1", "agent_a2"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: 1, // predates the local click
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: stale });
+
+    const applied = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    });
+    expect(applied?.focusedTabId).toBe("agent_a2");
+  });
+
+  it("still adopts a genuine cross-device focus change newer than the local click", () => {
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a2" });
+    store.focusTab(WORKSPACE_KEY, "agent_a2"); // records local focus intent (now)
+
+    const remote: WorkspaceUiState = {
+      tabs: [
+        { tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 },
+        { tabId: "agent_a2", target: { kind: "agent", agentId: "a2" }, createdAt: 2 },
+      ],
+      order: ["agent_a1", "agent_a2"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: Date.now() + 60_000, // another device focused a1 after our click
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const applied = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    });
+    expect(applied?.focusedTabId).toBe("agent_a1");
   });
 });

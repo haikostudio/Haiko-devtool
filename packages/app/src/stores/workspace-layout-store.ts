@@ -46,6 +46,7 @@ import {
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { clearTabCloseTombstone, recordTabClose } from "@/session-ui-state/close-tombstones";
+import { recordLocalFocusIntent } from "@/session-ui-state/focus-intent";
 
 export { buildWorkspaceTabPersistenceKey };
 export {
@@ -260,6 +261,7 @@ export function createWorkspaceLayoutStore(
           }));
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         openChildTabFocused: (workspaceKey, target, parentTabId) => {
@@ -300,6 +302,7 @@ export function createWorkspaceLayoutStore(
           });
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         openTabInBackground: (workspaceKey, target) => {
@@ -364,6 +367,9 @@ export function createWorkspaceLayoutStore(
             // tab from a snapshot captured before this moment (see
             // session-ui-state/close-tombstones).
             recordTabClose(normalizedWorkspaceKey, normalizedTabId);
+            // Closing auto-focuses a neighbor: record it as local focus intent so
+            // a stale broadcast can't steal focus back to the closed/previous tab.
+            recordLocalFocusIntent(normalizedWorkspaceKey);
           }
         },
         focusTab: (workspaceKey, tabId) => {
@@ -390,6 +396,7 @@ export function createWorkspaceLayoutStore(
               },
             };
           });
+          recordLocalFocusIntent(normalizedWorkspaceKey);
         },
         retargetTab: (workspaceKey, tabId, target) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
@@ -462,6 +469,7 @@ export function createWorkspaceLayoutStore(
           }));
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         reconcileTabs: (workspaceKey, snapshot) => {

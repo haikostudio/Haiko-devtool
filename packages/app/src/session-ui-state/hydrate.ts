@@ -16,6 +16,7 @@ import {
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
 import { getTabCloseTombstone } from "./close-tombstones";
+import { getLocalFocusIntent, suppressLocalFocusIntent } from "./focus-intent";
 import { logTabSync } from "./sync-log";
 
 function coerceLifecycle(lifecycle: string): DraftLifecycleState {
@@ -258,6 +259,21 @@ export function hydrateWorkspaceUiState(input: {
     return;
   }
 
+  // Every store mutation below comes FROM the daemon, not the user — bracket the
+  // whole pass so it never registers as local focus intent (see focus-intent).
+  suppressLocalFocusIntent(() => {
+    applyRemoteWorkspaceUiState(workspaceKey, input);
+  });
+}
+
+function applyRemoteWorkspaceUiState(
+  workspaceKey: string,
+  input: {
+    serverId: string;
+    workspaceId: string;
+    state: WorkspaceUiState;
+  },
+): void {
   hydrateDrafts(input.state);
 
   const layoutStore = useWorkspaceLayoutStore.getState();
@@ -338,6 +354,22 @@ export function hydrateWorkspaceUiState(input: {
   }
 
   if (remoteFocusedTabId && remoteTargets.has(remoteFocusedTabId)) {
-    layoutStore.focusTab(workspaceKey, remoteFocusedTabId);
+    // Focus is last-write-wins by revision, mirroring hydrateDrafts. If the user
+    // changed focus locally more recently than this snapshot was written, a stale
+    // broadcast (the debounced local push has not landed yet) must not yank focus
+    // back to the previous tab — the "click a tab, focus jumps back" race.
+    const localFocusIntent = getLocalFocusIntent(workspaceKey);
+    const remoteFocusIsStale =
+      localFocusIntent !== null && input.state.revision <= localFocusIntent;
+    if (remoteFocusIsStale) {
+      logTabSync("keeping local focus over stale host snapshot", {
+        workspaceKey,
+        remoteFocusedTabId,
+        remoteRevision: input.state.revision,
+        localFocusIntent,
+      });
+    } else {
+      layoutStore.focusTab(workspaceKey, remoteFocusedTabId);
+    }
   }
 }
