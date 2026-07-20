@@ -85,7 +85,8 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
 
   const hasDetails = Boolean(synthesis.objective || synthesis.state);
   const hasThread = previous.length > 0;
-  const expandable = hasDetails || hasThread;
+  const hasSummary = Boolean(synthesis.summary);
+  const expandable = hasSummary || hasDetails || hasThread;
 
   return (
     <View style={styles.host} pointerEvents="box-none" onLayout={handleLayout}>
@@ -113,9 +114,7 @@ export const AgentSynthesisBanner = memo(function AgentSynthesisBanner({
             ) : null}
           </View>
 
-          <Text style={styles.summary} numberOfLines={expanded ? undefined : 2}>
-            {synthesis.summary}
-          </Text>
+          {expanded && hasSummary ? <Text style={styles.summary}>{synthesis.summary}</Text> : null}
 
           {expanded && hasDetails ? (
             <View style={styles.details}>
