@@ -190,6 +190,53 @@ function getTerminalDraftLifecycle(input: {
   return lifecycle === "sent" || lifecycle === "abandoned" ? lifecycle : null;
 }
 
+// Scrubs the resolved remote view BEFORE adoption. Two classes of tabs are
+// removed in place: zombie draft tabs (terminal draft lifecycle, see
+// getTerminalDraftLifecycle) and tabs the user closed locally AFTER the
+// snapshot was taken (close tombstones — a snapshot whose revision predates
+// the close is a stale replay, not a genuine cross-device reopen). The
+// corrective push in useSessionUiStateSync then advertises the scrubbed state,
+// so the daemon converges on the cleanup instead of re-broadcasting the zombie
+// forever.
+function scrubRemoteTabs(input: {
+  serverId: string;
+  workspaceKey: string;
+  remoteRevision: number;
+  remoteTargets: Map<string, WorkspaceTabTarget>;
+  localTabIds: Set<string>;
+}): void {
+  for (const [tabId, target] of Array.from(input.remoteTargets)) {
+    const terminalLifecycle = getTerminalDraftLifecycle({
+      serverId: input.serverId,
+      tabId,
+      target,
+    });
+    if (terminalLifecycle) {
+      input.remoteTargets.delete(tabId);
+      logTabSync("dropping zombie draft tab from host snapshot", {
+        workspaceKey: input.workspaceKey,
+        tabId,
+        lifecycle: terminalLifecycle,
+        remoteRevision: input.remoteRevision,
+      });
+      continue;
+    }
+    if (!input.localTabIds.has(tabId)) {
+      const closedAt = getTabCloseTombstone(input.workspaceKey, tabId);
+      if (closedAt !== null && input.remoteRevision <= closedAt) {
+        input.remoteTargets.delete(tabId);
+        logTabSync("suppressing reopen of a tab closed after this snapshot", {
+          workspaceKey: input.workspaceKey,
+          tabId,
+          targetKind: target.kind,
+          closedAt,
+          remoteRevision: input.remoteRevision,
+        });
+      }
+    }
+  }
+}
+
 /**
  * Applies a remote workspace UI state into the local layout + draft stores,
  * synchronously, so the caller can guard against the resulting store mutations
@@ -224,43 +271,13 @@ export function hydrateWorkspaceUiState(input: {
   const localTabs = localLayout ? collectAllTabs(localLayout.root) : [];
   const localTabIds = new Set(localTabs.map((tab) => tab.tabId));
 
-  // Scrub the remote view BEFORE adopting it. Two classes of tabs are removed:
-  // zombie draft tabs (terminal draft lifecycle, see getTerminalDraftLifecycle)
-  // and tabs the user closed locally AFTER the snapshot was taken (close
-  // tombstones — a snapshot whose revision predates the close is a stale
-  // replay, not a genuine cross-device reopen). The corrective push in
-  // useSessionUiStateSync then advertises the scrubbed state, so the daemon
-  // converges on the cleanup instead of re-broadcasting the zombie forever.
-  for (const [tabId, target] of Array.from(remoteTargets)) {
-    const terminalLifecycle = getTerminalDraftLifecycle({
-      serverId: input.serverId,
-      tabId,
-      target,
-    });
-    if (terminalLifecycle) {
-      remoteTargets.delete(tabId);
-      logTabSync("dropping zombie draft tab from host snapshot", {
-        workspaceKey,
-        tabId,
-        lifecycle: terminalLifecycle,
-        remoteRevision: input.state.revision,
-      });
-      continue;
-    }
-    if (!localTabIds.has(tabId)) {
-      const closedAt = getTabCloseTombstone(workspaceKey, tabId);
-      if (closedAt !== null && input.state.revision <= closedAt) {
-        remoteTargets.delete(tabId);
-        logTabSync("suppressing reopen of a tab closed after this snapshot", {
-          workspaceKey,
-          tabId,
-          targetKind: target.kind,
-          closedAt,
-          remoteRevision: input.state.revision,
-        });
-      }
-    }
-  }
+  scrubRemoteTabs({
+    serverId: input.serverId,
+    workspaceKey,
+    remoteRevision: input.state.revision,
+    remoteTargets,
+    localTabIds,
+  });
   const effectiveOrder = remoteOrder.filter((tabId) => remoteTargets.has(tabId));
 
   // Close local tabs the remote no longer has — but keep a local draft that

@@ -49,6 +49,21 @@ export class SessionUiStateStore {
   async setWorkspace(workspaceId: string, state: WorkspaceUiState): Promise<WorkspaceUiState> {
     await this.load();
     const parsed = WorkspaceUiStateSchema.parse(state);
+    // Traces the cross-device tab sync: every accepted set lands here before
+    // being rebroadcast, so daemon.log shows which state (tab ids, draft
+    // lifecycles, revision) each device advertised — the raw material for
+    // diagnosing "a closed tab keeps reopening" ping-pong between devices.
+    this.logger.info(
+      {
+        workspaceId,
+        revision: parsed.revision,
+        tabIds: parsed.tabs.map((tab) => tab.tabId),
+        draftLifecycles: Object.fromEntries(
+          Object.entries(parsed.drafts).map(([key, record]) => [key, record.lifecycle]),
+        ),
+      },
+      "Session UI state set",
+    );
     this.current = { ...this.current, [workspaceId]: parsed };
     await this.enqueuePersist();
     for (const listener of this.changeListeners) {
