@@ -7,6 +7,10 @@ export function getWebPushState(): WebPushState {
   return "unsupported";
 }
 
+export async function syncWebPushState(): Promise<WebPushState> {
+  return "unsupported";
+}
+
 export async function enableWebPush(): Promise<WebPushState> {
   return "unsupported";
 }

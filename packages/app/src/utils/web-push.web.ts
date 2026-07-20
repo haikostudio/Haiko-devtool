@@ -25,11 +25,43 @@ function isSupported(): boolean {
   );
 }
 
+async function getRegistration(): Promise<ServiceWorkerRegistration> {
+  const existing = await navigator.serviceWorker.getRegistration();
+  return existing ?? (await navigator.serviceWorker.register("/sw.js"));
+}
+
+async function postSubscription(subscription: PushSubscription): Promise<void> {
+  await fetch("/push/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subscription),
+  });
+}
+
+// Quick, synchronous best-effort. Never claims "enabled" — a granted browser
+// permission does NOT mean an active push subscription exists. Real "enabled"
+// is only confirmed by syncWebPushState() once a subscription is found.
 export function getWebPushState(): WebPushState {
   if (!isSupported()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
-  if (Notification.permission === "granted") return "enabled";
   return "default";
+}
+
+// Reflects the REAL state: "enabled" only when an active push subscription
+// exists. When one does, re-post it so the server copy stays in sync.
+export async function syncWebPushState(): Promise<WebPushState> {
+  if (!isSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  if (Notification.permission !== "granted") return "default";
+  try {
+    const registration = await getRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return "default";
+    await postSubscription(subscription);
+    return "enabled";
+  } catch {
+    return "default";
+  }
 }
 
 export async function enableWebPush(): Promise<WebPushState> {
@@ -40,7 +72,7 @@ export async function enableWebPush(): Promise<WebPushState> {
     return permission === "denied" ? "denied" : "default";
   }
 
-  const registration = await navigator.serviceWorker.register("/sw.js");
+  const registration = await getRegistration();
   await navigator.serviceWorker.ready;
 
   const res = await fetch("/push/vapid-public");
@@ -54,11 +86,6 @@ export async function enableWebPush(): Promise<WebPushState> {
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     }));
 
-  await fetch("/push/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(subscription),
-  });
-
+  await postSubscription(subscription);
   return "enabled";
 }

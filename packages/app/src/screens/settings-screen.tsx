@@ -67,7 +67,12 @@ import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
 import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
-import { enableWebPush, getWebPushState, type WebPushState } from "@/utils/web-push";
+import {
+  enableWebPush,
+  getWebPushState,
+  syncWebPushState,
+  type WebPushState,
+} from "@/utils/web-push";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -301,6 +306,19 @@ function WebPushRow() {
   const { t } = useTranslation();
   const [state, setState] = useState<WebPushState>(() => getWebPushState());
   const [busy, setBusy] = useState(false);
+
+  // A granted browser permission is not proof of an active subscription — check
+  // the real push subscription on mount so the button never lies about "enabled".
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const next = await syncWebPushState();
+      if (active) setState(next);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleEnable = useCallback(async () => {
     setBusy(true);
