@@ -116,8 +116,11 @@ export function useDraggableToast({
     const top0 = stableHeight - bottomOffset - h;
     minX.value = -left0;
     maxX.value = rightOffset;
-    minY.value = -top0;
-    maxY.value = bottomOffset;
+    // Keep EDGE_MARGIN of breathing room top and bottom so a downward (or upward)
+    // drag can never park the pile flush against the window edge — the horizontal
+    // magnet already guarantees the same gap on the sides.
+    minY.value = -top0 + EDGE_MARGIN;
+    maxY.value = bottomOffset - EDGE_MARGIN;
     tx.value = Math.min(Math.max(tx.value, minX.value), maxX.value);
     ty.value = Math.min(Math.max(ty.value, minY.value), maxY.value);
   }, [width, stableHeight, rightOffset, bottomOffset, boxW, boxH, minX, maxX, minY, maxY, tx, ty]);
