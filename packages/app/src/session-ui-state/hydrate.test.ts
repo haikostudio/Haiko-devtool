@@ -539,6 +539,44 @@ describe("session ui state draft config sync", () => {
     expect(applied?.focusedTabId).toBe("agent_a2");
   });
 
+  it("keeps focus on the tab whose first prompt was just sent (draft -> agent retarget)", () => {
+    // The first-prompt handoff converts the focused draft tab into its agent tab
+    // in place via retargetTab (not focusTab / convertDraftToAgent). While the
+    // daemon runs its brain recall, a stale broadcast arrives still focusing the
+    // PREVIOUS tab. retargetTab must record local focus intent so adoption does
+    // not yank focus back mid-request — the reported "send first prompt, focus
+    // jumps to the previous agent" race.
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+    store.focusTab(WORKSPACE_KEY, "d1");
+    // Drafts are opened via retargetTab, which historically recorded no intent —
+    // clear it so the only thing that can defend focus is the retarget below.
+    resetLocalFocusIntentForTest();
+
+    store.retargetTab(WORKSPACE_KEY, "d1", { kind: "agent", agentId: "a2" });
+
+    const stale: WorkspaceUiState = {
+      tabs: [
+        { tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 },
+        { tabId: "d1", target: { kind: "agent", agentId: "a2" }, createdAt: 2 },
+      ],
+      order: ["agent_a1", "d1"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: 1, // predates the local send
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: stale });
+
+    const applied = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    });
+    expect(applied?.focusedTabId).toBe("d1");
+  });
+
   it("still adopts a genuine cross-device focus change newer than the local click", () => {
     const store = useWorkspaceLayoutStore.getState();
     store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });

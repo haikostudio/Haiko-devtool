@@ -434,6 +434,13 @@ export function createWorkspaceLayoutStore(
           }));
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          // Retargeting the current tab (e.g. draft -> agent when the first
+          // prompt is sent) keeps focus on this tab in place. Record local focus
+          // intent so a stale host broadcast that lands during the brain-recall
+          // window cannot yank focus back to the previous tab. No-op under
+          // suppressLocalFocusIntent, so the hydrate-driven retarget at
+          // hydrate.ts stays exempt.
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         convertDraftToAgent: (workspaceKey, tabId, agentId) => {
