@@ -264,6 +264,15 @@ export const en = {
       outstanding: "Outstanding",
       overdue: "{{count}} overdue",
       drafts: "{{count}} draft(s)",
+      yearTitle: "Revenue (12 mo)",
+      due: "due {{date}}",
+      status: {
+        draft: "Draft",
+        sent: "Sent",
+        partial: "Partially paid",
+        overdue: "Overdue",
+        paid: "Paid",
+      },
     },
     buckets: {
       needsInput: "Needs input",

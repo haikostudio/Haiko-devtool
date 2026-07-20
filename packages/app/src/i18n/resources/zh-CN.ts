@@ -265,6 +265,15 @@ export const zhCN: TranslationResources = {
       outstanding: "未付款",
       overdue: "{{count}} 张逾期",
       drafts: "{{count}} 张草稿",
+      yearTitle: "营收（12 个月）",
+      due: "到期 {{date}}",
+      status: {
+        draft: "草稿",
+        sent: "已发送",
+        partial: "部分付款",
+        overdue: "已逾期",
+        paid: "已付款",
+      },
     },
     buckets: {
       needsInput: "需要输入",

@@ -269,6 +269,15 @@ export const es: TranslationResources = {
       outstanding: "Pendiente",
       overdue: "{{count}} vencidas",
       drafts: "{{count}} borrador(es)",
+      yearTitle: "Ingresos (12 meses)",
+      due: "vence {{date}}",
+      status: {
+        draft: "Borrador",
+        sent: "Enviada",
+        partial: "Pago parcial",
+        overdue: "Vencida",
+        paid: "Pagada",
+      },
     },
     buckets: {
       needsInput: "Requiere acción",

@@ -267,6 +267,15 @@ export const ru: TranslationResources = {
       outstanding: "Не оплачено",
       overdue: "{{count}} просрочено",
       drafts: "Черновиков: {{count}}",
+      yearTitle: "Выручка (12 мес.)",
+      due: "срок {{date}}",
+      status: {
+        draft: "Черновик",
+        sent: "Отправлен",
+        partial: "Частично оплачен",
+        overdue: "Просрочен",
+        paid: "Оплачен",
+      },
     },
     buckets: {
       needsInput: "Требуется ввод",

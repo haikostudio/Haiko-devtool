@@ -265,6 +265,15 @@ export const ar: TranslationResources = {
       outstanding: "غير المدفوع",
       overdue: "{{count}} متأخرة",
       drafts: "{{count}} مسودة",
+      yearTitle: "الإيرادات (12 شهرًا)",
+      due: "الاستحقاق {{date}}",
+      status: {
+        draft: "مسودة",
+        sent: "مرسلة",
+        partial: "مدفوعة جزئيًا",
+        overdue: "متأخرة",
+        paid: "مدفوعة",
+      },
     },
     buckets: {
       needsInput: "بحاجة إلى إدخال",

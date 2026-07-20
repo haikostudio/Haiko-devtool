@@ -269,6 +269,15 @@ export const fr: TranslationResources = {
       outstanding: "Impayés",
       overdue: "{{count}} en retard",
       drafts: "{{count}} brouillon(s)",
+      yearTitle: "Chiffre d'affaires (12 mois)",
+      due: "éch. {{date}}",
+      status: {
+        draft: "Brouillon",
+        sent: "Envoyée",
+        partial: "Partiellement payée",
+        overdue: "En retard",
+        paid: "Payée",
+      },
     },
     buckets: {
       needsInput: "Action requise",

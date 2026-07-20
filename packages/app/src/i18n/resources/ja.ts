@@ -268,6 +268,15 @@ export const ja: TranslationResources = {
       outstanding: "未払い",
       overdue: "期限超過 {{count}} 件",
       drafts: "下書き {{count}} 件",
+      yearTitle: "売上（12か月）",
+      due: "期限 {{date}}",
+      status: {
+        draft: "下書き",
+        sent: "送付済み",
+        partial: "一部入金",
+        overdue: "期限超過",
+        paid: "支払済み",
+      },
     },
     buckets: {
       needsInput: "入力が必要",

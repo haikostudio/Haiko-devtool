@@ -269,6 +269,15 @@ export const ptBR: TranslationResources = {
       outstanding: "Em aberto",
       overdue: "{{count}} vencidas",
       drafts: "{{count}} rascunho(s)",
+      yearTitle: "Receita (12 meses)",
+      due: "vence {{date}}",
+      status: {
+        draft: "Rascunho",
+        sent: "Enviada",
+        partial: "Pago parcial",
+        overdue: "Vencida",
+        paid: "Paga",
+      },
     },
     buckets: {
       needsInput: "Requer ação",

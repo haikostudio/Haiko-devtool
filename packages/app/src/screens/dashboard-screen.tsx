@@ -42,6 +42,7 @@ function DashboardScreenContent() {
   } = useUsageStats();
   const {
     rows: comptaRows,
+    monthly: comptaMonthly,
     isSupported: comptaSupported,
     refresh: refreshComptaSummary,
   } = useComptaSummary();
@@ -69,7 +70,9 @@ function DashboardScreenContent() {
 
   const statsHeader = useMemo(() => {
     const compta =
-      comptaSupported && comptaRows !== null ? <ComptaSection rows={comptaRows} /> : null;
+      comptaSupported && comptaRows !== null ? (
+        <ComptaSection rows={comptaRows} monthly={comptaMonthly} />
+      ) : null;
     const usage =
       usageSupported && usageDays !== null ? <UsageStatsSection days={usageDays} /> : null;
     if (!compta && !usage) {
@@ -81,7 +84,7 @@ function DashboardScreenContent() {
         {usage}
       </>
     );
-  }, [comptaSupported, comptaRows, usageSupported, usageDays]);
+  }, [comptaSupported, comptaRows, comptaMonthly, usageSupported, usageDays]);
 
   return (
     <View style={styles.container}>
