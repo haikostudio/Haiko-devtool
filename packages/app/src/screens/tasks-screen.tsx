@@ -1,12 +1,16 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
   ScrollView,
   Text,
   View,
   type ViewStyle,
 } from "react-native";
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
@@ -121,6 +125,27 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
 const ThemedZap = withUnistyles(Zap);
+const ThemedGradientStop = withUnistyles(Stop);
+const surfaceStopColor = (theme: Theme) => ({ stopColor: theme.colors.surface0 });
+
+// A soft fade on the right edge of the scrollable header, hinting there's more
+// to slide into view. Fades from transparent to the header surface color so it
+// reads as the content dissolving under the edge. Purely decorative — no taps.
+function HeaderScrollFade() {
+  return (
+    <View pointerEvents="none" style={styles.headerScrollFade}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <SvgLinearGradient id="tasksHeaderFade" x1="0" y1="0" x2="1" y2="0">
+            <ThemedGradientStop offset="0" stopOpacity={0} uniProps={surfaceStopColor} />
+            <ThemedGradientStop offset="1" stopOpacity={1} uniProps={surfaceStopColor} />
+          </SvgLinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#tasksHeaderFade)" />
+      </Svg>
+    </View>
+  );
+}
 
 const MENU_ICON_SIZE = 16;
 // Base vertical padding for the pinned folder footer; the bottom safe-area inset
@@ -292,7 +317,7 @@ function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCoun
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
   const projectKey = useMemo(
-    () => projects.map((entry) => `${entry.serverId} ${entry.projectId}`).join("|"),
+    () => projects.map((entry) => `${entry.serverId}:${entry.projectId}`).join("|"),
     [projects],
   );
 
@@ -1168,6 +1193,76 @@ const FolderSelectorItem = memo(function FolderSelectorItem({ folder }: { folder
   );
 });
 
+// Project pill for the board header (name + dropdown), followed by a "/" divider.
+// Extracted so the header's JSX stays under the max-depth lint budget.
+function BoardProjectSelector({
+  currentProject,
+  projects,
+}: {
+  currentProject: ProjectEntry;
+  projects: ProjectEntry[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          style={styles.folderSelector}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.pickProject")}
+          testID="tasks-header-board-project-selector"
+        >
+          <ProjectColorMark projectKey={currentProject.projectId} />
+          <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+            {currentProject.displayName}
+          </Text>
+          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" width={240}>
+          {projects.map((entry) => (
+            <ProjectSelectorItem key={`${entry.serverId}:${entry.projectId}`} entry={entry} />
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Text style={styles.headerSeparator}>/</Text>
+    </>
+  );
+}
+
+// Folder pill for the board header (name + dropdown to switch folders in place).
+function BoardFolderSelector({
+  currentFolder,
+  folders,
+}: {
+  currentFolder: TaskFolder;
+  folders: TaskFolder[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        style={styles.folderSelector}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.folders")}
+        testID="tasks-header-folder-selector"
+      >
+        <FolderColorMark color={currentFolder.color} />
+        <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+          {currentFolder.name}
+        </Text>
+        <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" width={240}>
+        {folders.map((folder) => (
+          <FolderSelectorItem key={folder.id} folder={folder} />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // Picks the right header for the current drill-down level. On mobile the header
 // owns navigation: at the folder-list level it switches projects, on a board it
 // switches folders; everywhere else it's the plain menu header.
@@ -1219,6 +1314,51 @@ function CompactBoardHeader({
   projects: ProjectEntry[];
 }) {
   const { t } = useTranslation();
+  const scrollRef = useRef<ScrollView>(null);
+  const containerWidthRef = useRef(0);
+  const contentWidthRef = useRef(0);
+  const offsetRef = useRef(0);
+  const didAutoScrollRef = useRef(false);
+  const [showFade, setShowFade] = useState(false);
+
+  // Fade shows only when content overflows AND we're not already scrolled to the
+  // far right — so it reads as "there's more to the right", and disappears once
+  // you reach the end.
+  const refreshFade = useCallback(() => {
+    const overflow = contentWidthRef.current - containerWidthRef.current;
+    setShowFade(overflow > 1 && offsetRef.current < overflow - 1);
+  }, []);
+
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      containerWidthRef.current = event.nativeEvent.layout.width;
+      refreshFade();
+    },
+    [refreshFade],
+  );
+
+  // First time the content is measured wider than the rail, jump to the end so
+  // the active folder (rightmost item) is the one in view.
+  const handleContentSizeChange = useCallback(
+    (width: number) => {
+      contentWidthRef.current = width;
+      if (!didAutoScrollRef.current && width > containerWidthRef.current + 1) {
+        didAutoScrollRef.current = true;
+        scrollRef.current?.scrollToEnd({ animated: false });
+      }
+      refreshFade();
+    },
+    [refreshFade],
+  );
+
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      offsetRef.current = event.nativeEvent.contentOffset.x;
+      refreshFade();
+    },
+    [refreshFade],
+  );
+
   return (
     <ScreenHeader
       leftStyle={styles.boardHeaderLeft}
@@ -1235,62 +1375,26 @@ function CompactBoardHeader({
           >
             <ThemedChevronLeft size={ICON_SIZE.md} uniProps={mutedColorMapping} />
           </Pressable>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.boardHeaderScroll}
-            contentContainerStyle={styles.boardHeaderScrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {currentProject ? (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    style={styles.folderSelector}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("tasks.pickProject")}
-                    testID="tasks-header-board-project-selector"
-                  >
-                    <ProjectColorMark projectKey={currentProject.projectId} />
-                    <Text style={styles.folderSelectorLabel} numberOfLines={1}>
-                      {currentProject.displayName}
-                    </Text>
-                    <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" width={240}>
-                    {projects.map((entry) => (
-                      <ProjectSelectorItem
-                        key={`${entry.serverId}:${entry.projectId}`}
-                        entry={entry}
-                      />
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Text style={styles.headerSeparator}>/</Text>
-              </>
-            ) : null}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                style={styles.folderSelector}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={t("tasks.folders")}
-                testID="tasks-header-folder-selector"
-              >
-                <FolderColorMark color={currentFolder.color} />
-                <Text style={styles.folderSelectorLabel} numberOfLines={1}>
-                  {currentFolder.name}
-                </Text>
-                <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" width={240}>
-                {folders.map((folder) => (
-                  <FolderSelectorItem key={folder.id} folder={folder} />
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </ScrollView>
+          <View style={styles.boardHeaderScrollWrap}>
+            <ScrollView
+              ref={scrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.boardHeaderScroll}
+              contentContainerStyle={styles.boardHeaderScrollContent}
+              keyboardShouldPersistTaps="handled"
+              onLayout={handleLayout}
+              onContentSizeChange={handleContentSizeChange}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            >
+              {currentProject ? (
+                <BoardProjectSelector currentProject={currentProject} projects={projects} />
+              ) : null}
+              <BoardFolderSelector currentFolder={currentFolder} folders={folders} />
+            </ScrollView>
+            {showFade ? <HeaderScrollFade /> : null}
+          </View>
         </>
       }
     />
@@ -1766,13 +1870,25 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     color: theme.colors.mutedForeground,
   },
-  boardHeaderScroll: {
+  boardHeaderScrollWrap: {
     flex: 1,
+    minWidth: 0,
+    position: "relative",
+  },
+  boardHeaderScroll: {
+    flexGrow: 0,
   },
   boardHeaderScrollContent: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+  },
+  headerScrollFade: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: theme.spacing[6],
   },
   // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
   compactListWrap: {
