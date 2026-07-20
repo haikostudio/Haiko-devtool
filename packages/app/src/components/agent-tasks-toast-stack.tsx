@@ -41,7 +41,10 @@ import { agentTaskToastKey, useAgentTaskToastStore } from "@/stores/agent-task-t
 const ICON_SIZE = 16;
 // Matches theme.spacing[4]; kept as a literal so the container can add the
 // safe-area inset without subscribing the whole component to the theme runtime.
-const BASE_BOTTOM_OFFSET = 16;
+// Matches the horizontal RAIL_CLEARANCE so the pile keeps the same breathing room
+// from the bottom edge as it does from the right — otherwise it reads as flush to
+// the bottom while the sides have a clear gap.
+const BASE_BOTTOM_OFFSET = 44;
 // The magic scrollbar rail lives at right:12 with a 20px width, so it occupies
 // the rightmost ~32px of the pane. Offset the toast stack past it (plus a small
 // gap) so the rail stays visible instead of hiding behind the toasts.
