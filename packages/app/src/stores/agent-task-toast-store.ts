@@ -38,12 +38,19 @@ interface AgentTaskToastState {
   collapsed: boolean | null;
   setCollapsed: (collapsed: boolean) => void;
   /**
-   * Horizontal offset (in px) the user has dragged the floating pile by, relative
-   * to its default bottom-right anchor. Negative moves it left into the pane;
-   * persisted so the chosen position survives a reload.
+   * Where the user has dragged the floating pile / button, as an offset (in px)
+   * from its default anchored corner. Keyed per "placement" — the compact button
+   * and the wide stack, and each app section (chat, tasks board, …) get their own
+   * saved spot, so moving the button in one place never disturbs it in another.
+   * Negative x moves it left, negative y moves it up. Persisted across reloads.
    */
-  offsetX: number;
-  setOffsetX: (offsetX: number) => void;
+  positions: Record<string, ToastPosition>;
+  setPosition: (key: string, position: ToastPosition) => void;
+}
+
+export interface ToastPosition {
+  x: number;
+  y: number;
 }
 
 export const useAgentTaskToastStore = create<AgentTaskToastState>()(
@@ -53,8 +60,9 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
       seq: 0,
       collapsed: null,
       setCollapsed: (collapsed) => set({ collapsed }),
-      offsetX: 0,
-      setOffsetX: (offsetX) => set({ offsetX }),
+      positions: {},
+      setPosition: (key, position) =>
+        set((state) => ({ positions: { ...state.positions, [key]: position } })),
       reconcile: ({ activeKeys, existingKeys }) =>
         set((state) => {
           let changed = false;
@@ -92,9 +100,9 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
     {
       name: "agent-task-toast",
       storage: createJSONStorage(() => AsyncStorage),
-      // Only the fold preference and drag position are durable; the tracked-toast
+      // Only the fold preference and drag positions are durable; the tracked-toast
       // bookkeeping is rebuilt from the live agent list on every load.
-      partialize: (state) => ({ collapsed: state.collapsed, offsetX: state.offsetX }),
+      partialize: (state) => ({ collapsed: state.collapsed, positions: state.positions }),
     },
   ),
 );

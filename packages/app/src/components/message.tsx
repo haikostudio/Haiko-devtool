@@ -404,6 +404,17 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     marginTop: theme.spacing[2],
   },
+  trailingActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  trailingRowHidden: {
+    opacity: 0,
+  },
+  trailingRowVisible: {
+    opacity: 1,
+  },
   timestampText: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
@@ -468,6 +479,12 @@ export const UserMessage = memo(function UserMessage({
   disableOuterSpacing,
 }: UserMessageProps) {
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  // Web-only hover reveal for the row's actions; native/compact always show them
+  // (see showTrailingActions). onPointerEnter/Leave only fire on web.
+  const [isHovered, setIsHovered] = useState(false);
+  const handleHoverEnter = useCallback(() => setIsHovered(true), []);
+  const handleHoverLeave = useCallback(() => setIsHovered(false), []);
   const [lightboxTarget, setLightboxTarget] = useState<UserMessageLightboxTarget | null>(null);
   const openLocalLightbox = useCallback(
     (metadata: UserMessageImageAttachment) => setLightboxTarget({ kind: "local", metadata }),
@@ -483,6 +500,7 @@ export const UserMessage = memo(function UserMessage({
   const hasImages = images.length > 0;
   const hasRemoteImages = remoteImages.length > 0;
   const hasAttachments = attachments.length > 0;
+  const showTrailingActions = hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
     [timestamp],
@@ -522,8 +540,23 @@ export const UserMessage = memo(function UserMessage({
     ],
     [hasText],
   );
+  const trailingActionsStyle = useMemo(
+    () => [
+      userMessageStylesheet.trailingActions,
+      showTrailingActions
+        ? userMessageStylesheet.trailingRowVisible
+        : userMessageStylesheet.trailingRowHidden,
+    ],
+    [showTrailingActions],
+  );
+
   return (
-    <View style={containerStyle} testID="user-message">
+    <View
+      style={containerStyle}
+      testID="user-message"
+      onPointerEnter={handleHoverEnter}
+      onPointerLeave={handleHoverLeave}
+    >
       <View style={userMessageStylesheet.content}>
         <View style={userMessageStylesheet.bubble}>
           {hasImages ? (
@@ -577,19 +610,24 @@ export const UserMessage = memo(function UserMessage({
         {hasText ? (
           <View style={userMessageStylesheet.trailingRow}>
             <Text style={userMessageStylesheet.timestampText}>{formattedTimestamp}</Text>
-            {capabilities ? (
-              <RewindMenu
-                capabilities={capabilities}
-                isPending={rewindMutation.isPending}
-                rewoundText={message}
-                onRewind={handleRewind}
+            <View
+              style={trailingActionsStyle}
+              pointerEvents={showTrailingActions ? "auto" : "none"}
+            >
+              {capabilities ? (
+                <RewindMenu
+                  capabilities={capabilities}
+                  isPending={rewindMutation.isPending}
+                  rewoundText={message}
+                  onRewind={handleRewind}
+                />
+              ) : null}
+              <TurnCopyButton
+                getContent={getMessageContent}
+                containerStyle={userMessageStylesheet.copyButton}
+                accessibilityLabel={t("message.actions.copyMessage")}
               />
-            ) : null}
-            <TurnCopyButton
-              getContent={getMessageContent}
-              containerStyle={userMessageStylesheet.copyButton}
-              accessibilityLabel={t("message.actions.copyMessage")}
-            />
+            </View>
           </View>
         ) : null}
       </View>

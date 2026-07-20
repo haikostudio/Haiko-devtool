@@ -3,7 +3,6 @@ import {
   type LayoutChangeEvent,
   Pressable,
   Text,
-  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
@@ -12,7 +11,6 @@ import { ChevronsDownUp, ChevronsUpDown, GripVertical } from "lucide-react-nativ
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   type AnimatedStyle,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -26,6 +24,7 @@ import {
 } from "@getpaseo/protocol/agent-state-bucket";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { useDraggableToast, useToastSection } from "@/hooks/use-draggable-toast";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
@@ -375,12 +374,10 @@ function ToastStackItem({
 export function AgentTasksToastStack(): ReactElement | null {
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const visible = useTrackedTasks();
   const collapsed = useAgentTaskToastStore((state) => state.collapsed);
   const setCollapsed = useAgentTaskToastStore((state) => state.setCollapsed);
-  const persistedOffsetX = useAgentTaskToastStore((state) => state.offsetX);
-  const setOffsetX = useAgentTaskToastStore((state) => state.setOffsetX);
+  const section = useToastSection();
   // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
   // can pull each card up over the one behind it and leave only a top sliver.
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -400,36 +397,19 @@ export function AgentTasksToastStack(): ReactElement | null {
     setHeights((prev) => (prev[key] === height ? prev : { ...prev, [key]: height }));
   }, []);
 
-  // Horizontal drag: the pile rides on a translateX we clamp so it can slide left
-  // into the pane but never off either edge. Seeded from the persisted position and
-  // written back on release.
-  const offsetX = useSharedValue(persistedOffsetX);
-  const dragStartX = useSharedValue(0);
-  useEffect(() => {
-    offsetX.value = persistedOffsetX;
-  }, [offsetX, persistedOffsetX]);
-  // Keep the widest possible card (320) on-screen when dragged fully left; allow a
-  // little rightward travel so the pile can tuck into the very corner if wanted.
-  const minOffsetX = Math.min(0, -(windowWidth - RAIL_CLEARANCE - 340));
-  const maxOffsetX = RAIL_CLEARANCE - 8;
-  const dragGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .onStart(() => {
-          dragStartX.value = offsetX.value;
-        })
-        .onUpdate((event) => {
-          const next = dragStartX.value + event.translationX;
-          offsetX.value = Math.min(Math.max(next, minOffsetX), maxOffsetX);
-        })
-        .onEnd(() => {
-          runOnJS(setOffsetX)(offsetX.value);
-        }),
-    [dragStartX, offsetX, minOffsetX, maxOffsetX, setOffsetX],
-  );
-  const dragAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: offsetX.value }],
-  }));
+  // Free drag via the grab handle: the pile rides on a translate we clamp to the
+  // viewport, remembered per app section so its spot in chat is independent from
+  // its spot in the tasks board.
+  const {
+    gesture: dragGesture,
+    animatedStyle: dragAnimatedStyle,
+    onLayout: onDragLayout,
+  } = useDraggableToast({
+    placement: "stack",
+    section,
+    rightOffset: RAIL_CLEARANCE,
+    bottomOffset: BASE_BOTTOM_OFFSET + insets.bottom,
+  });
   const animatedContainerStyle = useMemo(
     () => [containerStyle, dragAnimatedStyle],
     [containerStyle, dragAnimatedStyle],
@@ -457,7 +437,7 @@ export function AgentTasksToastStack(): ReactElement | null {
   const lastIndex = visible.length - 1;
 
   return (
-    <Animated.View style={animatedContainerStyle} pointerEvents="box-none">
+    <Animated.View style={animatedContainerStyle} pointerEvents="box-none" onLayout={onDragLayout}>
       <View
         style={styles.hoverWrapper}
         onPointerEnter={handleHoverEnter}

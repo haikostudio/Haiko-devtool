@@ -274,6 +274,9 @@ export interface CreateAgentOptions {
   initialTitle?: string | null;
   // undefined is an explicit decision: the agent never appears in the sidebar.
   workspaceId: string | undefined;
+  // When true, a missing working directory (e.g. a pruned worktree) falls back to
+  // the nearest existing ancestor instead of throwing, so the conversation can still open.
+  allowMissingCwd?: boolean;
 }
 
 export interface AgentManagerOptions {
@@ -1111,7 +1114,13 @@ export class AgentManager {
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
-    const { storedConfig, launchConfig } = await this.prepareSessionConfig(config, resolvedAgentId);
+    const { storedConfig, launchConfig } = await this.prepareSessionConfig(
+      config,
+      resolvedAgentId,
+      {
+        allowMissingCwd: options.allowMissingCwd ?? false,
+      },
+    );
     this.requireEnabledProvider(storedConfig.provider);
     const client = await this.requireAvailableClient({
       provider: storedConfig.provider,

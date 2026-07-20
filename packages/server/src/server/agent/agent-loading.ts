@@ -75,6 +75,9 @@ export async function ensureAgentLoaded(
       snapshot = await deps.agentManager.createAgent(config, agentId, {
         labels: record.labels,
         workspaceId: record.workspaceId,
+        // The worktree may have been pruned since this agent was stored; fall back to the
+        // nearest existing directory instead of failing to load the conversation.
+        allowMissingCwd: true,
       });
       deps.logger.info({ agentId, provider: record.provider }, "Agent created from stored config");
     }
