@@ -126,14 +126,15 @@ const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
 const ThemedZap = withUnistyles(Zap);
 const ThemedGradientStop = withUnistyles(Stop);
-const surfaceStopColor = (theme: Theme) => ({ stopColor: theme.colors.surface0 });
+// The shadow is the theme foreground color (dark in light mode, light in dark
+// mode) so it stays visible against the header surface on both themes.
+const shadowStopColor = (theme: Theme) => ({ stopColor: theme.colors.foreground });
 
-// A soft fade on one edge of the scrollable header, hinting there's more to
-// slide into view. Fades from transparent to the header surface color so it
-// reads as the content dissolving under the edge. Purely decorative — no taps.
-// The opaque end sits on the given edge, so "left" fades toward the right and
-// vice-versa.
-function HeaderScrollFade({ side }: { side: "left" | "right" }) {
+// An inner shadow on one edge of the scrollable header: a soft dark edge that
+// makes the hidden content read as tucked under the rail, hinting you can slide
+// it into view. Purely decorative — no taps. The shadow sits ON the given edge,
+// so "left" is darkest at the left and fades toward the right, and vice-versa.
+function HeaderScrollShadow({ side }: { side: "left" | "right" }) {
   const isLeft = side === "left";
   return (
     <View
@@ -142,20 +143,20 @@ function HeaderScrollFade({ side }: { side: "left" | "right" }) {
     >
       <Svg width="100%" height="100%">
         <Defs>
-          <SvgLinearGradient id={`tasksHeaderFade-${side}`} x1="0" y1="0" x2="1" y2="0">
+          <SvgLinearGradient id={`tasksHeaderShadow-${side}`} x1="0" y1="0" x2="1" y2="0">
             <ThemedGradientStop
               offset="0"
-              stopOpacity={isLeft ? 1 : 0}
-              uniProps={surfaceStopColor}
+              stopOpacity={isLeft ? 0.22 : 0}
+              uniProps={shadowStopColor}
             />
             <ThemedGradientStop
               offset="1"
-              stopOpacity={isLeft ? 0 : 1}
-              uniProps={surfaceStopColor}
+              stopOpacity={isLeft ? 0 : 0.22}
+              uniProps={shadowStopColor}
             />
           </SvgLinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#tasksHeaderFade-${side})`} />
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#tasksHeaderShadow-${side})`} />
       </Svg>
     </View>
   );
@@ -1365,6 +1366,9 @@ function CompactBoardHeader({
       if (!didAutoScrollRef.current && width > containerWidthRef.current + 1) {
         didAutoScrollRef.current = true;
         scrollRef.current?.scrollToEnd({ animated: false });
+        // scrollToEnd is programmatic and may not emit onScroll, so mirror the
+        // resulting offset ourselves — otherwise the left shadow never lights up.
+        offsetRef.current = width - containerWidthRef.current;
       }
       refreshFade();
     },
@@ -1413,8 +1417,8 @@ function CompactBoardHeader({
               ) : null}
               <BoardFolderSelector currentFolder={currentFolder} folders={folders} />
             </ScrollView>
-            {fades.left ? <HeaderScrollFade side="left" /> : null}
-            {fades.right ? <HeaderScrollFade side="right" /> : null}
+            {fades.left ? <HeaderScrollShadow side="left" /> : null}
+            {fades.right ? <HeaderScrollShadow side="right" /> : null}
           </View>
         </>
       }
