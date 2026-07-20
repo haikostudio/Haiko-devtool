@@ -10,7 +10,10 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Cancel superseded runs on every ref (not just PRs): pushing several commits
+  # in a row to main used to run a full ~18-job suite for each one. Cancelling
+  # in-progress runs keeps only the latest, cutting wasted Actions minutes.
+  cancel-in-progress: true
 
 env:
   # CI does not use the CUDA execution provider, and the onnxruntime-node
