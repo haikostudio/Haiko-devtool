@@ -134,30 +134,55 @@ const shadowStopColor = (theme: Theme) => ({ stopColor: theme.colors.foreground 
 // makes the hidden content read as tucked under the rail, hinting you can slide
 // it into view. Purely decorative — no taps. The shadow sits ON the given edge,
 // so "left" is darkest at the left and fades toward the right, and vice-versa.
+//
+// The SVG is sized in explicit pixels (measured via onLayout) with a
+// userSpaceOnUse gradient: percentage sizing silently paints nothing on web, so
+// numeric dimensions are the only reliable option across web + native.
 function HeaderScrollShadow({ side }: { side: "left" | "right" }) {
   const isLeft = side === "left";
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+  }, []);
   return (
     <View
       pointerEvents="none"
+      onLayout={handleLayout}
       style={isLeft ? styles.headerScrollFadeLeft : styles.headerScrollFadeRight}
     >
-      <Svg width="100%" height="100%">
-        <Defs>
-          <SvgLinearGradient id={`tasksHeaderShadow-${side}`} x1="0" y1="0" x2="1" y2="0">
-            <ThemedGradientStop
-              offset="0"
-              stopOpacity={isLeft ? 0.22 : 0}
-              uniProps={shadowStopColor}
-            />
-            <ThemedGradientStop
-              offset="1"
-              stopOpacity={isLeft ? 0 : 0.22}
-              uniProps={shadowStopColor}
-            />
-          </SvgLinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#tasksHeaderShadow-${side})`} />
-      </Svg>
+      {size.width > 0 && size.height > 0 ? (
+        <Svg width={size.width} height={size.height}>
+          <Defs>
+            <SvgLinearGradient
+              id={`tasksHeaderShadow-${side}`}
+              x1="0"
+              y1="0"
+              x2={size.width}
+              y2="0"
+              gradientUnits="userSpaceOnUse"
+            >
+              <ThemedGradientStop
+                offset="0"
+                stopOpacity={isLeft ? 0.3 : 0}
+                uniProps={shadowStopColor}
+              />
+              <ThemedGradientStop
+                offset="1"
+                stopOpacity={isLeft ? 0 : 0.3}
+                uniProps={shadowStopColor}
+              />
+            </SvgLinearGradient>
+          </Defs>
+          <Rect
+            x={0}
+            y={0}
+            width={size.width}
+            height={size.height}
+            fill={`url(#tasksHeaderShadow-${side})`}
+          />
+        </Svg>
+      ) : null}
     </View>
   );
 }
@@ -1912,14 +1937,14 @@ const styles = StyleSheet.create((theme) => ({
     top: 0,
     bottom: 0,
     right: 0,
-    width: theme.spacing[6],
+    width: theme.spacing[8],
   },
   headerScrollFadeLeft: {
     position: "absolute",
     top: 0,
     bottom: 0,
     left: 0,
-    width: theme.spacing[6],
+    width: theme.spacing[8],
   },
   // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
   compactListWrap: {
