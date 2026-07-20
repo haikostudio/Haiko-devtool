@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { type LayoutChangeEvent, useWindowDimensions } from "react-native";
+import { type LayoutChangeEvent, useWindowDimensions, type ViewStyle } from "react-native";
 import { usePathname } from "expo-router";
 import { Gesture } from "react-native-gesture-handler";
 import {
@@ -8,7 +8,6 @@ import {
   useSharedValue,
   type AnimatedStyle,
 } from "react-native-reanimated";
-import type { ViewStyle } from "react-native";
 import { useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
 
 // A drag doesn't start until the finger travels this far, so a plain tap on the
