@@ -300,6 +300,8 @@ export const ru: TranslationResources = {
       timeline: "Хронология",
     },
     panel: {
+      evolutionCreateTask: "Создать задачу из этой идеи",
+      evolutionTaskCreated: "Задача добавлена на доску",
       chat: "Чат",
       details: "Подробности",
       noAgent: "Для этой задачи ещё не запущен ни один агент.",

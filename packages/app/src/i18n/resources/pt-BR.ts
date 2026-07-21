@@ -302,6 +302,8 @@ export const ptBR: TranslationResources = {
       timeline: "Linha do tempo",
     },
     panel: {
+      evolutionCreateTask: "Criar uma tarefa a partir desta ideia",
+      evolutionTaskCreated: "Tarefa adicionada ao quadro",
       chat: "Conversa",
       details: "Detalhes",
       noAgent: "Nenhum agente foi iniciado para esta tarefa ainda.",

@@ -298,6 +298,8 @@ export const ar: TranslationResources = {
       timeline: "الجدول الزمني",
     },
     panel: {
+      evolutionCreateTask: "إنشاء مهمة من هذه الفكرة",
+      evolutionTaskCreated: "تمت إضافة المهمة إلى اللوحة",
       chat: "المحادثة",
       details: "التفاصيل",
       noAgent: "لم يتم تشغيل أي وكيل لهذه المهمة بعد.",

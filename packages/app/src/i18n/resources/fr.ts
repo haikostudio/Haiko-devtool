@@ -302,6 +302,8 @@ export const fr: TranslationResources = {
       timeline: "Chronologie",
     },
     panel: {
+      evolutionCreateTask: "Créer une tâche à partir de cette idée",
+      evolutionTaskCreated: "Tâche ajoutée au tableau",
       chat: "Discussion",
       details: "Détails",
       noAgent: "Aucun agent n'a encore été lancé pour cette tâche.",

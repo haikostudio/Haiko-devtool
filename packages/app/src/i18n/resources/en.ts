@@ -297,6 +297,8 @@ export const en = {
       timeline: "Timeline",
     },
     panel: {
+      evolutionCreateTask: "Create a task from this idea",
+      evolutionTaskCreated: "Task added to the board",
       chat: "Chat",
       details: "Details",
       noAgent: "No agent has been started for this task yet.",

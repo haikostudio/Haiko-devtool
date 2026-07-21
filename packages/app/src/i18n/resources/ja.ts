@@ -301,6 +301,8 @@ export const ja: TranslationResources = {
       timeline: "タイムライン",
     },
     panel: {
+      evolutionCreateTask: "このアイデアからタスクを作成",
+      evolutionTaskCreated: "タスクをボードに追加しました",
       chat: "チャット",
       details: "詳細",
       noAgent: "このタスクにはまだエージェントが起動されていません。",

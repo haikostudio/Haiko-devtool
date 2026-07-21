@@ -53,6 +53,7 @@ import {
   ListChecks,
   ClipboardList,
   CircleDot,
+  ListPlus,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
@@ -116,6 +117,8 @@ import {
   useAssistantFileLinkActions,
   useAssistantLinkPress,
 } from "@/assistant-file-links";
+import { useToast } from "@/contexts/toast-context";
+import { useEvolutionTaskCreator } from "@/contexts/evolution-task-context";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
@@ -184,6 +187,7 @@ const MARKDOWN_ALLOWED_IMAGE_HANDLERS = [
 const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
 
 const ThemedMicVocal = withUnistyles(MicVocal);
+const ThemedListPlusIcon = withUnistyles(ListPlus);
 const ThemedTodoCheckIcon = withUnistyles(Check);
 const ThemedFileSymlinkIcon = withUnistyles(FileSymlink);
 const ThemedTriangleAlertIcon = withUnistyles(TriangleAlertIcon);
@@ -200,6 +204,7 @@ const primaryForegroundColorMapping = (theme: Theme) => ({
   color: theme.colors.primaryForeground,
 });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+const successColorMapping = (theme: Theme) => ({ color: theme.colors.success });
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_CSS = `
   @keyframes ${WEB_TOOLCALL_SHIMMER_ANIMATION_NAME} {
     0% {
@@ -1713,6 +1718,113 @@ function MarkdownListView({ baseStyle, spacing, children }: MarkdownListViewProp
   return <View style={style}>{children}</View>;
 }
 
+// Section-5 ("## N. Évolutions possibles") heading detector. Matches with or
+// without the accent so a model that drops it still triggers the affordance.
+const EVOLUTION_HEADING_PATTERN = /évolu|evolu/i;
+
+// Flatten an AST node to its plain text — used to seed the task title from a
+// bullet without dragging along inline markdown markup.
+function extractAstNodeText(node: ASTNode): string {
+  if (typeof node.content === "string" && node.content.length > 0) {
+    return node.content;
+  }
+  const children = (node as ASTNode & { children?: ASTNode[] }).children;
+  if (Array.isArray(children)) {
+    return children.map(extractAstNodeText).join("");
+  }
+  return "";
+}
+
+const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
+  button: {
+    marginLeft: theme.spacing[2],
+    marginTop: theme.spacing[1],
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonBusy: {
+    opacity: 0.5,
+  },
+}));
+
+interface EvolutionListItemProps {
+  listItemStyle: ViewStyle;
+  markerStyle: TextStyle;
+  contentStyle: ViewStyle;
+  marker: string;
+  title: string;
+  children: ReactNode;
+}
+
+/**
+ * A bullet inside the "Évolutions possibles" section, with a trailing button
+ * that turns the proposal into a backlog task on the current project's board.
+ * The button only appears when an EvolutionTaskProvider is in scope (i.e. the
+ * chat is embedded in a task drawer) and the bullet has text.
+ */
+function EvolutionListItem({
+  listItemStyle,
+  markerStyle,
+  contentStyle,
+  marker,
+  title,
+  children,
+}: EvolutionListItemProps) {
+  const creator = useEvolutionTaskCreator();
+  const toast = useToast();
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<"idle" | "creating" | "done">("idle");
+
+  const handleCreate = useStableEvent(async () => {
+    if (!creator || status !== "idle" || title.length === 0) {
+      return;
+    }
+    setStatus("creating");
+    try {
+      await creator.createTask({ title });
+      setStatus("done");
+      toast.show(t("tasks.panel.evolutionTaskCreated"), { variant: "success" });
+    } catch (error: unknown) {
+      setStatus("idle");
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const buttonStyle = useMemo(
+    () => [
+      evolutionTaskButtonStyles.button,
+      status !== "idle" ? evolutionTaskButtonStyles.buttonBusy : null,
+    ],
+    [status],
+  );
+
+  return (
+    <View style={listItemStyle}>
+      <Text style={markerStyle}>{marker}</Text>
+      <MarkdownListItemContent contentStyle={contentStyle}>{children}</MarkdownListItemContent>
+      {creator && title.length > 0 ? (
+        <Pressable
+          onPress={handleCreate}
+          disabled={status !== "idle"}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.evolutionCreateTask")}
+          hitSlop={8}
+          style={buttonStyle}
+          testID="evolution-create-task"
+        >
+          {status === "done" ? (
+            <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
+          ) : (
+            <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
+          )}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export const AssistantMessage = memo(function AssistantMessage({
   message,
   timestamp: _timestamp,
@@ -2040,16 +2152,57 @@ export const AssistantMessage = memo(function AssistantMessage({
     };
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
 
+  // Variant used only for the "Évolutions possibles" section: same rules, but
+  // each bullet gets a trailing "create task" button.
+  const evolutionMarkdownRules = useMemo<RenderRules>(
+    () => ({
+      ...markdownRules,
+      list_item: (
+        node: ASTNode,
+        children: ReactNode[],
+        parent: ASTNode[],
+        styles: MarkdownStyles,
+      ) => {
+        const { isOrdered, marker } = getMarkdownListMarker(node, parent);
+        const iconStyle = isOrdered ? styles.ordered_list_icon : styles.bullet_list_icon;
+        const contentStyle = isOrdered ? styles.ordered_list_content : styles.bullet_list_content;
+        return (
+          <EvolutionListItem
+            key={node.key}
+            listItemStyle={styles.list_item}
+            markerStyle={iconStyle}
+            contentStyle={contentStyle}
+            marker={marker}
+            title={extractAstNodeText(node).replace(/\s+/g, " ").trim()}
+          >
+            {children}
+          </EvolutionListItem>
+        );
+      },
+    }),
+    [markdownRules],
+  );
+
   const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
-  const keyedBlocks = useMemo(
-    () =>
-      blocks.map((block, index) => ({
+  const keyedBlocks = useMemo(() => {
+    // Blocks are split on blank lines, so the section heading and its bullet
+    // list are separate blocks. Track the active section as we walk them and
+    // flag every block under "Évolutions possibles".
+    let sectionIsEvolutions = false;
+    return blocks.map((block, index) => {
+      const firstLine = block.trimStart().split("\n", 1)[0] ?? "";
+      const headingMatch = /^#{1,6}\s+(.+)$/.exec(firstLine);
+      if (headingMatch) {
+        sectionIsEvolutions = EVOLUTION_HEADING_PATTERN.test(headingMatch[1]);
+      }
+      return {
         key: `${index}:${block.slice(0, 32)}`,
         block,
         callout: parseCalloutBlock(block),
-      })),
-    [blocks],
-  );
+        evolutions: sectionIsEvolutions,
+      };
+    });
+  }, [blocks]);
 
   const assistantContainerStyle = useMemo(
     () => [
@@ -2064,7 +2217,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block, callout }, index) => (
+      {keyedBlocks.map(({ key, block, callout, evolutions }, index) => (
         <AssistantMessageBlockContainer
           key={key}
           block={block}
@@ -2080,7 +2233,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           ) : (
             <MemoizedMarkdownBlock
               text={block}
-              rules={markdownRules}
+              rules={evolutions ? evolutionMarkdownRules : markdownRules}
               parser={markdownParser}
               onLinkPress={handleMarkdownLinkPress}
             />

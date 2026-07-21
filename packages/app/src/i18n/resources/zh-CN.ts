@@ -298,6 +298,8 @@ export const zhCN: TranslationResources = {
       timeline: "时间线",
     },
     panel: {
+      evolutionCreateTask: "根据此想法创建任务",
+      evolutionTaskCreated: "任务已添加到看板",
       chat: "对话",
       details: "详情",
       noAgent: "尚未为此任务启动任何智能体。",
