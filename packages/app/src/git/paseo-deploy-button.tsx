@@ -5,8 +5,17 @@ import { Rocket } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
-import { usePaseoDeployStatus } from "@/git/use-paseo-deploy";
+import {
+  type PaseoDeployCommitEntry,
+  type PaseoDeployFileEntry,
+  usePaseoDeployStatus,
+} from "@/git/use-paseo-deploy";
 import type { Theme } from "@/styles/theme";
+
+// Stable empty arrays so the list props keep a constant identity when the status
+// hasn't loaded yet (avoids needless re-renders of the list sections).
+const EMPTY_FILES: PaseoDeployFileEntry[] = [];
+const EMPTY_COMMITS: PaseoDeployCommitEntry[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
@@ -76,6 +85,30 @@ function DeployChangesSummary({ count }: { count: number }) {
       <Text style={styles.summaryCount}>{count}</Text>
       <Text style={styles.summaryLabel}>
         {count > 1 ? "changements à publier" : "changement à publier"}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Warning shown at the top of the deploy sheet when daemon-side work has shipped
+ * since the engine last started — those features stay dormant until a restart,
+ * which is exactly the "I don't see my changes" trap. Restart is a manual,
+ * human-triggered action, so this only informs; it never acts.
+ */
+function DaemonBehindNotice({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={styles.behind}>
+      <Text style={styles.behindTitle}>
+        {count > 1
+          ? `Le moteur est en retard sur ${count} nouveautés`
+          : "Le moteur est en retard sur 1 nouveauté"}
+      </Text>
+      <Text style={styles.behindText}>
+        {count > 1
+          ? "Ces changements sont enregistrés mais dorment tant que le moteur n'a pas redémarré. Redémarre-le pour les activer."
+          : "Ce changement est enregistré mais dort tant que le moteur n'a pas redémarré. Redémarre-le pour l'activer."}
       </Text>
     </View>
   );
@@ -152,6 +185,93 @@ interface PaseoDeployModalProps {
   onDeployed: () => void;
 }
 
+/** "Modifications en cours, pas encore enregistrées" list (hidden when empty). */
+function PendingFilesSection({ files }: { files: PaseoDeployFileEntry[] }) {
+  if (files.length === 0) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Modifications en cours, pas encore enregistrées</Text>
+      <View style={styles.list}>
+        {files.map((file) => (
+          <View key={file.path} style={styles.itemRow}>
+            <Text style={styles.bullet}>•</Text>
+            <Text style={styles.itemText}>
+              <Text style={styles.itemLabel}>{describeFileStatus(file.status)} : </Text>
+              {describeFilePath(file.path)}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** "Changements prêts, pas encore en ligne" list (hidden when empty). */
+function PendingCommitsSection({ commits }: { commits: PaseoDeployCommitEntry[] }) {
+  if (commits.length === 0) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Changements prêts, pas encore en ligne</Text>
+      <View style={styles.list}>
+        {commits.map((commit) => (
+          <View key={commit.sha} style={styles.itemRow}>
+            <Text style={styles.bullet}>•</Text>
+            <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Scrollable contents of the deploy sheet — split out so the modal shell stays
+ *  simple (and under the complexity budget). */
+function DeployModalBody({
+  status,
+  error,
+}: {
+  status: ReturnType<typeof usePaseoDeployStatus>["status"];
+  error: string | null;
+}) {
+  const deploying = status?.deploying ?? false;
+  const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
+  const unshippedCommits = status?.unshippedCommits ?? EMPTY_COMMITS;
+  const isClean = !deploying && uncommittedFiles.length === 0 && unshippedCommits.length === 0;
+  // Real number of changes to ship — honest even after work is grouped into a
+  // few commits (older daemons that don't send it fall back to the list sum).
+  const changesCount = status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length;
+  const daemonBehindCount = status?.daemonBehindCount ?? 0;
+
+  return (
+    <View style={styles.body}>
+      <DaemonBehindNotice count={daemonBehindCount} />
+
+      {isClean && daemonBehindCount <= 0 ? (
+        <Text style={styles.cleanText}>Tout est déjà en ligne. ✅</Text>
+      ) : null}
+
+      {isClean ? null : <DeployChangesSummary count={changesCount} />}
+
+      <PendingFilesSection files={uncommittedFiles} />
+      <PendingCommitsSection commits={unshippedCommits} />
+
+      {deploying ? <Text style={styles.infoText}>Déploiement en cours…</Text> : null}
+
+      {status?.lastError ? (
+        <View style={styles.warning}>
+          <Text style={styles.warningText}>{status.lastError}</Text>
+        </View>
+      ) : null}
+
+      {error ? (
+        <View style={styles.warning}>
+          <Text style={styles.warningText}>{error}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function PaseoDeployModal({
   visible,
   serverId,
@@ -166,12 +286,6 @@ function PaseoDeployModal({
   const sheetHeader = useMemo<SheetHeader>(() => ({ title: "À déployer" }), []);
 
   const deploying = status?.deploying ?? false;
-  const uncommittedFiles = status?.uncommittedFiles ?? [];
-  const unshippedCommits = status?.unshippedCommits ?? [];
-  const isClean = !deploying && uncommittedFiles.length === 0 && unshippedCommits.length === 0;
-  // Real number of changes to ship — honest even after work is grouped into a
-  // few commits (older daemons that don't send it fall back to the list sum).
-  const changesCount = status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length;
 
   const trigger = useCallback(
     async (noBuild: boolean) => {
@@ -254,56 +368,7 @@ function PaseoDeployModal({
       footer={footer}
       testID="paseo-deploy-modal"
     >
-      <View style={styles.body}>
-        {isClean ? <Text style={styles.cleanText}>Tout est déjà en ligne. ✅</Text> : null}
-
-        {isClean ? null : <DeployChangesSummary count={changesCount} />}
-
-        {uncommittedFiles.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Modifications en cours, pas encore enregistrées</Text>
-            <View style={styles.list}>
-              {uncommittedFiles.map((file) => (
-                <View key={file.path} style={styles.itemRow}>
-                  <Text style={styles.bullet}>•</Text>
-                  <Text style={styles.itemText}>
-                    <Text style={styles.itemLabel}>{describeFileStatus(file.status)} : </Text>
-                    {describeFilePath(file.path)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {unshippedCommits.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Changements prêts, pas encore en ligne</Text>
-            <View style={styles.list}>
-              {unshippedCommits.map((commit) => (
-                <View key={commit.sha} style={styles.itemRow}>
-                  <Text style={styles.bullet}>•</Text>
-                  <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {deploying ? <Text style={styles.infoText}>Déploiement en cours…</Text> : null}
-
-        {status?.lastError ? (
-          <View style={styles.warning}>
-            <Text style={styles.warningText}>{status.lastError}</Text>
-          </View>
-        ) : null}
-
-        {error ? (
-          <View style={styles.warning}>
-            <Text style={styles.warningText}>{error}</Text>
-          </View>
-        ) : null}
-      </View>
+      <DeployModalBody status={status} error={error} />
     </AdaptiveModalSheet>
   );
 }
@@ -426,6 +491,24 @@ const styles = StyleSheet.create((theme) => ({
   infoText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
+  },
+  // "Engine is behind" hint — amber, distinct from the red error banner so it
+  // reads as an actionable heads-up (restart me) rather than a failure.
+  behind: {
+    gap: theme.spacing[1],
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.palette.amber[900],
+  },
+  behindTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: "700",
+    color: theme.colors.palette.amber[100],
+  },
+  behindText: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.4,
+    color: theme.colors.palette.amber[200],
   },
   warning: {
     padding: theme.spacing[2],

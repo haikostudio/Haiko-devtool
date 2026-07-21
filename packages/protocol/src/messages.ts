@@ -4638,6 +4638,18 @@ export const PaseoDeployStatusResponseSchema = z.object({
     changesCount: z.number().optional(),
     headSha: z.string().nullable(),
     deployedSha: z.string().nullable(),
+    /**
+     * Commit the running daemon was started from. Lets the client warn when the
+     * live code has moved past what the daemon actually loaded (server features
+     * need a restart to take effect). Optional so older daemons still parse.
+     */
+    daemonSha: z.string().nullable().optional(),
+    /**
+     * Number of commits since the daemon started that touch daemon-side code
+     * (server / protocol / cli / relay / highlight) — i.e. real work that stays
+     * dormant until the daemon is restarted. Optional for older daemons.
+     */
+    daemonBehindCount: z.number().optional(),
     branch: z.string().nullable(),
     /** Error from the last finished deploy run, if it failed. */
     lastError: z.string().nullable(),

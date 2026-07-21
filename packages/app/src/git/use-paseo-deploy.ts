@@ -32,6 +32,13 @@ export interface PaseoDeployStatus {
   changesCount?: number;
   headSha: string | null;
   deployedSha: string | null;
+  /** Commit the running daemon booted from. Optional — older daemons omit it. */
+  daemonSha?: string | null;
+  /**
+   * Daemon-side changes shipped since the daemon started, dormant until it is
+   * restarted. Optional — older daemons don't send it (treated as 0).
+   */
+  daemonBehindCount?: number;
   branch: string | null;
   lastError: string | null;
   error: string | null;

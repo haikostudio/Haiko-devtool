@@ -11,10 +11,64 @@ const SHIP_SCRIPT = "/home/paseo/paseo-ship-now.sh";
 const DEPLOYED_SHA_FILE = "/var/www/paseo-app/.deployed-sha";
 const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
 
+/**
+ * Repo paths whose changes only take effect once the daemon is restarted —
+ * everything compiled into the running daemon process. Pure client/web changes
+ * (packages/app, docs, …) reach users through a web deploy instead, so they must
+ * NOT trigger the "restart the engine" hint.
+ */
+const DAEMON_CODE_PATHS = [
+  "packages/server",
+  "packages/protocol",
+  "packages/cli",
+  "packages/relay",
+  "packages/highlight",
+];
+
 /** A ship (commit/push/build/deploy) is currently running. */
 let deploying = false;
 /** Error from the last finished deploy run, if it failed. */
 let lastError: string | null = null;
+/**
+ * HEAD at the moment the daemon booted — captured once so we can tell, later,
+ * that new daemon-side commits have landed since this process started (they stay
+ * dormant until a restart). Must be recorded at startup, before HEAD can move.
+ */
+let daemonBootSha: string | null = null;
+
+/**
+ * Record the commit the daemon is running. Call once from bootstrap at startup,
+ * before any git work advances HEAD, so the "engine is behind" hint is honest.
+ */
+export async function recordDaemonBootSha(): Promise<void> {
+  try {
+    const result = await runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT });
+    daemonBootSha = result.stdout.trim() || null;
+  } catch {
+    daemonBootSha = null;
+  }
+}
+
+/**
+ * Count commits since the daemon booted that touch daemon-side code — the real
+ * number of shipped-but-dormant features waiting for a restart. Returns 0 when
+ * the boot SHA is unknown or equals HEAD.
+ */
+async function getDaemonBehindCount(headSha: string | null): Promise<number> {
+  if (daemonBootSha === null || daemonBootSha === headSha) {
+    return 0;
+  }
+  try {
+    const result = await runGitCommand(
+      ["log", "--format=%h", `${daemonBootSha}..HEAD`, "--", ...DAEMON_CODE_PATHS],
+      { cwd: REPO_ROOT },
+    );
+    return result.stdout.split("\n").filter((line) => line.length > 0).length;
+  } catch {
+    // Range failed (e.g. boot SHA unknown to git after a rebase) — no honest count.
+    return 0;
+  }
+}
 
 export interface PaseoDeployStatus {
   deploying: boolean;
@@ -30,6 +84,10 @@ export interface PaseoDeployStatus {
   changesCount: number;
   headSha: string | null;
   deployedSha: string | null;
+  /** Commit the running daemon booted from (null if unknown). */
+  daemonSha: string | null;
+  /** Daemon-side commits landed since boot, dormant until a restart. */
+  daemonBehindCount: number;
   branch: string | null;
   lastError: string | null;
   error: string | null;
@@ -132,6 +190,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const branch = branchResult.stdout.trim() || null;
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
     const changesCount = await getChangedFileCount(deployedSha, uncommittedFiles);
+    const daemonBehindCount = await getDaemonBehindCount(headSha);
 
     const hasPending =
       uncommittedFiles.length > 0 ||
@@ -146,6 +205,8 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       changesCount,
       headSha,
       deployedSha,
+      daemonSha: daemonBootSha,
+      daemonBehindCount,
       branch,
       lastError,
       error: null,
@@ -159,6 +220,8 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       changesCount: 0,
       headSha: null,
       deployedSha: null,
+      daemonSha: daemonBootSha,
+      daemonBehindCount: 0,
       branch: null,
       lastError,
       error: getErrorMessage(error),
