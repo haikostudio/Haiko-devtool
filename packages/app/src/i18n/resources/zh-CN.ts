@@ -306,6 +306,7 @@ export const zhCN: TranslationResources = {
       expand: "展开面板",
       billing: "账单",
       billingLine: {
+        changeClient: "更改",
         added: "已添加到 {{number}}",
         addError: "无法将任务添加到文档。",
         addTitle: "添加到文档",
@@ -2252,6 +2253,7 @@ export const zhCN: TranslationResources = {
         failedDescription: "重新加载以重试。",
       },
       billing: {
+        linkedTo: "项目客户：{{name}}",
         title: "账单",
         info: "将此项目关联到客户，即可把其任务添加到报价或发票。",
         client: "账单客户",

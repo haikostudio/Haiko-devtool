@@ -310,6 +310,7 @@ export const es: TranslationResources = {
       expand: "Expandir panel",
       billing: "Facturación",
       billingLine: {
+        changeClient: "Cambiar",
         added: "Añadido a {{number}}",
         addError: "No se pudo añadir la tarea al documento.",
         addTitle: "Añadir a un documento",
@@ -2324,6 +2325,7 @@ export const es: TranslationResources = {
         failedDescription: "Vuelva a cargar para intentarlo de nuevo.",
       },
       billing: {
+        linkedTo: "Cliente del proyecto: {{name}}",
         title: "Facturación",
         info: "Vincula este proyecto a un cliente para añadir sus tareas a un presupuesto o factura.",
         client: "Cliente de facturación",

@@ -24,6 +24,7 @@ import {
   MoreVertical,
   Pencil,
   Plus,
+  Settings2,
   Trash2,
   Zap,
 } from "lucide-react-native";
@@ -63,6 +64,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
+import { buildProjectSettingsRoute } from "@/utils/host-routes";
 
 // Desktop agent side-panel geometry — collapsed rail vs a resizable open width.
 const COLLAPSED_PANEL_WIDTH = 44;
@@ -125,6 +127,7 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
 const ThemedZap = withUnistyles(Zap);
+const ThemedSettings = withUnistyles(Settings2);
 const ThemedGradientStop = withUnistyles(Stop);
 // The shadow is the theme foreground color (dark in light mode, light in dark
 // mode) so it stays visible against the header surface on both themes.
@@ -662,6 +665,10 @@ const ProjectRailItem = memo(function ProjectRailItem({
   const handlePress = useCallback(() => {
     selectProject(entry);
   }, [entry]);
+  // Gear → the project's configuration sheet (name, icon, billing client, …).
+  const handleOpenSettings = useCallback(() => {
+    router.navigate(buildProjectSettingsRoute(entry.projectId));
+  }, [entry.projectId]);
   return (
     <Pressable
       style={selected ? styles.railItemSelected : railItemStyle}
@@ -682,6 +689,16 @@ const ProjectRailItem = memo(function ProjectRailItem({
           </Text>
         ) : null}
       </View>
+      <Pressable
+        onPress={handleOpenSettings}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t("sidebar.project.actions.openSettings")}
+        testID={`tasks-project-settings-${entry.projectId}`}
+        style={styles.railItemAction}
+      >
+        <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      </Pressable>
     </Pressable>
   );
 });
@@ -1491,6 +1508,10 @@ function CompactProjectHeader({
   projects: ProjectEntry[];
 }) {
   const { t } = useTranslation();
+  const settingsButton = useMemo(
+    () => <CompactProjectSettingsButton projectId={currentProject.projectId} />,
+    [currentProject.projectId],
+  );
   return (
     <ScreenHeader
       leftStyle={styles.boardHeaderLeft}
@@ -1529,7 +1550,28 @@ function CompactProjectHeader({
           </DropdownMenu>
         </>
       }
+      right={settingsButton}
     />
+  );
+}
+
+// Gear in the compact tasks header → the current project's configuration sheet.
+function CompactProjectSettingsButton({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    router.navigate(buildProjectSettingsRoute(projectId));
+  }, [projectId]);
+  return (
+    <Pressable
+      onPress={handlePress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t("sidebar.project.actions.openSettings")}
+      testID="tasks-header-project-settings"
+      style={styles.headerSettingsButton}
+    >
+      <ThemedSettings size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+    </Pressable>
   );
 }
 
@@ -1767,6 +1809,13 @@ const styles = StyleSheet.create((theme) => ({
   railItemSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+  },
+  railItemAction: {
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.sm,
+  },
+  headerSettingsButton: {
+    padding: theme.spacing[1],
   },
   folderColorDot: {
     width: 10,

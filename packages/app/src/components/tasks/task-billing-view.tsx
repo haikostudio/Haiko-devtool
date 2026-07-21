@@ -3,12 +3,14 @@ import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Receipt } from "lucide-react-native";
-import type { ComptaProjectLink } from "@getpaseo/protocol/messages";
+import type { ComptaClient, ComptaProjectLink } from "@getpaseo/protocol/messages";
 import type { KanbanTask } from "@/data/tasks";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
 import { Button } from "@/components/ui/button";
 import { TaskBillingAddSheet } from "@/components/compta/task-billing-add-sheet";
+import { ComptaClientPickerSheet } from "@/components/compta/compta-client-picker-sheet";
+import { useToast } from "@/contexts/toast-context";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
@@ -37,11 +39,15 @@ export function TaskBillingView({
   projectId: string | null;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const minutes = task.estimate?.estimatedMinutes;
   const hasBilling = minutes !== undefined && minutes > 0;
   const billingSupported = useHostFeature(serverId, "comptaBilling");
   const client = useHostRuntimeClient(serverId ?? "");
   const [link, setLink] = useState<ComptaProjectLink | null>(null);
+  // One-off client override for this task (defaults to the project's client).
+  const [pickedClient, setPickedClient] = useState<ComptaClient | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
@@ -66,6 +72,8 @@ export function TaskBillingView({
 
   const handleOpenAdd = useCallback(() => setAddOpen(true), []);
   const handleCloseAdd = useCallback(() => setAddOpen(false), []);
+  const handleOpenPicker = useCallback(() => setPickerOpen(true), []);
+  const handleClosePicker = useCallback(() => setPickerOpen(false), []);
   const billingLine = useMemo(
     () => ({
       title: task.title,
@@ -76,33 +84,80 @@ export function TaskBillingView({
     [task.title, task.description, minutes],
   );
 
-  if (!hasBilling) {
-    return (
-      <View style={styles.emptyState}>
-        <ThemedReceipt size={ICON_SIZE.lg} uniProps={mutedColorMapping} />
-        <Text style={styles.emptyText}>{t("tasks.panel.billingLine.noEstimate")}</Text>
-      </View>
-    );
-  }
+  // Effective client for this task: manual pick wins over the project default.
+  const effectiveClient = useMemo(() => {
+    if (pickedClient) {
+      return { id: pickedClient.id, name: pickedClient.name, company: pickedClient.company };
+    }
+    if (link) {
+      return { id: link.clientId, name: link.clientName, company: link.company };
+    }
+    return null;
+  }, [pickedClient, link]);
 
-  const amount = computeBillableCostChf(minutes);
+  // Picking a client when the project has none also becomes the project's
+  // default (so the next task starts pre-filled); otherwise it stays a one-off
+  // override for this task.
+  const handlePickClient = useCallback(
+    (picked: ComptaClient | null) => {
+      if (!picked) {
+        return;
+      }
+      setPickedClient(picked);
+      if (!link && client && projectId) {
+        void (async () => {
+          try {
+            const updated = await client.setComptaProjectLink({
+              projectId,
+              clientId: picked.id,
+            });
+            setLink(updated);
+            if (updated) {
+              toast.show(t("settings.project.billing.linkedTo", { name: updated.clientName }), {
+                variant: "success",
+              });
+            }
+          } catch {
+            // The one-off pick still works for this task; only the default failed.
+          }
+        })();
+      }
+    },
+    [link, client, projectId, toast, t],
+  );
+
+  const amount = hasBilling ? formatChf(computeBillableCostChf(minutes)) : "—";
   const rateValue = `${BILLABLE_HOURLY_RATE_CHF} CHF/h`;
 
   const renderAction = () => {
     if (!billingSupported) {
       return null;
     }
-    if (!link) {
-      return <Text style={styles.note}>{t("tasks.panel.billingLine.linkHint")}</Text>;
+    if (!effectiveClient) {
+      return (
+        <Button onPress={handleOpenPicker} testID="task-billing-pick-client">
+          {t("settings.project.billing.selectClient")}
+        </Button>
+      );
     }
     return (
       <View style={styles.actionBlock}>
-        <Text style={styles.linkedClient}>
-          {t("tasks.panel.billingLine.linkedClient", {
-            name: link.clientName,
-            company: link.company,
-          })}
-        </Text>
+        <View style={styles.clientRow}>
+          <Text style={styles.linkedClient} numberOfLines={1}>
+            {t("tasks.panel.billingLine.linkedClient", {
+              name: effectiveClient.name,
+              company: effectiveClient.company,
+            })}
+          </Text>
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={handleOpenPicker}
+            testID="task-billing-change-client"
+          >
+            {t("tasks.panel.billingLine.changeClient")}
+          </Button>
+        </View>
         <Button onPress={handleOpenAdd} testID="task-billing-add">
           {t("tasks.panel.billingLine.addButton")}
         </Button>
@@ -115,22 +170,42 @@ export function TaskBillingView({
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("tasks.panel.billingLine.title")}</Text>
         <Row label={t("tasks.panel.billingLine.label")} value={task.title} />
-        <Row label={t("tasks.panel.billingLine.time")} value={formatDuration(minutes)} />
+        <Row
+          label={t("tasks.panel.billingLine.time")}
+          value={hasBilling ? formatDuration(minutes) : "—"}
+        />
         <Row label={t("tasks.panel.billingLine.rate")} value={rateValue} />
         <View style={styles.divider} />
-        <Row label={t("tasks.panel.billingLine.amount")} value={formatChf(amount)} emphasized />
+        <Row label={t("tasks.panel.billingLine.amount")} value={amount} emphasized />
       </View>
+
+      {!hasBilling ? (
+        <View style={styles.hintRow}>
+          <ThemedReceipt size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <Text style={styles.hintText}>{t("tasks.panel.billingLine.noEstimate")}</Text>
+        </View>
+      ) : null}
 
       {renderAction()}
 
       <Text style={styles.note}>{t("tasks.panel.billingLine.note")}</Text>
 
-      {link && serverId ? (
+      {serverId ? (
+        <ComptaClientPickerSheet
+          visible={pickerOpen}
+          onClose={handleClosePicker}
+          serverId={serverId}
+          selectedClientId={effectiveClient?.id ?? null}
+          onSelect={handlePickClient}
+        />
+      ) : null}
+
+      {effectiveClient && serverId ? (
         <TaskBillingAddSheet
           visible={addOpen}
           onClose={handleCloseAdd}
           serverId={serverId}
-          clientId={link.clientId}
+          clientId={effectiveClient.id}
           documentTitle={task.title}
           line={billingLine}
         />
@@ -218,21 +293,27 @@ const styles = StyleSheet.create((theme) => ({
   actionBlock: {
     gap: theme.spacing[2],
   },
+  clientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
   linkedClient: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     paddingHorizontal: theme.spacing[1],
+    flexShrink: 1,
   },
-  emptyState: {
-    flex: 1,
+  hintRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[3],
-    padding: theme.spacing[6],
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
   },
-  emptyText: {
+  hintText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    textAlign: "center",
+    fontSize: theme.fontSize.xs,
+    flexShrink: 1,
   },
 }));

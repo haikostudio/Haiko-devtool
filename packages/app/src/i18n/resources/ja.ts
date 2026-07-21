@@ -309,6 +309,7 @@ export const ja: TranslationResources = {
       expand: "パネルを展開",
       billing: "請求",
       billingLine: {
+        changeClient: "変更",
         added: "{{number}} に追加しました",
         addError: "タスクを書類に追加できませんでした。",
         addTitle: "書類に追加",
@@ -2298,6 +2299,7 @@ export const ja: TranslationResources = {
         failedDescription: "再読み込みして再試行してください。",
       },
       billing: {
+        linkedTo: "プロジェクトのクライアント：{{name}}",
         title: "請求",
         info: "このプロジェクトを顧客に紐付けると、タスクを見積書や請求書に追加できます。",
         client: "請求先の顧客",

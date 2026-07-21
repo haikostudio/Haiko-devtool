@@ -306,6 +306,7 @@ export const ar: TranslationResources = {
       expand: "توسيع اللوحة",
       billing: "الفوترة",
       billingLine: {
+        changeClient: "تغيير",
         added: "أُضيف إلى {{number}}",
         addError: "تعذّرت إضافة المهمة إلى المستند.",
         addTitle: "إضافة إلى مستند",
@@ -2274,6 +2275,7 @@ export const ar: TranslationResources = {
         failedDescription: "أعد التحميل للمحاولة مرة أخرى.",
       },
       billing: {
+        linkedTo: "عميل المشروع: {{name}}",
         title: "الفوترة",
         info: "اربط هذا المشروع بعميل لإضافة مهامه إلى عرض سعر أو فاتورة.",
         client: "عميل الفوترة",

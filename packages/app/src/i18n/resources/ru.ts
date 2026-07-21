@@ -308,6 +308,7 @@ export const ru: TranslationResources = {
       expand: "Развернуть панель",
       billing: "Счёт",
       billingLine: {
+        changeClient: "Изменить",
         added: "Добавлено в {{number}}",
         addError: "Не удалось добавить задачу в документ.",
         addTitle: "Добавить в документ",
@@ -2313,6 +2314,7 @@ export const ru: TranslationResources = {
         failedDescription: "Перезагрузите, чтобы попробовать еще раз.",
       },
       billing: {
+        linkedTo: "Клиент проекта: {{name}}",
         title: "Счёт",
         info: "Свяжите проект с клиентом, чтобы добавлять его задачи в предложение или счёт.",
         client: "Клиент для счёта",

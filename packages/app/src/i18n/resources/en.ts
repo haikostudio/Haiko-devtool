@@ -305,6 +305,7 @@ export const en = {
       expand: "Expand panel",
       billing: "Billing",
       billingLine: {
+        changeClient: "Change",
         added: "Added to {{number}}",
         addError: "Couldn't add the task to the document.",
         addTitle: "Add to a document",
@@ -2283,6 +2284,7 @@ export const en = {
         failedDescription: "Reload to try again.",
       },
       billing: {
+        linkedTo: "Project client: {{name}}",
         title: "Billing",
         info: "Link this project to a client to add its tasks to a quote or invoice.",
         client: "Billing client",

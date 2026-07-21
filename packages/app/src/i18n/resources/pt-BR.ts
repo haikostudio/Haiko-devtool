@@ -310,6 +310,7 @@ export const ptBR: TranslationResources = {
       expand: "Expandir painel",
       billing: "Faturamento",
       billingLine: {
+        changeClient: "Alterar",
         added: "Adicionado a {{number}}",
         addError: "Não foi possível adicionar a tarefa ao documento.",
         addTitle: "Adicionar a um documento",
@@ -2310,6 +2311,7 @@ export const ptBR: TranslationResources = {
         failedDescription: "Recarregue para tentar novamente.",
       },
       billing: {
+        linkedTo: "Cliente do projeto: {{name}}",
         title: "Faturamento",
         info: "Vincule este projeto a um cliente para adicionar suas tarefas a um orçamento ou fatura.",
         client: "Cliente de faturamento",
