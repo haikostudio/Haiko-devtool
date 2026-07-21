@@ -1501,11 +1501,10 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     );
   }
 
-  // Mobile detail: full-screen content with a back header. Project detail uses
-  // an app-level back (out of settings, to the workspace) since the in-body
-  // "Back to projects" ghost button handles list-level back; other detail views
-  // step back to the settings root.
-  const detailBackHandler = view.kind === "project" ? handleBackToWorkspace : handleBackToRoot;
+  // Mobile detail: full-screen content with a back header. Every detail view —
+  // including project config — steps back to where it was pushed from (the
+  // projects list for project detail, the settings root otherwise).
+  const detailBackHandler = handleBackToRoot;
   if (isCompactLayout) {
     return (
       <View style={styles.container}>
