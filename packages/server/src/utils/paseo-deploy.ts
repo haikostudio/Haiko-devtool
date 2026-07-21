@@ -84,6 +84,40 @@ async function getUnshippedCommits(
   }
 }
 
+/**
+ * Count distinct files that differ from the deployed baseline — the real volume
+ * of pending work. `git diff --name-only <deployedSha>` already merges
+ * committed-but-unshipped edits with uncommitted ones (deduplicated); we add
+ * untracked new files on top. This is what stops the "60 changes → 3 commits"
+ * shrinkage once work gets committed.
+ */
+async function getChangedFileCount(
+  deployedSha: string | null,
+  uncommittedFiles: PaseoDeployPendingFile[],
+): Promise<number> {
+  // Without a known deployed baseline we can only trust the working-tree status.
+  if (deployedSha === null) {
+    return uncommittedFiles.length;
+  }
+  try {
+    const [tracked, untracked] = await Promise.all([
+      runGitCommand(["diff", "--name-only", deployedSha], { cwd: REPO_ROOT }),
+      runGitCommand(["ls-files", "--others", "--exclude-standard"], { cwd: REPO_ROOT }),
+    ]);
+    const files = new Set<string>();
+    for (const line of tracked.stdout.split("\n")) {
+      if (line.length > 0) files.add(line);
+    }
+    for (const line of untracked.stdout.split("\n")) {
+      if (line.length > 0) files.add(line);
+    }
+    return files.size;
+  } catch {
+    // Range failed (e.g. deployedSha unknown to git) — fall back to the working tree.
+    return uncommittedFiles.length;
+  }
+}
+
 export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
   try {
     const [statusResult, headResult, branchResult, deployedSha] = await Promise.all([
@@ -97,6 +131,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const headSha = headResult.stdout.trim() || null;
     const branch = branchResult.stdout.trim() || null;
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
+    const changesCount = await getChangedFileCount(deployedSha, uncommittedFiles);
 
     const hasPending =
       uncommittedFiles.length > 0 ||
@@ -108,6 +143,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       hasPending,
       uncommittedFiles,
       unshippedCommits,
+      changesCount,
       headSha,
       deployedSha,
       branch,
@@ -120,6 +156,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       hasPending: false,
       uncommittedFiles: [],
       unshippedCommits: [],
+      changesCount: 0,
       headSha: null,
       deployedSha: null,
       branch: null,

@@ -4616,6 +4616,12 @@ export const PaseoDeployStatusResponseSchema = z.object({
     hasPending: z.boolean(),
     uncommittedFiles: z.array(PaseoDeployPendingFileSchema),
     unshippedCommits: z.array(PaseoDeployPendingCommitSchema),
+    /**
+     * Real count of distinct files that differ from the live version (committed,
+     * uncommitted and new, deduplicated). Optional so older daemons that don't
+     * send it still parse; clients fall back to summing the two lists.
+     */
+    changesCount: z.number().optional(),
     headSha: z.string().nullable(),
     deployedSha: z.string().nullable(),
     branch: z.string().nullable(),

@@ -25,6 +25,11 @@ export interface PaseoDeployStatus {
   hasPending: boolean;
   uncommittedFiles: PaseoDeployFileEntry[];
   unshippedCommits: PaseoDeployCommitEntry[];
+  /**
+   * Real number of distinct changed files vs. the live version. Optional — older
+   * daemons don't send it, so callers fall back to summing the two lists.
+   */
+  changesCount?: number;
   headSha: string | null;
   deployedSha: string | null;
   branch: string | null;
@@ -69,7 +74,12 @@ export function usePaseoDeployStatus({ serverId, enabled }: UsePaseoDeployStatus
   });
 
   const status = query.data ?? null;
-  const pendingCount = status ? status.uncommittedFiles.length + status.unshippedCommits.length : 0;
+  // Prefer the daemon's honest file-level count; fall back to summing the lists
+  // for older daemons that don't send `changesCount`. Summing lists understates
+  // reality once files are grouped into a few commits — hence the preference.
+  const pendingCount = status
+    ? (status.changesCount ?? status.uncommittedFiles.length + status.unshippedCommits.length)
+    : 0;
 
   return {
     status,

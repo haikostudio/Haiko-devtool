@@ -65,6 +65,22 @@ function humanizeCommitSubject(subject: string): string {
   return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
+/**
+ * Prominent tally shown at the top of the deploy sheet — the real number of
+ * changes to ship, so the reader sees the volume before scanning the lists.
+ */
+function DeployChangesSummary({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={styles.summary}>
+      <Text style={styles.summaryCount}>{count}</Text>
+      <Text style={styles.summaryLabel}>
+        {count > 1 ? "changements à publier" : "changement à publier"}
+      </Text>
+    </View>
+  );
+}
+
 interface PaseoDeployButtonProps {
   serverId: string;
   /**
@@ -153,6 +169,9 @@ function PaseoDeployModal({
   const uncommittedFiles = status?.uncommittedFiles ?? [];
   const unshippedCommits = status?.unshippedCommits ?? [];
   const isClean = !deploying && uncommittedFiles.length === 0 && unshippedCommits.length === 0;
+  // Real number of changes to ship — honest even after work is grouped into a
+  // few commits (older daemons that don't send it fall back to the list sum).
+  const changesCount = status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length;
 
   const trigger = useCallback(
     async (noBuild: boolean) => {
@@ -237,6 +256,8 @@ function PaseoDeployModal({
     >
       <View style={styles.body}>
         {isClean ? <Text style={styles.cleanText}>Tout est déjà en ligne. ✅</Text> : null}
+
+        {isClean ? null : <DeployChangesSummary count={changesCount} />}
 
         {uncommittedFiles.length > 0 ? (
           <View style={styles.section}>
@@ -351,6 +372,22 @@ const styles = StyleSheet.create((theme) => ({
   cleanText: {
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
+  },
+  // Prominent tally at the very top so the reader sees the real volume of work
+  // at a glance, before scanning the per-file / per-commit lists below.
+  summary: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: theme.spacing[2],
+  },
+  summaryCount: {
+    fontSize: theme.fontSize.xl,
+    fontWeight: "800",
+    color: theme.colors.foreground,
+  },
+  summaryLabel: {
+    fontSize: theme.fontSize.base,
+    color: theme.colors.foregroundMuted,
   },
   section: {
     gap: theme.spacing[2],
