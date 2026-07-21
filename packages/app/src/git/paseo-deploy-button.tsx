@@ -26,6 +26,45 @@ const compactSpinnerColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
 });
 
+/** Turn a git short-status code (e.g. "M", "A", "??") into a plain French word. */
+function describeFileStatus(status: string): string {
+  const code = status.trim();
+  if (code === "??") return "Nouveau fichier";
+  switch (code[0] ?? "") {
+    case "A":
+      return "Ajouté";
+    case "M":
+      return "Modifié";
+    case "D":
+      return "Supprimé";
+    case "R":
+      return "Renommé";
+    case "C":
+      return "Copié";
+    case "U":
+      return "Conflit à résoudre";
+    default:
+      return "Modifié";
+  }
+}
+
+/** Show just the file name plus its folder, without the noisy leading path. */
+function describeFilePath(path: string): string {
+  const parts = path.split("/").filter((segment) => segment.length > 0);
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join("/")}`;
+}
+
+/**
+ * Strip a leading conventional-commit prefix like "feat(scope): " so the reader
+ * sees the plain sentence instead of developer jargon.
+ */
+function humanizeCommitSubject(subject: string): string {
+  const stripped = subject.replace(/^[a-z]+(\([^)]*\))?!?:\s*/i, "").trim();
+  if (stripped.length === 0) return subject;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 interface PaseoDeployButtonProps {
   serverId: string;
   /**
@@ -155,13 +194,14 @@ function PaseoDeployModal({
 
         {uncommittedFiles.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Modifications non enregistrées</Text>
+            <Text style={styles.sectionTitle}>Modifications en cours, pas encore enregistrées</Text>
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               {uncommittedFiles.map((file) => (
-                <View key={file.path} style={styles.row}>
-                  <Text style={styles.rowStatus}>{file.status}</Text>
-                  <Text style={styles.rowText} numberOfLines={1}>
-                    {file.path}
+                <View key={file.path} style={styles.itemRow}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.itemText}>
+                    <Text style={styles.itemLabel}>{describeFileStatus(file.status)} : </Text>
+                    {describeFilePath(file.path)}
                   </Text>
                 </View>
               ))}
@@ -171,14 +211,12 @@ function PaseoDeployModal({
 
         {unshippedCommits.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Commits pas encore en ligne</Text>
+            <Text style={styles.sectionTitle}>Changements prêts, pas encore en ligne</Text>
             <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
               {unshippedCommits.map((commit) => (
-                <View key={commit.sha} style={styles.row}>
-                  <Text style={styles.rowStatus}>{commit.sha.slice(0, 7)}</Text>
-                  <Text style={styles.rowText} numberOfLines={1}>
-                    {commit.subject}
-                  </Text>
+                <View key={commit.sha} style={styles.itemRow}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
                 </View>
               ))}
             </ScrollView>
@@ -305,21 +343,25 @@ const styles = StyleSheet.create((theme) => ({
   listContent: {
     gap: theme.spacing[1],
   },
-  row: {
+  itemRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: theme.spacing[2],
   },
-  rowStatus: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.mono,
+  bullet: {
+    fontSize: theme.fontSize.base,
+    lineHeight: theme.fontSize.base * 1.4,
     color: theme.colors.foregroundMuted,
-    minWidth: theme.spacing[8],
   },
-  rowText: {
+  itemText: {
     flex: 1,
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.base,
+    lineHeight: theme.fontSize.base * 1.4,
     color: theme.colors.foreground,
+  },
+  itemLabel: {
+    fontWeight: "600",
+    color: theme.colors.foregroundMuted,
   },
   infoText: {
     fontSize: theme.fontSize.sm,
