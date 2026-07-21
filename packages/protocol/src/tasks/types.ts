@@ -93,6 +93,18 @@ export const TaskLinksSchema = z.object({
 });
 export type TaskLinks = z.infer<typeof TaskLinksSchema>;
 
+// Set once the task's billable line was added to a compta quote/invoice from
+// the Facturation tab. Informational only — the amounts live in the compta
+// document; this lets the task show it is already billed and link back to it.
+export const TaskBillingLinkSchema = z.object({
+  kind: z.enum(["quote", "invoice"]),
+  documentId: z.string(),
+  // Human-facing document number, e.g. "FAC-0007" / "DEV-0003".
+  documentNumber: z.string(),
+  addedAt: z.string(),
+});
+export type TaskBillingLink = z.infer<typeof TaskBillingLinkSchema>;
+
 export const KanbanTaskSchema = z.object({
   id: z.string(),
   folderId: z.string(),
@@ -109,6 +121,8 @@ export const KanbanTaskSchema = z.object({
   runConfig: TaskRunConfigSchema.nullable().optional(),
   approval: TaskApprovalSchema.nullable().optional(),
   schedulePreference: TaskSchedulePreferenceSchema.optional(),
+  // Set once the task's line was added to a compta quote/invoice (Facturation tab).
+  billing: TaskBillingLinkSchema.nullable().optional(),
   // Set when a plan-mode run finished: the plan is ready in the linked agent.
   planReadyAt: z.string().nullable().optional(),
   links: TaskLinksSchema,

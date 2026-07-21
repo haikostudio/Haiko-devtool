@@ -325,6 +325,9 @@ export const es: TranslationResources = {
         linkHint:
           "Vincula este proyecto a un cliente en los ajustes del proyecto para añadirlo a una factura.",
         addButton: "Añadir a un presupuesto o factura",
+        relink: "Añadir a otro documento",
+        linkedInvoice: "Añadida a la factura {{number}}",
+        linkedQuote: "Añadida al presupuesto {{number}}",
         title: "Línea de factura",
         label: "Descripción",
         time: "Tiempo estimado",

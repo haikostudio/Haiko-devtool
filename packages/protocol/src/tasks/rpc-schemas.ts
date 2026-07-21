@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   KanbanTaskSchema,
+  TaskBillingLinkSchema,
   TaskBoardSchema,
   TaskColumnSchema,
   TaskFolderSchema,
@@ -81,6 +82,8 @@ export const TasksTaskUpdateRequestSchema = z.object({
   // null clears the field.
   runConfig: TaskRunConfigSchema.nullable().optional(),
   schedulePreference: TaskSchedulePreferenceSchema.nullable().optional(),
+  // null clears the billing link; set stamps the compta document it was added to.
+  billing: TaskBillingLinkSchema.nullable().optional(),
 });
 
 export const TasksTaskMoveRequestSchema = z.object({

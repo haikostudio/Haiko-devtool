@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Receipt } from "lucide-react-native";
-import type { ComptaClient, ComptaProjectLink } from "@getpaseo/protocol/messages";
-import type { KanbanTask } from "@/data/tasks";
+import { CheckCircle2, Receipt } from "lucide-react-native";
+import type {
+  ComptaClient,
+  ComptaDocumentRef,
+  ComptaProjectLink,
+} from "@getpaseo/protocol/messages";
+import type { KanbanTask, TaskBillingLink } from "@/data/tasks";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
 import { Button } from "@/components/ui/button";
@@ -51,8 +55,18 @@ function resolveTaskBilling(task: KanbanTask): TaskBilling {
   };
 }
 
+// Optimistic local link wins over the persisted one, normalized to null.
+function resolveBilling(
+  local: TaskBillingLink | null,
+  persisted: TaskBillingLink | null | undefined,
+): TaskBillingLink | null {
+  return local ?? persisted ?? null;
+}
+
 const ThemedReceipt = withUnistyles(Receipt);
+const ThemedCheck = withUnistyles(CheckCircle2);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const successColorMapping = (theme: Theme) => ({ color: theme.colors.success });
 
 /**
  * "Facturation" tab of the task drawer: presents the task as the billable line
@@ -83,6 +97,11 @@ export function TaskBillingView({
   const [pickedClient, setPickedClient] = useState<ComptaClient | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // Optimistic reflection of a just-added billing link, so the tab shows the
+  // "billed" state immediately without waiting for the board push to re-flow
+  // the task prop. The persisted task.billing wins once it lands.
+  const [localBilling, setLocalBilling] = useState<TaskBillingLink | null>(null);
+  const billing = resolveBilling(localBilling, task.billing);
 
   useEffect(() => {
     if (!billingSupported || !client || !projectId) {
@@ -106,6 +125,29 @@ export function TaskBillingView({
 
   const handleOpenAdd = useCallback(() => setAddOpen(true), []);
   const handleCloseAdd = useCallback(() => setAddOpen(false), []);
+  // Record the compta document the line landed on onto the task itself, so the
+  // task carries its billing state (and links back) across reloads. Reflect it
+  // locally right away; persistence via the daemon is best-effort.
+  const handleAdded = useCallback(
+    (document: ComptaDocumentRef) => {
+      const linkedAt = new Date().toISOString();
+      const nextBilling: TaskBillingLink = {
+        kind: document.kind,
+        documentId: document.id,
+        documentNumber: document.number,
+        addedAt: linkedAt,
+      };
+      setLocalBilling(nextBilling);
+      if (client && projectId) {
+        void client
+          .tasksTaskUpdate({ projectId, taskId: task.id, billing: nextBilling })
+          .catch(() => {
+            // Non-fatal: the line is on the document; only the task marker failed.
+          });
+      }
+    },
+    [client, projectId, task.id],
+  );
   const handleOpenPicker = useCallback(() => setPickerOpen(true), []);
   const handleClosePicker = useCallback(() => setPickerOpen(false), []);
   // Project rate wins; fall back to the reference 130 CHF/h when unset.
@@ -167,42 +209,6 @@ export function TaskBillingView({
   const rateValue = `${rateChf} CHF/h`;
   const hoursValue = hasBilling ? formatHours(hours) : "—";
 
-  const renderAction = () => {
-    if (!billingSupported) {
-      return null;
-    }
-    if (!effectiveClient) {
-      return (
-        <Button onPress={handleOpenPicker} testID="task-billing-pick-client">
-          {t("settings.project.billing.selectClient")}
-        </Button>
-      );
-    }
-    return (
-      <View style={styles.actionBlock}>
-        <View style={styles.clientRow}>
-          <Text style={styles.linkedClient} numberOfLines={1}>
-            {t("tasks.panel.billingLine.linkedClient", {
-              name: effectiveClient.name,
-              company: effectiveClient.company,
-            })}
-          </Text>
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={handleOpenPicker}
-            testID="task-billing-change-client"
-          >
-            {t("tasks.panel.billingLine.changeClient")}
-          </Button>
-        </View>
-        <Button onPress={handleOpenAdd} testID="task-billing-add">
-          {t("tasks.panel.billingLine.addButton")}
-        </Button>
-      </View>
-    );
-  };
-
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       <View style={styles.card}>
@@ -217,6 +223,8 @@ export function TaskBillingView({
         <Row label={t("tasks.panel.billingLine.amount")} value={amount} emphasized />
       </View>
 
+      <LinkedBanner billing={billing} />
+
       {!hasBilling ? (
         <View style={styles.hintRow}>
           <ThemedReceipt size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
@@ -224,9 +232,15 @@ export function TaskBillingView({
         </View>
       ) : null}
 
-      {renderAction()}
+      <BillingAction
+        billingSupported={billingSupported}
+        effectiveClient={effectiveClient}
+        alreadyLinked={billing != null}
+        onOpenPicker={handleOpenPicker}
+        onOpenAdd={handleOpenAdd}
+      />
 
-      <Text style={styles.note}>{t("tasks.panel.billingLine.note")}</Text>
+      {billing ? null : <Text style={styles.note}>{t("tasks.panel.billingLine.note")}</Text>}
 
       {serverId ? (
         <ComptaClientPickerSheet
@@ -242,6 +256,7 @@ export function TaskBillingView({
         <TaskBillingAddSheet
           visible={addOpen}
           onClose={handleCloseAdd}
+          onAdded={handleAdded}
           serverId={serverId}
           clientId={effectiveClient.id}
           documentTitle={billingTitle}
@@ -252,6 +267,78 @@ export function TaskBillingView({
         />
       ) : null}
     </ScrollView>
+  );
+}
+
+// Green "already billed" banner: the task's line is on a compta quote/invoice.
+function LinkedBanner({ billing }: { billing: TaskBillingLink | null }) {
+  const { t } = useTranslation();
+  if (!billing) {
+    return null;
+  }
+  const key =
+    billing.kind === "invoice"
+      ? "tasks.panel.billingLine.linkedInvoice"
+      : "tasks.panel.billingLine.linkedQuote";
+  return (
+    <View style={styles.linkedBanner} testID="task-billing-linked">
+      <ThemedCheck size={ICON_SIZE.sm} uniProps={successColorMapping} />
+      <Text style={styles.linkedText}>{t(key, { number: billing.documentNumber })}</Text>
+    </View>
+  );
+}
+
+// Action row: pick a client when none is linked, otherwise the linked-client row
+// plus the add/relink button. Extracted so the parent stays under its complexity
+// budget.
+function BillingAction({
+  billingSupported,
+  effectiveClient,
+  alreadyLinked,
+  onOpenPicker,
+  onOpenAdd,
+}: {
+  billingSupported: boolean;
+  effectiveClient: { id: string; name: string; company: string } | null;
+  alreadyLinked: boolean;
+  onOpenPicker: () => void;
+  onOpenAdd: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!billingSupported) {
+    return null;
+  }
+  if (!effectiveClient) {
+    return (
+      <Button onPress={onOpenPicker} testID="task-billing-pick-client">
+        {t("settings.project.billing.selectClient")}
+      </Button>
+    );
+  }
+  return (
+    <View style={styles.actionBlock}>
+      <View style={styles.clientRow}>
+        <Text style={styles.linkedClient} numberOfLines={1}>
+          {t("tasks.panel.billingLine.linkedClient", {
+            name: effectiveClient.name,
+            company: effectiveClient.company,
+          })}
+        </Text>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={onOpenPicker}
+          testID="task-billing-change-client"
+        >
+          {t("tasks.panel.billingLine.changeClient")}
+        </Button>
+      </View>
+      <Button onPress={onOpenAdd} testID="task-billing-add">
+        {alreadyLinked
+          ? t("tasks.panel.billingLine.relink")
+          : t("tasks.panel.billingLine.addButton")}
+      </Button>
+    </View>
   );
 }
 
@@ -275,8 +362,14 @@ function formatHours(hours: number): string {
 const styles = StyleSheet.create((theme) => ({
   scroll: {
     flex: 1,
+    // Own the drawer's dark surface so a short billing form never leaves a pale
+    // band below the content (the ScrollView is otherwise transparent).
+    backgroundColor: theme.colors.surface0,
   },
   scrollContent: {
+    // Grow to fill the viewport even when the content is short, so the dark
+    // background paints all the way down.
+    flexGrow: 1,
     padding: theme.spacing[3],
     gap: theme.spacing[3],
   },
@@ -340,6 +433,22 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     paddingHorizontal: theme.spacing[1],
+    flexShrink: 1,
+  },
+  linkedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    padding: theme.spacing[3],
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
+    borderWidth: 1,
+    borderColor: theme.colors.success,
+  },
+  linkedText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
     flexShrink: 1,
   },
   hintRow: {

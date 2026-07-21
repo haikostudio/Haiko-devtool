@@ -35,6 +35,7 @@ type DocumentKind = "quote" | "invoice";
 export function TaskBillingAddSheet({
   visible,
   onClose,
+  onAdded,
   serverId,
   clientId,
   documentTitle,
@@ -43,6 +44,9 @@ export function TaskBillingAddSheet({
 }: {
   visible: boolean;
   onClose: () => void;
+  // Fired with the quote/invoice the line landed on, so the caller can record
+  // the task's billing link. Runs before onClose on a successful add.
+  onAdded?: (document: ComptaDocumentRef) => void;
   serverId: string;
   clientId: string;
   documentTitle: string;
@@ -102,6 +106,9 @@ export function TaskBillingAddSheet({
           toast.show(t("tasks.panel.billingLine.added", { number: document?.number ?? "" }), {
             variant: "success",
           });
+          if (document) {
+            onAdded?.(document);
+          }
           onClose();
         } catch (error) {
           toast.error(
@@ -112,7 +119,7 @@ export function TaskBillingAddSheet({
         }
       })();
     },
-    [client, busy, clientId, documentTitle, line, toast, t, onClose],
+    [client, busy, clientId, documentTitle, line, toast, t, onClose, onAdded],
   );
 
   const header = useMemo(() => ({ title: t("tasks.panel.billingLine.addTitle") }), [t]);

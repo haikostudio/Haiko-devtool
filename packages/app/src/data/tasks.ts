@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  TaskBillingLink,
   TaskBoard,
   TaskColumn,
   TaskRunConfig,
@@ -8,7 +9,7 @@ import type {
 } from "@getpaseo/protocol/tasks/types";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
-export type { TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
+export type { TaskBillingLink, TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 function createSubscriptionId(): string {
@@ -36,6 +37,7 @@ export interface TaskBoardHandle {
     tags?: string[];
     runConfig?: TaskRunConfig | null;
     schedulePreference?: TaskSchedulePreference | null;
+    billing?: TaskBillingLink | null;
   }) => Promise<void>;
   moveTask: (input: { taskId: string; column: TaskColumn; index: number }) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -188,6 +190,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       tags?: string[];
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
+      billing?: TaskBillingLink | null;
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskUpdate({ projectId: project, ...input });

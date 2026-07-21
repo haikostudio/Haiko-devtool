@@ -208,6 +208,7 @@ export class TasksSession {
         ...(request.schedulePreference !== undefined
           ? { schedulePreference: request.schedulePreference }
           : {}),
+        ...(request.billing !== undefined ? { billing: request.billing } : {}),
       });
       this.host.emit({
         type: "tasks.task.update.response",
