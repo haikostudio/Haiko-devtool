@@ -101,6 +101,46 @@ describe("TaskEstimator", () => {
     expect(estimated?.schedule?.state).toBe("awaiting_slot");
   });
 
+  test("spawns a visible agent linked to the task and parses a fenced estimate", async () => {
+    const task = await seedScheduledTask();
+    const { estimator, createAgent, runAgent } = buildEstimator({
+      finalText: [
+        "Voici mon analyse : périmètre limité, deux fichiers concernés, faible risque.",
+        "```json",
+        JSON.stringify({
+          tokens: 90_000,
+          quotaPercent: 8,
+          estimatedMinutes: 20,
+          confidence: "medium",
+          summary: "Périmètre restreint.",
+        }),
+        "```",
+      ].join("\n"),
+    });
+
+    estimator.requestEstimate("proj-1", task.id);
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.estimate).toBeTruthy();
+    });
+
+    const board = await service.getBoard("proj-1");
+    const analyzed = board.tasks[0];
+    expect(analyzed?.estimate?.quotaPercent).toBe(8);
+    expect(analyzed?.estimate?.estimatedMinutes).toBe(20);
+    // The analysis agent is visible and linked to the task, so the task chat
+    // mirrors it live and the scheduler reuses it for execution.
+    expect(analyzed?.links.taskAgentId).toBe("estimator-agent-1");
+    expect(analyzed?.links.primaryAgentId).toBe("estimator-agent-1");
+    expect(runAgent).toHaveBeenCalledTimes(1);
+    const createCall = createAgent.mock.calls[0]?.[0];
+    // Not an internal throwaway agent, and it runs in its own worktree.
+    expect(createCall).not.toHaveProperty("internal");
+    expect(createCall).toHaveProperty("title", "Tâche : Implement login flow");
+    expect(createCall).toHaveProperty("worktree.action", "branch-off");
+  });
+
   test("falls back to a conservative estimate (with minutes) when the agent fails", async () => {
     const task = await seedScheduledTask();
     const { estimator } = buildEstimator({ finalText: new Error("agent exploded") });

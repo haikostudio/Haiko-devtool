@@ -72,6 +72,11 @@ export type TaskScheduleState = z.infer<typeof TaskScheduleStateSchema>;
 export const TaskLinksSchema = z.object({
   agentIds: z.array(z.string()),
   primaryAgentId: z.string().nullable().optional(),
+  // The pipeline agent Paseo spawned for this task: analysis and execution are
+  // the SAME conversation. Distinct from primaryAgentId, which agent-sync may
+  // point at a proposing/interactive agent. Absent for legacy tasks; when set,
+  // the scheduler reuses this agent for execution instead of creating a new one.
+  taskAgentId: z.string().nullable().optional(),
   workspaceId: z.string().nullable().optional(),
   branch: z.string().nullable().optional(),
   prUrl: z.string().nullable().optional(),

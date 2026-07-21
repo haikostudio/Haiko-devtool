@@ -1,38 +1,21 @@
-import { z } from "zod";
 import type pino from "pino";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
-import {
-  buildStructuredAgentResponsePrompt,
-  getStructuredAgentResponse,
-} from "../agent/agent-response-loop.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
-
-const ESTIMATOR_PROVIDER_MODEL = "claude/haiku";
-
-const TaskEstimateResultSchema = z.object({
-  tokens: z.number().int().nonnegative(),
-  quotaPercent: z.number().min(0).max(100),
-  estimatedMinutes: z.number().int().nonnegative(),
-  confidence: z.enum(["low", "medium", "high"]),
-  summary: z.string(),
-});
-
-// Applied when the estimator agent fails or returns unparseable output, so a
-// scheduled task never sits in pending_estimate forever. estimatedMinutes stays
-// above the scheduler's "light task" threshold so unknown work waits for quiet hours.
-const FALLBACK_ESTIMATE = {
-  tokens: 200_000,
-  quotaPercent: 10,
-  estimatedMinutes: 60,
-  confidence: "low" as const,
-  summary: "Estimation automatique indisponible — valeur par défaut prudente.",
-};
+import {
+  ANALYSIS_FALLBACK_ESTIMATE,
+  buildTaskAnalysisPrompt,
+  parseTaskAnalysisEstimate,
+  resolveTaskLaunch,
+  TASK_AGENT_LABEL,
+  type TaskAnalysisEstimate,
+} from "./agent-launch.js";
 
 interface TaskEstimatorOptions {
-  agentManager: Pick<AgentManager, "runAgent" | "archiveAgent">;
+  agentManager: Pick<AgentManager, "runAgent">;
   createAgent: BoundCreateAgentCommand;
   taskBoardService: TaskBoardService;
   projectRegistry: ProjectRegistry;
@@ -40,13 +23,20 @@ interface TaskEstimatorOptions {
 }
 
 /**
- * Produces quota-cost estimates for tasks by running a short-lived internal
- * Haiku agent against the project checkout. Requests are processed one at a
- * time; results land on the task via TaskBoardService (which pushes to
- * subscribers), then the schedule state advances pending_estimate → awaiting_slot.
+ * Analysis phase of the task pipeline. When a task enters "Validé"/"Planifié",
+ * this spawns the task's real, VISIBLE agent (the same one that will execute it)
+ * in its own worktree, links it to the task immediately so it shows up in the
+ * task chat, and runs a read-only analysis turn. The agent streams a readable
+ * assessment into the conversation and ends with a structured estimate, which
+ * lands on the task (advancing pending_estimate → awaiting_slot). The agent is
+ * left alive: the scheduler reuses it for execution — same conversation, so the
+ * analysis is the starting point and execution simply continues it.
+ *
+ * Requests are processed one at a time so validating a batch of tasks doesn't
+ * spawn a dozen worktrees/agents at once.
  */
 export class TaskEstimator {
-  private readonly agentManager: Pick<AgentManager, "runAgent" | "archiveAgent">;
+  private readonly agentManager: Pick<AgentManager, "runAgent">;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly taskBoardService: TaskBoardService;
   private readonly projectRegistry: ProjectRegistry;
@@ -90,7 +80,7 @@ export class TaskEstimator {
         } catch (error) {
           this.logger.warn(
             { err: error, projectId: next.projectId, taskId: next.taskId },
-            "Task estimate failed",
+            "Task analysis failed",
           );
         }
       }
@@ -105,24 +95,31 @@ export class TaskEstimator {
     if (!task) {
       return;
     }
+    // Done is terminal, and a task already analyzed keeps its estimate + agent.
+    if (task.completedAt != null || task.column === "done" || task.estimate) {
+      return;
+    }
     const project = await this.projectRegistry.get(projectId);
     if (!project) {
-      this.logger.warn({ projectId, taskId }, "Cannot estimate task: project not found");
+      this.logger.warn({ projectId, taskId }, "Cannot analyze task: project not found");
       return;
     }
 
-    const estimate = await this.runEstimatorAgent({
-      cwd: project.rootPath,
-      title: task.title,
-      description: task.description ?? "",
-      tags: task.tags,
-    });
+    let estimate = ANALYSIS_FALLBACK_ESTIMATE;
+    try {
+      estimate = await this.analyze(projectId, task, project.rootPath);
+    } catch (error) {
+      this.logger.warn(
+        { err: error, projectId, taskId, title: task.title },
+        "Task analysis agent failed, using fallback estimate",
+      );
+    }
 
     await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       estimate: {
         ...estimate,
-        model: ESTIMATOR_PROVIDER_MODEL,
+        model: resolveTaskLaunch(current).provider,
         estimatedAt: new Date().toISOString(),
       },
       ...(current.schedule?.state === "pending_estimate"
@@ -131,84 +128,63 @@ export class TaskEstimator {
     }));
   }
 
-  private async runEstimatorAgent(input: {
-    cwd: string;
-    title: string;
-    description: string;
-    tags: string[];
-  }): Promise<z.infer<typeof TaskEstimateResultSchema>> {
-    const basePrompt = [
-      "Tu es un estimateur de coût pour une tâche de développement qui sera exécutée par un agent de code (Claude).",
-      "Explore UNIQUEMENT ce qui est nécessaire dans ce dépôt (lecture seule, quelques fichiers au plus) pour jauger l'ampleur de la tâche.",
-      "",
-      `Tâche : ${input.title}`,
-      input.description ? `Description : ${input.description}` : "",
-      input.tags.length > 0 ? `Tags : ${input.tags.join(", ")}` : "",
-      "",
-      "Estime :",
-      "- tokens : total de tokens (entrée+sortie) que l'agent d'exécution consommera probablement",
-      "- quotaPercent : part (0-100) d'une fenêtre de 5h d'un abonnement Claude que cela représente",
-      "- estimatedMinutes : durée active estimée (en minutes) de l'exécution par l'agent (ex: 10, 45, 120)",
-      "- confidence : low | medium | high",
-      "- summary : justification en une phrase",
-    ]
-      .filter((line) => line !== "")
-      .join("\n");
+  /**
+   * Ensures the task's visible agent exists (creating it + its worktree and
+   * linking it on first analysis), then runs the read-only analysis turn and
+   * returns the parsed estimate (or the fallback when none is parseable).
+   */
+  private async analyze(
+    projectId: string,
+    task: KanbanTask,
+    cwd: string,
+  ): Promise<TaskAnalysisEstimate> {
+    const { provider, planMode, launchMode, branchName } = resolveTaskLaunch(task);
+    let agentId = task.links.taskAgentId ?? null;
+    let branch = task.links.branch ?? branchName;
 
-    let agentId: string | null = null;
-    try {
+    if (!agentId) {
       const created = await this.createAgent({
         kind: "mcp",
-        provider: ESTIMATOR_PROVIDER_MODEL,
-        cwd: input.cwd,
-        title: `Estimation : ${input.title}`,
+        provider,
+        cwd,
+        title: `Tâche : ${task.title}`,
+        labels: { [TASK_AGENT_LABEL]: task.id },
         unattended: true,
         promptFailure: "return-error",
         background: true,
         notifyOnFinish: false,
-        internal: true,
+        ...(task.runConfig?.thinkingOptionId ? { thinking: task.runConfig.thinkingOptionId } : {}),
+        mode: launchMode,
+        ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
       });
-      agentId = created.snapshot.id;
       if (created.initialPromptError) {
         throw created.initialPromptError;
       }
-      const initialPrompt = buildStructuredAgentResponsePrompt({
-        prompt: basePrompt,
-        schema: TaskEstimateResultSchema,
-        schemaName: "TaskEstimateResult",
-      });
-      let first = true;
-      const result = await getStructuredAgentResponse({
-        caller: async (nextPrompt) => {
-          const prompt = first ? initialPrompt : nextPrompt;
-          first = false;
-          if (!agentId) {
-            throw new Error("Estimator agent missing");
-          }
-          const run = await this.agentManager.runAgent(agentId, prompt);
-          return resolveFinalText(run.timeline, run.finalText);
+      const newAgentId = created.snapshot.id;
+      const workspaceId = created.snapshot.workspaceId ?? null;
+      agentId = newAgentId;
+      branch = branchName;
+      // Link the agent to the task immediately so the task chat mirrors it live
+      // as it analyzes — the analysis IS the starting point of the task.
+      await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
+        ...current,
+        links: {
+          ...current.links,
+          taskAgentId: newAgentId,
+          primaryAgentId: newAgentId,
+          agentIds: current.links.agentIds.includes(newAgentId)
+            ? current.links.agentIds
+            : [...current.links.agentIds, newAgentId],
+          ...(workspaceId ? { workspaceId } : {}),
+          ...(branch ? { branch } : {}),
         },
-        prompt: basePrompt,
-        schema: TaskEstimateResultSchema,
-        maxRetries: 1,
-        schemaName: "TaskEstimateResult",
-      });
-      return result;
-    } catch (error) {
-      this.logger.warn(
-        { err: error, title: input.title },
-        "Estimator agent failed, using fallback",
-      );
-      return FALLBACK_ESTIMATE;
-    } finally {
-      if (agentId) {
-        try {
-          await this.agentManager.archiveAgent(agentId);
-        } catch {
-          // Ignore cleanup errors for internal estimator agents.
-        }
-      }
+      }));
     }
+
+    const prompt = buildTaskAnalysisPrompt({ task, planMode, branch });
+    const run = await this.agentManager.runAgent(agentId, prompt);
+    const text = resolveFinalText(run.timeline, run.finalText);
+    return parseTaskAnalysisEstimate(text) ?? ANALYSIS_FALLBACK_ESTIMATE;
   }
 }
 

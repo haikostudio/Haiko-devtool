@@ -189,6 +189,42 @@ describe("TaskScheduler", () => {
     );
   });
 
+  test("reuses the analysis agent for execution instead of creating a new one", async () => {
+    const task = await seedScheduledTask({ quotaPercent: 15 });
+    // Simulate the analysis phase having already spawned the task's visible
+    // agent in its worktree: execution must CONTINUE that same conversation.
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      links: {
+        ...current.links,
+        taskAgentId: "analysis-agent-7",
+        primaryAgentId: "analysis-agent-7",
+        agentIds: ["analysis-agent-7"],
+        workspaceId: "ws-existing",
+        branch: "task/reuse-me",
+      },
+    }));
+    const runAgent = vi.fn(async () => ({
+      canceled: false,
+      finalText: "Done!",
+      timeline: [] as [],
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80, runAgent });
+
+    await scheduler.tick();
+    await vi.waitFor(async () => {
+      expect((await findTask(task.id))?.column).toBe("done");
+    });
+
+    // No new agent: the same analysis agent runs the execution turn.
+    expect(createAgent).not.toHaveBeenCalled();
+    expect(runAgent).toHaveBeenCalledTimes(1);
+    const done = await findTask(task.id);
+    expect(done?.links.primaryAgentId).toBe("analysis-agent-7");
+    expect(done?.links.taskAgentId).toBe("analysis-agent-7");
+    expect(done?.links.branch).toBe("task/reuse-me");
+  });
+
   test("defers launch when remaining quota is below estimate + margin", async () => {
     await seedScheduledTask({ quotaPercent: 50 });
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 40 });

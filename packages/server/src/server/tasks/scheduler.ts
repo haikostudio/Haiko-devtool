@@ -7,6 +7,9 @@ import type { ProviderUsageService } from "../../services/quota-fetcher/service.
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
+import { buildTaskExecutionPrompt, resolveTaskLaunch, TASK_AGENT_LABEL } from "./agent-launch.js";
+
+export { TASK_AGENT_LABEL } from "./agent-launch.js";
 
 const TICK_INTERVAL_MS = 30_000;
 // Real concurrency is governed by the quota budget, not this number: each launch
@@ -25,8 +28,6 @@ const MAX_CANCEL_REQUEUES = 5;
 // "auto" mode; anything heavier waits for the off-peak window.
 const LIGHT_TASK_MAX_QUOTA_PCT = 25;
 const LIGHT_TASK_MAX_MINUTES = 45;
-
-export const TASK_AGENT_LABEL = "paseo.task-id";
 
 interface TaskSchedulerOptions {
   taskBoardService: TaskBoardService;
@@ -48,21 +49,6 @@ interface LaunchCandidate {
   task: KanbanTask;
   folderOrder: number;
   runNow: boolean;
-}
-
-// Branch (and worktree slug) for a task launch: stable, readable, unique via a
-// short task-id suffix so two similarly-titled tasks never collide.
-function taskBranchName(task: KanbanTask): string {
-  const slug = task.title
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-+)|(-+$)/g, "")
-    .slice(0, 40)
-    .replace(/-+$/g, "");
-  const suffix = task.id.slice(0, 6);
-  return slug ? `task/${slug}-${suffix}` : `task/${suffix}`;
 }
 
 // "Planifié" column task ready to launch: estimated, awaiting a slot, and not
@@ -189,6 +175,10 @@ export class TaskScheduler {
     if (task.column !== "scheduled") {
       await this.taskBoardService.transitionTask(projectId, taskId, "scheduled");
     }
+    // Ensure the analysis agent is spawned even if this task entered the pipeline
+    // without a notify (e.g. created directly in "Planifié", or after a restart).
+    // No-op once the task already has an estimate/agent (guarded in the estimator).
+    this.taskEstimator.requestEstimate(projectId, taskId);
     this.runNowQueue.add(`${projectId}:${taskId}`);
     void this.tick().catch((error) => {
       this.logger.warn({ err: error }, "Task scheduler run-now tick failed");
@@ -442,50 +432,45 @@ export class TaskScheduler {
     }));
 
     try {
-      const runConfig = task.runConfig;
-      const planMode = runConfig?.mode === "plan";
-      const providerId = runConfig?.provider ?? "claude";
-      let provider = "claude";
-      if (runConfig) {
-        provider = runConfig.model
-          ? `${runConfig.provider}/${runConfig.model}`
-          : runConfig.provider;
-      }
-      // Task agents run unattended, so they must never block on a permission
-      // prompt mid-run. Launch them with the maximally-permissive mode for their
-      // provider: Claude "bypassPermissions", Codex "full-access". Plan-mode runs
-      // make no changes and keep their own mode.
-      let launchMode = "bypassPermissions";
-      if (planMode) {
-        launchMode = "plan";
-      } else if (providerId === "codex") {
-        launchMode = "full-access";
-      }
-      // Each launch gets its own worktree + branch off the project checkout, so
-      // several task agents can run in the same project concurrently without
-      // touching the user's working directory. Plan-mode runs make no changes,
-      // so they run directly in the current workspace — no throwaway worktree.
-      const branchName = planMode ? null : taskBranchName(task);
-      const created = await this.createAgent({
-        kind: "mcp",
-        provider,
-        cwd: project.rootPath,
-        title: `Tâche : ${task.title}`,
-        labels: { [TASK_AGENT_LABEL]: task.id },
-        unattended: true,
-        promptFailure: "return-error",
-        background: true,
-        notifyOnFinish: false,
-        ...(runConfig?.thinkingOptionId ? { thinking: runConfig.thinkingOptionId } : {}),
-        mode: launchMode,
-        ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
-      });
-      const agent = created.snapshot;
-      if (created.initialPromptError) {
-        throw created.initialPromptError;
+      const { provider, planMode, launchMode, branchName } = resolveTaskLaunch(task);
+      // The analysis phase already spawned the task's visible agent in its
+      // worktree and ran the read-only analysis turn. Execution CONTINUES that
+      // same conversation — reuse the agent instead of creating a new one, so
+      // the analysis is the task's starting point. Only the legacy path (no
+      // analysis agent, e.g. pre-upgrade tasks) creates the agent here.
+      let agentId = task.links.taskAgentId ?? null;
+      let branch = task.links.branch ?? branchName;
+      let workspaceId = task.links.workspaceId ?? null;
+
+      if (!agentId) {
+        // Each launch gets its own worktree + branch off the project checkout, so
+        // several task agents can run in the same project concurrently without
+        // touching the user's working directory. Plan-mode runs make no changes,
+        // so they run directly in the current workspace — no throwaway worktree.
+        const created = await this.createAgent({
+          kind: "mcp",
+          provider,
+          cwd: project.rootPath,
+          title: `Tâche : ${task.title}`,
+          labels: { [TASK_AGENT_LABEL]: task.id },
+          unattended: true,
+          promptFailure: "return-error",
+          background: true,
+          notifyOnFinish: false,
+          ...(task.runConfig?.thinkingOptionId
+            ? { thinking: task.runConfig.thinkingOptionId }
+            : {}),
+          mode: launchMode,
+          ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
+        });
+        if (created.initialPromptError) {
+          throw created.initialPromptError;
+        }
+        agentId = created.snapshot.id;
+        branch = branchName;
+        workspaceId = created.snapshot.workspaceId ?? workspaceId;
       }
 
-      const branch = branchName;
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
         ...current,
         column: "in_progress",
@@ -499,19 +484,20 @@ export class TaskScheduler {
         },
         links: {
           ...current.links,
-          agentIds: current.links.agentIds.includes(agent.id)
+          agentIds: current.links.agentIds.includes(agentId)
             ? current.links.agentIds
-            : [...current.links.agentIds, agent.id],
-          primaryAgentId: agent.id,
-          ...(agent.workspaceId ? { workspaceId: agent.workspaceId } : {}),
+            : [...current.links.agentIds, agentId],
+          primaryAgentId: agentId,
+          taskAgentId: agentId,
+          ...(workspaceId ? { workspaceId } : {}),
           ...(branch ? { branch } : {}),
         },
       }));
 
       // Cerveau recall + injection happen inside runAgent (AgentManager choke
       // point) — same path as interactive prompts, yellow pill included.
-      const prompt = this.buildTaskPrompt({ task, planMode, branch });
-      const result = await this.agentManager.runAgent(agent.id, prompt);
+      const prompt = buildTaskExecutionPrompt({ task, planMode, branch });
+      const result = await this.agentManager.runAgent(agentId, prompt);
       if (result.canceled) {
         // A cancellation isn't a task failure — it usually means the run was
         // interrupted (daemon restart, manual stop, quiet-hours window closed).
@@ -536,7 +522,7 @@ export class TaskScheduler {
           };
         });
         this.logger.info(
-          { taskId: task.id, agentId: agent.id },
+          { taskId: task.id, agentId },
           "Task run canceled; re-queued for next slot",
         );
         return;
@@ -550,7 +536,7 @@ export class TaskScheduler {
           schedule: null,
           planReadyAt: new Date().toISOString(),
         }));
-        this.logger.info({ taskId: task.id, agentId: agent.id }, "Task plan ready");
+        this.logger.info({ taskId: task.id, agentId }, "Task plan ready");
         return;
       }
 
@@ -560,7 +546,7 @@ export class TaskScheduler {
       }));
       await this.taskBoardService.transitionTask(projectId, task.id, "done");
       this.logger.info(
-        { taskId: task.id, agentId: agent.id, branch },
+        { taskId: task.id, agentId, branch },
         "Task executed in an isolated worktree",
       );
     } catch (error) {
@@ -587,41 +573,5 @@ export class TaskScheduler {
         });
       throw error;
     }
-  }
-
-  private buildTaskPrompt(input: {
-    task: KanbanTask;
-    planMode: boolean;
-    branch: string | null;
-  }): string {
-    const { task, planMode, branch } = input;
-    const header = [
-      planMode
-        ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
-        : `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree dédié, sur la branche ${branch ?? "de la tâche"}. Le checkout principal de l'utilisateur n'est pas touché.`,
-      "",
-      `## Tâche`,
-      `Titre : ${task.title}`,
-      task.description ? `Description :\n${task.description}` : "",
-      task.tags.length > 0 ? `Tags : ${task.tags.join(", ")}` : "",
-      "",
-      "## Instructions",
-    ];
-    const instructions = planMode
-      ? [
-          "1. Analyse la tâche et le dépôt, puis produis un PLAN D'IMPLÉMENTATION détaillé et actionnable :",
-          "   fichiers à modifier, approche retenue, étapes ordonnées, risques, tests à écrire.",
-          "2. NE modifie AUCUN fichier, ne commite pas, ne pousse pas.",
-          "3. Termine ta réponse par le plan complet en Markdown — l'utilisateur reprendra",
-          "   la main dans cette conversation pour décider de l'exécution.",
-        ]
-      : [
-          "1. Implémente la tâche complètement dans ce dépôt, en respectant ses conventions.",
-          "2. Vérifie ton travail (typecheck, lint, tests ciblés pertinents s'ils existent).",
-          "3. Commite tes changements sur cette branche avec un message conventionnel clair.",
-          "4. NE pousse PAS et NE crée PAS de pull request : l'utilisateur relit la branche et merge lui-même.",
-          "5. Termine ta réponse par un résumé de ce que tu as fait et la liste des fichiers modifiés.",
-        ];
-    return [...header, ...instructions].filter((line) => line !== "").join("\n");
   }
 }

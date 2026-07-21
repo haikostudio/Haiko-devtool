@@ -1,0 +1,195 @@
+import { z } from "zod";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
+
+// Label stamped on every agent Paseo spawns for a task, so task agents are
+// identifiable across the daemon (and excluded from Cerveau self-recursion).
+export const TASK_AGENT_LABEL = "paseo.task-id";
+
+// Structured estimate the analysis agent emits (as a trailing ```json block).
+// Same shape the board consumes, minus the model/timestamp the caller stamps.
+export const TaskAnalysisEstimateSchema = z.object({
+  tokens: z.number().int().nonnegative(),
+  quotaPercent: z.number().min(0).max(100),
+  estimatedMinutes: z.number().int().nonnegative(),
+  confidence: z.enum(["low", "medium", "high"]),
+  summary: z.string(),
+});
+export type TaskAnalysisEstimate = z.infer<typeof TaskAnalysisEstimateSchema>;
+
+// Applied when the analysis agent fails or omits a parseable estimate, so a
+// pipeline task never sits in pending_estimate forever. estimatedMinutes stays
+// above the scheduler's "light task" threshold so unknown work waits for quiet
+// hours rather than launching mid-day.
+export const ANALYSIS_FALLBACK_ESTIMATE: TaskAnalysisEstimate = {
+  tokens: 200_000,
+  quotaPercent: 10,
+  estimatedMinutes: 60,
+  confidence: "low",
+  summary: "Estimation automatique indisponible — valeur par défaut prudente.",
+};
+
+// Branch (and worktree slug) for a task launch: stable, readable, unique via a
+// short task-id suffix so two similarly-titled tasks never collide.
+export function taskBranchName(task: KanbanTask): string {
+  const slug = task.title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-+)|(-+$)/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  const suffix = task.id.slice(0, 6);
+  return slug ? `task/${slug}-${suffix}` : `task/${suffix}`;
+}
+
+export interface ResolvedTaskLaunch {
+  /** provider or provider/model string passed to createAgent. */
+  provider: string;
+  /** Bare provider id (no model), e.g. "claude" | "codex". */
+  providerId: string;
+  planMode: boolean;
+  /**
+   * Maximally-permissive run mode for the provider (task agents run unattended
+   * and must never block on a permission prompt). Plan-mode keeps "plan".
+   */
+  launchMode: string;
+  /** Worktree branch for direct-mode runs; null for plan-mode (runs in place). */
+  branchName: string | null;
+}
+
+/**
+ * Resolves the launch parameters shared by the analysis and execution phases
+ * from a task's runConfig, so both phases spawn/reuse the SAME kind of agent.
+ */
+export function resolveTaskLaunch(task: KanbanTask): ResolvedTaskLaunch {
+  const runConfig = task.runConfig ?? undefined;
+  const planMode = runConfig?.mode === "plan";
+  const providerId = runConfig?.provider ?? "claude";
+  let provider = "claude";
+  if (runConfig) {
+    provider = runConfig.model ? `${runConfig.provider}/${runConfig.model}` : runConfig.provider;
+  }
+  let launchMode = "bypassPermissions";
+  if (planMode) {
+    launchMode = "plan";
+  } else if (providerId === "codex") {
+    launchMode = "full-access";
+  }
+  const branchName = planMode ? null : taskBranchName(task);
+  return { provider, providerId, planMode, launchMode, branchName };
+}
+
+/**
+ * Extracts the structured estimate from the analysis agent's final message.
+ * The agent writes readable prose then a trailing ```json block; we parse the
+ * last fenced block (falling back to any brace-delimited object) and validate
+ * it. Returns null when nothing parseable is present.
+ */
+export function parseTaskAnalysisEstimate(text: string): TaskAnalysisEstimate | null {
+  const fenced = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(
+    (match) => match[1] ?? "",
+  );
+  const candidates = fenced.length > 0 ? fenced.toReversed() : [];
+  for (const candidate of candidates) {
+    const parsed = tryParseEstimate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  // No fenced block matched: try the whole text, then any {...} substring.
+  const whole = tryParseEstimate(text);
+  if (whole) {
+    return whole;
+  }
+  const brace = text.match(/\{[\s\S]*\}/);
+  return brace ? tryParseEstimate(brace[0]) : null;
+}
+
+function tryParseEstimate(raw: string): TaskAnalysisEstimate | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const result = TaskAnalysisEstimateSchema.safeParse(JSON.parse(trimmed));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function taskHeader(task: KanbanTask): string[] {
+  return [
+    "## Tâche",
+    `Titre : ${task.title}`,
+    task.description ? `Description :\n${task.description}` : "",
+    task.tags.length > 0 ? `Tags : ${task.tags.join(", ")}` : "",
+  ];
+}
+
+/**
+ * Phase 1 prompt. The visible task agent explores read-only, writes a readable
+ * analysis into the chat, and ends with a ```json estimate block. It makes no
+ * changes — execution resumes as a second turn in the SAME conversation.
+ */
+export function buildTaskAnalysisPrompt(input: {
+  task: KanbanTask;
+  planMode: boolean;
+  branch: string | null;
+}): string {
+  const { task, planMode, branch } = input;
+  const intro = planMode
+    ? "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera directement dans le workspace en cours du projet."
+    : `Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans un worktree dédié, sur la branche ${branch ?? "de la tâche"} (le checkout principal de l'utilisateur n'est pas touché).`;
+  return [
+    intro,
+    "",
+    ...taskHeader(task),
+    "",
+    "## Étape 1 — Analyse (maintenant, avant toute modification)",
+    "1. Explore le dépôt en LECTURE SEULE (quelques fichiers au plus) pour cerner le périmètre.",
+    "2. Rédige une analyse claire et concise : objectif, approche retenue, fichiers concernés, points de vigilance.",
+    "3. NE MODIFIE AUCUN fichier à cette étape. L'exécution reprendra ensuite dans CETTE MÊME conversation.",
+    "4. Termine impérativement ton message par un bloc ```json (et rien après) avec ton estimation :",
+    '   {"tokens": <entier>, "quotaPercent": <0-100>, "estimatedMinutes": <entier>, "confidence": "low|medium|high", "summary": "<justification en une phrase>"}',
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+/**
+ * Phase 2 prompt. Sent to the SAME agent that ran the analysis (or, on the
+ * legacy path, to a freshly-created agent), so it stays self-contained: it
+ * restates the task and asks for the actual implementation (or full plan).
+ */
+export function buildTaskExecutionPrompt(input: {
+  task: KanbanTask;
+  planMode: boolean;
+  branch: string | null;
+}): string {
+  const { task, planMode, branch } = input;
+  const intro = planMode
+    ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
+    : `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree dédié, sur la branche ${branch ?? "de la tâche"}. Le checkout principal de l'utilisateur n'est pas touché.`;
+  const instructions = planMode
+    ? [
+        "## Étape 2 — Plan d'implémentation",
+        "1. Analyse la tâche et le dépôt, puis produis un PLAN D'IMPLÉMENTATION détaillé et actionnable :",
+        "   fichiers à modifier, approche retenue, étapes ordonnées, risques, tests à écrire.",
+        "2. NE modifie AUCUN fichier, ne commite pas, ne pousse pas.",
+        "3. Termine ta réponse par le plan complet en Markdown — l'utilisateur reprendra",
+        "   la main dans cette conversation pour décider de l'exécution.",
+      ]
+    : [
+        "## Étape 2 — Exécution",
+        "1. Implémente la tâche complètement dans ce dépôt, en respectant ses conventions.",
+        "2. Vérifie ton travail (typecheck, lint, tests ciblés pertinents s'ils existent).",
+        "3. Commite tes changements sur cette branche avec un message conventionnel clair.",
+        "4. NE pousse PAS et NE crée PAS de pull request : l'utilisateur relit la branche et merge lui-même.",
+        "5. Termine ta réponse par un résumé de ce que tu as fait et la liste des fichiers modifiés.",
+      ];
+  return [intro, "", ...taskHeader(task), "", ...instructions]
+    .filter((line) => line !== "")
+    .join("\n");
+}
