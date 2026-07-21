@@ -2177,28 +2177,33 @@ export class DaemonClient {
   }
 
   async listComptaClients(requestId?: string): Promise<ComptaClient[]> {
-    return this.sendNamespacedCorrelatedSessionRequest<
-      "compta.clients.list.response",
-      ComptaClient[]
-    >({
-      requestId,
-      message: { type: "compta.clients.list.request" },
-      selectPayload: (payload) => payload.clients,
-    });
+    // Surface the host-side reason (e.g. "Compta API clients returned HTTP 401")
+    // instead of silently resolving to an empty list, so a failing request is
+    // diagnosable in the UI rather than looking like "no clients".
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"compta.clients.list.response">({
+        requestId,
+        message: { type: "compta.clients.list.request" },
+      });
+    if (!payload.success) {
+      throw new Error(payload.error ?? "Failed to list billing clients");
+    }
+    return payload.clients;
   }
 
   async getComptaProjectLink(
     projectId: string,
     requestId?: string,
   ): Promise<ComptaProjectLink | null> {
-    return this.sendNamespacedCorrelatedSessionRequest<
-      "compta.project.link.get.response",
-      ComptaProjectLink | null
-    >({
-      requestId,
-      message: { type: "compta.project.link.get.request", projectId },
-      selectPayload: (payload) => payload.link ?? null,
-    });
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"compta.project.link.get.response">({
+        requestId,
+        message: { type: "compta.project.link.get.request", projectId },
+      });
+    if (!payload.success) {
+      throw new Error(payload.error ?? "Failed to load billing link");
+    }
+    return payload.link ?? null;
   }
 
   async setComptaProjectLink(

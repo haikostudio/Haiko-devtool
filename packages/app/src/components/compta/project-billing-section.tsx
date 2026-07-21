@@ -48,9 +48,14 @@ export function ProjectBillingSection({
           setLink(fetchedLink);
           setError(null);
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          setError(t("settings.project.billing.loadError"));
+          const reason = err instanceof Error ? err.message.trim() : "";
+          setError(
+            reason
+              ? `${t("settings.project.billing.loadError")} (${reason})`
+              : t("settings.project.billing.loadError"),
+          );
         }
       } finally {
         if (!cancelled) {
