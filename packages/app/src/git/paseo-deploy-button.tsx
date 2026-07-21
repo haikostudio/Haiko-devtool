@@ -184,11 +184,52 @@ function PaseoDeployModal({
 
   const busy = triggering || deploying;
 
+  // Actions live in the sheet's sticky footer so they stay pinned to the bottom
+  // edge instead of scrolling away with the change list.
+  const footer = useMemo(
+    () => (
+      <View style={styles.actions}>
+        <Button
+          variant="default"
+          size="sm"
+          style={styles.actionButton}
+          onPress={handleDeploy}
+          disabled={busy}
+          testID="paseo-deploy-confirm"
+        >
+          {deploying ? "Publication en cours…" : "Publier maintenant"}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          style={styles.actionButton}
+          onPress={handleCommitOnly}
+          disabled={busy}
+          testID="paseo-deploy-commit-only"
+        >
+          Enregistrer sans publier
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          style={styles.actionButton}
+          onPress={onClose}
+          disabled={triggering}
+          testID="paseo-deploy-cancel"
+        >
+          Fermer
+        </Button>
+      </View>
+    ),
+    [busy, deploying, triggering, handleDeploy, handleCommitOnly, onClose],
+  );
+
   return (
     <AdaptiveModalSheet
       visible={visible}
       onClose={onClose}
       header={sheetHeader}
+      footer={footer}
       testID="paseo-deploy-modal"
     >
       <View style={styles.body}>
@@ -238,39 +279,6 @@ function PaseoDeployModal({
             <Text style={styles.warningText}>{error}</Text>
           </View>
         ) : null}
-
-        <View style={styles.actions}>
-          <Button
-            variant="default"
-            size="sm"
-            style={styles.actionButton}
-            onPress={handleDeploy}
-            disabled={busy}
-            testID="paseo-deploy-confirm"
-          >
-            {deploying ? "Publication en cours…" : "Publier maintenant"}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            style={styles.actionButton}
-            onPress={handleCommitOnly}
-            disabled={busy}
-            testID="paseo-deploy-commit-only"
-          >
-            Enregistrer sans publier
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            style={styles.actionButton}
-            onPress={onClose}
-            disabled={triggering}
-            testID="paseo-deploy-cancel"
-          >
-            Fermer
-          </Button>
-        </View>
       </View>
     </AdaptiveModalSheet>
   );
@@ -389,7 +397,10 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.palette.red[200],
   },
   // Stacked (one under the other) on narrow screens, side by side on wide ones.
+  // flex:1 lets the group fill the sticky footer's row so the buttons span the
+  // full sheet width instead of hugging their text.
   actions: {
+    flex: 1,
     flexDirection: { xs: "column", md: "row" },
     alignItems: "stretch",
     gap: theme.spacing[2],
