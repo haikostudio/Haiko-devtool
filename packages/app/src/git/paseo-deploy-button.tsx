@@ -239,14 +239,14 @@ function PaseoDeployModal({
 
         <View style={styles.actions}>
           <Button
-            variant="secondary"
+            variant="default"
             size="sm"
             style={styles.actionButton}
-            onPress={onClose}
-            disabled={triggering}
-            testID="paseo-deploy-cancel"
+            onPress={handleDeploy}
+            disabled={busy}
+            testID="paseo-deploy-confirm"
           >
-            Fermer
+            {deploying ? "Publication en cours…" : "Publier maintenant"}
           </Button>
           <Button
             variant="secondary"
@@ -259,14 +259,14 @@ function PaseoDeployModal({
             Enregistrer sans publier
           </Button>
           <Button
-            variant="default"
+            variant="secondary"
             size="sm"
             style={styles.actionButton}
-            onPress={handleDeploy}
-            disabled={busy}
-            testID="paseo-deploy-confirm"
+            onPress={onClose}
+            disabled={triggering}
+            testID="paseo-deploy-cancel"
           >
-            {deploying ? "Déploiement…" : "Déployer"}
+            Fermer
           </Button>
         </View>
       </View>
@@ -376,12 +376,13 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     color: theme.colors.palette.red[200],
   },
+  // Stacked (one under the other) on narrow screens, side by side on wide ones.
   actions: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: { xs: "column", md: "row" },
+    alignItems: "stretch",
     gap: theme.spacing[2],
   },
   actionButton: {
-    flex: 1,
+    flex: { xs: 0, md: 1 },
   },
 }));
