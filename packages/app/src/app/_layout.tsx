@@ -30,6 +30,7 @@ import { AgentTasksToastFab } from "@/components/agent-tasks-toast-fab";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
+import { AppUpdateBanner } from "@/components/app-update-banner";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { WindowSidebarMenuToggle } from "@/components/headers/menu-header";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
@@ -560,6 +561,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <KeyboardShortcutsDialog />
       <AppDiagnosticHost />
       <QuittingOverlay />
+      <AppUpdateBanner />
     </View>
   );
 

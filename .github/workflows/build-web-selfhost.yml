@@ -38,6 +38,14 @@ jobs:
 
       - name: Build web app (static export)
         run: npm run build:web --workspace=@getpaseo/app
+        env:
+          # Baked into the bundle so the running app knows which build it is.
+          # The app polls /version.json (written below) and shows a "reload"
+          # banner when the live build differs from this baked value.
+          EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
+
+      - name: Write version marker
+        run: printf '{"sha":"%s"}\n' "${{ github.sha }}" > packages/app/dist/version.json
 
       - name: Upload static site
         uses: actions/upload-artifact@v4
