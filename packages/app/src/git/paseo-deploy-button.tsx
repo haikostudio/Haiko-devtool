@@ -17,17 +17,30 @@ const rocketColorMapping = (theme: Theme) => ({
 const spinnerColorMapping = (theme: Theme) => ({
   color: theme.colors.palette.white,
 });
+// Compact (mobile header) uses the header's monochrome look instead of the
+// black pill, so the rocket matches the neighbouring play / source-control icons.
+const compactRocketColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
+const compactSpinnerColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
+});
 
 interface PaseoDeployButtonProps {
   serverId: string;
+  /**
+   * Compact icon-only rendering for the mobile header row (matches the other
+   * header icon buttons). Desktop keeps the black pill.
+   */
+  compact?: boolean;
 }
 
 /**
- * "Publier tout" — Paseo self-host deploy button for the desktop workspace
- * header. Rendered only for the Paseo repo itself and only when the host
- * advertises the `paseoSelfhostDeploy` capability (gated by the caller).
+ * "Publier tout" — Paseo self-host deploy button for the workspace header.
+ * Rendered only for the Paseo repo itself and only when the host advertises
+ * the `paseoSelfhostDeploy` capability (gated by the caller).
  */
-export function PaseoDeployButton({ serverId }: PaseoDeployButtonProps) {
+export function PaseoDeployButton({ serverId, compact = false }: PaseoDeployButtonProps) {
   const [open, setOpen] = useState(false);
   const { status, pendingCount, refetch } = usePaseoDeployStatus({ serverId, enabled: true });
 
@@ -37,6 +50,10 @@ export function PaseoDeployButton({ serverId }: PaseoDeployButtonProps) {
   const handleOpen = useCallback(() => setOpen(true), []);
   const handleClose = useCallback(() => setOpen(false), []);
 
+  const iconSize = compact ? 20 : 16;
+  const rocketColors = compact ? compactRocketColorMapping : rocketColorMapping;
+  const spinnerColors = compact ? compactSpinnerColorMapping : spinnerColorMapping;
+
   return (
     <>
       <Pressable
@@ -44,16 +61,18 @@ export function PaseoDeployButton({ serverId }: PaseoDeployButtonProps) {
         onPress={handleOpen}
         accessibilityRole="button"
         accessibilityLabel="Déployer Paseo"
-        style={styles.button}
+        style={compact ? styles.buttonCompact : styles.button}
       >
         {deploying ? (
-          <ThemedActivityIndicator size="small" uniProps={spinnerColorMapping} />
+          <ThemedActivityIndicator size="small" uniProps={spinnerColors} />
         ) : (
-          <ThemedRocket size={16} uniProps={rocketColorMapping} />
+          <ThemedRocket size={iconSize} uniProps={rocketColors} />
         )}
         {!deploying && hasPending ? (
-          <View style={styles.badge}>
-            {pendingCount > 0 ? <Text style={styles.badgeText}>{pendingCount}</Text> : null}
+          <View style={compact ? styles.badgeCompact : styles.badge}>
+            {!compact && pendingCount > 0 ? (
+              <Text style={styles.badgeText}>{pendingCount}</Text>
+            ) : null}
           </View>
         ) : null}
       </Pressable>
@@ -229,6 +248,25 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.palette.black,
+  },
+  // Mobile header icon button — matches styles.headerActionButton in the
+  // workspace header (icon-only, transparent, same touch target).
+  buttonCompact: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.lg,
+  },
+  badgeCompact: {
+    position: "absolute",
+    top: theme.spacing[1],
+    right: theme.spacing[1],
+    width: theme.spacing[2],
+    height: theme.spacing[2],
+    borderRadius: theme.spacing[1],
+    backgroundColor: theme.colors.primary,
   },
   badge: {
     minWidth: theme.spacing[4],

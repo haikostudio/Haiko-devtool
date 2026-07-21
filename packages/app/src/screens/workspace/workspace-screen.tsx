@@ -3441,6 +3441,9 @@ function WorkspaceScreenContent({
             }}
           </HeaderToggleButton>
         ) : null}
+        {isMobile && showPaseoDeployButton ? (
+          <PaseoDeployButton serverId={normalizedServerId} compact />
+        ) : null}
         {isMobile ? (
           <HeaderToggleButton
             testID="workspace-explorer-toggle"
