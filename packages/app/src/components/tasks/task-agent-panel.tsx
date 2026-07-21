@@ -248,7 +248,12 @@ const styles = StyleSheet.create((theme) => ({
   panel: {
     // No left border: the board's resize handle already draws the divider.
     width: "100%",
-    height: "100%",
+    flex: 1,
+    // A flex column that must hand a bounded height to the embedded agent
+    // stream below. On web, flex children default to `min-height: auto` and
+    // refuse to shrink under their content, so the message list overflows
+    // instead of scrolling — `minHeight: 0` restores the bounded height.
+    minHeight: 0,
     backgroundColor: theme.colors.surface0,
   },
   collapsedRail: {
@@ -290,9 +295,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   body: {
     flex: 1,
+    // Keep the scrollable tab content (chat stream) bounded on web — see `panel`.
+    minHeight: 0,
   },
   paneHost: {
     flex: 1,
+    minHeight: 0,
   },
   emptyState: {
     flex: 1,
