@@ -8,6 +8,7 @@ import {
 import { useDraftStore } from "@/stores/draft-store";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
 import type { WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
+import { getFocusedAt } from "@/session-ui-state/focus-intent";
 
 // Resolves the draft-store key for a tab whose composer carries a synced draft.
 // Only NEW-agent draft tabs are synced. Active-agent message composers are NOT:
@@ -48,6 +49,9 @@ export function buildWorkspaceUiState(input: {
   const tabs = layout ? collectAllTabs(layout.root) : [];
   const focusedPane = layout ? findPaneById(layout.root, layout.focusedPaneId) : null;
   const focusedTabId = focusedPane?.focusedTabId ?? null;
+  // Carry WHEN the focus last changed (see focus-intent.ts) so receivers resolve
+  // focus last-write-wins by intent time, not by our push revision.
+  const focusedAt = focusedTabId ? (getFocusedAt(workspaceKey) ?? undefined) : undefined;
 
   const draftStore = useDraftStore.getState();
   const drafts: WorkspaceUiState["drafts"] = {};
@@ -81,6 +85,7 @@ export function buildWorkspaceUiState(input: {
     focusedTabId,
     drafts,
     revision: input.revision,
+    ...(focusedAt !== undefined ? { focusedAt } : {}),
   };
 }
 

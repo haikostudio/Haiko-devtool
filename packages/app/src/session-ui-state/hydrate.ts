@@ -16,7 +16,7 @@ import {
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
 import { getTabCloseTombstone } from "./close-tombstones";
-import { getLocalFocusIntent, suppressLocalFocusIntent } from "./focus-intent";
+import { adoptRemoteFocusedAt, getFocusedAt, suppressLocalFocusIntent } from "./focus-intent";
 import { logTabSync } from "./sync-log";
 
 function coerceLifecycle(lifecycle: string): DraftLifecycleState {
@@ -372,22 +372,60 @@ function applyRemoteWorkspaceUiState(
   }
 
   if (remoteFocusedTabId && remoteTargets.has(remoteFocusedTabId)) {
-    // Focus is last-write-wins by revision, mirroring hydrateDrafts. If the user
-    // changed focus locally more recently than this snapshot was written, a stale
-    // broadcast (the debounced local push has not landed yet) must not yank focus
-    // back to the previous tab — the "click a tab, focus jumps back" race.
-    const localFocusIntent = getLocalFocusIntent(workspaceKey);
-    const remoteFocusIsStale =
-      localFocusIntent !== null && input.state.revision <= localFocusIntent;
-    if (remoteFocusIsStale) {
-      logTabSync("keeping local focus over stale host snapshot", {
-        workspaceKey,
-        remoteFocusedTabId,
-        remoteRevision: input.state.revision,
-        localFocusIntent,
-      });
-    } else {
-      layoutStore.focusTab(workspaceKey, remoteFocusedTabId);
-    }
+    applyRemoteFocus({
+      workspaceKey,
+      layoutStore,
+      remoteFocusedTabId,
+      remoteRevision: input.state.revision,
+      remoteFocusedAt: input.state.focusedAt ?? null,
+    });
+  }
+}
+
+// Focus is last-write-wins by focusedAt — the time the focus itself changed, NOT
+// the push time (revision). This is what makes focus survive a live cross-device
+// push duel: a device re-advertising an unchanged focus carries an OLD focusedAt,
+// so it can never yank focus away from the device the user is actually touching.
+// See focus-intent.ts.
+function applyRemoteFocus(input: {
+  workspaceKey: string;
+  layoutStore: ReturnType<typeof useWorkspaceLayoutStore.getState>;
+  remoteFocusedTabId: string;
+  remoteRevision: number;
+  remoteFocusedAt: number | null;
+}): void {
+  const { workspaceKey, layoutStore, remoteFocusedTabId, remoteRevision, remoteFocusedAt } = input;
+  const localFocusedAt = getFocusedAt(workspaceKey);
+
+  let adoptRemoteFocus: boolean;
+  if (remoteFocusedAt === null) {
+    // Pre-0.1.109 peer: no focusedAt on the wire. Fall back to the legacy guard —
+    // reject a snapshot whose revision predates our last local focus.
+    adoptRemoteFocus = !(localFocusedAt !== null && remoteRevision <= localFocusedAt);
+  } else if (localFocusedAt === null) {
+    // This device has no focus history yet (e.g. fresh after a reload) — the
+    // daemon's focus is authoritative.
+    adoptRemoteFocus = true;
+  } else {
+    // Both sides know when their focus changed: newer wins, ties keep local
+    // (stability — the device already showing this focus does not flicker).
+    adoptRemoteFocus = remoteFocusedAt > localFocusedAt;
+  }
+
+  if (adoptRemoteFocus) {
+    layoutStore.focusTab(workspaceKey, remoteFocusedTabId);
+    // Remember the focusedAt we adopted so our own next push re-advertises it
+    // instead of minting a fresh timestamp that would re-open the duel. The
+    // focusTab above is a no-op for local intent (we are under the suppress
+    // bracket), so this explicit record is the only thing that updates it.
+    adoptRemoteFocusedAt(workspaceKey, remoteFocusedAt ?? remoteRevision);
+  } else {
+    logTabSync("keeping local focus over stale host snapshot", {
+      workspaceKey,
+      remoteFocusedTabId,
+      remoteRevision,
+      remoteFocusedAt,
+      localFocusedAt,
+    });
   }
 }

@@ -1020,6 +1020,15 @@ export const WorkspaceUiStateSchema = z.object({
   // Monotonic per-workspace revision, bumped on every local edit. Last-write-wins
   // conflict resolution compares this across devices.
   revision: z.number(),
+  // Wall-clock time (ms) the FOCUS last actually changed by a user action, NOT
+  // the push time. `revision` is bumped on every edit (draft typing, tab open),
+  // so in a live cross-device push duel every broadcast looks "newer" and the
+  // revision-based focus guard can never fire — the other device keeps yanking
+  // focus back. Focus is resolved last-write-wins by focusedAt instead: a device
+  // re-advertising an unchanged focus carries an OLD focusedAt and can no longer
+  // steal focus. Optional for back-compat: absent from pre-0.1.109 peers, in
+  // which case the receiver falls back to the legacy revision-vs-intent guard.
+  focusedAt: z.number().optional(),
 });
 export type WorkspaceUiState = z.infer<typeof WorkspaceUiStateSchema>;
 export type WorkspaceUiTab = z.infer<typeof WorkspaceUiTabSchema>;

@@ -603,4 +603,83 @@ describe("session ui state draft config sync", () => {
     });
     expect(applied?.focusedTabId).toBe("agent_a1");
   });
+
+  it("keeps local focus against a live duel broadcast with a fresher revision but older focusedAt", () => {
+    // The regression the user kept hitting: another device (or the daemon) is in
+    // a push duel, so its broadcast carries a revision NEWER than our last focus
+    // (fresh Date.now()) yet its focus has not actually changed — focusedAt is
+    // OLD. The legacy revision guard would adopt it and yank focus to the left
+    // tab. Last-write-wins by focusedAt must keep our focus.
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a2" });
+    store.focusTab(WORKSPACE_KEY, "agent_a2"); // records local focusedAt = now
+
+    const localFocusedAt = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    })?.focusedAt;
+    expect(typeof localFocusedAt).toBe("number");
+
+    const duel: WorkspaceUiState = {
+      tabs: [
+        { tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 },
+        { tabId: "agent_a2", target: { kind: "agent", agentId: "a2" }, createdAt: 2 },
+      ],
+      order: ["agent_a1", "agent_a2"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: (localFocusedAt as number) + 60_000, // pushed later...
+      focusedAt: (localFocusedAt as number) - 5_000, // ...but focus changed earlier
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: duel });
+
+    const applied = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    });
+    expect(applied?.focusedTabId).toBe("agent_a2");
+  });
+
+  it("adopts a remote focus whose focusedAt is genuinely newer, and re-advertises that focusedAt", () => {
+    const store = useWorkspaceLayoutStore.getState();
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a1" });
+    store.openTabInBackground(WORKSPACE_KEY, { kind: "agent", agentId: "a2" });
+    store.focusTab(WORKSPACE_KEY, "agent_a2"); // local focusedAt = now
+
+    const localFocusedAt = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    })?.focusedAt as number;
+
+    const newerFocusedAt = localFocusedAt + 10_000;
+    const remote: WorkspaceUiState = {
+      tabs: [
+        { tabId: "agent_a1", target: { kind: "agent", agentId: "a1" }, createdAt: 1 },
+        { tabId: "agent_a2", target: { kind: "agent", agentId: "a2" }, createdAt: 2 },
+      ],
+      order: ["agent_a1", "agent_a2"],
+      focusedTabId: "agent_a1",
+      drafts: {},
+      revision: newerFocusedAt,
+      focusedAt: newerFocusedAt,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const applied = buildWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      revision: 0,
+    });
+    // Adopted the remote focus...
+    expect(applied?.focusedTabId).toBe("agent_a1");
+    // ...and re-advertises the SAME focusedAt (not a fresh one) so the loser of a
+    // duel does not immediately fight back.
+    expect(applied?.focusedAt).toBe(newerFocusedAt);
+  });
 });
