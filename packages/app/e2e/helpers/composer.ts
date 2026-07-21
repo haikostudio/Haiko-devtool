@@ -145,6 +145,20 @@ export async function expectGithubAttachmentPill(
 export async function openImageLightbox(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Open image attachment" }).first().click();
   await expect(page.getByTestId("attachment-lightbox-close")).toBeVisible({ timeout: 5_000 });
+  // Guard against the "opens but renders blank" regression: expo-image collapses
+  // to ~0px on web when it has no explicit dimensions, so assert the full-screen
+  // image actually laid out with a non-zero box.
+  const image = page.getByTestId("attachment-lightbox-image");
+  await expect(image).toBeVisible({ timeout: 5_000 });
+  await expect
+    .poll(
+      async () => {
+        const box = await image.boundingBox();
+        return Math.min(box?.width ?? 0, box?.height ?? 0);
+      },
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThan(1);
 }
 
 export async function closeImageLightbox(page: Page): Promise<void> {

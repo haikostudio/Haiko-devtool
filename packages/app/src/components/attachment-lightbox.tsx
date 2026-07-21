@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { type LayoutChangeEvent, Modal, Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image as ExpoImage } from "expo-image";
@@ -25,10 +25,23 @@ export function AttachmentLightbox({ metadata, uri: directUri, onClose }: Attach
   const url = directUri ?? resolvedUrl;
   const isOpen = Boolean(metadata) || Boolean(directUri);
   const [errored, setErrored] = useState(false);
+  // expo-image is NOT unistyles-aware and does not pick up a size from an
+  // absolute-fill (top/left/right/bottom: 0) style on web — it collapses to ~0px
+  // and the full-screen image renders blank even though the thumbnail (which
+  // uses an explicit width/height) shows fine. Measure the available area and
+  // hand the image explicit pixel dimensions, matching the thumbnail's fix.
+  const [imageBox, setImageBox] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     setErrored(false);
   }, [metadata?.id, directUri]);
+
+  const handleImageAreaLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setImageBox((prev) =>
+      prev && prev.width === width && prev.height === height ? prev : { width, height },
+    );
+  }, []);
 
   useEffect(() => {
     if (!isWeb || !isOpen) return;
@@ -60,6 +73,10 @@ export function AttachmentLightbox({ metadata, uri: directUri, onClose }: Attach
   const handleImageError = useCallback(() => setErrored(true), []);
   const noopPress = useCallback(() => {}, []);
   const imageSource = useMemo(() => ({ uri: url ?? "" }), [url]);
+  const imageStyle = useMemo(
+    () => (imageBox ? { width: imageBox.width, height: imageBox.height } : imageFillStyle),
+    [imageBox],
+  );
 
   if (!isOpen) {
     return null;
@@ -83,13 +100,17 @@ export function AttachmentLightbox({ metadata, uri: directUri, onClose }: Attach
               {hasError ? (
                 <Text style={styles.errorText}>{t("message.attachments.imageLoadFailed")}</Text>
               ) : (
-                <Pressable onPress={noopPress} style={styles.imagePressable}>
+                <Pressable
+                  onPress={noopPress}
+                  onLayout={handleImageAreaLayout}
+                  style={styles.imagePressable}
+                >
                   <ExpoImage
                     testID="attachment-lightbox-image"
                     source={imageSource}
                     contentFit="contain"
                     onError={handleImageError}
-                    style={imageFillStyle}
+                    style={imageStyle}
                   />
                 </Pressable>
               )}
