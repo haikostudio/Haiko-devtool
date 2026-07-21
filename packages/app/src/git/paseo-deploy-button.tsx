@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Rocket } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
@@ -241,7 +241,7 @@ function PaseoDeployModal({
         {uncommittedFiles.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Modifications en cours, pas encore enregistrées</Text>
-            <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            <View style={styles.list}>
               {uncommittedFiles.map((file) => (
                 <View key={file.path} style={styles.itemRow}>
                   <Text style={styles.bullet}>•</Text>
@@ -251,21 +251,21 @@ function PaseoDeployModal({
                   </Text>
                 </View>
               ))}
-            </ScrollView>
+            </View>
           </View>
         ) : null}
 
         {unshippedCommits.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Changements prêts, pas encore en ligne</Text>
-            <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            <View style={styles.list}>
               {unshippedCommits.map((commit) => (
                 <View key={commit.sha} style={styles.itemRow}>
                   <Text style={styles.bullet}>•</Text>
                   <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
                 </View>
               ))}
-            </ScrollView>
+            </View>
           </View>
         ) : null}
 
@@ -360,10 +360,10 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: "600",
     color: theme.colors.foregroundMuted,
   },
+  // The whole change list flows into the sheet's single scroll region — no inner
+  // maxHeight box, so the drawer scrolls as one instead of cramming rows into a
+  // tiny nested scroller while the sheet stays half-empty.
   list: {
-    maxHeight: 160,
-  },
-  listContent: {
     gap: theme.spacing[1],
   },
   itemRow: {
