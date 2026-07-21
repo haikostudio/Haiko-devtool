@@ -109,8 +109,10 @@ export function PaseoDeployButton({ serverId, compact = false }: PaseoDeployButt
         )}
         {!deploying && hasPending ? (
           <View style={compact ? styles.badgeCompact : styles.badge}>
-            {!compact && pendingCount > 0 ? (
-              <Text style={styles.badgeText}>{pendingCount}</Text>
+            {pendingCount > 0 ? (
+              <Text style={compact ? styles.badgeTextCompact : styles.badgeText}>
+                {pendingCount > 99 ? "99+" : pendingCount}
+              </Text>
             ) : null}
           </View>
         ) : null}
@@ -297,14 +299,24 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
   },
+  // Small count pill overlapping the top-right of the mobile icon.
   badgeCompact: {
     position: "absolute",
-    top: theme.spacing[1],
-    right: theme.spacing[1],
-    width: theme.spacing[2],
-    height: theme.spacing[2],
-    borderRadius: theme.spacing[1],
+    top: 0,
+    right: 0,
+    minWidth: theme.spacing[4],
+    height: theme.spacing[4],
+    paddingHorizontal: theme.spacing[1],
+    borderRadius: theme.spacing[2],
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: theme.colors.primary,
+  },
+  badgeTextCompact: {
+    fontSize: Math.round(theme.fontSize.xs * 0.85),
+    lineHeight: theme.fontSize.xs,
+    fontWeight: "700",
+    color: theme.colors.primaryForeground,
   },
   badge: {
     minWidth: theme.spacing[4],
