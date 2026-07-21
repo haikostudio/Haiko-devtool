@@ -39,6 +39,7 @@ export function TaskBillingAddSheet({
   clientId,
   documentTitle,
   line,
+  defaultDocument,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -46,6 +47,8 @@ export function TaskBillingAddSheet({
   clientId: string;
   documentTitle: string;
   line: TaskBillingLine;
+  // Project's pinned draft; surfaced first when still an open draft.
+  defaultDocument?: { kind: DocumentKind; id: string } | null;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -125,14 +128,20 @@ export function TaskBillingAddSheet({
     if (drafts.length === 0) {
       return null;
     }
+    // Surface the project's pinned draft first (starred) when it is still open.
+    const isDefault = (draft: ComptaDocumentRef) =>
+      defaultDocument != null &&
+      draft.kind === defaultDocument.kind &&
+      draft.id === defaultDocument.id;
+    const ordered = [...drafts].sort((a, b) => Number(isDefault(b)) - Number(isDefault(a)));
     return (
       <>
         <Text style={styles.sectionLabel}>{t("tasks.panel.billingLine.existingDrafts")}</Text>
-        {drafts.map((draft) => (
+        {ordered.map((draft) => (
           <ActionRow
             key={`${draft.kind}-${draft.id}`}
             icon={DRAFT_ICON}
-            label={`${draft.number}${draft.title ? ` · ${draft.title}` : ""}`}
+            label={`${isDefault(draft) ? "★ " : ""}${draft.number}${draft.title ? ` · ${draft.title}` : ""}`}
             disabled={busy}
             kind={draft.kind}
             documentId={draft.id}

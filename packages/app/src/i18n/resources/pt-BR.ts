@@ -312,6 +312,8 @@ export const ptBR: TranslationResources = {
       expand: "Expandir painel",
       billing: "Faturamento",
       billingLine: {
+        description: "Descrição",
+        manualHours: "Horas dev sênior",
         changeClient: "Alterar",
         added: "Adicionado a {{number}}",
         addError: "Não foi possível adicionar a tarefa ao documento.",
@@ -2320,6 +2322,10 @@ export const ptBR: TranslationResources = {
         failedDescription: "Recarregue para tentar novamente.",
       },
       billing: {
+        rate: "Valor por hora (CHF/h)",
+        ratePlaceholder: "130",
+        defaultDocument: "Documento padrão",
+        defaultDocumentNone: "Nenhum",
         linkedTo: "Cliente do projeto: {{name}}",
         title: "Faturamento",
         info: "Vincule este projeto a um cliente para adicionar suas tarefas a um orçamento ou fatura.",

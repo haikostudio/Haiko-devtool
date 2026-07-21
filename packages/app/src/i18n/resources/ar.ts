@@ -308,6 +308,8 @@ export const ar: TranslationResources = {
       expand: "توسيع اللوحة",
       billing: "الفوترة",
       billingLine: {
+        description: "Description",
+        manualHours: "Senior-dev hours",
         changeClient: "تغيير",
         added: "أُضيف إلى {{number}}",
         addError: "تعذّرت إضافة المهمة إلى المستند.",
@@ -2284,6 +2286,10 @@ export const ar: TranslationResources = {
         failedDescription: "أعد التحميل للمحاولة مرة أخرى.",
       },
       billing: {
+        rate: "Hourly rate (CHF/h)",
+        ratePlaceholder: "130",
+        defaultDocument: "Default document",
+        defaultDocumentNone: "None",
         linkedTo: "عميل المشروع: {{name}}",
         title: "الفوترة",
         info: "اربط هذا المشروع بعميل لإضافة مهامه إلى عرض سعر أو فاتورة.",

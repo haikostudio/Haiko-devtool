@@ -307,6 +307,8 @@ export const en = {
       expand: "Expand panel",
       billing: "Billing",
       billingLine: {
+        description: "Description",
+        manualHours: "Senior-dev hours",
         changeClient: "Change",
         added: "Added to {{number}}",
         addError: "Couldn't add the task to the document.",
@@ -2293,6 +2295,10 @@ export const en = {
         failedDescription: "Reload to try again.",
       },
       billing: {
+        rate: "Hourly rate (CHF/h)",
+        ratePlaceholder: "130",
+        defaultDocument: "Default document",
+        defaultDocumentNone: "None",
         linkedTo: "Project client: {{name}}",
         title: "Billing",
         info: "Link this project to a client to add its tasks to a quote or invoice.",

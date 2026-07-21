@@ -13,6 +13,16 @@ export const TaskAnalysisEstimateSchema = z.object({
   estimatedMinutes: z.number().int().nonnegative(),
   confidence: z.enum(["low", "medium", "high"]),
   summary: z.string(),
+  // Billing lens for the Facturation tab. Optional so an agent that omits them
+  // (or an older prompt) still parses; the UI falls back to the task's own
+  // title/description and an empty hours field.
+  //  - billingTitle: short invoice label (<= 5 words).
+  //  - billingDescription: short invoice description (<= 3 lines).
+  //  - billingHours: hours a senior developer would bill doing this BY HAND
+  //    (real price), NOT the agent's runtime.
+  billingTitle: z.string().optional(),
+  billingDescription: z.string().optional(),
+  billingHours: z.number().nonnegative().optional(),
 });
 export type TaskAnalysisEstimate = z.infer<typeof TaskAnalysisEstimateSchema>;
 
@@ -152,7 +162,10 @@ export function buildTaskAnalysisPrompt(input: {
     "2. Rédige une analyse claire et concise : objectif, approche retenue, fichiers concernés, points de vigilance.",
     "3. NE MODIFIE AUCUN fichier à cette étape. L'exécution reprendra ensuite dans CETTE MÊME conversation.",
     "4. Termine impérativement ton message par un bloc ```json (et rien après) avec ton estimation :",
-    '   {"tokens": <entier>, "quotaPercent": <0-100>, "estimatedMinutes": <entier>, "confidence": "low|medium|high", "summary": "<justification en une phrase>"}',
+    '   {"tokens": <entier>, "quotaPercent": <0-100>, "estimatedMinutes": <entier>, "confidence": "low|medium|high", "summary": "<justification en une phrase>", "billingTitle": "<titre facturation, 5 mots max>", "billingDescription": "<description facturation, 3 lignes max>", "billingHours": <heures>}',
+    "   • billingTitle : libellé court et clair pour une facture client (5 mots maximum).",
+    "   • billingDescription : description concise du livrable pour la facture (3 lignes maximum, sans jargon).",
+    "   • billingHours : nombre d'heures qu'un développeur senior facturerait pour réaliser ce travail À LA MAIN (prix réel, décimales autorisées). Ce n'est PAS ton temps d'exécution d'agent (estimatedMinutes), mais l'effort humain équivalent.",
   ]
     .filter((line) => line !== "")
     .join("\n");

@@ -308,6 +308,8 @@ export const zhCN: TranslationResources = {
       expand: "展开面板",
       billing: "账单",
       billingLine: {
+        description: "描述",
+        manualHours: "资深开发工时",
         changeClient: "更改",
         added: "已添加到 {{number}}",
         addError: "无法将任务添加到文档。",
@@ -2262,6 +2264,10 @@ export const zhCN: TranslationResources = {
         failedDescription: "重新加载以重试。",
       },
       billing: {
+        rate: "每小时费率（CHF/h）",
+        ratePlaceholder: "130",
+        defaultDocument: "默认文档",
+        defaultDocumentNone: "无",
         linkedTo: "项目客户：{{name}}",
         title: "账单",
         info: "将此项目关联到客户，即可把其任务添加到报价或发票。",

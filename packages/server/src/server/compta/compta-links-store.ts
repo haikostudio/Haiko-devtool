@@ -16,6 +16,10 @@ import { writeJsonFileAtomic } from "../atomic-file.js";
 export interface ComptaProjectLinkRecord {
   clientId: string;
   companyId: string;
+  // Billable hourly rate for this project's task lines (CHF). Absent = default.
+  hourlyRateChf?: number;
+  // Default draft document new task lines pre-select.
+  defaultDocument?: { kind: "quote" | "invoice"; id: string };
 }
 
 interface LinksFile {

@@ -1100,6 +1100,15 @@ export const ComptaProjectLinkSetRequestSchema = z.object({
   projectId: z.string(),
   // Null clears the link.
   clientId: z.string().nullable(),
+  // Billable hourly rate for this project's tasks (CHF). Omitted = leave the
+  // stored rate untouched; null = reset to the default rate.
+  hourlyRateChf: z.number().positive().nullable().optional(),
+  // Default draft document new task lines land on. Omitted = leave untouched;
+  // null = clear the default.
+  defaultDocument: z
+    .object({ kind: z.enum(["quote", "invoice"]), id: z.string() })
+    .nullable()
+    .optional(),
   requestId: z.string(),
 });
 
@@ -1940,6 +1949,11 @@ export const ComptaProjectLinkSchema = z.object({
   companyId: z.string(),
   company: z.string(),
   currency: z.string(),
+  // Billable hourly rate for this project's task lines (CHF). Absent = the
+  // client should fall back to the default rate (130).
+  hourlyRateChf: z.number().positive().optional(),
+  // Default draft document new task lines land on, when still a draft.
+  defaultDocument: z.object({ kind: z.enum(["quote", "invoice"]), id: z.string() }).optional(),
 });
 
 // A draft quote/invoice a task line can be appended to.

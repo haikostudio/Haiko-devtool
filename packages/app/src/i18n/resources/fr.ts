@@ -312,6 +312,8 @@ export const fr: TranslationResources = {
       expand: "Développer le panneau",
       billing: "Facturation",
       billingLine: {
+        description: "Description",
+        manualHours: "Heures dev senior",
         changeClient: "Changer",
         added: "Ajouté à {{number}}",
         addError: "Impossible d'ajouter la tâche au document.",
@@ -2339,6 +2341,10 @@ export const fr: TranslationResources = {
         failedDescription: "Rechargez pour réessayer.",
       },
       billing: {
+        rate: "Taux horaire (CHF/h)",
+        ratePlaceholder: "130",
+        defaultDocument: "Document par défaut",
+        defaultDocumentNone: "Aucun",
         linkedTo: "Client du projet : {{name}}",
         title: "Facturation",
         info: "Associe ce projet à un client pour ajouter ses tâches à une offre ou une facture.",

@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ComptaClient, ComptaProjectLink } from "@getpaseo/protocol/messages";
+import type {
+  ComptaClient,
+  ComptaDocumentRef,
+  ComptaProjectLink,
+} from "@getpaseo/protocol/messages";
+import { FormTextInput } from "@/components/ui/form-field";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -8,12 +13,19 @@ import { SettingsGroup } from "@/screens/settings/settings-group";
 import { SettingsSection } from "@/screens/settings/settings-section";
 
 const UNLINKED = "__none__";
+const NO_DOCUMENT = "__no_document__";
+
+// Pack/unpack the pinned document into a single select value ("kind:id").
+function documentValue(doc: { kind: string; id: string }): string {
+  return `${doc.kind}:${doc.id}`;
+}
 
 /**
- * Links a Paseo project to a billing client on the accounting instance. The
- * mapping lives daemon-side (not in the repo), so this reads/writes it over the
- * compta RPCs directly rather than through the project's paseo.yaml draft.
- * Rendered only when the host advertises the `comptaBilling` capability.
+ * Links a Paseo project to a billing client on the accounting instance and,
+ * once linked, lets the user set the project's hourly rate and pin a default
+ * draft document task lines land on. The mapping lives daemon-side (not in the
+ * repo), so this reads/writes it over the compta RPCs directly. Rendered only
+ * when the host advertises the `comptaBilling` capability.
  */
 export function ProjectBillingSection({
   serverId,
@@ -27,9 +39,27 @@ export function ProjectBillingSection({
   const client = useHostRuntimeClient(serverId);
   const [clients, setClients] = useState<ComptaClient[]>([]);
   const [link, setLink] = useState<ComptaProjectLink | null>(null);
+  const [documents, setDocuments] = useState<ComptaDocumentRef[]>([]);
+  const [rateDraft, setRateDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Draft quotes/invoices for the linked client (the pin candidates).
+  const loadDocuments = useCallback(
+    async (clientId: string | null) => {
+      if (!client || !clientId) {
+        setDocuments([]);
+        return;
+      }
+      try {
+        setDocuments(await client.listComptaDraftDocuments(clientId));
+      } catch {
+        setDocuments([]);
+      }
+    },
+    [client],
+  );
 
   useEffect(() => {
     if (!supported || !client) {
@@ -43,11 +73,14 @@ export function ProjectBillingSection({
           client.listComptaClients(),
           client.getComptaProjectLink(projectId),
         ]);
-        if (!cancelled) {
-          setClients(fetchedClients);
-          setLink(fetchedLink);
-          setError(null);
+        if (cancelled) {
+          return;
         }
+        setClients(fetchedClients);
+        setLink(fetchedLink);
+        setRateDraft(fetchedLink?.hourlyRateChf ? String(fetchedLink.hourlyRateChf) : "");
+        setError(null);
+        await loadDocuments(fetchedLink?.clientId ?? null);
       } catch (err) {
         if (!cancelled) {
           const reason = err instanceof Error ? err.message.trim() : "";
@@ -66,10 +99,10 @@ export function ProjectBillingSection({
     return () => {
       cancelled = true;
     };
-  }, [supported, client, projectId, t]);
+  }, [supported, client, projectId, t, loadDocuments]);
 
-  const options = useMemo<SelectFieldOption<string>[]>(() => {
-    const clientOptions = clients.map((entry) => ({
+  const clientOptions = useMemo<SelectFieldOption<string>[]>(() => {
+    const entries = clients.map((entry) => ({
       id: entry.id,
       value: entry.id,
       label: entry.name,
@@ -77,11 +110,11 @@ export function ProjectBillingSection({
     }));
     return [
       { id: UNLINKED, value: UNLINKED, label: t("settings.project.billing.none") },
-      ...clientOptions,
+      ...entries,
     ];
   }, [clients, t]);
 
-  const handleChange = useCallback(
+  const handleClientChange = useCallback(
     (value: string) => {
       if (!client) {
         return;
@@ -92,6 +125,8 @@ export function ProjectBillingSection({
         try {
           const updated = await client.setComptaProjectLink({ projectId, clientId: nextClientId });
           setLink(updated);
+          setRateDraft(updated?.hourlyRateChf ? String(updated.hourlyRateChf) : "");
+          await loadDocuments(updated?.clientId ?? null);
           setError(null);
         } catch {
           setError(t("settings.project.billing.saveError"));
@@ -100,16 +135,103 @@ export function ProjectBillingSection({
         }
       })();
     },
-    [client, projectId, t],
+    [client, projectId, t, loadDocuments],
   );
 
-  const selectedDisplay = useMemo(
+  // Commit the rate on blur: empty resets to the default, a valid positive
+  // number sets it, anything else reverts the field to the stored value.
+  const handleRateCommit = useCallback(() => {
+    if (!client || !link) {
+      return;
+    }
+    const trimmed = rateDraft.trim().replace(",", ".");
+    const parsed = trimmed === "" ? null : Number(trimmed);
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) {
+      setRateDraft(link.hourlyRateChf ? String(link.hourlyRateChf) : "");
+      return;
+    }
+    if ((parsed ?? undefined) === link.hourlyRateChf) {
+      return;
+    }
+    setSaving(true);
+    void (async () => {
+      try {
+        const updated = await client.setComptaProjectLink({
+          projectId,
+          clientId: link.clientId,
+          hourlyRateChf: parsed,
+        });
+        setLink(updated);
+        setRateDraft(updated?.hourlyRateChf ? String(updated.hourlyRateChf) : "");
+        setError(null);
+      } catch {
+        setError(t("settings.project.billing.saveError"));
+      } finally {
+        setSaving(false);
+      }
+    })();
+  }, [client, link, rateDraft, projectId, t]);
+
+  const documentOptions = useMemo<SelectFieldOption<string>[]>(() => {
+    const entries = documents.map((doc) => ({
+      id: `${doc.kind}-${doc.id}`,
+      value: documentValue(doc),
+      label: `${doc.number}${doc.title ? ` · ${doc.title}` : ""}`,
+    }));
+    return [
+      {
+        id: NO_DOCUMENT,
+        value: NO_DOCUMENT,
+        label: t("settings.project.billing.defaultDocumentNone"),
+      },
+      ...entries,
+    ];
+  }, [documents, t]);
+
+  const handleDocumentChange = useCallback(
+    (value: string) => {
+      if (!client || !link) {
+        return;
+      }
+      const nextDoc =
+        value === NO_DOCUMENT
+          ? null
+          : (documents.find((doc) => documentValue(doc) === value) ?? null);
+      setSaving(true);
+      void (async () => {
+        try {
+          const updated = await client.setComptaProjectLink({
+            projectId,
+            clientId: link.clientId,
+            defaultDocument: nextDoc ? { kind: nextDoc.kind, id: nextDoc.id } : null,
+          });
+          setLink(updated);
+          setError(null);
+        } catch {
+          setError(t("settings.project.billing.saveError"));
+        } finally {
+          setSaving(false);
+        }
+      })();
+    },
+    [client, link, documents, projectId, t],
+  );
+
+  const selectedClientDisplay = useMemo(
     () =>
       link
         ? { label: link.clientName, description: link.company }
         : { label: t("settings.project.billing.none") },
     [link, t],
   );
+
+  const selectedDocument = link?.defaultDocument
+    ? documentValue(link.defaultDocument)
+    : NO_DOCUMENT;
+  const selectedDocumentDisplay = useMemo(() => {
+    const match = documentOptions.find((option) => option.value === selectedDocument);
+    return { label: match?.label ?? t("settings.project.billing.defaultDocumentNone") };
+  }, [documentOptions, selectedDocument, t]);
 
   if (!supported) {
     return null;
@@ -121,23 +243,52 @@ export function ProjectBillingSection({
       info={t("settings.project.billing.info")}
       testID="billing-group"
     >
-      <SettingsSection
-        title={t("settings.project.billing.client")}
-        testID="billing-client-section"
-        flush
-      >
+      <SettingsSection title={t("settings.project.billing.client")} testID="billing-client-section">
         <SelectField
           title={t("settings.project.billing.client")}
           value={link ? link.clientId : UNLINKED}
-          selectedDisplay={selectedDisplay}
-          options={options}
-          onChange={handleChange}
+          selectedDisplay={selectedClientDisplay}
+          options={clientOptions}
+          onChange={handleClientChange}
           placeholder={t("settings.project.billing.selectClient")}
           emptyText={t("settings.project.billing.noClients")}
           loading={loading || saving}
           hint={error ?? undefined}
         />
       </SettingsSection>
+
+      {link ? (
+        <>
+          <SettingsSection title={t("settings.project.billing.rate")} testID="billing-rate-section">
+            <FormTextInput
+              value={rateDraft}
+              onChangeText={setRateDraft}
+              onBlur={handleRateCommit}
+              keyboardType="numeric"
+              placeholder={t("settings.project.billing.ratePlaceholder")}
+              editable={!saving}
+              testID="billing-rate-input"
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title={t("settings.project.billing.defaultDocument")}
+            testID="billing-default-document-section"
+            flush
+          >
+            <SelectField
+              title={t("settings.project.billing.defaultDocument")}
+              value={selectedDocument}
+              selectedDisplay={selectedDocumentDisplay}
+              options={documentOptions}
+              onChange={handleDocumentChange}
+              placeholder={t("settings.project.billing.defaultDocumentNone")}
+              emptyText={t("settings.project.billing.defaultDocumentNone")}
+              loading={loading || saving}
+            />
+          </SettingsSection>
+        </>
+      ) : null}
     </SettingsGroup>
   );
 }

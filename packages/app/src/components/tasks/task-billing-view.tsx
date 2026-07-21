@@ -15,19 +15,52 @@ import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   BILLABLE_HOURLY_RATE_CHF,
-  computeBillableCostChf,
+  computeManualBillingChf,
   formatChf,
 } from "@/components/tasks/task-cost";
+
+// Invoice title stays short (<= 5 words); fall back to the task title trimmed.
+function toShortTitle(source: string): string {
+  return source.trim().split(/\s+/).slice(0, 5).join(" ");
+}
+
+// Invoice description stays short (<= 3 lines); fall back to the task's own.
+function toShortDescription(source: string): string {
+  return source.trim().split(/\r?\n/).slice(0, 3).join("\n");
+}
+
+interface TaskBilling {
+  billingHours: number | undefined;
+  hasBilling: boolean;
+  billingTitle: string;
+  billingDescription: string;
+}
+
+// Resolves the invoice line the analysis agent produced (senior-dev hours +
+// short title/description), falling back to the task's own fields when the
+// agent omitted them. Kept out of the component to keep its complexity down.
+function resolveTaskBilling(task: KanbanTask): TaskBilling {
+  const estimate = task.estimate;
+  const billingHours = estimate?.billingHours;
+  const description = task.description?.trim() ? toShortDescription(task.description) : "";
+  return {
+    billingHours,
+    hasBilling: billingHours !== undefined && billingHours > 0,
+    billingTitle: estimate?.billingTitle?.trim() || toShortTitle(task.title),
+    billingDescription: estimate?.billingDescription?.trim() || description,
+  };
+}
 
 const ThemedReceipt = withUnistyles(Receipt);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 /**
  * "Facturation" tab of the task drawer: presents the task as the billable line
- * it would become on an invoice — label (task title), estimated time, hourly
- * rate and the resulting amount — and, when the project is linked to a billing
- * client, lets the user add that line to a draft quote/invoice. The write goes
- * through the daemon's certified compta script; nothing is computed here.
+ * it would become on an invoice — the analysis agent's short title, short
+ * description, senior-developer hours (the real price, not the agent runtime),
+ * the project's hourly rate and the resulting amount — and, when the project is
+ * linked to a billing client, lets the user add that line to a draft
+ * quote/invoice. The write goes through the daemon's certified compta script.
  */
 export function TaskBillingView({
   task,
@@ -40,8 +73,9 @@ export function TaskBillingView({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const minutes = task.estimate?.estimatedMinutes;
-  const hasBilling = minutes !== undefined && minutes > 0;
+  // Billing lens produced by the analysis agent: senior-dev hours (the real
+  // price, not the agent's runtime), a short invoice title and description.
+  const { billingHours, hasBilling, billingTitle, billingDescription } = resolveTaskBilling(task);
   const billingSupported = useHostFeature(serverId, "comptaBilling");
   const client = useHostRuntimeClient(serverId ?? "");
   const [link, setLink] = useState<ComptaProjectLink | null>(null);
@@ -74,14 +108,16 @@ export function TaskBillingView({
   const handleCloseAdd = useCallback(() => setAddOpen(false), []);
   const handleOpenPicker = useCallback(() => setPickerOpen(true), []);
   const handleClosePicker = useCallback(() => setPickerOpen(false), []);
+  // Project rate wins; fall back to the reference 130 CHF/h when unset.
+  const rateChf = link?.hourlyRateChf ?? BILLABLE_HOURLY_RATE_CHF;
   const billingLine = useMemo(
     () => ({
-      title: task.title,
-      description: task.description?.trim() ? task.description.trim() : undefined,
-      hours: (minutes ?? 0) / 60,
-      unitPrice: BILLABLE_HOURLY_RATE_CHF,
+      title: billingTitle,
+      description: billingDescription || undefined,
+      hours: billingHours ?? 0,
+      unitPrice: rateChf,
     }),
-    [task.title, task.description, minutes],
+    [billingTitle, billingDescription, billingHours, rateChf],
   );
 
   // Effective client for this task: manual pick wins over the project default.
@@ -126,8 +162,10 @@ export function TaskBillingView({
     [link, client, projectId, toast, t],
   );
 
-  const amount = hasBilling ? formatChf(computeBillableCostChf(minutes)) : "—";
-  const rateValue = `${BILLABLE_HOURLY_RATE_CHF} CHF/h`;
+  const hours = billingHours ?? 0;
+  const amount = hasBilling ? formatChf(computeManualBillingChf(hours, rateChf)) : "—";
+  const rateValue = `${rateChf} CHF/h`;
+  const hoursValue = hasBilling ? formatHours(hours) : "—";
 
   const renderAction = () => {
     if (!billingSupported) {
@@ -169,11 +207,11 @@ export function TaskBillingView({
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("tasks.panel.billingLine.title")}</Text>
-        <Row label={t("tasks.panel.billingLine.label")} value={task.title} />
-        <Row
-          label={t("tasks.panel.billingLine.time")}
-          value={hasBilling ? formatDuration(minutes) : "—"}
-        />
+        <Row label={t("tasks.panel.billingLine.label")} value={billingTitle} />
+        {billingDescription ? (
+          <Row label={t("tasks.panel.billingLine.description")} value={billingDescription} />
+        ) : null}
+        <Row label={t("tasks.panel.billingLine.manualHours")} value={hoursValue} />
         <Row label={t("tasks.panel.billingLine.rate")} value={rateValue} />
         <View style={styles.divider} />
         <Row label={t("tasks.panel.billingLine.amount")} value={amount} emphasized />
@@ -206,8 +244,11 @@ export function TaskBillingView({
           onClose={handleCloseAdd}
           serverId={serverId}
           clientId={effectiveClient.id}
-          documentTitle={task.title}
+          documentTitle={billingTitle}
           line={billingLine}
+          defaultDocument={
+            effectiveClient.id === link?.clientId ? (link?.defaultDocument ?? null) : null
+          }
         />
       ) : null}
     </ScrollView>
@@ -225,14 +266,10 @@ function Row({ label, value, emphasized }: { label: string; value: string; empha
   );
 }
 
-// Minutes → "Xh Ymin" (drops the hour part below 60, drops minutes when round).
-function formatDuration(minutes: number): string {
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+// Hours → "X h" with at most one decimal (e.g. "2 h", "1.5 h").
+function formatHours(hours: number): string {
+  const rounded = Math.round(hours * 10) / 10;
+  return `${rounded} h`;
 }
 
 const styles = StyleSheet.create((theme) => ({

@@ -143,7 +143,7 @@ import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
 import type { UsageStatsStore } from "./stats/usage-stats-store.js";
-import type { ComptaLinksStore } from "./compta/compta-links-store.js";
+import type { ComptaLinksStore, ComptaProjectLinkRecord } from "./compta/compta-links-store.js";
 import type { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import { wrapSpokenInput } from "./voice-config.js";
 import { isVoicePermissionAllowed } from "./voice-permission-policy.js";
@@ -1843,7 +1843,7 @@ export class Session {
       case "compta.project.link.get.request":
         return this.handleComptaProjectLinkGetRequest(msg.projectId, msg.requestId);
       case "compta.project.link.set.request":
-        return this.handleComptaProjectLinkSetRequest(msg.projectId, msg.clientId, msg.requestId);
+        return this.handleComptaProjectLinkSetRequest(msg);
       case "compta.documents.list.request":
         return this.handleComptaDocumentsListRequest(msg.clientId, msg.requestId);
       case "compta.task.add.request":
@@ -2912,7 +2912,7 @@ export class Session {
   // The link store keeps only ids; re-resolve the human labels from the live
   // client list so a renamed client shows correctly without a migration.
   private async resolveProjectLink(
-    record: { clientId: string; companyId: string } | null,
+    record: ComptaProjectLinkRecord | null,
   ): Promise<ComptaProjectLink | null> {
     if (!record || !this.comptaSummaryService) {
       return null;
@@ -2928,6 +2928,8 @@ export class Session {
       companyId: match.companyId,
       company: match.company,
       currency: match.currency,
+      ...(record.hourlyRateChf !== undefined ? { hourlyRateChf: record.hourlyRateChf } : {}),
+      ...(record.defaultDocument ? { defaultDocument: record.defaultDocument } : {}),
     };
   }
 
@@ -2960,10 +2962,9 @@ export class Session {
   }
 
   private async handleComptaProjectLinkSetRequest(
-    projectId: string,
-    clientId: string | null,
-    requestId: string,
+    msg: Extract<SessionInboundMessage, { type: "compta.project.link.set.request" }>,
   ): Promise<void> {
+    const { projectId, clientId, requestId } = msg;
     try {
       if (!this.comptaLinksStore || !this.comptaSummaryService) {
         throw new Error("Compta billing is not available on this daemon");
@@ -2980,8 +2981,23 @@ export class Session {
       if (!companyId) {
         throw new Error("Unknown billing client");
       }
-      await this.comptaLinksStore.set(projectId, { clientId, companyId });
-      const link = await this.resolveProjectLink({ clientId, companyId });
+      // Merge with the stored record so a rate-only or default-doc-only update
+      // never wipes the other field. undefined = keep; null = clear.
+      const existing = await this.comptaLinksStore.get(projectId);
+      const keepRate = existing?.clientId === clientId ? existing.hourlyRateChf : undefined;
+      const keepDoc = existing?.clientId === clientId ? existing.defaultDocument : undefined;
+      const hourlyRateChf =
+        msg.hourlyRateChf === undefined ? keepRate : (msg.hourlyRateChf ?? undefined);
+      const defaultDocument =
+        msg.defaultDocument === undefined ? keepDoc : (msg.defaultDocument ?? undefined);
+      const record: ComptaProjectLinkRecord = {
+        clientId,
+        companyId,
+        ...(hourlyRateChf !== undefined ? { hourlyRateChf } : {}),
+        ...(defaultDocument ? { defaultDocument } : {}),
+      };
+      await this.comptaLinksStore.set(projectId, record);
+      const link = await this.resolveProjectLink(record);
       this.emit({
         type: "compta.project.link.set.response",
         payload: { link, success: true, error: null, requestId },

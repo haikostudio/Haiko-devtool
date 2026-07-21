@@ -24,6 +24,15 @@ export const TaskEstimateSchema = z.object({
   summary: z.string().optional(),
   // Estimated active agent runtime in minutes.
   estimatedMinutes: z.number().int().nonnegative().optional(),
+  // Billing lens, produced by the analysis agent for the Facturation tab.
+  // These describe the human deliverable, not the agent run:
+  //  - billingTitle: short invoice label (<= 5 words).
+  //  - billingDescription: short invoice description (<= 3 lines).
+  //  - billingHours: effort a senior developer would bill by hand (real price,
+  //    NOT the agent's runtime), in hours (decimals allowed).
+  billingTitle: z.string().optional(),
+  billingDescription: z.string().optional(),
+  billingHours: z.number().nonnegative().optional(),
 });
 export type TaskEstimate = z.infer<typeof TaskEstimateSchema>;
 

@@ -2207,7 +2207,14 @@ export class DaemonClient {
   }
 
   async setComptaProjectLink(
-    input: { projectId: string; clientId: string | null },
+    input: {
+      projectId: string;
+      clientId: string | null;
+      // undefined = leave stored rate untouched; null = reset to default.
+      hourlyRateChf?: number | null;
+      // undefined = leave untouched; null = clear the default document.
+      defaultDocument?: { kind: "quote" | "invoice"; id: string } | null;
+    },
     requestId?: string,
   ): Promise<ComptaProjectLink | null> {
     return this.sendNamespacedCorrelatedSessionRequest<
@@ -2219,6 +2226,8 @@ export class DaemonClient {
         type: "compta.project.link.set.request",
         projectId: input.projectId,
         clientId: input.clientId,
+        ...(input.hourlyRateChf !== undefined ? { hourlyRateChf: input.hourlyRateChf } : {}),
+        ...(input.defaultDocument !== undefined ? { defaultDocument: input.defaultDocument } : {}),
       },
       selectPayload: (payload) => payload.link ?? null,
     });

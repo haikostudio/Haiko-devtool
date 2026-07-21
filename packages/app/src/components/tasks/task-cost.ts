@@ -118,6 +118,18 @@ export function computeBillableCostChf(minutes: number): number {
   return (minutes / 60) * BILLABLE_HOURLY_RATE_CHF;
 }
 
+/**
+ * Real (manual) billing amount for a task line: the senior-developer hours the
+ * analysis agent estimated, times the project's configured rate. This is the
+ * "prix réel" lens — distinct from the agent-runtime cost above.
+ */
+export function computeManualBillingChf(
+  hours: number,
+  rateChf: number = BILLABLE_HOURLY_RATE_CHF,
+): number {
+  return hours * rateChf;
+}
+
 export function formatChf(amount: number): string {
   const rounded = amount >= 10 ? Math.round(amount) : Math.round(amount * 10) / 10;
   return `${rounded} CHF`;

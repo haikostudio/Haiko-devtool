@@ -311,6 +311,8 @@ export const ja: TranslationResources = {
       expand: "パネルを展開",
       billing: "請求",
       billingLine: {
+        description: "説明",
+        manualHours: "シニア開発者の工数",
         changeClient: "変更",
         added: "{{number}} に追加しました",
         addError: "タスクを書類に追加できませんでした。",
@@ -2308,6 +2310,10 @@ export const ja: TranslationResources = {
         failedDescription: "再読み込みして再試行してください。",
       },
       billing: {
+        rate: "時給（CHF/h）",
+        ratePlaceholder: "130",
+        defaultDocument: "デフォルトの書類",
+        defaultDocumentNone: "なし",
         linkedTo: "プロジェクトのクライアント：{{name}}",
         title: "請求",
         info: "このプロジェクトを顧客に紐付けると、タスクを見積書や請求書に追加できます。",
