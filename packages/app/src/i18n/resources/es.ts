@@ -331,6 +331,13 @@ export const es: TranslationResources = {
           "Aún no hay estimación. Ejecuta el análisis de la tarea para calcular tiempo y coste.",
       },
     },
+    conductor: {
+      title: "Director",
+      move: "Mover el panel",
+      noProject: "Selecciona primero un proyecto.",
+      noHost: "El host no está conectado.",
+      failed: "No se pudo iniciar el director.",
+    },
     pickProject: "Elige un proyecto",
     noProjects: "No hay proyectos disponibles — conecta un host primero.",
     allProjects: "Todos los proyectos",

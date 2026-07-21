@@ -7,6 +7,7 @@ import {
 } from "@getpaseo/protocol/agent-lifecycle";
 import {
   getParentAgentIdFromLabels,
+  isConductorAgent,
   isDelegatedAgent,
   PARENT_AGENT_ID_LABEL,
 } from "@getpaseo/protocol/agent-labels";
@@ -898,9 +899,16 @@ export class AgentManager {
   }
 
   listAgents(): ManagedAgent[] {
-    return Array.from(this.agents.values())
-      .filter((agent) => !agent.internal)
-      .map((agent) => Object.assign({}, agent));
+    return (
+      Array.from(this.agents.values())
+        .filter((agent) => !agent.internal)
+        // The persistent per-project conductor is a normal (non-internal)
+        // persisted agent so it survives restarts, but it must never surface as a
+        // browsable tab/agent card. The conductor panel subscribes to it directly
+        // by agentId instead.
+        .filter((agent) => !isConductorAgent(agent))
+        .map((agent) => Object.assign({}, agent))
+    );
   }
 
   async listImportableSessions(

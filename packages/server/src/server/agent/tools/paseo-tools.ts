@@ -2991,6 +2991,79 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         };
       },
     );
+
+    registerTool(
+      "move_task",
+      {
+        title: "Move task",
+        description:
+          "Move a kanban task to a different column and position. Columns: backlog, validated, scheduled, in_progress, done.",
+        inputSchema: {
+          projectId: z.string(),
+          taskId: z.string(),
+          column: z.enum(["backlog", "validated", "scheduled", "in_progress", "done"]),
+          index: z.number().int().min(0).optional(),
+        },
+        outputSchema: { success: z.boolean() },
+      },
+      async (args: {
+        projectId: string;
+        taskId: string;
+        column: "backlog" | "validated" | "scheduled" | "in_progress" | "done";
+        index?: number;
+      }) => {
+        await taskBoardService.moveTask(args.projectId, {
+          taskId: args.taskId,
+          column: args.column,
+          index: args.index ?? 0,
+          manual: true,
+        });
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ success: true }),
+        };
+      },
+    );
+
+    registerTool(
+      "delete_task",
+      {
+        title: "Delete task",
+        description: "Delete a kanban task from a project's board.",
+        inputSchema: {
+          projectId: z.string(),
+          taskId: z.string(),
+        },
+        outputSchema: { success: z.boolean() },
+      },
+      async (args: { projectId: string; taskId: string }) => {
+        await taskBoardService.deleteTask(args.projectId, args.taskId);
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ success: true }),
+        };
+      },
+    );
+
+    registerTool(
+      "delete_task_folder",
+      {
+        title: "Delete task folder",
+        description: "Delete a folder from a project's board. Tasks inside the folder are removed.",
+        inputSchema: {
+          projectId: z.string(),
+          folderId: z.string(),
+        },
+        outputSchema: { success: z.boolean() },
+      },
+      async (args: { projectId: string; folderId: string }) => {
+        await taskBoardService.deleteFolder(args.projectId, args.folderId);
+        return {
+          content: [],
+          structuredContent: ensureValidJson({ success: true }),
+        };
+      },
+    );
   }
 
   return toCatalog();

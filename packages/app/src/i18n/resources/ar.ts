@@ -325,6 +325,13 @@ export const ar: TranslationResources = {
         noEstimate: "لا يوجد تقدير بعد. شغِّل تحليل المهمة لحساب الوقت والتكلفة.",
       },
     },
+    conductor: {
+      title: "قائد الأوركسترا",
+      move: "تحريك اللوحة",
+      noProject: "اختر مشروعًا أولًا.",
+      noHost: "المضيف غير متصل.",
+      failed: "تعذّر بدء قائد الأوركسترا.",
+    },
     pickProject: "اختر مشروعًا",
     noProjects: "لا توجد مشاريع متاحة — صِل مضيفًا أولاً.",
     allProjects: "كل المشاريع",

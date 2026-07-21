@@ -120,6 +120,12 @@ export const TasksTaskApproveRequestSchema = z.object({
   taskId: z.string(),
 });
 
+export const TasksConductorEnsureRequestSchema = z.object({
+  type: z.literal("tasks.conductor.ensure.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+});
+
 export const TasksBoardGetResponseSchema = z.object({
   type: z.literal("tasks.board.get.response"),
   payload: z.object({
@@ -228,6 +234,16 @@ export const TasksTaskApproveResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     task: KanbanTaskSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksConductorEnsureResponseSchema = z.object({
+  type: z.literal("tasks.conductor.ensure.response"),
+  payload: z.object({
+    requestId: z.string(),
+    agentId: z.string().nullable(),
+    workspaceId: z.string().nullable(),
     error: z.string().nullable(),
   }),
 });

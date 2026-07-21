@@ -21,6 +21,13 @@ export interface PaseoDeployStatus {
   hasPending: boolean;
   uncommittedFiles: PaseoDeployPendingFile[];
   unshippedCommits: PaseoDeployPendingCommit[];
+  /**
+   * Real number of distinct files that differ from what's currently live —
+   * committed-but-unshipped, uncommitted, and new files all counted once. This
+   * stays honest when work gets grouped into a few commits (a 60-file change is
+   * still "60 changes", not "3 commits").
+   */
+  changesCount: number;
   headSha: string | null;
   deployedSha: string | null;
   branch: string | null;

@@ -136,6 +136,7 @@ import { AgentTaskSyncService } from "./tasks/agent-sync.js";
 import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { MessageTriage } from "./tasks/message-triage.js";
+import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
 import { ProjectBriefStore } from "../services/brain-memory/project-brief.js";
@@ -1326,6 +1327,14 @@ export async function createPaseoDaemon(
         logger,
       })
     : null;
+  // Persistent per-project "Chef d'orchestre" agent: manages the board via the
+  // paseo task tools and survives restarts (persisted, discovered by label).
+  const conductorService = new ConductorAgentService({
+    createAgent,
+    agentStorage,
+    projectRegistry,
+    logger,
+  });
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");
   logger.info({ elapsed: elapsed() }, "Loading persisted agent registry");
@@ -1640,6 +1649,7 @@ export async function createPaseoDaemon(
               taskBoardService,
               taskEstimator,
               taskScheduler,
+              conductorService,
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);

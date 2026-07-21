@@ -324,6 +324,13 @@ export const en = {
         noEstimate: "No estimate yet. Run the task analysis to compute time and cost.",
       },
     },
+    conductor: {
+      title: "Conductor",
+      move: "Move panel",
+      noProject: "Select a project first.",
+      noHost: "Host is not connected.",
+      failed: "Couldn't start the conductor.",
+    },
     pickProject: "Choose a project",
     noProjects: "No projects available — connect a host first.",
     allProjects: "All projects",

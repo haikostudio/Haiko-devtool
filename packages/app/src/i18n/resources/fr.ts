@@ -331,6 +331,13 @@ export const fr: TranslationResources = {
           "Pas encore d'estimation. Lancez l'analyse de la tâche pour calculer le temps et le coût.",
       },
     },
+    conductor: {
+      title: "Chef d'orchestre",
+      move: "Déplacer le panneau",
+      noProject: "Sélectionnez d'abord un projet.",
+      noHost: "L'hôte n'est pas connecté.",
+      failed: "Impossible de démarrer le chef d'orchestre.",
+    },
     pickProject: "Choisir un projet",
     noProjects: "Aucun projet disponible — connectez d'abord un hôte.",
     allProjects: "Tous les projets",

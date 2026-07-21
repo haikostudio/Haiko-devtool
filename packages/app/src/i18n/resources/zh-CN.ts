@@ -325,6 +325,13 @@ export const zhCN: TranslationResources = {
         noEstimate: "暂无估算。运行任务分析以计算时间和成本。",
       },
     },
+    conductor: {
+      title: "指挥",
+      move: "移动面板",
+      noProject: "请先选择一个项目。",
+      noHost: "主机未连接。",
+      failed: "无法启动指挥。",
+    },
     pickProject: "选择项目",
     noProjects: "暂无可用项目 — 请先连接主机。",
     allProjects: "所有项目",

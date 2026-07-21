@@ -331,6 +331,13 @@ export const ptBR: TranslationResources = {
           "Ainda sem estimativa. Execute a análise da tarefa para calcular tempo e custo.",
       },
     },
+    conductor: {
+      title: "Maestro",
+      move: "Mover o painel",
+      noProject: "Selecione um projeto primeiro.",
+      noHost: "O host não está conectado.",
+      failed: "Não foi possível iniciar o maestro.",
+    },
     pickProject: "Escolha um projeto",
     noProjects: "Nenhum projeto disponível — conecte um host primeiro.",
     allProjects: "Todos os projetos",

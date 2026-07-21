@@ -1,7 +1,18 @@
 export const PARENT_AGENT_ID_LABEL = "paseo.parent-agent-id";
 
+// Marks the persistent per-project "Chef d'orchestre" (conductor) agent. Used
+// both to discover the existing conductor across restarts and to keep it out of
+// the normal workspace tab/agent listings.
+export const CONDUCTOR_ROLE_LABEL = "paseo.role";
+export const CONDUCTOR_ROLE_VALUE = "conductor";
+export const CONDUCTOR_PROJECT_ID_LABEL = "paseo.conductor-project-id";
+
 export interface AgentLabelSource {
   labels?: Record<string, unknown> | null;
+}
+
+export function isConductorAgent(agent: AgentLabelSource): boolean {
+  return agent.labels?.[CONDUCTOR_ROLE_LABEL] === CONDUCTOR_ROLE_VALUE;
 }
 
 export function getParentAgentIdFromLabels(labels: Record<string, unknown> | null | undefined) {

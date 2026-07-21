@@ -3,6 +3,7 @@ import type { SessionInboundMessage, SessionOutboundMessage } from "../../messag
 import { TaskBoardServiceError, type TaskBoardService } from "../../tasks/service.js";
 import type { TaskEstimator } from "../../tasks/estimator.js";
 import type { TaskScheduler } from "../../tasks/scheduler.js";
+import type { ConductorAgentService } from "../../tasks/conductor-agent.js";
 
 export interface TasksSessionHost {
   emit(msg: SessionOutboundMessage): void;
@@ -13,6 +14,7 @@ export interface TasksSessionOptions {
   taskBoardService: TaskBoardService;
   taskEstimator: TaskEstimator | null;
   taskScheduler: TaskScheduler | null;
+  conductorService: ConductorAgentService | null;
   logger: pino.Logger;
 }
 
@@ -25,6 +27,7 @@ export class TasksSession {
   private readonly taskBoardService: TaskBoardService;
   private readonly taskEstimator: TaskEstimator | null;
   private readonly taskScheduler: TaskScheduler | null;
+  private readonly conductorService: ConductorAgentService | null;
   private readonly logger: pino.Logger;
   private readonly subscriptions = new Map<string, () => void>();
 
@@ -33,6 +36,7 @@ export class TasksSession {
     this.taskBoardService = options.taskBoardService;
     this.taskEstimator = options.taskEstimator;
     this.taskScheduler = options.taskScheduler;
+    this.conductorService = options.conductorService;
     this.logger = options.logger;
   }
 
@@ -244,6 +248,33 @@ export class TasksSession {
       });
     } catch (error) {
       this.emitRpcError(request, error);
+    }
+  }
+
+  async handleConductorEnsureRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.conductor.ensure.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.conductorService) {
+        throw new TaskBoardServiceError(
+          "conductor_unavailable",
+          "Conductor service is not available",
+        );
+      }
+      const { agentId, workspaceId } = await this.conductorService.ensureConductorAgent(
+        request.projectId,
+      );
+      this.host.emit({
+        type: "tasks.conductor.ensure.response",
+        payload: { requestId: request.requestId, agentId, workspaceId, error: null },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: error }, "Conductor ensure request failed");
+      this.host.emit({
+        type: "tasks.conductor.ensure.response",
+        payload: { requestId: request.requestId, agentId: null, workspaceId: null, error: message },
+      });
     }
   }
 

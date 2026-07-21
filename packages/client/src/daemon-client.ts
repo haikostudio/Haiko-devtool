@@ -4591,6 +4591,13 @@ export class DaemonClient {
     });
   }
 
+  async tasksConductorEnsure(projectId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.conductor.ensure.response">({
+      requestId,
+      message: { type: "tasks.conductor.ensure.request", projectId },
+    });
+  }
+
   async listCommands(options: ListCommandsOptions): Promise<ListCommandsPayload>;
   async listCommands(agentId: string, requestId?: string): Promise<ListCommandsPayload>;
   async listCommands(

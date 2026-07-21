@@ -329,6 +329,13 @@ export const ja: TranslationResources = {
           "まだ見積もりがありません。タスク分析を実行して時間とコストを計算してください。",
       },
     },
+    conductor: {
+      title: "指揮者",
+      move: "パネルを移動",
+      noProject: "先にプロジェクトを選択してください。",
+      noHost: "ホストに接続されていません。",
+      failed: "指揮者を起動できませんでした。",
+    },
     pickProject: "プロジェクトを選択",
     noProjects: "利用可能なプロジェクトがありません — まずホストに接続してください。",
     allProjects: "すべてのプロジェクト",

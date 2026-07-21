@@ -23,6 +23,7 @@ import type { ComptaSummaryService } from "./compta/compta-summary-service.js";
 import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
+import type { ConductorAgentService } from "./tasks/conductor-agent.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
@@ -488,6 +489,7 @@ export class VoiceAssistantWebSocketServer {
   private taskBoardService: TaskBoardService | null = null;
   private taskEstimator: TaskEstimator | null = null;
   private taskScheduler: TaskScheduler | null = null;
+  private conductorService: ConductorAgentService | null = null;
   private activityLogService: ActivityLogService | null = null;
   private comptaSummaryService: ComptaSummaryService | null = null;
   private comptaLinksStore: ComptaLinksStore | null = null;
@@ -1105,6 +1107,7 @@ export class VoiceAssistantWebSocketServer {
       taskBoardService: this.taskBoardService ?? undefined,
       taskEstimator: this.taskEstimator,
       taskScheduler: this.taskScheduler,
+      conductorService: this.conductorService,
       activityLogService: this.activityLogService ?? undefined,
       comptaSummaryService: this.comptaSummaryService ?? undefined,
       comptaLinksStore: this.comptaLinksStore ?? undefined,
@@ -1292,11 +1295,13 @@ export class VoiceAssistantWebSocketServer {
     taskBoardService: TaskBoardService;
     taskEstimator: TaskEstimator | null;
     taskScheduler: TaskScheduler | null;
+    conductorService: ConductorAgentService | null;
     messageTriage: MessageTriage | null;
   }): void {
     this.taskBoardService = services.taskBoardService;
     this.taskEstimator = services.taskEstimator;
     this.taskScheduler = services.taskScheduler;
+    this.conductorService = services.conductorService;
     this.messageTriage = services.messageTriage;
   }
 
@@ -1388,6 +1393,8 @@ export class VoiceAssistantWebSocketServer {
         tasksRunConfig: !!this.taskBoardService,
         // COMPAT(tasksAutopilot): added in v0.1.111, drop the gate when floor >= v0.1.111.
         tasksAutopilot: !!this.taskBoardService,
+        // COMPAT(tasksConductor): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        tasksConductor: !!this.conductorService,
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: !!this.agentManager.getUsageStatsStore(),
         comptaSummary: !!this.comptaSummaryService,

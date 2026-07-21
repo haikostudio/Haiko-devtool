@@ -10,6 +10,7 @@ import {
   type TaskDetailSaveInput,
 } from "@/components/tasks/task-detail-sheet";
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
+import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import type { KanbanTask } from "@/data/tasks";
 import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -164,7 +165,9 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
         />
       </View>
 
-      <View style={styles.body}>{renderBody()}</View>
+      <EvolutionTaskProvider serverId={serverId} projectId={projectId} folderId={task.folderId}>
+        <View style={styles.body}>{renderBody()}</View>
+      </EvolutionTaskProvider>
     </View>
   );
 }

@@ -26,6 +26,7 @@ import {
   Plus,
   Settings2,
   Trash2,
+  Wand2,
   Zap,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -48,6 +49,7 @@ import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskAgentPanel } from "@/components/tasks/task-agent-panel";
+import { ConductorPanel } from "@/components/tasks/conductor-panel";
 import { CompactTaskAgentSheet } from "@/components/tasks/compact-task-agent-sheet";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
@@ -128,6 +130,7 @@ const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
 const ThemedZap = withUnistyles(Zap);
 const ThemedSettings = withUnistyles(Settings2);
+const ThemedWand = withUnistyles(Wand2);
 const ThemedGradientStop = withUnistyles(Stop);
 // The shadow is the theme foreground color (dark in light mode, light in dark
 // mode) so it stays visible against the header surface on both themes.
@@ -1186,7 +1189,47 @@ function BoardContent({
         onRunNow={handleRunTaskNow}
         onApprove={handleApproveTask}
       />
+      <ConductorDock serverId={serverId} projectId={projectId} />
     </TaskScheduleProvider>
+  );
+}
+
+// Bottom-center floating toggle + the conductor panel overlay. Gated on the
+// host feature flag; extracted from BoardContent to keep it under the
+// complexity budget and to co-locate the conductor's own store reads.
+function ConductorDock({
+  serverId,
+  projectId,
+}: {
+  serverId: string | null;
+  projectId: string | null;
+}) {
+  const { t } = useTranslation();
+  const supportsConductor = useHostFeature(serverId, "tasksConductor");
+  const conductorOpen = useTasksBoardUiStore((state) => state.conductorOpen);
+  const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
+  const handleClose = useCallback(() => setConductorOpen(false), [setConductorOpen]);
+  const handleOpen = useCallback(() => setConductorOpen(true), [setConductorOpen]);
+
+  if (!supportsConductor || !projectId) {
+    return null;
+  }
+  if (conductorOpen) {
+    return <ConductorPanel serverId={serverId} projectId={projectId} onClose={handleClose} />;
+  }
+  return (
+    <Pressable
+      onPress={handleOpen}
+      accessibilityRole="button"
+      accessibilityLabel={t("tasks.conductor.title")}
+      style={styles.conductorToggle}
+      testID="tasks-conductor-toggle"
+    >
+      <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      <Text style={styles.conductorToggleLabel} numberOfLines={1}>
+        {t("tasks.conductor.title")}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -1718,6 +1761,27 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface0,
+  },
+  // Floating toggle anchored bottom-center of the board area that opens the
+  // "Chef d'orchestre" conductor panel.
+  conductorToggle: {
+    position: "absolute",
+    bottom: theme.spacing[4],
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[2],
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  conductorToggleLabel: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
   },
   // --- Desktop three-pane layout ---
   desktopRow: {

@@ -55,6 +55,7 @@ import {
   TasksTaskEstimateRequestSchema,
   TasksTaskRunNowRequestSchema,
   TasksTaskApproveRequestSchema,
+  TasksConductorEnsureRequestSchema,
   TasksBoardGetResponseSchema,
   TasksBoardSubscribeResponseSchema,
   TasksBoardUnsubscribeResponseSchema,
@@ -68,6 +69,7 @@ import {
   TasksTaskEstimateResponseSchema,
   TasksTaskRunNowResponseSchema,
   TasksTaskApproveResponseSchema,
+  TasksConductorEnsureResponseSchema,
   TasksBoardUpdateMessageSchema,
 } from "./tasks/rpc-schemas.js";
 import {
@@ -2835,6 +2837,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskEstimateRequestSchema,
   TasksTaskRunNowRequestSchema,
   TasksTaskApproveRequestSchema,
+  TasksConductorEnsureRequestSchema,
   ActivityLogGetRequestSchema,
   ActivityLogSubscribeRequestSchema,
   ActivityLogUnsubscribeRequestSchema,
@@ -3058,6 +3061,8 @@ export const ServerInfoStatusPayloadSchema = z
         tasksRunConfig: z.boolean().optional(),
         // COMPAT(tasksAutopilot): added in v0.1.111, drop the gate when floor >= v0.1.111.
         tasksAutopilot: z.boolean().optional(),
+        // COMPAT(tasksConductor): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        tasksConductor: z.boolean().optional(),
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: z.boolean().optional(),
         // COMPAT(comptaSummary): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -5266,6 +5271,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskEstimateResponseSchema,
   TasksTaskRunNowResponseSchema,
   TasksTaskApproveResponseSchema,
+  TasksConductorEnsureResponseSchema,
   TasksBoardUpdateMessageSchema,
   ActivityLogGetResponseSchema,
   ActivityLogSubscribeResponseSchema,
