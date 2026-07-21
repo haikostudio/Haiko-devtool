@@ -65,6 +65,7 @@ import { RetainedPanel } from "@/components/retained-panel";
 import { WindowChromeRegion } from "@/utils/desktop-window";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { WorkspaceActions } from "@/git/workspace-actions";
+import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
@@ -1725,6 +1726,13 @@ function WorkspaceScreenContent({
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
+  // Paseo-only self-host deploy button: the Paseo repo itself, on a host that
+  // advertises the capability. Personal-fork feature; strings are French inline.
+  const paseoSelfhostDeploySupported = useSessionStore(
+    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeploy === true,
+  );
+  const showPaseoDeployButton =
+    paseoSelfhostDeploySupported && workspaceDirectory === "/root/paseo";
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
   const canOpenImportSheet = [client, isConnected, workspaceDirectory].every(Boolean);
   const openImportSheet = useCallback(() => {
@@ -3367,6 +3375,7 @@ function WorkspaceScreenContent({
               cwd={workspaceDirectory}
               hideLabels={showCompactButtonLabels}
             />
+            {showPaseoDeployButton ? <PaseoDeployButton serverId={normalizedServerId} /> : null}
             {isGitCheckout ? (
               <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
                 <TooltipTrigger asChild>
@@ -3474,6 +3483,7 @@ function WorkspaceScreenContent({
       handleViewScriptTerminal,
       handleOpenUrlInBrowserTab,
       showCompactButtonLabels,
+      showPaseoDeployButton,
       isGitCheckout,
       handleToggleExplorer,
       isExplorerOpen,

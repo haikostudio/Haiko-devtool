@@ -35,6 +35,8 @@ import type {
   CheckoutPullResponse,
   CheckoutPushResponse,
   CheckoutRefreshResponse,
+  PaseoDeployStatusResponse,
+  PaseoDeployTriggerResponse,
   CheckoutPrCreateResponse,
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
@@ -368,6 +370,8 @@ type CheckoutMergeFromBasePayload = CheckoutMergeFromBaseResponse["payload"];
 type CheckoutPullPayload = CheckoutPullResponse["payload"];
 type CheckoutPushPayload = CheckoutPushResponse["payload"];
 type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
+type PaseoDeployStatusPayload = PaseoDeployStatusResponse["payload"];
+type PaseoDeployTriggerPayload = PaseoDeployTriggerResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
 type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
@@ -3671,6 +3675,30 @@ export class DaemonClient {
         cwd,
       },
       responseType: "checkout.refresh.response",
+    });
+  }
+
+  async paseoDeployStatus(requestId?: string): Promise<PaseoDeployStatusPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.status.request",
+      },
+      responseType: "checkout.deploy.status.response",
+    });
+  }
+
+  async paseoDeployTrigger(
+    input?: { noBuild?: boolean },
+    requestId?: string,
+  ): Promise<PaseoDeployTriggerPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.trigger.request",
+        noBuild: input?.noBuild,
+      },
+      responseType: "checkout.deploy.trigger.response",
     });
   }
 

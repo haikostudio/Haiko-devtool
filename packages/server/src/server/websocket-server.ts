@@ -1398,6 +1398,8 @@ export class VoiceAssistantWebSocketServer {
         activityLog: !!this.activityLogService,
         // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
         turnRecap: true,
+        // COMPAT(paseoSelfhostDeploy): added in v0.1.108, custom fork feature (self-host deploy button).
+        paseoSelfhostDeploy: true,
       },
     };
   }

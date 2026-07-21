@@ -1755,6 +1755,10 @@ export class Session {
         return this.checkoutSession.handleStashPopRequest(msg);
       case "stash_list_request":
         return this.checkoutSession.handleStashListRequest(msg);
+      case "checkout.deploy.status.request":
+        return this.checkoutSession.handlePaseoDeployStatusRequest(msg);
+      case "checkout.deploy.trigger.request":
+        return this.checkoutSession.handlePaseoDeployTriggerRequest(msg);
       default:
         return undefined;
     }

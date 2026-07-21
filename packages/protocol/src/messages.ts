@@ -2206,6 +2206,20 @@ export const BranchSuggestionsRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Paseo self-host deploy (custom fork feature). Reports and triggers the
+// "publish the self-hosted web app" flow for the Paseo repo itself.
+export const PaseoDeployStatusRequestSchema = z.object({
+  type: z.literal("checkout.deploy.status.request"),
+  requestId: z.string(),
+});
+
+export const PaseoDeployTriggerRequestSchema = z.object({
+  type: z.literal("checkout.deploy.trigger.request"),
+  /** When true, commit + push only, skip the (costly) web rebuild. */
+  noBuild: z.boolean().optional(),
+  requestId: z.string(),
+});
+
 export const GitHubSearchItemSchema = z.object({
   kind: z.enum(["issue", "pr"]),
   number: z.number(),
@@ -2747,6 +2761,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   StashSaveRequestSchema,
   StashPopRequestSchema,
   StashListRequestSchema,
+  PaseoDeployStatusRequestSchema,
+  PaseoDeployTriggerRequestSchema,
   ValidateBranchRequestSchema,
   BranchSuggestionsRequestSchema,
   GitHubSearchRequestSchema,
@@ -3056,6 +3072,8 @@ export const ServerInfoStatusPayloadSchema = z
         activityLog: z.boolean().optional(),
         // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
         turnRecap: z.boolean().optional(),
+        // COMPAT(paseoSelfhostDeploy): added in v0.1.108, custom fork feature (self-host deploy button).
+        paseoSelfhostDeploy: z.boolean().optional(),
       })
       .optional(),
   })
@@ -4574,6 +4592,45 @@ export const ValidateBranchResponseSchema = z.object({
   }),
 });
 
+export const PaseoDeployPendingFileSchema = z.object({
+  path: z.string(),
+  status: z.string(),
+});
+
+export const PaseoDeployPendingCommitSchema = z.object({
+  sha: z.string(),
+  subject: z.string(),
+});
+
+export const PaseoDeployStatusResponseSchema = z.object({
+  type: z.literal("checkout.deploy.status.response"),
+  payload: z.object({
+    /** A ship (commit/push/build/deploy) is currently running. */
+    deploying: z.boolean(),
+    /** True when the live app differs from the current code (something to ship). */
+    hasPending: z.boolean(),
+    uncommittedFiles: z.array(PaseoDeployPendingFileSchema),
+    unshippedCommits: z.array(PaseoDeployPendingCommitSchema),
+    headSha: z.string().nullable(),
+    deployedSha: z.string().nullable(),
+    branch: z.string().nullable(),
+    /** Error from the last finished deploy run, if it failed. */
+    lastError: z.string().nullable(),
+    /** Error while computing this status. */
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const PaseoDeployTriggerResponseSchema = z.object({
+  type: z.literal("checkout.deploy.trigger.response"),
+  payload: z.object({
+    started: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const BranchSuggestionsResponseSchema = z.object({
   type: z.literal("branch_suggestions_response"),
   payload: z.object({
@@ -5143,6 +5200,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   StashSaveResponseSchema,
   StashPopResponseSchema,
   StashListResponseSchema,
+  PaseoDeployStatusResponseSchema,
+  PaseoDeployTriggerResponseSchema,
   ValidateBranchResponseSchema,
   BranchSuggestionsResponseSchema,
   GitHubSearchResponseSchema,
@@ -5468,6 +5527,12 @@ export type SubscribeCheckoutDiffRequest = z.infer<typeof SubscribeCheckoutDiffR
 export type UnsubscribeCheckoutDiffRequest = z.infer<typeof UnsubscribeCheckoutDiffRequestSchema>;
 export type SubscribeCheckoutDiffResponse = z.infer<typeof SubscribeCheckoutDiffResponseSchema>;
 export type CheckoutDiffUpdate = z.infer<typeof CheckoutDiffUpdateSchema>;
+export type PaseoDeployStatusRequest = z.infer<typeof PaseoDeployStatusRequestSchema>;
+export type PaseoDeployTriggerRequest = z.infer<typeof PaseoDeployTriggerRequestSchema>;
+export type PaseoDeployStatusResponse = z.infer<typeof PaseoDeployStatusResponseSchema>;
+export type PaseoDeployTriggerResponse = z.infer<typeof PaseoDeployTriggerResponseSchema>;
+export type PaseoDeployPendingFile = z.infer<typeof PaseoDeployPendingFileSchema>;
+export type PaseoDeployPendingCommit = z.infer<typeof PaseoDeployPendingCommitSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;

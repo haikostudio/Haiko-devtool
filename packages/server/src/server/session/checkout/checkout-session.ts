@@ -6,6 +6,8 @@ import type {
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
+  PaseoDeployStatusRequest,
+  PaseoDeployTriggerRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
   SubscribeCheckoutDiffRequest,
@@ -44,6 +46,7 @@ import {
 } from "../../../utils/checkout-git.js";
 import { execCommand } from "../../../utils/spawn.js";
 import { expandTilde } from "../../../utils/path.js";
+import { getPaseoDeployStatus, triggerPaseoDeploy } from "../../../utils/paseo-deploy.js";
 import type { GitMetadataGenerator } from "./git-metadata-generator.js";
 
 /**
@@ -298,6 +301,29 @@ export class CheckoutSession {
   handleUnsubscribeDiffRequest(msg: UnsubscribeCheckoutDiffRequest): void {
     this.diffSubscriptions.get(msg.subscriptionId)?.();
     this.diffSubscriptions.delete(msg.subscriptionId);
+  }
+
+  async handlePaseoDeployStatusRequest(msg: PaseoDeployStatusRequest): Promise<void> {
+    const status = await getPaseoDeployStatus();
+    this.host.emit({
+      type: "checkout.deploy.status.response",
+      payload: {
+        ...status,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployTriggerRequest(msg: PaseoDeployTriggerRequest): Promise<void> {
+    const { started, error } = await triggerPaseoDeploy({ noBuild: msg.noBuild });
+    this.host.emit({
+      type: "checkout.deploy.trigger.response",
+      payload: {
+        started,
+        error,
+        requestId: msg.requestId,
+      },
+    });
   }
 
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {
