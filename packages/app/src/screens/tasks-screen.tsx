@@ -1763,9 +1763,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface0,
     borderColor: theme.colors.border,
   },
+  // Auto-width icon button: the field flexes to fill the row, this button hugs
+  // its icon (horizontal padding instead of a fixed width) and sits beside it.
   sortButton: {
-    width: 34,
     height: 34,
+    paddingHorizontal: theme.spacing[2],
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.lg,
@@ -1899,11 +1901,11 @@ const styles = StyleSheet.create((theme) => ({
   compactViewSwitch: {
     paddingHorizontal: theme.spacing[3],
   },
-  // Aligns the timeline strip to the columns block below: same horizontal inset
-  // as the board, capped to the columns' total width so its edges meet the
-  // first and last column. Left-aligns (parent stretch + maxWidth) on wide
-  // screens; on narrow screens it fills like the columns do.
+  // Timeline strip capped to the columns' total width, centered horizontally in
+  // the board container on wide screens (alignSelf center + maxWidth); on narrow
+  // screens it fills like the columns do.
   ganttBoardAlign: {
+    alignSelf: "center",
     marginHorizontal: theme.spacing[4],
     maxWidth:
       KANBAN_COLUMNS.length * KANBAN_COLUMN_MAX_WIDTH +
@@ -2033,10 +2035,10 @@ const styles = StyleSheet.create((theme) => ({
   footerButton: {
     alignSelf: "stretch",
   },
-  // Add-folder / add-task action buttons: small, icon+label, always left-aligned
-  // (never stretched), so the folder rail and the compact list share one edge.
+  // Add-folder action button: full-width across the rail footer so it reads as a
+  // clear primary action anchoring the bottom of the folders list.
   addButton: {
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
   },
   newTaskRow: {
     flexDirection: "row",
