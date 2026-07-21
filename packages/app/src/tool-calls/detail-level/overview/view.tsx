@@ -103,6 +103,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   content: {
     paddingTop: theme.spacing[1],
-    paddingHorizontal: 13,
+    paddingHorizontal: theme.spacing[3],
   },
 }));

@@ -378,7 +378,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.foregroundMuted,
     // Nudge the dot down so it optically centers on the first line of the title.
-    marginTop: 6,
+    marginTop: theme.spacing[1.5],
   },
   priorityDotHigh: {
     backgroundColor: theme.colors.statusDanger,
@@ -418,7 +418,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 2,
+    paddingVertical: theme.spacing[1],
   },
   tagText: {
     color: theme.colors.foregroundMuted,

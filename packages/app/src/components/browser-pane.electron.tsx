@@ -1949,8 +1949,8 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
-    gap: 8,
+    padding: theme.spacing[6],
+    gap: theme.spacing[2],
   },
   unavailableTitle: {
     fontSize: 16,

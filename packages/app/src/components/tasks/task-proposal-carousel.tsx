@@ -613,7 +613,7 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[3],
   },
   field: {
-    gap: 3,
+    gap: theme.spacing[1],
   },
   fieldLabel: {
     color: theme.colors.foregroundMuted,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 6,
+    paddingVertical: theme.spacing[1.5],
   },
   inputMultiline: {
     width: "100%",
@@ -641,7 +641,7 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface1,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 6,
+    paddingVertical: theme.spacing[1.5],
   },
   placeholderColor: {
     color: theme.colors.foregroundMuted,
@@ -650,7 +650,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
   },
   infoBlock: {
-    gap: 2,
+    gap: theme.spacing[1],
   },
   infoText: {
     color: theme.colors.foregroundMuted,
@@ -665,11 +665,11 @@ const styles = StyleSheet.create((theme) => ({
   approveBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: theme.spacing[1.5],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.statusSuccess,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 6,
+    paddingVertical: theme.spacing[1.5],
   },
   actionText: {
     color: "#ffffff",
@@ -679,13 +679,13 @@ const styles = StyleSheet.create((theme) => ({
   refuseBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: theme.spacing[1.5],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 6,
+    paddingVertical: theme.spacing[1.5],
   },
   refuseText: {
     color: theme.colors.foreground,
@@ -695,7 +695,7 @@ const styles = StyleSheet.create((theme) => ({
   dotsRow: {
     flexDirection: "row",
     alignSelf: "center",
-    gap: 5,
+    gap: theme.spacing[1.5],
     paddingRight: theme.spacing[3],
   },
   dot: {

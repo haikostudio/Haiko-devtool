@@ -1381,7 +1381,7 @@ const styles = StyleSheet.create((theme) => ({
   summaryPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: theme.spacing[1],
   },
   summaryPillSuccessText: {
     fontSize: theme.fontSize.xs,
@@ -1526,8 +1526,8 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0,
   },
   kebabButton: {
-    padding: 2,
-    borderRadius: 4,
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.base,
   },
   kebabButtonHovered: {
     backgroundColor: theme.colors.surface2,
@@ -1573,7 +1573,7 @@ const styles = StyleSheet.create((theme) => ({
   threadCount: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: theme.spacing[1],
   },
   threadComment: {
     borderTopWidth: 1,

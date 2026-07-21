@@ -725,7 +725,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     flexWrap: "wrap",
     gap: theme.spacing[1],
-    marginTop: 2,
+    marginTop: theme.spacing[1],
   },
   rowTrailing: {
     marginLeft: theme.spacing[2],

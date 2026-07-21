@@ -3,6 +3,7 @@ import { Pressable, Text, View, type PressableStateCallbackType } from "react-na
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { LucideIcon } from "lucide-react-native";
 import { HEADER_INNER_HEIGHT, HEADER_INNER_HEIGHT_MOBILE } from "@/constants/layout";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -131,8 +132,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     // Match the sidebar workspace-row shape (height, padding, radius) so the
     // compact header entries sit tight against the workspace list below.
-    minHeight: 36,
-    paddingVertical: theme.spacing[2],
+    minHeight: LIST_ROW_HEIGHT,
+    paddingVertical: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.lg,
   },

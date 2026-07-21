@@ -24,6 +24,8 @@ export interface ControlInteractionStyleMap {
 
 const COMPACT_CONTROL_HEIGHT = 32;
 const FIELD_CONTROL_HEIGHT = 44;
+/** Single source of truth for selectable list/menu/picker row minHeight (ComboboxItem, DropdownMenuItem, ContextMenu item, AutocompleteItem, and bespoke picker/nav rows). */
+export const LIST_ROW_HEIGHT = 36;
 const SEGMENTED_COMPACT_INSET = 2;
 const SEGMENTED_FIELD_INSET = 3;
 const SWITCH_TRACK_WIDTH = 34;

@@ -378,7 +378,7 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: theme.spacing[1],
   },
   badgePressed: {
     opacity: 0.82,
@@ -398,7 +398,7 @@ const checksBadgeStyles = StyleSheet.create((theme) => ({
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: theme.spacing[1],
   },
   text: {
     fontSize: theme.fontSize.xs,

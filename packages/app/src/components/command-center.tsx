@@ -701,7 +701,7 @@ const styles = StyleSheet.create((theme) => ({
   textContent: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: theme.spacing[1],
   },
   rowShortcut: {
     marginLeft: theme.spacing[2],

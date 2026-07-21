@@ -229,7 +229,7 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   detailRow: {
-    gap: 3,
+    gap: theme.spacing[1],
   },
   detailLabel: {
     fontSize: 10,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
   },
   threadItem: {
-    gap: 2,
+    gap: theme.spacing[1],
   },
   threadTime: {
     fontSize: theme.fontSize.xs,

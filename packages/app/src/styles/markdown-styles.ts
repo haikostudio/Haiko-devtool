@@ -167,7 +167,7 @@ export function createMarkdownStyles(theme: Theme) {
       backgroundColor: theme.colors.surface2,
       color: theme.colors.foreground,
       paddingHorizontal: theme.spacing[1],
-      paddingVertical: 2,
+      paddingVertical: theme.spacing[1],
       borderRadius: theme.borderRadius.md,
       borderWidth: 0,
       fontFamily: theme.fontFamily.mono,
@@ -285,7 +285,7 @@ export function createMarkdownStyles(theme: Theme) {
     bullet_list_icon: {
       ...webSelectableTextStyle,
       color: theme.colors.foreground,
-      marginRight: 8,
+      marginRight: theme.spacing[2],
       fontSize: theme.fontSize.base,
       lineHeight: 22,
     },
@@ -293,7 +293,7 @@ export function createMarkdownStyles(theme: Theme) {
     ordered_list_icon: {
       ...webSelectableTextStyle,
       color: theme.colors.foreground,
-      marginRight: 8,
+      marginRight: theme.spacing[2],
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
       lineHeight: 22,

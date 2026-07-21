@@ -47,7 +47,7 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.surface3,
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 3,
+    paddingVertical: theme.spacing[1],
   },
   pillSuccess: {
     backgroundColor: `${theme.colors.statusSuccess}1A`,

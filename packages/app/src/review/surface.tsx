@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Shortcut } from "@/components/ui/shortcut";
 import { isWeb } from "@/constants/platform";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
 import type { ShortcutKey } from "@/utils/format-shortcut";
 import { useWorkspaceFocusRestoration } from "@/workspace/focus";
 import { useReviewDraftComments, useReviewDraftStore, type ReviewDraftComment } from "./store";
@@ -75,7 +75,7 @@ function useCanShowReviewKeyboardHints(): boolean {
 
 export const INLINE_REVIEW_COMMENT_HEIGHT = 72;
 export const INLINE_REVIEW_EDITOR_HEIGHT = 132;
-const INLINE_REVIEW_GAP = 6;
+const INLINE_REVIEW_GAP = SPACING[1.5];
 export const SMALL_ACTION_HIT_SLOP = 8;
 const REVIEW_CANCEL_SHORTCUT_KEYS: ShortcutKey[] = ["Esc"];
 const REVIEW_SAVE_SHORTCUT_KEYS: ShortcutKey[] = ["mod", "Enter"];

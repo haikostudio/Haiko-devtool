@@ -1784,7 +1784,7 @@ const terminalProfileStyles = StyleSheet.create((theme) => ({
   rowActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 0,
+    gap: theme.spacing[0],
   },
   emptyCard: {
     padding: theme.spacing[4],
@@ -1824,9 +1824,9 @@ const styles = StyleSheet.create((theme) => ({
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 4,
+    paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
   },
   statusDot: {
@@ -1841,9 +1841,9 @@ const styles = StyleSheet.create((theme) => ({
   badgePill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[2],
-    paddingVertical: 4,
+    paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
     borderColor: theme.colors.border,

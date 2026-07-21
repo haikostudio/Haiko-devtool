@@ -416,7 +416,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     alignItems: "center",
-    gap: 2,
+    gap: theme.spacing[1],
   },
   metricValue: (highlight: boolean) => ({
     color: highlight ? baseColors.amber[500] : theme.colors.foreground,
@@ -452,7 +452,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   invoiceMain: {
     flex: 1,
-    gap: 1,
+    gap: theme.spacing[1],
   },
   invoiceTitle: {
     color: theme.colors.foreground,
@@ -465,7 +465,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   invoiceRight: {
     alignItems: "flex-end",
-    gap: 1,
+    gap: theme.spacing[1],
   },
   invoiceAmount: {
     color: theme.colors.foreground,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create((theme) => ({
   chartArea: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 3,
+    gap: theme.spacing[1],
     height: CHART_HEIGHT + 18,
   },
   goalLine: {

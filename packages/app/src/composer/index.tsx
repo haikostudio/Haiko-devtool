@@ -2081,12 +2081,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
     // On mobile, the negative margins below cancel each glyph's internal padding
     // to reach the composer border; this inset adds a small visual gap from it.
     paddingLeft: {
-      xs: 5,
-      md: 10,
+      xs: theme.spacing[1.5],
+      md: theme.spacing[2],
     },
     paddingRight: {
-      xs: 5,
-      md: 10,
+      xs: theme.spacing[1.5],
+      md: theme.spacing[2],
     },
   },
   footerLeft: {

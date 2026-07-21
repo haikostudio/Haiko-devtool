@@ -865,16 +865,17 @@ function ProjectNameEditor({ project, client }: ProjectNameEditorProps) {
           <Pencil size={ICON_SIZE} color={styles.iconColor.color} />
         </Pressable>
         {project.projectCustomName ? (
-          <Pressable
+          <Button
             testID="project-name-reset-button"
             accessibilityLabel={t("settings.project.rename.resetLabel")}
             onPress={handleReset}
             disabled={renameMutation.isPending}
             hitSlop={8}
-            style={styles.nameEditorResetButton}
+            variant="ghost"
+            size="xs"
           >
-            <Text style={styles.nameEditorResetText}>{t("settings.project.rename.reset")}</Text>
-          </Pressable>
+            {t("settings.project.rename.reset")}
+          </Button>
         ) : null}
       </View>
     );
@@ -1304,14 +1305,6 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface2,
     minWidth: 0,
-  },
-  nameEditorResetButton: {
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
-  },
-  nameEditorResetText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
   },
   titleIcon: {
     width: 28,

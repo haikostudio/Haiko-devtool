@@ -548,7 +548,7 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
   },
   scriptItem: {
-    paddingVertical: 6,
+    paddingVertical: theme.spacing[1.5],
   },
   scriptHeader: {
     flexDirection: "row",
@@ -576,14 +576,14 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   hostList: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     paddingHorizontal: theme.spacing[3],
   },
   hostRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1.5],
-    paddingVertical: 2,
+    paddingVertical: theme.spacing[1],
     minHeight: 18,
   },
   hostLabel: {
@@ -620,7 +620,7 @@ const styles = StyleSheet.create((theme) => ({
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: theme.spacing[1],
   },
   actionButtonLabel: {
     fontSize: theme.fontSize.xs,

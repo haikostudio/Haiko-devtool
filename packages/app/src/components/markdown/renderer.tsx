@@ -807,10 +807,10 @@ const detailsStyles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   flowImage: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
   },
   flowImageFallback: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
     borderRadius: theme.borderRadius.sm,
     backgroundColor: theme.colors.surface2,

@@ -55,7 +55,7 @@ import {
   CircleDot,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import Animated, {
   Easing,
@@ -939,7 +939,7 @@ function AssistantMarkdownImage({
   const dataImage = useMemo(() => parseImageDataUrl(source), [source]);
   const containerStyle = useMemo<StyleProp<ViewStyle>>(
     () => ({
-      marginTop: hasLeadingContent ? 16 : 0,
+      marginTop: hasLeadingContent ? SPACING[4] : 0,
       marginBottom: 0,
     }),
     [hasLeadingContent],
@@ -1223,7 +1223,7 @@ export const TurnCopyButton = memo(function TurnCopyButton({
 
 const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   container: {
-    marginHorizontal: -13,
+    marginHorizontal: -theme.spacing[3],
   },
   containerSpacing: {
     marginBottom: theme.spacing[1],
@@ -2068,7 +2068,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         <AssistantMessageBlockContainer
           key={key}
           block={block}
-          marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
+          marginBottom={index < keyedBlocks.length - 1 ? SPACING[3] : 0}
         >
           {callout ? (
             <MarkdownCallout
@@ -2188,7 +2188,7 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
   },
   content: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
+    paddingVertical: theme.spacing[2],
   },
   row: {
     flexDirection: "row",
@@ -2413,7 +2413,7 @@ const brainContextStylesheet = StyleSheet.create((theme) => ({
   },
   content: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
+    paddingVertical: theme.spacing[2],
   },
   row: {
     flexDirection: "row",
@@ -2488,7 +2488,7 @@ const brainContextStylesheet = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
     lineHeight: 14,
-    marginTop: 1,
+    marginTop: theme.spacing[1],
   },
 }));
 
@@ -2713,7 +2713,7 @@ const taskTriageStylesheet = StyleSheet.create((theme) => ({
   },
   content: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
+    paddingVertical: theme.spacing[2],
   },
   row: {
     flexDirection: "row",

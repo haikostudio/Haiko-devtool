@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { ActivityIndicator } from "react-native";
 import { measureElement as measureVirtualElement, useVirtualizer } from "@tanstack/react-virtual";
+import { SPACING } from "@/styles/theme";
 import { estimateStreamItemHeight } from "./web-virtualization";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { createStreamStrategy } from "./strategy";
@@ -37,8 +38,8 @@ const historyStartSlotStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   minHeight: 32,
-  paddingTop: 4,
-  paddingBottom: 8,
+  paddingTop: SPACING[1],
+  paddingBottom: SPACING[2],
 };
 
 function isScrollContainerNearBottom(
@@ -655,10 +656,10 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       minHeight: "100%",
       // Reserve room for the floating synthesis banner at the top; later messages
       // still scroll up under it (the scroll container is full-height behind it).
-      paddingTop: 16 + topContentInset,
-      paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      paddingTop: SPACING[4] + topContentInset,
+      paddingBottom: SPACING[4],
+      paddingLeft: isMobileBreakpoint ? SPACING[2] : SPACING[4],
+      paddingRight: isMobileBreakpoint ? SPACING[2] : SPACING[4],
       boxSizing: "border-box",
     };
   }, [isMobileBreakpoint, topContentInset]);

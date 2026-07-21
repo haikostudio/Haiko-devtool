@@ -27,6 +27,7 @@ import {
 } from "lucide-react-native";
 import { getFileIconSvg } from "@/components/material-file-icons";
 import { TreeChevron, TreeIndentGuides, TREE_INDENT_PER_LEVEL } from "@/components/tree-primitives";
+import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { AgentFileExplorerState, ExplorerEntry } from "@/stores/session-store";
 import { useHosts } from "@/runtime/host-runtime";
@@ -553,13 +554,13 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         <Text style={styles.errorText}>{error}</Text>
         <View style={styles.errorActions}>
           {showBackFromError ? (
-            <Pressable style={styles.retryButton} onPress={handleBackFromError}>
-              <Text style={styles.retryButtonText}>{t("workspace.fileExplorer.actions.back")}</Text>
-            </Pressable>
+            <Button variant="outline" size="sm" onPress={handleBackFromError}>
+              {t("workspace.fileExplorer.actions.back")}
+            </Button>
           ) : null}
-          <Pressable style={styles.retryButton} onPress={handleRetry}>
-            <Text style={styles.retryButtonText}>{t("workspace.fileExplorer.actions.retry")}</Text>
-          </Pressable>
+          <Button variant="outline" size="sm" onPress={handleRetry}>
+            {t("workspace.fileExplorer.actions.retry")}
+          </Button>
         </View>
       </View>
     );
@@ -1082,18 +1083,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     textAlign: "center",
   },
-  retryButton: {
-    borderRadius: theme.borderRadius.full,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[1],
-  },
-  retryButtonText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-  },
   errorActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -1112,7 +1101,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 2,
+    paddingVertical: theme.spacing[1],
     paddingRight: theme.spacing[2],
     borderRadius: theme.borderRadius.md,
   },

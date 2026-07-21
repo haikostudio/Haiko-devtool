@@ -2,8 +2,10 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
+import { Button } from "@/components/ui/button";
 import { isWeb } from "@/constants/platform";
 import { useAppUpdateAvailable } from "@/hooks/use-app-update";
+import { SPACING } from "@/styles/theme";
 
 /**
  * Web-only "new version available — reload" banner.
@@ -29,7 +31,7 @@ export function AppUpdateBanner() {
   const handleDismiss = useCallback(() => setDismissed(true), []);
 
   const containerStyle = useMemo(
-    () => [styles.container, { paddingTop: insets.top + 8 }],
+    () => [styles.container, { paddingTop: insets.top + SPACING[2] }],
     [insets.top],
   );
 
@@ -42,14 +44,9 @@ export function AppUpdateBanner() {
           Nouvelle version disponible
         </Text>
         <View style={styles.actions}>
-          <Pressable
-            onPress={handleReload}
-            accessibilityRole="button"
-            accessibilityLabel="Recharger"
-            style={styles.reloadButton}
-          >
-            <Text style={styles.reloadText}>Recharger</Text>
-          </Pressable>
+          <Button variant="default" size="sm" onPress={handleReload} accessibilityLabel="Recharger">
+            Recharger
+          </Button>
           <Pressable
             onPress={handleDismiss}
             accessibilityRole="button"
@@ -99,17 +96,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-  },
-  reloadButton: {
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[3],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.primary,
-  },
-  reloadText: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: "600",
-    color: theme.colors.primaryForeground,
   },
   dismissButton: {
     alignItems: "center",

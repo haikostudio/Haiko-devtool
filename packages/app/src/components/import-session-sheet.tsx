@@ -595,7 +595,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowIconWrap: {
     width: theme.iconSize.md,
-    paddingTop: 2,
+    paddingTop: theme.spacing[1],
     alignItems: "center",
     justifyContent: "center",
   },

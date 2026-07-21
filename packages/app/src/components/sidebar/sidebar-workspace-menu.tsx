@@ -158,9 +158,9 @@ function triggerStyle({ hovered = false }: PressableStateCallbackType & { hovere
 
 const styles = StyleSheet.create((theme) => ({
   trigger: {
-    padding: 2,
-    borderRadius: 4,
-    marginLeft: 2,
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.base,
+    marginLeft: theme.spacing[1],
   },
   triggerHovered: {
     backgroundColor: theme.colors.surface2,

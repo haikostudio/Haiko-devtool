@@ -22,7 +22,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
@@ -420,8 +420,8 @@ const webColumnBodyStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   alignItems: "stretch",
-  gap: 8,
-  padding: 8,
+  gap: SPACING[2],
+  padding: SPACING[2],
   flex: 1,
   minHeight: 120,
   overflowY: "auto",

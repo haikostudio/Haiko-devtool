@@ -3922,7 +3922,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2] + theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[2],
   },
   switcherTriggerPressed: {

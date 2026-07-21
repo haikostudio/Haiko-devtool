@@ -127,7 +127,7 @@ export function ProjectBillingSection({
         flush
       >
         <SelectField
-          label={t("settings.project.billing.client")}
+          title={t("settings.project.billing.client")}
           value={link ? link.clientId : UNLINKED}
           selectedDisplay={selectedDisplay}
           options={options}

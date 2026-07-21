@@ -29,7 +29,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     height: 20,
-    gap: 4,
+    gap: theme.spacing[1],
     flexShrink: 0,
   },
   additions: {

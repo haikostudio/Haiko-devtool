@@ -31,7 +31,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // leading icon, search input icon) and any row primitive rendered inside the
 // sheet body. Rows whose leading icon should line up with the header must
 // match this padding.
-export const SHEET_HORIZONTAL_PADDING_SCALE = 6;
+export const SHEET_HORIZONTAL_PADDING_SCALE = 4;
 
 export interface SheetHeaderSearch {
   onChange: (value: string) => void;
@@ -478,7 +478,7 @@ export interface AdaptiveModalSheetProps {
   dynamicSizing?: boolean;
   /**
    * Compact only: horizontal padding token for the bottom-sheet body. Defaults
-   * to the shared header indent (spacing[6]); pass a smaller scale for dense
+   * to the shared header indent (spacing[4]); pass a smaller scale for dense
    * lists that should sit closer to the edges.
    */
   contentPaddingScale?: number;

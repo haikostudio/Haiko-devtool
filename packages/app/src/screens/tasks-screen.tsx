@@ -1808,7 +1808,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   railItemBody: {
     flex: 1,
-    gap: 1,
+    gap: theme.spacing[1],
   },
   railItemTitle: {
     color: theme.colors.foregroundMuted,
@@ -1949,7 +1949,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   rowText: {
     flex: 1,
-    gap: 2,
+    gap: theme.spacing[1],
   },
   rowTitle: {
     color: theme.colors.foreground,

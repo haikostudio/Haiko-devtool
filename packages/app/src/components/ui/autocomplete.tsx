@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { File, Folder } from "lucide-react-native";
 import type { Theme } from "@/styles/theme";
 import { getAutocompleteScrollOffset } from "./autocomplete-utils";
+import { LIST_ROW_HEIGHT } from "./control-geometry";
 
 export interface AutocompleteOption {
   id: string;
@@ -332,15 +333,15 @@ const styles = StyleSheet.create((theme: Theme) => ({
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    gap: theme.spacing[2],
   },
   itemLeading: {
     width: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: theme.spacing[1],
   },
   itemActive: {
     backgroundColor: theme.colors.surface2,
@@ -373,7 +374,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   itemDescription: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-    marginTop: 2,
+    marginTop: theme.spacing[1],
   },
   itemDescriptionInline: {
     flex: 1,

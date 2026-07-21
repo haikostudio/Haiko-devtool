@@ -503,7 +503,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: CELL_GAP,
-    paddingVertical: 3,
+    paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
   },
   rowHovered: {

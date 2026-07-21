@@ -650,7 +650,7 @@ const styles = StyleSheet.create((theme) => ({
   textColumn: {
     flexShrink: 1,
     minWidth: 0,
-    gap: 2,
+    gap: theme.spacing[1],
   },
   title: {
     fontSize: theme.fontSize.sm,

@@ -441,7 +441,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     backgroundColor: theme.colors.surface2,
     borderRadius: theme.borderRadius.full,
-    padding: 2,
+    padding: theme.spacing[1],
   },
   modeButton: (active: boolean) => ({
     paddingHorizontal: theme.spacing[3],
@@ -456,7 +456,7 @@ const styles = StyleSheet.create((theme) => ({
   chartArea: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 3,
+    gap: theme.spacing[1],
     height: CHART_HEIGHT + 18,
   },
   barColumn: {

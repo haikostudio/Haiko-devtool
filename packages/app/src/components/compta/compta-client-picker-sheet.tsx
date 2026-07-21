@@ -5,6 +5,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Check, CircleOff, UserRound } from "lucide-react-native";
 import type { ComptaClient } from "@getpaseo/protocol/messages";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
@@ -164,14 +165,15 @@ const styles = StyleSheet.create((theme) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
+    minHeight: LIST_ROW_HEIGHT,
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
     borderRadius: theme.borderRadius.md,
   },
   rowBody: {
     flex: 1,
-    gap: 1,
+    gap: theme.spacing[1],
   },
   rowLabel: {
     color: theme.colors.foreground,

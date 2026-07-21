@@ -18,6 +18,7 @@ import type { AgentProvider } from "@getpaseo/protocol/agent-types";
 import type { SheetHeader } from "@/components/adaptive-modal-sheet";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
 import { Button } from "@/components/ui/button";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   Combobox,
@@ -971,8 +972,8 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    minHeight: 36,
+    paddingVertical: theme.spacing[1],
+    minHeight: LIST_ROW_HEIGHT,
     ...(IS_WEB ? {} : { marginHorizontal: theme.spacing[1] }),
   },
   drillDownRowHovered: {

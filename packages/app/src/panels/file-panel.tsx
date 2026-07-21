@@ -2,17 +2,11 @@ import { Text, View } from "react-native";
 import { FileText } from "lucide-react-native";
 import invariant from "tiny-invariant";
 import { useTranslation } from "react-i18next";
+import { StyleSheet } from "react-native-unistyles";
 import { FilePane } from "@/components/file-pane";
 import { usePaneContext } from "@/panels/pane-context";
 import type { PanelRegistration } from "@/panels/panel-registry";
 import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
-
-const CENTERED_PADDED_STYLE = {
-  flex: 1,
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 16,
-} as const;
 
 function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
   const fileName = target.path.split("/").findLast(Boolean) ?? target.path;
@@ -32,7 +26,7 @@ function FilePanel() {
   invariant(target.kind === "file", "FilePanel requires file target");
   if (!workspaceDirectory) {
     return (
-      <View style={CENTERED_PADDED_STYLE}>
+      <View style={styles.centeredPadded}>
         <Text>{t("panels.file.directoryMissing")}</Text>
       </View>
     );
@@ -45,3 +39,12 @@ export const filePanelRegistration: PanelRegistration<"file"> = {
   component: FilePanel,
   useDescriptor: useFilePanelDescriptor,
 };
+
+const styles = StyleSheet.create((theme) => ({
+  centeredPadded: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: theme.spacing[4],
+  },
+}));

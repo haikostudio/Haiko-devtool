@@ -41,7 +41,12 @@ export interface SelectFieldRenderOptionInput<TValue> {
 }
 
 export interface SelectFieldProps<TValue> {
-  label: string;
+  /**
+   * Visible field label. Omit when the surrounding surface already names the
+   * field (e.g. a SettingsSection title); pass `title` so the picker sheet still
+   * has a header. The trigger keeps its accessibility label either way.
+   */
+  label?: string;
   value: TValue | null;
   selectedDisplay: SelectFieldDisplay | null;
   options: SelectFieldOption<TValue>[];
@@ -286,6 +291,7 @@ export function SelectField<TValue>({
 
   const displayLabel = selectedDisplay?.label ?? placeholder;
   const fieldHint = selectedDisplay?.description ?? hint;
+  const accessibilityName = label ?? title;
 
   const control = (
     <>
@@ -296,7 +302,9 @@ export function SelectField<TValue>({
           onBlur={handleTriggerBlur}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={`${label} (${displayLabel})`}
+          accessibilityLabel={
+            accessibilityName ? `${accessibilityName} (${displayLabel})` : displayLabel
+          }
           testID={triggerTestID}
         >
           {({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => (

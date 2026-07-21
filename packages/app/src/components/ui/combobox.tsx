@@ -63,6 +63,7 @@ import {
 import { FloatingSurface } from "@/components/ui/floating";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import { buildDesktopFrameStyle } from "./combobox-frame-style";
+import { LIST_ROW_HEIGHT } from "./control-geometry";
 
 export { buildDesktopFrameStyle } from "./combobox-frame-style";
 
@@ -1594,7 +1595,7 @@ const styles = StyleSheet.create((theme) => ({
   comboboxItem: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 28,
+    minHeight: LIST_ROW_HEIGHT,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[1],
@@ -1669,7 +1670,7 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   bottomSheetHeader: {
-    paddingHorizontal: theme.spacing[6],
+    paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[2],
   },
   comboboxTitle: {

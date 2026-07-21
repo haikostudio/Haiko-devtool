@@ -30,6 +30,7 @@ import { Keyframe, runOnJS } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Check, CheckCircle } from "lucide-react-native";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isWeb } from "@/constants/platform";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
@@ -921,10 +922,10 @@ const styles = StyleSheet.create((theme) => ({
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
   },
@@ -967,7 +968,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.accentForeground,
   },
   itemDescription: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
   },

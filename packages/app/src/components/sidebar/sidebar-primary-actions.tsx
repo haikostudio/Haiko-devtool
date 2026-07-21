@@ -10,6 +10,7 @@ import {
   SquareKanban,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { canCreateWorktreeForProjectKind } from "@/projects/host-projects";
 import { useHostFeature } from "@/runtime/host-features";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
@@ -191,15 +192,15 @@ export function SidebarPrimaryActions({
 
 const styles = StyleSheet.create((theme) => ({
   container: {
-    gap: 2,
+    gap: theme.spacing[1],
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 40,
-    paddingVertical: theme.spacing[1.5],
-    paddingHorizontal: theme.spacing[2],
+    minHeight: LIST_ROW_HEIGHT,
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
     marginHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
   },
