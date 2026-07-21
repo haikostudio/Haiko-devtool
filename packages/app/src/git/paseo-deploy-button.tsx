@@ -193,6 +193,7 @@ function PaseoDeployModal({
           variant="default"
           size="sm"
           style={styles.actionButton}
+          textStyle={styles.actionButtonText}
           onPress={handleDeploy}
           disabled={busy}
           testID="paseo-deploy-confirm"
@@ -203,6 +204,7 @@ function PaseoDeployModal({
           variant="secondary"
           size="sm"
           style={styles.actionButton}
+          textStyle={styles.actionButtonText}
           onPress={handleCommitOnly}
           disabled={busy}
           testID="paseo-deploy-commit-only"
@@ -213,6 +215,7 @@ function PaseoDeployModal({
           variant="secondary"
           size="sm"
           style={styles.actionButton}
+          textStyle={styles.actionButtonText}
           onPress={onClose}
           disabled={triggering}
           testID="paseo-deploy-cancel"
@@ -407,5 +410,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   actionButton: {
     flex: { xs: 0, md: 1 },
+    paddingHorizontal: theme.spacing[2],
+  },
+  // Smaller label so long actions like "Enregistrer sans publier" stay on a
+  // single line inside the side-by-side desktop footer instead of wrapping.
+  actionButtonText: {
+    fontSize: theme.fontSize.xs,
+    textAlign: "center",
   },
 }));
