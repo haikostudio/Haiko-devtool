@@ -35,24 +35,24 @@ type DocumentKind = "quote" | "invoice";
 export function TaskBillingAddSheet({
   visible,
   onClose,
+  onAdded,
   serverId,
   clientId,
   documentTitle,
   line,
   defaultDocument,
-  onAdded,
 }: {
   visible: boolean;
   onClose: () => void;
+  // Fired with the quote/invoice the line landed on, so the caller can record
+  // the task's billing link. Runs before onClose on a successful add.
+  onAdded?: (document: ComptaDocumentRef) => void;
   serverId: string;
   clientId: string;
   documentTitle: string;
   line: TaskBillingLine;
   // Project's pinned draft; surfaced first when still an open draft.
   defaultDocument?: { kind: DocumentKind; id: string } | null;
-  // Fired with the target document once the line was added (to record it on
-  // the task so it can be flagged as already billed).
-  onAdded?: (document: ComptaDocumentRef) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();

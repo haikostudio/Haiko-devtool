@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  TaskBilling,
   TaskBoard,
   TaskColumn,
   TaskRunConfig,
@@ -8,7 +9,7 @@ import type {
 } from "@getpaseo/protocol/tasks/types";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
-export type { TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
+export type { TaskBilling, TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 function createSubscriptionId(): string {
