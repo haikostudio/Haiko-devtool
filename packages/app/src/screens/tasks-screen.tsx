@@ -1756,9 +1756,12 @@ const styles = StyleSheet.create((theme) => ({
   // White field + white square button so both read clearly against the gray
   // sidebar rail (surface2 input on a surface2 rail was invisible). The input
   // flexes to fill; the sort button is a fixed square column beside it.
+  // A visible resting border (matching the sort button) gives the white field a
+  // defined edge — without it, white on the near-white rail has no contrast.
   railSearchInput: {
     flex: 1,
     backgroundColor: theme.colors.surface0,
+    borderColor: theme.colors.border,
   },
   sortButton: {
     width: 34,
