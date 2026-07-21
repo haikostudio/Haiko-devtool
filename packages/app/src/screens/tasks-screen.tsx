@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
@@ -1350,6 +1350,13 @@ function TasksHeader({
   projects: ProjectEntry[];
   folders: TaskFolder[];
 }) {
+  // Same gear on every drill-down level (desktop header included): the
+  // project's configuration sheet must always be one tap away.
+  const settingsButton = useMemo(
+    () =>
+      selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null,
+    [selectedProject],
+  );
   if (isCompact && supportsTasksBoard && selectedFolder) {
     return (
       <CompactBoardHeader
@@ -1357,13 +1364,14 @@ function TasksHeader({
         folders={folders}
         currentProject={selectedProject}
         projects={projects}
+        right={settingsButton}
       />
     );
   }
   if (isCompact && supportsTasksBoard && selectedProject) {
     return <CompactProjectHeader currentProject={selectedProject} projects={projects} />;
   }
-  return <MenuHeader title={title} />;
+  return <MenuHeader title={title} rightContent={settingsButton} />;
 }
 
 // Mobile board header: hamburger + back-to-folders chevron + a folder-name
@@ -1374,11 +1382,13 @@ function CompactBoardHeader({
   folders,
   currentProject,
   projects,
+  right,
 }: {
   currentFolder: TaskFolder;
   folders: TaskFolder[];
   currentProject: ProjectEntry | null;
   projects: ProjectEntry[];
+  right?: ReactNode;
 }) {
   const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
@@ -1474,6 +1484,7 @@ function CompactBoardHeader({
           </View>
         </>
       }
+      right={right}
     />
   );
 }
@@ -1509,7 +1520,7 @@ function CompactProjectHeader({
 }) {
   const { t } = useTranslation();
   const settingsButton = useMemo(
-    () => <CompactProjectSettingsButton projectId={currentProject.projectId} />,
+    () => <ProjectSettingsButton projectId={currentProject.projectId} />,
     [currentProject.projectId],
   );
   return (
@@ -1555,8 +1566,8 @@ function CompactProjectHeader({
   );
 }
 
-// Gear in the compact tasks header → the current project's configuration sheet.
-function CompactProjectSettingsButton({ projectId }: { projectId: string }) {
+// Gear in the tasks headers (desktop + compact) → the project's configuration sheet.
+function ProjectSettingsButton({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const handlePress = useCallback(() => {
     router.navigate(buildProjectSettingsRoute(projectId));
