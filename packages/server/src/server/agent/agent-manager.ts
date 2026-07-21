@@ -2622,6 +2622,22 @@ export class AgentManager {
     return await this.getLastAssistantMessageFromStores(agentId);
   }
 
+  /**
+   * Best-effort read of the fields a completion notification wants: the agent's
+   * current tab title and its latest synthesis summary ("what it just did").
+   * Both come from the persisted record so they reflect the auto-titler and the
+   * post-turn synthesis rebuild. Returns nulls when unavailable.
+   */
+  async getAgentNotificationContext(
+    agentId: string,
+  ): Promise<{ title: string | null; synthesisSummary: string | null }> {
+    const record = this.registry ? await this.registry.get(agentId) : null;
+    return {
+      title: record?.title ?? null,
+      synthesisSummary: record?.synthesis?.summary ?? null,
+    };
+  }
+
   private getLastAssistantMessageFromTimeline(
     timeline: readonly AgentTimelineItem[],
   ): string | null {

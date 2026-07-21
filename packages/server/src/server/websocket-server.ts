@@ -2120,10 +2120,14 @@ export class VoiceAssistantWebSocketServer {
     const nowMs = Date.now();
     const agent = this.agentManager.getAgent(params.agentId);
     const assistantMessage = await this.agentManager.getLastAssistantMessage(params.agentId);
+    const { title: agentTitle, synthesisSummary } =
+      await this.agentManager.getAgentNotificationContext(params.agentId);
     const notification = buildAgentAttentionNotificationPayload({
       reason: params.reason,
       serverId: this.serverId,
       agentId: params.agentId,
+      agentTitle,
+      finishedSummary: synthesisSummary,
       assistantMessage,
       permissionRequest: agent ? findLatestPermissionRequest(agent.pendingPermissions) : null,
     });

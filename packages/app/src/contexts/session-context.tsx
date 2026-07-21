@@ -240,6 +240,29 @@ const getLatestPermissionRequest = (
   return null;
 };
 
+// Local fallback for the completion notification, used only when the daemon
+// didn't send a prebuilt payload (older host). Kept at module scope so the
+// title/summary resolution stays out of the notify callback's complexity budget.
+const buildFallbackAttentionNotification = (input: {
+  reason: "finished" | "error" | "permission";
+  serverId: string;
+  agentId: string;
+  agent: { title: string | null; synthesis?: { summary: string } | null } | undefined;
+  assistantMessage: string | null;
+  permissionRequest: NotificationPermissionRequest | null;
+}): AgentAttentionNotificationPayload => {
+  const isFinished = input.reason === "finished";
+  return buildAgentAttentionNotificationPayload({
+    reason: input.reason,
+    serverId: input.serverId,
+    agentId: input.agentId,
+    agentTitle: input.agent?.title ?? null,
+    finishedSummary: isFinished ? (input.agent?.synthesis?.summary ?? null) : null,
+    assistantMessage: isFinished ? input.assistantMessage : null,
+    permissionRequest: input.reason === "permission" ? input.permissionRequest : null,
+  });
+};
+
 type AgentUpdatePayload = Extract<SessionOutboundMessage, { type: "agent_update" }>["payload"];
 type WorkspaceSetupProgressPayload = Extract<
   SessionOutboundMessage,
@@ -979,12 +1002,13 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
 
       const notification =
         params.notification ??
-        buildAgentAttentionNotificationPayload({
+        buildFallbackAttentionNotification({
           reason: params.reason,
           serverId,
           agentId: params.agentId,
-          assistantMessage: params.reason === "finished" ? assistantMessage : null,
-          permissionRequest: params.reason === "permission" ? permissionRequest : null,
+          agent: session?.agents.get(params.agentId),
+          assistantMessage,
+          permissionRequest,
         });
 
       void sendOsNotification({
