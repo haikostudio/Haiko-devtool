@@ -1270,6 +1270,7 @@ export const ptBR: TranslationResources = {
     title: "Criar workspace",
     errors: {
       failedCreateWorktree: "Falha ao criar worktree",
+      hostDiskFull: "O disco do host está cheio — libere espaço e tente novamente",
       failedOpenProject: "Falha ao abrir projeto",
       selectModel: "Selecione um modelo",
       hostDisconnected: "Host não está conectado",

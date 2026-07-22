@@ -1254,6 +1254,7 @@ export const en = {
     title: "Create workspace",
     errors: {
       failedCreateWorktree: "Failed to create worktree",
+      hostDiskFull: "Host disk is full — free up space and try again",
       failedOpenProject: "Failed to open project",
       selectModel: "Select a model",
       hostDisconnected: "Host is not connected",

@@ -1257,6 +1257,7 @@ export const ja: TranslationResources = {
     title: "ワークスペースを作成",
     errors: {
       failedCreateWorktree: "ワークツリーの作成に失敗しました",
+      hostDiskFull: "ホストのディスクがいっぱいです。空き容量を確保して再試行してください",
       failedOpenProject: "プロジェクトを開けませんでした",
       selectModel: "モデルを選択してください",
       hostDisconnected: "ホストが接続されていません",

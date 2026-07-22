@@ -172,6 +172,7 @@ import {
   WorkspaceProvisioningError,
   type WorkspaceProvisioningService,
 } from "./session/workspace-provisioning/workspace-provisioning-service.js";
+import { DiskFullError } from "../utils/worktree.js";
 import {
   createWorkspaceRecoveryService,
   type WorkspaceRecoveryService,
@@ -4867,7 +4868,7 @@ export class Session {
         { err: error, sourceKind: request.source.kind, requestId: request.requestId },
         "Failed to create workspace",
       );
-      const errorCode = error instanceof WorkspaceProvisioningError ? error.code : undefined;
+      const errorCode = resolveWorkspaceCreateErrorCode(error);
       this.emit({
         type: "workspace.create.response",
         payload: {
@@ -6383,4 +6384,14 @@ function normalizeCloneRepository(input: {
 
 function isValidGitHubRepoSegment(value: string): boolean {
   return /^[A-Za-z0-9._-]+$/u.test(value);
+}
+
+function resolveWorkspaceCreateErrorCode(error: unknown): string | undefined {
+  if (error instanceof DiskFullError) {
+    return "disk_full";
+  }
+  if (error instanceof WorkspaceProvisioningError) {
+    return error.code;
+  }
+  return undefined;
 }
