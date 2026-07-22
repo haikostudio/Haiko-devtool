@@ -18,6 +18,7 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 import type { WorkspaceUiState } from "@getpaseo/protocol/messages";
 import { resetTabCloseTombstonesForTest } from "@/session-ui-state/close-tombstones";
 import { resetLocalFocusIntentForTest } from "@/session-ui-state/focus-intent";
+import { resetTabOpenMarkersForTest } from "@/session-ui-state/open-markers";
 import { hydrateWorkspaceUiState } from "@/session-ui-state/hydrate";
 import { buildWorkspaceUiState } from "@/session-ui-state/snapshot";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -61,6 +62,7 @@ describe("session ui state draft config sync", () => {
     useCreateFlowStore.getState().clearAll();
     resetTabCloseTombstonesForTest();
     resetLocalFocusIntentForTest();
+    resetTabOpenMarkersForTest();
   });
 
   it("does NOT capture the composer draft of an already-active agent tab", () => {
@@ -255,9 +257,12 @@ describe("session ui state draft config sync", () => {
     expect(draftSetup(tabs[0]?.target).model).toBe("opus");
   });
 
-  it("still closes an empty local draft the host dropped", () => {
-    // An empty draft carries no unsent work, so a genuine cross-device close
-    // must still propagate — we do not leak stale empty drafts.
+  it("preserves a brand-new empty draft tab the host has not acknowledged yet", () => {
+    // The user just clicked "New Agent". Before the debounced push reaches the
+    // host, an adopt-on-connect fetch (or a live broadcast) arrives with a
+    // snapshot captured BEFORE the tab existed. The freshly opened draft must
+    // NOT vanish on its own — the reported "open a new agent, it closes itself"
+    // bug. The open marker (see open-markers) keeps it until the host catches up.
     useWorkspaceLayoutStore
       .getState()
       .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
@@ -271,6 +276,43 @@ describe("session ui state draft config sync", () => {
     };
 
     hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    const tabs = collectAllTabs(layout.root);
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.target).toMatchObject({ kind: "draft", draftId: "d1" });
+  });
+
+  it("closes an empty draft the host dropped once it had acknowledged the tab", () => {
+    // Genuine cross-device close: the host DID know about the draft (a snapshot
+    // once included it, clearing the open marker), then another device closed
+    // it. A later snapshot that omits it must propagate the close — we do not
+    // leak stale empty drafts.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+
+    // First adoption: the host acknowledges the draft, clearing its open marker.
+    const acknowledged: WorkspaceUiState = {
+      tabs: [
+        { tabId: "d1", target: { kind: "draft", draftId: "d1", setup: BASE_SETUP }, createdAt: 1 },
+      ],
+      order: ["d1"],
+      focusedTabId: "d1",
+      drafts: {},
+      revision: 2,
+    };
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: acknowledged });
+
+    // Second adoption: another device closed it, so the host drops it.
+    const dropped: WorkspaceUiState = {
+      tabs: [],
+      order: [],
+      focusedTabId: null,
+      drafts: {},
+      revision: 3,
+    };
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: dropped });
 
     const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
     const tabs = collectAllTabs(layout.root);

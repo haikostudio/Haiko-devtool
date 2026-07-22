@@ -16,6 +16,7 @@ import {
   workspaceTabTargetsEqual,
 } from "@/workspace-tabs/identity";
 import { getTabCloseTombstone } from "./close-tombstones";
+import { clearTabOpenMarker, hasTabOpenMarker } from "./open-markers";
 import { adoptRemoteFocusedAt, getFocusedAt, suppressLocalFocusIntent } from "./focus-intent";
 import { logTabSync } from "./sync-log";
 
@@ -314,6 +315,13 @@ function applyRemoteWorkspaceUiState(
   });
   const effectiveOrder = remoteOrder.filter((tabId) => remoteTargets.has(tabId));
 
+  // A tab the host now advertises is acknowledged: drop any open marker so a
+  // later snapshot that omits it reads as a genuine cross-device close rather
+  // than an unacknowledged local open (see open-markers).
+  for (const tabId of remoteTargets.keys()) {
+    clearTabOpenMarker(workspaceKey, tabId);
+  }
+
   // Close local tabs the remote no longer has — but keep a local draft that
   // still holds unsent work (see hasUnsentDraftWork). Preserved drafts are
   // re-advertised by the corrective push in useSessionUiStateSync, so the host
@@ -324,6 +332,28 @@ function applyRemoteWorkspaceUiState(
     }
     if (hasUnsentDraftWork({ serverId: input.serverId, tab })) {
       logTabSync("preserving local draft with unsent work", {
+        workspaceKey,
+        tabId: tab.tabId,
+        remoteRevision: input.state.revision,
+      });
+      continue;
+    }
+    // A brand-new draft tab the user just opened, not yet acknowledged by the
+    // host: preserve it so adoption of a snapshot captured before it existed
+    // can't make it vanish on its own (see open-markers). Only draft tabs — an
+    // agent tab absent from the host was archived elsewhere and should close.
+    // A draft whose own record is terminal ("sent"/"abandoned") is a zombie, not
+    // a live new tab, so the marker must never rescue it.
+    if (
+      tab.target.kind === "draft" &&
+      hasTabOpenMarker(workspaceKey, tab.tabId) &&
+      !getTerminalDraftLifecycle({
+        serverId: input.serverId,
+        tabId: tab.tabId,
+        target: tab.target,
+      })
+    ) {
+      logTabSync("preserving unacknowledged local draft tab", {
         workspaceKey,
         tabId: tab.tabId,
         remoteRevision: input.state.revision,
