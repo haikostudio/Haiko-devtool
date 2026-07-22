@@ -87,25 +87,44 @@ function pushEscHandler(handler: EscHandler): () => void {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  desktopOverlay: {
+  // Full-screen overlay that hosts the desktop card. Placement (where the card
+  // sits) and backdrop (dim + click-outside vs. transparent + click-through) are
+  // layered on top as separate style fragments so the three placements share one
+  // base.
+  desktopOverlayBase: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    justifyContent: "center",
-    alignItems: "center",
     padding: theme.spacing[6],
     zIndex: OVERLAY_Z.modal,
+  },
+  // "center": the default modal, card centered in the viewport.
+  desktopPlaceCenter: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // "bottom": card docked to the bottom edge, horizontally centered (the tasks
+  // conductor/chat dock — a drawer that hugs the bottom of the board, not a
+  // floating modal in the middle of the screen).
+  desktopPlaceBottom: {
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  // "right": card anchored to the right edge as an independent side panel (the
+  // task Details/Billing drawer), so it sits beside the bottom dock instead of
+  // stacking on top of it.
+  desktopPlaceRight: {
+    justifyContent: "center",
+    alignItems: "flex-end",
+  },
+  // Dimmed backdrop: a click anywhere outside the card closes it.
+  desktopOverlayDim: {
+    backgroundColor: "rgba(0,0,0,0.55)",
     pointerEvents: "auto" as const,
   },
-  // Backdrop-less desktop overlay: no dim, and taps fall through to the app
-  // behind everywhere except the card itself (pointerEvents "box-none"), so the
-  // rest of the screen stays visible and interactive. The user closes via the X.
-  desktopOverlayNoBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+  // Backdrop-less overlay: no dim, and taps fall through to the app behind
+  // everywhere except the card itself (pointerEvents "box-none"), so the rest of
+  // the screen stays visible and interactive. The user closes via the X.
+  desktopOverlayTransparent: {
     backgroundColor: "transparent",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: theme.spacing[6],
-    zIndex: OVERLAY_Z.modal,
     pointerEvents: "box-none" as const,
   },
   desktopCard: {
@@ -254,6 +273,12 @@ const styles = StyleSheet.create((theme) => ({
 
 const SEARCH_INPUT_STYLE = [styles.searchInput, isWeb && { outlineStyle: "none" }];
 const WEB_EXIT_DURATION_MS = 160;
+
+const DESKTOP_PLACEMENT_STYLE = {
+  center: styles.desktopPlaceCenter,
+  bottom: styles.desktopPlaceBottom,
+  right: styles.desktopPlaceRight,
+} as const;
 
 function SheetBackground({ style }: BottomSheetBackgroundProps) {
   const { theme } = useUnistyles();
@@ -486,6 +511,14 @@ export interface AdaptiveModalSheetProps {
    * X). Esc-to-close still works. Defaults to true (dimmed, click-outside).
    */
   desktopBackdrop?: boolean;
+  /**
+   * Desktop only: where the card sits within the viewport. "center" (default)
+   * is the classic modal; "bottom" docks it to the bottom edge as a drawer (the
+   * tasks conductor/chat dock); "right" anchors it to the right edge as an
+   * independent side panel (the task Details drawer). Compact form factors always
+   * use the bottom sheet regardless of this value.
+   */
+  desktopPlacement?: "center" | "bottom" | "right";
   scrollable?: boolean;
   presentation?: "push" | "replace";
   /**
@@ -514,6 +547,7 @@ export function AdaptiveModalSheet({
   testID,
   desktopMaxWidth,
   desktopBackdrop = true,
+  desktopPlacement = "center",
   scrollable = true,
   presentation,
   dynamicSizing = false,
@@ -625,7 +659,9 @@ export function AdaptiveModalSheet({
   );
   const desktopOverlayStyle = useMemo(
     () => [
-      desktopBackdrop ? styles.desktopOverlay : styles.desktopOverlayNoBackdrop,
+      styles.desktopOverlayBase,
+      DESKTOP_PLACEMENT_STYLE[desktopPlacement],
+      desktopBackdrop ? styles.desktopOverlayDim : styles.desktopOverlayTransparent,
       isWeb && {
         opacity: isWebClosing ? 0 : 1,
         transitionDuration: `${WEB_EXIT_DURATION_MS}ms`,
@@ -633,7 +669,7 @@ export function AdaptiveModalSheet({
         transitionTimingFunction: "ease",
       },
     ],
-    [isWebClosing, desktopBackdrop],
+    [isWebClosing, desktopBackdrop, desktopPlacement],
   );
 
   useEffect(() => {

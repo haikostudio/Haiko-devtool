@@ -30,8 +30,11 @@ export interface TaskDetailDrawerProps {
 
 /**
  * The task's "Details" + "Billing" drawer, unified across form factors through
- * the shared `AdaptiveModalSheet`: a bottom sheet on compact, a centered card on
- * desktop (no backdrop dim, so the board behind stays visible/interactive).
+ * the shared `AdaptiveModalSheet`: a bottom sheet on compact, and on desktop a
+ * drawer anchored to the right edge (`desktopPlacement="right"`, no backdrop dim,
+ * so the board behind stays visible/interactive). It anchors right so it sits
+ * beside the conductor's bottom chat dock — opening "Details" from the dock never
+ * stacks two cards in the middle of the screen.
  *
  * The body is a fixed SegmentedControl over the selected view. Both views
  * (`TaskDetailInlineForm`, `TaskBillingView`) own their own flex ScrollView, so
@@ -79,6 +82,7 @@ function TaskDetailDrawerInner({
       onClose={onClose}
       scrollable={false}
       desktopBackdrop={false}
+      desktopPlacement="right"
       testID="task-detail-drawer"
     >
       <View style={styles.tabs}>

@@ -47,8 +47,10 @@ export interface ConductorPanelProps {
 
 /**
  * The "Chef d'orchestre" chat drawer, rendered through the shared
- * `AdaptiveModalSheet`: a bottom sheet on compact, a centered card on desktop
- * (no backdrop dim, so the board behind stays visible/interactive). Shows the
+ * `AdaptiveModalSheet`: a bottom sheet on compact, and on desktop a drawer
+ * docked to the bottom edge of the board (`desktopPlacement="bottom"`, no
+ * backdrop dim, so the board behind stays visible/interactive) — a dock, not a
+ * modal floating in the middle of the screen. Shows the
  * persistent per-project conductor agent by default, and swaps to the selected
  * task's agent chat when a task is tapped on the board. On mount (in conductor
  * mode) it ensures the conductor exists on the host and embeds its live agent via
@@ -203,6 +205,7 @@ export function ConductorPanel({
       onClose={onClose}
       scrollable={false}
       desktopBackdrop={false}
+      desktopPlacement="bottom"
       snapPoints={CONDUCTOR_SNAP_POINTS}
       desktopMaxWidth={CONDUCTOR_DESKTOP_MAX_WIDTH}
       testID="conductor-panel"
