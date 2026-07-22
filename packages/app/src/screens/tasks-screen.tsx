@@ -1099,11 +1099,70 @@ function BoardContent({
   return <TaskScheduleProvider value={quietHours}>{boardStack}</TaskScheduleProvider>;
 }
 
+// Task actions bound to a board handle, shared by the conductor dock (its
+// Details tab) and the standalone Details/Billing drawer so the two never drift.
+function useBoardTaskActions(boardHandle: BoardHandle) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const handleSave = useCallback(
+    ({ taskId, title, description, tags, runConfig, schedulePreference }: TaskDetailSaveInput) => {
+      void boardHandle.updateTask({
+        taskId,
+        title,
+        description: description || null,
+        tags,
+        runConfig,
+        schedulePreference,
+      });
+    },
+    [boardHandle],
+  );
+  const handleDelete = useCallback(
+    (taskId: string) => {
+      void boardHandle.deleteTask(taskId);
+    },
+    [boardHandle],
+  );
+  const handleEstimate = useCallback(
+    (taskId: string) => {
+      toast.show(t("tasks.toast.reanalyzing"));
+      boardHandle.estimateTask(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast, t],
+  );
+  const handleRunNow = useCallback(
+    (taskId: string) => {
+      toast.show(t("tasks.toast.launching"));
+      boardHandle.runTaskNow(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast, t],
+  );
+  const handleApprove = useCallback(
+    (taskId: string) => {
+      void boardHandle.approveTask(taskId);
+    },
+    [boardHandle],
+  );
+  const handleSetHold = useCallback(
+    (taskId: string, hold: boolean) => {
+      boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast],
+  );
+  return { handleSave, handleDelete, handleEstimate, handleRunNow, handleApprove, handleSetHold };
+}
+
 // Bottom-center floating toggle + the shared chat dock overlay. Gated on the
 // host feature flag; rendered at the TasksScreen root so its absolute position
 // centers across the full tasks area (including rails), not just the board. The
-// dock shows the conductor agent by default and the selected task's agent when a
-// task is tapped on the board.
+// dock shows the conductor agent by default and, when a task is tapped on the
+// board, that task's Chat / Details / Billing tabs.
 function ConductorDock({
   serverId,
   projectId,
@@ -1114,14 +1173,13 @@ function ConductorDock({
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
-  const toast = useToast();
   const isCompact = useIsCompactFormFactor();
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const conductorOpen = useTasksBoardUiStore((state) => state.conductorOpen);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const dockTaskId = useTasksBoardUiStore((state) => state.dockTaskId);
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
-  const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
+  const taskActions = useBoardTaskActions(boardHandle);
 
   const dockTask = useMemo(
     () =>
@@ -1137,19 +1195,6 @@ function ConductorDock({
   }, [setConductorOpen, setDockTaskId]);
   const handleOpen = useCallback(() => setConductorOpen(true), [setConductorOpen]);
   const handleBack = useCallback(() => setDockTaskId(null), [setDockTaskId]);
-  const handleOpenDetails = useCallback(
-    (taskId: string) => setDetailsTaskId(taskId),
-    [setDetailsTaskId],
-  );
-  const handleRunNow = useCallback(
-    (taskId: string) => {
-      toast.show(t("tasks.toast.launching"));
-      boardHandle.runTaskNow(taskId).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
-      });
-    },
-    [boardHandle, toast, t],
-  );
 
   // Proximity animation (desktop web only): the toggle fades in and grows as the
   // cursor approaches, then springs back to dormant when it moves away. On touch
@@ -1208,8 +1253,12 @@ function ConductorDock({
         projectId={projectId}
         dockTask={dockTask}
         onBackToConductor={handleBack}
-        onOpenDetails={handleOpenDetails}
-        onRunNow={handleRunNow}
+        onRunNow={taskActions.handleRunNow}
+        onSave={taskActions.handleSave}
+        onDelete={taskActions.handleDelete}
+        onEstimate={taskActions.handleEstimate}
+        onApprove={taskActions.handleApprove}
+        onSetHold={taskActions.handleSetHold}
         onClose={handleClose}
       />
     );
@@ -1245,8 +1294,6 @@ function TasksDetailDock({
   projectId: string | null;
   boardHandle: BoardHandle;
 }) {
-  const { t } = useTranslation();
-  const toast = useToast();
   const detailsTaskId = useTasksBoardUiStore((state) => state.detailsTaskId);
   const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
 
@@ -1259,57 +1306,7 @@ function TasksDetailDock({
   );
 
   const handleClose = useCallback(() => setDetailsTaskId(null), [setDetailsTaskId]);
-  const handleSave = useCallback(
-    ({ taskId, title, description, tags, runConfig, schedulePreference }: TaskDetailSaveInput) => {
-      void boardHandle.updateTask({
-        taskId,
-        title,
-        description: description || null,
-        tags,
-        runConfig,
-        schedulePreference,
-      });
-    },
-    [boardHandle],
-  );
-  const handleDelete = useCallback(
-    (taskId: string) => {
-      void boardHandle.deleteTask(taskId);
-    },
-    [boardHandle],
-  );
-  const handleEstimate = useCallback(
-    (taskId: string) => {
-      toast.show(t("tasks.toast.reanalyzing"));
-      boardHandle.estimateTask(taskId).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
-      });
-    },
-    [boardHandle, toast, t],
-  );
-  const handleRunNow = useCallback(
-    (taskId: string) => {
-      toast.show(t("tasks.toast.launching"));
-      boardHandle.runTaskNow(taskId).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
-      });
-    },
-    [boardHandle, toast, t],
-  );
-  const handleApprove = useCallback(
-    (taskId: string) => {
-      void boardHandle.approveTask(taskId);
-    },
-    [boardHandle],
-  );
-  const handleSetHold = useCallback(
-    (taskId: string, hold: boolean) => {
-      boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
-      });
-    },
-    [boardHandle, toast],
-  );
+  const taskActions = useBoardTaskActions(boardHandle);
 
   return (
     <TaskDetailDrawer
@@ -1318,12 +1315,12 @@ function TasksDetailDock({
       task={detailsTask}
       visible={detailsTask !== null}
       onClose={handleClose}
-      onSave={handleSave}
-      onDelete={handleDelete}
-      onEstimate={handleEstimate}
-      onRunNow={handleRunNow}
-      onApprove={handleApprove}
-      onSetHold={handleSetHold}
+      onSave={taskActions.handleSave}
+      onDelete={taskActions.handleDelete}
+      onEstimate={taskActions.handleEstimate}
+      onRunNow={taskActions.handleRunNow}
+      onApprove={taskActions.handleApprove}
+      onSetHold={taskActions.handleSetHold}
     />
   );
 }
