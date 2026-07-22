@@ -87,6 +87,9 @@ export function CompactTaskAgentSheet(props: CompactTaskAgentSheetProps) {
 
   const contentStyle = useAnimatedStyle(() => ({
     flex: 1,
+    // Bounded height must reach the embedded agent stream so it can scroll on
+    // web (flex children default to `min-height: auto` — see styles below).
+    minHeight: 0,
     transform: [{ translateY: translateY.value }],
   }));
 
@@ -142,13 +145,19 @@ export function CompactTaskAgentSheet(props: CompactTaskAgentSheetProps) {
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
+    minHeight: 0,
   },
   host: {
     flex: 1,
+    // Every flex-column ancestor between the full-screen root and the chat
+    // stream needs `minHeight: 0` on web, otherwise it expands to its content
+    // and the discussion overflows without scrolling.
+    minHeight: 0,
     backgroundColor: theme.colors.surface0,
   },
   panelHost: {
     flex: 1,
+    minHeight: 0,
   },
   handleArea: {
     alignItems: "center",
