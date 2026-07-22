@@ -232,6 +232,13 @@ function sortButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
   return [styles.sortButton, (hovered || pressed) && styles.sortButtonHovered];
 }
 
+// Plain (non-Unistyles) style: FormTextInput flattens its `style` prop and strips
+// Unistyles metadata, which silently drops a proxy style's flex/background. So the
+// field flexes via the plain wrapper View (railSearchField) and the input just
+// knocks out its own grey chrome so the white wrapper shows through — same trick as
+// the column toolbar's search field.
+const TRANSPARENT_CHROME = { backgroundColor: "transparent" } as const;
+
 // Most-recent-first, falling back to name so ties (and projects with no agent
 // activity) stay stable and readable.
 function compareByRecent(left: ProjectEntry, right: ProjectEntry): number {
@@ -594,14 +601,16 @@ function ProjectsRail({
     <View style={styles.rail}>
       <Text style={styles.railHeader}>{t("tasks.pickProject")}</Text>
       <View style={styles.railSearchRow}>
-        <FormTextInput
-          size="sm"
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t("tasks.searchProjects")}
-          style={styles.railSearchInput}
-          testID="tasks-project-search"
-        />
+        <View style={styles.railSearchField}>
+          <FormTextInput
+            size="sm"
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("tasks.searchProjects")}
+            style={TRANSPARENT_CHROME}
+            testID="tasks-project-search"
+          />
+        </View>
         <Pressable
           style={sortButtonStyle}
           onPress={toggleSort}
@@ -1920,15 +1929,18 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     paddingBottom: theme.spacing[2],
   },
-  // White field + white square button so both read clearly against the gray
-  // sidebar rail (surface2 input on a surface2 rail was invisible). The input
-  // flexes to fill; the sort button is a fixed square column beside it.
-  // A visible resting border (matching the sort button) gives the white field a
-  // defined edge — without it, white on the near-white rail has no contrast.
-  railSearchInput: {
+  // White, bordered wrapper so the field reads as an input against the grey
+  // sidebar rail. flex:1 here (a plain View) reliably fills the row — the
+  // FormTextInput's own flex/background is dropped by its style split, exactly
+  // like the column toolbar's search field.
+  railSearchField: {
     flex: 1,
+    justifyContent: "center",
     backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
     borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
   },
   // Auto-width icon button: the field flexes to fill the row, this button hugs
   // its icon (horizontal padding instead of a fixed width) and sits beside it.
