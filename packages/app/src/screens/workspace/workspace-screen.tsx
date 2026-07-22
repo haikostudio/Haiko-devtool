@@ -1692,6 +1692,21 @@ function useWorkspaceTerminalTabActions({
   };
 }
 
+/**
+ * Whether the deploy button may appear for this workspace. The daemon sends the
+ * set of Paseo checkout roots (main repo + task worktrees); older daemons omit
+ * it, so we fall back to the main repo path.
+ */
+function isPaseoDeployCheckout(
+  workspaceDirectory: string | null,
+  roots: readonly string[] | undefined,
+): boolean {
+  if (roots) {
+    return !!workspaceDirectory && roots.includes(workspaceDirectory);
+  }
+  return workspaceDirectory === "/root/paseo";
+}
+
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1726,13 +1741,19 @@ function WorkspaceScreenContent({
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
-  // Paseo-only self-host deploy button: the Paseo repo itself, on a host that
-  // advertises the capability. Personal-fork feature; strings are French inline.
+  // Paseo-only self-host deploy button: the Paseo repo OR any of its task-branch
+  // worktrees, on a host that advertises the capability. The daemon sends the set
+  // of checkout roots; older daemons omit it, so we fall back to the main repo
+  // path. Personal-fork feature; strings are French inline.
   const paseoSelfhostDeploySupported = useSessionStore(
     (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeploy === true,
   );
+  const paseoSelfhostDeployRoots = useSessionStore(
+    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeployRoots,
+  );
   const showPaseoDeployButton =
-    paseoSelfhostDeploySupported && workspaceDirectory === "/root/paseo";
+    paseoSelfhostDeploySupported &&
+    isPaseoDeployCheckout(workspaceDirectory, paseoSelfhostDeployRoots);
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
   const canOpenImportSheet = [client, isConnected, workspaceDirectory].every(Boolean);
   const openImportSheet = useCallback(() => {

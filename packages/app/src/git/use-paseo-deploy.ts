@@ -20,6 +20,15 @@ export interface PaseoDeployCommitEntry {
   subject: string;
 }
 
+/** Another Paseo checkout (task-branch worktree) with work to merge-and-ship. */
+export interface PaseoDeployWorktreeEntry {
+  path: string;
+  branch: string;
+  ahead: number;
+  commits: PaseoDeployCommitEntry[];
+  uncommittedCount: number;
+}
+
 export interface PaseoDeployStatus {
   deploying: boolean;
   hasPending: boolean;
@@ -40,6 +49,11 @@ export interface PaseoDeployStatus {
    */
   daemonBehindCount?: number;
   branch: string | null;
+  /**
+   * Other Paseo checkouts (task-branch worktrees) with pending work — each can be
+   * merged-and-shipped from the modal. Optional so older daemons still parse.
+   */
+  worktrees?: PaseoDeployWorktreeEntry[];
   lastError: string | null;
   error: string | null;
 }

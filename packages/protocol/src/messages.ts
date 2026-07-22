@@ -2233,6 +2233,12 @@ export const PaseoDeployTriggerRequestSchema = z.object({
   type: z.literal("checkout.deploy.trigger.request"),
   /** When true, commit + push only, skip the (costly) web rebuild. */
   noBuild: z.boolean().optional(),
+  /**
+   * When set, merge this branch into the deploy branch before shipping — the
+   * "fusionner puis publier" path for a task-branch worktree. Optional so the
+   * plain deploy-branch ship keeps working unchanged.
+   */
+  mergeBranch: z.string().optional(),
   requestId: z.string(),
 });
 
@@ -3093,6 +3099,10 @@ export const ServerInfoStatusPayloadSchema = z
         turnRecap: z.boolean().optional(),
         // COMPAT(paseoSelfhostDeploy): added in v0.1.108, custom fork feature (self-host deploy button).
         paseoSelfhostDeploy: z.boolean().optional(),
+        // COMPAT(paseoSelfhostDeployRoots): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        // Checkout roots (the Paseo repo + its worktrees) where the deploy button
+        // may appear, so task-branch worktrees show it too — not just /root/paseo.
+        paseoSelfhostDeployRoots: z.array(z.string()).optional(),
       })
       .optional(),
   })
@@ -4621,6 +4631,24 @@ export const PaseoDeployPendingCommitSchema = z.object({
   subject: z.string(),
 });
 
+/**
+ * Another Paseo checkout (a task-branch worktree) that carries work not yet on
+ * the deploy branch. Surfaced so the deploy modal can list every atelier's
+ * pending work in one place and merge-then-ship any of them.
+ */
+export const PaseoDeployWorktreeSchema = z.object({
+  /** Absolute path of the worktree checkout. */
+  path: z.string(),
+  /** Branch checked out there. */
+  branch: z.string(),
+  /** Number of commits on this branch not yet on the deploy branch. */
+  ahead: z.number(),
+  /** Those commits (newest first), for a human-readable list. */
+  commits: z.array(PaseoDeployPendingCommitSchema),
+  /** Uncommitted files in that worktree (shown as an info count only). */
+  uncommittedCount: z.number(),
+});
+
 export const PaseoDeployStatusResponseSchema = z.object({
   type: z.literal("checkout.deploy.status.response"),
   payload: z.object({
@@ -4651,6 +4679,12 @@ export const PaseoDeployStatusResponseSchema = z.object({
      */
     daemonBehindCount: z.number().optional(),
     branch: z.string().nullable(),
+    /**
+     * Other Paseo checkouts (task-branch worktrees) with work not yet on the
+     * deploy branch — each can be merged-and-shipped from the modal. Optional so
+     * older daemons that don't send it still parse.
+     */
+    worktrees: z.array(PaseoDeployWorktreeSchema).optional(),
     /** Error from the last finished deploy run, if it failed. */
     lastError: z.string().nullable(),
     /** Error while computing this status. */
@@ -5571,6 +5605,7 @@ export type PaseoDeployStatusResponse = z.infer<typeof PaseoDeployStatusResponse
 export type PaseoDeployTriggerResponse = z.infer<typeof PaseoDeployTriggerResponseSchema>;
 export type PaseoDeployPendingFile = z.infer<typeof PaseoDeployPendingFileSchema>;
 export type PaseoDeployPendingCommit = z.infer<typeof PaseoDeployPendingCommitSchema>;
+export type PaseoDeployWorktree = z.infer<typeof PaseoDeployWorktreeSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;
