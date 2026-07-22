@@ -49,6 +49,26 @@ export function recordLocalTabOpen(workspaceKey: string, tabId: string): void {
   entries.set(tabId, now);
 }
 
+// Seeds a marker from a persisted tab at startup, so the protection survives a
+// reload: after a reload the in-memory registry is empty, yet the just-opened
+// draft tab rehydrates from disk while the host snapshot may still predate it.
+// The marker is timestamped with the tab's own createdAt, so a draft older than
+// the TTL is NOT seeded — an ancient empty draft the host never learned about
+// stays closeable. Cleared as usual the moment the host acknowledges the tab.
+export function seedTabOpenMarker(workspaceKey: string, tabId: string, openedAt: number): void {
+  const now = Date.now();
+  if (now - openedAt > MARKER_TTL_MS) {
+    return;
+  }
+  let entries = openedAtByWorkspaceTab.get(workspaceKey);
+  if (!entries) {
+    entries = new Map();
+    openedAtByWorkspaceTab.set(workspaceKey, entries);
+  }
+  pruneExpired(entries, now);
+  entries.set(tabId, openedAt);
+}
+
 // Clears the marker once the host acknowledges the tab (it appears in a
 // snapshot) or the tab is closed / converted — from then on a host snapshot that
 // omits the tab is a genuine close, not a stale replay.

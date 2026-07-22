@@ -18,7 +18,7 @@ vi.mock("@react-native-async-storage/async-storage", () => {
 import type { WorkspaceUiState } from "@getpaseo/protocol/messages";
 import { resetTabCloseTombstonesForTest } from "@/session-ui-state/close-tombstones";
 import { resetLocalFocusIntentForTest } from "@/session-ui-state/focus-intent";
-import { resetTabOpenMarkersForTest } from "@/session-ui-state/open-markers";
+import { resetTabOpenMarkersForTest, seedTabOpenMarker } from "@/session-ui-state/open-markers";
 import { hydrateWorkspaceUiState } from "@/session-ui-state/hydrate";
 import { buildWorkspaceUiState } from "@/session-ui-state/snapshot";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
@@ -302,7 +302,11 @@ describe("session ui state draft config sync", () => {
       drafts: {},
       revision: 2,
     };
-    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: acknowledged });
+    hydrateWorkspaceUiState({
+      serverId: SERVER_ID,
+      workspaceId: WORKSPACE_ID,
+      state: acknowledged,
+    });
 
     // Second adoption: another device closed it, so the host drops it.
     const dropped: WorkspaceUiState = {
@@ -317,6 +321,56 @@ describe("session ui state draft config sync", () => {
     const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
     const tabs = collectAllTabs(layout.root);
     expect(tabs).toHaveLength(0);
+  });
+
+  it("preserves a recent draft tab reseeded from disk after a reload", () => {
+    // After a reload the in-memory markers are gone; the layout store reseeds a
+    // marker for each persisted draft tab from its createdAt. A recent draft
+    // (within the TTL) the host has not acknowledged must survive adoption.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+    // Simulate the reload: wipe live markers, then reseed as onRehydrateStorage
+    // would, with a fresh createdAt.
+    resetTabOpenMarkersForTest();
+    seedTabOpenMarker(WORKSPACE_KEY, "d1", Date.now());
+
+    const remote: WorkspaceUiState = {
+      tabs: [],
+      order: [],
+      focusedTabId: null,
+      drafts: {},
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    expect(collectAllTabs(layout.root)).toHaveLength(1);
+  });
+
+  it("still closes an ancient draft tab whose reseed was skipped as too old", () => {
+    // A draft older than the marker TTL is not reseeded on reload, so the host
+    // dropping it still closes it — we do not resurrect stale empty drafts.
+    useWorkspaceLayoutStore
+      .getState()
+      .openTabInBackground(WORKSPACE_KEY, { kind: "draft", draftId: "d1", setup: BASE_SETUP });
+    resetTabOpenMarkersForTest();
+    // createdAt far in the past: seedTabOpenMarker ignores it.
+    seedTabOpenMarker(WORKSPACE_KEY, "d1", Date.now() - 7 * 60 * 60 * 1000);
+
+    const remote: WorkspaceUiState = {
+      tabs: [],
+      order: [],
+      focusedTabId: null,
+      drafts: {},
+      revision: 2,
+    };
+
+    hydrateWorkspaceUiState({ serverId: SERVER_ID, workspaceId: WORKSPACE_ID, state: remote });
+
+    const layout = useWorkspaceLayoutStore.getState().layoutByWorkspace[WORKSPACE_KEY];
+    expect(collectAllTabs(layout.root)).toHaveLength(0);
   });
 
   it("drops a zombie draft tab whose synced record says the draft was already sent", () => {

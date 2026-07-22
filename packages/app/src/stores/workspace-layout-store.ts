@@ -46,7 +46,11 @@ import {
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { clearTabCloseTombstone, recordTabClose } from "@/session-ui-state/close-tombstones";
-import { clearTabOpenMarker, recordLocalTabOpen } from "@/session-ui-state/open-markers";
+import {
+  clearTabOpenMarker,
+  recordLocalTabOpen,
+  seedTabOpenMarker,
+} from "@/session-ui-state/open-markers";
 import { recordLocalFocusIntent } from "@/session-ui-state/focus-intent";
 
 export { buildWorkspaceTabPersistenceKey };
@@ -951,6 +955,24 @@ export function createWorkspaceLayoutStore(
             layoutByWorkspace,
             splitSizesByWorkspace: state.splitSizesByWorkspace,
           };
+        },
+        // After a reload the in-memory open markers are gone, so a freshly opened
+        // draft tab rehydrated from disk would be closeable again by an adoption
+        // that predates it. Reseed a marker for each persisted draft tab (bounded
+        // by its own age inside seedTabOpenMarker) so the "new agent closes
+        // itself" protection survives the reload too.
+        onRehydrateStorage: () => (state) => {
+          if (!state) {
+            return;
+          }
+          for (const workspaceKey in state.layoutByWorkspace) {
+            const layout = state.layoutByWorkspace[workspaceKey];
+            for (const tab of collectAllTabs(layout.root)) {
+              if (tab.target.kind === "draft") {
+                seedTabOpenMarker(workspaceKey, tab.tabId, tab.createdAt);
+              }
+            }
+          }
         },
       },
     ),
