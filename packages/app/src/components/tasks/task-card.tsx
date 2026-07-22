@@ -1,5 +1,15 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { Bot, Clock, GitPullRequest } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -107,6 +117,47 @@ function computeNextRunAt(task: KanbanTask, quietHours: QuietHours, nowMs: numbe
   return nextQuietHoursStartMs(nowMs, quietHours);
 }
 
+// Horizontal travel (px) of the attention shake, and how often it repeats.
+const SHAKE_AMPLITUDE = 3;
+const SHAKE_INTERVAL_MS = 5000;
+
+/**
+ * Drives the "waiting for you" shake: a short burst of horizontal wobbles (~0.4s)
+ * followed by a rest, looping every `SHAKE_INTERVAL_MS`. Returns an animated
+ * transform style to spread on the card wrapper. Disabled (identity transform)
+ * when the task isn't waiting, or when the OS asks for reduced motion.
+ */
+function useAttentionShake(active: boolean) {
+  const offset = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!active || reduceMotion) {
+      cancelAnimation(offset);
+      offset.value = withTiming(0, { duration: 120 });
+      return;
+    }
+    // One burst: quick out-and-back wobbles that settle, then hold still for the
+    // remainder of the interval before the repeat replays it.
+    const burst = withSequence(
+      withTiming(-1, { duration: 55 }),
+      withTiming(1, { duration: 90 }),
+      withTiming(-0.6, { duration: 90 }),
+      withTiming(0.4, { duration: 80 }),
+      withTiming(0, { duration: 70 }),
+    );
+    offset.value = withRepeat(withDelay(SHAKE_INTERVAL_MS - 385, burst), -1, false);
+    return () => {
+      cancelAnimation(offset);
+      offset.value = 0;
+    };
+  }, [active, reduceMotion, offset]);
+
+  return useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value * SHAKE_AMPLITUDE }],
+  }));
+}
+
 /**
  * A single kanban card, ticket-style: a soft tinted priority chip on top, the
  * title, an optional two-line description, then deadline / meta / tags. Flat
@@ -124,6 +175,10 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
   const tone = useTaskTone(task);
+
+  // A task that wants a reply nudges itself: a light horizontal shake every ~5s,
+  // just enough to catch the eye without being noisy. Honors reduced motion.
+  const shakeStyle = useAttentionShake(tone === "attention");
 
   // Concrete "runs around 01:00" hint for tasks the scheduler parks until the
   // next off-peak window. Formatted in the window's timezone and the UI locale.
@@ -155,57 +210,59 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const priorityLabel = priority?.label;
 
   return (
-    <Pressable
-      onPress={handlePress}
-      style={cardStyle}
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
-    >
-      <TaskStatusVoyant tone={tone} variant="pip" />
-      <View style={styles.titleRow}>
-        {priority ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
-        <Text style={styles.title} numberOfLines={3}>
-          {task.title}
-        </Text>
-      </View>
-      {scheduleBadge ? (
-        <View style={styles.chipRow}>
-          <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
+    <Animated.View style={shakeStyle}>
+      <Pressable
+        onPress={handlePress}
+        style={cardStyle}
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
+      >
+        <TaskStatusVoyant tone={tone} variant="pip" />
+        <View style={styles.titleRow}>
+          {priority ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
+          <Text style={styles.title} numberOfLines={3}>
+            {task.title}
+          </Text>
         </View>
-      ) : null}
-      {nextRunLabel ? (
-        <View style={styles.nextRunRow}>
-          <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          <Text style={styles.nextRunText}>{nextRunLabel}</Text>
-        </View>
-      ) : null}
-      {description ? (
-        <Text style={styles.description} numberOfLines={2}>
-          {description}
-        </Text>
-      ) : null}
-      <CardMetaRow task={task} deadline={deadline} />
-      {visibleTags.length > 0 ? (
-        <View style={styles.tagsRow}>
-          {visibleTags.map((tag) => (
-            <View key={tag} style={styles.tagChip}>
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          ))}
-          {hiddenTagCount > 0 ? (
-            <View style={styles.tagChip}>
-              <Text style={styles.tagText}>{`+${hiddenTagCount}`}</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-      {task.schedule?.lastError ? (
-        <Text style={styles.errorText} numberOfLines={2}>
-          {task.schedule.lastError}
-        </Text>
-      ) : null}
-    </Pressable>
+        {scheduleBadge ? (
+          <View style={styles.chipRow}>
+            <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
+          </View>
+        ) : null}
+        {nextRunLabel ? (
+          <View style={styles.nextRunRow}>
+            <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+            <Text style={styles.nextRunText}>{nextRunLabel}</Text>
+          </View>
+        ) : null}
+        {description ? (
+          <Text style={styles.description} numberOfLines={2}>
+            {description}
+          </Text>
+        ) : null}
+        <CardMetaRow task={task} deadline={deadline} />
+        {visibleTags.length > 0 ? (
+          <View style={styles.tagsRow}>
+            {visibleTags.map((tag) => (
+              <View key={tag} style={styles.tagChip}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+            ))}
+            {hiddenTagCount > 0 ? (
+              <View style={styles.tagChip}>
+                <Text style={styles.tagText}>{`+${hiddenTagCount}`}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+        {task.schedule?.lastError ? (
+          <Text style={styles.errorText} numberOfLines={2}>
+            {task.schedule.lastError}
+          </Text>
+        ) : null}
+      </Pressable>
+    </Animated.View>
   );
 });
 

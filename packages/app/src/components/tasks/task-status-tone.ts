@@ -1,19 +1,21 @@
 import type { WorkspaceStateBucket } from "@getpaseo/protocol/agent-state-bucket";
 import type { KanbanTask } from "@/data/tasks";
 
-// The three "voyant" tones a task (or an aggregate of tasks) can signal, mirroring
-// the agent toast badge: amber = the task wants the user (a question, a permission,
-// a paused go, a ready plan, a failure), blue = something is actively happening,
-// green = finished. `null` = nothing worth a light (an untouched backlog task).
-export type TaskTone = "attention" | "running" | "done";
+// The "voyant" tones a task (or an aggregate of tasks) can signal, mirroring the
+// agent toast badge: amber = the task wants the user (a question, a permission, a
+// paused go, a ready plan, a failure), a spinning square loader = an agent is
+// actively working, blue = queued/planned and waiting for its slot, green =
+// finished. `null` = nothing worth a light (an untouched backlog task).
+export type TaskTone = "attention" | "running" | "scheduled" | "done";
 
 // Aggregate precedence: surface the most action-needing signal first. A project
-// that needs you (amber) outranks one that is merely working (blue), which
-// outranks one that is simply finished (green).
+// that needs you (amber) outranks one actively working (loader), which outranks
+// one merely scheduled (blue), which outranks one simply finished (green).
 const AGGREGATE_RANK: Record<TaskTone, number> = {
   attention: 0,
   running: 1,
-  done: 2,
+  scheduled: 2,
+  done: 3,
 };
 
 // The agent Paseo runs a task through. primaryAgentId is what agent-sync points
@@ -38,18 +40,23 @@ function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
   );
 }
 
-// Actively working: the scheduler is analyzing / queued / launching / running,
-// the card sits in the in-progress column, or the live agent is running.
-function isActive(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
+// Actively working (spinning loader): the scheduler is estimating / launching /
+// running, the card sits in the in-progress column, or the live agent is running.
+function isRunning(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
   const scheduleState = task.schedule?.state;
   return (
     task.column === "in_progress" ||
     scheduleState === "pending_estimate" ||
-    scheduleState === "awaiting_slot" ||
     scheduleState === "launching" ||
     scheduleState === "running" ||
     agentBucket === "running"
   );
+}
+
+// Queued/planned but not yet working: validated and parked waiting for its slot
+// (a quiet-hours window, an available agent quota). Reads as a static blue light.
+function isScheduled(task: KanbanTask): boolean {
+  return task.schedule?.state === "awaiting_slot";
 }
 
 /**
@@ -71,8 +78,11 @@ export function deriveTaskTone(
   if (wantsUser(task, agentBucket)) {
     return "attention";
   }
-  if (isActive(task, agentBucket)) {
+  if (isRunning(task, agentBucket)) {
     return "running";
+  }
+  if (isScheduled(task)) {
+    return "scheduled";
   }
   return null;
 }

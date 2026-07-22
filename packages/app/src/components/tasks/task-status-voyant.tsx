@@ -17,6 +17,7 @@ import {
 } from "@getpaseo/protocol/agent-state-bucket";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { SyncedLoader } from "@/components/synced-loader";
 import type { KanbanTask } from "@/data/tasks";
 import { aggregateTaskTones, deriveTaskTone, taskAgentId, type TaskTone } from "./task-status-tone";
 
@@ -168,9 +169,11 @@ export function useProjectToneMap(projects: ProjectRef[]): Map<string, TaskTone 
 }
 
 /**
- * The status "voyant": a small colored dot. `dot` sits inline in a rail row;
- * `pip` straddles the top-left corner of a card, echoing the agent toast badge.
- * Renders nothing when there is no tone to show.
+ * The status "voyant": echoes the agent toast badge. A `running` task shows the
+ * exact same shared square loader as the toasts (a spinning dot grid); every
+ * other tone is a small static colored light — amber = wants you, blue =
+ * scheduled, green = done. `dot` sits inline in a rail row; `pip` straddles the
+ * top-left corner of a card. Renders nothing when there is no tone to show.
  */
 export function TaskStatusVoyant({
   tone,
@@ -183,9 +186,17 @@ export function TaskStatusVoyant({
   if (!tone) {
     return null;
   }
-  return (
-    <View style={VOYANT_STYLE[variant][tone]} accessibilityLabel={t(`tasks.status.${tone}`)} />
-  );
+  const label = t(`tasks.status.${tone}`);
+  // Actively working: the same synced square loader the agent toasts use, so the
+  // "en cours" light animates identically everywhere it appears.
+  if (tone === "running") {
+    return (
+      <View style={LOADER_WRAP_STYLE[variant]} accessibilityLabel={label}>
+        <SyncedLoader size={LOADER_SIZE[variant]} color={styles.loaderColor.color} />
+      </View>
+    );
+  }
+  return <View style={VOYANT_STYLE[variant][tone]} accessibilityLabel={label} />;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -208,10 +219,32 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.surface0,
     zIndex: 2,
   },
+  // Inline wrapper that centers the square loader where a rail dot would sit.
+  loaderDot: {
+    width: 11,
+    height: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Straddles the card corner exactly where the `pip` dot would, so swapping the
+  // static light for the animated loader keeps the same anchor.
+  loaderPip: {
+    position: "absolute",
+    top: -4,
+    left: -4,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
+  // The loader color reads as "working" blue — same lane as the scheduled light,
+  // but animated. Pulled off the stylesheet so SyncedLoader gets a plain string.
+  loaderColor: {
+    color: theme.colors.palette.blue[500],
+  },
   toneAttention: {
     backgroundColor: theme.colors.palette.amber[500],
   },
-  toneRunning: {
+  toneScheduled: {
     backgroundColor: theme.colors.palette.blue[500],
   },
   toneDone: {
@@ -219,23 +252,37 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-const TONE_STYLE: Record<TaskTone, object> = {
+// Loader dimensions per variant: a touch larger on cards (pip) than in rail rows.
+const LOADER_SIZE: Record<"dot" | "pip", number> = {
+  dot: 10,
+  pip: 12,
+};
+
+const LOADER_WRAP_STYLE: Record<"dot" | "pip", object> = {
+  dot: styles.loaderDot,
+  pip: styles.loaderPip,
+};
+
+// Static tones only — `running` is drawn by the SyncedLoader, not a colored dot.
+type StaticTone = Exclude<TaskTone, "running">;
+
+const TONE_STYLE: Record<StaticTone, object> = {
   attention: styles.toneAttention,
-  running: styles.toneRunning,
+  scheduled: styles.toneScheduled,
   done: styles.toneDone,
 };
 
 // Precomputed [shape, tone] style tuples so the render passes a stable array
 // reference instead of building a new one each time (react-perf lint rule).
-const VOYANT_STYLE: Record<"dot" | "pip", Record<TaskTone, object[]>> = {
+const VOYANT_STYLE: Record<"dot" | "pip", Record<StaticTone, object[]>> = {
   dot: {
     attention: [styles.dot, TONE_STYLE.attention],
-    running: [styles.dot, TONE_STYLE.running],
+    scheduled: [styles.dot, TONE_STYLE.scheduled],
     done: [styles.dot, TONE_STYLE.done],
   },
   pip: {
     attention: [styles.pip, TONE_STYLE.attention],
-    running: [styles.pip, TONE_STYLE.running],
+    scheduled: [styles.pip, TONE_STYLE.scheduled],
     done: [styles.pip, TONE_STYLE.done],
   },
 };
