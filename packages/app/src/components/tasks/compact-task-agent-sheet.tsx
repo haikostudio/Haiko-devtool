@@ -35,11 +35,11 @@ const DISMISS_DISTANCE = 120;
 const DISMISS_VELOCITY = 900;
 
 /**
- * Compact (mobile) full-screen presentation of a task's agent + editor. On phones
- * a task tap opens this instead of the config-only detail sheet, so mobile gets
- * the same "Chat" + "Details" + "Billing" tabs the desktop side panel offers —
- * the live agent mirror and the task editor in one drawer. Fresh mount per task
- * (`key`) so no state leaks between cards.
+ * Compact (mobile) full-screen presentation of a task's "Details" drawer — the
+ * same "Details" + "Billing" tabs the desktop side panel offers. Opened from the
+ * chat dock header's "Details" button (the task's live agent chat lives in the
+ * shared bottom dock now, not here). Fresh mount per task (`key`) so no state
+ * leaks between cards.
  *
  * A grab handle sits at the very top (below the safe-area inset) so the drawer
  * reads as draggable: dragging it down past a threshold slides the sheet away

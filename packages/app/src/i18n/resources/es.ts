@@ -339,6 +339,8 @@ export const es: TranslationResources = {
     conductor: {
       title: "Director",
       move: "Mover el panel",
+      backToConductor: "Volver al director",
+      openDetails: "Detalles",
       noProject: "Selecciona primero un proyecto.",
       noHost: "El host no está conectado.",
       failed: "No se pudo iniciar el director.",

@@ -335,6 +335,8 @@ export const ru: TranslationResources = {
     conductor: {
       title: "Дирижёр",
       move: "Переместить панель",
+      backToConductor: "Вернуться к дирижёру",
+      openDetails: "Подробности",
       noProject: "Сначала выберите проект.",
       noHost: "Хост не подключён.",
       failed: "Не удалось запустить дирижёра.",

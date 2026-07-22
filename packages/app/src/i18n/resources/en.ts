@@ -332,6 +332,8 @@ export const en = {
     conductor: {
       title: "Conductor",
       move: "Move panel",
+      backToConductor: "Back to conductor",
+      openDetails: "Details",
       noProject: "Select a project first.",
       noHost: "Host is not connected.",
       failed: "Couldn't start the conductor.",
@@ -413,6 +415,11 @@ export const en = {
       pending: "Needs approval",
       approve: "Approve",
       explainer: "Proposed by an agent — it will only run once you approve it.",
+    },
+    status: {
+      attention: "Waiting for you",
+      running: "In progress",
+      done: "Done",
     },
     triage: {
       fieldFolder: "Folder",

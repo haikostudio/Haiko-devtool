@@ -339,6 +339,8 @@ export const fr: TranslationResources = {
     conductor: {
       title: "Chef d'orchestre",
       move: "Déplacer le panneau",
+      backToConductor: "Revenir au chef d'orchestre",
+      openDetails: "Détails",
       noProject: "Sélectionnez d'abord un projet.",
       noHost: "L'hôte n'est pas connecté.",
       failed: "Impossible de démarrer le chef d'orchestre.",
@@ -421,6 +423,11 @@ export const fr: TranslationResources = {
       pending: "À confirmer",
       approve: "Approuver",
       explainer: "Proposée par un agent — elle ne sera lancée qu'après votre confirmation.",
+    },
+    status: {
+      attention: "Attend une réponse",
+      running: "En cours",
+      done: "Terminé",
     },
     triage: {
       fieldFolder: "Dossier",

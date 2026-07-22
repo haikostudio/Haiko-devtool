@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Bot, PanelRightClose, PanelRightOpen, X } from "lucide-react-native";
-import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import {
   TaskDetailInlineForm,
@@ -12,13 +11,7 @@ import {
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import type { KanbanTask } from "@/data/tasks";
-import { useSessionStore } from "@/stores/session-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
-import {
-  buildWorkspacePaneContentModel,
-  WorkspacePaneContent,
-} from "@/screens/workspace/workspace-pane-content";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedBot = withUnistyles(Bot);
@@ -26,7 +19,7 @@ const ThemedX = withUnistyles(X);
 const ThemedPanelClose = withUnistyles(PanelRightClose);
 const ThemedPanelOpen = withUnistyles(PanelRightOpen);
 
-type PanelView = "chat" | "details" | "billing";
+type PanelView = "details" | "billing";
 
 export interface TaskAgentPanelProps {
   serverId: string | null;
@@ -50,39 +43,17 @@ export interface TaskAgentPanelProps {
 }
 
 /**
- * Desktop-only side panel to the right of the kanban board. Mirrors the native
- * Paseo agent for the selected task's primary agent (same `WorkspacePaneContent`
- * the workspace screen mounts, so it's a live mirror — not a copy) and exposes
- * the task editor as a second tab. When no agent has run yet, offers to launch
- * one.
+ * The task's "Details" drawer — the right-hand side panel on desktop, the
+ * full-screen sheet on compact. Holds the task editor (Details) and its
+ * Billing view as two tabs. The task's live agent chat lives elsewhere now (the
+ * shared bottom "Chef d'orchestre" dock), so this panel is config-only.
  */
 export function TaskAgentPanel(props: TaskAgentPanelProps) {
   const { serverId, projectId, task, collapsed, onToggleCollapse, onClose, fullscreen } = props;
   const { t } = useTranslation();
-  const [view, setView] = useState<PanelView>("chat");
-
-  const agentId = task.links.primaryAgentId ?? null;
-  // Prefer the task's recorded workspace; fall back to the agent's own workspace
-  // from the session store so the embedded pane always has a scope.
-  const agentWorkspaceId = useSessionStore((state) =>
-    serverId && agentId ? state.sessions[serverId]?.agents?.get(agentId)?.workspaceId : undefined,
-  );
-  const workspaceId = task.links.workspaceId ?? agentWorkspaceId ?? null;
-
-  const handleSwitchToChat = useCallback(() => setView("chat"), []);
+  const [view, setView] = useState<PanelView>("details");
 
   const renderBody = () => {
-    if (view === "chat") {
-      return (
-        <ChatView
-          serverId={serverId}
-          task={task}
-          agentId={agentId}
-          workspaceId={workspaceId}
-          onRunNow={props.onRunNow}
-        />
-      );
-    }
     if (view === "billing") {
       return <TaskBillingView task={task} serverId={serverId} projectId={projectId} />;
     }
@@ -91,7 +62,7 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
         serverId={serverId}
         task={task}
         visible
-        onClose={handleSwitchToChat}
+        onClose={onClose}
         onSave={props.onSave}
         onDelete={props.onDelete}
         onEstimate={props.onEstimate}
@@ -104,7 +75,6 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
 
   const viewOptions = useMemo<SegmentedControlOption<PanelView>[]>(
     () => [
-      { value: "chat", label: t("tasks.panel.chat"), testID: "task-panel-view-chat" },
       { value: "details", label: t("tasks.panel.details"), testID: "task-panel-view-details" },
       { value: "billing", label: t("tasks.panel.billing"), testID: "task-panel-view-billing" },
     ],
@@ -174,78 +144,6 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
   );
 }
 
-function ChatView({
-  serverId,
-  task,
-  agentId,
-  workspaceId,
-  onRunNow,
-}: {
-  serverId: string | null;
-  task: KanbanTask;
-  agentId: string | null;
-  workspaceId: string | null;
-  onRunNow: (taskId: string) => void;
-}) {
-  const { t } = useTranslation();
-  const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
-
-  if (serverId && agentId && workspaceId) {
-    return <EmbeddedAgentPane serverId={serverId} agentId={agentId} workspaceId={workspaceId} />;
-  }
-
-  return (
-    <View style={styles.emptyState}>
-      <ThemedBot size={ICON_SIZE.lg} uniProps={mutedColorMapping} />
-      <Text style={styles.emptyText}>{t("tasks.panel.noAgent")}</Text>
-      {serverId ? (
-        <Button onPress={handleRun} testID="task-panel-launch-agent">
-          {t("tasks.panel.launchAgent")}
-        </Button>
-      ) : null}
-    </View>
-  );
-}
-
-function EmbeddedAgentPane({
-  serverId,
-  agentId,
-  workspaceId,
-}: {
-  serverId: string;
-  agentId: string;
-  workspaceId: string;
-}) {
-  const content = useMemo(() => {
-    const openInNativeWorkspace = () => {
-      navigateToAgent({ serverId, agentId, workspaceId });
-    };
-    return buildWorkspacePaneContentModel({
-      tab: {
-        key: `tasks:agent:${agentId}`,
-        tabId: `tasks:agent:${agentId}`,
-        kind: "agent",
-        target: { kind: "agent", agentId },
-      },
-      normalizedServerId: serverId,
-      normalizedWorkspaceId: workspaceId,
-      // The tasks board owns no tab strip; tab-management intents fall back to
-      // opening the agent in its native workspace.
-      onOpenTab: openInNativeWorkspace,
-      onCloseCurrentTab: openInNativeWorkspace,
-      onRetargetCurrentTab: openInNativeWorkspace,
-      onOpenWorkspaceFile: openInNativeWorkspace,
-      onOpenImportSheet: openInNativeWorkspace,
-    });
-  }, [serverId, agentId, workspaceId]);
-
-  return (
-    <View style={styles.paneHost}>
-      <WorkspacePaneContent content={content} isWorkspaceFocused isPaneFocused />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create((theme) => ({
   panel: {
     // No left border: the board's resize handle already draws the divider.
@@ -292,20 +190,5 @@ const styles = StyleSheet.create((theme) => ({
   },
   body: {
     flex: 1,
-  },
-  paneHost: {
-    flex: 1,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing[3],
-    padding: theme.spacing[6],
-  },
-  emptyText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    textAlign: "center",
   },
 }));

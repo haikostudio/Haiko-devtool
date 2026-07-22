@@ -339,6 +339,8 @@ export const ptBR: TranslationResources = {
     conductor: {
       title: "Maestro",
       move: "Mover o painel",
+      backToConductor: "Voltar ao maestro",
+      openDetails: "Detalhes",
       noProject: "Selecione um projeto primeiro.",
       noHost: "O host não está conectado.",
       failed: "Não foi possível iniciar o maestro.",

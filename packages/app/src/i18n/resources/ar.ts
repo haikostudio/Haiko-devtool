@@ -333,6 +333,8 @@ export const ar: TranslationResources = {
     conductor: {
       title: "قائد الأوركسترا",
       move: "تحريك اللوحة",
+      backToConductor: "العودة إلى قائد الأوركسترا",
+      openDetails: "التفاصيل",
       noProject: "اختر مشروعًا أولًا.",
       noHost: "المضيف غير متصل.",
       failed: "تعذّر بدء قائد الأوركسترا.",

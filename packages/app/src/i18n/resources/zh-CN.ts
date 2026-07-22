@@ -333,6 +333,8 @@ export const zhCN: TranslationResources = {
     conductor: {
       title: "指挥",
       move: "移动面板",
+      backToConductor: "返回指挥",
+      openDetails: "详情",
       noProject: "请先选择一个项目。",
       noHost: "主机未连接。",
       failed: "无法启动指挥。",
