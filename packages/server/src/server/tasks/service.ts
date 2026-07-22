@@ -2,12 +2,14 @@ import type pino from "pino";
 import type {
   KanbanTask,
   TaskApproval,
+  TaskBilling,
   TaskBoard,
   TaskColumn,
   TaskFolder,
   TaskRunConfig,
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
+import { slugifyBranch } from "./agent-launch.js";
 import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
@@ -31,6 +33,26 @@ function repackFolderOrders(folders: TaskFolder[]): TaskFolder[] {
   return folders.map((entry, index) =>
     entry.order === index ? entry : Object.assign({}, entry, { order: index }),
   );
+}
+
+/**
+ * A folder IS a git branch: derive a valid branch ref from an explicit branch
+ * (each `/`-segment slugified) or, absent that, from the folder name (prefixed
+ * `feat/`). Returns undefined when nothing usable can be derived, so callers keep
+ * the legacy per-task branch fallback.
+ */
+function deriveFolderBranch(name: string, branch?: string): string | undefined {
+  const raw = branch?.trim() ? branch : name;
+  const cleaned = raw
+    .split("/")
+    .map((segment) => slugifyBranch(segment))
+    .filter((segment) => segment.length > 0)
+    .join("/");
+  if (!cleaned) {
+    return undefined;
+  }
+  // A bare name (no slash) becomes a conventional feature branch.
+  return branch?.trim() && branch.includes("/") ? cleaned : `feat/${cleaned}`;
 }
 
 /**
@@ -141,14 +163,17 @@ export class TaskBoardService {
     name: string,
     color?: string,
     autopilot?: boolean,
+    branch?: string,
   ): Promise<TaskFolder> {
     let created: TaskFolder | null = null;
+    const resolvedBranch = deriveFolderBranch(name, branch);
     const board = await this.store.mutate(projectId, (current) => {
       created = {
         id: generateTaskEntityId(),
         name: name.trim(),
         ...(color ? { color } : {}),
         ...(autopilot !== undefined ? { autopilot } : {}),
+        ...(resolvedBranch ? { branch: resolvedBranch } : {}),
         order: current.folders.length,
         createdAt: new Date().toISOString(),
       };
@@ -164,7 +189,13 @@ export class TaskBoardService {
   async updateFolder(
     projectId: string,
     folderId: string,
-    changes: { name?: string; color?: string; autopilot?: boolean; order?: number },
+    changes: {
+      name?: string;
+      color?: string;
+      autopilot?: boolean;
+      branch?: string;
+      order?: number;
+    },
   ): Promise<TaskFolder> {
     let updated: TaskFolder | null = null;
     const board = await this.store.mutate(projectId, (current) => {
@@ -172,11 +203,21 @@ export class TaskBoardService {
       if (!folder) {
         throw new TaskBoardServiceError("folder_not_found", `Folder not found: ${folderId}`);
       }
+      // Editing the branch (or the name when the branch was derived from it)
+      // re-derives the ref and drops the shared worktree so the next launch
+      // recreates it on the new branch.
+      const nextBranch =
+        changes.branch !== undefined
+          ? deriveFolderBranch(changes.name ?? folder.name, changes.branch)
+          : folder.branch;
+      const branchChanged = nextBranch !== folder.branch;
       updated = {
         ...folder,
         ...(changes.name !== undefined ? { name: changes.name.trim() } : {}),
         ...(changes.color !== undefined ? { color: changes.color } : {}),
         ...(changes.autopilot !== undefined ? { autopilot: changes.autopilot } : {}),
+        ...(changes.branch !== undefined ? { branch: nextBranch } : {}),
+        ...(branchChanged ? { workspaceId: null, worktreeCwd: null } : {}),
         ...(changes.order !== undefined ? { order: changes.order } : {}),
       };
       const others = current.folders.filter((entry) => entry.id !== folderId);
@@ -232,6 +273,35 @@ export class TaskBoardService {
       throw new TaskBoardServiceError("folder_create_failed", `Failed to ensure folder: ${name}`);
     }
     return folderId;
+  }
+
+  /**
+   * Records the shared worktree the scheduler created for a folder's branch, so
+   * later tasks in the same folder reuse it instead of branching off again. No-op
+   * if the folder no longer exists (it may have been deleted mid-launch).
+   */
+  async setFolderWorkspace(
+    projectId: string,
+    folderId: string,
+    input: { branch: string; workspaceId: string; worktreeCwd: string },
+  ): Promise<void> {
+    const board = await this.store.mutate(projectId, (current) => {
+      const folder = current.folders.find((entry) => entry.id === folderId);
+      if (!folder) {
+        return current;
+      }
+      const updated: TaskFolder = {
+        ...folder,
+        branch: input.branch,
+        workspaceId: input.workspaceId,
+        worktreeCwd: input.worktreeCwd,
+      };
+      return {
+        ...current,
+        folders: current.folders.map((entry) => (entry.id === folderId ? updated : entry)),
+      };
+    });
+    this.broadcast(board);
   }
 
   // ---- Tasks ----
@@ -299,6 +369,8 @@ export class TaskBoardService {
       tags?: string[];
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
+      billing?: TaskBilling | null;
+      executionHold?: boolean | null;
     },
   ): Promise<KanbanTask> {
     const board = await this.mutateTask(projectId, taskId, (task) => {
@@ -324,6 +396,16 @@ export class TaskBoardService {
         delete updated.schedulePreference;
       } else if (changes.schedulePreference !== undefined) {
         updated.schedulePreference = changes.schedulePreference;
+      }
+      if (changes.billing === null) {
+        delete updated.billing;
+      } else if (changes.billing !== undefined) {
+        updated.billing = changes.billing;
+      }
+      if (changes.executionHold === null || changes.executionHold === false) {
+        delete updated.executionHold;
+      } else if (changes.executionHold === true) {
+        updated.executionHold = true;
       }
       return updated;
     });

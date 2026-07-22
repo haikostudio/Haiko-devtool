@@ -109,7 +109,11 @@ import type {
   AgentSessionConfig,
 } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
-import type { TaskRunConfig, TaskSchedulePreference } from "@getpaseo/protocol/tasks/types";
+import type {
+  TaskBilling,
+  TaskRunConfig,
+  TaskSchedulePreference,
+} from "@getpaseo/protocol/tasks/types";
 import { isRelayClientWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
 import { terminalSubscriptionKey } from "@getpaseo/protocol/terminal-subscription-key";
 import {
@@ -3703,7 +3707,7 @@ export class DaemonClient {
   }
 
   async paseoDeployTrigger(
-    input?: { noBuild?: boolean },
+    input?: { noBuild?: boolean; mergeBranches?: string[] },
     requestId?: string,
   ): Promise<PaseoDeployTriggerPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -3711,6 +3715,7 @@ export class DaemonClient {
       message: {
         type: "checkout.deploy.trigger.request",
         noBuild: input?.noBuild,
+        mergeBranches: input?.mergeBranches,
       },
       responseType: "checkout.deploy.trigger.response",
     });
@@ -4548,6 +4553,7 @@ export class DaemonClient {
       tags?: string[];
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
+      billing?: TaskBilling | null;
     },
     requestId?: string,
   ) {

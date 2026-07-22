@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
+import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 // Label stamped on every agent Paseo spawns for a task, so task agents are
 // identifiable across the daemon (and excluded from Cerveau self-recursion).
@@ -38,10 +38,11 @@ export const ANALYSIS_FALLBACK_ESTIMATE: TaskAnalysisEstimate = {
   summary: "Estimation automatique indisponible — valeur par défaut prudente.",
 };
 
-// Branch (and worktree slug) for a task launch: stable, readable, unique via a
-// short task-id suffix so two similarly-titled tasks never collide.
-export function taskBranchName(task: KanbanTask): string {
-  const slug = task.title
+// Turns free-form text into the branch-safe slug portion of a git ref: lowercase,
+// accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Shared
+// by task-branch naming and folder-branch derivation.
+export function slugifyBranch(text: string): string {
+  return text
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -49,6 +50,12 @@ export function taskBranchName(task: KanbanTask): string {
     .replace(/(^-+)|(-+$)/g, "")
     .slice(0, 40)
     .replace(/-+$/g, "");
+}
+
+// Branch (and worktree slug) for a task launch: stable, readable, unique via a
+// short task-id suffix so two similarly-titled tasks never collide.
+export function taskBranchName(task: KanbanTask): string {
+  const slug = slugifyBranch(task.title);
   const suffix = task.id.slice(0, 6);
   return slug ? `task/${slug}-${suffix}` : `task/${suffix}`;
 }
@@ -88,6 +95,50 @@ export function resolveTaskLaunch(task: KanbanTask): ResolvedTaskLaunch {
   }
   const branchName = planMode ? null : taskBranchName(task);
   return { provider, providerId, planMode, launchMode, branchName };
+}
+
+/**
+ * How a task's agent should get its working tree. A folder IS a git branch:
+ * every task in a branch-folder lands on the SAME branch inside ONE shared
+ * worktree (created by the first task, reused by the rest). Legacy folders (no
+ * branch) keep the old per-task throwaway branch. Plan-mode always runs in place.
+ */
+export type TaskWorktreePlan =
+  | { kind: "in-place"; branch: null }
+  // First task of a branch-folder (or a legacy task): cut a fresh worktree.
+  // recordFolderId set => stamp the resulting workspace back on that folder.
+  | { kind: "create"; branchName: string; branch: string; recordFolderId: string | null }
+  // Later task of a branch-folder: run inside the folder's shared worktree.
+  | { kind: "reuse"; branch: string; workspaceId: string; cwd: string };
+
+export function resolveTaskWorktreePlan(input: {
+  task: KanbanTask;
+  folder: TaskFolder | undefined;
+  planMode: boolean;
+}): TaskWorktreePlan {
+  const { task, folder, planMode } = input;
+  if (planMode) {
+    return { kind: "in-place", branch: null };
+  }
+  const folderBranch = folder?.branch;
+  if (folderBranch) {
+    if (folder?.workspaceId && folder.worktreeCwd) {
+      return {
+        kind: "reuse",
+        branch: folderBranch,
+        workspaceId: folder.workspaceId,
+        cwd: folder.worktreeCwd,
+      };
+    }
+    return {
+      kind: "create",
+      branchName: folderBranch,
+      branch: folderBranch,
+      recordFolderId: folder ? folder.id : null,
+    };
+  }
+  const branch = taskBranchName(task);
+  return { kind: "create", branchName: branch, branch, recordFolderId: null };
 }
 
 /**
@@ -184,7 +235,7 @@ export function buildTaskExecutionPrompt(input: {
   const { task, planMode, branch } = input;
   const intro = planMode
     ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
-    : `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree dédié, sur la branche ${branch ?? "de la tâche"}. Le checkout principal de l'utilisateur n'est pas touché.`;
+    : `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree dédié, sur la branche ${branch ?? "de la tâche"} (les autres tâches du même groupe committent sur cette même branche). Le checkout principal de l'utilisateur n'est pas touché.`;
   const instructions = planMode
     ? [
         "## Étape 2 — Plan d'implémentation",

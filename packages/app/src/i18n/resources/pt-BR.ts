@@ -314,6 +314,7 @@ export const ptBR: TranslationResources = {
       billingLine: {
         description: "Descrição",
         manualHours: "Horas dev sênior",
+        alreadyBilled: "Já faturado · {{number}}",
         changeClient: "Alterar",
         added: "Adicionado a {{number}}",
         addError: "Não foi possível adicionar a tarefa ao documento.",
@@ -325,6 +326,9 @@ export const ptBR: TranslationResources = {
         linkHint:
           "Vincule este projeto a um cliente nas configurações do projeto para adicioná-lo a uma fatura.",
         addButton: "Adicionar a um orçamento ou fatura",
+        relink: "Adicionar a outro documento",
+        linkedInvoice: "Adicionada à fatura {{number}}",
+        linkedQuote: "Adicionada ao orçamento {{number}}",
         title: "Linha de fatura",
         label: "Descrição",
         time: "Tempo estimado",
@@ -338,6 +342,8 @@ export const ptBR: TranslationResources = {
     conductor: {
       title: "Maestro",
       move: "Mover o painel",
+      backToConductor: "Voltar ao maestro",
+      openDetails: "Detalhes",
       noProject: "Selecione um projeto primeiro.",
       noHost: "O host não está conectado.",
       failed: "Não foi possível iniciar o maestro.",
@@ -354,6 +360,9 @@ export const ptBR: TranslationResources = {
       title: "Nova pasta",
       editTitle: "Editar pasta",
       nameField: "Nome",
+      branchField: "Branch git",
+      branchHint: "Cada tarefa deste grupo faz commit nesta branch.",
+      branchPlaceholder: "feat/minha-branch",
       colorField: "Cor",
       autopilotField: "Piloto automático",
       autopilotHint:
@@ -401,6 +410,7 @@ export const ptBR: TranslationResources = {
       failed: "Falhou",
       running: "Executando",
       estimating: "Estimando…",
+      heldForReview: "Aguardando seu aval",
       awaiting: "Aguardando janela",
       awaitingWindow: "Aguardando horário de baixa",
       nextRun: "Por volta de {{when}}",
@@ -419,6 +429,11 @@ export const ptBR: TranslationResources = {
       pending: "Aguardando aprovação",
       approve: "Aprovar",
       explainer: "Proposta por um agente — só será executada após sua aprovação.",
+    },
+    status: {
+      attention: "Aguardando você",
+      running: "Em andamento",
+      done: "Concluído",
     },
     triage: {
       fieldFolder: "Pasta",
@@ -490,6 +505,8 @@ export const ptBR: TranslationResources = {
       reEstimate: "Re-estimar",
       runNow: "Executar agora",
       reanalyze: "Reanalisar",
+      hold: "Aguardar meu aval",
+      resumeAuto: "Retomar automático",
       taskActions: "Ações da tarefa",
       add: "Adicionar",
       save: "Salvar",

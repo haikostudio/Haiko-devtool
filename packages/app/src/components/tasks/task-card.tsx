@@ -12,6 +12,7 @@ import {
   type ParsedPriority,
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
+import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import {
   isQuietTime,
   nextQuietHoursStartMs,
@@ -74,6 +75,10 @@ function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (state === "pending_estimate") {
     return { labelKey: "tasks.schedule.estimating" };
   }
+  // "Pause au choix": analyzed but held until the user gives the go.
+  if (task.executionHold === true) {
+    return { labelKey: "tasks.schedule.heldForReview", variant: "warning" };
+  }
   if (task.schedule?.waitingReason === "quiet_hours") {
     return { labelKey: "tasks.schedule.awaitingWindow" };
   }
@@ -118,6 +123,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
 
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
+  const tone = useTaskTone(task);
 
   // Concrete "runs around 01:00" hint for tasks the scheduler parks until the
   // next off-peak window. Formatted in the window's timezone and the UI locale.
@@ -156,6 +162,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
       accessibilityRole="button"
       accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
     >
+      <TaskStatusVoyant tone={tone} variant="pip" />
       <View style={styles.titleRow}>
         {priority ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
         <Text style={styles.title} numberOfLines={3}>

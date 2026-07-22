@@ -8,6 +8,7 @@ import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   type PaseoDeployCommitEntry,
   type PaseoDeployFileEntry,
+  type PaseoDeployWorktreeEntry,
   usePaseoDeployStatus,
 } from "@/git/use-paseo-deploy";
 import type { Theme } from "@/styles/theme";
@@ -16,6 +17,7 @@ import type { Theme } from "@/styles/theme";
 // hasn't loaded yet (avoids needless re-renders of the list sections).
 const EMPTY_FILES: PaseoDeployFileEntry[] = [];
 const EMPTY_COMMITS: PaseoDeployCommitEntry[] = [];
+const EMPTY_WORKTREES: PaseoDeployWorktreeEntry[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
@@ -224,19 +226,200 @@ function PendingCommitsSection({ commits }: { commits: PaseoDeployCommitEntry[] 
   );
 }
 
+/** Turn a branch ref (e.g. "task/page-config-…-a55b11") into a short label. */
+function describeBranch(branch: string): string {
+  const segments = branch.split("/");
+  const tail = segments[segments.length - 1] || branch;
+  // Drop a trailing "-<6 hex>" task suffix so the label stays readable.
+  return tail.replace(/-[0-9a-f]{6,}$/i, "");
+}
+
+/** Uncommitted-files hint for an atelier card (info only; shipping needs a commit). */
+function WorktreeUncommittedHint({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <Text style={styles.worktreeHint}>
+      {count > 1
+        ? `${count} fichiers non enregistrés dans cet atelier (à enregistrer avant publication)`
+        : "1 fichier non enregistré dans cet atelier (à enregistrer avant publication)"}
+    </Text>
+  );
+}
+
+/** One atelier card — its pending commits plus a merge-and-publish action. */
+function WorktreeCard({
+  worktree,
+  onPublishBranch,
+  busy,
+  pendingBranches,
+}: {
+  worktree: PaseoDeployWorktreeEntry;
+  onPublishBranch: (branch: string) => void;
+  busy: boolean;
+  pendingBranches: string[] | null;
+}) {
+  const handlePress = useCallback(
+    () => onPublishBranch(worktree.branch),
+    [onPublishBranch, worktree.branch],
+  );
+  const isPending = !!pendingBranches?.includes(worktree.branch);
+  return (
+    <View style={styles.worktreeCard}>
+      <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
+      {worktree.commits.map((commit) => (
+        <View key={commit.sha} style={styles.itemRow}>
+          <Text style={styles.bullet}>•</Text>
+          <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
+        </View>
+      ))}
+      <WorktreeUncommittedHint count={worktree.uncommittedCount} />
+      <Button
+        variant="secondary"
+        size="sm"
+        style={styles.worktreeButton}
+        textStyle={styles.actionButtonText}
+        onPress={handlePress}
+        disabled={busy || worktree.ahead === 0}
+        testID={`paseo-deploy-merge-${worktree.branch}`}
+      >
+        {isPending ? "Publication en cours…" : "Fusionner & publier"}
+      </Button>
+    </View>
+  );
+}
+
+/** "Tout fusionner & publier" — vide en une fois tous les ateliers publiables. */
+function PublishAllButton({
+  branches,
+  onPublishAll,
+  busy,
+  pendingBranches,
+}: {
+  branches: string[];
+  onPublishAll: (branches: string[]) => void;
+  busy: boolean;
+  pendingBranches: string[] | null;
+}) {
+  const handlePress = useCallback(() => onPublishAll(branches), [onPublishAll, branches]);
+  // Only worth showing when at least two ateliers can be shipped at once.
+  if (branches.length < 2) return null;
+  const isPending = (pendingBranches?.length ?? 0) > 1;
+  return (
+    <Button
+      variant="default"
+      size="sm"
+      style={styles.worktreeButton}
+      textStyle={styles.actionButtonText}
+      onPress={handlePress}
+      disabled={busy}
+      testID="paseo-deploy-merge-all"
+    >
+      {isPending ? "Publication en cours…" : `Tout fusionner & publier (${branches.length})`}
+    </Button>
+  );
+}
+
+/**
+ * "Autres ateliers" — every other Paseo checkout (task-branch worktree) with work
+ * not yet on the deploy branch. Each can be merged into the deploy branch and
+ * shipped in one tap, so nothing a task did stays invisible.
+ */
+function WorktreesSection({
+  worktrees,
+  onPublishBranch,
+  onPublishAll,
+  busy,
+  pendingBranches,
+}: {
+  worktrees: PaseoDeployWorktreeEntry[];
+  onPublishBranch: (branch: string) => void;
+  onPublishAll: (branches: string[]) => void;
+  busy: boolean;
+  pendingBranches: string[] | null;
+}) {
+  const mergeableBranches = useMemo(
+    () => worktrees.filter((worktree) => worktree.ahead > 0).map((worktree) => worktree.branch),
+    [worktrees],
+  );
+  if (worktrees.length === 0) return null;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Autres ateliers (branches de tâche)</Text>
+      <View style={styles.worktreeList}>
+        {worktrees.map((worktree) => (
+          <WorktreeCard
+            key={worktree.path}
+            worktree={worktree}
+            onPublishBranch={onPublishBranch}
+            busy={busy}
+            pendingBranches={pendingBranches}
+          />
+        ))}
+        <PublishAllButton
+          branches={mergeableBranches}
+          onPublishAll={onPublishAll}
+          busy={busy}
+          pendingBranches={pendingBranches}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Red banner for a deploy error (last run failure or trigger error). */
+function DeployErrorBanner({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <View style={styles.warning}>
+      <Text style={styles.warningText}>{message}</Text>
+    </View>
+  );
+}
+
+/** Top-of-sheet header: "all live" line when clean, else the changes tally. */
+function DeployStatusHeader({
+  isClean,
+  daemonBehindCount,
+  changesCount,
+}: {
+  isClean: boolean;
+  daemonBehindCount: number;
+  changesCount: number;
+}) {
+  if (isClean) {
+    return daemonBehindCount <= 0 ? (
+      <Text style={styles.cleanText}>Tout est déjà en ligne. ✅</Text>
+    ) : null;
+  }
+  return <DeployChangesSummary count={changesCount} />;
+}
+
 /** Scrollable contents of the deploy sheet — split out so the modal shell stays
  *  simple (and under the complexity budget). */
 function DeployModalBody({
   status,
   error,
+  onPublishBranch,
+  onPublishAll,
+  busy,
+  pendingBranches,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   error: string | null;
+  onPublishBranch: (branch: string) => void;
+  onPublishAll: (branches: string[]) => void;
+  busy: boolean;
+  pendingBranches: string[] | null;
 }) {
   const deploying = status?.deploying ?? false;
   const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
   const unshippedCommits = status?.unshippedCommits ?? EMPTY_COMMITS;
-  const isClean = !deploying && uncommittedFiles.length === 0 && unshippedCommits.length === 0;
+  const worktrees = status?.worktrees ?? EMPTY_WORKTREES;
+  const isClean =
+    !deploying &&
+    uncommittedFiles.length === 0 &&
+    unshippedCommits.length === 0 &&
+    worktrees.length === 0;
   // Real number of changes to ship — honest even after work is grouped into a
   // few commits (older daemons that don't send it fall back to the list sum).
   const changesCount = status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length;
@@ -245,29 +428,26 @@ function DeployModalBody({
   return (
     <View style={styles.body}>
       <DaemonBehindNotice count={daemonBehindCount} />
-
-      {isClean && daemonBehindCount <= 0 ? (
-        <Text style={styles.cleanText}>Tout est déjà en ligne. ✅</Text>
-      ) : null}
-
-      {isClean ? null : <DeployChangesSummary count={changesCount} />}
+      <DeployStatusHeader
+        isClean={isClean}
+        daemonBehindCount={daemonBehindCount}
+        changesCount={changesCount}
+      />
 
       <PendingFilesSection files={uncommittedFiles} />
       <PendingCommitsSection commits={unshippedCommits} />
+      <WorktreesSection
+        worktrees={worktrees}
+        onPublishBranch={onPublishBranch}
+        onPublishAll={onPublishAll}
+        busy={busy}
+        pendingBranches={pendingBranches}
+      />
 
       {deploying ? <Text style={styles.infoText}>Déploiement en cours…</Text> : null}
 
-      {status?.lastError ? (
-        <View style={styles.warning}>
-          <Text style={styles.warningText}>{status.lastError}</Text>
-        </View>
-      ) : null}
-
-      {error ? (
-        <View style={styles.warning}>
-          <Text style={styles.warningText}>{error}</Text>
-        </View>
-      ) : null}
+      <DeployErrorBanner message={status?.lastError ?? null} />
+      <DeployErrorBanner message={error} />
     </View>
   );
 }
@@ -282,18 +462,21 @@ function PaseoDeployModal({
   const client = useHostRuntimeClient(serverId);
   const [triggering, setTriggering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Branches currently being merged-and-shipped (for the per-atelier / all labels).
+  const [pendingBranches, setPendingBranches] = useState<string[] | null>(null);
 
   const sheetHeader = useMemo<SheetHeader>(() => ({ title: "À déployer" }), []);
 
   const deploying = status?.deploying ?? false;
 
   const trigger = useCallback(
-    async (noBuild: boolean) => {
+    async (input: { noBuild?: boolean; mergeBranches?: string[] }) => {
       if (!client || triggering || deploying) return;
       setError(null);
       setTriggering(true);
+      setPendingBranches(input.mergeBranches ?? null);
       try {
-        const result = await client.paseoDeployTrigger(noBuild ? { noBuild: true } : undefined);
+        const result = await client.paseoDeployTrigger(input);
         if (!result.started && result.error) {
           setError(result.error);
         }
@@ -302,18 +485,33 @@ function PaseoDeployModal({
         setError(err instanceof Error && err.message ? err.message : "Échec du déclenchement.");
       } finally {
         setTriggering(false);
+        setPendingBranches(null);
       }
     },
     [client, triggering, deploying, onDeployed],
   );
 
   const handleDeploy = useCallback(() => {
-    void trigger(false);
+    void trigger({});
   }, [trigger]);
 
   const handleCommitOnly = useCallback(() => {
-    void trigger(true);
+    void trigger({ noBuild: true });
   }, [trigger]);
+
+  const handlePublishBranch = useCallback(
+    (branch: string) => {
+      void trigger({ mergeBranches: [branch] });
+    },
+    [trigger],
+  );
+
+  const handlePublishAll = useCallback(
+    (branches: string[]) => {
+      void trigger({ mergeBranches: branches });
+    },
+    [trigger],
+  );
 
   const busy = triggering || deploying;
 
@@ -368,7 +566,14 @@ function PaseoDeployModal({
       footer={footer}
       testID="paseo-deploy-modal"
     >
-      <DeployModalBody status={status} error={error} />
+      <DeployModalBody
+        status={status}
+        error={error}
+        onPublishBranch={handlePublishBranch}
+        onPublishAll={handlePublishAll}
+        busy={busy}
+        pendingBranches={pendingBranches}
+      />
     </AdaptiveModalSheet>
   );
 }
@@ -491,6 +696,32 @@ const styles = StyleSheet.create((theme) => ({
   infoText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
+  },
+  // Per-atelier cards, each with its own merge-and-publish action.
+  worktreeList: {
+    gap: theme.spacing[2],
+  },
+  worktreeCard: {
+    gap: theme.spacing[1],
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+  },
+  worktreeBranch: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: "700",
+    color: theme.colors.foreground,
+  },
+  worktreeHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
+  worktreeButton: {
+    marginTop: theme.spacing[1],
+    alignSelf: "flex-start",
+    paddingHorizontal: theme.spacing[2],
   },
   // "Engine is behind" hint — amber, distinct from the red error banner so it
   // reads as an actionable heads-up (restart me) rather than a failure.

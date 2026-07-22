@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  TaskBilling,
   TaskBoard,
   TaskColumn,
   TaskRunConfig,
@@ -8,7 +9,7 @@ import type {
 } from "@getpaseo/protocol/tasks/types";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
-export type { TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
+export type { TaskBilling, TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 function createSubscriptionId(): string {
@@ -19,9 +20,20 @@ export interface TaskBoardHandle {
   board: TaskBoard | null;
   isLoading: boolean;
   error: string | null;
-  createFolder: (input: { name: string; color?: string }) => Promise<void>;
+  createFolder: (input: {
+    name: string;
+    color?: string;
+    autopilot?: boolean;
+    branch?: string;
+  }) => Promise<void>;
   renameFolder: (folderId: string, name: string) => Promise<void>;
-  updateFolder: (input: { folderId: string; name?: string; color?: string }) => Promise<void>;
+  updateFolder: (input: {
+    folderId: string;
+    name?: string;
+    color?: string;
+    autopilot?: boolean;
+    branch?: string;
+  }) => Promise<void>;
   deleteFolder: (folderId: string) => Promise<void>;
   createTask: (input: {
     folderId: string;
@@ -36,6 +48,7 @@ export interface TaskBoardHandle {
     tags?: string[];
     runConfig?: TaskRunConfig | null;
     schedulePreference?: TaskSchedulePreference | null;
+    executionHold?: boolean | null;
   }) => Promise<void>;
   moveTask: (input: { taskId: string; column: TaskColumn; index: number }) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -136,7 +149,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   }, [getClient, projectId]);
 
   const createFolder = useCallback(
-    async (input: { name: string; color?: string; autopilot?: boolean }) => {
+    async (input: { name: string; color?: string; autopilot?: boolean; branch?: string }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksFolderCreate({ projectId: project, ...input });
     },
@@ -152,7 +165,13 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   );
 
   const updateFolder = useCallback(
-    async (input: { folderId: string; name?: string; color?: string; autopilot?: boolean }) => {
+    async (input: {
+      folderId: string;
+      name?: string;
+      color?: string;
+      autopilot?: boolean;
+      branch?: string;
+    }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksFolderUpdate({ projectId: project, ...input });
     },
@@ -188,6 +207,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       tags?: string[];
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
+      executionHold?: boolean | null;
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskUpdate({ projectId: project, ...input });

@@ -1,6 +1,6 @@
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type GestureResponderEvent,
+  Animated,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -8,7 +8,6 @@ import {
   ScrollView,
   Text,
   View,
-  type ViewStyle,
 } from "react-native";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -43,14 +42,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
+import {
+  AgentBucketProvider,
+  TaskStatusVoyant,
+  useFolderToneMap,
+  useProjectToneMap,
+} from "@/components/tasks/task-status-voyant";
+import type { TaskTone } from "@/components/tasks/task-status-tone";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
-import { TaskAgentPanel } from "@/components/tasks/task-agent-panel";
+import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
 import { ConductorPanel } from "@/components/tasks/conductor-panel";
-import { CompactTaskAgentSheet } from "@/components/tasks/compact-task-agent-sheet";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { Button } from "@/components/ui/button";
@@ -59,6 +65,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
+import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -67,55 +74,6 @@ import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
-
-// Desktop agent side-panel geometry — collapsed rail vs a resizable open width.
-const COLLAPSED_PANEL_WIDTH = 44;
-const MIN_PANEL_WIDTH = 320;
-const MAX_PANEL_WIDTH = 760;
-
-function clampPanelWidth(width: number): number {
-  return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, width));
-}
-
-// RN's ViewStyle `cursor` only types auto|pointer; `col-resize` is web-valid, so
-// apply it as a web-only escape hatch outside Unistyles' stricter typing.
-const resizeCursorStyle: ViewStyle | undefined = isWeb
-  ? ({ cursor: "col-resize" } as unknown as ViewStyle)
-  : undefined;
-
-const alwaysCapture = () => true;
-
-// Cross-platform drag handle (RN responder system, so it works on web without
-// touching DOM APIs). Reports incremental pageX deltas; the board clamps width.
-function ResizeHandle({ onResize }: { onResize: (deltaX: number) => void }) {
-  const lastXRef = useRef(0);
-  const handleStyle = useMemo(() => [styles.resizeHandle, resizeCursorStyle], []);
-  const handleGrant = useCallback((event: GestureResponderEvent) => {
-    lastXRef.current = event.nativeEvent.pageX;
-  }, []);
-  const handleMove = useCallback(
-    (event: GestureResponderEvent) => {
-      const x = event.nativeEvent.pageX;
-      onResize(x - lastXRef.current);
-      lastXRef.current = x;
-    },
-    [onResize],
-  );
-  return (
-    <View
-      style={handleStyle}
-      accessibilityRole="adjustable"
-      onStartShouldSetResponder={alwaysCapture}
-      onMoveShouldSetResponder={alwaysCapture}
-      onResponderGrant={handleGrant}
-      onResponderMove={handleMove}
-    >
-      {/* The divider itself is a 1px hairline; the surrounding handle stays wide
-          enough to grab comfortably (transparent hit zone around the line). */}
-      <View style={styles.resizeHandleLine} />
-    </View>
-  );
-}
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
@@ -245,6 +203,10 @@ const FolderKebabMenu = memo(function FolderKebabMenu({
     </DropdownMenu>
   );
 });
+
+// Stable empty-array identity so the tone hooks' memos don't rebuild every
+// render while a board is still loading (a fresh `[]` would look like new input).
+const EMPTY_TASKS: KanbanTask[] = [];
 
 type ProjectSortMode = "recent" | "name";
 
@@ -472,42 +434,55 @@ export function TasksScreen() {
     }
   }, [isCompact, projectId, firstProject, boardHandle.board, selectedFolder, firstFolderId]);
 
+  // Task selection (which chat the dock shows, which drawer is open) is per
+  // project; drop it whenever the project changes so a stale chat/drawer never
+  // lingers from another project. These store fields are ephemeral (not persisted).
+  const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
+  useEffect(() => {
+    setDockTaskId(null);
+    setDetailsTaskId(null);
+  }, [serverId, projectId, setDockTaskId, setDetailsTaskId]);
+
   const title = tasksHeaderTitle(t, isCompact, selectedFolder, selectedProject);
 
   return (
-    <View style={styles.container}>
-      <TasksHeader
-        title={title}
-        isCompact={isCompact}
-        supportsTasksBoard={supportsTasksBoard}
-        selectedProject={selectedProject}
-        selectedFolder={selectedFolder}
-        projects={projects}
-        folders={sortedFolders}
-      />
-      {isCompact ? (
-        <CompactFlow
-          serverId={serverId}
-          projectId={projectId}
-          folderId={folderId}
-          projects={projects}
+    <AgentBucketProvider>
+      <View style={styles.container}>
+        <TasksHeader
+          title={title}
+          isCompact={isCompact}
           supportsTasksBoard={supportsTasksBoard}
-          supportsAutopilot={supportsAutopilot}
-          boardHandle={boardHandle}
-        />
-      ) : (
-        <DesktopLayout
-          serverId={serverId}
-          projectId={projectId}
-          folderId={selectedFolder?.id ?? null}
+          selectedProject={selectedProject}
+          selectedFolder={selectedFolder}
           projects={projects}
           folders={sortedFolders}
-          supportsTasksBoard={supportsTasksBoard}
-          supportsAutopilot={supportsAutopilot}
-          boardHandle={boardHandle}
         />
-      )}
-    </View>
+        {isCompact ? (
+          <CompactFlow
+            serverId={serverId}
+            projectId={projectId}
+            folderId={folderId}
+            projects={projects}
+            supportsTasksBoard={supportsTasksBoard}
+            supportsAutopilot={supportsAutopilot}
+            boardHandle={boardHandle}
+          />
+        ) : (
+          <DesktopLayout
+            serverId={serverId}
+            projectId={projectId}
+            folderId={selectedFolder?.id ?? null}
+            projects={projects}
+            folders={sortedFolders}
+            supportsTasksBoard={supportsTasksBoard}
+            supportsAutopilot={supportsAutopilot}
+            boardHandle={boardHandle}
+          />
+        )}
+        <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
+      </View>
+    </AgentBucketProvider>
   );
 }
 
@@ -594,6 +569,7 @@ function ProjectsRail({
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<ProjectSortMode>("recent");
   const counts = useProjectTaskCounts(projects);
+  const tones = useProjectToneMap(projects);
 
   const displayed = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -648,6 +624,7 @@ function ProjectsRail({
             entry={entry}
             selected={entry.serverId === serverId && entry.projectId === projectId}
             counts={counts.get(`${entry.serverId}:${entry.projectId}`) ?? null}
+            tone={tones.get(`${entry.serverId}:${entry.projectId}`) ?? null}
           />
         ))}
       </ScrollView>
@@ -659,10 +636,12 @@ const ProjectRailItem = memo(function ProjectRailItem({
   entry,
   selected,
   counts,
+  tone,
 }: {
   entry: ProjectEntry;
   selected: boolean;
   counts: ProjectCounts | null;
+  tone: TaskTone | null;
 }) {
   const { t } = useTranslation();
   const handlePress = useCallback(() => {
@@ -692,6 +671,7 @@ const ProjectRailItem = memo(function ProjectRailItem({
           </Text>
         ) : null}
       </View>
+      <TaskStatusVoyant tone={tone} />
       <Pressable
         onPress={handleOpenSettings}
         hitSlop={8}
@@ -726,6 +706,7 @@ function FoldersRail({
     }
     return counts;
   }, [boardHandle.board]);
+  const folderTones = useFolderToneMap(boardHandle.board?.tasks ?? EMPTY_TASKS);
 
   const totalTasks = boardHandle.board?.tasks.length ?? 0;
 
@@ -745,6 +726,7 @@ function FoldersRail({
             folder={folder}
             selected={folder.id === folderId}
             taskCount={taskCounts.get(folder.id) ?? 0}
+            tone={folderTones.get(folder.id) ?? null}
             onEditFolder={folderModal.openEdit}
             onDeleteFolder={boardHandle.deleteFolder}
           />
@@ -785,7 +767,7 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   }, []);
 
   const handleSubmit = useCallback(
-    (input: { name: string; color: string; autopilot?: boolean }) => {
+    (input: { name: string; color: string; autopilot?: boolean; branch?: string }) => {
       if (mode?.kind === "edit") {
         void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
       } else {
@@ -798,7 +780,12 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   const initialFolder = useMemo(
     () =>
       mode?.kind === "edit"
-        ? { name: mode.folder.name, color: mode.folder.color, autopilot: mode.folder.autopilot }
+        ? {
+            name: mode.folder.name,
+            color: mode.folder.color,
+            autopilot: mode.folder.autopilot,
+            branch: mode.folder.branch,
+          }
         : undefined,
     [mode],
   );
@@ -820,12 +807,14 @@ const FolderRailItem = memo(function FolderRailItem({
   folder,
   selected,
   taskCount,
+  tone,
   onEditFolder,
   onDeleteFolder,
 }: {
   folder: TaskFolder;
   selected: boolean;
   taskCount: number;
+  tone: TaskTone | null;
   onEditFolder: (folder: TaskFolder) => void;
   onDeleteFolder: (folderId: string) => Promise<void>;
 }) {
@@ -853,8 +842,14 @@ const FolderRailItem = memo(function FolderRailItem({
         >
           {folder.name}
         </Text>
+        {folder.branch ? (
+          <Text style={styles.railItemBranch} numberOfLines={1}>
+            {folder.branch}
+          </Text>
+        ) : null}
         <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
+      <TaskStatusVoyant tone={tone} />
       {folder.autopilot ? <AutopilotMark /> : null}
       <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
@@ -935,14 +930,15 @@ function BoardContent({
   const isCompact = useIsCompactFormFactor();
   const { config } = useDaemonConfig(serverId);
   const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
-  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
-  // Desktop only: the task whose agent is mirrored in the right-hand side panel.
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
-  // Persisted so the width the user dragged the agent panel to is restored on
-  // reload / when returning to the board.
-  const panelWidth = useTasksBoardUiStore((state) => state.panelWidth);
-  const setPanelWidth = useTasksBoardUiStore((state) => state.setPanelWidth);
+  // The task whose Details+Billing drawer is open (right panel on desktop, the
+  // full-screen sheet on compact). Ephemeral store state so the dock header's
+  // "Details" button — which lives at the screen root — can open it too.
+  const detailsTaskId = useTasksBoardUiStore((state) => state.detailsTaskId);
+  const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
+  // Tapping a task points the shared bottom dock at its agent chat.
+  const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
+  const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
 
@@ -964,20 +960,18 @@ function BoardContent({
     [t],
   );
 
-  const detailTask = useMemo(
+  const detailsTask = useMemo(
     () =>
-      detailTaskId
-        ? (boardHandle.board?.tasks.find((task) => task.id === detailTaskId) ?? null)
+      detailsTaskId
+        ? (boardHandle.board?.tasks.find((task) => task.id === detailsTaskId) ?? null)
         : null,
-    [detailTaskId, boardHandle.board],
+    [detailsTaskId, boardHandle.board],
   );
 
-  const selectedTask = useMemo(
-    () =>
-      selectedTaskId
-        ? (boardHandle.board?.tasks.find((task) => task.id === selectedTaskId) ?? null)
-        : null,
-    [selectedTaskId, boardHandle.board],
+  // Tasks in the open folder, for the folder's glanceable billable total.
+  const folderTasks = useMemo(
+    () => (boardHandle.board?.tasks ?? []).filter((task) => task.folderId === folderId),
+    [boardHandle.board, folderId],
   );
 
   const handleMoveTask = useCallback(
@@ -987,46 +981,26 @@ function BoardContent({
     [boardHandle],
   );
 
-  // Compact opens the task's agent full-screen (Chat + Details tabs); desktop
-  // opens the same agent in the side panel beside the board.
+  // Tapping a task (board card or Gantt bar) opens its agent chat in the shared
+  // bottom dock. The Details+Billing drawer is opened separately, from the dock
+  // header's "Details" button — the two surfaces are independent. Hosts without
+  // the conductor feature have no dock, so there we open the Details drawer
+  // directly (otherwise a task tap would do nothing visible).
   const handlePressTask = useCallback(
     (task: KanbanTask) => {
-      if (isCompact) {
-        setDetailTaskId(task.id);
-        return;
+      if (supportsConductor) {
+        setDockTaskId(task.id);
+        setConductorOpen(true);
+      } else {
+        setDetailsTaskId(task.id);
       }
-      setSelectedTaskId(task.id);
-      setPanelCollapsed(false);
     },
-    [isCompact],
+    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId],
   );
 
-  const handleCloseDetail = useCallback(() => {
-    setDetailTaskId(null);
-  }, []);
-
-  const handleClosePanel = useCallback(() => {
-    setSelectedTaskId(null);
-  }, []);
-
-  const handleToggleCollapsePanel = useCallback(() => {
-    setPanelCollapsed((collapsed) => !collapsed);
-  }, []);
-
-  const handleResizePanel = useCallback(
-    (deltaX: number) => {
-      // Panel sits on the right edge, so dragging the handle right shrinks it.
-      // Read the live width from the store so rapid drag deltas compose correctly.
-      const current = useTasksBoardUiStore.getState().panelWidth;
-      setPanelWidth(clampPanelWidth(current - deltaX));
-    },
-    [setPanelWidth],
-  );
-
-  const panelHostStyle = useMemo(
-    () => [styles.panelHost, { width: panelCollapsed ? COLLAPSED_PANEL_WIDTH : panelWidth }],
-    [panelCollapsed, panelWidth],
-  );
+  const handleCloseDetails = useCallback(() => {
+    setDetailsTaskId(null);
+  }, [setDetailsTaskId]);
 
   const handleCancelNewTask = useCallback(() => {
     setNewTaskColumn(null);
@@ -1108,12 +1082,19 @@ function BoardContent({
     [boardHandle],
   );
 
+  const handleSetHold = useCallback(
+    (taskId: string, hold: boolean) => {
+      boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast],
+  );
+
   // Desktop keeps the strip-above-board layout; compact swaps to one-at-a-time
   // tabs so neither view is squeezed.
   const showTimeline = !isCompact || compactView === "timeline";
   const showBoard = !isCompact || compactView === "board";
-
-  const showPanel = !isCompact && selectedTask !== null;
 
   const boardStack = (
     <View style={isCompact ? styles.boardContainerCompact : styles.boardContainer}>
@@ -1129,6 +1110,7 @@ function BoardContent({
           />
         </View>
       ) : null}
+      <FolderBillingTotal serverId={serverId} projectId={projectId} tasks={folderTasks} />
       {boardHandle.board && showTimeline ? (
         <TaskGantt
           board={boardHandle.board}
@@ -1154,82 +1136,154 @@ function BoardContent({
 
   return (
     <TaskScheduleProvider value={quietHours}>
-      {showPanel && selectedTask ? (
-        <View style={styles.boardSplitRow}>
-          {boardStack}
-          {panelCollapsed ? null : <ResizeHandle onResize={handleResizePanel} />}
-          <View style={panelHostStyle}>
-            <TaskAgentPanel
-              serverId={serverId}
-              projectId={projectId}
-              task={selectedTask}
-              collapsed={panelCollapsed}
-              onToggleCollapse={handleToggleCollapsePanel}
-              onClose={handleClosePanel}
-              onSave={handleSaveTask}
-              onDelete={handleDeleteTask}
-              onEstimate={handleEstimateTask}
-              onRunNow={handleRunTaskNow}
-              onApprove={handleApproveTask}
-            />
-          </View>
-        </View>
-      ) : (
-        boardStack
-      )}
-      <CompactTaskAgentSheet
+      {boardStack}
+      <TaskDetailDrawer
         serverId={serverId}
         projectId={projectId}
-        task={detailTask}
-        visible={detailTask !== null}
-        onClose={handleCloseDetail}
+        task={detailsTask}
+        visible={detailsTask !== null}
+        onClose={handleCloseDetails}
         onSave={handleSaveTask}
         onDelete={handleDeleteTask}
         onEstimate={handleEstimateTask}
         onRunNow={handleRunTaskNow}
         onApprove={handleApproveTask}
+        onSetHold={handleSetHold}
       />
-      <ConductorDock serverId={serverId} projectId={projectId} />
     </TaskScheduleProvider>
   );
 }
 
-// Bottom-center floating toggle + the conductor panel overlay. Gated on the
-// host feature flag; extracted from BoardContent to keep it under the
-// complexity budget and to co-locate the conductor's own store reads.
+// Bottom-center floating toggle + the shared chat dock overlay. Gated on the
+// host feature flag; rendered at the TasksScreen root so its absolute position
+// centers across the full tasks area (including rails), not just the board. The
+// dock shows the conductor agent by default and the selected task's agent when a
+// task is tapped on the board.
 function ConductorDock({
   serverId,
   projectId,
+  boardHandle,
 }: {
   serverId: string | null;
   projectId: string | null;
+  boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const isCompact = useIsCompactFormFactor();
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const conductorOpen = useTasksBoardUiStore((state) => state.conductorOpen);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
-  const handleClose = useCallback(() => setConductorOpen(false), [setConductorOpen]);
+  const dockTaskId = useTasksBoardUiStore((state) => state.dockTaskId);
+  const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
+
+  const dockTask = useMemo(
+    () =>
+      dockTaskId ? (boardHandle.board?.tasks.find((task) => task.id === dockTaskId) ?? null) : null,
+    [dockTaskId, boardHandle.board],
+  );
+
+  // Closing the dock also drops the task selection so it never reopens pointed at
+  // a task that has since gone away.
+  const handleClose = useCallback(() => {
+    setConductorOpen(false);
+    setDockTaskId(null);
+  }, [setConductorOpen, setDockTaskId]);
   const handleOpen = useCallback(() => setConductorOpen(true), [setConductorOpen]);
+  const handleBack = useCallback(() => setDockTaskId(null), [setDockTaskId]);
+  const handleOpenDetails = useCallback(
+    (taskId: string) => setDetailsTaskId(taskId),
+    [setDetailsTaskId],
+  );
+  const handleRunNow = useCallback(
+    (taskId: string) => {
+      toast.show(t("tasks.toast.launching"));
+      boardHandle.runTaskNow(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast, t],
+  );
+
+  // Proximity animation (desktop web only): the toggle fades in and grows as the
+  // cursor approaches, then springs back to dormant when it moves away. On touch
+  // (compact) there's no cursor, so the toggle starts fully visible instead.
+  const proximityEnabled = isWeb && !isCompact;
+  const wrapperRef = useRef<View>(null);
+  const scaleAnim = useRef(new Animated.Value(proximityEnabled ? 0.85 : 1)).current;
+  const opacityAnim = useRef(new Animated.Value(proximityEnabled ? 0.5 : 1)).current;
+  const nearRef = useRef(false);
+
+  useEffect(() => {
+    if (!proximityEnabled || conductorOpen) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const el = wrapperRef.current as unknown as HTMLElement | null;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.sqrt((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2);
+      const near = dist < 140;
+      if (near === nearRef.current) return;
+      nearRef.current = near;
+      Animated.parallel([
+        Animated.spring(scaleAnim, { toValue: near ? 1 : 0.85, useNativeDriver: false }),
+        Animated.timing(opacityAnim, {
+          toValue: near ? 1 : 0.5,
+          duration: 180,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    return () => window.removeEventListener("mousemove", onMouseMove);
+  }, [proximityEnabled, conductorOpen, scaleAnim, opacityAnim]);
+
+  const wrapperAnimStyle = useMemo(
+    () => [
+      styles.conductorToggleWrapper,
+      { transform: [{ scale: scaleAnim }], opacity: opacityAnim },
+    ],
+    // scaleAnim/opacityAnim are stable Animated.Value refs; the memo is only
+    // for the outer array allocation so the lint rule is satisfied.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   if (!supportsConductor || !projectId) {
     return null;
   }
   if (conductorOpen) {
-    return <ConductorPanel serverId={serverId} projectId={projectId} onClose={handleClose} />;
+    return (
+      <ConductorPanel
+        serverId={serverId}
+        projectId={projectId}
+        dockTask={dockTask}
+        onBackToConductor={handleBack}
+        onOpenDetails={handleOpenDetails}
+        onRunNow={handleRunNow}
+        onClose={handleClose}
+      />
+    );
   }
   return (
-    <Pressable
-      onPress={handleOpen}
-      accessibilityRole="button"
-      accessibilityLabel={t("tasks.conductor.title")}
-      style={styles.conductorToggle}
-      testID="tasks-conductor-toggle"
-    >
-      <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      <Text style={styles.conductorToggleLabel} numberOfLines={1}>
-        {t("tasks.conductor.title")}
-      </Text>
-    </Pressable>
+    <Animated.View ref={wrapperRef} style={wrapperAnimStyle}>
+      <Pressable
+        onPress={handleOpen}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.conductor.title")}
+        style={styles.conductorToggle}
+        testID="tasks-conductor-toggle"
+      >
+        <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        <Text style={styles.conductorToggleLabel} numberOfLines={1}>
+          {t("tasks.conductor.title")}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -1376,6 +1430,21 @@ function BoardFolderSelector({
 // Picks the right header for the current drill-down level. On mobile the header
 // owns navigation: at the folder-list level it switches projects, on a board it
 // switches folders; everywhere else it's the plain menu header.
+/**
+ * Deploy ("Publier") button for the task manager header — same gate as the
+ * workspace header: only the Paseo repo itself, and only when the host
+ * advertises the `paseoSelfhostDeploy` capability.
+ */
+function TasksDeployButton({ project }: { project: ProjectEntry | null }) {
+  const supported = useSessionStore((s) =>
+    project
+      ? s.sessions[project.serverId]?.serverInfo?.features?.paseoSelfhostDeploy === true
+      : false,
+  );
+  if (!project || !supported || project.rootPath !== "/root/paseo") return null;
+  return <PaseoDeployButton serverId={project.serverId} compact />;
+}
+
 function TasksHeader({
   title,
   isCompact,
@@ -1393,11 +1462,15 @@ function TasksHeader({
   projects: ProjectEntry[];
   folders: TaskFolder[];
 }) {
-  // Same gear on every drill-down level (desktop header included): the
-  // project's configuration sheet must always be one tap away.
-  const settingsButton = useMemo(
-    () =>
-      selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null,
+  // Top-right cluster: the deploy rocket (Paseo repo only) sits next to the
+  // project gear, which stays one tap away on every drill-down level.
+  const rightContent = useMemo(
+    () => (
+      <View style={styles.headerRightCluster}>
+        <TasksDeployButton project={selectedProject} />
+        {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
+      </View>
+    ),
     [selectedProject],
   );
   if (isCompact && supportsTasksBoard && selectedFolder) {
@@ -1407,14 +1480,20 @@ function TasksHeader({
         folders={folders}
         currentProject={selectedProject}
         projects={projects}
-        right={settingsButton}
+        right={rightContent}
       />
     );
   }
   if (isCompact && supportsTasksBoard && selectedProject) {
-    return <CompactProjectHeader currentProject={selectedProject} projects={projects} />;
+    return (
+      <CompactProjectHeader
+        currentProject={selectedProject}
+        projects={projects}
+        right={rightContent}
+      />
+    );
   }
-  return <MenuHeader title={title} rightContent={settingsButton} />;
+  return <MenuHeader title={title} rightContent={rightContent} />;
 }
 
 // Mobile board header: hamburger + back-to-folders chevron + a folder-name
@@ -1557,15 +1636,13 @@ const ProjectSelectorItem = memo(function ProjectSelectorItem({ entry }: { entry
 function CompactProjectHeader({
   currentProject,
   projects,
+  right,
 }: {
   currentProject: ProjectEntry;
   projects: ProjectEntry[];
+  right?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const settingsButton = useMemo(
-    () => <ProjectSettingsButton projectId={currentProject.projectId} />,
-    [currentProject.projectId],
-  );
   return (
     <ScreenHeader
       leftStyle={styles.boardHeaderLeft}
@@ -1604,7 +1681,7 @@ function CompactProjectHeader({
           </DropdownMenu>
         </>
       }
-      right={settingsButton}
+      right={right}
     />
   );
 }
@@ -1631,18 +1708,29 @@ function ProjectSettingsButton({ projectId }: { projectId: string }) {
 
 function CompactProjectPicker({ projects }: { projects: ProjectEntry[] }) {
   const { t } = useTranslation();
+  const tones = useProjectToneMap(projects);
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       <Text style={styles.sectionLabel}>{t("tasks.pickProject")}</Text>
       {projects.length === 0 ? <Text style={styles.emptyText}>{t("tasks.noProjects")}</Text> : null}
       {projects.map((entry) => (
-        <CompactProjectRow key={`${entry.serverId}:${entry.projectId}`} entry={entry} />
+        <CompactProjectRow
+          key={`${entry.serverId}:${entry.projectId}`}
+          entry={entry}
+          tone={tones.get(`${entry.serverId}:${entry.projectId}`) ?? null}
+        />
       ))}
     </ScrollView>
   );
 }
 
-const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: ProjectEntry }) {
+const CompactProjectRow = memo(function CompactProjectRow({
+  entry,
+  tone,
+}: {
+  entry: ProjectEntry;
+  tone: TaskTone | null;
+}) {
   const handlePress = useCallback(() => {
     selectProject(entry);
   }, [entry]);
@@ -1657,6 +1745,7 @@ const CompactProjectRow = memo(function CompactProjectRow({ entry }: { entry: Pr
         <Text style={styles.rowTitle}>{entry.displayName}</Text>
         <Text style={styles.rowSubtitle}>{entry.hostLabel}</Text>
       </View>
+      <TaskStatusVoyant tone={tone} />
       <ThemedChevronRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
     </Pressable>
   );
@@ -1687,6 +1776,7 @@ function CompactFolderList({
     }
     return counts;
   }, [boardHandle.board]);
+  const folderTones = useFolderToneMap(boardHandle.board?.tasks ?? EMPTY_TASKS);
 
   return (
     <View style={styles.compactListWrap}>
@@ -1697,6 +1787,7 @@ function CompactFolderList({
             key={folder.id}
             folder={folder}
             taskCount={taskCounts.get(folder.id) ?? 0}
+            tone={folderTones.get(folder.id) ?? null}
             onEditFolder={folderModal.openEdit}
             onDeleteFolder={boardHandle.deleteFolder}
           />
@@ -1725,11 +1816,13 @@ function CompactFolderList({
 const CompactFolderRow = memo(function CompactFolderRow({
   folder,
   taskCount,
+  tone,
   onEditFolder,
   onDeleteFolder,
 }: {
   folder: TaskFolder;
   taskCount: number;
+  tone: TaskTone | null;
   onEditFolder: (folder: TaskFolder) => void;
   onDeleteFolder: (folderId: string) => Promise<void>;
 }) {
@@ -1751,6 +1844,7 @@ const CompactFolderRow = memo(function CompactFolderRow({
         <Text style={styles.rowTitle}>{folder.name}</Text>
         <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
+      <TaskStatusVoyant tone={tone} />
       {folder.autopilot ? <AutopilotMark /> : null}
       <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
@@ -1762,12 +1856,21 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     backgroundColor: theme.colors.surface0,
   },
-  // Floating toggle anchored bottom-center of the board area that opens the
-  // "Chef d'orchestre" conductor panel.
-  conductorToggle: {
+  // Top-right header cluster: deploy rocket + project gear side by side.
+  headerRightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  // Floating toggle anchored bottom-center of the full tasks area. The wrapper
+  // holds the absolute position so the Animated.View can handle scale/opacity
+  // without conflicting with the positioning props.
+  conductorToggleWrapper: {
     position: "absolute",
     bottom: theme.spacing[4],
     alignSelf: "center",
+  },
+  conductorToggle: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
@@ -1890,6 +1993,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
+  railItemBranch: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.mono,
+  },
   railItemAction: {
     padding: theme.spacing[1],
     borderRadius: theme.borderRadius.sm,
@@ -1937,28 +2045,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     gap: theme.spacing[3],
     paddingTop: theme.spacing[3],
-  },
-  // Desktop split: board on the left (flex), resizable agent panel on the right.
-  boardSplitRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "stretch",
-  },
-  panelHost: {
-    height: "100%",
-  },
-  // Wide, transparent grab zone so the col-resize drag stays easy to hit; the
-  // visible hairline hugs the panel edge (flex-end) rather than floating mid-gap.
-  resizeHandle: {
-    width: 9,
-    alignItems: "flex-end",
-    backgroundColor: "transparent",
-  },
-  // …while the visible divider is a full-height 1px hairline running to the top.
-  resizeHandleLine: {
-    width: 1,
-    height: "100%",
-    backgroundColor: theme.colors.border,
   },
   // Compact board/timeline tab switch — full width, aligned to the board inset
   // (12) with breathing room below the header so it isn't glued to it.

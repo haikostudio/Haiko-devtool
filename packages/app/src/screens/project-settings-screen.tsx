@@ -5,7 +5,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import { StyleSheet } from "react-native-unistyles";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lucide-react-native";
+import { Check, ChevronDown, MoreVertical, Pencil, Plus, X } from "lucide-react-native";
 import { ProjectIconView } from "@/components/project-icon-view";
 import { HostPicker as SharedHostPicker, HostStatusDotSlot } from "@/components/hosts/host-picker";
 import type {
@@ -147,7 +147,6 @@ function NoEditableTarget() {
   const { t } = useTranslation();
   return (
     <View style={styles.noTargetContainer}>
-      <BackToProjectsButton />
       <Text style={styles.noTargetText}>{t("settings.project.noEditableTarget")}</Text>
       <Button
         testID="project-settings-back-button"
@@ -158,23 +157,6 @@ function NoEditableTarget() {
         {t("settings.project.backToProjects")}
       </Button>
     </View>
-  );
-}
-
-function BackToProjectsButton() {
-  const { t } = useTranslation();
-  return (
-    <Button
-      testID="project-settings-back-link"
-      accessibilityLabel={t("settings.project.backToProjects")}
-      onPress={navigateBackToProjects}
-      variant="ghost"
-      size="sm"
-      leftIcon={ArrowLeft}
-      style={styles.backButton}
-    >
-      {t("settings.project.backToProjects")}
-    </Button>
   );
 }
 
@@ -233,8 +215,6 @@ function ProjectSettingsBody({
 
   return (
     <View style={styles.body}>
-      <BackToProjectsButton />
-
       <View style={styles.headerBlock}>
         <View style={styles.titleRow}>
           <ProjectTitleIcon
@@ -1251,7 +1231,6 @@ function ScriptEditModal({ script, onChange, onCancel, onSave }: ScriptEditModal
 
 const styles = StyleSheet.create((theme) => ({
   noTargetContainer: {
-    padding: theme.spacing[4],
     alignItems: "flex-start",
     gap: theme.spacing[3],
   },
@@ -1260,12 +1239,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
   },
   body: {
-    padding: theme.spacing[4],
     gap: theme.spacing[2],
-  },
-  backButton: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 0,
   },
   headerBlock: {
     marginTop: theme.spacing[2],

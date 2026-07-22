@@ -5,11 +5,13 @@ import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
+import type { TaskFolder } from "@getpaseo/protocol/tasks/types";
 import {
   ANALYSIS_FALLBACK_ESTIMATE,
   buildTaskAnalysisPrompt,
   parseTaskAnalysisEstimate,
   resolveTaskLaunch,
+  resolveTaskWorktreePlan,
   TASK_AGENT_LABEL,
   type TaskAnalysisEstimate,
 } from "./agent-launch.js";
@@ -105,9 +107,10 @@ export class TaskEstimator {
       return;
     }
 
+    const folder = board.folders.find((entry) => entry.id === task.folderId);
     let estimate = ANALYSIS_FALLBACK_ESTIMATE;
     try {
-      estimate = await this.analyze(projectId, task, project.rootPath);
+      estimate = await this.analyze(projectId, task, project.rootPath, folder);
     } catch (error) {
       this.logger.warn(
         { err: error, projectId, taskId, title: task.title },
@@ -137,16 +140,20 @@ export class TaskEstimator {
     projectId: string,
     task: KanbanTask,
     cwd: string,
+    folder: TaskFolder | undefined,
   ): Promise<TaskAnalysisEstimate> {
-    const { provider, planMode, launchMode, branchName } = resolveTaskLaunch(task);
+    const { provider, planMode, launchMode } = resolveTaskLaunch(task);
+    const plan = resolveTaskWorktreePlan({ task, folder, planMode });
     let agentId = task.links.taskAgentId ?? null;
-    let branch = task.links.branch ?? branchName;
+    let branch = task.links.branch ?? plan.branch;
 
     if (!agentId) {
+      // A branch-folder reuses its shared worktree (run inside its cwd); the
+      // first task of the folder (or a legacy task) cuts a fresh worktree.
       const created = await this.createAgent({
         kind: "mcp",
         provider,
-        cwd,
+        cwd: plan.kind === "reuse" ? plan.cwd : cwd,
         title: `Tâche : ${task.title}`,
         labels: { [TASK_AGENT_LABEL]: task.id },
         unattended: true,
@@ -155,7 +162,10 @@ export class TaskEstimator {
         notifyOnFinish: false,
         ...(task.runConfig?.thinkingOptionId ? { thinking: task.runConfig.thinkingOptionId } : {}),
         mode: launchMode,
-        ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
+        ...(plan.kind === "reuse" ? { workspaceId: plan.workspaceId } : {}),
+        ...(plan.kind === "create"
+          ? { worktree: { action: "branch-off" as const, branchName: plan.branchName } }
+          : {}),
       });
       if (created.initialPromptError) {
         throw created.initialPromptError;
@@ -163,7 +173,16 @@ export class TaskEstimator {
       const newAgentId = created.snapshot.id;
       const workspaceId = created.snapshot.workspaceId ?? null;
       agentId = newAgentId;
-      branch = branchName;
+      branch = plan.branch;
+      // First task of a branch-folder: remember the shared worktree so the
+      // folder's other tasks land on the same branch.
+      if (plan.kind === "create" && plan.recordFolderId && workspaceId) {
+        await this.taskBoardService.setFolderWorkspace(projectId, plan.recordFolderId, {
+          branch: plan.branch,
+          workspaceId,
+          worktreeCwd: created.snapshot.cwd,
+        });
+      }
       // Link the agent to the task immediately so the task chat mirrors it live
       // as it analyzes — the analysis IS the starting point of the task.
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
