@@ -44,6 +44,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
@@ -983,6 +984,12 @@ function BoardContent({
     [selectedTaskId, boardHandle.board],
   );
 
+  // Tasks in the open folder, for the folder's glanceable billable total.
+  const folderTasks = useMemo(
+    () => (boardHandle.board?.tasks ?? []).filter((task) => task.folderId === folderId),
+    [boardHandle.board, folderId],
+  );
+
   const handleMoveTask = useCallback(
     (input: { taskId: string; column: TaskColumn; index: number }) => {
       void boardHandle.moveTask(input);
@@ -1111,6 +1118,15 @@ function BoardContent({
     [boardHandle],
   );
 
+  const handleSetHold = useCallback(
+    (taskId: string, hold: boolean) => {
+      boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast],
+  );
+
   // Desktop keeps the strip-above-board layout; compact swaps to one-at-a-time
   // tabs so neither view is squeezed.
   const showTimeline = !isCompact || compactView === "timeline";
@@ -1132,6 +1148,7 @@ function BoardContent({
           />
         </View>
       ) : null}
+      <FolderBillingTotal serverId={serverId} projectId={projectId} tasks={folderTasks} />
       {boardHandle.board && showTimeline ? (
         <TaskGantt
           board={boardHandle.board}
@@ -1174,6 +1191,7 @@ function BoardContent({
               onEstimate={handleEstimateTask}
               onRunNow={handleRunTaskNow}
               onApprove={handleApproveTask}
+              onSetHold={handleSetHold}
             />
           </View>
         </View>
@@ -1191,6 +1209,7 @@ function BoardContent({
         onEstimate={handleEstimateTask}
         onRunNow={handleRunTaskNow}
         onApprove={handleApproveTask}
+        onSetHold={handleSetHold}
       />
     </TaskScheduleProvider>
   );

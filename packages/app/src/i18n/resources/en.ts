@@ -309,6 +309,7 @@ export const en = {
       billingLine: {
         description: "Description",
         manualHours: "Senior-dev hours",
+        alreadyBilled: "Already billed · {{number}}",
         changeClient: "Change",
         added: "Added to {{number}}",
         addError: "Couldn't add the task to the document.",
@@ -392,7 +393,8 @@ export const en = {
     schedule: {
       failed: "Failed",
       running: "Running",
-      estimating: "Estimating…",
+      estimating: "Analyzing…",
+      heldForReview: "Waiting for your go",
       awaiting: "Awaiting slot",
       awaitingWindow: "Waiting for off-peak",
       nextRun: "Runs ~{{when}}",
@@ -482,6 +484,8 @@ export const en = {
       reEstimate: "Re-estimate",
       runNow: "Run now",
       reanalyze: "Re-analyze",
+      hold: "Hold for my go",
+      resumeAuto: "Resume auto-run",
       taskActions: "Task actions",
       add: "Add",
       save: "Save",

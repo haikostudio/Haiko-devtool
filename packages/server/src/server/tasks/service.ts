@@ -2,6 +2,7 @@ import type pino from "pino";
 import type {
   KanbanTask,
   TaskApproval,
+  TaskBilling,
   TaskBoard,
   TaskColumn,
   TaskFolder,
@@ -299,6 +300,8 @@ export class TaskBoardService {
       tags?: string[];
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
+      billing?: TaskBilling | null;
+      executionHold?: boolean | null;
     },
   ): Promise<KanbanTask> {
     const board = await this.mutateTask(projectId, taskId, (task) => {
@@ -324,6 +327,16 @@ export class TaskBoardService {
         delete updated.schedulePreference;
       } else if (changes.schedulePreference !== undefined) {
         updated.schedulePreference = changes.schedulePreference;
+      }
+      if (changes.billing === null) {
+        delete updated.billing;
+      } else if (changes.billing !== undefined) {
+        updated.billing = changes.billing;
+      }
+      if (changes.executionHold === null || changes.executionHold === false) {
+        delete updated.executionHold;
+      } else if (changes.executionHold === true) {
+        updated.executionHold = true;
       }
       return updated;
     });

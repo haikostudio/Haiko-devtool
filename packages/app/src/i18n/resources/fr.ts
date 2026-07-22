@@ -314,6 +314,7 @@ export const fr: TranslationResources = {
       billingLine: {
         description: "Description",
         manualHours: "Heures dev senior",
+        alreadyBilled: "Déjà facturé · {{number}}",
         changeClient: "Changer",
         added: "Ajouté à {{number}}",
         addError: "Impossible d'ajouter la tâche au document.",
@@ -400,7 +401,8 @@ export const fr: TranslationResources = {
     schedule: {
       failed: "Échec",
       running: "En exécution",
-      estimating: "Estimation…",
+      estimating: "Analyse en cours…",
+      heldForReview: "En attente de ton go",
       awaiting: "En attente de créneau",
       awaitingWindow: "Attente heures creuses",
       nextRun: "Vers {{when}}",
@@ -490,6 +492,8 @@ export const fr: TranslationResources = {
       reEstimate: "Ré-estimer",
       runNow: "Lancer maintenant",
       reanalyze: "Ré-analyser",
+      hold: "Mettre en attente",
+      resumeAuto: "Reprendre l'auto",
       taskActions: "Actions de la tâche",
       add: "Ajouter",
       save: "Enregistrer",

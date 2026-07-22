@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Receipt } from "lucide-react-native";
-import type { ComptaClient, ComptaProjectLink } from "@getpaseo/protocol/messages";
+import { CheckCircle2, Receipt } from "lucide-react-native";
+import type {
+  ComptaClient,
+  ComptaDocumentRef,
+  ComptaProjectLink,
+} from "@getpaseo/protocol/messages";
 import type { KanbanTask } from "@/data/tasks";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
 import { Button } from "@/components/ui/button";
+import { Field, FormTextInput } from "@/components/ui/form-field";
 import { TaskBillingAddSheet } from "@/components/compta/task-billing-add-sheet";
 import { ComptaClientPickerSheet } from "@/components/compta/compta-client-picker-sheet";
 import { useToast } from "@/contexts/toast-context";
@@ -29,38 +34,37 @@ function toShortDescription(source: string): string {
   return source.trim().split(/\r?\n/).slice(0, 3).join("\n");
 }
 
-interface TaskBilling {
+interface ResolvedBilling {
   billingHours: number | undefined;
-  hasBilling: boolean;
   billingTitle: string;
   billingDescription: string;
 }
 
 // Resolves the invoice line the analysis agent produced (senior-dev hours +
 // short title/description), falling back to the task's own fields when the
-// agent omitted them. Kept out of the component to keep its complexity down.
-function resolveTaskBilling(task: KanbanTask): TaskBilling {
+// agent omitted them. These values only seed the editable fields below.
+function resolveTaskBilling(task: KanbanTask): ResolvedBilling {
   const estimate = task.estimate;
-  const billingHours = estimate?.billingHours;
   const description = task.description?.trim() ? toShortDescription(task.description) : "";
   return {
-    billingHours,
-    hasBilling: billingHours !== undefined && billingHours > 0,
+    billingHours: estimate?.billingHours,
     billingTitle: estimate?.billingTitle?.trim() || toShortTitle(task.title),
     billingDescription: estimate?.billingDescription?.trim() || description,
   };
 }
 
 const ThemedReceipt = withUnistyles(Receipt);
+const ThemedCheck = withUnistyles(CheckCircle2);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const successColorMapping = (theme: Theme) => ({ color: theme.colors.success });
 
 /**
- * "Facturation" tab of the task drawer: presents the task as the billable line
- * it would become on an invoice — the analysis agent's short title, short
- * description, senior-developer hours (the real price, not the agent runtime),
- * the project's hourly rate and the resulting amount — and, when the project is
- * linked to a billing client, lets the user add that line to a draft
- * quote/invoice. The write goes through the daemon's certified compta script.
+ * "Facturation" tab of the task drawer: the task as an editable invoice line —
+ * the analysis agent's short title, short description and senior-developer
+ * hours (the real price, not the agent runtime) seed the fields, which the user
+ * can tweak before adding. The amount is those hours × the project's rate. Once
+ * added, the task is flagged as already billed. Writes go through the daemon's
+ * certified compta script.
  */
 export function TaskBillingView({
   task,
@@ -73,16 +77,26 @@ export function TaskBillingView({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  // Billing lens produced by the analysis agent: senior-dev hours (the real
-  // price, not the agent's runtime), a short invoice title and description.
-  const { billingHours, hasBilling, billingTitle, billingDescription } = resolveTaskBilling(task);
+  const seed = resolveTaskBilling(task);
   const billingSupported = useHostFeature(serverId, "comptaBilling");
   const client = useHostRuntimeClient(serverId ?? "");
   const [link, setLink] = useState<ComptaProjectLink | null>(null);
-  // One-off client override for this task (defaults to the project's client).
   const [pickedClient, setPickedClient] = useState<ComptaClient | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // Editable line, seeded from the agent's output and re-seeded when a fresh
+  // estimate lands (the deps are the agent values, so user edits are kept).
+  const [titleDraft, setTitleDraft] = useState(seed.billingTitle);
+  const [descDraft, setDescDraft] = useState(seed.billingDescription);
+  const [hoursDraft, setHoursDraft] = useState(
+    seed.billingHours !== undefined ? String(seed.billingHours) : "",
+  );
+
+  useEffect(() => {
+    setTitleDraft(seed.billingTitle);
+    setDescDraft(seed.billingDescription);
+    setHoursDraft(seed.billingHours !== undefined ? String(seed.billingHours) : "");
+  }, [seed.billingTitle, seed.billingDescription, seed.billingHours]);
 
   useEffect(() => {
     if (!billingSupported || !client || !projectId) {
@@ -108,16 +122,19 @@ export function TaskBillingView({
   const handleCloseAdd = useCallback(() => setAddOpen(false), []);
   const handleOpenPicker = useCallback(() => setPickerOpen(true), []);
   const handleClosePicker = useCallback(() => setPickerOpen(false), []);
+
   // Project rate wins; fall back to the reference 130 CHF/h when unset.
   const rateChf = link?.hourlyRateChf ?? BILLABLE_HOURLY_RATE_CHF;
+  const hoursNum = Number(hoursDraft.replace(",", ".")) || 0;
+  const hasBilling = hoursNum > 0;
   const billingLine = useMemo(
     () => ({
-      title: billingTitle,
-      description: billingDescription || undefined,
-      hours: billingHours ?? 0,
+      title: titleDraft.trim() || seed.billingTitle,
+      description: descDraft.trim() || undefined,
+      hours: hoursNum,
       unitPrice: rateChf,
     }),
-    [billingTitle, billingDescription, billingHours, rateChf],
+    [titleDraft, descDraft, hoursNum, rateChf, seed.billingTitle],
   );
 
   // Effective client for this task: manual pick wins over the project default.
@@ -132,8 +149,7 @@ export function TaskBillingView({
   }, [pickedClient, link]);
 
   // Picking a client when the project has none also becomes the project's
-  // default (so the next task starts pre-filled); otherwise it stays a one-off
-  // override for this task.
+  // default; otherwise it stays a one-off override for this task.
   const handlePickClient = useCallback(
     (picked: ComptaClient | null) => {
       if (!picked) {
@@ -143,10 +159,7 @@ export function TaskBillingView({
       if (!link && client && projectId) {
         void (async () => {
           try {
-            const updated = await client.setComptaProjectLink({
-              projectId,
-              clientId: picked.id,
-            });
+            const updated = await client.setComptaProjectLink({ projectId, clientId: picked.id });
             setLink(updated);
             if (updated) {
               toast.show(t("settings.project.billing.linkedTo", { name: updated.clientName }), {
@@ -162,56 +175,69 @@ export function TaskBillingView({
     [link, client, projectId, toast, t],
   );
 
-  const hours = billingHours ?? 0;
-  const amount = hasBilling ? formatChf(computeManualBillingChf(hours, rateChf)) : "—";
-  const rateValue = `${rateChf} CHF/h`;
-  const hoursValue = hasBilling ? formatHours(hours) : "—";
+  // Record the document on the task so it shows as already billed.
+  const handleAdded = useCallback(
+    (document: ComptaDocumentRef) => {
+      if (!client || !projectId) {
+        return;
+      }
+      void client
+        .tasksTaskUpdate({
+          projectId,
+          taskId: task.id,
+          billing: {
+            kind: document.kind,
+            documentId: document.id,
+            number: document.number,
+            addedAt: new Date().toISOString(),
+          },
+        })
+        .catch(() => {
+          // Non-fatal: the line was added; only the local flag failed to persist.
+        });
+    },
+    [client, projectId, task.id],
+  );
 
-  const renderAction = () => {
-    if (!billingSupported) {
-      return null;
-    }
-    if (!effectiveClient) {
-      return (
-        <Button onPress={handleOpenPicker} testID="task-billing-pick-client">
-          {t("settings.project.billing.selectClient")}
-        </Button>
-      );
-    }
-    return (
-      <View style={styles.actionBlock}>
-        <View style={styles.clientRow}>
-          <Text style={styles.linkedClient} numberOfLines={1}>
-            {t("tasks.panel.billingLine.linkedClient", {
-              name: effectiveClient.name,
-              company: effectiveClient.company,
-            })}
-          </Text>
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={handleOpenPicker}
-            testID="task-billing-change-client"
-          >
-            {t("tasks.panel.billingLine.changeClient")}
-          </Button>
-        </View>
-        <Button onPress={handleOpenAdd} testID="task-billing-add">
-          {t("tasks.panel.billingLine.addButton")}
-        </Button>
-      </View>
-    );
-  };
+  const amount = hasBilling ? formatChf(computeManualBillingChf(hoursNum, rateChf)) : "—";
+  const rateValue = `${rateChf} CHF/h`;
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      {task.billing ? (
+        <View style={styles.billedRow}>
+          <ThemedCheck size={ICON_SIZE.sm} uniProps={successColorMapping} />
+          <Text style={styles.billedText}>
+            {t("tasks.panel.billingLine.alreadyBilled", { number: task.billing.number })}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("tasks.panel.billingLine.title")}</Text>
-        <Row label={t("tasks.panel.billingLine.label")} value={billingTitle} />
-        {billingDescription ? (
-          <Row label={t("tasks.panel.billingLine.description")} value={billingDescription} />
-        ) : null}
-        <Row label={t("tasks.panel.billingLine.manualHours")} value={hoursValue} />
+        <Field label={t("tasks.panel.billingLine.label")}>
+          <FormTextInput
+            value={titleDraft}
+            onChangeText={setTitleDraft}
+            testID="task-billing-title"
+          />
+        </Field>
+        <Field label={t("tasks.panel.billingLine.description")}>
+          <FormTextInput
+            value={descDraft}
+            onChangeText={setDescDraft}
+            multiline
+            testID="task-billing-description"
+          />
+        </Field>
+        <Field label={t("tasks.panel.billingLine.manualHours")}>
+          <FormTextInput
+            value={hoursDraft}
+            onChangeText={setHoursDraft}
+            keyboardType="numeric"
+            testID="task-billing-hours"
+          />
+        </Field>
         <Row label={t("tasks.panel.billingLine.rate")} value={rateValue} />
         <View style={styles.divider} />
         <Row label={t("tasks.panel.billingLine.amount")} value={amount} emphasized />
@@ -224,7 +250,13 @@ export function TaskBillingView({
         </View>
       ) : null}
 
-      {renderAction()}
+      <BillingAction
+        supported={billingSupported}
+        client={effectiveClient}
+        canAdd={hasBilling}
+        onPickClient={handleOpenPicker}
+        onAdd={handleOpenAdd}
+      />
 
       <Text style={styles.note}>{t("tasks.panel.billingLine.note")}</Text>
 
@@ -244,14 +276,66 @@ export function TaskBillingView({
           onClose={handleCloseAdd}
           serverId={serverId}
           clientId={effectiveClient.id}
-          documentTitle={billingTitle}
+          documentTitle={billingLine.title}
           line={billingLine}
           defaultDocument={
             effectiveClient.id === link?.clientId ? (link?.defaultDocument ?? null) : null
           }
+          onAdded={handleAdded}
         />
       ) : null}
     </ScrollView>
+  );
+}
+
+// Client row + add button (or the "pick a client" call to action). Extracted to
+// keep the main component's branching under the complexity budget.
+function BillingAction({
+  supported,
+  client,
+  canAdd,
+  onPickClient,
+  onAdd,
+}: {
+  supported: boolean;
+  client: { id: string; name: string; company: string } | null;
+  canAdd: boolean;
+  onPickClient: () => void;
+  onAdd: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!supported) {
+    return null;
+  }
+  if (!client) {
+    return (
+      <Button onPress={onPickClient} testID="task-billing-pick-client">
+        {t("settings.project.billing.selectClient")}
+      </Button>
+    );
+  }
+  return (
+    <View style={styles.actionBlock}>
+      <View style={styles.clientRow}>
+        <Text style={styles.linkedClient} numberOfLines={1}>
+          {t("tasks.panel.billingLine.linkedClient", {
+            name: client.name,
+            company: client.company,
+          })}
+        </Text>
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={onPickClient}
+          testID="task-billing-change-client"
+        >
+          {t("tasks.panel.billingLine.changeClient")}
+        </Button>
+      </View>
+      <Button onPress={onAdd} disabled={!canAdd} testID="task-billing-add">
+        {t("tasks.panel.billingLine.addButton")}
+      </Button>
+    </View>
   );
 }
 
@@ -264,12 +348,6 @@ function Row({ label, value, emphasized }: { label: string; value: string; empha
       </Text>
     </View>
   );
-}
-
-// Hours → "X h" with at most one decimal (e.g. "2 h", "1.5 h").
-function formatHours(hours: number): string {
-  const rounded = Math.round(hours * 10) / 10;
-  return `${rounded} h`;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -351,6 +429,18 @@ const styles = StyleSheet.create((theme) => ({
   hintText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+    flexShrink: 1,
+  },
+  billedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[1],
+  },
+  billedText: {
+    color: theme.colors.success,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
     flexShrink: 1,
   },
 }));

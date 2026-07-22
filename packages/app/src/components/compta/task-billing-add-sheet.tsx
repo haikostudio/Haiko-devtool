@@ -40,6 +40,7 @@ export function TaskBillingAddSheet({
   documentTitle,
   line,
   defaultDocument,
+  onAdded,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -49,6 +50,9 @@ export function TaskBillingAddSheet({
   line: TaskBillingLine;
   // Project's pinned draft; surfaced first when still an open draft.
   defaultDocument?: { kind: DocumentKind; id: string } | null;
+  // Fired with the target document once the line was added (to record it on
+  // the task so it can be flagged as already billed).
+  onAdded?: (document: ComptaDocumentRef) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -102,6 +106,9 @@ export function TaskBillingAddSheet({
           toast.show(t("tasks.panel.billingLine.added", { number: document?.number ?? "" }), {
             variant: "success",
           });
+          if (document) {
+            onAdded?.(document);
+          }
           onClose();
         } catch (error) {
           toast.error(
@@ -112,7 +119,7 @@ export function TaskBillingAddSheet({
         }
       })();
     },
-    [client, busy, clientId, documentTitle, line, toast, t, onClose],
+    [client, busy, clientId, documentTitle, line, toast, t, onClose, onAdded],
   );
 
   const header = useMemo(() => ({ title: t("tasks.panel.billingLine.addTitle") }), [t]);

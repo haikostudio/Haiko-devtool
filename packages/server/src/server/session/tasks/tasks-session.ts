@@ -208,6 +208,8 @@ export class TasksSession {
         ...(request.schedulePreference !== undefined
           ? { schedulePreference: request.schedulePreference }
           : {}),
+        ...(request.billing !== undefined ? { billing: request.billing } : {}),
+        ...(request.executionHold !== undefined ? { executionHold: request.executionHold } : {}),
       });
       this.host.emit({
         type: "tasks.task.update.response",
@@ -285,6 +287,17 @@ export class TasksSession {
       if (!this.taskEstimator) {
         throw new TaskBoardServiceError("estimator_unavailable", "Task estimator is not available");
       }
+      // Manual "relancer l'analyse": drop the prior estimate and re-arm so the
+      // analysis re-runs (the estimator reuses the same agent/conversation via
+      // links.taskAgentId). The automatic sweep skips already-estimated tasks;
+      // this explicit request forces a fresh pass.
+      await this.taskBoardService.patchTask(request.projectId, request.taskId, (current) => ({
+        ...current,
+        estimate: null,
+        ...(current.schedule
+          ? { schedule: { ...current.schedule, state: "pending_estimate" as const } }
+          : {}),
+      }));
       this.taskEstimator.requestEstimate(request.projectId, request.taskId);
       this.host.emit({
         type: "tasks.task.estimate.response",

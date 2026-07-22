@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   KanbanTaskSchema,
+  TaskBillingSchema,
   TaskBoardSchema,
   TaskColumnSchema,
   TaskFolderSchema,
@@ -81,6 +82,11 @@ export const TasksTaskUpdateRequestSchema = z.object({
   // null clears the field.
   runConfig: TaskRunConfigSchema.nullable().optional(),
   schedulePreference: TaskSchedulePreferenceSchema.nullable().optional(),
+  // Set when a task line is added to a billing document; null clears it.
+  billing: TaskBillingSchema.nullable().optional(),
+  // "Pause au choix": true holds execution after analysis until the user's go;
+  // false/null returns the task to automatic execution.
+  executionHold: z.boolean().nullable().optional(),
 });
 
 export const TasksTaskMoveRequestSchema = z.object({

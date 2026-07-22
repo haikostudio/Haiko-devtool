@@ -36,6 +36,18 @@ export const TaskEstimateSchema = z.object({
 });
 export type TaskEstimate = z.infer<typeof TaskEstimateSchema>;
 
+// Records that a completed task's line was added to a billing document, so the
+// UI can flag it as already billed and avoid accidental double-entry. Optional
+// on the task; absent = not yet billed.
+export const TaskBillingSchema = z.object({
+  kind: z.enum(["quote", "invoice"]),
+  documentId: z.string(),
+  // Human document number (e.g. "FA-2026-001"), for the "already billed" badge.
+  number: z.string(),
+  addedAt: z.string(),
+});
+export type TaskBilling = z.infer<typeof TaskBillingSchema>;
+
 // Per-task execution configuration chosen by the user or a proposing agent.
 export const TaskRunConfigSchema = z.object({
   // Agent provider id, e.g. "claude", "codex".
@@ -109,6 +121,11 @@ export const KanbanTaskSchema = z.object({
   runConfig: TaskRunConfigSchema.nullable().optional(),
   approval: TaskApprovalSchema.nullable().optional(),
   schedulePreference: TaskSchedulePreferenceSchema.optional(),
+  // "Pause au choix": when true, the scheduler analyzes the task (so the plan +
+  // estimate show up) but HOLDS execution until the user gives the go — an
+  // explicit run-now, or clearing the hold. Absent/false = auto (the "Validé"
+  // column consent still runs the task automatically once a slot opens).
+  executionHold: z.boolean().optional(),
   // Set when a plan-mode run finished: the plan is ready in the linked agent.
   planReadyAt: z.string().nullable().optional(),
   links: TaskLinksSchema,
@@ -118,6 +135,8 @@ export const KanbanTaskSchema = z.object({
   // scheduler never re-arms or relaunches a completed task, even if it later
   // re-enters a pipeline column.
   completedAt: z.string().nullable().optional(),
+  // Set once the task's line has been added to a billing document.
+  billing: TaskBillingSchema.nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
