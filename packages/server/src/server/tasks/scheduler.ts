@@ -1,4 +1,4 @@
-import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
+import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
@@ -7,7 +7,12 @@ import type { ProviderUsageService } from "../../services/quota-fetcher/service.
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
-import { buildTaskExecutionPrompt, resolveTaskLaunch, TASK_AGENT_LABEL } from "./agent-launch.js";
+import {
+  buildTaskExecutionPrompt,
+  resolveTaskLaunch,
+  resolveTaskWorktreePlan,
+  TASK_AGENT_LABEL,
+} from "./agent-launch.js";
 
 export { TASK_AGENT_LABEL } from "./agent-launch.js";
 
@@ -47,6 +52,7 @@ interface TaskSchedulerOptions {
 interface LaunchCandidate {
   projectId: string;
   task: KanbanTask;
+  folder: TaskFolder | undefined;
   folderOrder: number;
   runNow: boolean;
 }
@@ -58,7 +64,9 @@ function isScheduledCandidate(task: KanbanTask): boolean {
     task.column === "scheduled" &&
     task.schedule?.state === "awaiting_slot" &&
     Boolean(task.estimate) &&
-    task.approval?.state !== "pending"
+    task.approval?.state !== "pending" &&
+    // "Pause au choix": held tasks are analyzed but never auto-launched.
+    task.executionHold !== true
   );
 }
 
@@ -70,7 +78,9 @@ function isValidatedReady(task: KanbanTask): boolean {
     Boolean(task.estimate) &&
     task.approval?.state !== "pending" &&
     task.schedule?.state !== "launching" &&
-    task.schedule?.state !== "running"
+    task.schedule?.state !== "running" &&
+    // Held tasks stay in "Validé" (with a badge) until the user gives the go.
+    task.executionHold !== true
   );
 }
 
@@ -126,6 +136,9 @@ export class TaskScheduler {
   // taskId -> reserved quota percent for launches still in flight.
   private readonly inFlight = new Map<string, number>();
   private readonly runNowQueue = new Set<string>();
+  // "projectId:folderId" of branch-folders with an active task, recomputed each
+  // tick. A branch-folder runs its tasks one at a time (single shared worktree).
+  private readonly busyBranchFolders = new Set<string>();
   // Open tasks already sent to the estimator this daemon lifetime — the sweep
   // estimates each task once (a failed run writes a fallback estimate anyway).
   private readonly estimateRequested = new Set<string>();
@@ -175,6 +188,15 @@ export class TaskScheduler {
     if (task.column !== "scheduled") {
       await this.taskBoardService.transitionTask(projectId, taskId, "scheduled");
     }
+    // An explicit run-now is the user's "go": lift any "pause au choix" hold so
+    // the task launches now (and stays on auto afterwards).
+    if (task.executionHold === true) {
+      await this.taskBoardService.patchTask(projectId, taskId, (current) => {
+        const next = { ...current };
+        delete next.executionHold;
+        return next;
+      });
+    }
     // Ensure the analysis agent is spawned even if this task entered the pipeline
     // without a notify (e.g. created directly in "Planifié", or after a restart).
     // No-op once the task already has an estimate/agent (guarded in the estimator).
@@ -202,6 +224,14 @@ export class TaskScheduler {
         if (this.inFlight.has(candidate.task.id)) {
           continue;
         }
+        // Serialize within a branch-folder: its tasks share one worktree, so hold
+        // this one back while a sibling is already active (or launched this tick).
+        const branchFolderKey = candidate.folder?.branch
+          ? `${candidate.projectId}:${candidate.folder.id}`
+          : null;
+        if (branchFolderKey && this.busyBranchFolders.has(branchFolderKey)) {
+          continue;
+        }
         if (!candidate.runNow) {
           if (!this.isWithinLaunchWindow(candidate.task)) {
             await this.setWaitingReason(candidate, "quiet_hours");
@@ -215,6 +245,9 @@ export class TaskScheduler {
         }
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
+        if (branchFolderKey) {
+          this.busyBranchFolders.add(branchFolderKey);
+        }
         void this.launch(candidate)
           .catch((error) => {
             this.logger.error(
@@ -234,6 +267,7 @@ export class TaskScheduler {
   private async collectCandidates(): Promise<LaunchCandidate[]> {
     const projects = await this.projectRegistry.list();
     const candidates: LaunchCandidate[] = [];
+    this.busyBranchFolders.clear();
     for (const project of projects) {
       if (project.archivedAt) {
         continue;
@@ -242,10 +276,12 @@ export class TaskScheduler {
       if (board.tasks.length === 0) {
         continue;
       }
+      const foldersById = new Map(board.folders.map((folder) => [folder.id, folder]));
       const folderOrders = new Map(board.folders.map((folder) => [folder.id, folder.order]));
       const folderAutopilot = new Map(
         board.folders.map((folder) => [folder.id, folder.autopilot === true]),
       );
+      this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
       for (const task of board.tasks) {
         if (task.column === "done" || task.column === "in_progress") {
           continue;
@@ -280,12 +316,32 @@ export class TaskScheduler {
         candidates.push({
           projectId: project.projectId,
           task,
+          folder: foldersById.get(task.folderId),
           folderOrder: folderOrders.get(task.folderId) ?? 0,
           runNow: this.runNowQueue.has(`${project.projectId}:${task.id}`),
         });
       }
     }
     return this.sortForPacking(candidates);
+  }
+
+  // A branch-folder shares ONE worktree, so only one of its tasks may run at a
+  // time. Records folders that already have an active (launching/running) task so
+  // the tick loop holds their other tasks back until the slot frees up.
+  private markBusyBranchFolders(
+    projectId: string,
+    tasks: KanbanTask[],
+    foldersById: Map<string, TaskFolder>,
+  ): void {
+    for (const task of tasks) {
+      const active =
+        task.column === "in_progress" ||
+        task.schedule?.state === "launching" ||
+        task.schedule?.state === "running";
+      if (active && foldersById.get(task.folderId)?.branch) {
+        this.busyBranchFolders.add(`${projectId}:${task.folderId}`);
+      }
+    }
   }
 
   /** Fire-and-forget column move driven by the scheduler (never manual). */
@@ -432,25 +488,25 @@ export class TaskScheduler {
     }));
 
     try {
-      const { provider, planMode, launchMode, branchName } = resolveTaskLaunch(task);
+      const { provider, planMode, launchMode } = resolveTaskLaunch(task);
+      const plan = resolveTaskWorktreePlan({ task, folder: candidate.folder, planMode });
       // The analysis phase already spawned the task's visible agent in its
       // worktree and ran the read-only analysis turn. Execution CONTINUES that
       // same conversation — reuse the agent instead of creating a new one, so
       // the analysis is the task's starting point. Only the legacy path (no
       // analysis agent, e.g. pre-upgrade tasks) creates the agent here.
       let agentId = task.links.taskAgentId ?? null;
-      let branch = task.links.branch ?? branchName;
+      let branch = task.links.branch ?? plan.branch;
       let workspaceId = task.links.workspaceId ?? null;
 
       if (!agentId) {
-        // Each launch gets its own worktree + branch off the project checkout, so
-        // several task agents can run in the same project concurrently without
-        // touching the user's working directory. Plan-mode runs make no changes,
-        // so they run directly in the current workspace — no throwaway worktree.
+        // Legacy path (no analysis agent yet). A branch-folder reuses its shared
+        // worktree; otherwise cut a fresh worktree off the project checkout.
+        // Plan-mode runs make no changes, so they run in place — no worktree.
         const created = await this.createAgent({
           kind: "mcp",
           provider,
-          cwd: project.rootPath,
+          cwd: plan.kind === "reuse" ? plan.cwd : project.rootPath,
           title: `Tâche : ${task.title}`,
           labels: { [TASK_AGENT_LABEL]: task.id },
           unattended: true,
@@ -461,14 +517,24 @@ export class TaskScheduler {
             ? { thinking: task.runConfig.thinkingOptionId }
             : {}),
           mode: launchMode,
-          ...(branchName ? { worktree: { action: "branch-off" as const, branchName } } : {}),
+          ...(plan.kind === "reuse" ? { workspaceId: plan.workspaceId } : {}),
+          ...(plan.kind === "create"
+            ? { worktree: { action: "branch-off" as const, branchName: plan.branchName } }
+            : {}),
         });
         if (created.initialPromptError) {
           throw created.initialPromptError;
         }
         agentId = created.snapshot.id;
-        branch = branchName;
+        branch = plan.branch;
         workspaceId = created.snapshot.workspaceId ?? workspaceId;
+        if (plan.kind === "create" && plan.recordFolderId && created.snapshot.workspaceId) {
+          await this.taskBoardService.setFolderWorkspace(projectId, plan.recordFolderId, {
+            branch: plan.branch,
+            workspaceId: created.snapshot.workspaceId,
+            worktreeCwd: created.snapshot.cwd,
+          });
+        }
       }
 
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({

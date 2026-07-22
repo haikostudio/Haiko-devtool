@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   KanbanTaskSchema,
+  TaskBillingSchema,
   TaskBoardSchema,
   TaskColumnSchema,
   TaskFolderSchema,
@@ -37,6 +38,8 @@ export const TasksFolderCreateRequestSchema = z.object({
   name: z.string().min(1),
   color: z.string().optional(),
   autopilot: z.boolean().optional(),
+  // Git branch this folder represents; derived from the name when omitted.
+  branch: z.string().optional(),
 });
 
 export const TasksFolderUpdateRequestSchema = z.object({
@@ -47,6 +50,7 @@ export const TasksFolderUpdateRequestSchema = z.object({
   name: z.string().min(1).optional(),
   color: z.string().optional(),
   autopilot: z.boolean().optional(),
+  branch: z.string().optional(),
   order: z.number().int().optional(),
 });
 
@@ -81,6 +85,11 @@ export const TasksTaskUpdateRequestSchema = z.object({
   // null clears the field.
   runConfig: TaskRunConfigSchema.nullable().optional(),
   schedulePreference: TaskSchedulePreferenceSchema.nullable().optional(),
+  // Set when a task line is added to a billing document; null clears it.
+  billing: TaskBillingSchema.nullable().optional(),
+  // "Pause au choix": true holds execution after analysis until the user's go;
+  // false/null returns the task to automatic execution.
+  executionHold: z.boolean().nullable().optional(),
 });
 
 export const TasksTaskMoveRequestSchema = z.object({
