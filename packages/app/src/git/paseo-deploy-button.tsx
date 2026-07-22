@@ -661,9 +661,11 @@ const styles = StyleSheet.create((theme) => ({
   section: {
     gap: theme.spacing[2],
   },
+  // Matches the app-wide sheet section-title convention (settings.ts): small,
+  // regular weight, muted — so every drawer reads the same.
   sectionTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: "600",
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
     color: theme.colors.foregroundMuted,
   },
   // The whole change list flows into the sheet's single scroll region — no inner
