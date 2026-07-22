@@ -3707,7 +3707,7 @@ export class DaemonClient {
   }
 
   async paseoDeployTrigger(
-    input?: { noBuild?: boolean; mergeBranch?: string },
+    input?: { noBuild?: boolean; mergeBranches?: string[] },
     requestId?: string,
   ): Promise<PaseoDeployTriggerPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -3715,7 +3715,7 @@ export class DaemonClient {
       message: {
         type: "checkout.deploy.trigger.request",
         noBuild: input?.noBuild,
-        mergeBranch: input?.mergeBranch,
+        mergeBranches: input?.mergeBranches,
       },
       responseType: "checkout.deploy.trigger.response",
     });

@@ -98,9 +98,17 @@ export function usePaseoDeployStatus({ serverId, enabled }: UsePaseoDeployStatus
   // Prefer the daemon's honest file-level count; fall back to summing the lists
   // for older daemons that don't send `changesCount`. Summing lists understates
   // reality once files are grouped into a few commits — hence the preference.
-  const pendingCount = status
+  const deployPending = status
     ? (status.changesCount ?? status.uncommittedFiles.length + status.unshippedCommits.length)
     : 0;
+  // Global tally across every atelier: the deploy branch plus each task
+  // worktree's pending commits and uncommitted files, so the badge reflects the
+  // whole project's outstanding work, not just the main checkout.
+  const worktreePending = (status?.worktrees ?? []).reduce(
+    (sum, worktree) => sum + worktree.ahead + worktree.uncommittedCount,
+    0,
+  );
+  const pendingCount = deployPending + worktreePending;
 
   return {
     status,

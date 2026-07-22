@@ -251,17 +251,18 @@ function WorktreeCard({
   worktree,
   onPublishBranch,
   busy,
-  pendingBranch,
+  pendingBranches,
 }: {
   worktree: PaseoDeployWorktreeEntry;
   onPublishBranch: (branch: string) => void;
   busy: boolean;
-  pendingBranch: string | null;
+  pendingBranches: string[] | null;
 }) {
   const handlePress = useCallback(
     () => onPublishBranch(worktree.branch),
     [onPublishBranch, worktree.branch],
   );
+  const isPending = !!pendingBranches?.includes(worktree.branch);
   return (
     <View style={styles.worktreeCard}>
       <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
@@ -281,9 +282,40 @@ function WorktreeCard({
         disabled={busy || worktree.ahead === 0}
         testID={`paseo-deploy-merge-${worktree.branch}`}
       >
-        {pendingBranch === worktree.branch ? "Publication en cours…" : "Fusionner & publier"}
+        {isPending ? "Publication en cours…" : "Fusionner & publier"}
       </Button>
     </View>
+  );
+}
+
+/** "Tout fusionner & publier" — vide en une fois tous les ateliers publiables. */
+function PublishAllButton({
+  branches,
+  onPublishAll,
+  busy,
+  pendingBranches,
+}: {
+  branches: string[];
+  onPublishAll: (branches: string[]) => void;
+  busy: boolean;
+  pendingBranches: string[] | null;
+}) {
+  const handlePress = useCallback(() => onPublishAll(branches), [onPublishAll, branches]);
+  // Only worth showing when at least two ateliers can be shipped at once.
+  if (branches.length < 2) return null;
+  const isPending = (pendingBranches?.length ?? 0) > 1;
+  return (
+    <Button
+      variant="default"
+      size="sm"
+      style={styles.worktreeButton}
+      textStyle={styles.actionButtonText}
+      onPress={handlePress}
+      disabled={busy}
+      testID="paseo-deploy-merge-all"
+    >
+      {isPending ? "Publication en cours…" : `Tout fusionner & publier (${branches.length})`}
+    </Button>
   );
 }
 
@@ -295,14 +327,20 @@ function WorktreeCard({
 function WorktreesSection({
   worktrees,
   onPublishBranch,
+  onPublishAll,
   busy,
-  pendingBranch,
+  pendingBranches,
 }: {
   worktrees: PaseoDeployWorktreeEntry[];
   onPublishBranch: (branch: string) => void;
+  onPublishAll: (branches: string[]) => void;
   busy: boolean;
-  pendingBranch: string | null;
+  pendingBranches: string[] | null;
 }) {
+  const mergeableBranches = useMemo(
+    () => worktrees.filter((worktree) => worktree.ahead > 0).map((worktree) => worktree.branch),
+    [worktrees],
+  );
   if (worktrees.length === 0) return null;
   return (
     <View style={styles.section}>
@@ -314,9 +352,15 @@ function WorktreesSection({
             worktree={worktree}
             onPublishBranch={onPublishBranch}
             busy={busy}
-            pendingBranch={pendingBranch}
+            pendingBranches={pendingBranches}
           />
         ))}
+        <PublishAllButton
+          branches={mergeableBranches}
+          onPublishAll={onPublishAll}
+          busy={busy}
+          pendingBranches={pendingBranches}
+        />
       </View>
     </View>
   );
@@ -356,14 +400,16 @@ function DeployModalBody({
   status,
   error,
   onPublishBranch,
+  onPublishAll,
   busy,
-  pendingBranch,
+  pendingBranches,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   error: string | null;
   onPublishBranch: (branch: string) => void;
+  onPublishAll: (branches: string[]) => void;
   busy: boolean;
-  pendingBranch: string | null;
+  pendingBranches: string[] | null;
 }) {
   const deploying = status?.deploying ?? false;
   const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
@@ -393,8 +439,9 @@ function DeployModalBody({
       <WorktreesSection
         worktrees={worktrees}
         onPublishBranch={onPublishBranch}
+        onPublishAll={onPublishAll}
         busy={busy}
-        pendingBranch={pendingBranch}
+        pendingBranches={pendingBranches}
       />
 
       {deploying ? <Text style={styles.infoText}>Déploiement en cours…</Text> : null}
@@ -415,19 +462,19 @@ function PaseoDeployModal({
   const client = useHostRuntimeClient(serverId);
   const [triggering, setTriggering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Branch currently being merged-and-shipped (for the per-atelier button label).
-  const [pendingBranch, setPendingBranch] = useState<string | null>(null);
+  // Branches currently being merged-and-shipped (for the per-atelier / all labels).
+  const [pendingBranches, setPendingBranches] = useState<string[] | null>(null);
 
   const sheetHeader = useMemo<SheetHeader>(() => ({ title: "À déployer" }), []);
 
   const deploying = status?.deploying ?? false;
 
   const trigger = useCallback(
-    async (input: { noBuild?: boolean; mergeBranch?: string }) => {
+    async (input: { noBuild?: boolean; mergeBranches?: string[] }) => {
       if (!client || triggering || deploying) return;
       setError(null);
       setTriggering(true);
-      setPendingBranch(input.mergeBranch ?? null);
+      setPendingBranches(input.mergeBranches ?? null);
       try {
         const result = await client.paseoDeployTrigger(input);
         if (!result.started && result.error) {
@@ -438,7 +485,7 @@ function PaseoDeployModal({
         setError(err instanceof Error && err.message ? err.message : "Échec du déclenchement.");
       } finally {
         setTriggering(false);
-        setPendingBranch(null);
+        setPendingBranches(null);
       }
     },
     [client, triggering, deploying, onDeployed],
@@ -454,7 +501,14 @@ function PaseoDeployModal({
 
   const handlePublishBranch = useCallback(
     (branch: string) => {
-      void trigger({ mergeBranch: branch });
+      void trigger({ mergeBranches: [branch] });
+    },
+    [trigger],
+  );
+
+  const handlePublishAll = useCallback(
+    (branches: string[]) => {
+      void trigger({ mergeBranches: branches });
     },
     [trigger],
   );
@@ -516,8 +570,9 @@ function PaseoDeployModal({
         status={status}
         error={error}
         onPublishBranch={handlePublishBranch}
+        onPublishAll={handlePublishAll}
         busy={busy}
-        pendingBranch={pendingBranch}
+        pendingBranches={pendingBranches}
       />
     </AdaptiveModalSheet>
   );

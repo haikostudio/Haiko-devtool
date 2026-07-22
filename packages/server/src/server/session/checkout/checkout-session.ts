@@ -317,7 +317,7 @@ export class CheckoutSession {
   async handlePaseoDeployTriggerRequest(msg: PaseoDeployTriggerRequest): Promise<void> {
     const { started, error } = await triggerPaseoDeploy({
       noBuild: msg.noBuild,
-      mergeBranch: msg.mergeBranch,
+      mergeBranches: msg.mergeBranches,
     });
     this.host.emit({
       type: "checkout.deploy.trigger.response",
