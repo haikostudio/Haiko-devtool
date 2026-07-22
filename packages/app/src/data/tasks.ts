@@ -36,6 +36,7 @@ export interface TaskBoardHandle {
     tags?: string[];
     runConfig?: TaskRunConfig | null;
     schedulePreference?: TaskSchedulePreference | null;
+    executionHold?: boolean | null;
   }) => Promise<void>;
   moveTask: (input: { taskId: string; column: TaskColumn; index: number }) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -188,6 +189,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       tags?: string[];
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
+      executionHold?: boolean | null;
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskUpdate({ projectId: project, ...input });

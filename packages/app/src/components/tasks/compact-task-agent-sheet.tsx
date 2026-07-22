@@ -25,6 +25,7 @@ interface CompactTaskAgentSheetProps {
   onEstimate: (taskId: string) => void;
   onRunNow: (taskId: string) => void;
   onApprove: (taskId: string) => void;
+  onSetHold?: (taskId: string, hold: boolean) => void;
 }
 
 const noop = () => {};
@@ -128,6 +129,7 @@ export function CompactTaskAgentSheet(props: CompactTaskAgentSheetProps) {
                 onEstimate={props.onEstimate}
                 onRunNow={props.onRunNow}
                 onApprove={props.onApprove}
+                onSetHold={props.onSetHold}
               />
             </View>
           </Animated.View>

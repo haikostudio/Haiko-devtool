@@ -46,6 +46,7 @@ export interface TaskAgentPanelProps {
   onEstimate: (taskId: string) => void;
   onRunNow: (taskId: string) => void;
   onApprove: (taskId: string) => void;
+  onSetHold?: (taskId: string, hold: boolean) => void;
 }
 
 /**
@@ -96,6 +97,7 @@ export function TaskAgentPanel(props: TaskAgentPanelProps) {
         onEstimate={props.onEstimate}
         onRunNow={props.onRunNow}
         onApprove={props.onApprove}
+        onSetHold={props.onSetHold}
       />
     );
   };

@@ -74,6 +74,10 @@ function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (state === "pending_estimate") {
     return { labelKey: "tasks.schedule.estimating" };
   }
+  // "Pause au choix": analyzed but held until the user gives the go.
+  if (task.executionHold === true) {
+    return { labelKey: "tasks.schedule.heldForReview", variant: "warning" };
+  }
   if (task.schedule?.waitingReason === "quiet_hours") {
     return { labelKey: "tasks.schedule.awaitingWindow" };
   }

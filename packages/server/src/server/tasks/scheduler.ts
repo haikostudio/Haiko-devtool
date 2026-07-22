@@ -58,7 +58,9 @@ function isScheduledCandidate(task: KanbanTask): boolean {
     task.column === "scheduled" &&
     task.schedule?.state === "awaiting_slot" &&
     Boolean(task.estimate) &&
-    task.approval?.state !== "pending"
+    task.approval?.state !== "pending" &&
+    // "Pause au choix": held tasks are analyzed but never auto-launched.
+    task.executionHold !== true
   );
 }
 
@@ -70,7 +72,9 @@ function isValidatedReady(task: KanbanTask): boolean {
     Boolean(task.estimate) &&
     task.approval?.state !== "pending" &&
     task.schedule?.state !== "launching" &&
-    task.schedule?.state !== "running"
+    task.schedule?.state !== "running" &&
+    // Held tasks stay in "Validé" (with a badge) until the user gives the go.
+    task.executionHold !== true
   );
 }
 
@@ -174,6 +178,15 @@ export class TaskScheduler {
     }
     if (task.column !== "scheduled") {
       await this.taskBoardService.transitionTask(projectId, taskId, "scheduled");
+    }
+    // An explicit run-now is the user's "go": lift any "pause au choix" hold so
+    // the task launches now (and stays on auto afterwards).
+    if (task.executionHold === true) {
+      await this.taskBoardService.patchTask(projectId, taskId, (current) => {
+        const next = { ...current };
+        delete next.executionHold;
+        return next;
+      });
     }
     // Ensure the analysis agent is spawned even if this task entered the pipeline
     // without a notify (e.g. created directly in "Planifié", or after a restart).

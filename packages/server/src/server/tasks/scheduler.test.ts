@@ -225,6 +225,31 @@ describe("TaskScheduler", () => {
     expect(done?.links.branch).toBe("task/reuse-me");
   });
 
+  test("does not launch a held task (pause au choix), then launches once run-now lifts the hold", async () => {
+    const task = await seedScheduledTask({ quotaPercent: 10 });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      executionHold: true,
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.tick();
+    // Held: analyzed and awaiting, but never auto-launched.
+    expect(createAgent).not.toHaveBeenCalled();
+    let held = await findTask(task.id);
+    expect(held?.column).toBe("scheduled");
+    expect(held?.executionHold).toBe(true);
+
+    // An explicit run-now is the user's "go": it lifts the hold and launches.
+    await scheduler.runNow("proj-1", task.id);
+    await vi.waitFor(async () => {
+      expect((await findTask(task.id))?.column).toBe("done");
+    });
+    held = await findTask(task.id);
+    expect(held?.executionHold ?? false).toBe(false);
+    expect(createAgent).toHaveBeenCalledTimes(1);
+  });
+
   test("defers launch when remaining quota is below estimate + margin", async () => {
     await seedScheduledTask({ quotaPercent: 50 });
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 40 });

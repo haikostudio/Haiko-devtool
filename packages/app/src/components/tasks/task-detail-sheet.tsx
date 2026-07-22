@@ -68,6 +68,20 @@ function resolveTaskActions(task: KanbanTask): TaskActionAvailability {
   };
 }
 
+// "Pause au choix" state for a task: whether it's currently held, and whether
+// the hold toggle applies (only for in-pipeline tasks that aren't mid-launch).
+// Kept at module scope so its branch count stays out of the form's complexity.
+function resolveHoldState(task: KanbanTask): { isHeld: boolean; canHold: boolean } {
+  const scheduleState = task.schedule?.state ?? null;
+  const inPipeline = task.column === "validated" || task.column === "scheduled";
+  const canHold =
+    inPipeline &&
+    scheduleState !== "launching" &&
+    scheduleState !== "running" &&
+    task.approval?.state !== "pending";
+  return { isHeld: task.executionHold === true, canHold };
+}
+
 export interface TaskDetailSaveInput {
   taskId: string;
   title: string;
@@ -87,6 +101,7 @@ interface TaskDetailSheetProps {
   onEstimate: (taskId: string) => void;
   onRunNow: (taskId: string) => void;
   onApprove: (taskId: string) => void;
+  onSetHold?: (taskId: string, hold: boolean) => void;
 }
 
 /**
@@ -181,6 +196,7 @@ function TaskDetailSheetForm({
   onEstimate,
   onRunNow,
   onApprove,
+  onSetHold,
   inline = false,
 }: TaskDetailSheetProps & { task: KanbanTask; inline?: boolean }) {
   const { t } = useTranslation();
@@ -278,6 +294,17 @@ function TaskDetailSheetForm({
   const handleApprove = useCallback(() => {
     onApprove(taskId);
   }, [taskId, onApprove]);
+
+  // "Pause au choix": the user can hold a pipeline task so it's analyzed but not
+  // auto-launched, then review the plan and give the go (run-now) — or resume auto.
+  const holdState = resolveHoldState(task);
+  const isHeld = holdState.isHeld;
+  // Hide the toggle when no handler is wired (keeps the feature self-consistent
+  // even if a concurrent edit drops the screen-level wiring).
+  const canHold = holdState.canHold && onSetHold !== undefined;
+  const handleToggleHold = useCallback(() => {
+    onSetHold?.(taskId, !isHeld);
+  }, [onSetHold, taskId, isHeld]);
 
   const actions = useMemo(() => resolveTaskActions(task), [task]);
   const planAgentId = task.planReadyAt ? actions.primaryAgentId : null;
@@ -388,8 +415,11 @@ function TaskDetailSheetForm({
         actions={actions}
         planAgentId={planAgentId}
         viewAgentId={viewAgentId}
+        isHeld={isHeld}
+        canHold={canHold}
         onRunNow={handleRunNow}
         onEstimate={handleEstimate}
+        onToggleHold={handleToggleHold}
         onViewAgent={handleViewAgent}
         onViewPlan={handleViewPlan}
       />
@@ -450,21 +480,27 @@ function TaskActionsRow({
   actions,
   planAgentId,
   viewAgentId,
+  isHeld,
+  canHold,
   onRunNow,
   onEstimate,
+  onToggleHold,
   onViewAgent,
   onViewPlan,
 }: {
   actions: TaskActionAvailability;
   planAgentId: string | null;
   viewAgentId: string | null;
+  isHeld: boolean;
+  canHold: boolean;
   onRunNow: () => void;
   onEstimate: () => void;
+  onToggleHold: () => void;
   onViewAgent: () => void;
   onViewPlan: () => void;
 }) {
   const { t } = useTranslation();
-  if (!actions.canRun && !actions.canEstimate && !planAgentId && !viewAgentId) {
+  if (!actions.canRun && !actions.canEstimate && !canHold && !planAgentId && !viewAgentId) {
     return null;
   }
   return (
@@ -479,9 +515,19 @@ function TaskActionsRow({
           {t("tasks.actions.runNow")}
         </Button>
       ) : null}
+      {canHold ? (
+        <Button
+          variant="outline"
+          size={ACTION_BUTTON_SIZE}
+          onPress={onToggleHold}
+          testID="task-detail-hold"
+        >
+          {isHeld ? t("tasks.actions.resumeAuto") : t("tasks.actions.hold")}
+        </Button>
+      ) : null}
       {actions.canEstimate ? (
         <Button variant="outline" size={ACTION_BUTTON_SIZE} onPress={onEstimate}>
-          {t("tasks.actions.reEstimate")}
+          {t("tasks.actions.reanalyze")}
         </Button>
       ) : null}
       {viewAgentId ? (
