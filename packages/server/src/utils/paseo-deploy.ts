@@ -2,7 +2,11 @@ import { spawn } from "node:child_process";
 import { openSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
-import type { PaseoDeployPendingCommit, PaseoDeployPendingFile } from "@getpaseo/protocol/messages";
+import type {
+  PaseoDeployPendingCommit,
+  PaseoDeployPendingFile,
+  PaseoDeployWorktree,
+} from "@getpaseo/protocol/messages";
 import { runGitCommand } from "./run-git-command.js";
 
 /** Personal self-host fork feature — these paths are hardcoded for this host. */
@@ -89,6 +93,11 @@ export interface PaseoDeployStatus {
   /** Daemon-side commits landed since boot, dormant until a restart. */
   daemonBehindCount: number;
   branch: string | null;
+  /**
+   * Other Paseo checkouts (task-branch worktrees) with work not yet on the
+   * deploy branch — each mergeable-and-shippable from the modal.
+   */
+  worktrees: PaseoDeployWorktree[];
   lastError: string | null;
   error: string | null;
 }
@@ -176,6 +185,157 @@ async function getChangedFileCount(
   }
 }
 
+interface GitWorktree {
+  path: string;
+  branch: string | null;
+  head: string | null;
+}
+
+/**
+ * Parse `git worktree list --porcelain` into structured entries. Detached
+ * worktrees (no branch) come back with `branch: null` and are skipped by
+ * callers that need a mergeable branch name.
+ */
+function parseWorktreeList(porcelain: string): GitWorktree[] {
+  const worktrees: GitWorktree[] = [];
+  let current: GitWorktree | null = null;
+  for (const rawLine of porcelain.split("\n")) {
+    const line = rawLine.trimEnd();
+    if (line.startsWith("worktree ")) {
+      if (current) worktrees.push(current);
+      current = { path: line.slice("worktree ".length), branch: null, head: null };
+    } else if (line.startsWith("HEAD ") && current) {
+      current.head = line.slice("HEAD ".length).trim() || null;
+    } else if (line.startsWith("branch ") && current) {
+      // "branch refs/heads/foo" -> "foo"
+      current.branch =
+        line
+          .slice("branch ".length)
+          .replace(/^refs\/heads\//, "")
+          .trim() || null;
+    }
+  }
+  if (current) worktrees.push(current);
+  return worktrees;
+}
+
+async function listWorktrees(): Promise<GitWorktree[]> {
+  try {
+    const result = await runGitCommand(["worktree", "list", "--porcelain"], { cwd: REPO_ROOT });
+    return parseWorktreeList(result.stdout);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Latest known Paseo checkout roots. Cached so `server_info` (built
+ * synchronously) can read it without a git call; refreshed whenever the deploy
+ * status is polled and primed once at bootstrap.
+ */
+let cachedDeployRoots: string[] = [REPO_ROOT];
+
+/**
+ * Absolute paths of every Paseo checkout — the main repo plus its worktrees.
+ * The client uses this to decide where the deploy button may appear, so a
+ * task-branch worktree shows it too, not just `/root/paseo`. Falls back to just
+ * the main root if worktree discovery fails. Side effect: updates the cache read
+ * by {@link getCachedPaseoDeployRoots}.
+ */
+export async function getPaseoDeployRoots(): Promise<string[]> {
+  const worktrees = await listWorktrees();
+  const roots = new Set<string>([REPO_ROOT]);
+  for (const wt of worktrees) {
+    if (wt.path.length > 0) roots.add(wt.path);
+  }
+  cachedDeployRoots = [...roots];
+  return cachedDeployRoots;
+}
+
+/**
+ * Synchronous snapshot of the Paseo checkout roots for `server_info`. Returns
+ * the last value computed by {@link getPaseoDeployRoots} (primed at bootstrap,
+ * refreshed on every status poll).
+ */
+export function getCachedPaseoDeployRoots(): string[] {
+  return cachedDeployRoots;
+}
+
+/**
+ * Count uncommitted files in a worktree (shown as an info count only — those
+ * changes must be committed in their own atelier before they can ship).
+ */
+async function getWorktreeUncommittedCount(path: string): Promise<number> {
+  try {
+    const result = await runGitCommand(["status", "--porcelain"], { cwd: path });
+    return result.stdout.split("\n").filter((line) => line.length > 0).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Commits on `branch` that are not yet on the deploy branch (`deployHeadSha`) —
+ * i.e. exactly what a "fusionner puis publier" would add. Capped for display.
+ */
+async function getBranchAheadCommits(
+  deployHeadSha: string | null,
+  branchHead: string | null,
+): Promise<PaseoDeployPendingCommit[]> {
+  if (deployHeadSha === null || branchHead === null || deployHeadSha === branchHead) {
+    return [];
+  }
+  try {
+    const result = await runGitCommand(
+      ["log", "--format=%h%x1f%s", "-n", "50", `${deployHeadSha}..${branchHead}`],
+      { cwd: REPO_ROOT },
+    );
+    return result.stdout
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [sha, subject] = line.split("\x1f");
+        return { sha: sha ?? "", subject: subject ?? "" };
+      });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Every OTHER Paseo checkout (task-branch worktree) that carries work not yet on
+ * the deploy branch — committed commits ahead and/or uncommitted files. The
+ * deploy checkout itself is excluded (its own pending work is the top-level
+ * status). This is what lets the modal regroup all ateliers in one view.
+ */
+async function getPendingWorktrees(
+  worktrees: GitWorktree[],
+  deployHeadSha: string | null,
+): Promise<PaseoDeployWorktree[]> {
+  const results = await Promise.all(
+    worktrees
+      .filter((wt) => wt.path !== REPO_ROOT && wt.branch !== null)
+      .map(async (wt): Promise<PaseoDeployWorktree | null> => {
+        const branch = wt.branch as string;
+        const [commits, uncommittedCount] = await Promise.all([
+          getBranchAheadCommits(deployHeadSha, wt.head),
+          getWorktreeUncommittedCount(wt.path),
+        ]);
+        if (commits.length === 0 && uncommittedCount === 0) {
+          return null;
+        }
+        return {
+          path: wt.path,
+          branch,
+          ahead: commits.length,
+          commits,
+          uncommittedCount,
+        };
+      }),
+  );
+  return results.filter((entry): entry is PaseoDeployWorktree => entry !== null);
+}
+
 export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
   try {
     const [statusResult, headResult, branchResult, deployedSha] = await Promise.all([
@@ -191,10 +351,17 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
     const changesCount = await getChangedFileCount(deployedSha, uncommittedFiles);
     const daemonBehindCount = await getDaemonBehindCount(headSha);
+    const allWorktrees = await listWorktrees();
+    // Keep the roots cache (read synchronously by server_info) fresh on each poll.
+    cachedDeployRoots = [
+      ...new Set<string>([REPO_ROOT, ...allWorktrees.map((wt) => wt.path).filter(Boolean)]),
+    ];
+    const worktrees = await getPendingWorktrees(allWorktrees, headSha);
 
     const hasPending =
       uncommittedFiles.length > 0 ||
       unshippedCommits.length > 0 ||
+      worktrees.length > 0 ||
       (deployedSha !== null && deployedSha !== headSha);
 
     return {
@@ -208,6 +375,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       daemonSha: daemonBootSha,
       daemonBehindCount,
       branch,
+      worktrees,
       lastError,
       error: null,
     };
@@ -223,17 +391,90 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       daemonSha: daemonBootSha,
       daemonBehindCount: 0,
       branch: null,
+      worktrees: [],
       lastError,
       error: getErrorMessage(error),
     };
   }
 }
 
+/**
+ * Merge a task branch into the deploy branch inside the main checkout — the
+ * "fusionner puis publier" step. Refuses cleanly (aborting any partial merge)
+ * when the branch is unknown or the merge conflicts, so the deploy branch is
+ * never left half-merged. Returns a French error message on failure.
+ */
+async function mergeBranchIntoDeploy(
+  branch: string,
+): Promise<{ ok: boolean; error: string | null }> {
+  // Guard the branch name against anything but a real local branch.
+  try {
+    const verify = await runGitCommand(
+      ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`],
+      { cwd: REPO_ROOT, acceptExitCodes: [0, 1] },
+    );
+    if (verify.exitCode !== 0) {
+      return { ok: false, error: `Branche introuvable : ${branch}.` };
+    }
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+
+  // Already the deploy branch — nothing to merge, ship as-is.
+  try {
+    const currentBranch = (
+      await runGitCommand(["rev-parse", "--abbrev-ref", "HEAD"], { cwd: REPO_ROOT })
+    ).stdout.trim();
+    if (currentBranch === branch) {
+      return { ok: true, error: null };
+    }
+  } catch {
+    // Fall through and let the merge attempt surface any real problem.
+  }
+
+  try {
+    const merge = await runGitCommand(["merge", "--no-edit", branch], {
+      cwd: REPO_ROOT,
+      acceptExitCodes: [0, 1],
+    });
+    if (merge.exitCode !== 0) {
+      // Conflict or blocked merge — abort so the deploy branch stays clean.
+      await runGitCommand(["merge", "--abort"], {
+        cwd: REPO_ROOT,
+        acceptExitCodes: [0, 1, 128],
+      }).catch(() => {});
+      return {
+        ok: false,
+        error: `La fusion de « ${branch} » a échoué (conflit). Rien n'a été publié ; résous le conflit dans l'atelier puis réessaie.`,
+      };
+    }
+    return { ok: true, error: null };
+  } catch (error) {
+    await runGitCommand(["merge", "--abort"], {
+      cwd: REPO_ROOT,
+      acceptExitCodes: [0, 1, 128],
+    }).catch(() => {});
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
 export async function triggerPaseoDeploy(input: {
   noBuild?: boolean;
+  mergeBranch?: string;
 }): Promise<PaseoDeployTriggerResult> {
   if (deploying) {
     return { started: false, error: "Un déploiement est déjà en cours." };
+  }
+
+  // Merge the requested task branch into the deploy branch first. On failure we
+  // never flip `deploying` or spawn the ship script — the deploy branch is left
+  // untouched (merge aborted).
+  if (input.mergeBranch) {
+    const merged = await mergeBranchIntoDeploy(input.mergeBranch);
+    if (!merged.ok) {
+      lastError = merged.error;
+      return { started: false, error: merged.error };
+    }
   }
 
   try {
