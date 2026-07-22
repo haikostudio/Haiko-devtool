@@ -420,6 +420,11 @@ export const ru: TranslationResources = {
       approve: "Подтвердить",
       explainer: "Предложена агентом — запустится только после вашего подтверждения.",
     },
+    status: {
+      attention: "Ожидает вас",
+      running: "Выполняется",
+      done: "Готово",
+    },
     triage: {
       fieldFolder: "Папка",
       fieldPriority: "Приоритет",

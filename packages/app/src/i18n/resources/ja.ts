@@ -421,6 +421,11 @@ export const ja: TranslationResources = {
       approve: "承認",
       explainer: "エージェントによる提案 — 承認するまで実行されません。",
     },
+    status: {
+      attention: "対応待ち",
+      running: "実行中",
+      done: "完了",
+    },
     triage: {
       fieldFolder: "フォルダー",
       fieldPriority: "優先度",

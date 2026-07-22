@@ -424,6 +424,11 @@ export const ptBR: TranslationResources = {
       approve: "Aprovar",
       explainer: "Proposta por um agente — só será executada após sua aprovação.",
     },
+    status: {
+      attention: "Aguardando você",
+      running: "Em andamento",
+      done: "Concluído",
+    },
     triage: {
       fieldFolder: "Pasta",
       fieldPriority: "Prioridade",

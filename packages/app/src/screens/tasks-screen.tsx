@@ -509,28 +509,28 @@ export function TasksScreen() {
           projects={projects}
           folders={sortedFolders}
         />
-      {isCompact ? (
-        <CompactFlow
-          serverId={serverId}
-          projectId={projectId}
-          folderId={folderId}
-          projects={projects}
-          supportsTasksBoard={supportsTasksBoard}
-          supportsAutopilot={supportsAutopilot}
-          boardHandle={boardHandle}
-        />
-      ) : (
-        <DesktopLayout
-          serverId={serverId}
-          projectId={projectId}
-          folderId={selectedFolder?.id ?? null}
-          projects={projects}
-          folders={sortedFolders}
-          supportsTasksBoard={supportsTasksBoard}
-          supportsAutopilot={supportsAutopilot}
-          boardHandle={boardHandle}
-        />
-      )}
+        {isCompact ? (
+          <CompactFlow
+            serverId={serverId}
+            projectId={projectId}
+            folderId={folderId}
+            projects={projects}
+            supportsTasksBoard={supportsTasksBoard}
+            supportsAutopilot={supportsAutopilot}
+            boardHandle={boardHandle}
+          />
+        ) : (
+          <DesktopLayout
+            serverId={serverId}
+            projectId={projectId}
+            folderId={selectedFolder?.id ?? null}
+            projects={projects}
+            folders={sortedFolders}
+            supportsTasksBoard={supportsTasksBoard}
+            supportsAutopilot={supportsAutopilot}
+            boardHandle={boardHandle}
+          />
+        )}
         <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
       </View>
     </AgentBucketProvider>

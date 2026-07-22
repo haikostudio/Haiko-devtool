@@ -417,6 +417,11 @@ export const zhCN: TranslationResources = {
       approve: "批准",
       explainer: "由智能体提出 — 需要你确认后才会执行。",
     },
+    status: {
+      attention: "等待你",
+      running: "进行中",
+      done: "已完成",
+    },
     triage: {
       fieldFolder: "文件夹",
       fieldPriority: "优先级",

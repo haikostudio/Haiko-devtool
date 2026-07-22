@@ -423,6 +423,11 @@ export const es: TranslationResources = {
       approve: "Aprobar",
       explainer: "Propuesta por un agente — solo se ejecutará cuando la apruebes.",
     },
+    status: {
+      attention: "Esperándote",
+      running: "En curso",
+      done: "Hecho",
+    },
     triage: {
       fieldFolder: "Carpeta",
       fieldPriority: "Prioridad",

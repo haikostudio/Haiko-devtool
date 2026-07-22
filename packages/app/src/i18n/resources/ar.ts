@@ -417,6 +417,11 @@ export const ar: TranslationResources = {
       approve: "موافقة",
       explainer: "اقترحها وكيل — لن تُنفَّذ إلا بعد موافقتك.",
     },
+    status: {
+      attention: "بانتظارك",
+      running: "قيد التنفيذ",
+      done: "مكتمل",
+    },
     triage: {
       fieldFolder: "المجلد",
       fieldPriority: "الأولوية",

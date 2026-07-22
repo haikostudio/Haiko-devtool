@@ -183,13 +183,9 @@ export function TaskStatusVoyant({
   if (!tone) {
     return null;
   }
-  const dotStyle = [
-    variant === "pip" ? styles.pip : styles.dot,
-    tone === "attention" && styles.toneAttention,
-    tone === "running" && styles.toneRunning,
-    tone === "done" && styles.toneDone,
-  ];
-  return <View style={dotStyle} accessibilityLabel={t(`tasks.status.${tone}`)} />;
+  return (
+    <View style={VOYANT_STYLE[variant][tone]} accessibilityLabel={t(`tasks.status.${tone}`)} />
+  );
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -222,3 +218,24 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.palette.green[500],
   },
 }));
+
+const TONE_STYLE: Record<TaskTone, object> = {
+  attention: styles.toneAttention,
+  running: styles.toneRunning,
+  done: styles.toneDone,
+};
+
+// Precomputed [shape, tone] style tuples so the render passes a stable array
+// reference instead of building a new one each time (react-perf lint rule).
+const VOYANT_STYLE: Record<"dot" | "pip", Record<TaskTone, object[]>> = {
+  dot: {
+    attention: [styles.dot, TONE_STYLE.attention],
+    running: [styles.dot, TONE_STYLE.running],
+    done: [styles.dot, TONE_STYLE.done],
+  },
+  pip: {
+    attention: [styles.pip, TONE_STYLE.attention],
+    running: [styles.pip, TONE_STYLE.running],
+    done: [styles.pip, TONE_STYLE.done],
+  },
+};

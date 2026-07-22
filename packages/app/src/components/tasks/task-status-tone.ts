@@ -23,6 +23,35 @@ export function taskAgentId(task: KanbanTask): string | null {
   return task.links.primaryAgentId ?? task.links.taskAgentId ?? null;
 }
 
+// Wants the user: proposed-but-unapproved, paused for an explicit go, a
+// plan-mode result ready to review, a failed run, or a live agent blocked on a
+// permission / question / attention flag.
+function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
+  return (
+    task.approval?.state === "pending" ||
+    task.executionHold === true ||
+    Boolean(task.planReadyAt) ||
+    task.schedule?.state === "failed" ||
+    agentBucket === "needs_input" ||
+    agentBucket === "failed" ||
+    agentBucket === "attention"
+  );
+}
+
+// Actively working: the scheduler is analyzing / queued / launching / running,
+// the card sits in the in-progress column, or the live agent is running.
+function isActive(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
+  const scheduleState = task.schedule?.state;
+  return (
+    task.column === "in_progress" ||
+    scheduleState === "pending_estimate" ||
+    scheduleState === "awaiting_slot" ||
+    scheduleState === "launching" ||
+    scheduleState === "running" ||
+    agentBucket === "running"
+  );
+}
+
 /**
  * Maps one task to its status tone. Reads the board fields (column, completion,
  * approval, hold, plan, schedule) first, then the live agent bucket so a running
@@ -39,35 +68,12 @@ export function deriveTaskTone(
   if (task.completedAt || task.column === "done") {
     return "done";
   }
-
-  // Wants the user: proposed-but-unapproved, paused for an explicit go, a
-  // plan-mode result ready to review, a failed run, or a live agent blocked on a
-  // permission / question / attention flag.
-  if (
-    task.approval?.state === "pending" ||
-    task.executionHold === true ||
-    Boolean(task.planReadyAt) ||
-    task.schedule?.state === "failed" ||
-    agentBucket === "needs_input" ||
-    agentBucket === "failed" ||
-    agentBucket === "attention"
-  ) {
+  if (wantsUser(task, agentBucket)) {
     return "attention";
   }
-
-  // Actively working: the scheduler is analyzing / queued / launching / running,
-  // the card sits in the in-progress column, or the live agent is running.
-  if (
-    task.column === "in_progress" ||
-    task.schedule?.state === "pending_estimate" ||
-    task.schedule?.state === "awaiting_slot" ||
-    task.schedule?.state === "launching" ||
-    task.schedule?.state === "running" ||
-    agentBucket === "running"
-  ) {
+  if (isActive(task, agentBucket)) {
     return "running";
   }
-
   return null;
 }
 
