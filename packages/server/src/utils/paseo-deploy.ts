@@ -107,6 +107,11 @@ export interface PaseoDeployTriggerResult {
   error: string | null;
 }
 
+export interface PaseoDeployCommitWorktreeResult {
+  committed: boolean;
+  error: string | null;
+}
+
 async function readDeployedSha(): Promise<string | null> {
   try {
     const raw = await readFile(DEPLOYED_SHA_FILE, "utf8");
@@ -478,6 +483,42 @@ async function mergeBranchesIntoDeploy(
     }
   }
   return { merged, skipped };
+}
+
+/**
+ * Enregistrer (commit) tout le travail non enregistré d'un atelier (task-branch
+ * worktree) directement depuis la fenêtre « À déployer », pour que sa case
+ * devienne cochable. On valide d'abord que le chemin est bien un worktree connu
+ * (jamais le checkout de déploiement, jamais un chemin arbitraire venu du fil),
+ * puis on `git add -A` + `git commit` (sans les hooks, qui sont lents).
+ */
+export async function commitWorktreeChanges(input: {
+  worktreePath: string;
+}): Promise<PaseoDeployCommitWorktreeResult> {
+  const worktrees = await listWorktrees();
+  const match = worktrees.find(
+    (wt) => wt.path === input.worktreePath && wt.path !== REPO_ROOT && wt.branch !== null,
+  );
+  if (!match) {
+    return { committed: false, error: "Atelier introuvable." };
+  }
+  try {
+    const status = await runGitCommand(["status", "--porcelain"], { cwd: match.path });
+    if (status.stdout.trim().length === 0) {
+      return { committed: false, error: "Rien à enregistrer dans cet atelier." };
+    }
+    await runGitCommand(["add", "-A"], { cwd: match.path });
+    const commit = await runGitCommand(
+      ["commit", "--no-verify", "-m", `chore(${match.branch}): enregistrer le travail en cours`],
+      { cwd: match.path, acceptExitCodes: [0, 1] },
+    );
+    if (commit.exitCode !== 0) {
+      return { committed: false, error: "L'enregistrement a échoué." };
+    }
+    return { committed: true, error: null };
+  } catch (error) {
+    return { committed: false, error: getErrorMessage(error) };
+  }
 }
 
 export async function triggerPaseoDeploy(input: {

@@ -2243,6 +2243,15 @@ export const PaseoDeployTriggerRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Enregistre (commit) le travail non enregistré d'un atelier (task-branch
+// worktree) pour que sa case devienne cochable dans la fenêtre « À déployer ».
+export const PaseoDeployCommitWorktreeRequestSchema = z.object({
+  type: z.literal("checkout.deploy.commit-worktree.request"),
+  /** Absolute path of the worktree checkout to save. */
+  worktreePath: z.string(),
+  requestId: z.string(),
+});
+
 export const GitHubSearchItemSchema = z.object({
   kind: z.enum(["issue", "pr"]),
   number: z.number(),
@@ -2786,6 +2795,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   StashListRequestSchema,
   PaseoDeployStatusRequestSchema,
   PaseoDeployTriggerRequestSchema,
+  PaseoDeployCommitWorktreeRequestSchema,
   ValidateBranchRequestSchema,
   BranchSuggestionsRequestSchema,
   GitHubSearchRequestSchema,
@@ -4703,6 +4713,15 @@ export const PaseoDeployTriggerResponseSchema = z.object({
   }),
 });
 
+export const PaseoDeployCommitWorktreeResponseSchema = z.object({
+  type: z.literal("checkout.deploy.commit-worktree.response"),
+  payload: z.object({
+    committed: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const BranchSuggestionsResponseSchema = z.object({
   type: z.literal("branch_suggestions_response"),
   payload: z.object({
@@ -5274,6 +5293,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   StashListResponseSchema,
   PaseoDeployStatusResponseSchema,
   PaseoDeployTriggerResponseSchema,
+  PaseoDeployCommitWorktreeResponseSchema,
   ValidateBranchResponseSchema,
   BranchSuggestionsResponseSchema,
   GitHubSearchResponseSchema,
@@ -5604,6 +5624,12 @@ export type PaseoDeployStatusRequest = z.infer<typeof PaseoDeployStatusRequestSc
 export type PaseoDeployTriggerRequest = z.infer<typeof PaseoDeployTriggerRequestSchema>;
 export type PaseoDeployStatusResponse = z.infer<typeof PaseoDeployStatusResponseSchema>;
 export type PaseoDeployTriggerResponse = z.infer<typeof PaseoDeployTriggerResponseSchema>;
+export type PaseoDeployCommitWorktreeRequest = z.infer<
+  typeof PaseoDeployCommitWorktreeRequestSchema
+>;
+export type PaseoDeployCommitWorktreeResponse = z.infer<
+  typeof PaseoDeployCommitWorktreeResponseSchema
+>;
 export type PaseoDeployPendingFile = z.infer<typeof PaseoDeployPendingFileSchema>;
 export type PaseoDeployPendingCommit = z.infer<typeof PaseoDeployPendingCommitSchema>;
 export type PaseoDeployWorktree = z.infer<typeof PaseoDeployWorktreeSchema>;

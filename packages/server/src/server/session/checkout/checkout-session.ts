@@ -6,6 +6,7 @@ import type {
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
+  PaseoDeployCommitWorktreeRequest,
   PaseoDeployStatusRequest,
   PaseoDeployTriggerRequest,
   SessionInboundMessage,
@@ -46,7 +47,11 @@ import {
 } from "../../../utils/checkout-git.js";
 import { execCommand } from "../../../utils/spawn.js";
 import { expandTilde } from "../../../utils/path.js";
-import { getPaseoDeployStatus, triggerPaseoDeploy } from "../../../utils/paseo-deploy.js";
+import {
+  commitWorktreeChanges,
+  getPaseoDeployStatus,
+  triggerPaseoDeploy,
+} from "../../../utils/paseo-deploy.js";
 import type { GitMetadataGenerator } from "./git-metadata-generator.js";
 
 /**
@@ -323,6 +328,22 @@ export class CheckoutSession {
       type: "checkout.deploy.trigger.response",
       payload: {
         started,
+        error,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployCommitWorktreeRequest(
+    msg: PaseoDeployCommitWorktreeRequest,
+  ): Promise<void> {
+    const { committed, error } = await commitWorktreeChanges({
+      worktreePath: msg.worktreePath,
+    });
+    this.host.emit({
+      type: "checkout.deploy.commit-worktree.response",
+      payload: {
+        committed,
         error,
         requestId: msg.requestId,
       },

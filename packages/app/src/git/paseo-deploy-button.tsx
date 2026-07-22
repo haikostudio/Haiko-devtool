@@ -292,15 +292,28 @@ function WorktreeCard({
   worktree,
   selected,
   onToggle,
+  onCommit,
+  committing,
   busy,
 }: {
   worktree: PaseoDeployWorktreeEntry;
   selected: boolean;
   onToggle: (branch: string) => void;
+  onCommit: (path: string) => void;
+  committing: boolean;
   busy: boolean;
 }) {
   const mergeable = worktree.ahead > 0;
+  const hasUncommitted = worktree.uncommittedCount > 0;
   const handlePress = useCallback(() => onToggle(worktree.branch), [onToggle, worktree.branch]);
+  // Stop the tap from also toggling the card's selection underneath the button.
+  const handleCommit = useCallback(
+    (event: { stopPropagation?: () => void }) => {
+      event.stopPropagation?.();
+      onCommit(worktree.path);
+    },
+    [onCommit, worktree.path],
+  );
   return (
     <Pressable
       style={styles.worktreeCard}
@@ -311,6 +324,19 @@ function WorktreeCard({
       <View style={styles.worktreeHeader}>
         <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
         <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
+        {hasUncommitted ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            style={styles.worktreeCommitButton}
+            textStyle={styles.actionButtonText}
+            onPress={handleCommit}
+            disabled={busy || committing}
+            testID={`paseo-deploy-commit-${worktree.branch}`}
+          >
+            {committing ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        ) : null}
       </View>
       {worktree.commits.map((commit) => (
         <View key={commit.sha} style={styles.itemRow}>
@@ -332,11 +358,15 @@ function WorktreesSection({
   worktrees,
   deselected,
   onToggle,
+  onCommit,
+  committingPath,
   busy,
 }: {
   worktrees: PaseoDeployWorktreeEntry[];
   deselected: Set<string>;
   onToggle: (branch: string) => void;
+  onCommit: (path: string) => void;
+  committingPath: string | null;
   busy: boolean;
 }) {
   if (worktrees.length === 0) return null;
@@ -350,6 +380,8 @@ function WorktreesSection({
             worktree={worktree}
             selected={!deselected.has(worktree.branch)}
             onToggle={onToggle}
+            onCommit={onCommit}
+            committing={committingPath === worktree.path}
             busy={busy}
           />
         ))}
@@ -393,12 +425,16 @@ function DeployModalBody({
   error,
   deselected,
   onToggle,
+  onCommit,
+  committingPath,
   busy,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   error: string | null;
   deselected: Set<string>;
   onToggle: (branch: string) => void;
+  onCommit: (path: string) => void;
+  committingPath: string | null;
   busy: boolean;
 }) {
   const deploying = status?.deploying ?? false;
@@ -431,6 +467,8 @@ function DeployModalBody({
         worktrees={worktrees}
         deselected={deselected}
         onToggle={onToggle}
+        onCommit={onCommit}
+        committingPath={committingPath}
         busy={busy}
       />
 
@@ -454,6 +492,8 @@ function PaseoDeployModal({
   const [error, setError] = useState<string | null>(null);
   // Branches currently being merged-and-shipped (for the per-atelier / all labels).
   const [pendingBranches, setPendingBranches] = useState<string[] | null>(null);
+  // Worktree path whose "Enregistrer" (commit) action is currently running.
+  const [committingPath, setCommittingPath] = useState<string | null>(null);
 
   const sheetHeader = useMemo<SheetHeader>(() => ({ title: "À déployer" }), []);
 
@@ -509,6 +549,28 @@ function PaseoDeployModal({
     if (selectedBranches.length === 0) return;
     void trigger({ mergeBranches: selectedBranches });
   }, [trigger, selectedBranches]);
+
+  // Save (commit) an atelier's pending work so its card becomes selectable —
+  // then refresh the status so the "unsaved files" hint disappears at once.
+  const handleCommitWorktree = useCallback(
+    async (path: string) => {
+      if (!client || committingPath) return;
+      setError(null);
+      setCommittingPath(path);
+      try {
+        const result = await client.paseoDeployCommitWorktree({ worktreePath: path });
+        if (!result.committed && result.error) {
+          setError(result.error);
+        }
+        onDeployed();
+      } catch (err) {
+        setError(err instanceof Error && err.message ? err.message : "Échec de l'enregistrement.");
+      } finally {
+        setCommittingPath(null);
+      }
+    },
+    [client, committingPath, onDeployed],
+  );
 
   const busy = triggering || deploying;
   const selectionPending = (pendingBranches?.length ?? 0) > 0;
@@ -571,6 +633,8 @@ function PaseoDeployModal({
         error={error}
         deselected={deselected}
         onToggle={toggle}
+        onCommit={handleCommitWorktree}
+        committingPath={committingPath}
         busy={busy}
       />
     </AdaptiveModalSheet>
@@ -714,6 +778,10 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  // Compact "Enregistrer" action pinned to the right of the atelier's header row.
+  worktreeCommitButton: {
+    paddingHorizontal: theme.spacing[2],
   },
   worktreeBranch: {
     flex: 1,
