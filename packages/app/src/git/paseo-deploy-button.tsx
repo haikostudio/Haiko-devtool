@@ -325,46 +325,21 @@ function WorktreeCard({
 
 /**
  * "Autres ateliers" — every other Paseo checkout (task-branch worktree) with work
- * not yet on the deploy branch. Tick the ones to include, then merge-and-ship the
- * selection in one go, so nothing a task did stays invisible.
+ * not yet on the deploy branch. Tick the ones to include; the merge-and-ship
+ * action lives in the sheet's sticky footer so nothing a task did stays invisible.
  */
 function WorktreesSection({
   worktrees,
-  onPublishSelection,
+  deselected,
+  onToggle,
   busy,
-  pendingBranches,
 }: {
   worktrees: PaseoDeployWorktreeEntry[];
-  onPublishSelection: (branches: string[]) => void;
+  deselected: Set<string>;
+  onToggle: (branch: string) => void;
   busy: boolean;
-  pendingBranches: string[] | null;
 }) {
-  // Track UNchecked branches, so freshly-appearing ateliers default to selected
-  // and the set survives the background status polling without resetting.
-  const [deselected, setDeselected] = useState<Set<string>>(() => new Set());
-  const toggle = useCallback((branch: string) => {
-    setDeselected((prev) => {
-      const next = new Set(prev);
-      if (next.has(branch)) next.delete(branch);
-      else next.add(branch);
-      return next;
-    });
-  }, []);
-
-  const selectedBranches = useMemo(
-    () =>
-      worktrees
-        .filter((worktree) => worktree.ahead > 0 && !deselected.has(worktree.branch))
-        .map((worktree) => worktree.branch),
-    [worktrees, deselected],
-  );
-  const handlePublish = useCallback(
-    () => onPublishSelection(selectedBranches),
-    [onPublishSelection, selectedBranches],
-  );
-
   if (worktrees.length === 0) return null;
-  const isPending = (pendingBranches?.length ?? 0) > 0;
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Autres ateliers (branches de tâche)</Text>
@@ -374,23 +349,10 @@ function WorktreesSection({
             key={worktree.path}
             worktree={worktree}
             selected={!deselected.has(worktree.branch)}
-            onToggle={toggle}
+            onToggle={onToggle}
             busy={busy}
           />
         ))}
-        <Button
-          variant="default"
-          size="sm"
-          style={styles.worktreeButton}
-          textStyle={styles.actionButtonText}
-          onPress={handlePublish}
-          disabled={busy || selectedBranches.length === 0}
-          testID="paseo-deploy-merge-selection"
-        >
-          {isPending
-            ? "Publication en cours…"
-            : `Fusionner & publier la sélection (${selectedBranches.length})`}
-        </Button>
       </View>
     </View>
   );
@@ -429,15 +391,15 @@ function DeployStatusHeader({
 function DeployModalBody({
   status,
   error,
-  onPublishSelection,
+  deselected,
+  onToggle,
   busy,
-  pendingBranches,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   error: string | null;
-  onPublishSelection: (branches: string[]) => void;
+  deselected: Set<string>;
+  onToggle: (branch: string) => void;
   busy: boolean;
-  pendingBranches: string[] | null;
 }) {
   const deploying = status?.deploying ?? false;
   const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
@@ -467,9 +429,9 @@ function DeployModalBody({
       <PendingCommitsSection commits={unshippedCommits} />
       <WorktreesSection
         worktrees={worktrees}
-        onPublishSelection={onPublishSelection}
+        deselected={deselected}
+        onToggle={onToggle}
         busy={busy}
-        pendingBranches={pendingBranches}
       />
 
       {deploying ? <Text style={styles.infoText}>Déploiement en cours…</Text> : null}
@@ -496,6 +458,26 @@ function PaseoDeployModal({
   const sheetHeader = useMemo<SheetHeader>(() => ({ title: "À déployer" }), []);
 
   const deploying = status?.deploying ?? false;
+  const worktrees = status?.worktrees ?? EMPTY_WORKTREES;
+
+  // Selection of ateliers to merge-and-ship. Track UNchecked branches, so freshly-
+  // appearing ateliers default to selected and the set survives status polling.
+  const [deselected, setDeselected] = useState<Set<string>>(() => new Set());
+  const toggle = useCallback((branch: string) => {
+    setDeselected((prev) => {
+      const next = new Set(prev);
+      if (next.has(branch)) next.delete(branch);
+      else next.add(branch);
+      return next;
+    });
+  }, []);
+  const selectedBranches = useMemo(
+    () =>
+      worktrees
+        .filter((worktree) => worktree.ahead > 0 && !deselected.has(worktree.branch))
+        .map((worktree) => worktree.branch),
+    [worktrees, deselected],
+  );
 
   const trigger = useCallback(
     async (input: { noBuild?: boolean; mergeBranches?: string[] }) => {
@@ -523,19 +505,14 @@ function PaseoDeployModal({
     void trigger({});
   }, [trigger]);
 
-  const handleCommitOnly = useCallback(() => {
-    void trigger({ noBuild: true });
-  }, [trigger]);
-
-  const handlePublishSelection = useCallback(
-    (branches: string[]) => {
-      if (branches.length === 0) return;
-      void trigger({ mergeBranches: branches });
-    },
-    [trigger],
-  );
+  const handlePublishSelection = useCallback(() => {
+    if (selectedBranches.length === 0) return;
+    void trigger({ mergeBranches: selectedBranches });
+  }, [trigger, selectedBranches]);
 
   const busy = triggering || deploying;
+  const selectionPending = (pendingBranches?.length ?? 0) > 0;
+  const hasSelectableWorktrees = worktrees.some((worktree) => worktree.ahead > 0);
 
   // Actions live in the sheet's sticky footer so they stay pinned to the bottom
   // edge instead of scrolling away with the change list.
@@ -553,31 +530,32 @@ function PaseoDeployModal({
         >
           {deploying ? "Publication en cours…" : "Publier maintenant"}
         </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          style={styles.actionButton}
-          textStyle={styles.actionButtonText}
-          onPress={handleCommitOnly}
-          disabled={busy}
-          testID="paseo-deploy-commit-only"
-        >
-          Enregistrer sans publier
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          style={styles.actionButton}
-          textStyle={styles.actionButtonText}
-          onPress={onClose}
-          disabled={triggering}
-          testID="paseo-deploy-cancel"
-        >
-          Fermer
-        </Button>
+        {hasSelectableWorktrees ? (
+          <Button
+            variant="default"
+            size="sm"
+            style={styles.actionButton}
+            textStyle={styles.actionButtonText}
+            onPress={handlePublishSelection}
+            disabled={busy || selectedBranches.length === 0}
+            testID="paseo-deploy-merge-selection"
+          >
+            {selectionPending
+              ? "Publication en cours…"
+              : `Fusionner & publier la sélection (${selectedBranches.length})`}
+          </Button>
+        ) : null}
       </View>
     ),
-    [busy, deploying, triggering, handleDeploy, handleCommitOnly, onClose],
+    [
+      busy,
+      deploying,
+      handleDeploy,
+      handlePublishSelection,
+      hasSelectableWorktrees,
+      selectedBranches.length,
+      selectionPending,
+    ],
   );
 
   return (
@@ -591,9 +569,9 @@ function PaseoDeployModal({
       <DeployModalBody
         status={status}
         error={error}
-        onPublishSelection={handlePublishSelection}
+        deselected={deselected}
+        onToggle={toggle}
         busy={busy}
-        pendingBranches={pendingBranches}
       />
     </AdaptiveModalSheet>
   );
