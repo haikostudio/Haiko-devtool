@@ -342,6 +342,8 @@ export const ja: TranslationResources = {
       move: "パネルを移動",
       backToConductor: "指揮者に戻る",
       openDetails: "詳細",
+      collapse: "折りたたむ",
+      expand: "展開",
       noProject: "先にプロジェクトを選択してください。",
       noHost: "ホストに接続されていません。",
       failed: "指揮者を起動できませんでした。",

@@ -337,6 +337,8 @@ export const en = {
       move: "Move panel",
       backToConductor: "Back to conductor",
       openDetails: "Details",
+      collapse: "Collapse",
+      expand: "Expand",
       noProject: "Select a project first.",
       noHost: "Host is not connected.",
       failed: "Couldn't start the conductor.",

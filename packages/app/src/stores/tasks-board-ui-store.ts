@@ -13,12 +13,24 @@ interface TasksBoardUiState {
   /** Whether the bottom-docked "Chef d'orchestre" chat dock is open. */
   conductorOpen: boolean;
   setConductorOpen: (conductorOpen: boolean) => void;
-  /** Height (in px) of the conductor panel. */
+  /** Height (in px) of the conductor chat dock. */
   conductorHeight: number;
   setConductorHeight: (conductorHeight: number) => void;
-  /** Horizontal offset (in px) of the conductor panel from its centered position. */
+  /** Horizontal offset (in px) of the conductor dock from its centered position. */
   conductorOffsetX: number;
   setConductorOffsetX: (conductorOffsetX: number) => void;
+  /** Whether the conductor chat dock is collapsed to its title bar. */
+  conductorCollapsed: boolean;
+  setConductorCollapsed: (conductorCollapsed: boolean) => void;
+  /** Height (in px) of the Details/Billing dock. */
+  detailsHeight: number;
+  setDetailsHeight: (detailsHeight: number) => void;
+  /** Horizontal offset (in px) of the Details/Billing dock from its centered position. */
+  detailsOffsetX: number;
+  setDetailsOffsetX: (detailsOffsetX: number) => void;
+  /** Whether the Details/Billing dock is collapsed to its title bar. */
+  detailsCollapsed: boolean;
+  setDetailsCollapsed: (detailsCollapsed: boolean) => void;
   /**
    * Ephemeral (not persisted): the task whose agent chat the bottom dock shows.
    * `null` means the dock shows the persistent conductor agent. Set on task tap,
@@ -51,6 +63,14 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setConductorHeight: (conductorHeight) => set({ conductorHeight }),
       conductorOffsetX: 0,
       setConductorOffsetX: (conductorOffsetX) => set({ conductorOffsetX }),
+      conductorCollapsed: false,
+      setConductorCollapsed: (conductorCollapsed) => set({ conductorCollapsed }),
+      detailsHeight: DEFAULT_CONDUCTOR_HEIGHT,
+      setDetailsHeight: (detailsHeight) => set({ detailsHeight }),
+      detailsOffsetX: 0,
+      setDetailsOffsetX: (detailsOffsetX) => set({ detailsOffsetX }),
+      detailsCollapsed: false,
+      setDetailsCollapsed: (detailsCollapsed) => set({ detailsCollapsed }),
       dockTaskId: null,
       setDockTaskId: (dockTaskId) => set({ dockTaskId }),
       detailsTaskId: null,
@@ -66,6 +86,10 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         conductorOpen: state.conductorOpen,
         conductorHeight: state.conductorHeight,
         conductorOffsetX: state.conductorOffsetX,
+        conductorCollapsed: state.conductorCollapsed,
+        detailsHeight: state.detailsHeight,
+        detailsOffsetX: state.detailsOffsetX,
+        detailsCollapsed: state.detailsCollapsed,
       }),
     },
   ),

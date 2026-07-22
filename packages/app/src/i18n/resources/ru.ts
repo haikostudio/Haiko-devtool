@@ -340,6 +340,8 @@ export const ru: TranslationResources = {
       move: "Переместить панель",
       backToConductor: "Вернуться к дирижёру",
       openDetails: "Подробности",
+      collapse: "Свернуть",
+      expand: "Развернуть",
       noProject: "Сначала выберите проект.",
       noHost: "Хост не подключён.",
       failed: "Не удалось запустить дирижёра.",

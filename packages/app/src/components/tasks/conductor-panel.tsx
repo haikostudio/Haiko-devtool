@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { PanelRight } from "lucide-react-native";
-import type { SheetHeader } from "@/components/adaptive-modal-sheet";
-import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
+import { PanelRight, Wand2 } from "lucide-react-native";
+import { TaskBottomDock, type TaskDockHeader } from "@/components/tasks/task-bottom-dock";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
@@ -17,11 +17,7 @@ import {
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedPanelRight = withUnistyles(PanelRight);
-
-// Compact bottom sheet snap: the embedded agent pane needs generous height.
-const CONDUCTOR_SNAP_POINTS = ["90%"];
-// The desktop card is a chat surface, so give it more width than the default.
-const CONDUCTOR_DESKTOP_MAX_WIDTH = 640;
+const ThemedWand = withUnistyles(Wand2);
 
 type EnsureState =
   | { status: "loading" }
@@ -47,14 +43,15 @@ export interface ConductorPanelProps {
 
 /**
  * The "Chef d'orchestre" chat drawer, rendered through the shared
- * `AdaptiveModalSheet`: a bottom sheet on compact, a centered card on desktop
- * (no backdrop dim, so the board behind stays visible/interactive). Shows the
- * persistent per-project conductor agent by default, and swaps to the selected
- * task's agent chat when a task is tapped on the board. On mount (in conductor
- * mode) it ensures the conductor exists on the host and embeds its live agent via
- * the same WorkspacePaneContent the workspace screen uses; in task mode it embeds
- * the task's primary agent. Switching agents fully remounts the pane (React
- * `key`) so no scroll/terminal state leaks across agents.
+ * `TaskBottomDock`: a bottom sheet on compact, and on desktop a drawer docked to
+ * the bottom of the board that the user can drag left/right, resize, and collapse
+ * — never a modal floating in the middle of the screen. Shows the persistent
+ * per-project conductor agent by default, and swaps to the selected task's agent
+ * chat when a task is tapped on the board. On mount (in conductor mode) it ensures
+ * the conductor exists on the host and embeds its live agent via the same
+ * WorkspacePaneContent the workspace screen uses; in task mode it embeds the
+ * task's primary agent. Switching agents fully remounts the pane (React `key`) so
+ * no scroll/terminal state leaks across agents.
  */
 export function ConductorPanel({
   serverId,
@@ -66,6 +63,17 @@ export function ConductorPanel({
   onClose,
 }: ConductorPanelProps) {
   const { t } = useTranslation();
+
+  const conductorHeight = useTasksBoardUiStore((state) => state.conductorHeight);
+  const conductorOffsetX = useTasksBoardUiStore((state) => state.conductorOffsetX);
+  const conductorCollapsed = useTasksBoardUiStore((state) => state.conductorCollapsed);
+  const setConductorHeight = useTasksBoardUiStore((state) => state.setConductorHeight);
+  const setConductorOffsetX = useTasksBoardUiStore((state) => state.setConductorOffsetX);
+  const setConductorCollapsed = useTasksBoardUiStore((state) => state.setConductorCollapsed);
+  const handleToggleCollapse = useCallback(
+    () => setConductorCollapsed(!conductorCollapsed),
+    [conductorCollapsed, setConductorCollapsed],
+  );
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
   const inTaskMode = dockTask !== null;
@@ -168,8 +176,8 @@ export function ConductorPanel({
   };
 
   // Task mode gets a back arrow (to the conductor) and an "open details" action;
-  // conductor mode is a plain titled header. Built-in close handles onClose.
-  const header = useMemo<SheetHeader>(() => {
+  // conductor mode shows the wand leading icon. The dock owns close/collapse/drag.
+  const header = useMemo<TaskDockHeader>(() => {
     if (inTaskMode && dockTask) {
       return {
         title: dockTask.title,
@@ -193,22 +201,27 @@ export function ConductorPanel({
         ),
       };
     }
-    return { title: t("tasks.conductor.title") };
+    return {
+      title: t("tasks.conductor.title"),
+      leading: <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
+    };
   }, [inTaskMode, dockTask, onBackToConductor, handleOpenDetailsPress, t]);
 
   return (
-    <AdaptiveModalSheet
+    <TaskBottomDock
       header={header}
       visible
       onClose={onClose}
-      scrollable={false}
-      desktopBackdrop={false}
-      snapPoints={CONDUCTOR_SNAP_POINTS}
-      desktopMaxWidth={CONDUCTOR_DESKTOP_MAX_WIDTH}
+      height={conductorHeight}
+      offsetX={conductorOffsetX}
+      collapsed={conductorCollapsed}
+      onResize={setConductorHeight}
+      onMove={setConductorOffsetX}
+      onToggleCollapse={handleToggleCollapse}
       testID="conductor-panel"
     >
       <View style={styles.body}>{renderBody()}</View>
-    </AdaptiveModalSheet>
+    </TaskBottomDock>
   );
 }
 

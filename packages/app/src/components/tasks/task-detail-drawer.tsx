@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { TaskBottomDock, type TaskDockHeader } from "@/components/tasks/task-bottom-dock";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import {
   TaskDetailInlineForm,
@@ -10,6 +10,7 @@ import {
 } from "@/components/tasks/task-detail-sheet";
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
+import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import type { KanbanTask } from "@/data/tasks";
 
 type PanelView = "details" | "billing";
@@ -30,14 +31,15 @@ export interface TaskDetailDrawerProps {
 
 /**
  * The task's "Details" + "Billing" drawer, unified across form factors through
- * the shared `AdaptiveModalSheet`: a bottom sheet on compact, a centered card on
- * desktop (no backdrop dim, so the board behind stays visible/interactive).
+ * the shared `TaskBottomDock`: a bottom sheet on compact, and on desktop a drawer
+ * docked to the bottom that the user can drag left/right, resize, and collapse —
+ * the same kind of drawer as the conductor chat dock, with its own persisted
+ * geometry so the two can be arranged side by side.
  *
  * The body is a fixed SegmentedControl over the selected view. Both views
  * (`TaskDetailInlineForm`, `TaskBillingView`) own their own flex ScrollView, so
- * the sheet uses a static (`scrollable={false}`) body that hands them a bounded
- * flex height (`minHeight: 0`) — nesting them in the sheet's own scroll would
- * double-scroll. Fresh mount per task via `key` so no state leaks between cards.
+ * the dock uses a static body that hands them a bounded flex height
+ * (`minHeight: 0`). Fresh mount per task via `key` so no state leaks between cards.
  */
 export function TaskDetailDrawer(props: TaskDetailDrawerProps) {
   if (!props.task) {
@@ -62,7 +64,18 @@ function TaskDetailDrawerInner({
   const { t } = useTranslation();
   const [view, setView] = useState<PanelView>("details");
 
-  const header = useMemo((): SheetHeader => ({ title: task.title }), [task.title]);
+  const detailsHeight = useTasksBoardUiStore((state) => state.detailsHeight);
+  const detailsOffsetX = useTasksBoardUiStore((state) => state.detailsOffsetX);
+  const detailsCollapsed = useTasksBoardUiStore((state) => state.detailsCollapsed);
+  const setDetailsHeight = useTasksBoardUiStore((state) => state.setDetailsHeight);
+  const setDetailsOffsetX = useTasksBoardUiStore((state) => state.setDetailsOffsetX);
+  const setDetailsCollapsed = useTasksBoardUiStore((state) => state.setDetailsCollapsed);
+  const handleToggleCollapse = useCallback(
+    () => setDetailsCollapsed(!detailsCollapsed),
+    [detailsCollapsed, setDetailsCollapsed],
+  );
+
+  const header = useMemo((): TaskDockHeader => ({ title: task.title }), [task.title]);
 
   const viewOptions = useMemo<SegmentedControlOption<PanelView>[]>(
     () => [
@@ -73,12 +86,16 @@ function TaskDetailDrawerInner({
   );
 
   return (
-    <AdaptiveModalSheet
+    <TaskBottomDock
       header={header}
       visible={visible}
       onClose={onClose}
-      scrollable={false}
-      desktopBackdrop={false}
+      height={detailsHeight}
+      offsetX={detailsOffsetX}
+      collapsed={detailsCollapsed}
+      onResize={setDetailsHeight}
+      onMove={setDetailsOffsetX}
+      onToggleCollapse={handleToggleCollapse}
       testID="task-detail-drawer"
     >
       <View style={styles.tabs}>
@@ -111,7 +128,7 @@ function TaskDetailDrawerInner({
           )}
         </View>
       </EvolutionTaskProvider>
-    </AdaptiveModalSheet>
+    </TaskBottomDock>
   );
 }
 

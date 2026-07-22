@@ -232,6 +232,13 @@ function sortButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
   return [styles.sortButton, (hovered || pressed) && styles.sortButtonHovered];
 }
 
+// Plain (non-Unistyles) style: FormTextInput flattens its `style` prop and strips
+// Unistyles metadata, which silently drops a proxy style's flex/background. So the
+// field flexes via the plain wrapper View (railSearchField) and the input just
+// knocks out its own grey chrome so the white wrapper shows through — same trick as
+// the column toolbar's search field.
+const TRANSPARENT_CHROME = { backgroundColor: "transparent" } as const;
+
 // Most-recent-first, falling back to name so ties (and projects with no agent
 // activity) stay stable and readable.
 function compareByRecent(left: ProjectEntry, right: ProjectEntry): number {
@@ -481,6 +488,9 @@ export function TasksScreen() {
           />
         )}
         <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
+        {/* Rendered after the conductor dock so, when both are open, the Details
+            drawer stacks above the chat instead of hiding behind it. */}
+        <TasksDetailDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
       </View>
     </AgentBucketProvider>
   );
@@ -594,14 +604,16 @@ function ProjectsRail({
     <View style={styles.rail}>
       <Text style={styles.railHeader}>{t("tasks.pickProject")}</Text>
       <View style={styles.railSearchRow}>
-        <FormTextInput
-          size="sm"
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t("tasks.searchProjects")}
-          style={styles.railSearchInput}
-          testID="tasks-project-search"
-        />
+        <View style={styles.railSearchField}>
+          <FormTextInput
+            size="sm"
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("tasks.searchProjects")}
+            style={TRANSPARENT_CHROME}
+            testID="tasks-project-search"
+          />
+        </View>
         <Pressable
           style={sortButtonStyle}
           onPress={toggleSort}
@@ -930,10 +942,9 @@ function BoardContent({
   const isCompact = useIsCompactFormFactor();
   const { config } = useDaemonConfig(serverId);
   const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
-  // The task whose Details+Billing drawer is open (right panel on desktop, the
-  // full-screen sheet on compact). Ephemeral store state so the dock header's
-  // "Details" button — which lives at the screen root — can open it too.
-  const detailsTaskId = useTasksBoardUiStore((state) => state.detailsTaskId);
+  // Tapping a task on a host without the conductor opens its Details+Billing
+  // drawer directly. The drawer itself lives at the screen root (TasksDetailDock)
+  // so it docks beside the conductor chat and stacks above it, never behind.
   const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
   // Tapping a task points the shared bottom dock at its agent chat.
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
@@ -958,14 +969,6 @@ function BoardContent({
       },
     ],
     [t],
-  );
-
-  const detailsTask = useMemo(
-    () =>
-      detailsTaskId
-        ? (boardHandle.board?.tasks.find((task) => task.id === detailsTaskId) ?? null)
-        : null,
-    [detailsTaskId, boardHandle.board],
   );
 
   // Tasks in the open folder, for the folder's glanceable billable total.
@@ -997,10 +1000,6 @@ function BoardContent({
     },
     [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId],
   );
-
-  const handleCloseDetails = useCallback(() => {
-    setDetailsTaskId(null);
-  }, [setDetailsTaskId]);
 
   const handleCancelNewTask = useCallback(() => {
     setNewTaskColumn(null);
@@ -1034,27 +1033,6 @@ function BoardContent({
     [newTaskColumn, handleCreateTask, handleCancelNewTask],
   );
 
-  const handleSaveTask = useCallback(
-    ({ taskId, title, description, tags, runConfig, schedulePreference }: TaskDetailSaveInput) => {
-      void boardHandle.updateTask({
-        taskId,
-        title,
-        description: description || null,
-        tags,
-        runConfig,
-        schedulePreference,
-      });
-    },
-    [boardHandle],
-  );
-
-  const handleDeleteTask = useCallback(
-    (taskId: string) => {
-      void boardHandle.deleteTask(taskId);
-    },
-    [boardHandle],
-  );
-
   const handleEstimateTask = useCallback(
     (taskId: string) => {
       toast.show(t("tasks.toast.reanalyzing"));
@@ -1073,22 +1051,6 @@ function BoardContent({
       });
     },
     [boardHandle, toast, t],
-  );
-
-  const handleApproveTask = useCallback(
-    (taskId: string) => {
-      void boardHandle.approveTask(taskId);
-    },
-    [boardHandle],
-  );
-
-  const handleSetHold = useCallback(
-    (taskId: string, hold: boolean) => {
-      boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
-        toast.error(error instanceof Error ? error.message : String(error));
-      });
-    },
-    [boardHandle, toast],
   );
 
   // Desktop keeps the strip-above-board layout; compact swaps to one-at-a-time
@@ -1134,24 +1096,7 @@ function BoardContent({
     </View>
   );
 
-  return (
-    <TaskScheduleProvider value={quietHours}>
-      {boardStack}
-      <TaskDetailDrawer
-        serverId={serverId}
-        projectId={projectId}
-        task={detailsTask}
-        visible={detailsTask !== null}
-        onClose={handleCloseDetails}
-        onSave={handleSaveTask}
-        onDelete={handleDeleteTask}
-        onEstimate={handleEstimateTask}
-        onRunNow={handleRunTaskNow}
-        onApprove={handleApproveTask}
-        onSetHold={handleSetHold}
-      />
-    </TaskScheduleProvider>
-  );
+  return <TaskScheduleProvider value={quietHours}>{boardStack}</TaskScheduleProvider>;
 }
 
 // Bottom-center floating toggle + the shared chat dock overlay. Gated on the
@@ -1284,6 +1229,102 @@ function ConductorDock({
         </Text>
       </Pressable>
     </Animated.View>
+  );
+}
+
+// The task's Details+Billing drawer, rendered at the TasksScreen root (after the
+// conductor dock) so it docks beside the conductor chat and stacks above it. Open
+// state lives in the board store: the conductor dock's "Details" button and a
+// task tap on non-conductor hosts both set `detailsTaskId`.
+function TasksDetailDock({
+  serverId,
+  projectId,
+  boardHandle,
+}: {
+  serverId: string | null;
+  projectId: string | null;
+  boardHandle: BoardHandle;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const detailsTaskId = useTasksBoardUiStore((state) => state.detailsTaskId);
+  const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
+
+  const detailsTask = useMemo(
+    () =>
+      detailsTaskId
+        ? (boardHandle.board?.tasks.find((task) => task.id === detailsTaskId) ?? null)
+        : null,
+    [detailsTaskId, boardHandle.board],
+  );
+
+  const handleClose = useCallback(() => setDetailsTaskId(null), [setDetailsTaskId]);
+  const handleSave = useCallback(
+    ({ taskId, title, description, tags, runConfig, schedulePreference }: TaskDetailSaveInput) => {
+      void boardHandle.updateTask({
+        taskId,
+        title,
+        description: description || null,
+        tags,
+        runConfig,
+        schedulePreference,
+      });
+    },
+    [boardHandle],
+  );
+  const handleDelete = useCallback(
+    (taskId: string) => {
+      void boardHandle.deleteTask(taskId);
+    },
+    [boardHandle],
+  );
+  const handleEstimate = useCallback(
+    (taskId: string) => {
+      toast.show(t("tasks.toast.reanalyzing"));
+      boardHandle.estimateTask(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast, t],
+  );
+  const handleRunNow = useCallback(
+    (taskId: string) => {
+      toast.show(t("tasks.toast.launching"));
+      boardHandle.runTaskNow(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast, t],
+  );
+  const handleApprove = useCallback(
+    (taskId: string) => {
+      void boardHandle.approveTask(taskId);
+    },
+    [boardHandle],
+  );
+  const handleSetHold = useCallback(
+    (taskId: string, hold: boolean) => {
+      boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast],
+  );
+
+  return (
+    <TaskDetailDrawer
+      serverId={serverId}
+      projectId={projectId}
+      task={detailsTask}
+      visible={detailsTask !== null}
+      onClose={handleClose}
+      onSave={handleSave}
+      onDelete={handleDelete}
+      onEstimate={handleEstimate}
+      onRunNow={handleRunNow}
+      onApprove={handleApprove}
+      onSetHold={handleSetHold}
+    />
   );
 }
 
@@ -1920,15 +1961,18 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[2],
     paddingBottom: theme.spacing[2],
   },
-  // White field + white square button so both read clearly against the gray
-  // sidebar rail (surface2 input on a surface2 rail was invisible). The input
-  // flexes to fill; the sort button is a fixed square column beside it.
-  // A visible resting border (matching the sort button) gives the white field a
-  // defined edge — without it, white on the near-white rail has no contrast.
-  railSearchInput: {
+  // White, bordered wrapper so the field reads as an input against the grey
+  // sidebar rail. flex:1 here (a plain View) reliably fills the row — the
+  // FormTextInput's own flex/background is dropped by its style split, exactly
+  // like the column toolbar's search field.
+  railSearchField: {
     flex: 1,
+    justifyContent: "center",
     backgroundColor: theme.colors.surface0,
+    borderWidth: 1,
     borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
   },
   // Auto-width icon button: the field flexes to fill the row, this button hugs
   // its icon (horizontal padding instead of a fixed width) and sits beside it.

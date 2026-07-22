@@ -344,6 +344,8 @@ export const ptBR: TranslationResources = {
       move: "Mover o painel",
       backToConductor: "Voltar ao maestro",
       openDetails: "Detalhes",
+      collapse: "Recolher",
+      expand: "Expandir",
       noProject: "Selecione um projeto primeiro.",
       noHost: "O host não está conectado.",
       failed: "Não foi possível iniciar o maestro.",
