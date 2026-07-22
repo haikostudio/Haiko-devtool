@@ -454,6 +454,31 @@ const MAX_RECENT_STDERR_CHARS = 4000;
 const STDERR_FLUSH_WAIT_MS = 150;
 const STDERR_FLUSH_POLL_INTERVAL_MS = 10;
 
+// A foreground turn may be retried once when it dies to a transient SDK glitch
+// (momentary strain on the connection to the Claude process) instead of
+// surfacing a "[System Error]" that the user would just re-send by hand.
+const MAX_TRANSIENT_TURN_RETRIES = 1;
+const TRANSIENT_TURN_RETRY_DELAY_MS = 250;
+// Signatures of transient SDK crashes that reliably clear on the next attempt.
+// Kept deliberately narrow so genuine failures still surface immediately.
+const TRANSIENT_SDK_ERROR_PATTERNS: RegExp[] = [
+  // e.g. "Cannot read properties of null (reading 'push')" — the SDK's internal
+  // stream state was torn down mid-flight; a fresh query resubmits cleanly.
+  /cannot read propert(?:y|ies) of (?:null|undefined) \(reading ['"]?push['"]?\)/i,
+];
+
+function isTransientSdkError(error: unknown): boolean {
+  let message: string;
+  if (typeof error === "string") {
+    message = error;
+  } else if (error instanceof Error) {
+    message = `${error.message}\n${error.stack ?? ""}`;
+  } else {
+    message = JSON.stringify(error);
+  }
+  return TRANSIENT_SDK_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 function summarizeClaudeOptionsForLog(options: ClaudeOptions): ClaudeOptionsLogSummary {
   const systemPromptRaw = options.systemPrompt;
   const systemPromptSummary = (() => {
@@ -1916,6 +1941,10 @@ class ClaudeAgentSession implements AgentSession {
   private pendingInterruptAbort = false;
   private foregroundHasVisibleActivity = false;
   private activeTurnHasAssistantText = false;
+  // Retained payload + retry count for the active foreground turn, so a turn
+  // that dies to a transient SDK glitch can be resubmitted once automatically.
+  private activeForegroundSdkMessage: SDKUserMessage | null = null;
+  private foregroundTransientRetries = 0;
   private readonly contextUsage: ClaudeContextUsageState;
   private userMessageIds: string[] = [];
   private readonly emittedUserMessageIds = new Set<string>();
@@ -2056,6 +2085,8 @@ class ClaudeAgentSession implements AgentSession {
     this.rememberRewindUserAnchor(sdkUserMessageId);
     const turnId = this.createTurnId("foreground");
     this.activeForegroundTurnId = turnId;
+    this.activeForegroundSdkMessage = sdkMessage;
+    this.foregroundTransientRetries = 0;
     this.foregroundHasVisibleActivity = false;
     this.activeTurnHasAssistantText = false;
     this.contextUsage.beginTurn();
@@ -3273,6 +3304,92 @@ class ClaudeAgentSession implements AgentSession {
     return message.toLowerCase().includes("request was aborted");
   }
 
+  /**
+   * Handle a query-pump drain error that was not an interrupt abort: try a
+   * transient-error retry first, and otherwise surface the failure as a
+   * terminal turn_failed. The caller stops the current pump afterwards either
+   * way (a successful retry has already spun up a fresh pump).
+   */
+  private async recoverOrFailPumpDrain(error: unknown, activeQuery: Query): Promise<void> {
+    if (
+      !this.closed &&
+      this.query === activeQuery &&
+      (await this.attemptTransientForegroundRetry(error))
+    ) {
+      // A fresh query + pump have taken over with the resubmitted message.
+      return;
+    }
+    if (!this.closed && this.query === activeQuery) {
+      await this.awaitRecentStderrAfterProcessExit(error);
+      this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
+    }
+  }
+
+  /**
+   * Recover a foreground turn that died to a transient SDK glitch (e.g. "Cannot
+   * read properties of null (reading 'push')") by rebuilding the query and
+   * resubmitting the original user message, instead of surfacing a
+   * "[System Error]" the user would just re-send by hand. Returns true when a
+   * fresh query + pump have taken over so the caller stops the current pump.
+   */
+  private async attemptTransientForegroundRetry(error: unknown): Promise<boolean> {
+    // Only foreground turns carry a retained payload we can safely resubmit.
+    if (this.closed || !this.activeForegroundTurnId || !this.activeForegroundSdkMessage) {
+      return false;
+    }
+    // Never replay a turn that already streamed visible output — a retry would
+    // duplicate it. Transient push-crashes fire before any output is produced.
+    if (this.foregroundHasVisibleActivity) {
+      return false;
+    }
+    if (this.foregroundTransientRetries >= MAX_TRANSIENT_TURN_RETRIES) {
+      return false;
+    }
+    if (!isTransientSdkError(error)) {
+      return false;
+    }
+
+    this.foregroundTransientRetries += 1;
+    const message = this.activeForegroundSdkMessage;
+    this.logger.warn(
+      {
+        agentId: this.agentId,
+        provider: "claude",
+        sessionId: this.claudeSessionId,
+        turnId: this.activeForegroundTurnId,
+        attempt: this.foregroundTransientRetries,
+        err: error,
+      },
+      "Retrying Claude foreground turn after transient SDK error",
+    );
+
+    if (TRANSIENT_TURN_RETRY_DELAY_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, TRANSIENT_TURN_RETRY_DELAY_MS));
+    }
+    // The turn may have been cancelled or the session closed during the delay.
+    if (this.closed || !this.activeForegroundTurnId) {
+      return false;
+    }
+
+    try {
+      this.queryRestartNeeded = true;
+      await this.ensureQuery();
+      if (!this.input) {
+        return false;
+      }
+      this.input.push(message);
+      // ensureQuery() cleared queryPumpPromise; spawn a fresh pump on the new query.
+      this.startQueryPump();
+      return true;
+    } catch (retryError) {
+      this.logger.warn(
+        { agentId: this.agentId, provider: "claude", err: retryError },
+        "Failed to restart Claude query for transient retry",
+      );
+      return false;
+    }
+  }
+
   private finishForegroundTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
   ): void {
@@ -3281,6 +3398,7 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.notifySubscribers(event);
     this.activeForegroundTurnId = null;
+    this.activeForegroundSdkMessage = null;
     this.cancelCurrentTurn = null;
     this.activeTurnHasAssistantText = false;
     this.syncTurnState("foreground turn terminal");
@@ -3443,10 +3561,7 @@ class ClaudeAgentSession implements AgentSession {
             );
             continue;
           }
-          if (!this.closed && this.query === activeQuery) {
-            await this.awaitRecentStderrAfterProcessExit(error);
-            this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
-          }
+          await this.recoverOrFailPumpDrain(error, activeQuery);
           return;
         }
       }
