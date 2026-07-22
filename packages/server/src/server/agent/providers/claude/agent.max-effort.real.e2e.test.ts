@@ -58,7 +58,9 @@ describe("Claude max effort availability (real)", () => {
       );
 
       expect(failure).toBeDefined();
-      expect(failure?.error).toContain("Claude Code process exited with code 1");
+      // Raw SDK exit message is rewritten into a readable French sentence; the
+      // exit code and diagnostic still carry the technical detail.
+      expect(failure?.error).toContain("Claude n'a pas pu démarrer");
       expect(failure?.code).toBe("1");
       expect(failure?.diagnostic).toContain('Effort level "max" is not available');
     } finally {

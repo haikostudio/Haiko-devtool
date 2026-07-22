@@ -941,7 +941,9 @@ test("captures Claude stderr in the turn failure diagnostic when stderr arrives 
     expect(capturedOptions?.effort).toBe("max");
     expect(failure).toMatchObject({
       type: "turn_failed",
-      error: "Claude Code process exited with code 1",
+      // Raw SDK message is rewritten into a readable French sentence; the exit
+      // code and stderr diagnostic are still preserved for debugging.
+      error: "Claude n'a pas pu démarrer — réessaie, et vérifie qu'il est bien installé.",
       code: "1",
       diagnostic: stderrMessage,
     });

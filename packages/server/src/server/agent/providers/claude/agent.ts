@@ -36,6 +36,7 @@ import {
 } from "./models.js";
 import { CLAUDE_ULTRACODE_THINKING_OPTION_ID } from "./model-manifest.js";
 import { parsePartialJsonObject } from "./partial-json.js";
+import { isClaudeAbortMessage, toReadableClaudeError } from "./error-messages.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
@@ -3149,14 +3150,21 @@ class ClaudeAgentSession implements AgentSession {
   private buildTurnFailedEvent(
     errorMessage: string,
   ): Extract<AgentStreamEvent, { type: "turn_failed" }> {
-    const normalized = errorMessage.trim() || "Claude run failed";
-    const exitCodeMatch = normalized.match(/\bcode\s+(\d+)\b/i);
+    const raw = errorMessage.trim() || "Claude run failed";
+    const exitCodeMatch = raw.match(/\bcode\s+(\d+)\b/i);
     const code = exitCodeMatch ? exitCodeMatch[1] : undefined;
     const diagnostic = this.getRecentStderrDiagnostic();
+    // User cancellations are surfaced as-is; only genuine failures are rewritten
+    // into a readable French sentence. The raw technical message is preserved in
+    // the daemon log for debugging.
+    const error = isClaudeAbortMessage(raw) ? raw : toReadableClaudeError(raw);
+    if (error !== raw) {
+      this.logger.warn({ rawError: raw }, "Claude turn failed (raw SDK error)");
+    }
     return {
       type: "turn_failed",
       provider: "claude",
-      error: normalized,
+      error,
       ...(code ? { code } : {}),
       ...(diagnostic ? { diagnostic } : {}),
     };
