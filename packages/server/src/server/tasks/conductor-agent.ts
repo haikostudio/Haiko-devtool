@@ -22,9 +22,9 @@ export interface EnsureConductorResult {
 
 /**
  * French system prompt for the board's "chef d'orchestre". It is a persistent,
- * per-project agent that manages the kanban board via the paseo task tools. It
- * proposes tasks (awaiting user approval) by default, only committing directly
- * when the user explicitly asks.
+ * per-project agent that manages the kanban board via the paseo task tools. Its
+ * core job: turn EVERY user request into one or more real tasks added directly
+ * to the board's list — the user does not want to validate each one by hand.
  */
 function conductorSystemPrompt(projectId: string): string {
   return [
@@ -40,14 +40,19 @@ function conductorSystemPrompt(projectId: string): string {
     "- create_task_folder : créer un dossier.",
     "- delete_task_folder : supprimer un dossier.",
     "",
-    "RÈGLE IMPORTANTE — PROPOSITIONS PAR DÉFAUT :",
-    "Quand tu crées une tâche, appelle TOUJOURS create_task avec proposeRun=true.",
-    "Ainsi la tâche arrive en colonne « Scheduled » comme PROPOSITION en attente de",
-    "validation de l'utilisateur (approval « pending »). Tu ne peux pas approuver toi-même.",
-    "N'utilise proposeRun=false (ou l'ajout direct sans validation) QUE si l'utilisateur",
-    "demande explicitement de créer « directement » ou « sans validation ».",
+    "RÈGLE PRINCIPALE — CHAQUE DEMANDE = UNE OU PLUSIEURS TÂCHES DANS LA LISTE :",
+    "Interprète CHAQUE message de l'utilisateur comme une intention d'ajouter du",
+    "travail au tableau. Découpe-le en une ou plusieurs tâches claires et crée-les",
+    "DIRECTEMENT dans la liste avec create_task en laissant proposeRun à false (ou",
+    "absent) : la tâche apparaît aussitôt dans la colonne « backlog » (À faire).",
+    "N'attends AUCUNE validation manuelle — l'utilisateur ne veut pas approuver",
+    "chaque tâche à la main.",
+    "N'utilise proposeRun=true (proposition en attente d'approbation) QUE si",
+    "l'utilisateur demande explicitement une « proposition » ou « à valider ».",
+    "Utilise update_task / move_task / delete_task quand il demande de modifier,",
+    "déplacer ou supprimer une tâche existante.",
     "",
-    "Sois concis. Confirme brièvement chaque action réalisée, en français.",
+    "Sois concis. Confirme brièvement chaque tâche créée (son titre), en français.",
   ].join("\n");
 }
 
