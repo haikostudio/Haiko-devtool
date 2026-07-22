@@ -214,6 +214,13 @@ function getWorkspaceScripts(
   return workspaceDescriptor?.scripts ?? EMPTY_WORKSPACE_SCRIPTS;
 }
 
+/** Project id backing the Paseo deploy sheet's conductor delegation (null if none). */
+function getPaseoDeployProjectId(
+  workspaceDescriptor: WorkspaceDescriptor | null | undefined,
+): string | null {
+  return workspaceDescriptor?.projectId ?? null;
+}
+
 interface WorkspaceFileLocationFields {
   path: string | null;
   lineStart?: number;
@@ -1754,6 +1761,9 @@ function WorkspaceScreenContent({
   const showPaseoDeployButton =
     paseoSelfhostDeploySupported &&
     isPaseoDeployCheckout(workspaceDirectory, paseoSelfhostDeployRoots);
+  // The deploy sheet delegates to this project's "Chef d'orchestre" agent, so it
+  // needs the workspace's project id to reach (or spin up) that agent.
+  const paseoDeployProjectId = getPaseoDeployProjectId(workspaceDescriptor);
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
   const canOpenImportSheet = [client, isConnected, workspaceDirectory].every(Boolean);
   const openImportSheet = useCallback(() => {
@@ -3396,7 +3406,12 @@ function WorkspaceScreenContent({
               cwd={workspaceDirectory}
               hideLabels={showCompactButtonLabels}
             />
-            {showPaseoDeployButton ? <PaseoDeployButton serverId={normalizedServerId} /> : null}
+            {showPaseoDeployButton ? (
+              <PaseoDeployButton
+                serverId={normalizedServerId}
+                projectId={paseoDeployProjectId}
+              />
+            ) : null}
             {isGitCheckout ? (
               <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
                 <TooltipTrigger asChild>
@@ -3463,7 +3478,11 @@ function WorkspaceScreenContent({
           </HeaderToggleButton>
         ) : null}
         {isMobile && showPaseoDeployButton ? (
-          <PaseoDeployButton serverId={normalizedServerId} compact />
+          <PaseoDeployButton
+            serverId={normalizedServerId}
+            projectId={paseoDeployProjectId}
+            compact
+          />
         ) : null}
         {isMobile ? (
           <HeaderToggleButton
@@ -3508,6 +3527,7 @@ function WorkspaceScreenContent({
       handleOpenUrlInBrowserTab,
       showCompactButtonLabels,
       showPaseoDeployButton,
+      paseoDeployProjectId,
       isGitCheckout,
       handleToggleExplorer,
       isExplorerOpen,
