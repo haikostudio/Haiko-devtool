@@ -8,11 +8,9 @@ import {
   ScrollView,
   Text,
   View,
-  type ViewStyle,
 } from "react-native";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowDownAZ,
@@ -57,9 +55,8 @@ import {
 } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
-import { TaskAgentPanel } from "@/components/tasks/task-agent-panel";
+import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
 import { ConductorPanel } from "@/components/tasks/conductor-panel";
-import { CompactTaskAgentSheet } from "@/components/tasks/compact-task-agent-sheet";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { Button } from "@/components/ui/button";
@@ -77,54 +74,6 @@ import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
-
-// Desktop agent side-panel geometry — collapsed rail vs a resizable open width.
-const COLLAPSED_PANEL_WIDTH = 44;
-const MIN_PANEL_WIDTH = 320;
-const MAX_PANEL_WIDTH = 760;
-
-function clampPanelWidth(width: number): number {
-  return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, width));
-}
-
-// RN's ViewStyle `cursor` only types auto|pointer; `col-resize` is web-valid, so
-// apply it as a web-only escape hatch outside Unistyles' stricter typing.
-const resizeCursorStyle: ViewStyle | undefined = isWeb
-  ? ({ cursor: "col-resize" } as unknown as ViewStyle)
-  : undefined;
-
-// Cross-platform drag handle for the Details drawer width. Uses gesture-handler's
-// Pan (which tracks the pointer globally) so the resize survives the cursor
-// leaving the handle — the old RN responder system dropped the drag there.
-// `runOnJS` keeps the callbacks on the JS thread so they read/write the store.
-function ResizeHandle() {
-  const setPanelWidth = useTasksBoardUiStore((state) => state.setPanelWidth);
-  const startRef = useRef(0);
-  const handleStyle = useMemo(() => [styles.resizeHandle, resizeCursorStyle], []);
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .hitSlop({ left: 8, right: 8 })
-        .onStart(() => {
-          startRef.current = useTasksBoardUiStore.getState().panelWidth;
-        })
-        .onUpdate((event) => {
-          // Panel sits on the right edge, so dragging right shrinks it.
-          setPanelWidth(clampPanelWidth(startRef.current - event.translationX));
-        }),
-    [setPanelWidth],
-  );
-  return (
-    <GestureDetector gesture={gesture}>
-      <View style={handleStyle} accessibilityRole="adjustable">
-        {/* The divider itself is a 1px hairline; the surrounding handle stays wide
-          enough to grab comfortably (transparent hit zone around the line). */}
-        <View style={styles.resizeHandleLine} />
-      </View>
-    </GestureDetector>
-  );
-}
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
@@ -818,7 +767,7 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   }, []);
 
   const handleSubmit = useCallback(
-    (input: { name: string; color: string; autopilot?: boolean }) => {
+    (input: { name: string; color: string; autopilot?: boolean; branch?: string }) => {
       if (mode?.kind === "edit") {
         void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
       } else {
@@ -831,7 +780,12 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   const initialFolder = useMemo(
     () =>
       mode?.kind === "edit"
-        ? { name: mode.folder.name, color: mode.folder.color, autopilot: mode.folder.autopilot }
+        ? {
+            name: mode.folder.name,
+            color: mode.folder.color,
+            autopilot: mode.folder.autopilot,
+            branch: mode.folder.branch,
+          }
         : undefined,
     [mode],
   );
@@ -888,6 +842,11 @@ const FolderRailItem = memo(function FolderRailItem({
         >
           {folder.name}
         </Text>
+        {folder.branch ? (
+          <Text style={styles.railItemBranch} numberOfLines={1}>
+            {folder.branch}
+          </Text>
+        ) : null}
         <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
       <TaskStatusVoyant tone={tone} />
@@ -980,10 +939,6 @@ function BoardContent({
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
-  // Persisted so the width the user dragged the drawer to is restored on
-  // reload / when returning to the board.
-  const panelWidth = useTasksBoardUiStore((state) => state.panelWidth);
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
 
@@ -1046,15 +1001,6 @@ function BoardContent({
   const handleCloseDetails = useCallback(() => {
     setDetailsTaskId(null);
   }, [setDetailsTaskId]);
-
-  const handleToggleCollapsePanel = useCallback(() => {
-    setPanelCollapsed((collapsed) => !collapsed);
-  }, []);
-
-  const panelHostStyle = useMemo(
-    () => [styles.panelHost, { width: panelCollapsed ? COLLAPSED_PANEL_WIDTH : panelWidth }],
-    [panelCollapsed, panelWidth],
-  );
 
   const handleCancelNewTask = useCallback(() => {
     setNewTaskColumn(null);
@@ -1150,8 +1096,6 @@ function BoardContent({
   const showTimeline = !isCompact || compactView === "timeline";
   const showBoard = !isCompact || compactView === "board";
 
-  const showPanel = !isCompact && detailsTask !== null;
-
   const boardStack = (
     <View style={isCompact ? styles.boardContainerCompact : styles.boardContainer}>
       {isCompact ? (
@@ -1192,45 +1136,20 @@ function BoardContent({
 
   return (
     <TaskScheduleProvider value={quietHours}>
-      {showPanel && detailsTask ? (
-        <View style={styles.boardSplitRow}>
-          {boardStack}
-          {panelCollapsed ? null : <ResizeHandle />}
-          <View style={panelHostStyle}>
-            <TaskAgentPanel
-              serverId={serverId}
-              projectId={projectId}
-              task={detailsTask}
-              collapsed={panelCollapsed}
-              onToggleCollapse={handleToggleCollapsePanel}
-              onClose={handleCloseDetails}
-              onSave={handleSaveTask}
-              onDelete={handleDeleteTask}
-              onEstimate={handleEstimateTask}
-              onRunNow={handleRunTaskNow}
-              onApprove={handleApproveTask}
-              onSetHold={handleSetHold}
-            />
-          </View>
-        </View>
-      ) : (
-        boardStack
-      )}
-      {isCompact ? (
-        <CompactTaskAgentSheet
-          serverId={serverId}
-          projectId={projectId}
-          task={detailsTask}
-          visible={detailsTask !== null}
-          onClose={handleCloseDetails}
-          onSave={handleSaveTask}
-          onDelete={handleDeleteTask}
-          onEstimate={handleEstimateTask}
-          onRunNow={handleRunTaskNow}
-          onApprove={handleApproveTask}
-          onSetHold={handleSetHold}
-        />
-      ) : null}
+      {boardStack}
+      <TaskDetailDrawer
+        serverId={serverId}
+        projectId={projectId}
+        task={detailsTask}
+        visible={detailsTask !== null}
+        onClose={handleCloseDetails}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
+        onEstimate={handleEstimateTask}
+        onRunNow={handleRunTaskNow}
+        onApprove={handleApproveTask}
+        onSetHold={handleSetHold}
+      />
     </TaskScheduleProvider>
   );
 }
@@ -2074,6 +1993,11 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
+  railItemBranch: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.mono,
+  },
   railItemAction: {
     padding: theme.spacing[1],
     borderRadius: theme.borderRadius.sm,
@@ -2121,28 +2045,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     gap: theme.spacing[3],
     paddingTop: theme.spacing[3],
-  },
-  // Desktop split: board on the left (flex), resizable agent panel on the right.
-  boardSplitRow: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "stretch",
-  },
-  panelHost: {
-    height: "100%",
-  },
-  // Wide, transparent grab zone so the col-resize drag stays easy to hit; the
-  // visible hairline hugs the panel edge (flex-end) rather than floating mid-gap.
-  resizeHandle: {
-    width: 9,
-    alignItems: "flex-end",
-    backgroundColor: "transparent",
-  },
-  // …while the visible divider is a full-height 1px hairline running to the top.
-  resizeHandleLine: {
-    width: 1,
-    height: "100%",
-    backgroundColor: theme.colors.border,
   },
   // Compact board/timeline tab switch — full width, aligned to the board inset
   // (12) with breathing room below the header so it isn't glued to it.

@@ -1,22 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  Text,
-  useWindowDimensions,
-  View,
-  type ViewStyle,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { ChevronLeft, GripHorizontal, PanelRight, Wand2, X } from "lucide-react-native";
-import { useIsCompactFormFactor } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
+import { PanelRight } from "lucide-react-native";
+import type { SheetHeader } from "@/components/adaptive-modal-sheet";
+import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
-import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
@@ -26,30 +16,12 @@ import {
 } from "@/screens/workspace/workspace-pane-content";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ThemedWand = withUnistyles(Wand2);
-const ThemedX = withUnistyles(X);
-const ThemedGrip = withUnistyles(GripHorizontal);
-const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const ThemedPanelRight = withUnistyles(PanelRight);
 
-const MIN_HEIGHT = 220;
-const MAX_HEIGHT = 720;
-// Comfortable fixed width on desktop; full-width on compact.
-const DESKTOP_WIDTH = 560;
-const SCREEN_MARGIN = 16;
-
-function clampHeight(height: number): number {
-  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, height));
-}
-
-// RN's ViewStyle `cursor` only types auto|pointer; the row/move cursors are
-// web-valid, so apply them as a web-only escape hatch outside stricter typing.
-const rowResizeCursor: ViewStyle | undefined = isWeb
-  ? ({ cursor: "row-resize" } as unknown as ViewStyle)
-  : undefined;
-const moveCursor: ViewStyle | undefined = isWeb
-  ? ({ cursor: "move" } as unknown as ViewStyle)
-  : undefined;
+// Compact bottom sheet snap: the embedded agent pane needs generous height.
+const CONDUCTOR_SNAP_POINTS = ["90%"];
+// The desktop card is a chat surface, so give it more width than the default.
+const CONDUCTOR_DESKTOP_MAX_WIDTH = 640;
 
 type EnsureState =
   | { status: "loading" }
@@ -74,13 +46,15 @@ export interface ConductorPanelProps {
 }
 
 /**
- * Bottom-docked, resizable + horizontally-draggable chat dock. Shows the
- * persistent per-project "Chef d'orchestre" agent by default, and swaps to the
- * selected task's agent chat when a task is tapped on the board. On mount (in
- * conductor mode) it ensures the conductor exists on the host and embeds its live
- * agent via the same WorkspacePaneContent the workspace screen uses; in task mode
- * it embeds the task's primary agent. Switching agents fully remounts the pane
- * (React `key`) so no scroll/terminal state leaks across agents.
+ * The "Chef d'orchestre" chat drawer, rendered through the shared
+ * `AdaptiveModalSheet`: a bottom sheet on compact, a centered card on desktop
+ * (no backdrop dim, so the board behind stays visible/interactive). Shows the
+ * persistent per-project conductor agent by default, and swaps to the selected
+ * task's agent chat when a task is tapped on the board. On mount (in conductor
+ * mode) it ensures the conductor exists on the host and embeds its live agent via
+ * the same WorkspacePaneContent the workspace screen uses; in task mode it embeds
+ * the task's primary agent. Switching agents fully remounts the pane (React
+ * `key`) so no scroll/terminal state leaks across agents.
  */
 export function ConductorPanel({
   serverId,
@@ -92,12 +66,6 @@ export function ConductorPanel({
   onClose,
 }: ConductorPanelProps) {
   const { t } = useTranslation();
-  const isCompact = useIsCompactFormFactor();
-  const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-
-  const conductorHeight = useTasksBoardUiStore((state) => state.conductorHeight);
-  const conductorOffsetX = useTasksBoardUiStore((state) => state.conductorOffsetX);
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
   const inTaskMode = dockTask !== null;
@@ -161,37 +129,6 @@ export function ConductorPanel({
     };
   }, [serverId, projectId, t, inTaskMode]);
 
-  const width = isCompact ? screenWidth : Math.min(DESKTOP_WIDTH, screenWidth - SCREEN_MARGIN * 2);
-
-  // Clamp the horizontal offset so the panel always stays fully on-screen.
-  const maxOffset = Math.max(0, (screenWidth - width) / 2 - SCREEN_MARGIN);
-  const clampedOffsetX = isCompact
-    ? 0
-    : Math.min(maxOffset, Math.max(-maxOffset, conductorOffsetX));
-
-  // On a phone, cap the height so the dock never taller than the viewport.
-  const maxCompactHeight = screenHeight - insets.top - 24;
-  const height = isCompact
-    ? Math.min(clampHeight(conductorHeight), maxCompactHeight)
-    : clampHeight(conductorHeight);
-
-  const panelStyle = useMemo(
-    () => [
-      styles.panel,
-      {
-        width,
-        height,
-        transform: [{ translateX: clampedOffsetX }],
-      },
-    ],
-    [width, height, clampedOffsetX],
-  );
-
-  const dockRootStyle = useMemo(
-    () => [styles.dockRoot, isCompact ? { paddingBottom: 0 } : null],
-    [isCompact],
-  );
-
   const renderBody = () => {
     if (inTaskMode && dockTask) {
       return (
@@ -230,123 +167,48 @@ export function ConductorPanel({
     );
   };
 
-  return (
-    <View style={dockRootStyle} pointerEvents="box-none">
-      <View style={panelStyle} testID="conductor-panel">
-        <HeightResizeHandle />
-        <View style={styles.header}>
-          {inTaskMode && dockTask ? (
-            <>
-              <Pressable
-                onPress={onBackToConductor}
-                accessibilityRole="button"
-                accessibilityLabel={t("tasks.conductor.backToConductor")}
-                style={styles.headerButton}
-                testID="conductor-panel-back"
-              >
-                <ThemedChevronLeft size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-              </Pressable>
-              <Text style={styles.title} numberOfLines={1}>
-                {dockTask.title}
-              </Text>
-              <Pressable
-                onPress={handleOpenDetailsPress}
-                accessibilityRole="button"
-                accessibilityLabel={t("tasks.conductor.openDetails")}
-                style={styles.detailsButton}
-                testID="conductor-panel-open-details"
-              >
-                <ThemedPanelRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-                <Text style={styles.detailsButtonLabel} numberOfLines={1}>
-                  {t("tasks.conductor.openDetails")}
-                </Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-              <Text style={styles.title} numberOfLines={1}>
-                {t("tasks.conductor.title")}
-              </Text>
-            </>
-          )}
-          {isCompact ? null : <HorizontalDragHandle />}
+  // Task mode gets a back arrow (to the conductor) and an "open details" action;
+  // conductor mode is a plain titled header. Built-in close handles onClose.
+  const header = useMemo<SheetHeader>(() => {
+    if (inTaskMode && dockTask) {
+      return {
+        title: dockTask.title,
+        back: {
+          onPress: onBackToConductor,
+          accessibilityLabel: t("tasks.conductor.backToConductor"),
+        },
+        actions: (
           <Pressable
-            onPress={onClose}
+            onPress={handleOpenDetailsPress}
             accessibilityRole="button"
-            accessibilityLabel={t("common.actions.close")}
-            style={styles.headerButton}
-            testID="conductor-panel-close"
+            accessibilityLabel={t("tasks.conductor.openDetails")}
+            style={styles.detailsButton}
+            testID="conductor-panel-open-details"
           >
-            <ThemedX size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+            <ThemedPanelRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+            <Text style={styles.detailsButtonLabel} numberOfLines={1}>
+              {t("tasks.conductor.openDetails")}
+            </Text>
           </Pressable>
-        </View>
-        <View style={styles.body}>{renderBody()}</View>
-      </View>
-    </View>
-  );
-}
+        ),
+      };
+    }
+    return { title: t("tasks.conductor.title") };
+  }, [inTaskMode, dockTask, onBackToConductor, handleOpenDetailsPress, t]);
 
-// Top-edge horizontal bar that resizes the panel HEIGHT. Uses gesture-handler's
-// Pan (which tracks the pointer globally) so the drag survives the cursor leaving
-// the handle — the RN responder system used to drop the drag there. `runOnJS`
-// keeps the callbacks on the JS thread so they can read/write the Zustand store.
-function HeightResizeHandle() {
-  const setConductorHeight = useTasksBoardUiStore((state) => state.setConductorHeight);
-  const startRef = useRef(0);
-  const handleStyle = useMemo(() => [styles.resizeHandle, rowResizeCursor], []);
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .hitSlop({ top: 8, bottom: 8 })
-        .onStart(() => {
-          startRef.current = useTasksBoardUiStore.getState().conductorHeight;
-        })
-        .onUpdate((event) => {
-          // Top handle: dragging up (negative translationY) grows the panel.
-          setConductorHeight(clampHeight(startRef.current - event.translationY));
-        }),
-    [setConductorHeight],
-  );
   return (
-    <GestureDetector gesture={gesture}>
-      <View style={handleStyle} accessibilityRole="adjustable">
-        <View style={styles.resizeHandleLine} />
-      </View>
-    </GestureDetector>
-  );
-}
-
-// Header grip that moves the panel HORIZONTALLY (desktop only). Same gesture-
-// handler approach so the move keeps tracking once the cursor leaves the grip.
-function HorizontalDragHandle() {
-  const { t } = useTranslation();
-  const setConductorOffsetX = useTasksBoardUiStore((state) => state.setConductorOffsetX);
-  const startRef = useRef(0);
-  const handleStyle = useMemo(() => [styles.dragHandle, moveCursor], []);
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .onStart(() => {
-          startRef.current = useTasksBoardUiStore.getState().conductorOffsetX;
-        })
-        .onUpdate((event) => {
-          setConductorOffsetX(startRef.current + event.translationX);
-        }),
-    [setConductorOffsetX],
-  );
-  return (
-    <GestureDetector gesture={gesture}>
-      <View
-        style={handleStyle}
-        accessibilityRole="adjustable"
-        accessibilityLabel={t("tasks.conductor.move")}
-      >
-        <ThemedGrip size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      </View>
-    </GestureDetector>
+    <AdaptiveModalSheet
+      header={header}
+      visible
+      onClose={onClose}
+      scrollable={false}
+      desktopBackdrop={false}
+      snapPoints={CONDUCTOR_SNAP_POINTS}
+      desktopMaxWidth={CONDUCTOR_DESKTOP_MAX_WIDTH}
+      testID="conductor-panel"
+    >
+      <View style={styles.body}>{renderBody()}</View>
+    </AdaptiveModalSheet>
   );
 }
 
@@ -390,57 +252,11 @@ function EmbeddedConductorPane({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  // Bottom-centered dock container that lets taps pass through to the board
-  // everywhere except the panel itself.
-  dockRoot: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    paddingBottom: theme.spacing[3],
-  },
-  panel: {
-    backgroundColor: theme.colors.surface0,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.borderRadius.lg,
-    overflow: "hidden",
-  },
-  resizeHandle: {
-    height: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  resizeHandleLine: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.colors.border,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  title: {
+  // The embedded pane / chat manages its own scroll and needs a bounded flex
+  // height, so the sheet body is a static flex column with `minHeight: 0`.
+  body: {
     flex: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-  },
-  dragHandle: {
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-  },
-  headerButton: {
-    padding: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
+    minHeight: 0,
   },
   detailsButton: {
     flexDirection: "row",
@@ -457,11 +273,9 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.medium,
   },
-  body: {
-    flex: 1,
-  },
   paneHost: {
     flex: 1,
+    minHeight: 0,
   },
   centered: {
     flex: 1,

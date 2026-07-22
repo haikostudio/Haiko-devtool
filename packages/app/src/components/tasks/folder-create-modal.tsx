@@ -24,12 +24,12 @@ export const FOLDER_COLORS = [
 interface FolderCreateModalProps {
   visible: boolean;
   onClose: () => void;
-  onCreate: (input: { name: string; color: string; autopilot?: boolean }) => void;
+  onCreate: (input: { name: string; color: string; autopilot?: boolean; branch?: string }) => void;
   /**
    * When provided the dialog opens in edit mode: fields prefill from this
    * folder, the title/submit labels switch, and onCreate carries the edits.
    */
-  initialFolder?: { name: string; color?: string; autopilot?: boolean };
+  initialFolder?: { name: string; color?: string; autopilot?: boolean; branch?: string };
   // Autopilot toggle is shown only when the daemon supports it.
   showAutopilot?: boolean;
 }
@@ -51,6 +51,7 @@ export function FolderCreateModal({
   const controlSize = isCompact ? "md" : "sm";
   const isEditing = initialFolder !== undefined;
   const [name, setName] = useState("");
+  const [branch, setBranch] = useState("");
   const [color, setColor] = useState<string>(FOLDER_COLORS[0]);
   const [autopilot, setAutopilot] = useState(false);
   // The name input is native-owned (see AdaptiveTextInput); bump the reset key
@@ -60,6 +61,7 @@ export function FolderCreateModal({
   useEffect(() => {
     if (visible) {
       setName(initialFolder?.name ?? "");
+      setBranch(initialFolder?.branch ?? "");
       setColor(initialFolder?.color ?? FOLDER_COLORS[0]);
       setAutopilot(initialFolder?.autopilot ?? false);
       setResetKey((key) => key + 1);
@@ -71,9 +73,15 @@ export function FolderCreateModal({
     if (!trimmed) {
       return;
     }
-    onCreate({ name: trimmed, color, ...(showAutopilot ? { autopilot } : {}) });
+    const trimmedBranch = branch.trim();
+    onCreate({
+      name: trimmed,
+      color,
+      ...(showAutopilot ? { autopilot } : {}),
+      ...(trimmedBranch ? { branch: trimmedBranch } : {}),
+    });
     onClose();
-  }, [name, color, autopilot, showAutopilot, onCreate, onClose]);
+  }, [name, branch, color, autopilot, showAutopilot, onCreate, onClose]);
 
   const header = useMemo(
     (): SheetHeader => ({
@@ -124,6 +132,18 @@ export function FolderCreateModal({
           // from its footer on mobile web.
           autoFocus={!isCompact}
           testID="tasks-folder-modal-name"
+        />
+      </Field>
+      <Field label={t("tasks.folderModal.branchField")} hint={t("tasks.folderModal.branchHint")}>
+        <FormTextInput
+          size={controlSize}
+          resetKey={resetKey}
+          initialValue={initialFolder?.branch ?? ""}
+          onChangeText={setBranch}
+          placeholder={t("tasks.folderModal.branchPlaceholder")}
+          autoCapitalize="none"
+          autoCorrect={false}
+          testID="tasks-folder-modal-branch"
         />
       </Field>
       <Field label={t("tasks.folderModal.colorField")}>

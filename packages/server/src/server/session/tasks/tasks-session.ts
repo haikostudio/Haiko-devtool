@@ -129,6 +129,7 @@ export class TasksSession {
         request.name,
         request.color,
         request.autopilot,
+        request.branch,
       );
       this.host.emit({
         type: "tasks.folder.create.response",
@@ -147,6 +148,7 @@ export class TasksSession {
         ...(request.name !== undefined ? { name: request.name } : {}),
         ...(request.color !== undefined ? { color: request.color } : {}),
         ...(request.autopilot !== undefined ? { autopilot: request.autopilot } : {}),
+        ...(request.branch !== undefined ? { branch: request.branch } : {}),
         ...(request.order !== undefined ? { order: request.order } : {}),
       });
       this.host.emit({

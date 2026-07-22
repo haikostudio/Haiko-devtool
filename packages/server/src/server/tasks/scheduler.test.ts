@@ -131,7 +131,7 @@ describe("TaskScheduler", () => {
     nowMs?: number;
   }) {
     const createAgent = vi.fn(async () => ({
-      snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1" },
+      snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1", cwd: "/tmp/wt/feat-auth" },
       initialPromptError: null,
     }));
     const runAgent =
@@ -172,18 +172,22 @@ describe("TaskScheduler", () => {
     const done = board.tasks.find((entry) => entry.id === task.id);
     expect(done?.links.primaryAgentId).toBe("task-agent-1");
     expect(done?.links.workspaceId).toBe("ws-proj-1");
-    // The branch is the task's own worktree branch, unique via the id suffix.
-    expect(done?.links.branch).toMatch(/^task\/implement-login-flow-/);
+    // A folder IS a git branch: the task lands on the folder's branch (derived
+    // from the "Auth" folder name), shared by all of the folder's tasks.
+    expect(done?.links.branch).toBe("feat/auth");
     expect(done?.links.prUrl ?? null).toBeNull();
     expect(done?.schedule ?? null).toBeNull();
+    // The shared worktree is recorded on the folder for its later tasks to reuse.
+    const authFolder = board.folders.find((entry) => entry.branch === "feat/auth");
+    expect(authFolder?.workspaceId).toBe("ws-proj-1");
     expect(createAgent).toHaveBeenCalledTimes(1);
-    // Runs in a fresh worktree branched off the project checkout.
+    // Runs in a fresh worktree branched off the project checkout on that branch.
     expect(createAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: "/tmp/proj-1",
         worktree: expect.objectContaining({
           action: "branch-off",
-          branchName: expect.stringMatching(/^task\/implement-login-flow-/),
+          branchName: "feat/auth",
         }),
       }),
     );

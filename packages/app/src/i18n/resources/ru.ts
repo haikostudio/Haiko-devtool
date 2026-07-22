@@ -356,6 +356,9 @@ export const ru: TranslationResources = {
       title: "Новая папка",
       editTitle: "Изменить папку",
       nameField: "Название",
+      branchField: "Git-ветка",
+      branchHint: "Все задачи этой группы коммитятся в эту ветку.",
+      branchPlaceholder: "feat/my-branch",
       colorField: "Цвет",
       autopilotField: "Автопилот",
       autopilotHint:
