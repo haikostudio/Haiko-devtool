@@ -1528,7 +1528,7 @@ function TasksDeployButton({ project }: { project: ProjectEntry | null }) {
       : false,
   );
   if (!project || !supported || project.rootPath !== "/root/paseo") return null;
-  return <PaseoDeployButton serverId={project.serverId} compact />;
+  return <PaseoDeployButton serverId={project.serverId} projectId={project.projectId} compact />;
 }
 
 function TasksHeader({
