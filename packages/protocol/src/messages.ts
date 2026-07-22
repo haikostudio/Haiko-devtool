@@ -2234,11 +2234,12 @@ export const PaseoDeployTriggerRequestSchema = z.object({
   /** When true, commit + push only, skip the (costly) web rebuild. */
   noBuild: z.boolean().optional(),
   /**
-   * When set, merge this branch into the deploy branch before shipping — the
-   * "fusionner puis publier" path for a task-branch worktree. Optional so the
-   * plain deploy-branch ship keeps working unchanged.
+   * When set, merge these branches into the deploy branch before shipping — the
+   * "fusionner puis publier" path for task-branch worktrees. One entry for a
+   * single atelier, several for "tout fusionner & publier". Optional so the plain
+   * deploy-branch ship keeps working unchanged.
    */
-  mergeBranch: z.string().optional(),
+  mergeBranches: z.array(z.string()).optional(),
   requestId: z.string(),
 });
 

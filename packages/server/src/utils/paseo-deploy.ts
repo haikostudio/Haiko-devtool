@@ -458,28 +458,56 @@ async function mergeBranchIntoDeploy(
   }
 }
 
+/**
+ * Merge every requested branch into the deploy branch, sequentially. Branches
+ * that conflict are aborted and skipped (never left half-merged); the ones that
+ * merged stay merged. Returns which succeeded and which were skipped so the
+ * caller can decide whether to ship and what to report.
+ */
+async function mergeBranchesIntoDeploy(
+  branches: string[],
+): Promise<{ merged: string[]; skipped: string[] }> {
+  const merged: string[] = [];
+  const skipped: string[] = [];
+  for (const branch of branches) {
+    const result = await mergeBranchIntoDeploy(branch);
+    if (result.ok) {
+      merged.push(branch);
+    } else {
+      skipped.push(branch);
+    }
+  }
+  return { merged, skipped };
+}
+
 export async function triggerPaseoDeploy(input: {
   noBuild?: boolean;
-  mergeBranch?: string;
+  mergeBranches?: string[];
 }): Promise<PaseoDeployTriggerResult> {
   if (deploying) {
     return { started: false, error: "Un déploiement est déjà en cours." };
   }
 
-  // Merge the requested task branch into the deploy branch first. On failure we
-  // never flip `deploying` or spawn the ship script — the deploy branch is left
-  // untouched (merge aborted).
-  if (input.mergeBranch) {
-    const merged = await mergeBranchIntoDeploy(input.mergeBranch);
-    if (!merged.ok) {
-      lastError = merged.error;
-      return { started: false, error: merged.error };
+  // Merge the requested task branches into the deploy branch first. Conflicting
+  // ateliers are skipped (aborted, never left half-merged); we ship whatever
+  // merged. Only if EVERY requested merge failed do we bail without shipping.
+  let skippedNote: string | null = null;
+  if (input.mergeBranches && input.mergeBranches.length > 0) {
+    const { merged, skipped } = await mergeBranchesIntoDeploy(input.mergeBranches);
+    if (merged.length === 0) {
+      const error = `La fusion a échoué (conflit) : ${skipped.join(", ")}. Rien n'a été publié ; résous les conflits dans l'atelier puis réessaie.`;
+      lastError = error;
+      return { started: false, error };
+    }
+    if (skipped.length > 0) {
+      skippedNote = `Ateliers ignorés (conflit) : ${skipped.join(", ")}. À fusionner à la main.`;
     }
   }
 
   try {
     deploying = true;
-    lastError = null;
+    // Keep the skip note visible after a partial merge; otherwise clear.
+    lastError = skippedNote;
 
     const logFd = openSync(SHIP_LOG_FILE, "a");
     const child = spawn(SHIP_SCRIPT, input.noBuild ? ["--no-build"] : [], {
