@@ -335,6 +335,8 @@ export const zhCN: TranslationResources = {
       move: "移动面板",
       backToConductor: "返回指挥",
       openDetails: "详情",
+      collapse: "折叠",
+      expand: "展开",
       noProject: "请先选择一个项目。",
       noHost: "主机未连接。",
       failed: "无法启动指挥。",

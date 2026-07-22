@@ -335,6 +335,8 @@ export const ar: TranslationResources = {
       move: "تحريك اللوحة",
       backToConductor: "العودة إلى قائد الأوركسترا",
       openDetails: "التفاصيل",
+      collapse: "طيّ",
+      expand: "توسيع",
       noProject: "اختر مشروعًا أولًا.",
       noHost: "المضيف غير متصل.",
       failed: "تعذّر بدء قائد الأوركسترا.",

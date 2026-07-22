@@ -341,6 +341,8 @@ export const fr: TranslationResources = {
       move: "Déplacer le panneau",
       backToConductor: "Revenir au chef d'orchestre",
       openDetails: "Détails",
+      collapse: "Réduire",
+      expand: "Agrandir",
       noProject: "Sélectionnez d'abord un projet.",
       noHost: "L'hôte n'est pas connecté.",
       failed: "Impossible de démarrer le chef d'orchestre.",
