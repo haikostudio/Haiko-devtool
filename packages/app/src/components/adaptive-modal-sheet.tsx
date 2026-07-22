@@ -96,6 +96,18 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: OVERLAY_Z.modal,
     pointerEvents: "auto" as const,
   },
+  // Backdrop-less desktop overlay: no dim, and taps fall through to the app
+  // behind everywhere except the card itself (pointerEvents "box-none"), so the
+  // rest of the screen stays visible and interactive. The user closes via the X.
+  desktopOverlayNoBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: theme.spacing[6],
+    zIndex: OVERLAY_Z.modal,
+    pointerEvents: "box-none" as const,
+  },
   desktopCard: {
     width: "100%",
     maxWidth: 520,
@@ -467,6 +479,13 @@ export interface AdaptiveModalSheetProps {
   testID?: string;
   /** Override the max width of the desktop card. */
   desktopMaxWidth?: number;
+  /**
+   * Desktop only: when false, the centered card renders without the dark
+   * backdrop dim, and clicks fall through to the app behind it (the card stays
+   * interactive; there is no click-outside-to-close — the user closes via the
+   * X). Esc-to-close still works. Defaults to true (dimmed, click-outside).
+   */
+  desktopBackdrop?: boolean;
   scrollable?: boolean;
   presentation?: "push" | "replace";
   /**
@@ -494,6 +513,7 @@ export function AdaptiveModalSheet({
   snapPoints,
   testID,
   desktopMaxWidth,
+  desktopBackdrop = true,
   scrollable = true,
   presentation,
   dynamicSizing = false,
@@ -605,7 +625,7 @@ export function AdaptiveModalSheet({
   );
   const desktopOverlayStyle = useMemo(
     () => [
-      styles.desktopOverlay,
+      desktopBackdrop ? styles.desktopOverlay : styles.desktopOverlayNoBackdrop,
       isWeb && {
         opacity: isWebClosing ? 0 : 1,
         transitionDuration: `${WEB_EXIT_DURATION_MS}ms`,
@@ -613,7 +633,7 @@ export function AdaptiveModalSheet({
         transitionTimingFunction: "ease",
       },
     ],
-    [isWebClosing],
+    [isWebClosing, desktopBackdrop],
   );
 
   useEffect(() => {
@@ -728,11 +748,13 @@ export function AdaptiveModalSheet({
 
   const desktopContent = (
     <View style={desktopOverlayStyle} testID={testID}>
-      <Pressable
-        accessibilityLabel={t("common.actions.dismiss")}
-        style={ABSOLUTE_FILL_STYLE}
-        onPress={onClose}
-      />
+      {desktopBackdrop ? (
+        <Pressable
+          accessibilityLabel={t("common.actions.dismiss")}
+          style={ABSOLUTE_FILL_STYLE}
+          onPress={onClose}
+        />
+      ) : null}
       <View style={desktopCardStyle}>{cardInner}</View>
     </View>
   );

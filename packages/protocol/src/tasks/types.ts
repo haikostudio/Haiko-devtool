@@ -150,6 +150,14 @@ export const TaskFolderSchema = z.object({
   // Autopilot: the scheduler may pick this folder's backlog tasks directly
   // (quota + quiet-hours gates still apply). Absent = manual (drag to Planned).
   autopilot: z.boolean().optional(),
+  // A folder IS a real git branch: every task in it works and commits on this
+  // branch, inside one shared worktree. Absent (legacy folders) = each task
+  // falls back to its own throwaway `task/<slug>-<id>` branch.
+  branch: z.string().optional(),
+  // The shared worktree for this folder's branch, stamped by the scheduler on
+  // the first task launch. Git allows only one worktree per branch, so tasks in
+  // the folder reuse this workspace and run one at a time. Absent = not yet created.
+  workspaceId: z.string().nullable().optional(),
   order: z.number().int(),
   createdAt: z.string(),
 });
