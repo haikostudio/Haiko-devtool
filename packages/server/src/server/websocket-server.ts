@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import type { AgentManager, AgentMetricsSnapshot } from "./agent/agent-manager.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
+import { getCachedPaseoDeployRoots } from "../utils/paseo-deploy.js";
 import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
@@ -1407,6 +1408,10 @@ export class VoiceAssistantWebSocketServer {
         turnRecap: true,
         // COMPAT(paseoSelfhostDeploy): added in v0.1.108, custom fork feature (self-host deploy button).
         paseoSelfhostDeploy: true,
+        // COMPAT(paseoSelfhostDeployRoots): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        // Every Paseo checkout (main repo + task worktrees) where the deploy
+        // button may appear — cached, refreshed on each deploy-status poll.
+        paseoSelfhostDeployRoots: getCachedPaseoDeployRoots(),
       },
     };
   }

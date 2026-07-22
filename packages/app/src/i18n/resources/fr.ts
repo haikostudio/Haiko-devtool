@@ -326,6 +326,9 @@ export const fr: TranslationResources = {
         linkHint:
           "Lie ce projet à un client dans les réglages du projet pour l'ajouter à une facture.",
         addButton: "Ajouter à une offre ou facture",
+        relink: "Rattacher à un autre document",
+        linkedInvoice: "Rattachée à la facture {{number}}",
+        linkedQuote: "Rattachée à l'offre {{number}}",
         title: "Ligne de facture",
         label: "Libellé",
         time: "Temps estimé",
