@@ -44,7 +44,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
-import { KANBAN_COLUMNS, KANBAN_COLUMN_MAX_WIDTH } from "@/components/tasks/kanban-columns";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import {
@@ -2092,15 +2091,8 @@ const styles = StyleSheet.create((theme) => ({
   compactViewSwitch: {
     paddingHorizontal: theme.spacing[3],
   },
-  // Timeline strip capped to the columns' total width, centered horizontally in
-  // the board container on wide screens (alignSelf center + maxWidth); on narrow
-  // screens it fills like the columns do.
   ganttBoardAlign: {
-    alignSelf: "center",
     marginHorizontal: theme.spacing[4],
-    maxWidth:
-      KANBAN_COLUMNS.length * KANBAN_COLUMN_MAX_WIDTH +
-      (KANBAN_COLUMNS.length - 1) * theme.spacing[4],
   },
   centered: {
     flex: 1,

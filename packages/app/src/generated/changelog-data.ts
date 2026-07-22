@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-22",
     markdown:
-      "### Ajouts\n\n- Add workspace files to chat from Files and Changes\n- Les dossiers du tableau deviennent de vraies branches git\n- Compteur global et « Tout fusionner & publier »\n- Bouton et fenêtre « À déployer » dans tous les ateliers Paseo\n- Sélection par coche des ateliers + aperçu du total\n- Voyants d'état vert/orange/bleu sur cartes projet, dossier et tâche\n- Chat de tâche déplacé dans le dock du chef d'orchestre + drag corrigé\n- Compteur global et « Tout fusionner & publier »\n- Pause au choix avant exécution, badge d'analyse et relance d'analyse\n- Ligne éditable, marqueur « déjà facturé » et total par dossier\n- Bouton et fenêtre « À déployer » dans tous les ateliers Paseo\n- Chef d'orchestre — colonne par défaut mémorisée, mode proposition sur mot-clé, récap de lot\n- Centrer le kanban + chef d'orchestre au centre fenêtre + animation proximité\n- Le chef d'orchestre crée les tâches directement dans la liste\n- Témoin « le moteur est en retard sur X nouveautés »\n- Article de facture enrichi + taux et document par défaut par projet\n- Afficher la quantité réelle de changements en haut de la fenêtre « À déployer »\n- Bouton « créer une tâche » sur chaque évolution du chat\n- Agent « chef d'orchestre » ancré en bas du gestionnaire de tâches\n- Lancer un agent d'analyse visible dès la validation, puis continuer l'exécution avec le même agent\n- Label sidebar add project action\n- Bandeau « Nouvelle version disponible » (fin des rechargements manuels)\n- Improve workspace service controls\n- Bouton Publier aussi dans l'en-tête mobile (icône compacte)\n- Bouton « Publier maintenant » dans l'en-tête Paseo\n- Roue de config projet aussi dans l'en-tête desktop et l'en-tête dossier mobile\n- Titre de l'agent + résumé de ce qu'il a terminé\n- Accès à la config du projet depuis le gestionnaire + choix du client dans la tâche\n- Rapprocher un projet à un client et ajouter une tâche à une offre/facture\n- Add 'max' thinking level support (#2267)\n- Date et heure de chaque souvenir dans la pastille de rappel\n- Les tâches terminées restent affichées jusqu'à l'ouverture de l'agent\n- La description reste masquée dans la bannière, visible seulement au clic\n- Détail des factures au toucher + graphique 12 mois sur la carte facturation\n- Carte facturation sur le tableau de bord + proposition de facturation en fin de tâche\n- Configure workspace service port allocation (#2165)\n- Fondu symétrique gauche/droite sur l'en-tête scrollable du tableau\n- L'aimant garde une marge du bord et ne colle que si le bouton est lâché près d'un bord\n- Dégradé de bord droit + auto-scroll sur le dossier actif dans l'en-tête\n- Aimant vers le bord au relâchement + appui long pour réinitialiser la position du bouton\n- En-tête du tableau scrollable horizontalement quand les noms dépassent\n- Sélecteur de projet à gauche du dossier dans l'en-tête du tableau\n- Notifications web (push navigateur/PWA) opt-in dans les réglages\n- Dégradé d'opacité en profondeur sur la pile repliée\n- Survol pour déplier la pile + poignée pour la déplacer\n- Animation de pliage + repli automatique de la pile\n- Bouton pour replier la pile de toasts (préférence mémorisée)\n- Rattrape en français les libellés des anciens onglets\n- Titre d'onglet et synthèse toujours en français\n- La capture de fin de tour couvre tous les chemins (tâches, routines, boucles)\n- Fraîcheur mémoire — apprend des actions, rafraîchit la fiche, faits immédiats, pill sous le message\n- Default send behavior to queue, not interrupt\n- Replanifie automatiquement une tâche annulée\n- Traduit les puces « Non publié » ajoutées après coup\n- Journal des modifications entièrement en français\n- Actions compactes et adaptées au statut dans la feuille de détail d'une tâche\n- Tiroir d'agent plein écran (Chat + Détails) au toucher d'une tâche sur mobile\n- Rappel du Cerveau à chaque prompt via le point de passage AgentManager\n- Barre de recherche, filtre et tri par colonne sur le tableau\n- Reflète l'agent de la tâche sélectionnée dans un panneau latéral redimensionnable sur bureau\n- Titre d'onglet en direct + bannière d'une phrase tirée de la réponse\n- Icônes Lucide automatiques sur les titres de sections du compte-rendu de tâche\n- Encadrés gris avec icônes Lucide, bordure gauche supprimée\n- La chronologie n'affiche que le planifié et l'en-cours, coloré par colonne ; barre de recherche visible + filtre à facettes\n- Titre automatique de l'onglet à partir de la réponse de l'agent à chaque tour\n- Champ de recherche + menu de tri sur le tableau\n- Ajout du module de planification requis par l'écran des tâches\n- Nouvel espace de travail déplacé vers un bouton + dans l'en-tête des espaces\n- Onglets pleine largeur en vue compacte avec espacement de l'en-tête\n- Actions principales intégrées dans la barre latérale mobile\n- Navigation par dossier dans l'en-tête du tableau + pied de page « nouveau dossier » pleine largeur fixe\n- Version du démon incluse dans les journaux (#2155)\n- Cartes kanban épurées — priorité masquée, une seule ligne d'infos, étiquettes limitées\n- Réponses orientées vers un ton simple, léger et non technique\n- Ajout de la colonne « Validé » comme filtre entre analyse et exécution\n- Migration des projets et worktrees existants\n- Conversation récente restaurée pendant la reconnexion (#2206)\n- Connexion des démons au Hub via approbation dans le navigateur\n- Menu par carte pour lancer ou réanalyser une tâche depuis le tableau\n- Retour immédiat dans la conversation à l'envoi d'un message\n- Compteurs dans la colonne des projets + champ de recherche visible\n- Badge de tâche flottant + tiroir pour les notifications des agents\n- Pastille de rappel structurée + diagnostics de démarrage et d'émission\n- Refonte du tableau des tâches — colonnes pastel, pastilles douces, vraie chronologie\n- Priorité et échéance éditables comme champs dédiés dans la fiche de tâche\n- Vraie application affichée dans l'en-tête de la page d'accueil\n- Nombre de tâches simultanées piloté par le budget de quota, plus par un chiffre fixe\n- Dossiers en autopilote, worktrees par tâche, estimation du backlog, optimisation du quota\n- Masquage des sous-agents internes du fournisseur dans le suivi\n- Bac de triage épinglé au-dessus de la zone de saisie, style conversation et entièrement éditable\n- Refonte du carrousel de triage — bloc violet, points, ensemble complet de champs\n- Chronologie des tâches affichée sur l'écran projet mobile\n- Pastille Cerveau toujours affichée, même sans rappel\n- Rappel Cerveau à chaque message (suppression du filtre de pertinence)\n- Carrousel d'approbation dans la conversation pour les tâches proposées au triage\n- Chronologie Gantt aux couleurs du projet au-dessus du tableau kanban\n- Modèle et raisonnement exacts, double coût, exécution dans l'espace de travail courant\n- Marges resserrées des statistiques du tableau de bord sur écrans compacts\n- Barre d'activité plus haute avec un pourcentage dans chaque segment\n- Filtre de projets multi-sélection + pourcentages sur la barre d'activité\n- Barre de projets empilée unique + étiquettes de projet colorées dans Activité\n\n### Améliorations\n\n- Unifie les fenêtres du tableau de tâches sur le drawer standard\n- Limit initial sidebar workspace rendering\n- Reduce timeline catch-up page size\n- Load the import engine as a dependency\n- Suppression des codes de fermeture websocket inutilisés\n- Réutilisation du battement client pour vérifier la vivacité de la socket\n\n### Corrections\n\n- Tiroirs du tableau en dock bas déplaçable, redimensionnable et rétractable\n- Garder le nouvel onglet d'agent vivant même après un rechargement\n- Show usage limits approaching exhaustion\n- La recherche projet (rail gauche) adopte la mise en forme des colonnes\n- Ancrer les drawers du tableau — chat en bas, détails à droite (desktop)\n- Clean up failed run workspaces\n- Preserve adjacent wide characters\n- Copy complete assistant turns on iOS\n- Supprime la bande blanche et rattache la tâche à la facture\n- Retire le bouton retour redondant et le padding en double sur la config projet\n- Rendre la discussion du drawer de tâche défilable sur mobile\n- Preserve Windows terminal hook smoke command\n- Empêcher un nouvel onglet d'agent de se refermer tout seul\n- Make new workspace creation explicit (#2315)\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Preserve Pi message IDs after resume (#2313)\n- Supprime la bande blanche et rattache la tâche à la facture\n- Rendre la discussion du drawer de tâche défilable sur mobile\n- Retire le bouton retour redondant et le padding en double sur la config projet\n- Stop composer flickering during keyboard changes\n- Stop markdown lines joining\n- Ne plus afficher les agents internes du cerveau comme onglets fantômes\n- Liste « À déployer » scrollable sur toute la hauteur du tiroir\n- Stop Android chat jumping during streaming\n- Standardize the Vim settings switch\n- Prevent catch-up from moving submitted messages\n- Keep hidden chats current through brief switches\n- Keep submitted prompts in place\n- Balance sidebar divider spacing\n- Afficher la vraie raison quand la liste des clients échoue\n- Labels des boutons réduits pour tenir sur une ligne\n- Simplify commits sidebar header\n- Restore packaged terminal hooks\n- Preserve UI fonts in portaled overlays\n- Boutons de la fenêtre « À déployer » épinglés dans un pied fixe\n- Keep agent history visible during catch-up\n- Align sidebar section spacing\n- Keep pinned workspace labels aligned\n- Silence non-Git workspace warnings\n- Boutons de la fenêtre empilés sur mobile + alignés sur desktop\n- Prevent duplicate web menu actions\n- Preserve discovered project prompts\n- Preserve host replicas across provider remounts\n- Keep reload splash continuous\n- Fenêtre « À déployer » en clair — phrases complètes, plus de codes tronqués\n- Image plein écran visible au clic sur la vignette\n- Contour visible sur le champ de recherche du sélecteur de projet\n- Le focus ne se fait plus voler par un appareil en duel de synchro\n- Plus de vol de focus au premier prompt d'un nouvel agent\n- Drover mobile — poignée de glissement + layout, onglet facturation lint-clean\n- Workspace-scoped session imports across Claude Code, OpenCode, Pi, and OMP (#2265)\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Keep cached workspace header visible while reconnecting\n- Le transcript défile sous la bannière et s'estompe (vrai fondu)\n- Fin du duel de synchro qui faisait planter l'app (React #185)\n- Marge de sécurité en bas des boutons d'action (plus collés au bord)\n- Fondu doux sous la bannière flottante (fin du bord dur)\n- Une erreur de rotation du journal ne tue plus le daemon\n- Keep dictation shortcuts responsive (#2268)\n- Aperçu d'image ne devient plus blanc à l'envoi (blob détaché avant db.close)\n- Empêcher la pile de toasts de se coller au bord haut/bas au drag\n- Keep submitted prompts in timeline order (#2259)\n- Show complete workspace and agent history (#2263)\n- Un onglet cliqué ne perd plus le focus au profit du précédent (broadcast périmé)\n- Marge sous la pile de toasts flottante (desktop) alignée sur les côtés\n- Ombre de bord en pixels réels (SVG en % invisible sur web)\n- Rythme vertical équilibré autour des onglets Tableau/Chronologie (12px au-dessus et en dessous)\n- Ombre de bord visible + position de scroll corrigée après recadrage auto\n- Harden the desktop import flow\n- L'édition d'un dossier pré-remplit le nom existant dans le drawer\n- Un onglet fermé ne ressuscite plus depuis un instantané périmé de l'hôte\n- Un onglet vide fermé ne se rouvre plus tout seul\n- Le clavier ne déplace plus le bouton flottant hors de sa position réglée au drag\n- Worktree disparu ne bloque plus l'ouverture de la conversation\n- Resserrer l'espace vide entre l'en-tête et les onglets Tableau/Chronologie (mobile)\n- Fond de carte opaque, seul le contenu s'estompe en profondeur\n- L'état « Activé » reflète un vrai abonnement, pas juste la permission\n- Package local speech worker (#1587)\n- Rendre l'état terminé définitif, plus aucune relance\n- Conserve un brouillon de nouvel agent au rechargement\n- Ouvre les tâches dont le dossier de travail a disparu\n- Compression depuis le base64 conservé, sans détour par une object-URL du store\n- Réduction des images pour Codex, pas seulement pour le budget du relais\n- Champ de recherche par colonne blanc et pleine largeur dans la barre d'outils\n- N'ouvre plus deux fois un onglet en arrière-plan pour un agent tout juste créé\n- Menu de l'espace de travail affiché en mode compact dans la vraie liste des projets\n- Marges resserrées dans la fiche Options de l'agent\n- Menu de la ligne d'espace de travail toujours affiché en PWA web compacte\n- Alignement du défilement de la section réflexion sur les autres sections de détail (#1884)\n- Champ de saisie maintenu visible après la dictée (#2194)\n- Suppression des sous-agents parents fantômes (#2214)\n- Le tiroir gère sa propre zone de sécurité basse afin que les cartes PWA évitent l'indicateur d'accueil\n- Normalisation NFC des étiquettes pour que priorité et échéance ne fuitent plus en pastilles brutes\n- Espace pour le badge du tiroir de tâche + repli sur la zone de sécurité basse\n- Suppression des sous-agents parents fantômes (#2214)\n- Fin du signalement des retours directs de l'agent + explication de la pastille de questions\n- Autorisation de la config de l'espace de travail actif\n- Rejet des substitutions de commandes imbriquées\n- Rafraîchissement de la config de checkout gérée\n- Préservation de la config de l'espace de travail adopté\n- Validation des références de source et des expansions\n- Préservation du calcul direct des ports\n- Libération des observateurs d'espace de travail à l'extinction\n- Normalisation des références de branche de checkout\n- Validation de l'état de source en direct\n- Partage de la sémantique des commandes de service\n- Normalisation des références de source\n- Préservation de la sémantique du shell Windows\n- Préservation d'un état de source cohérent\n- Encadrement de la découverte automatique des sources\n- Validation des cibles de connexion des espaces de travail\n- Préservation de la sémantique des commandes de source\n- Préservation de la sémantique de checkout et de shell\n- Renforcement du transport d'approbation du Hub\n- Vidage de la sortie de migration avant l'achèvement\n- Restriction des URL d'activation du Hub\n- Limitation du démarrage de l'enregistrement au Hub\n- Interrogation d'approbation du Hub maintenue dans le délai d'expiration\n- Badge de tâche remonté au-dessus de la zone de saisie\n- Tableau gris neutre, chronologie en niveaux de gris, espacement mobile resserré\n- Onglet chronologie mobile + correction du chevauchement des libellés d'axe Gantt\n- Mise en évidence des changements qui s'appliquent au prochain tour (#2201)\n- Messages en file maintenus visibles jusqu'à ce que le démon confirme leur envoi\n- Préservation des styles de thème enregistrés après le démarrage\n- Actions des messages utilisateur toujours affichées, pas seulement au survol\n- Aucun message en file abandonné lorsque le client est indisponible\n- Horodatage des messages et heure de fin de tour toujours affichés\n- Prise en charge du niveau de réflexion « max » à l'import des sessions OMP (#2191)\n- Suppression du délai d'expiration réel pour le RPC compact de Pi (#2181)\n- Champ de saisie maintenu visible après la dictée (#2194)\n- Lignes et sections des feuilles bien plus resserrées\n- Fin de la résurrection d'onglets brouillons vides par d'anciens instantanés d'interface\n- Marges des feuilles et hauteurs de lignes resserrées\n- Tâches du backlog affichées aussi dans la chronologie des tâches\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Repli sur une lecture intégrée quand le transfert de fichier binaire bloque\n- Correspondance de projet tolérante aux alias et familles (miroir de la résolution de portée du Cerveau)\n- Alignement de la bande chronologique des tâches avec les colonnes kanban\n- Fin de la création d'un second onglet par d'anciens instantanés de synchronisation après l'envoi d'un brouillon\n- Images envoyées par l'utilisateur affichées sur tous les clients, pas seulement l'émetteur\n- Brouillon de nouvel agent maintenu focalisé après l'envoi\n- Réutilisation de l'espace de travail existant pour la création d'agents externes/internes\n- Application de la règle un espace de travail par dossier au niveau du registre\n- Application d'un espace de travail par dossier au point de création\n- Création d'espace de travail local ramenée à un par dossier\n- Pastilles de filtre d'activité rendues en capsules pleine hauteur",
+      "### Ajouts\n\n- Open Changes as a workspace tab (#2298)\n- Bouton « Enregistrer » sur chaque atelier pour valider son travail depuis la fenêtre « À déployer »\n- Compression d'images partagée (web/native) + découpage relay\n- Bouton « Fusionner & publier la sélection » en pied de fenêtre, retrait de « Fermer » et « Enregistrer sans publier »\n- Fusionner Détails et Facturation dans le tiroir du chat\n- Add workspace files to chat from Files and Changes\n- Les dossiers du tableau deviennent de vraies branches git\n- Compteur global et « Tout fusionner & publier »\n- Bouton et fenêtre « À déployer » dans tous les ateliers Paseo\n- Sélection par coche des ateliers + aperçu du total\n- Voyants d'état vert/orange/bleu sur cartes projet, dossier et tâche\n- Chat de tâche déplacé dans le dock du chef d'orchestre + drag corrigé\n- Compteur global et « Tout fusionner & publier »\n- Pause au choix avant exécution, badge d'analyse et relance d'analyse\n- Ligne éditable, marqueur « déjà facturé » et total par dossier\n- Bouton et fenêtre « À déployer » dans tous les ateliers Paseo\n- Chef d'orchestre — colonne par défaut mémorisée, mode proposition sur mot-clé, récap de lot\n- Centrer le kanban + chef d'orchestre au centre fenêtre + animation proximité\n- Le chef d'orchestre crée les tâches directement dans la liste\n- Témoin « le moteur est en retard sur X nouveautés »\n- Article de facture enrichi + taux et document par défaut par projet\n- Afficher la quantité réelle de changements en haut de la fenêtre « À déployer »\n- Bouton « créer une tâche » sur chaque évolution du chat\n- Agent « chef d'orchestre » ancré en bas du gestionnaire de tâches\n- Lancer un agent d'analyse visible dès la validation, puis continuer l'exécution avec le même agent\n- Label sidebar add project action\n- Bandeau « Nouvelle version disponible » (fin des rechargements manuels)\n- Improve workspace service controls\n- Bouton Publier aussi dans l'en-tête mobile (icône compacte)\n- Bouton « Publier maintenant » dans l'en-tête Paseo\n- Roue de config projet aussi dans l'en-tête desktop et l'en-tête dossier mobile\n- Titre de l'agent + résumé de ce qu'il a terminé\n- Accès à la config du projet depuis le gestionnaire + choix du client dans la tâche\n- Rapprocher un projet à un client et ajouter une tâche à une offre/facture\n- Add 'max' thinking level support (#2267)\n- Date et heure de chaque souvenir dans la pastille de rappel\n- Les tâches terminées restent affichées jusqu'à l'ouverture de l'agent\n- La description reste masquée dans la bannière, visible seulement au clic\n- Détail des factures au toucher + graphique 12 mois sur la carte facturation\n- Carte facturation sur le tableau de bord + proposition de facturation en fin de tâche\n- Configure workspace service port allocation (#2165)\n- Fondu symétrique gauche/droite sur l'en-tête scrollable du tableau\n- L'aimant garde une marge du bord et ne colle que si le bouton est lâché près d'un bord\n- Dégradé de bord droit + auto-scroll sur le dossier actif dans l'en-tête\n- Aimant vers le bord au relâchement + appui long pour réinitialiser la position du bouton\n- En-tête du tableau scrollable horizontalement quand les noms dépassent\n- Sélecteur de projet à gauche du dossier dans l'en-tête du tableau\n- Notifications web (push navigateur/PWA) opt-in dans les réglages\n- Dégradé d'opacité en profondeur sur la pile repliée\n- Survol pour déplier la pile + poignée pour la déplacer\n- Animation de pliage + repli automatique de la pile\n- Bouton pour replier la pile de toasts (préférence mémorisée)\n- Rattrape en français les libellés des anciens onglets\n- Titre d'onglet et synthèse toujours en français\n- La capture de fin de tour couvre tous les chemins (tâches, routines, boucles)\n- Fraîcheur mémoire — apprend des actions, rafraîchit la fiche, faits immédiats, pill sous le message\n- Default send behavior to queue, not interrupt\n- Replanifie automatiquement une tâche annulée\n- Traduit les puces « Non publié » ajoutées après coup\n- Journal des modifications entièrement en français\n- Actions compactes et adaptées au statut dans la feuille de détail d'une tâche\n- Tiroir d'agent plein écran (Chat + Détails) au toucher d'une tâche sur mobile\n- Rappel du Cerveau à chaque prompt via le point de passage AgentManager\n- Barre de recherche, filtre et tri par colonne sur le tableau\n- Reflète l'agent de la tâche sélectionnée dans un panneau latéral redimensionnable sur bureau\n- Titre d'onglet en direct + bannière d'une phrase tirée de la réponse\n- Icônes Lucide automatiques sur les titres de sections du compte-rendu de tâche\n- Encadrés gris avec icônes Lucide, bordure gauche supprimée\n- La chronologie n'affiche que le planifié et l'en-cours, coloré par colonne ; barre de recherche visible + filtre à facettes\n- Titre automatique de l'onglet à partir de la réponse de l'agent à chaque tour\n- Champ de recherche + menu de tri sur le tableau\n- Ajout du module de planification requis par l'écran des tâches\n- Nouvel espace de travail déplacé vers un bouton + dans l'en-tête des espaces\n- Onglets pleine largeur en vue compacte avec espacement de l'en-tête\n- Actions principales intégrées dans la barre latérale mobile\n- Navigation par dossier dans l'en-tête du tableau + pied de page « nouveau dossier » pleine largeur fixe\n- Version du démon incluse dans les journaux (#2155)\n- Cartes kanban épurées — priorité masquée, une seule ligne d'infos, étiquettes limitées\n- Réponses orientées vers un ton simple, léger et non technique\n- Ajout de la colonne « Validé » comme filtre entre analyse et exécution\n- Migration des projets et worktrees existants\n- Conversation récente restaurée pendant la reconnexion (#2206)\n- Connexion des démons au Hub via approbation dans le navigateur\n- Menu par carte pour lancer ou réanalyser une tâche depuis le tableau\n- Retour immédiat dans la conversation à l'envoi d'un message\n- Compteurs dans la colonne des projets + champ de recherche visible\n- Badge de tâche flottant + tiroir pour les notifications des agents\n- Pastille de rappel structurée + diagnostics de démarrage et d'émission\n- Refonte du tableau des tâches — colonnes pastel, pastilles douces, vraie chronologie\n- Priorité et échéance éditables comme champs dédiés dans la fiche de tâche\n- Vraie application affichée dans l'en-tête de la page d'accueil\n- Nombre de tâches simultanées piloté par le budget de quota, plus par un chiffre fixe\n- Dossiers en autopilote, worktrees par tâche, estimation du backlog, optimisation du quota\n- Masquage des sous-agents internes du fournisseur dans le suivi\n- Bac de triage épinglé au-dessus de la zone de saisie, style conversation et entièrement éditable\n- Refonte du carrousel de triage — bloc violet, points, ensemble complet de champs\n- Chronologie des tâches affichée sur l'écran projet mobile\n- Pastille Cerveau toujours affichée, même sans rappel\n- Rappel Cerveau à chaque message (suppression du filtre de pertinence)\n- Carrousel d'approbation dans la conversation pour les tâches proposées au triage\n\n### Améliorations\n\n- Unifie les fenêtres du tableau de tâches sur le drawer standard\n- Limit initial sidebar workspace rendering\n- Reduce timeline catch-up page size\n- Load the import engine as a dependency\n- Suppression des codes de fermeture websocket inutilisés\n- Réutilisation du battement client pour vérifier la vivacité de la socket\n\n### Corrections\n\n- Accept all command source types in slash command schema (#2175)\n- Complete turns when agent_end omits messages (#2261)\n- Tone usage bars by how full they are (#2322)\n- Corriger le crash useToast à l'ouverture du gestionnaire de tâches\n- Stop stale checkout diff subscriptions (#2317)\n- Tiroirs du tableau en dock bas déplaçable, redimensionnable et rétractable\n- Garder le nouvel onglet d'agent vivant même après un rechargement\n- Show usage limits approaching exhaustion\n- La recherche projet (rail gauche) adopte la mise en forme des colonnes\n- Ancrer les drawers du tableau — chat en bas, détails à droite (desktop)\n- Clean up failed run workspaces\n- Preserve adjacent wide characters\n- Copy complete assistant turns on iOS\n- Supprime la bande blanche et rattache la tâche à la facture\n- Retire le bouton retour redondant et le padding en double sur la config projet\n- Rendre la discussion du drawer de tâche défilable sur mobile\n- Preserve Windows terminal hook smoke command\n- Empêcher un nouvel onglet d'agent de se refermer tout seul\n- Make new workspace creation explicit (#2315)\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Preserve Pi message IDs after resume (#2313)\n- Supprime la bande blanche et rattache la tâche à la facture\n- Rendre la discussion du drawer de tâche défilable sur mobile\n- Retire le bouton retour redondant et le padding en double sur la config projet\n- Stop composer flickering during keyboard changes\n- Stop markdown lines joining\n- Ne plus afficher les agents internes du cerveau comme onglets fantômes\n- Liste « À déployer » scrollable sur toute la hauteur du tiroir\n- Stop Android chat jumping during streaming\n- Standardize the Vim settings switch\n- Prevent catch-up from moving submitted messages\n- Keep hidden chats current through brief switches\n- Keep submitted prompts in place\n- Balance sidebar divider spacing\n- Afficher la vraie raison quand la liste des clients échoue\n- Labels des boutons réduits pour tenir sur une ligne\n- Simplify commits sidebar header\n- Restore packaged terminal hooks\n- Preserve UI fonts in portaled overlays\n- Boutons de la fenêtre « À déployer » épinglés dans un pied fixe\n- Keep agent history visible during catch-up\n- Align sidebar section spacing\n- Keep pinned workspace labels aligned\n- Silence non-Git workspace warnings\n- Boutons de la fenêtre empilés sur mobile + alignés sur desktop\n- Prevent duplicate web menu actions\n- Preserve discovered project prompts\n- Preserve host replicas across provider remounts\n- Keep reload splash continuous\n- Fenêtre « À déployer » en clair — phrases complètes, plus de codes tronqués\n- Image plein écran visible au clic sur la vignette\n- Contour visible sur le champ de recherche du sélecteur de projet\n- Le focus ne se fait plus voler par un appareil en duel de synchro\n- Plus de vol de focus au premier prompt d'un nouvel agent\n- Drover mobile — poignée de glissement + layout, onglet facturation lint-clean\n- Workspace-scoped session imports across Claude Code, OpenCode, Pi, and OMP (#2265)\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Keep cached workspace header visible while reconnecting\n- Le transcript défile sous la bannière et s'estompe (vrai fondu)\n- Fin du duel de synchro qui faisait planter l'app (React #185)\n- Marge de sécurité en bas des boutons d'action (plus collés au bord)\n- Fondu doux sous la bannière flottante (fin du bord dur)\n- Une erreur de rotation du journal ne tue plus le daemon\n- Keep dictation shortcuts responsive (#2268)\n- Aperçu d'image ne devient plus blanc à l'envoi (blob détaché avant db.close)\n- Empêcher la pile de toasts de se coller au bord haut/bas au drag\n- Keep submitted prompts in timeline order (#2259)\n- Show complete workspace and agent history (#2263)\n- Un onglet cliqué ne perd plus le focus au profit du précédent (broadcast périmé)\n- Marge sous la pile de toasts flottante (desktop) alignée sur les côtés\n- Ombre de bord en pixels réels (SVG en % invisible sur web)\n- Rythme vertical équilibré autour des onglets Tableau/Chronologie (12px au-dessus et en dessous)\n- Ombre de bord visible + position de scroll corrigée après recadrage auto\n- Harden the desktop import flow\n- L'édition d'un dossier pré-remplit le nom existant dans le drawer\n- Un onglet fermé ne ressuscite plus depuis un instantané périmé de l'hôte\n- Un onglet vide fermé ne se rouvre plus tout seul\n- Le clavier ne déplace plus le bouton flottant hors de sa position réglée au drag\n- Worktree disparu ne bloque plus l'ouverture de la conversation\n- Resserrer l'espace vide entre l'en-tête et les onglets Tableau/Chronologie (mobile)\n- Fond de carte opaque, seul le contenu s'estompe en profondeur\n- L'état « Activé » reflète un vrai abonnement, pas juste la permission\n- Package local speech worker (#1587)\n- Rendre l'état terminé définitif, plus aucune relance\n- Conserve un brouillon de nouvel agent au rechargement\n- Ouvre les tâches dont le dossier de travail a disparu\n- Compression depuis le base64 conservé, sans détour par une object-URL du store\n- Réduction des images pour Codex, pas seulement pour le budget du relais\n- Champ de recherche par colonne blanc et pleine largeur dans la barre d'outils\n- N'ouvre plus deux fois un onglet en arrière-plan pour un agent tout juste créé\n- Menu de l'espace de travail affiché en mode compact dans la vraie liste des projets\n- Marges resserrées dans la fiche Options de l'agent\n- Menu de la ligne d'espace de travail toujours affiché en PWA web compacte\n- Alignement du défilement de la section réflexion sur les autres sections de détail (#1884)\n- Champ de saisie maintenu visible après la dictée (#2194)\n- Suppression des sous-agents parents fantômes (#2214)\n- Le tiroir gère sa propre zone de sécurité basse afin que les cartes PWA évitent l'indicateur d'accueil\n- Normalisation NFC des étiquettes pour que priorité et échéance ne fuitent plus en pastilles brutes\n- Espace pour le badge du tiroir de tâche + repli sur la zone de sécurité basse\n- Suppression des sous-agents parents fantômes (#2214)\n- Fin du signalement des retours directs de l'agent + explication de la pastille de questions\n- Autorisation de la config de l'espace de travail actif\n- Rejet des substitutions de commandes imbriquées\n- Rafraîchissement de la config de checkout gérée\n- Préservation de la config de l'espace de travail adopté\n- Validation des références de source et des expansions\n- Préservation du calcul direct des ports\n- Libération des observateurs d'espace de travail à l'extinction\n- Normalisation des références de branche de checkout\n- Validation de l'état de source en direct\n- Partage de la sémantique des commandes de service\n- Normalisation des références de source\n- Préservation de la sémantique du shell Windows\n- Préservation d'un état de source cohérent\n- Encadrement de la découverte automatique des sources\n- Validation des cibles de connexion des espaces de travail\n- Préservation de la sémantique des commandes de source\n- Préservation de la sémantique de checkout et de shell\n- Renforcement du transport d'approbation du Hub\n- Vidage de la sortie de migration avant l'achèvement\n- Restriction des URL d'activation du Hub\n- Limitation du démarrage de l'enregistrement au Hub\n- Interrogation d'approbation du Hub maintenue dans le délai d'expiration\n- Badge de tâche remonté au-dessus de la zone de saisie\n- Tableau gris neutre, chronologie en niveaux de gris, espacement mobile resserré\n- Onglet chronologie mobile + correction du chevauchement des libellés d'axe Gantt\n- Mise en évidence des changements qui s'appliquent au prochain tour (#2201)\n- Messages en file maintenus visibles jusqu'à ce que le démon confirme leur envoi\n- Préservation des styles de thème enregistrés après le démarrage\n- Actions des messages utilisateur toujours affichées, pas seulement au survol\n- Aucun message en file abandonné lorsque le client est indisponible\n- Horodatage des messages et heure de fin de tour toujours affichés\n- Prise en charge du niveau de réflexion « max » à l'import des sessions OMP (#2191)\n- Suppression du délai d'expiration réel pour le RPC compact de Pi (#2181)\n- Champ de saisie maintenu visible après la dictée (#2194)\n- Lignes et sections des feuilles bien plus resserrées\n- Fin de la résurrection d'onglets brouillons vides par d'anciens instantanés d'interface\n- Marges des feuilles et hauteurs de lignes resserrées\n- Tâches du backlog affichées aussi dans la chronologie des tâches\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Repli sur une lecture intégrée quand le transfert de fichier binaire bloque\n- Correspondance de projet tolérante aux alias et familles (miroir de la résolution de portée du Cerveau)\n- Alignement de la bande chronologique des tâches avec les colonnes kanban\n- Fin de la création d'un second onglet par d'anciens instantanés de synchronisation après l'envoi d'un brouillon",
   },
   {
     version: "0.1.108",
@@ -619,6 +619,107 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "894fa8516ee3846d2b2665a0cb7f5a799a94e149",
+    shortHash: "894fa8516",
+    date: "2026-07-22T21:47:09+02:00",
+    author: "Josh Bendavid",
+    subject: "fix(omp): accept all command source types in slash command schema (#2175)",
+  },
+  {
+    hash: "35f51714774744215c2e139704bb09524abfc455",
+    shortHash: "35f517147",
+    date: "2026-07-23T04:42:16+09:00",
+    author: "Byeonghoon Yoo",
+    subject: "fix(omp): complete turns when agent_end omits messages (#2261)",
+  },
+  {
+    hash: "5dfe50ca749f8701b41956bc6bb88e69c11da0b5",
+    shortHash: "5dfe50ca7",
+    date: "2026-07-22T21:32:28+02:00",
+    author: "Mohamed Boudra",
+    subject: "Fix notifications opening the wrong workspace (#2331)",
+  },
+  {
+    hash: "de69b2a2af34e865af235bcb28ba94b897fce7ff",
+    shortHash: "de69b2a2a",
+    date: "2026-07-22T21:30:44+02:00",
+    author: "Christoph Leiter",
+    subject: "fix(server): tone usage bars by how full they are (#2322)",
+  },
+  {
+    hash: "10da5ca169dfc205b55b35a12280796cb546bbc8",
+    shortHash: "10da5ca16",
+    date: "2026-07-22T12:25:12-07:00",
+    author: "Ethan Greenfeld",
+    subject: "Improve OMP state compatibility and advisor rendering (#2219)",
+  },
+  {
+    hash: "fb4e9a1d9346f94877aab0caf2e99a08687903cf",
+    shortHash: "fb4e9a1d9",
+    date: "2026-07-22T21:06:31+02:00",
+    author: "haikostudio",
+    subject: "fix(tâches): corriger le crash useToast à l'ouverture du gestionnaire de tâches",
+  },
+  {
+    hash: "512c9b31a8f022d93a9d1cbf3da0c4a21c7e8e28",
+    shortHash: "512c9b31a",
+    date: "2026-07-22T19:57:18+01:00",
+    author: "nikuscs",
+    subject: "feat: open Changes as a workspace tab (#2298)",
+  },
+  {
+    hash: "5ea03868cf004caf849484745e62bd9dbe50bcdb",
+    shortHash: "5ea03868c",
+    date: "2026-07-22T20:56:12+02:00",
+    author: "haikostudio",
+    subject:
+      "feat(déploiement): bouton « Enregistrer » sur chaque atelier pour valider son travail depuis la fenêtre « À déployer »",
+  },
+  {
+    hash: "bf02f6372b03f5ee12b124559b4f5d702b4c1640",
+    shortHash: "bf02f6372",
+    date: "2026-07-22T20:43:55+02:00",
+    author: "haikostudio",
+    subject: "feat(pièces jointes): compression d'images partagée (web/native) + découpage relay",
+  },
+  {
+    hash: "7d20ea35b2cd39f09f599670acad2451cea64845",
+    shortHash: "7d20ea35b",
+    date: "2026-07-22T20:40:40+02:00",
+    author: "haikostudio",
+    subject:
+      "style(déploiement): aligner les titres de la fenêtre « À déployer » sur la mise en forme standard des feuilles",
+  },
+  {
+    hash: "7899294d867b97fa98aa5ab7723109664eca5f25",
+    shortHash: "7899294d8",
+    date: "2026-07-22T20:37:16+02:00",
+    author: "haikostudio",
+    subject:
+      "feat(déploiement): bouton « Fusionner & publier la sélection » en pied de fenêtre, retrait de « Fermer » et « Enregistrer sans publier »",
+  },
+  {
+    hash: "eac5f799db4a3d39229b771f3c9fc79df02b06dc",
+    shortHash: "eac5f799d",
+    date: "2026-07-22T20:01:59+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): fusionner Détails et Facturation dans le tiroir du chat",
+  },
+  {
+    hash: "76a5edb020c8d5efc1da95a9834d84d3ebe50b2f",
+    shortHash: "76a5edb02",
+    date: "2026-07-22T18:31:12+02:00",
+    author: "Mohamed Boudra",
+    subject: "Open existing agents from links and the CLI (#2324)",
+  },
+  {
+    hash: "9952615c33d9b962a5f058b085115c1bbbef8483",
+    shortHash: "9952615c3",
+    date: "2026-07-22T15:49:44+01:00",
+    author: "nikuscs",
+    subject: "fix: stop stale checkout diff subscriptions (#2317)",
+  },
   {
     hash: "bd937850b3fd2db5c698e74ebc55ce14a90c1b4b",
     shortHash: "bd937850b",
@@ -2657,105 +2758,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "Make keyboard shortcuts searchable (#2160)",
   },
-  {
-    hash: "1a254ba8ba87a3f86a24502c56bfda4b7d9b3ffd",
-    shortHash: "1a254ba8b",
-    date: "2026-07-18T11:49:11+02:00",
-    author: "haikostudio",
-    subject: "feat(app): project-colored Gantt timeline above the kanban board",
-  },
-  {
-    hash: "b4a5b6a3ff94af056e30231b19cbdacbe0566c8f",
-    shortHash: "b4a5b6a3f",
-    date: "2026-07-18T11:49:11+02:00",
-    author: "Mohamed Boudra",
-    subject: "Add non-Git projects across filesystem mounts (#2187)",
-  },
-  {
-    hash: "9b5b97147c1779ec11c92d1cf24fa48034aafc5d",
-    shortHash: "9b5b97147",
-    date: "2026-07-18T11:19:43+02:00",
-    author: "haikostudio",
-    subject: "feat(tasks): exact model + reasoning, dual cost, run in current workspace",
-  },
-  {
-    hash: "3acde4dd6c53e25016bc2b9df770888777f93af5",
-    shortHash: "3acde4dd6",
-    date: "2026-07-18T10:35:17+02:00",
-    author: "haikostudio",
-    subject: "fix(agent): show user-sent images on every client, not just the sender",
-  },
-  {
-    hash: "3f89ec85ba9382832f799fa05b5f3d3d263e1e9e",
-    shortHash: "3f89ec85b",
-    date: "2026-07-18T09:57:05+02:00",
-    author: "haikostudio",
-    subject: "feat(app): tighter dashboard stats padding on compact screens",
-  },
-  {
-    hash: "7b23cef199034e382e0dae87109e2430a81125ed",
-    shortHash: "7b23cef19",
-    date: "2026-07-18T09:39:47+02:00",
-    author: "haikostudio",
-    subject: "fix(app): keep new-agent draft focused after submit",
-  },
-  {
-    hash: "6bb7c511bea4d851cf46fbe0eb1c12a8e99dc6d9",
-    shortHash: "6bb7c511b",
-    date: "2026-07-18T09:35:53+02:00",
-    author: "haikostudio",
-    subject: "fix(server): reuse existing workspace for external/internal agent creation",
-  },
-  {
-    hash: "a03c109b670c931ad7e2aa4b7e5845beccf0932a",
-    shortHash: "a03c109b6",
-    date: "2026-07-18T09:32:09+02:00",
-    author: "haikostudio",
-    subject: "feat(app): taller activity bar with a percentage in every slice",
-  },
-  {
-    hash: "2bab9ba7018806b7decb29581cbc7ef2d2ca8b7b",
-    shortHash: "2bab9ba70",
-    date: "2026-07-18T03:42:46+02:00",
-    author: "haikostudio",
-    subject: "fix(server): enforce one-workspace-per-directory invariant at the registry",
-  },
-  {
-    hash: "d53e606c868319b55085fd8c3a45797cac2ce20c",
-    shortHash: "d53e606c8",
-    date: "2026-07-18T03:18:02+02:00",
-    author: "haikostudio",
-    subject: "fix(server): enforce one workspace per directory at creation chokepoint",
-  },
-  {
-    hash: "7664e8511e3ce1cec77b9142808ba990d1b379dc",
-    shortHash: "7664e8511",
-    date: "2026-07-18T03:15:21+02:00",
-    author: "haikostudio",
-    subject: "feat(app): multi-select project filter + percentages on the activity bar",
-  },
-  {
-    hash: "616d159765074f3aa9d703aee8201b6ebccc7c04",
-    shortHash: "616d15976",
-    date: "2026-07-18T02:59:48+02:00",
-    author: "haikostudio",
-    subject: "fix(server): collapse local workspace create to one-per-directory",
-  },
-  {
-    hash: "d9384ae016dc931695548766a07a2c76c3936d44",
-    shortHash: "d9384ae01",
-    date: "2026-07-18T02:55:48+02:00",
-    author: "haikostudio",
-    subject: "feat(app): single stacked project bar + colored project tags on Activity",
-  },
-  {
-    hash: "a01b922e0ba582e7fad4e2da4e0f30403d103d3b",
-    shortHash: "a01b922e0",
-    date: "2026-07-18T02:46:55+02:00",
-    author: "haikostudio",
-    subject: "fix(app): activity filter chips rendered as full-height capsules",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-22T14:58:24+01:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-22T21:47:09+02:00";
