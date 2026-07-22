@@ -1763,6 +1763,8 @@ export class Session {
         return this.checkoutSession.handlePaseoDeployStatusRequest(msg);
       case "checkout.deploy.trigger.request":
         return this.checkoutSession.handlePaseoDeployTriggerRequest(msg);
+      case "checkout.deploy.commit-worktree.request":
+        return this.checkoutSession.handlePaseoDeployCommitWorktreeRequest(msg);
       default:
         return undefined;
     }

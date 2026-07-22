@@ -37,6 +37,7 @@ import type {
   CheckoutRefreshResponse,
   PaseoDeployStatusResponse,
   PaseoDeployTriggerResponse,
+  PaseoDeployCommitWorktreeResponse,
   CheckoutPrCreateResponse,
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
@@ -376,6 +377,7 @@ type CheckoutPushPayload = CheckoutPushResponse["payload"];
 type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
 type PaseoDeployStatusPayload = PaseoDeployStatusResponse["payload"];
 type PaseoDeployTriggerPayload = PaseoDeployTriggerResponse["payload"];
+type PaseoDeployCommitWorktreePayload = PaseoDeployCommitWorktreeResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
 type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
@@ -3718,6 +3720,20 @@ export class DaemonClient {
         mergeBranches: input?.mergeBranches,
       },
       responseType: "checkout.deploy.trigger.response",
+    });
+  }
+
+  async paseoDeployCommitWorktree(
+    input: { worktreePath: string },
+    requestId?: string,
+  ): Promise<PaseoDeployCommitWorktreePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.commit-worktree.request",
+        worktreePath: input.worktreePath,
+      },
+      responseType: "checkout.deploy.commit-worktree.response",
     });
   }
 
