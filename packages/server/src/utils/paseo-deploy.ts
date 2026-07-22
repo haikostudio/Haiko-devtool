@@ -404,10 +404,117 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
 }
 
 /**
+ * Generated/committed files that diverge between the deploy branch and a task
+ * worktree on *every* merge, yet carry no real work to lose. The changelog
+ * snapshot is regenerated on each commit from `git log --all` (see the
+ * `changelog` job in `lefthook.yml`), so the deploy branch's copy already
+ * reflects EVERY branch's entries — keeping our side and letting the next commit
+ * regenerate it loses nothing. When a merge conflict touches only these paths we
+ * resolve them automatically instead of aborting; any other conflicted path is a
+ * real code conflict a human must resolve. Kept in sync with the `merge=ours`
+ * rule in the repo-root `.gitattributes`.
+ */
+export const AUTO_RESOLVABLE_CONFLICT_PATHS = ["packages/app/src/generated/changelog-data.ts"];
+
+export interface MergeConflictClassification {
+  autoResolvable: string[];
+  manual: string[];
+}
+
+/**
+ * Split the paths left unmerged after a conflicting merge into the ones we can
+ * safely auto-resolve ({@link AUTO_RESOLVABLE_CONFLICT_PATHS}) and the ones that
+ * need a human. Pure, so it is unit-tested without touching git.
+ */
+export function classifyMergeConflicts(unmergedPaths: string[]): MergeConflictClassification {
+  const autoResolvable: string[] = [];
+  const manual: string[] = [];
+  for (const path of unmergedPaths) {
+    if (AUTO_RESOLVABLE_CONFLICT_PATHS.includes(path)) {
+      autoResolvable.push(path);
+    } else {
+      manual.push(path);
+    }
+  }
+  return { autoResolvable, manual };
+}
+
+/**
+ * Register the `ours` merge driver in the deploy checkout so the `.gitattributes`
+ * `merge=ours` rule on the generated changelog resolves cleanly (keep our side)
+ * during a merge instead of raising a conflict at all. `true` always exits 0, so
+ * git keeps the current side. Idempotent — safe to call before every deploy; the
+ * post-merge auto-resolver below is the runtime safety net if this ever misses.
+ */
+async function ensureMergeDriver(): Promise<void> {
+  try {
+    await runGitCommand(["config", "merge.ours.driver", "true"], { cwd: REPO_ROOT });
+  } catch {
+    // Best effort — auto-resolution below still handles the conflict.
+  }
+}
+
+/**
+ * A merge just conflicted. If every unmerged path is a regenerated artifact we
+ * keep our side (the deploy branch's copy already reflects all branches) and
+ * finish the merge; if any real code file conflicts, report it so a human can
+ * resolve it in the atelier. The caller aborts the merge when this returns not-ok.
+ */
+async function tryAutoResolveMergeConflict(
+  branch: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let unmerged: string[];
+  try {
+    const status = await runGitCommand(["diff", "--name-only", "--diff-filter=U"], {
+      cwd: REPO_ROOT,
+    });
+    unmerged = status.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+
+  const { autoResolvable, manual } = classifyMergeConflicts(unmerged);
+
+  // A real code conflict — or a blocked merge with no unmerged paths at all —
+  // needs a human. Name the offending files so the atelier knows what to fix.
+  if (manual.length > 0 || autoResolvable.length === 0) {
+    const detail = manual.length > 0 ? ` Fichiers en conflit : ${manual.join(", ")}.` : "";
+    return {
+      ok: false,
+      error: `La fusion de « ${branch} » a échoué (conflit).${detail} Rien n'a été publié ; résous le conflit dans l'atelier puis réessaie.`,
+    };
+  }
+
+  // Only regenerated artifacts conflict — keep our side and finish the merge.
+  try {
+    for (const path of autoResolvable) {
+      await runGitCommand(["checkout", "--ours", "--", path], { cwd: REPO_ROOT });
+      await runGitCommand(["add", "--", path], { cwd: REPO_ROOT });
+    }
+    // Finish the merge commit without hooks: the changelog hook would just
+    // regenerate the file we deliberately kept and could re-conflict.
+    const commit = await runGitCommand(["commit", "--no-edit", "--no-verify"], {
+      cwd: REPO_ROOT,
+      acceptExitCodes: [0, 1],
+    });
+    if (commit.exitCode !== 0) {
+      return { ok: false, error: `La fusion de « ${branch} » a échoué à la finalisation.` };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+/**
  * Merge a task branch into the deploy branch inside the main checkout — the
- * "fusionner puis publier" step. Refuses cleanly (aborting any partial merge)
- * when the branch is unknown or the merge conflicts, so the deploy branch is
- * never left half-merged. Returns a French error message on failure.
+ * "fusionner puis publier" step. Auto-resolves conflicts that only touch
+ * regenerated artifacts (changelog snapshot) and finishes the merge; aborts any
+ * partial merge cleanly on a real code conflict or an unknown branch, so the
+ * deploy branch is never left half-merged. Returns a French error on failure.
  */
 async function mergeBranchIntoDeploy(
   branch: string,
@@ -443,15 +550,18 @@ async function mergeBranchIntoDeploy(
       acceptExitCodes: [0, 1],
     });
     if (merge.exitCode !== 0) {
-      // Conflict or blocked merge — abort so the deploy branch stays clean.
+      // Conflict — try to auto-resolve regenerated artifacts (changelog) and
+      // finish the merge; only abort when a real code file conflicts.
+      const resolved = await tryAutoResolveMergeConflict(branch);
+      if (resolved.ok) {
+        return { ok: true, error: null };
+      }
+      // Abort so the deploy branch stays clean, then surface the conflict.
       await runGitCommand(["merge", "--abort"], {
         cwd: REPO_ROOT,
         acceptExitCodes: [0, 1, 128],
       }).catch(() => {});
-      return {
-        ok: false,
-        error: `La fusion de « ${branch} » a échoué (conflit). Rien n'a été publié ; résous le conflit dans l'atelier puis réessaie.`,
-      };
+      return { ok: false, error: resolved.error };
     }
     return { ok: true, error: null };
   } catch (error) {
@@ -474,6 +584,9 @@ async function mergeBranchesIntoDeploy(
 ): Promise<{ merged: string[]; skipped: string[] }> {
   const merged: string[] = [];
   const skipped: string[] = [];
+  // Make the `.gitattributes` merge=ours rule active before any merge, so the
+  // generated changelog resolves cleanly instead of conflicting.
+  await ensureMergeDriver();
   for (const branch of branches) {
     const result = await mergeBranchIntoDeploy(branch);
     if (result.ok) {
