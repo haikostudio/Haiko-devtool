@@ -154,9 +154,10 @@ describe("TaskEstimator", () => {
     const board = await service.getBoard("proj-1");
     const estimated = board.tasks[0];
     expect(estimated?.estimate?.confidence).toBe("low");
-    // The fallback stays above the light-task threshold so unknown work
-    // waits for quiet hours rather than launching mid-day.
-    expect(estimated?.estimate?.estimatedMinutes).toBe(60);
+    // The fallback is the agent's own (short, realistic) runtime, not a flat
+    // human-scale hour: unknown work reads as "light" and is governed by the
+    // quota gate rather than blindly parked until quiet hours.
+    expect(estimated?.estimate?.estimatedMinutes).toBe(15);
     expect(estimated?.schedule?.state).toBe("awaiting_slot");
   });
 });

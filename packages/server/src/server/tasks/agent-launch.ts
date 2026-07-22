@@ -7,9 +7,19 @@ export const TASK_AGENT_LABEL = "paseo.task-id";
 
 // Structured estimate the analysis agent emits (as a trailing ```json block).
 // Same shape the board consumes, minus the model/timestamp the caller stamps.
+//
+// Two INDEPENDENT time dimensions live here and must never be conflated:
+//  - estimatedMinutes: the AGENT's own wall-clock runtime (fast — usually a few
+//    minutes). This is what the card shows and what the scheduler uses to decide
+//    light-vs-heavy timing.
+//  - billingHours: the human effort a senior developer would bill doing the same
+//    work BY HAND (the real price), used only by the Facturation tab.
 export const TaskAnalysisEstimateSchema = z.object({
+  // Estimated total token cost (input + output) for THIS task on its target model.
   tokens: z.number().int().nonnegative(),
+  // Estimated share of one 5h usage window of the task's target model, 0-100.
   quotaPercent: z.number().min(0).max(100),
+  // The agent's own active runtime in minutes — machine time, not human effort.
   estimatedMinutes: z.number().int().nonnegative(),
   confidence: z.enum(["low", "medium", "high"]),
   summary: z.string(),
@@ -27,13 +37,16 @@ export const TaskAnalysisEstimateSchema = z.object({
 export type TaskAnalysisEstimate = z.infer<typeof TaskAnalysisEstimateSchema>;
 
 // Applied when the analysis agent fails or omits a parseable estimate, so a
-// pipeline task never sits in pending_estimate forever. estimatedMinutes stays
-// above the scheduler's "light task" threshold so unknown work waits for quiet
-// hours rather than launching mid-day.
+// pipeline task never sits in pending_estimate forever. estimatedMinutes is the
+// AGENT's own runtime, so the fallback is a short, realistic value (not a flat
+// human-scale hour): it reads as a "light" task, so unknown work is governed by
+// the quota gate — running promptly when quota allows — instead of being blindly
+// parked until quiet hours. quotaPercent stays deliberately modest for the same
+// reason; the scheduler's quota gate is the real safety governor.
 export const ANALYSIS_FALLBACK_ESTIMATE: TaskAnalysisEstimate = {
   tokens: 200_000,
   quotaPercent: 10,
-  estimatedMinutes: 60,
+  estimatedMinutes: 15,
   confidence: "low",
   summary: "Estimation automatique indisponible — valeur par défaut prudente.",
 };
@@ -200,11 +213,13 @@ export function buildTaskAnalysisPrompt(input: {
   branch: string | null;
 }): string {
   const { task, planMode, branch } = input;
+  const providerLabel = resolveTaskLaunch(task).provider;
   const intro = planMode
     ? "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera directement dans le workspace en cours du projet."
     : `Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans un worktree dédié, sur la branche ${branch ?? "de la tâche"} (le checkout principal de l'utilisateur n'est pas touché).`;
   return [
     intro,
+    `Agent d'exécution : ${providerLabel}. Chiffre tokens/quota/temps POUR CE modèle.`,
     "",
     ...taskHeader(task),
     "",
@@ -214,6 +229,9 @@ export function buildTaskAnalysisPrompt(input: {
     "3. NE MODIFIE AUCUN fichier à cette étape. L'exécution reprendra ensuite dans CETTE MÊME conversation.",
     "4. Termine impérativement ton message par un bloc ```json (et rien après) avec ton estimation :",
     '   {"tokens": <entier>, "quotaPercent": <0-100>, "estimatedMinutes": <entier>, "confidence": "low|medium|high", "summary": "<justification en une phrase>", "billingTitle": "<titre facturation, 5 mots max>", "billingDescription": "<description facturation, 3 lignes max>", "billingHours": <heures>}',
+    `   • estimatedMinutes : le temps que TOI, l'agent (${providerLabel}), mettras réellement à EXÉCUTER la tâche, montre en main — en général quelques minutes (2 à 15), rarement plus de 30 même pour un gros chantier. C'est ce temps MACHINE qui s'affiche sur la carte. Ce n'est PAS l'effort humain (voir billingHours).`,
+    `   • quotaPercent : part d'UNE fenêtre d'usage de 5 h de ${providerLabel} que cette exécution consommera (petite tâche ~2-10 %, gros chantier 30 %+). Un modèle plus lourd consomme plus de quota à travail égal.`,
+    "   • tokens : coût total estimé en tokens (entrée + sortie).",
     "   • billingTitle : libellé court et clair pour une facture client (5 mots maximum).",
     "   • billingDescription : description concise du livrable pour la facture (3 lignes maximum, sans jargon).",
     "   • billingHours : nombre d'heures qu'un développeur senior facturerait pour réaliser ce travail À LA MAIN (prix réel, décimales autorisées). Ce n'est PAS ton temps d'exécution d'agent (estimatedMinutes), mais l'effort humain équivalent.",
