@@ -46,6 +46,11 @@ import {
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
 import { clearTabCloseTombstone, recordTabClose } from "@/session-ui-state/close-tombstones";
+import {
+  clearTabOpenMarker,
+  recordLocalTabOpen,
+  seedTabOpenMarker,
+} from "@/session-ui-state/open-markers";
 import { recordLocalFocusIntent } from "@/session-ui-state/focus-intent";
 
 export { buildWorkspaceTabPersistenceKey };
@@ -302,6 +307,11 @@ export function createWorkspaceLayoutStore(
           });
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          // A freshly opened draft tab the host hasn't heard about yet must not be
+          // closed by adoption of a snapshot that predates it (see open-markers).
+          if (normalizedTarget.kind === "draft") {
+            recordLocalTabOpen(normalizedWorkspaceKey, result.tabId);
+          }
           recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
@@ -334,6 +344,9 @@ export function createWorkspaceLayoutStore(
           }));
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          if (normalizedTarget.kind === "draft") {
+            recordLocalTabOpen(normalizedWorkspaceKey, result.tabId);
+          }
           return result.tabId;
         },
         closeTab: (workspaceKey, tabId) => {
@@ -367,6 +380,8 @@ export function createWorkspaceLayoutStore(
             // tab from a snapshot captured before this moment (see
             // session-ui-state/close-tombstones).
             recordTabClose(normalizedWorkspaceKey, normalizedTabId);
+            // A locally-closed tab is no longer an unacknowledged local open.
+            clearTabOpenMarker(normalizedWorkspaceKey, normalizedTabId);
             // Closing auto-focuses a neighbor: record it as local focus intent so
             // a stale broadcast can't steal focus back to the closed/previous tab.
             recordLocalFocusIntent(normalizedWorkspaceKey);
@@ -476,6 +491,9 @@ export function createWorkspaceLayoutStore(
           }));
 
           clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          // The draft became an agent tab; drop the draft's unacknowledged-open
+          // marker so it can't preserve a tab that no longer exists as a draft.
+          clearTabOpenMarker(normalizedWorkspaceKey, normalizedTabId);
           recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
@@ -937,6 +955,24 @@ export function createWorkspaceLayoutStore(
             layoutByWorkspace,
             splitSizesByWorkspace: state.splitSizesByWorkspace,
           };
+        },
+        // After a reload the in-memory open markers are gone, so a freshly opened
+        // draft tab rehydrated from disk would be closeable again by an adoption
+        // that predates it. Reseed a marker for each persisted draft tab (bounded
+        // by its own age inside seedTabOpenMarker) so the "new agent closes
+        // itself" protection survives the reload too.
+        onRehydrateStorage: () => (state) => {
+          if (!state) {
+            return;
+          }
+          for (const workspaceKey in state.layoutByWorkspace) {
+            const layout = state.layoutByWorkspace[workspaceKey];
+            for (const tab of collectAllTabs(layout.root)) {
+              if (tab.target.kind === "draft") {
+                seedTabOpenMarker(workspaceKey, tab.tabId, tab.createdAt);
+              }
+            }
+          }
         },
       },
     ),

@@ -37,6 +37,13 @@ export function suppressLocalFocusIntent<T>(fn: () => T): T {
   }
 }
 
+// True while a remote snapshot is being adopted (hydrate). Lets other local
+// registries (e.g. open-markers) skip recording daemon-driven store mutations as
+// genuine local intent, the same way recordLocalFocusIntent no-ops below.
+export function isApplyingRemoteState(): boolean {
+  return remoteApplyDepth > 0;
+}
+
 // A local, user-driven focus change (clicking a tab, sending the first prompt).
 // No-op while adopting remote state so daemon-driven focus never counts as local.
 export function recordLocalFocusIntent(workspaceKey: string): void {
