@@ -432,6 +432,7 @@ const styles = StyleSheet.create((theme) => ({
     flexGrow: 1,
     flexDirection: "row",
     alignItems: "stretch",
+    justifyContent: "center",
     gap: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[4],

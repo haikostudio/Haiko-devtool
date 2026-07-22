@@ -1,5 +1,6 @@
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   type GestureResponderEvent,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -59,6 +60,7 @@ import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
+import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -507,6 +509,7 @@ export function TasksScreen() {
           boardHandle={boardHandle}
         />
       )}
+      {!isCompact && <ConductorDock serverId={serverId} projectId={projectId} />}
     </View>
   );
 }
@@ -1189,14 +1192,13 @@ function BoardContent({
         onRunNow={handleRunTaskNow}
         onApprove={handleApproveTask}
       />
-      <ConductorDock serverId={serverId} projectId={projectId} />
     </TaskScheduleProvider>
   );
 }
 
 // Bottom-center floating toggle + the conductor panel overlay. Gated on the
-// host feature flag; extracted from BoardContent to keep it under the
-// complexity budget and to co-locate the conductor's own store reads.
+// host feature flag; rendered at the TasksScreen root so its absolute position
+// centers across the full tasks area (including rails), not just the board.
 function ConductorDock({
   serverId,
   projectId,
@@ -1211,6 +1213,51 @@ function ConductorDock({
   const handleClose = useCallback(() => setConductorOpen(false), [setConductorOpen]);
   const handleOpen = useCallback(() => setConductorOpen(true), [setConductorOpen]);
 
+  // Proximity animation (web only): the toggle fades in and grows as the cursor
+  // approaches, then springs back to dormant when the cursor moves away.
+  const wrapperRef = useRef<View>(null);
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0.5)).current;
+  const nearRef = useRef(false);
+
+  useEffect(() => {
+    if (!isWeb || conductorOpen) return;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const el = wrapperRef.current as unknown as HTMLElement | null;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.sqrt((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2);
+      const near = dist < 140;
+      if (near === nearRef.current) return;
+      nearRef.current = near;
+      Animated.parallel([
+        Animated.spring(scaleAnim, { toValue: near ? 1 : 0.85, useNativeDriver: false }),
+        Animated.timing(opacityAnim, {
+          toValue: near ? 1 : 0.5,
+          duration: 180,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    return () => window.removeEventListener("mousemove", onMouseMove);
+  }, [conductorOpen, scaleAnim, opacityAnim]);
+
+  const wrapperAnimStyle = useMemo(
+    () => [
+      styles.conductorToggleWrapper,
+      { transform: [{ scale: scaleAnim }], opacity: opacityAnim },
+    ],
+    // scaleAnim/opacityAnim are stable Animated.Value refs; the memo is only
+    // for the outer array allocation so the lint rule is satisfied.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   if (!supportsConductor || !projectId) {
     return null;
   }
@@ -1218,18 +1265,20 @@ function ConductorDock({
     return <ConductorPanel serverId={serverId} projectId={projectId} onClose={handleClose} />;
   }
   return (
-    <Pressable
-      onPress={handleOpen}
-      accessibilityRole="button"
-      accessibilityLabel={t("tasks.conductor.title")}
-      style={styles.conductorToggle}
-      testID="tasks-conductor-toggle"
-    >
-      <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      <Text style={styles.conductorToggleLabel} numberOfLines={1}>
-        {t("tasks.conductor.title")}
-      </Text>
-    </Pressable>
+    <Animated.View ref={wrapperRef} style={wrapperAnimStyle}>
+      <Pressable
+        onPress={handleOpen}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.conductor.title")}
+        style={styles.conductorToggle}
+        testID="tasks-conductor-toggle"
+      >
+        <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        <Text style={styles.conductorToggleLabel} numberOfLines={1}>
+          {t("tasks.conductor.title")}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -1376,6 +1425,21 @@ function BoardFolderSelector({
 // Picks the right header for the current drill-down level. On mobile the header
 // owns navigation: at the folder-list level it switches projects, on a board it
 // switches folders; everywhere else it's the plain menu header.
+/**
+ * Deploy ("Publier") button for the task manager header — same gate as the
+ * workspace header: only the Paseo repo itself, and only when the host
+ * advertises the `paseoSelfhostDeploy` capability.
+ */
+function TasksDeployButton({ project }: { project: ProjectEntry | null }) {
+  const supported = useSessionStore((s) =>
+    project
+      ? s.sessions[project.serverId]?.serverInfo?.features?.paseoSelfhostDeploy === true
+      : false,
+  );
+  if (!project || !supported || project.rootPath !== "/root/paseo") return null;
+  return <PaseoDeployButton serverId={project.serverId} compact />;
+}
+
 function TasksHeader({
   title,
   isCompact,
@@ -1393,11 +1457,15 @@ function TasksHeader({
   projects: ProjectEntry[];
   folders: TaskFolder[];
 }) {
-  // Same gear on every drill-down level (desktop header included): the
-  // project's configuration sheet must always be one tap away.
-  const settingsButton = useMemo(
-    () =>
-      selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null,
+  // Top-right cluster: the deploy rocket (Paseo repo only) sits next to the
+  // project gear, which stays one tap away on every drill-down level.
+  const rightContent = useMemo(
+    () => (
+      <View style={styles.headerRightCluster}>
+        <TasksDeployButton project={selectedProject} />
+        {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
+      </View>
+    ),
     [selectedProject],
   );
   if (isCompact && supportsTasksBoard && selectedFolder) {
@@ -1407,14 +1475,20 @@ function TasksHeader({
         folders={folders}
         currentProject={selectedProject}
         projects={projects}
-        right={settingsButton}
+        right={rightContent}
       />
     );
   }
   if (isCompact && supportsTasksBoard && selectedProject) {
-    return <CompactProjectHeader currentProject={selectedProject} projects={projects} />;
+    return (
+      <CompactProjectHeader
+        currentProject={selectedProject}
+        projects={projects}
+        right={rightContent}
+      />
+    );
   }
-  return <MenuHeader title={title} rightContent={settingsButton} />;
+  return <MenuHeader title={title} rightContent={rightContent} />;
 }
 
 // Mobile board header: hamburger + back-to-folders chevron + a folder-name
@@ -1557,15 +1631,13 @@ const ProjectSelectorItem = memo(function ProjectSelectorItem({ entry }: { entry
 function CompactProjectHeader({
   currentProject,
   projects,
+  right,
 }: {
   currentProject: ProjectEntry;
   projects: ProjectEntry[];
+  right?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const settingsButton = useMemo(
-    () => <ProjectSettingsButton projectId={currentProject.projectId} />,
-    [currentProject.projectId],
-  );
   return (
     <ScreenHeader
       leftStyle={styles.boardHeaderLeft}
@@ -1604,7 +1676,7 @@ function CompactProjectHeader({
           </DropdownMenu>
         </>
       }
-      right={settingsButton}
+      right={right}
     />
   );
 }
@@ -1762,12 +1834,21 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     backgroundColor: theme.colors.surface0,
   },
-  // Floating toggle anchored bottom-center of the board area that opens the
-  // "Chef d'orchestre" conductor panel.
-  conductorToggle: {
+  // Top-right header cluster: deploy rocket + project gear side by side.
+  headerRightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  // Floating toggle anchored bottom-center of the full tasks area. The wrapper
+  // holds the absolute position so the Animated.View can handle scale/opacity
+  // without conflicting with the positioning props.
+  conductorToggleWrapper: {
     position: "absolute",
     bottom: theme.spacing[4],
     alignSelf: "center",
+  },
+  conductorToggle: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
