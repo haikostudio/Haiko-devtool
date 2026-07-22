@@ -432,6 +432,7 @@ export const ja: TranslationResources = {
     status: {
       attention: "対応待ち",
       running: "実行中",
+      scheduled: "予定",
       done: "完了",
     },
     triage: {

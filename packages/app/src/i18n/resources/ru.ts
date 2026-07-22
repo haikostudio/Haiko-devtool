@@ -431,6 +431,7 @@ export const ru: TranslationResources = {
     status: {
       attention: "Ожидает вас",
       running: "Выполняется",
+      scheduled: "Запланировано",
       done: "Готово",
     },
     triage: {

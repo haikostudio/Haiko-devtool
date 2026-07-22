@@ -435,6 +435,7 @@ export const fr: TranslationResources = {
     status: {
       attention: "Attend une réponse",
       running: "En cours",
+      scheduled: "Planifiée",
       done: "Terminé",
     },
     triage: {
