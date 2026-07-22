@@ -154,10 +154,13 @@ export const TaskFolderSchema = z.object({
   // branch, inside one shared worktree. Absent (legacy folders) = each task
   // falls back to its own throwaway `task/<slug>-<id>` branch.
   branch: z.string().optional(),
-  // The shared worktree for this folder's branch, stamped by the scheduler on
-  // the first task launch. Git allows only one worktree per branch, so tasks in
-  // the folder reuse this workspace and run one at a time. Absent = not yet created.
+  // The shared worktree for this folder's branch, stamped on the first task
+  // launch. Git allows only one worktree per branch, so tasks in the folder reuse
+  // this workspace and run one at a time. Absent = not yet created.
   workspaceId: z.string().nullable().optional(),
+  // Absolute path of that shared worktree, so later tasks spawn their agent
+  // inside it (same branch). Stamped together with workspaceId.
+  worktreeCwd: z.string().nullable().optional(),
   order: z.number().int(),
   createdAt: z.string(),
 });

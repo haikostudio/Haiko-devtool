@@ -767,7 +767,7 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   }, []);
 
   const handleSubmit = useCallback(
-    (input: { name: string; color: string; autopilot?: boolean }) => {
+    (input: { name: string; color: string; autopilot?: boolean; branch?: string }) => {
       if (mode?.kind === "edit") {
         void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
       } else {
@@ -780,7 +780,12 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   const initialFolder = useMemo(
     () =>
       mode?.kind === "edit"
-        ? { name: mode.folder.name, color: mode.folder.color, autopilot: mode.folder.autopilot }
+        ? {
+            name: mode.folder.name,
+            color: mode.folder.color,
+            autopilot: mode.folder.autopilot,
+            branch: mode.folder.branch,
+          }
         : undefined,
     [mode],
   );
@@ -837,6 +842,11 @@ const FolderRailItem = memo(function FolderRailItem({
         >
           {folder.name}
         </Text>
+        {folder.branch ? (
+          <Text style={styles.railItemBranch} numberOfLines={1}>
+            {folder.branch}
+          </Text>
+        ) : null}
         <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
       <TaskStatusVoyant tone={tone} />
@@ -1982,6 +1992,11 @@ const styles = StyleSheet.create((theme) => ({
   railItemSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
+  },
+  railItemBranch: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.mono,
   },
   railItemAction: {
     padding: theme.spacing[1],

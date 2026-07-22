@@ -357,6 +357,9 @@ export const ptBR: TranslationResources = {
       title: "Nova pasta",
       editTitle: "Editar pasta",
       nameField: "Nome",
+      branchField: "Branch git",
+      branchHint: "Cada tarefa deste grupo faz commit nesta branch.",
+      branchPlaceholder: "feat/minha-branch",
       colorField: "Cor",
       autopilotField: "Piloto automático",
       autopilotHint:
