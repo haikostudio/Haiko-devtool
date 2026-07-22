@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Rocket } from "lucide-react-native";
+import { Check, Rocket } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -20,7 +20,11 @@ const EMPTY_COMMITS: PaseoDeployCommitEntry[] = [];
 const EMPTY_WORKTREES: PaseoDeployWorktreeEntry[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
+const ThemedCheck = withUnistyles(Check);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+const checkColorMapping = (theme: Theme) => ({
+  color: theme.colors.primaryForeground,
+});
 
 const rocketColorMapping = (theme: Theme) => ({
   color: theme.colors.palette.white,
@@ -89,6 +93,26 @@ function DeployChangesSummary({ count }: { count: number }) {
         {count > 1 ? "changements à publier" : "changement à publier"}
       </Text>
     </View>
+  );
+}
+
+/**
+ * Overview line under the main tally: how much work waits across the OTHER
+ * ateliers (task-branch worktrees), so the reader sees the spread at a glance
+ * before scrolling. Hidden when nothing is pending in other ateliers.
+ */
+function WorktreesSummary({ worktrees }: { worktrees: PaseoDeployWorktreeEntry[] }) {
+  if (worktrees.length === 0) return null;
+  const total = worktrees.reduce(
+    (sum, worktree) => sum + worktree.ahead + worktree.uncommittedCount,
+    0,
+  );
+  const changeLabel = total > 1 ? "changements" : "changement";
+  const atelierLabel = worktrees.length > 1 ? "ateliers" : "atelier";
+  return (
+    <Text style={styles.worktreesSummary}>
+      {`${total} ${changeLabel} dans ${worktrees.length} ${atelierLabel}`}
+    </Text>
   );
 }
 
@@ -246,26 +270,48 @@ function WorktreeUncommittedHint({ count }: { count: number }) {
   );
 }
 
-/** One atelier card — its pending commits plus a merge-and-publish action. */
+/** Small square checkbox (filled + check when on). Disabled ateliers show muted. */
+function WorktreeCheckbox({ checked, disabled }: { checked: boolean; disabled: boolean }) {
+  const boxStyle = useMemo(
+    () => [
+      styles.checkbox,
+      checked ? styles.checkboxChecked : null,
+      disabled ? styles.checkboxDisabled : null,
+    ],
+    [checked, disabled],
+  );
+  return (
+    <View style={boxStyle}>
+      {checked ? <ThemedCheck size={12} uniProps={checkColorMapping} /> : null}
+    </View>
+  );
+}
+
+/** One atelier card — a checkbox to include it in the batch, plus its commits. */
 function WorktreeCard({
   worktree,
-  onPublishBranch,
+  selected,
+  onToggle,
   busy,
-  pendingBranches,
 }: {
   worktree: PaseoDeployWorktreeEntry;
-  onPublishBranch: (branch: string) => void;
+  selected: boolean;
+  onToggle: (branch: string) => void;
   busy: boolean;
-  pendingBranches: string[] | null;
 }) {
-  const handlePress = useCallback(
-    () => onPublishBranch(worktree.branch),
-    [onPublishBranch, worktree.branch],
-  );
-  const isPending = !!pendingBranches?.includes(worktree.branch);
+  const mergeable = worktree.ahead > 0;
+  const handlePress = useCallback(() => onToggle(worktree.branch), [onToggle, worktree.branch]);
   return (
-    <View style={styles.worktreeCard}>
-      <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
+    <Pressable
+      style={styles.worktreeCard}
+      onPress={handlePress}
+      disabled={busy || !mergeable}
+      testID={`paseo-deploy-worktree-${worktree.branch}`}
+    >
+      <View style={styles.worktreeHeader}>
+        <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
+        <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
+      </View>
       {worktree.commits.map((commit) => (
         <View key={commit.sha} style={styles.itemRow}>
           <Text style={styles.bullet}>•</Text>
@@ -273,75 +319,52 @@ function WorktreeCard({
         </View>
       ))}
       <WorktreeUncommittedHint count={worktree.uncommittedCount} />
-      <Button
-        variant="secondary"
-        size="sm"
-        style={styles.worktreeButton}
-        textStyle={styles.actionButtonText}
-        onPress={handlePress}
-        disabled={busy || worktree.ahead === 0}
-        testID={`paseo-deploy-merge-${worktree.branch}`}
-      >
-        {isPending ? "Publication en cours…" : "Fusionner & publier"}
-      </Button>
-    </View>
-  );
-}
-
-/** "Tout fusionner & publier" — vide en une fois tous les ateliers publiables. */
-function PublishAllButton({
-  branches,
-  onPublishAll,
-  busy,
-  pendingBranches,
-}: {
-  branches: string[];
-  onPublishAll: (branches: string[]) => void;
-  busy: boolean;
-  pendingBranches: string[] | null;
-}) {
-  const handlePress = useCallback(() => onPublishAll(branches), [onPublishAll, branches]);
-  // Only worth showing when at least two ateliers can be shipped at once.
-  if (branches.length < 2) return null;
-  const isPending = (pendingBranches?.length ?? 0) > 1;
-  return (
-    <Button
-      variant="default"
-      size="sm"
-      style={styles.worktreeButton}
-      textStyle={styles.actionButtonText}
-      onPress={handlePress}
-      disabled={busy}
-      testID="paseo-deploy-merge-all"
-    >
-      {isPending ? "Publication en cours…" : `Tout fusionner & publier (${branches.length})`}
-    </Button>
+    </Pressable>
   );
 }
 
 /**
  * "Autres ateliers" — every other Paseo checkout (task-branch worktree) with work
- * not yet on the deploy branch. Each can be merged into the deploy branch and
- * shipped in one tap, so nothing a task did stays invisible.
+ * not yet on the deploy branch. Tick the ones to include, then merge-and-ship the
+ * selection in one go, so nothing a task did stays invisible.
  */
 function WorktreesSection({
   worktrees,
-  onPublishBranch,
-  onPublishAll,
+  onPublishSelection,
   busy,
   pendingBranches,
 }: {
   worktrees: PaseoDeployWorktreeEntry[];
-  onPublishBranch: (branch: string) => void;
-  onPublishAll: (branches: string[]) => void;
+  onPublishSelection: (branches: string[]) => void;
   busy: boolean;
   pendingBranches: string[] | null;
 }) {
-  const mergeableBranches = useMemo(
-    () => worktrees.filter((worktree) => worktree.ahead > 0).map((worktree) => worktree.branch),
-    [worktrees],
+  // Track UNchecked branches, so freshly-appearing ateliers default to selected
+  // and the set survives the background status polling without resetting.
+  const [deselected, setDeselected] = useState<Set<string>>(() => new Set());
+  const toggle = useCallback((branch: string) => {
+    setDeselected((prev) => {
+      const next = new Set(prev);
+      if (next.has(branch)) next.delete(branch);
+      else next.add(branch);
+      return next;
+    });
+  }, []);
+
+  const selectedBranches = useMemo(
+    () =>
+      worktrees
+        .filter((worktree) => worktree.ahead > 0 && !deselected.has(worktree.branch))
+        .map((worktree) => worktree.branch),
+    [worktrees, deselected],
   );
+  const handlePublish = useCallback(
+    () => onPublishSelection(selectedBranches),
+    [onPublishSelection, selectedBranches],
+  );
+
   if (worktrees.length === 0) return null;
+  const isPending = (pendingBranches?.length ?? 0) > 0;
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Autres ateliers (branches de tâche)</Text>
@@ -350,17 +373,24 @@ function WorktreesSection({
           <WorktreeCard
             key={worktree.path}
             worktree={worktree}
-            onPublishBranch={onPublishBranch}
+            selected={!deselected.has(worktree.branch)}
+            onToggle={toggle}
             busy={busy}
-            pendingBranches={pendingBranches}
           />
         ))}
-        <PublishAllButton
-          branches={mergeableBranches}
-          onPublishAll={onPublishAll}
-          busy={busy}
-          pendingBranches={pendingBranches}
-        />
+        <Button
+          variant="default"
+          size="sm"
+          style={styles.worktreeButton}
+          textStyle={styles.actionButtonText}
+          onPress={handlePublish}
+          disabled={busy || selectedBranches.length === 0}
+          testID="paseo-deploy-merge-selection"
+        >
+          {isPending
+            ? "Publication en cours…"
+            : `Fusionner & publier la sélection (${selectedBranches.length})`}
+        </Button>
       </View>
     </View>
   );
@@ -399,15 +429,13 @@ function DeployStatusHeader({
 function DeployModalBody({
   status,
   error,
-  onPublishBranch,
-  onPublishAll,
+  onPublishSelection,
   busy,
   pendingBranches,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   error: string | null;
-  onPublishBranch: (branch: string) => void;
-  onPublishAll: (branches: string[]) => void;
+  onPublishSelection: (branches: string[]) => void;
   busy: boolean;
   pendingBranches: string[] | null;
 }) {
@@ -433,13 +461,13 @@ function DeployModalBody({
         daemonBehindCount={daemonBehindCount}
         changesCount={changesCount}
       />
+      <WorktreesSummary worktrees={worktrees} />
 
       <PendingFilesSection files={uncommittedFiles} />
       <PendingCommitsSection commits={unshippedCommits} />
       <WorktreesSection
         worktrees={worktrees}
-        onPublishBranch={onPublishBranch}
-        onPublishAll={onPublishAll}
+        onPublishSelection={onPublishSelection}
         busy={busy}
         pendingBranches={pendingBranches}
       />
@@ -499,15 +527,9 @@ function PaseoDeployModal({
     void trigger({ noBuild: true });
   }, [trigger]);
 
-  const handlePublishBranch = useCallback(
-    (branch: string) => {
-      void trigger({ mergeBranches: [branch] });
-    },
-    [trigger],
-  );
-
-  const handlePublishAll = useCallback(
+  const handlePublishSelection = useCallback(
     (branches: string[]) => {
+      if (branches.length === 0) return;
       void trigger({ mergeBranches: branches });
     },
     [trigger],
@@ -569,8 +591,7 @@ function PaseoDeployModal({
       <DeployModalBody
         status={status}
         error={error}
-        onPublishBranch={handlePublishBranch}
-        onPublishAll={handlePublishAll}
+        onPublishSelection={handlePublishSelection}
         busy={busy}
         pendingBranches={pendingBranches}
       />
@@ -709,10 +730,37 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface2,
   },
+  worktreeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   worktreeBranch: {
+    flex: 1,
     fontSize: theme.fontSize.sm,
     fontWeight: "700",
     color: theme.colors.foreground,
+  },
+  checkbox: {
+    width: theme.spacing[4],
+    height: theme.spacing[4],
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  checkboxDisabled: {
+    opacity: 0.4,
+  },
+  // One-line spread across ateliers, under the main tally.
+  worktreesSummary: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.foregroundMuted,
   },
   worktreeHint: {
     fontSize: theme.fontSize.xs,
