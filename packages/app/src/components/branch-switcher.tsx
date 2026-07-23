@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, GitBranch } from "lucide-react-native";
@@ -9,6 +9,8 @@ import { Combobox, ComboboxItem, type ComboboxProps } from "@/components/ui/comb
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
+import { useWorkspaceFields } from "@/stores/session-store-hooks";
+import { rememberProjectBranch } from "@/stores/project-branch-selection-store";
 
 interface BranchSwitcherProps {
   currentBranchName: string | null;
@@ -52,6 +54,17 @@ export function BranchSwitcher({
     toast,
     queryClient,
   });
+
+  // Persist the branch each project is viewing so a browser refresh restores it
+  // per project instead of resetting. Keyed by project (not workspace) so it
+  // survives even when the workspace id is remapped across reloads.
+  const projectId = useWorkspaceFields(serverId, workspaceId, (w) => w.projectId);
+  useEffect(() => {
+    if (!projectId || !currentBranchName) {
+      return;
+    }
+    rememberProjectBranch({ serverId, projectId, branch: currentBranchName });
+  }, [serverId, projectId, currentBranchName]);
 
   const handleOpen = useCallback(() => setIsOpen(true), [setIsOpen]);
 
