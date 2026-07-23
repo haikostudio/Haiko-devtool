@@ -309,6 +309,18 @@ export const ru: TranslationResources = {
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",
+      analysis: {
+        title: "Анализ задачи",
+        runtime: "Время выполнения",
+        quota: "Использовано квоты",
+        tokens: "Токены",
+        cost: "Оценочная стоимость",
+        billableHours: "Оплачиваемые часы",
+        confidence: "Уверенность",
+        confidenceLow: "Низкая",
+        confidenceMedium: "Средняя",
+        confidenceHigh: "Высокая",
+      },
       billingLine: {
         description: "Описание",
         manualHours: "Часы senior-разработчика",

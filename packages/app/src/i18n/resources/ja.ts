@@ -310,6 +310,18 @@ export const ja: TranslationResources = {
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",
+      analysis: {
+        title: "タスク分析",
+        runtime: "実行時間",
+        quota: "使用クォータ",
+        tokens: "トークン",
+        cost: "推定コスト",
+        billableHours: "請求対象時間",
+        confidence: "信頼度",
+        confidenceLow: "低",
+        confidenceMedium: "中",
+        confidenceHigh: "高",
+      },
       billingLine: {
         description: "説明",
         manualHours: "シニア開発者の工数",

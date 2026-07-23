@@ -86,6 +86,8 @@ import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-
 import { markdownNodeContainsType } from "@/utils/markdown-ast";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { TaskAnalysisCard } from "@/components/tasks/task-analysis-card";
+import { parseTaskAnalysisEstimateBlock } from "@/components/tasks/task-analysis-estimate";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
 import { parseCalloutBlock, type CalloutType, type ParsedCallout } from "@/utils/markdown-callout";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
@@ -1953,30 +1955,45 @@ export const AssistantMessage = memo(function AssistantMessage({
         _parent: ASTNode[],
         styles: MarkdownStyles,
         inheritedStyles: TextStyle = {},
-      ) => (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={null}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.code_block}
-        />
-      ),
+      ) => {
+        const estimate = parseTaskAnalysisEstimateBlock(node.content);
+        if (estimate) {
+          return <TaskAnalysisCard key={node.key} estimate={estimate} />;
+        }
+        return (
+          <HighlightedCodeBlock
+            key={node.key}
+            code={node.content}
+            language={null}
+            inheritedStyles={inheritedStyles}
+            textStyle={styles.code_block}
+          />
+        );
+      },
       fence: (
         node: ASTNode,
         _children: ReactNode[],
         _parent: ASTNode[],
         styles: MarkdownStyles,
         inheritedStyles: TextStyle = {},
-      ) => (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={node.sourceInfo}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.fence}
-        />
-      ),
+      ) => {
+        // The task-analysis agent ends its message with a ```json estimate
+        // block. Render it as a readable card (summary + numbers table) instead
+        // of raw JSON; every other fenced block keeps the normal code rendering.
+        const estimate = parseTaskAnalysisEstimateBlock(node.content);
+        if (estimate) {
+          return <TaskAnalysisCard key={node.key} estimate={estimate} />;
+        }
+        return (
+          <HighlightedCodeBlock
+            key={node.key}
+            code={node.content}
+            language={node.sourceInfo}
+            inheritedStyles={inheritedStyles}
+            textStyle={styles.fence}
+          />
+        );
+      },
       code_inline: (
         node: ASTNode,
         _children: ReactNode[],

@@ -311,6 +311,18 @@ export const es: TranslationResources = {
       collapse: "Contraer panel",
       expand: "Expandir panel",
       billing: "Facturación",
+      analysis: {
+        title: "Análisis de la tarea",
+        runtime: "Tiempo de ejecución",
+        quota: "Cuota utilizada",
+        tokens: "Tokens",
+        cost: "Coste estimado",
+        billableHours: "Horas facturables",
+        confidence: "Confianza",
+        confidenceLow: "Baja",
+        confidenceMedium: "Media",
+        confidenceHigh: "Alta",
+      },
       billingLine: {
         description: "Descripción",
         manualHours: "Horas dev sénior",

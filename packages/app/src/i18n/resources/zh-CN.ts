@@ -307,6 +307,18 @@ export const zhCN: TranslationResources = {
       collapse: "收起面板",
       expand: "展开面板",
       billing: "账单",
+      analysis: {
+        title: "任务分析",
+        runtime: "运行时间",
+        quota: "已用配额",
+        tokens: "Token",
+        cost: "预计成本",
+        billableHours: "计费工时",
+        confidence: "置信度",
+        confidenceLow: "低",
+        confidenceMedium: "中",
+        confidenceHigh: "高",
+      },
       billingLine: {
         description: "描述",
         manualHours: "资深开发工时",
