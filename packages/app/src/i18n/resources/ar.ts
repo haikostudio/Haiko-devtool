@@ -1244,6 +1244,7 @@ export const ar: TranslationResources = {
     title: "إنشاء مساحة عمل",
     errors: {
       failedCreateWorktree: "فشل في إنشاء شجرة العمل",
+      hostDiskFull: "قرص المضيف ممتلئ — حرِّر مساحة وحاول مرة أخرى",
       failedOpenProject: "فشل في فتح المشروع",
       selectModel: "اختر نموذجا",
       hostDisconnected: "Host غير متصل",

@@ -104,6 +104,9 @@ export interface ArchiveCommandInput {
   branchName?: string;
   workspaceId?: string;
   scope?: ArchiveScope["kind"];
+  // Refuse to delete the worktree directory if it still holds uncommitted
+  // changes. Set by post-deployment cleanup; defaults to force removal.
+  requireCleanWorktree?: boolean;
 }
 
 export type ArchiveCommandResult =
@@ -142,6 +145,7 @@ export async function archiveCommand(
     const result = await archiveByScope(dependencies, {
       scope: { kind: "worktree", targetPath },
       requestId: input.requestId,
+      ...(input.requireCleanWorktree ? { requireCleanWorktree: true } : {}),
     });
 
     return {

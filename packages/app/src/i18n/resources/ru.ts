@@ -1276,6 +1276,7 @@ export const ru: TranslationResources = {
     title: "Создать рабочую область",
     errors: {
       failedCreateWorktree: "Не удалось создать рабочее дерево.",
+      hostDiskFull: "На диске хоста нет места — освободите место и повторите попытку",
       failedOpenProject: "Не удалось открыть проект",
       selectModel: "Выберите модель",
       hostDisconnected: "Host не подключен",

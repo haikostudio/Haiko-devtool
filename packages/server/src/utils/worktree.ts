@@ -36,6 +36,12 @@ import { createExternalProcessEnv } from "../server/paseo-env.js";
 import { parseGitRevParsePath, resolveGitRevParsePath } from "./git-rev-parse-path.js";
 import { validateBranchSlug } from "@getpaseo/protocol/branch-slug";
 import { expandTilde, getRealpathAwareRelativePath, isPathInsideRoot } from "./path.js";
+import {
+  formatBytesShort,
+  getDiskSpaceInfo,
+  isDiskFullErrorMessage,
+  resolveWorktreeMinFreeBytes,
+} from "./disk-space.js";
 
 export { slugify, validateBranchSlug } from "@getpaseo/protocol/branch-slug";
 
@@ -126,6 +132,23 @@ export class WorktreeSetupError extends Error {
     super(message);
     this.name = "WorktreeSetupError";
     this.results = results;
+  }
+}
+
+export class DiskFullError extends Error {
+  readonly freeBytes: number;
+  readonly requiredBytes: number;
+  readonly path: string;
+
+  constructor(options: { freeBytes: number; requiredBytes: number; path: string }) {
+    super(
+      `Not enough free disk space on the host (${formatBytesShort(options.freeBytes)} free, ` +
+        `need at least ${formatBytesShort(options.requiredBytes)}) to create a workspace at ${options.path}.`,
+    );
+    this.name = "DiskFullError";
+    this.freeBytes = options.freeBytes;
+    this.requiredBytes = options.requiredBytes;
+    this.path = options.path;
   }
 }
 
@@ -1238,6 +1261,11 @@ export const createWorktree = async ({
   let worktreePath = join(await getPaseoWorktreesRoot(cwd, paseoHome, worktreesRoot), worktreeSlug);
   mkdirSync(dirname(worktreePath), { recursive: true });
 
+  // Refuse up front when the host disk is already near-full. Otherwise git
+  // fails mid-checkout with a raw "unable to write file" that surfaces to the
+  // user as an opaque error instead of a clear "host disk is full".
+  await assertWorktreeDiskSpace(dirname(worktreePath));
+
   // Also handle worktree path collision
   let finalWorktreePath = worktreePath;
   let pathSuffix = 1;
@@ -1247,10 +1275,24 @@ export const createWorktree = async ({
   }
 
   // Primitive owner for `git worktree add`; callers route through createWorktreeCore.
-  await runGitCommand(["worktree", "add", finalWorktreePath, ...sourcePlan.addArguments], {
-    cwd,
-    timeout: 120_000,
-  });
+  try {
+    await runGitCommand(["worktree", "add", finalWorktreePath, ...sourcePlan.addArguments], {
+      cwd,
+      timeout: 120_000,
+    });
+  } catch (error) {
+    // git ran out of space part-way through the checkout: translate the raw
+    // OS error into the typed disk-full error so the UI can show a clear hint.
+    if (error instanceof Error && isDiskFullErrorMessage(error.message)) {
+      const info = await getDiskSpaceInfo(dirname(worktreePath)).catch(() => null);
+      throw new DiskFullError({
+        freeBytes: info?.freeBytes ?? 0,
+        requiredBytes: resolveWorktreeMinFreeBytes(),
+        path: dirname(worktreePath),
+      });
+    }
+    throw error;
+  }
   worktreePath = normalizePathForOwnership(finalWorktreePath);
 
   if (sourcePlan.pushRemote) {
@@ -1290,6 +1332,42 @@ export const createWorktree = async ({
     worktreePath,
   };
 };
+
+/**
+ * Throw a typed {@link DiskFullError} when the filesystem holding new worktrees
+ * is below the configured free-space floor. Best-effort: if the probe itself
+ * fails we let creation proceed rather than block on a flaky stat.
+ */
+export async function assertWorktreeDiskSpace(targetDir: string): Promise<void> {
+  let freeBytes: number;
+  try {
+    ({ freeBytes } = await getDiskSpaceInfo(targetDir));
+  } catch {
+    return;
+  }
+  const requiredBytes = resolveWorktreeMinFreeBytes();
+  if (freeBytes < requiredBytes) {
+    throw new DiskFullError({ freeBytes, requiredBytes, path: targetDir });
+  }
+}
+
+/**
+ * Report whether a worktree has any staged, unstaged, or untracked changes.
+ * Used as a safety gate before auto-removing a worktree after deployment so we
+ * never discard work that was not committed. Best-effort: an unreadable
+ * worktree is treated as "dirty" so we err on the side of keeping it.
+ */
+export async function worktreeHasUncommittedChanges(worktreePath: string): Promise<boolean> {
+  try {
+    const { stdout } = await runGitCommand(["status", "--porcelain"], {
+      cwd: worktreePath,
+      envOverlay: READ_ONLY_GIT_ENV,
+    });
+    return stdout.trim().length > 0;
+  } catch {
+    return true;
+  }
+}
 
 interface ResolveWorktreeSourcePlanOptions {
   cwd: string;
