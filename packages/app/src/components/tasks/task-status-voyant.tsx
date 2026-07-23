@@ -125,13 +125,33 @@ function projectRefKey(ref: ProjectRef): string {
   return `${ref.serverId}:${ref.projectId}`;
 }
 
+// The project rail has no live board subscription, so it can't see a task move
+// into "in progress" the moment it starts. Re-poll every few seconds so a
+// project's dot lights up when a descendant starts working — and, just as
+// importantly, goes quiet again once nothing is left running.
+const PROJECT_TONE_POLL_MS = 4000;
+
+// The board of the project the user is currently viewing (already live-subscribed
+// elsewhere). Overlaid onto the polled snapshot so the selected project's dot
+// reacts instantly, with no poll delay.
+export interface LiveProjectBoard {
+  key: string;
+  tasks: KanbanTask[];
+}
+
 /**
- * Aggregate tone per project, keyed by "serverId:projectId". One-shot fetches
- * each project's board (the project rail has no live subscription) whenever the
- * set of projects changes, then rolls the tasks up against the live agent state
- * — so the agent-driven signals (waiting / running) stay current between fetches.
+ * Aggregate tone per project, keyed by "serverId:projectId". Fetches each
+ * project's board (the project rail has no live subscription) whenever the set of
+ * projects changes, then keeps polling on an interval so state that lives on the
+ * board (a task entering the in-progress column, a schedule launching) surfaces
+ * on the parent project — not just the live agent signals. `liveBoard`, when
+ * given, overrides the polled snapshot for the currently-viewed project so its
+ * dot animates the instant a child starts.
  */
-export function useProjectToneMap(projects: ProjectRef[]): Map<string, TaskTone | null> {
+export function useProjectToneMap(
+  projects: ProjectRef[],
+  liveBoard?: LiveProjectBoard | null,
+): Map<string, TaskTone | null> {
   const bucketMap = useAgentBucketMap();
   const [tasksByProject, setTasksByProject] = useState<Map<string, KanbanTask[]>>(() => new Map());
   const projectsRef = useRef(projects);
@@ -164,8 +184,10 @@ export function useProjectToneMap(projects: ProjectRef[]): Map<string, TaskTone 
       }
     };
     void load();
+    const timer = setInterval(load, PROJECT_TONE_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [projectKey]);
 
@@ -174,8 +196,15 @@ export function useProjectToneMap(projects: ProjectRef[]): Map<string, TaskTone 
     for (const [key, tasks] of tasksByProject) {
       result.set(key, aggregateTaskTones(tasks.map((task) => toneOf(task, bucketMap))));
     }
+    // The viewed project's live board wins over its (possibly stale) polled copy.
+    if (liveBoard) {
+      result.set(
+        liveBoard.key,
+        aggregateTaskTones(liveBoard.tasks.map((task) => toneOf(task, bucketMap))),
+      );
+    }
     return result;
-  }, [tasksByProject, bucketMap]);
+  }, [tasksByProject, bucketMap, liveBoard]);
 }
 
 // Vertical hop (px) of the attention bounce, and how often it repeats — kept in
