@@ -101,6 +101,19 @@ export class TasksSession {
         type: "tasks.board.subscribe.response",
         payload: { requestId: request.requestId, board, error: null },
       });
+      // Also deliver the current snapshot on the push channel. A client that
+      // re-subscribes after a transparent reconnect does not apply the
+      // correlated response above (the board hook is not the caller there), so
+      // this push is what refreshes its view and surfaces any task created
+      // while the socket was down.
+      this.host.emit({
+        type: "tasks.board.update",
+        payload: {
+          subscriptionId: request.subscriptionId,
+          projectId: request.projectId,
+          board,
+        },
+      });
     } catch (error) {
       this.emitRpcError(request, error);
     }

@@ -1109,6 +1109,13 @@ export class DaemonClient {
     }
   >();
   private terminalDirectorySubscriptions = new Map<string, { cwd: string; workspaceId?: string }>();
+  // Live kanban board subscriptions, keyed by subscriptionId. Re-armed on
+  // reconnect: the daemon drops all task subscriptions when the socket closes,
+  // and the React board hook does not re-run on a transparent reconnect (the
+  // client instance is stable), so without this the board would go silently
+  // stale — new tasks (e.g. created by the conductor) only appear after a manual
+  // page refresh.
+  private tasksBoardSubscriptions = new Map<string, { projectId: string }>();
   private readonly terminalStreams = new TerminalStreamRouter();
   private pendingBinaryFileReads = new Map<string, PendingBinaryFileRead>();
   private activeBinaryFileTransfers = new Map<string, BinaryFileTransferState>();
@@ -2452,6 +2459,23 @@ export class DaemonClient {
         ...(subscription.workspaceId !== undefined
           ? { workspaceId: subscription.workspaceId }
           : {}),
+      });
+    }
+  }
+
+  private resubscribeTasksBoardSubscriptions(): void {
+    if (this.tasksBoardSubscriptions.size === 0) {
+      return;
+    }
+    for (const [subscriptionId, subscription] of this.tasksBoardSubscriptions) {
+      // Fire-and-forget re-subscribe. The daemon answers with a fresh board on
+      // the push channel (tasks.board.update), which the board hook applies, so
+      // any task created while the socket was down shows up without a refresh.
+      this.sendSessionMessage({
+        type: "tasks.board.subscribe.request",
+        projectId: subscription.projectId,
+        subscriptionId,
+        requestId: this.createRequestId(),
       });
     }
   }
@@ -4494,6 +4518,8 @@ export class DaemonClient {
   }
 
   async tasksBoardSubscribe(projectId: string, subscriptionId: string, requestId?: string) {
+    // Remember the subscription so it can be re-armed after a reconnect.
+    this.tasksBoardSubscriptions.set(subscriptionId, { projectId });
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.subscribe.response">({
       requestId,
       message: { type: "tasks.board.subscribe.request", projectId, subscriptionId },
@@ -4501,6 +4527,7 @@ export class DaemonClient {
   }
 
   async tasksBoardUnsubscribe(subscriptionId: string, requestId?: string) {
+    this.tasksBoardSubscriptions.delete(subscriptionId);
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.unsubscribe.response">({
       requestId,
       message: { type: "tasks.board.unsubscribe.request", subscriptionId },
@@ -5756,6 +5783,7 @@ export class DaemonClient {
           this.startLivenessHeartbeat();
           this.resubscribeCheckoutDiffSubscriptions();
           this.resubscribeTerminalDirectorySubscriptions();
+          this.resubscribeTasksBoardSubscriptions();
           this.flushPendingSendQueue();
           this.resolveConnect();
         }
