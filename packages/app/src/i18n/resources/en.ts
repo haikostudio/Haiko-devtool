@@ -306,6 +306,18 @@ export const en = {
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",
+      analysis: {
+        title: "Task analysis",
+        runtime: "Runtime",
+        quota: "Quota used",
+        tokens: "Tokens",
+        cost: "Estimated cost",
+        billableHours: "Billable hours",
+        confidence: "Confidence",
+        confidenceLow: "Low",
+        confidenceMedium: "Medium",
+        confidenceHigh: "High",
+      },
       billingLine: {
         description: "Description",
         manualHours: "Senior-dev hours",

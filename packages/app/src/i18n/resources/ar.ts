@@ -307,6 +307,18 @@ export const ar: TranslationResources = {
       collapse: "طي اللوحة",
       expand: "توسيع اللوحة",
       billing: "الفوترة",
+      analysis: {
+        title: "تحليل المهمة",
+        runtime: "وقت التنفيذ",
+        quota: "الحصة المستخدمة",
+        tokens: "الرموز",
+        cost: "التكلفة المقدرة",
+        billableHours: "ساعات قابلة للفوترة",
+        confidence: "الثقة",
+        confidenceLow: "منخفضة",
+        confidenceMedium: "متوسطة",
+        confidenceHigh: "عالية",
+      },
       billingLine: {
         description: "Description",
         manualHours: "Senior-dev hours",

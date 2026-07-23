@@ -311,6 +311,18 @@ export const ptBR: TranslationResources = {
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",
+      analysis: {
+        title: "Análise da tarefa",
+        runtime: "Tempo de execução",
+        quota: "Cota utilizada",
+        tokens: "Tokens",
+        cost: "Custo estimado",
+        billableHours: "Horas faturáveis",
+        confidence: "Confiança",
+        confidenceLow: "Baixa",
+        confidenceMedium: "Média",
+        confidenceHigh: "Alta",
+      },
       billingLine: {
         description: "Descrição",
         manualHours: "Horas dev sênior",
