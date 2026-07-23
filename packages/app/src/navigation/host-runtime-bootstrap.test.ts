@@ -392,33 +392,33 @@ describe("resolveHostIndexRoute", () => {
     ).toEqual("/h/server-saved/workspace/workspace-a");
   });
 
-  it("opens global project selection when the remembered workspace is proven missing", () => {
+  it("opens the task board when the remembered workspace is proven missing", () => {
     expect(
       resolveHostIndexRoute({
         serverId: "server-saved",
         workspaceSelection: { serverId: "server-saved", workspaceId: "workspace-a" },
         workspaceSelectionStatus: "missing",
       }),
-    ).toEqual("/open-project");
+    ).toEqual("/tasks?host=server-saved");
   });
 
-  it("opens global project selection when the remembered workspace belongs to another host", () => {
+  it("opens the task board when the remembered workspace belongs to another host", () => {
     expect(
       resolveHostIndexRoute({
         serverId: "server-saved",
         workspaceSelection: { serverId: "server-other", workspaceId: "workspace-a" },
         workspaceSelectionStatus: "exists",
       }),
-    ).toEqual("/open-project");
+    ).toEqual("/tasks?host=server-saved");
   });
 
-  it("opens global project selection when no workspace is remembered", () => {
+  it("opens the task board when no workspace is remembered", () => {
     expect(
       resolveHostIndexRoute({
         serverId: "server-saved",
         workspaceSelection: null,
         workspaceSelectionStatus: "unknown",
       }),
-    ).toEqual("/open-project");
+    ).toEqual("/tasks?host=server-saved");
   });
 });
