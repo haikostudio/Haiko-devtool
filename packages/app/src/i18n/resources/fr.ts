@@ -296,6 +296,7 @@ export const fr: TranslationResources = {
       now: "Maintenant",
       inProgress: "En cours",
       quotaWindow: "Quota 5 h",
+      noBranchToSwitch: "Cette tâche n'a pas encore de branche — rien à afficher.",
     },
     view: {
       board: "Tableau",

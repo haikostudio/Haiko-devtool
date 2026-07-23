@@ -292,6 +292,7 @@ export const zhCN: TranslationResources = {
       now: "现在",
       inProgress: "进行中",
       quotaWindow: "5 小时配额",
+      noBranchToSwitch: "此任务还没有分支 — 无可切换。",
     },
     view: {
       board: "看板",

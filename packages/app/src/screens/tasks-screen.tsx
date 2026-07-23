@@ -29,6 +29,7 @@ import {
   Zap,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader, SidebarMenuToggle } from "@/components/headers/menu-header";
@@ -66,9 +67,16 @@ import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { PaseoDeployButton } from "@/git/paseo-deploy-button";
+import { useCheckoutStatusQuery } from "@/git/use-status-query";
+import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import {
+  getHostRuntimeStore,
+  useHostRuntimeClient,
+  useHostRuntimeIsConnected,
+  useHosts,
+} from "@/runtime/host-runtime";
 import { rememberProjectBranch } from "@/stores/project-branch-selection-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
@@ -220,6 +228,22 @@ interface ProjectEntry {
   rootPath: string;
   /** Epoch ms of the most recent agent activity in this project (0 if none). */
   lastActivityAt: number;
+}
+
+// The project's checkout directory, used as the cwd for the active branch switch
+// a timeline tap performs. Null when the project isn't in the loaded set yet.
+function findProjectRootPath(
+  projects: ProjectEntry[],
+  serverId: string | null,
+  projectId: string | null,
+): string | null {
+  if (!serverId || !projectId) {
+    return null;
+  }
+  return (
+    projects.find((entry) => entry.serverId === serverId && entry.projectId === projectId)
+      ?.rootPath ?? null
+  );
 }
 
 function rowItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
@@ -594,6 +618,7 @@ function DesktopLayout({
         key={`${serverId}:${projectId}:${folderId}`}
         serverId={serverId}
         projectId={projectId}
+        projectRootPath={findProjectRootPath(projects, serverId, projectId)}
         folderId={folderId}
         boardHandle={boardHandle}
       />
@@ -991,19 +1016,50 @@ const renderTimelineIcon = ({ color, size }: { color: string; size: number }) =>
 function BoardContent({
   serverId,
   projectId,
+  projectRootPath,
   folderId,
   boardHandle,
 }: {
   serverId: string | null;
   projectId: string | null;
+  projectRootPath: string | null;
   folderId: string;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const isCompact = useIsCompactFormFactor();
   const { config } = useDaemonConfig(serverId);
   const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
+
+  // The active branch switch operates on the project's main checkout (its root
+  // path). We reuse the very hook the sidebar branch switcher drives, so a
+  // timeline tap performs the exact same real checkout — stash prompt, toasts and
+  // query invalidation included — not just a note for next reload.
+  const branchSwitchServerId = serverId ?? "";
+  const checkoutCwd = projectRootPath ?? "";
+  const client = useHostRuntimeClient(branchSwitchServerId);
+  const isConnected = useHostRuntimeIsConnected(branchSwitchServerId);
+  const { status: checkoutStatus } = useCheckoutStatusQuery({
+    serverId: branchSwitchServerId,
+    cwd: checkoutCwd,
+  });
+  const currentBranchName =
+    checkoutStatus?.currentBranch && checkoutStatus.currentBranch !== "HEAD"
+      ? checkoutStatus.currentBranch
+      : null;
+  const { handleBranchSelect } = useBranchSwitcher({
+    client,
+    normalizedServerId: branchSwitchServerId,
+    normalizedWorkspaceId: projectId ?? checkoutCwd,
+    workspaceDirectory: checkoutCwd || null,
+    currentBranchName,
+    isGitCheckout: Boolean(checkoutCwd),
+    isConnected,
+    toast,
+    queryClient,
+  });
   // Tapping a task on a host without the conductor opens its Details+Billing
   // drawer directly. The drawer itself lives at the screen root (TasksDetailDock)
   // so it docks beside the conductor chat and stacks above it, never behind.
@@ -1064,12 +1120,13 @@ function BoardContent({
   );
 
   // Tapping a task on the timeline does everything a card tap does (open its
-  // drawer/dock) AND points the project at that task's git branch, so the strip
-  // above the board doubles as a branch picker. We reuse the per-project branch
-  // memory the sidebar switcher already writes to (project-branch-selection), so
-  // a reload restores the same branch. A task's branch is the one its agent runs
-  // on once launched (links.branch), falling back to its folder's shared branch;
-  // an un-launched task with neither just opens its drawer.
+  // drawer/dock) AND immediately switches the project onto that task's git branch
+  // — the same active checkout the sidebar branch switcher performs, not just a
+  // note read back on reload. A task's branch is the one its agent runs on once
+  // launched (links.branch), falling back to its folder's shared branch. When a
+  // task has neither (agent not launched, no folder branch) we only open the
+  // drawer and say so discreetly. Persistence is kept on top of the live switch,
+  // so a reload still restores the same branch.
   const handlePressTimelineTask = useCallback(
     (task: KanbanTask) => {
       handlePressTask(task);
@@ -1078,11 +1135,14 @@ function BoardContent({
       }
       const folder = boardHandle.board?.folders.find((entry) => entry.id === task.folderId);
       const branch = task.links.branch ?? folder?.branch ?? null;
-      if (branch) {
-        rememberProjectBranch({ serverId, projectId, branch });
+      if (!branch) {
+        toast.show(t("tasks.gantt.noBranchToSwitch"));
+        return;
       }
+      handleBranchSelect(branch);
+      rememberProjectBranch({ serverId, projectId, branch });
     },
-    [handlePressTask, serverId, projectId, boardHandle.board],
+    [handlePressTask, serverId, projectId, boardHandle.board, handleBranchSelect, toast, t],
   );
 
   const handleCancelNewTask = useCallback(() => {
@@ -1465,6 +1525,7 @@ function CompactFlow({
       <BoardContent
         serverId={serverId}
         projectId={projectId}
+        projectRootPath={findProjectRootPath(projects, serverId, projectId)}
         folderId={folderId}
         boardHandle={boardHandle}
       />

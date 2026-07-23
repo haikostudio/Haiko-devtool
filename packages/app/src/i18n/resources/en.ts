@@ -291,6 +291,7 @@ export const en = {
       now: "Now",
       inProgress: "Running",
       quotaWindow: "5h quota",
+      noBranchToSwitch: "This task has no branch yet — nothing to switch to.",
     },
     view: {
       board: "Board",
