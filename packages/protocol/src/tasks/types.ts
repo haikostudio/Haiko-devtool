@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentAttachmentSchema } from "../attachments.js";
 
 // Kanban task board — per-project task management.
 // Wire schemas are pure structural declarations (no transforms/defaults on containers).
@@ -111,6 +112,11 @@ export const KanbanTaskSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   tags: z.array(z.string()),
+  // Files/context the user attached when composing the task's prompt. Persisted
+  // so the pipeline agent receives them (as prompt content blocks) when the task
+  // is later analyzed/executed — the same attachment shape as a chat message.
+  // Optional + additive: old boards/clients simply omit it.
+  attachments: z.array(AgentAttachmentSchema).optional(),
   column: TaskColumnSchema,
   order: z.number().int(),
   origin: z.enum(["manual", "agent_sync"]),

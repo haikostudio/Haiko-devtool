@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
+import type { AgentPromptInput } from "../agent/agent-sdk-types.js";
+import { buildAgentPrompt } from "../agent/prompt-attachments.js";
 
 // Label stamped on every agent Paseo spawns for a task, so task agents are
 // identifiable across the daemon (and excluded from Cerveau self-recursion).
@@ -274,4 +276,20 @@ export function buildTaskExecutionPrompt(input: {
   return [intro, "", ...taskHeader(task), "", ...instructions]
     .filter((line) => line !== "")
     .join("\n");
+}
+
+/**
+ * Fold any files/context the user attached when composing the task into the
+ * agent prompt, as content blocks — the same shape a chat message carries. When
+ * the task has no attachments this is a no-op (returns the plain text), so the
+ * common path is unchanged. Called once at analysis time (and on the legacy
+ * execution path); since analysis and execution share one conversation, the
+ * agent keeps the attachments in context for the execution turn.
+ */
+export function withTaskAttachments(prompt: string, task: KanbanTask): AgentPromptInput {
+  const attachments = task.attachments;
+  if (!attachments || attachments.length === 0) {
+    return prompt;
+  }
+  return buildAgentPrompt(prompt, undefined, attachments);
 }

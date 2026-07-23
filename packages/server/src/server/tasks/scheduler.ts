@@ -12,6 +12,7 @@ import {
   resolveTaskLaunch,
   resolveTaskWorktreePlan,
   TASK_AGENT_LABEL,
+  withTaskAttachments,
 } from "./agent-launch.js";
 
 export { TASK_AGENT_LABEL } from "./agent-launch.js";
@@ -562,7 +563,13 @@ export class TaskScheduler {
 
       // Cerveau recall + injection happen inside runAgent (AgentManager choke
       // point) — same path as interactive prompts, yellow pill included.
-      const prompt = buildTaskExecutionPrompt({ task, planMode, branch });
+      // Re-fold attachments here too: on the legacy path (no analysis agent) the
+      // freshly-created agent has never seen them, and re-sending on the common
+      // path is harmless (the file blocks are small path references).
+      const prompt = withTaskAttachments(
+        buildTaskExecutionPrompt({ task, planMode, branch }),
+        task,
+      );
       const result = await this.agentManager.runAgent(agentId, prompt);
       if (result.canceled) {
         // A cancellation isn't a task failure — it usually means the run was

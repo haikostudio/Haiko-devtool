@@ -63,6 +63,7 @@ import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/s
 import { useToast } from "@/contexts/toast-context";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
+import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
@@ -967,6 +968,18 @@ function CenteredNote({ text }: { text: string }) {
 // Gantt gets full height when picked.
 type CompactBoardView = "board" | "timeline";
 
+// A task's title is the first non-empty line of its prompt, trimmed of leading
+// list markers and capped so the kanban card stays one line. The full prompt is
+// kept as the description; the analysis agent refines the title later.
+const MAX_DERIVED_TITLE_CHARS = 80;
+function deriveTaskTitle(prompt: string): string {
+  const firstLine = prompt.split("\n").find((line) => line.trim().length > 0) ?? "";
+  const cleaned = firstLine.replace(/^\s*(?:[-*+•]|\[[ xX]\]|\d+[.)])\s*/, "").trim();
+  return cleaned.length > MAX_DERIVED_TITLE_CHARS
+    ? `${cleaned.slice(0, MAX_DERIVED_TITLE_CHARS).trimEnd()}…`
+    : cleaned;
+}
+
 const renderBoardIcon = ({ color, size }: { color: string; size: number }) => (
   <LayoutGrid color={color} size={size} />
 );
@@ -1054,16 +1067,25 @@ function BoardContent({
   }, []);
 
   const handleCreateTask = useCallback(
-    ({ title, description }: { title: string; description: string }) => {
+    ({ text, attachments }: { text: string; attachments: AgentAttachment[] }) => {
       if (!newTaskColumn) {
         return;
       }
       const targetColumn = newTaskColumn;
+      // The prompt IS the task: derive a short title from its first line and
+      // keep the full prompt as the description the pipeline agent works from.
+      // No prompt text means there's nothing to describe — treat it as a cancel.
+      const title = deriveTaskTitle(text);
+      if (!title) {
+        setNewTaskColumn(null);
+        return;
+      }
       setNewTaskColumn(null);
       void boardHandle.createTask({
         folderId,
         title,
-        ...(description ? { description } : {}),
+        description: text,
+        ...(attachments.length > 0 ? { attachments } : {}),
         column: targetColumn,
       });
     },
@@ -1072,13 +1094,21 @@ function BoardContent({
 
   const columnExtras = useMemo(
     () =>
-      newTaskColumn
+      newTaskColumn && serverId
         ? {
             column: newTaskColumn,
-            node: <NewTaskCard onSubmit={handleCreateTask} onCancel={handleCancelNewTask} />,
+            node: (
+              <NewTaskCard
+                serverId={serverId}
+                cwd=""
+                draftKey={`tasks-new:${folderId}:${newTaskColumn}`}
+                onSubmit={handleCreateTask}
+                onCancel={handleCancelNewTask}
+              />
+            ),
           }
         : null,
-    [newTaskColumn, handleCreateTask, handleCancelNewTask],
+    [newTaskColumn, serverId, folderId, handleCreateTask, handleCancelNewTask],
   );
 
   const handleEstimateTask = useCallback(
