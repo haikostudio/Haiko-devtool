@@ -352,6 +352,14 @@ export const zhCN: TranslationResources = {
     newFolderPlaceholder: "新文件夹名称",
     newTaskPlaceholder: "任务标题",
     newTaskDescriptionPlaceholder: "描述（可选）",
+    newTaskModal: {
+      title: "新建任务",
+      promptPlaceholder: "描述要执行的任务…",
+      submit: "创建任务",
+      addAttachment: "添加附件",
+      attachment: "附件",
+      removeAttachment: "移除附件",
+    },
     folderModal: {
       title: "新建文件夹",
       editTitle: "编辑文件夹",

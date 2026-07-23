@@ -5,6 +5,7 @@ import {
   TaskBoardSchema,
   TaskColumnSchema,
   TaskFolderSchema,
+  TaskImageAttachmentSchema,
   TaskRunConfigSchema,
   TaskSchedulePreferenceSchema,
 } from "./types.js";
@@ -72,6 +73,8 @@ export const TasksTaskCreateRequestSchema = z.object({
   column: TaskColumnSchema.optional(),
   runConfig: TaskRunConfigSchema.optional(),
   schedulePreference: TaskSchedulePreferenceSchema.optional(),
+  // Pictures attached in the "add task" card, forwarded to the background agent.
+  images: z.array(TaskImageAttachmentSchema).optional(),
 });
 
 export const TasksTaskUpdateRequestSchema = z.object({

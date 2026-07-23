@@ -352,6 +352,14 @@ export const ar: TranslationResources = {
     newFolderPlaceholder: "اسم المجلد الجديد",
     newTaskPlaceholder: "عنوان المهمة",
     newTaskDescriptionPlaceholder: "الوصف (اختياري)",
+    newTaskModal: {
+      title: "مهمة جديدة",
+      promptPlaceholder: "صِف المهمة المطلوب تنفيذها…",
+      submit: "إنشاء المهمة",
+      addAttachment: "إضافة مرفق",
+      attachment: "مرفق",
+      removeAttachment: "إزالة المرفق",
+    },
     folderModal: {
       title: "مجلد جديد",
       editTitle: "تعديل المجلد",

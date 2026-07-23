@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus } from "lucide-react-native";
+import { Paperclip } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -37,7 +37,11 @@ import {
 } from "./kanban-columns";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ThemedPlus = withUnistyles(Plus);
+const ThemedPaperclip = withUnistyles(Paperclip);
+
+// Tasks are only ever added to the "Affaire" (backlog) column — the entry point
+// of the board — so the add control lives on that column alone.
+const ADD_TASK_COLUMN: TaskColumn = "backlog";
 
 const COLUMN_DROPPABLE_PREFIX = "column:";
 // Desktop: drag starts after a small pointer travel so plain clicks still
@@ -261,16 +265,18 @@ const DroppableColumn = memo(function DroppableColumn({
         <Text style={styles.columnTitle}>{label}</Text>
         <Text style={styles.columnCount}>{tasks.length}</Text>
         <View style={styles.columnHeaderSpacer} />
-        <Pressable
-          onPress={handleAddTask}
-          style={addButtonStyle}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t("tasks.actions.addTask")}
-          testID={`tasks-add-${column}`}
-        >
-          <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        </Pressable>
+        {column === ADD_TASK_COLUMN ? (
+          <Pressable
+            onPress={handleAddTask}
+            style={addButtonStyle}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.actions.addTask")}
+            testID={`tasks-add-${column}`}
+          >
+            <ThemedPaperclip size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          </Pressable>
+        ) : null}
       </View>
       <BoardColumnToolbar
         board={board}

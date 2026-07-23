@@ -3,6 +3,7 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import {
   ANALYSIS_FALLBACK_ESTIMATE,
   buildTaskAnalysisPrompt,
+  buildTaskExecutionPrompt,
   parseTaskAnalysisEstimate,
 } from "./agent-launch.js";
 
@@ -59,6 +60,36 @@ describe("task analysis estimation", () => {
       branch: "task/login",
     });
     expect(prompt).toContain("Agent d'exécution : claude");
+  });
+
+  test("a task with no images yields a plain string prompt (unchanged)", () => {
+    expect(
+      typeof buildTaskAnalysisPrompt({ task: makeTask(), planMode: false, branch: null }),
+    ).toBe("string");
+    expect(
+      typeof buildTaskExecutionPrompt({ task: makeTask(), planMode: false, branch: null }),
+    ).toBe("string");
+  });
+
+  test("attached pictures ride along as image blocks after the task text", () => {
+    const task = makeTask({
+      images: [
+        { data: "aGVsbG8=", mimeType: "image/png" },
+        { data: "d29ybGQ=", mimeType: "image/jpeg" },
+      ],
+    });
+    for (const prompt of [
+      buildTaskAnalysisPrompt({ task, planMode: false, branch: "task/login" }),
+      buildTaskExecutionPrompt({ task, planMode: false, branch: "task/login" }),
+    ]) {
+      expect(Array.isArray(prompt)).toBe(true);
+      const blocks = prompt as Array<{ type: string; text?: string; data?: string }>;
+      // Text first, then one image block per attachment in order.
+      expect(blocks[0]?.type).toBe("text");
+      expect(blocks[0]?.text).toContain("Ajouter la connexion");
+      expect(blocks.slice(1).map((block) => block.type)).toEqual(["image", "image"]);
+      expect(blocks[1]?.data).toBe("aGVsbG8=");
+    }
   });
 
   test("parses a trailing json estimate with both dimensions", () => {

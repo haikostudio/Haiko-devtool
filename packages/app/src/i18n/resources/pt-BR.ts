@@ -358,6 +358,14 @@ export const ptBR: TranslationResources = {
     newFolderPlaceholder: "Nome da nova pasta",
     newTaskPlaceholder: "Título da tarefa",
     newTaskDescriptionPlaceholder: "Descrição (opcional)",
+    newTaskModal: {
+      title: "Nova tarefa",
+      promptPlaceholder: "Descreva a tarefa a realizar…",
+      submit: "Criar tarefa",
+      addAttachment: "Adicionar anexo",
+      attachment: "Anexo",
+      removeAttachment: "Remover anexo",
+    },
     folderModal: {
       title: "Nova pasta",
       editTitle: "Editar pasta",

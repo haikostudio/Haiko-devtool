@@ -184,6 +184,7 @@ export class TasksSession {
         ...(request.description !== undefined ? { description: request.description } : {}),
         ...(request.tags !== undefined ? { tags: request.tags } : {}),
         ...(request.column !== undefined ? { column: request.column } : {}),
+        ...(request.images !== undefined ? { images: request.images } : {}),
         ...(request.runConfig !== undefined ? { runConfig: request.runConfig } : {}),
         ...(request.schedulePreference !== undefined
           ? { schedulePreference: request.schedulePreference }

@@ -354,6 +354,14 @@ export const ru: TranslationResources = {
     newFolderPlaceholder: "Имя новой папки",
     newTaskPlaceholder: "Название задачи",
     newTaskDescriptionPlaceholder: "Описание (необязательно)",
+    newTaskModal: {
+      title: "Новая задача",
+      promptPlaceholder: "Опишите задачу для выполнения…",
+      submit: "Создать задачу",
+      addAttachment: "Добавить вложение",
+      attachment: "Вложение",
+      removeAttachment: "Удалить вложение",
+    },
     folderModal: {
       title: "Новая папка",
       editTitle: "Изменить папку",

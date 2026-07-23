@@ -356,6 +356,14 @@ export const ja: TranslationResources = {
     newFolderPlaceholder: "新しいフォルダー名",
     newTaskPlaceholder: "タスクのタイトル",
     newTaskDescriptionPlaceholder: "説明（任意）",
+    newTaskModal: {
+      title: "新しいタスク",
+      promptPlaceholder: "実行するタスクを説明してください…",
+      submit: "タスクを作成",
+      addAttachment: "添付ファイルを追加",
+      attachment: "添付ファイル",
+      removeAttachment: "添付ファイルを削除",
+    },
     folderModal: {
       title: "新しいフォルダー",
       editTitle: "フォルダーを編集",

@@ -4,12 +4,20 @@ import type {
   TaskBilling,
   TaskBoard,
   TaskColumn,
+  TaskImageAttachment,
   TaskRunConfig,
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
-export type { TaskBilling, TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
+export type {
+  TaskBilling,
+  TaskBoard,
+  TaskColumn,
+  TaskImageAttachment,
+  TaskRunConfig,
+  TaskSchedulePreference,
+};
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 function createSubscriptionId(): string {
@@ -40,6 +48,7 @@ export interface TaskBoardHandle {
     title: string;
     description?: string;
     column?: TaskColumn;
+    images?: TaskImageAttachment[];
   }) => Promise<void>;
   updateTask: (input: {
     taskId: string;
@@ -192,6 +201,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       title: string;
       description?: string;
       column?: TaskColumn;
+      images?: TaskImageAttachment[];
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskCreate({ projectId: project, ...input });

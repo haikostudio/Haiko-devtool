@@ -6,6 +6,7 @@ import type {
   TaskBoard,
   TaskColumn,
   TaskFolder,
+  TaskImageAttachment,
   TaskRunConfig,
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
@@ -80,6 +81,8 @@ interface CreateTaskInput {
   schedulePreference?: TaskSchedulePreference;
   // "pending" gates the scheduler until the user approves (agent proposals).
   approval?: TaskApproval;
+  // Pictures attached in the board's "add task" card, handed to the agent.
+  images?: TaskImageAttachment[];
 }
 
 interface MoveTaskInput {
@@ -326,6 +329,7 @@ export class TaskBoardService {
         column,
         order: siblings.length,
         origin: input.origin ?? "manual",
+        ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
         normalizedTitle: normalizeTaskTitle(input.title),
         ...(input.runConfig !== undefined ? { runConfig: input.runConfig } : {}),
         ...(input.schedulePreference !== undefined

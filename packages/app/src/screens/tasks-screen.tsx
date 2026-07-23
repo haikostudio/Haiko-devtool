@@ -45,7 +45,7 @@ import {
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { TaskGantt } from "@/components/tasks/task-gantt";
-import { NewTaskCard } from "@/components/tasks/new-task-card";
+import { NewTaskModal, type NewTaskSubmit } from "@/components/tasks/new-task-card";
 import {
   AgentBucketProvider,
   TaskStatusVoyant,
@@ -72,6 +72,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { deleteAttachments } from "@/attachments/service";
+import { encodeImages } from "@/utils/encode-images";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
 
@@ -1054,31 +1056,35 @@ function BoardContent({
   }, []);
 
   const handleCreateTask = useCallback(
-    ({ title, description }: { title: string; description: string }) => {
+    ({ prompt, images }: NewTaskSubmit) => {
       if (!newTaskColumn) {
         return;
       }
       const targetColumn = newTaskColumn;
       setNewTaskColumn(null);
-      void boardHandle.createTask({
-        folderId,
-        title,
-        ...(description ? { description } : {}),
-        column: targetColumn,
-      });
+      // The prompt IS the task: its first line becomes the card title (kept
+      // short), the whole prompt becomes the description the analysis agent
+      // reads. Pictures are encoded to base64 off the main flow, then the task
+      // is created — creation kicks off the background analysis agent, and the
+      // real card replaces the modal via the board push.
+      const { title, description } = deriveTaskFromPrompt(prompt);
+      void (async () => {
+        const encoded = await encodeImages(images);
+        await boardHandle.createTask({
+          folderId,
+          title,
+          ...(description ? { description } : {}),
+          ...(encoded && encoded.length > 0 ? { images: encoded } : {}),
+          column: targetColumn,
+        });
+        // The bytes now live on the task server-side; drop the local copies so
+        // no orphan attachments pile up in the client store.
+        if (images.length > 0) {
+          await deleteAttachments(images);
+        }
+      })();
     },
     [newTaskColumn, folderId, boardHandle],
-  );
-
-  const columnExtras = useMemo(
-    () =>
-      newTaskColumn
-        ? {
-            column: newTaskColumn,
-            node: <NewTaskCard onSubmit={handleCreateTask} onCancel={handleCancelNewTask} />,
-          }
-        : null,
-    [newTaskColumn, handleCreateTask, handleCancelNewTask],
   );
 
   const handleEstimateTask = useCallback(
@@ -1138,13 +1144,36 @@ function BoardContent({
           onAddTask={setNewTaskColumn}
           onRunTask={handleRunTaskNow}
           onReanalyzeTask={handleEstimateTask}
-          columnExtras={columnExtras}
         />
       ) : null}
+      <NewTaskModal
+        visible={newTaskColumn !== null}
+        onClose={handleCancelNewTask}
+        onSubmit={handleCreateTask}
+      />
     </View>
   );
 
   return <TaskScheduleProvider value={quietHours}>{boardStack}</TaskScheduleProvider>;
+}
+
+// The prompt typed in the "add task" card IS the task. Its first non-empty line
+// becomes a short card title; the full prompt is kept as the description so the
+// analysis agent reads exactly what the user wrote.
+const NEW_TASK_TITLE_MAX = 80;
+function deriveTaskFromPrompt(prompt: string): { title: string; description: string } {
+  const firstLine =
+    prompt
+      .split("\n")
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? prompt;
+  const title =
+    firstLine.length > NEW_TASK_TITLE_MAX
+      ? `${firstLine.slice(0, NEW_TASK_TITLE_MAX - 1).trimEnd()}…`
+      : firstLine;
+  // Only carry a description when it adds something beyond the title.
+  const description = prompt.trim() === title ? "" : prompt.trim();
+  return { title, description };
 }
 
 // Task actions bound to a board handle, shared by the conductor dock (its

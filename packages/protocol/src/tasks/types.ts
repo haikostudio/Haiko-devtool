@@ -105,6 +105,16 @@ export const TaskLinksSchema = z.object({
 });
 export type TaskLinks = z.infer<typeof TaskLinksSchema>;
 
+// A picture attached to a task when it was created from the board's "add task"
+// card. Stored inline as base64 (same wire shape the agent prompt uses) so the
+// background agent that analyzes/executes the task receives it as an image
+// block. Kept small: the composer compresses images before they land here.
+export const TaskImageAttachmentSchema = z.object({
+  data: z.string(), // base64-encoded image bytes
+  mimeType: z.string(), // e.g. "image/jpeg", "image/png"
+});
+export type TaskImageAttachment = z.infer<typeof TaskImageAttachmentSchema>;
+
 export const KanbanTaskSchema = z.object({
   id: z.string(),
   folderId: z.string(),
@@ -114,6 +124,10 @@ export const KanbanTaskSchema = z.object({
   column: TaskColumnSchema,
   order: z.number().int(),
   origin: z.enum(["manual", "agent_sync"]),
+  // Pictures attached at creation time (board "add task" card). Optional and
+  // additive: legacy tasks and clients omit it. Handed to the task's background
+  // agent as image blocks alongside the task text.
+  images: z.array(TaskImageAttachmentSchema).optional(),
   // Dedupe key for agent-sync: lowercase, trimmed, bullets/punctuation stripped.
   normalizedTitle: z.string(),
   estimate: TaskEstimateSchema.nullable().optional(),

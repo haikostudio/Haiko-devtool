@@ -358,6 +358,14 @@ export const fr: TranslationResources = {
     newFolderPlaceholder: "Nom de la nouvelle branche",
     newTaskPlaceholder: "Titre de la tâche",
     newTaskDescriptionPlaceholder: "Description (optionnelle)",
+    newTaskModal: {
+      title: "Nouvelle tâche",
+      promptPlaceholder: "Décrivez la tâche à réaliser…",
+      submit: "Créer la tâche",
+      addAttachment: "Ajouter une pièce jointe",
+      attachment: "Pièce jointe",
+      removeAttachment: "Retirer la pièce jointe",
+    },
     folderModal: {
       title: "Nouvelle branche",
       editTitle: "Modifier la branche",

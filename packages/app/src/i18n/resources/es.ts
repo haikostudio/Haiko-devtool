@@ -358,6 +358,14 @@ export const es: TranslationResources = {
     newFolderPlaceholder: "Nombre de la carpeta",
     newTaskPlaceholder: "Título de la tarea",
     newTaskDescriptionPlaceholder: "Descripción (opcional)",
+    newTaskModal: {
+      title: "Nueva tarea",
+      promptPlaceholder: "Describe la tarea a realizar…",
+      submit: "Crear tarea",
+      addAttachment: "Añadir adjunto",
+      attachment: "Adjunto",
+      removeAttachment: "Quitar adjunto",
+    },
     folderModal: {
       title: "Nueva carpeta",
       editTitle: "Editar carpeta",

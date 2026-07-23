@@ -351,6 +351,14 @@ export const en = {
     newFolderPlaceholder: "New branch name",
     newTaskPlaceholder: "Task title",
     newTaskDescriptionPlaceholder: "Description (optional)",
+    newTaskModal: {
+      title: "New task",
+      promptPlaceholder: "Describe the task to carry out…",
+      submit: "Create task",
+      addAttachment: "Add attachment",
+      attachment: "Attachment",
+      removeAttachment: "Remove attachment",
+    },
     folderModal: {
       title: "New branch",
       editTitle: "Edit branch",

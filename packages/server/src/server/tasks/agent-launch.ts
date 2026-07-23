@@ -1,5 +1,24 @@
 import { z } from "zod";
 import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
+import type { AgentPromptInput } from "../agent/agent-sdk-types.js";
+
+// Wrap a task prompt string with the pictures attached at creation time. With no
+// images this returns the plain string — byte-identical to the old prompt, so
+// existing (image-less) tasks are entirely unaffected. With images it returns
+// content blocks (text first, then each picture) so the agent sees them.
+function withTaskImages(text: string, task: KanbanTask): AgentPromptInput {
+  if (!task.images || task.images.length === 0) {
+    return text;
+  }
+  return [
+    { type: "text", text },
+    ...task.images.map((image) => ({
+      type: "image" as const,
+      data: image.data,
+      mimeType: image.mimeType,
+    })),
+  ];
+}
 
 // Label stamped on every agent Paseo spawns for a task, so task agents are
 // identifiable across the daemon (and excluded from Cerveau self-recursion).
@@ -211,13 +230,13 @@ export function buildTaskAnalysisPrompt(input: {
   task: KanbanTask;
   planMode: boolean;
   branch: string | null;
-}): string {
+}): AgentPromptInput {
   const { task, planMode, branch } = input;
   const providerLabel = resolveTaskLaunch(task).provider;
   const intro = planMode
     ? "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera directement dans le workspace en cours du projet."
     : `Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans un worktree dédié, sur la branche ${branch ?? "de la tâche"} (le checkout principal de l'utilisateur n'est pas touché).`;
-  return [
+  const text = [
     intro,
     `Agent d'exécution : ${providerLabel}. Chiffre tokens/quota/temps POUR CE modèle.`,
     "",
@@ -238,6 +257,7 @@ export function buildTaskAnalysisPrompt(input: {
   ]
     .filter((line) => line !== "")
     .join("\n");
+  return withTaskImages(text, task);
 }
 
 /**
@@ -249,7 +269,7 @@ export function buildTaskExecutionPrompt(input: {
   task: KanbanTask;
   planMode: boolean;
   branch: string | null;
-}): string {
+}): AgentPromptInput {
   const { task, planMode, branch } = input;
   const intro = planMode
     ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
@@ -271,7 +291,8 @@ export function buildTaskExecutionPrompt(input: {
         "4. NE pousse PAS et NE crée PAS de pull request : l'utilisateur relit la branche et merge lui-même.",
         "5. Termine ta réponse par un résumé de ce que tu as fait et la liste des fichiers modifiés.",
       ];
-  return [intro, "", ...taskHeader(task), "", ...instructions]
+  const text = [intro, "", ...taskHeader(task), "", ...instructions]
     .filter((line) => line !== "")
     .join("\n");
+  return withTaskImages(text, task);
 }
