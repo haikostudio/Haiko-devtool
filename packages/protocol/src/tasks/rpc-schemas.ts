@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentAttachmentSchema } from "../attachments.js";
 import {
   KanbanTaskSchema,
   TaskBillingSchema,
@@ -69,6 +70,7 @@ export const TasksTaskCreateRequestSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  attachments: z.array(AgentAttachmentSchema).optional(),
   column: TaskColumnSchema.optional(),
   runConfig: TaskRunConfigSchema.optional(),
   schedulePreference: TaskSchedulePreferenceSchema.optional(),

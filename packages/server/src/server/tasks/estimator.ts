@@ -13,6 +13,7 @@ import {
   resolveTaskLaunch,
   resolveTaskWorktreePlan,
   TASK_AGENT_LABEL,
+  withTaskAttachments,
   type TaskAnalysisEstimate,
 } from "./agent-launch.js";
 
@@ -263,7 +264,7 @@ export class TaskEstimator {
       }));
     }
 
-    const prompt = buildTaskAnalysisPrompt({ task, planMode, branch });
+    const prompt = withTaskAttachments(buildTaskAnalysisPrompt({ task, planMode, branch }), task);
     const run = await this.agentManager.runAgent(agentId, prompt);
     const text = resolveFinalText(run.timeline, run.finalText);
     return parseTaskAnalysisEstimate(text) ?? ANALYSIS_FALLBACK_ESTIMATE;

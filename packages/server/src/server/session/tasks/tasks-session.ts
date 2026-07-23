@@ -183,6 +183,7 @@ export class TasksSession {
         title: request.title,
         ...(request.description !== undefined ? { description: request.description } : {}),
         ...(request.tags !== undefined ? { tags: request.tags } : {}),
+        ...(request.attachments !== undefined ? { attachments: request.attachments } : {}),
         ...(request.column !== undefined ? { column: request.column } : {}),
         ...(request.runConfig !== undefined ? { runConfig: request.runConfig } : {}),
         ...(request.schedulePreference !== undefined

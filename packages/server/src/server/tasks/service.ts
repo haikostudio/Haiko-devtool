@@ -131,6 +131,7 @@ interface CreateTaskInput {
   title: string;
   description?: string;
   tags?: string[];
+  attachments?: KanbanTask["attachments"];
   column?: TaskColumn;
   origin?: KanbanTask["origin"];
   agentId?: string;
@@ -380,6 +381,9 @@ export class TaskBoardService {
         folderId: input.folderId,
         title: input.title.trim(),
         ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.attachments !== undefined && input.attachments.length > 0
+          ? { attachments: input.attachments }
+          : {}),
         tags: input.tags ?? [],
         column,
         order: siblings.length,

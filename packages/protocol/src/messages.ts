@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  GitHubPrAttachmentSchema,
+  GitHubIssueAttachmentSchema,
+  TextAttachmentSchema,
+  ReviewAttachmentContextLineSchema,
+  ReviewAttachmentCommentSchema,
+  ReviewAttachmentSchema,
+  UploadedFileAttachmentSchema,
+  AgentAttachmentSchema,
+} from "./attachments.js";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
 import { AGENT_LIFECYCLE_STATUSES } from "./agent-lifecycle.js";
@@ -1145,83 +1155,20 @@ export const SetVoiceModeMessageSchema = z.object({
   requestId: z.string().optional(),
 });
 
-export const GitHubPrAttachmentSchema = z.object({
-  type: z.literal("github_pr"),
-  mimeType: z.literal("application/github-pr"),
-  number: z.number().int().positive(),
-  title: z.string(),
-  url: z.string(),
-  body: z.string().nullable().optional(),
-  baseRefName: z.string().nullable().optional(),
-  headRefName: z.string().nullable().optional(),
-});
-
-export const GitHubIssueAttachmentSchema = z.object({
-  type: z.literal("github_issue"),
-  mimeType: z.literal("application/github-issue"),
-  number: z.number().int().positive(),
-  title: z.string(),
-  url: z.string(),
-  body: z.string().nullable().optional(),
-});
-
-export const TextAttachmentSchema = z
-  .object({
-    type: z.literal("text"),
-    mimeType: z.literal("text/plain"),
-    contextKind: z.string().optional(),
-    title: z.string().nullable().optional(),
-    text: z.string(),
-  })
-  .transform(({ contextKind, ...attachment }) => ({
-    ...attachment,
-    ...(contextKind === "chat_history" ? { contextKind } : {}),
-  }));
-
-export const ReviewAttachmentContextLineSchema = z.object({
-  oldLineNumber: z.number().int().positive().nullable(),
-  newLineNumber: z.number().int().positive().nullable(),
-  type: z.enum(["add", "remove", "context"]),
-  content: z.string(),
-});
-
-export const ReviewAttachmentCommentSchema = z.object({
-  filePath: z.string(),
-  side: z.enum(["old", "new"]),
-  lineNumber: z.number().int().positive(),
-  body: z.string(),
-  context: z.object({
-    hunkHeader: z.string(),
-    targetLine: ReviewAttachmentContextLineSchema,
-    lines: z.array(ReviewAttachmentContextLineSchema),
-  }),
-});
-
-export const ReviewAttachmentSchema = z.object({
-  type: z.literal("review"),
-  mimeType: z.literal("application/paseo-review"),
-  cwd: z.string(),
-  mode: z.enum(["uncommitted", "base"]),
-  baseRef: z.string().nullable().optional(),
-  comments: z.array(ReviewAttachmentCommentSchema),
-});
-
-export const UploadedFileAttachmentSchema = z.object({
-  type: z.literal("uploaded_file"),
-  id: z.string(),
-  fileName: z.string(),
-  mimeType: z.string(),
-  size: z.number().int().nonnegative(),
-  path: z.string(),
-});
-
-export const AgentAttachmentSchema = z.discriminatedUnion("type", [
+// Attachment schemas now live in ./attachments.ts (so lower-level schemas like
+// tasks can import them without an eval-time cycle through this file). Re-export
+// keeps every `@getpaseo/protocol/messages` import working unchanged; they're
+// imported at the top of this file alongside the other protocol modules.
+export {
   GitHubPrAttachmentSchema,
   GitHubIssueAttachmentSchema,
   TextAttachmentSchema,
+  ReviewAttachmentContextLineSchema,
+  ReviewAttachmentCommentSchema,
   ReviewAttachmentSchema,
   UploadedFileAttachmentSchema,
-]);
+  AgentAttachmentSchema,
+};
 
 function normalizeAgentAttachments(input: unknown): AgentAttachment[] {
   if (!Array.isArray(input)) {

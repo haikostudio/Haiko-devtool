@@ -4,6 +4,7 @@ import {
   ANALYSIS_FALLBACK_ESTIMATE,
   buildTaskAnalysisPrompt,
   parseTaskAnalysisEstimate,
+  withTaskAttachments,
 } from "./agent-launch.js";
 
 // The two "light task" thresholds the scheduler uses (scheduler.ts). The
@@ -73,5 +74,37 @@ describe("task analysis estimation", () => {
     );
     expect(parsed?.estimatedMinutes).toBe(8);
     expect(parsed?.billingHours).toBe(3);
+  });
+});
+
+describe("task prompt attachments", () => {
+  test("a task with no attachments keeps the plain text prompt", () => {
+    const prompt = withTaskAttachments("Fais la tâche", makeTask());
+    expect(prompt).toBe("Fais la tâche");
+  });
+
+  test("attachments are folded in as prompt content blocks alongside the text", () => {
+    const prompt = withTaskAttachments(
+      "Fais la tâche",
+      makeTask({
+        attachments: [
+          {
+            type: "uploaded_file",
+            id: "upload_1",
+            fileName: "brief.pdf",
+            mimeType: "application/pdf",
+            size: 1234,
+            path: "/paseo-home/uploads/upload_1/brief.pdf",
+          },
+        ],
+      }),
+    );
+    // The user prompt is now a block array: the task text plus the attachment.
+    expect(Array.isArray(prompt)).toBe(true);
+    const blocks = prompt as Array<Record<string, unknown>>;
+    expect(blocks).toContainEqual({ type: "text", text: "Fais la tâche" });
+    expect(blocks).toContainEqual(
+      expect.objectContaining({ type: "uploaded_file", fileName: "brief.pdf" }),
+    );
   });
 });

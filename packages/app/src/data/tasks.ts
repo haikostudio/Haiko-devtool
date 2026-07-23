@@ -7,6 +7,7 @@ import type {
   TaskRunConfig,
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
+import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 
 export type { TaskBilling, TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
@@ -39,6 +40,7 @@ export interface TaskBoardHandle {
     folderId: string;
     title: string;
     description?: string;
+    attachments?: AgentAttachment[];
     column?: TaskColumn;
   }) => Promise<void>;
   updateTask: (input: {
@@ -191,6 +193,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       folderId: string;
       title: string;
       description?: string;
+      attachments?: AgentAttachment[];
       column?: TaskColumn;
     }) => {
       const { client, projectId: project } = requireContext();
