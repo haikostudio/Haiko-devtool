@@ -400,6 +400,7 @@ export const ru: TranslationResources = {
       scheduled: "Запланировано",
       inProgress: "В работе",
       done: "Готово",
+      deployed: "Развёрнуто",
     },
     board: {
       emptyColumn: "Нет задач",

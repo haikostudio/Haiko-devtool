@@ -283,7 +283,7 @@ export class TaskScheduler {
       );
       this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
       for (const task of board.tasks) {
-        if (task.column === "done" || task.column === "in_progress") {
+        if (task.column === "done" || task.column === "deployed" || task.column === "in_progress") {
           continue;
         }
         if (task.column === "backlog") {

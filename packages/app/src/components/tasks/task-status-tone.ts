@@ -71,8 +71,9 @@ export function deriveTaskTone(
   task: KanbanTask,
   agentBucket: WorkspaceStateBucket | undefined,
 ): TaskTone | null {
-  // "done" is terminal in the board model — never re-light a completed task.
-  if (task.completedAt || task.column === "done") {
+  // "done" and "deployed" are terminal in the board model — never re-light a
+  // completed or shipped task.
+  if (task.completedAt || task.column === "done" || task.column === "deployed") {
     return "done";
   }
   if (wantsUser(task, agentBucket)) {

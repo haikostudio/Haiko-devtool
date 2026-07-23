@@ -15,6 +15,7 @@ export const KANBAN_COLUMNS: TaskColumn[] = [
   "scheduled",
   "in_progress",
   "done",
+  "deployed",
 ];
 
 // Per-column cap on the desktop board (columns grow to fill, then stop here and
@@ -294,6 +295,7 @@ export function useColumnLabels(): Record<TaskColumn, string> {
       scheduled: t("tasks.columns.scheduled"),
       in_progress: t("tasks.columns.inProgress"),
       done: t("tasks.columns.done"),
+      deployed: t("tasks.columns.deployed"),
     }),
     [t],
   );

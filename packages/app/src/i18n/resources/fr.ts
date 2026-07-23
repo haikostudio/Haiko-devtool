@@ -404,6 +404,7 @@ export const fr: TranslationResources = {
       scheduled: "Planifié",
       inProgress: "En cours",
       done: "Terminé",
+      deployed: "Déployé",
     },
     board: {
       emptyColumn: "Aucune tâche",

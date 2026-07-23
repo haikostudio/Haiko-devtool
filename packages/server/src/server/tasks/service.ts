@@ -19,6 +19,64 @@ export type TaskBoardListener = (board: TaskBoard) => void;
 // remains a valid direct-drop entry point (and the queued-for-launch state).
 const PIPELINE_COLUMNS = new Set<TaskColumn>(["validated", "scheduled"]);
 
+// The kanban columns, in board order. The last entry is terminal.
+const COLUMN_ORDER = [
+  "backlog",
+  "validated",
+  "scheduled",
+  "in_progress",
+  "done",
+  "deployed",
+] as const satisfies readonly TaskColumn[];
+
+/**
+ * Compute the task as it lands in its target column: stamp completion/deploy
+ * timestamps, arm or disarm the schedule, and auto-approve an implicit drag.
+ *
+ * - "validated"/"scheduled" are the pipeline columns: entering one from outside
+ *   arms the schedule (the scheduler/estimator then pick it up); leaving disarms
+ *   it. A task that already reached "done" is terminal — never re-arm it, even if
+ *   dragged back into a pipeline column (kills the "done keeps relaunching" loop).
+ * - "done" stamps completedAt; "deployed" (terminal, post-"done") stamps
+ *   deployedAt and backfills completedAt if the task jumped straight there.
+ */
+function applyColumnMove(
+  task: KanbanTask,
+  input: MoveTaskInput,
+  now: string,
+): { moved: KanbanTask; enteringPipeline: boolean } {
+  const alreadyCompleted = task.completedAt != null;
+  const enteringPipeline =
+    !alreadyCompleted && PIPELINE_COLUMNS.has(input.column) && !PIPELINE_COLUMNS.has(task.column);
+  const leavingPipeline = !PIPELINE_COLUMNS.has(input.column) && PIPELINE_COLUMNS.has(task.column);
+  const enteringDone = input.column === "done" && task.completedAt == null;
+  const enteringDeployed = input.column === "deployed" && task.deployedAt == null;
+  const moved: KanbanTask = {
+    ...task,
+    column: input.column,
+    updatedAt: now,
+    ...(enteringDone ? { completedAt: now } : {}),
+    ...(enteringDeployed
+      ? { deployedAt: now, ...(task.completedAt == null ? { completedAt: now } : {}) }
+      : {}),
+    ...(input.manual ? { manualOverrideAt: now } : {}),
+    // A user drag into a pipeline column is an implicit approval of the proposal.
+    ...(input.manual && enteringPipeline && task.approval?.state === "pending"
+      ? { approval: { ...task.approval, state: "approved" as const, approvedAt: now } }
+      : {}),
+    ...(enteringPipeline
+      ? {
+          schedule: {
+            state: task.estimate ? ("awaiting_slot" as const) : ("pending_estimate" as const),
+            attempts: 0,
+          },
+        }
+      : {}),
+    ...(leavingPipeline && task.schedule?.state !== "running" ? { schedule: null } : {}),
+  };
+  return { moved, enteringPipeline };
+}
+
 export class TaskBoardServiceError extends Error {
   constructor(
     public readonly code: string,
@@ -461,40 +519,7 @@ export class TaskBoardService {
         throw new TaskBoardServiceError("task_not_found", `Task not found: ${input.taskId}`);
       }
       const now = new Date().toISOString();
-      // "validated" and "scheduled" are the pipeline columns where analysis and
-      // execution live. Entering either from outside arms the schedule and pokes
-      // the estimator/scheduler; leaving to a non-pipeline column disarms it.
-      // A task that has already reached "done" is terminal: never re-arm or
-      // relaunch it, even if it is later dragged/transitioned back into a
-      // pipeline column. This kills the "done task keeps relaunching" loop.
-      const alreadyCompleted = task.completedAt != null;
-      const enteringPipeline =
-        !alreadyCompleted &&
-        PIPELINE_COLUMNS.has(input.column) &&
-        !PIPELINE_COLUMNS.has(task.column);
-      const leavingPipeline =
-        !PIPELINE_COLUMNS.has(input.column) && PIPELINE_COLUMNS.has(task.column);
-      const enteringDone = input.column === "done" && task.completedAt == null;
-      const moved: KanbanTask = {
-        ...task,
-        column: input.column,
-        updatedAt: now,
-        ...(enteringDone ? { completedAt: now } : {}),
-        ...(input.manual ? { manualOverrideAt: now } : {}),
-        // A user drag into a pipeline column is an implicit approval of the proposal.
-        ...(input.manual && enteringPipeline && task.approval?.state === "pending"
-          ? { approval: { ...task.approval, state: "approved" as const, approvedAt: now } }
-          : {}),
-        ...(enteringPipeline
-          ? {
-              schedule: {
-                state: task.estimate ? ("awaiting_slot" as const) : ("pending_estimate" as const),
-                attempts: 0,
-              },
-            }
-          : {}),
-        ...(leavingPipeline && task.schedule?.state !== "running" ? { schedule: null } : {}),
-      };
+      const { moved, enteringPipeline } = applyColumnMove(task, input, now);
       if (enteringPipeline) {
         scheduledTask = moved;
       }
@@ -512,7 +537,7 @@ export class TaskBoardService {
 
       const reOrdered = new Map<string, number>();
       targetColumn.forEach((entry, index) => reOrdered.set(entry.id, index));
-      for (const column of ["backlog", "validated", "scheduled", "in_progress", "done"] as const) {
+      for (const column of COLUMN_ORDER) {
         if (column === input.column) {
           continue;
         }

@@ -404,6 +404,7 @@ export const ptBR: TranslationResources = {
       scheduled: "Planejado",
       inProgress: "Em andamento",
       done: "Concluído",
+      deployed: "Implantado",
     },
     board: {
       emptyColumn: "Sem tarefas",

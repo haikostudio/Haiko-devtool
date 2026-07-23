@@ -5,12 +5,17 @@ import { z } from "zod";
 
 // "validated": user-validated tasks. This is the consent gate — analysis
 // (estimation) and execution only ever start here, never from "backlog".
+// "deployed": terminal, post-"done" column. A task lands here once the
+// conductor has confirmed its work is actually live (merged + published).
+// Appending it keeps the wire enum backward-compatible: an old daemon simply
+// never emits it, and an old client that receives it is one release away.
 export const TaskColumnSchema = z.enum([
   "backlog",
   "validated",
   "scheduled",
   "in_progress",
   "done",
+  "deployed",
 ]);
 export type TaskColumn = z.infer<typeof TaskColumnSchema>;
 
@@ -135,6 +140,10 @@ export const KanbanTaskSchema = z.object({
   // scheduler never re-arms or relaunches a completed task, even if it later
   // re-enters a pipeline column.
   completedAt: z.string().nullable().optional(),
+  // Stamped when a task reaches "deployed" — the conductor confirmed the work
+  // is live (merged + published). Terminal, like completedAt; a task entering
+  // "deployed" also gets a completedAt if it somehow skipped "done".
+  deployedAt: z.string().nullable().optional(),
   // Set once the task's line has been added to a billing document.
   billing: TaskBillingSchema.nullable().optional(),
   createdAt: z.string(),
