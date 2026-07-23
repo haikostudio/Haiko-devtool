@@ -21,6 +21,43 @@ export interface EnsureConductorResult {
 }
 
 /**
+ * Tools the "chef d'orchestre" is HARD-BLOCKED from ever using. The conductor's
+ * only job is to manage the kanban board (create/update/move/delete tasks and
+ * folders) — it must NEVER act on the code itself. `disallowedTools` is enforced
+ * by the Claude Agent SDK before any permission prompt, so listing a tool here
+ * makes it impossible to call, even when the agent runs in a permissive mode.
+ *
+ * We block every surface that could edit files, run shell commands (commit,
+ * push, build, test, deploy), or fan work out to another agent/terminal. The
+ * board's own execution pipeline — not the conductor — is what spawns the agents
+ * that actually do the work. Read-only tools (Read/Grep/Glob) stay available so
+ * the conductor can inspect context and write good task descriptions.
+ */
+export const CONDUCTOR_DISALLOWED_TOOLS: readonly string[] = [
+  // Built-in editing / shell / subagent tools.
+  "Bash",
+  "BashOutput",
+  "KillShell",
+  "KillBash",
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "NotebookEdit",
+  "Task",
+  // Paseo MCP tools that execute code or spawn/steer other agents & terminals.
+  "mcp__paseo__create_agent",
+  "mcp__paseo__send_agent_prompt",
+  "mcp__paseo__create_terminal",
+  "mcp__paseo__send_terminal_keys",
+  "mcp__paseo__kill_terminal",
+  "mcp__paseo__capture_terminal",
+  "mcp__paseo__create_worktree",
+  "mcp__paseo__archive_worktree",
+  "mcp__paseo__create_schedule",
+  "mcp__paseo__create_heartbeat",
+];
+
+/**
  * French system prompt for the board's "chef d'orchestre". It is a persistent,
  * per-project agent that manages the kanban board via the paseo task tools. Its
  * core job: turn EVERY user request into one or more real tasks added directly
@@ -30,6 +67,24 @@ function conductorSystemPrompt(projectId: string): string {
   return [
     "Tu es le « chef d'orchestre » du tableau de tâches (kanban) de ce projet.",
     `L'identifiant du projet est : ${projectId}. Passe TOUJOURS ce même projectId à chaque outil.`,
+    "",
+    "RÈGLE ABSOLUE — TU NE TOUCHES JAMAIS AU CODE :",
+    "Ta SEULE fonction est de gérer le tableau. Tu n'écris jamais de code, tu ne",
+    "modifies aucun fichier, tu ne lances aucune commande : ni commit, ni push, ni",
+    "build, ni test, ni déploiement, ni terminal. Tu ne fais pas le travail",
+    "toi-même et tu ne le confies pas non plus à un autre agent que tu lancerais :",
+    "tu te contentes de créer, modifier, déplacer ou supprimer des tâches (et des",
+    "dossiers). Les outils d'édition, de shell et de lancement d'agents te sont",
+    "d'ailleurs techniquement retirés — si tu ressens le besoin d'agir sur le code,",
+    "c'est le signe qu'il faut créer une tâche à la place.",
+    "",
+    "TOUTE DEMANDE D'ACTION = UNE TÂCHE, JAMAIS UNE EXÉCUTION :",
+    "Quand l'utilisateur demande une correction, une fonctionnalité, un changement",
+    "de comportement ou n'importe quelle action sur le projet (par ex. « corrige le",
+    "graphe pour qu'il soit en pleine largeur »), tu ne la réalises PAS toi-même :",
+    "tu crées une tâche claire qui la décrit. C'est l'agent d'exécution de cette",
+    "tâche qui fera le travail réel. Ne code jamais, même pour une modification qui",
+    "te paraît minuscule.",
     "",
     "Tu pilotes le tableau via les outils paseo :",
     "- list_tasks : lister les tâches et dossiers du tableau.",
@@ -135,7 +190,14 @@ export class ConductorAgentService {
         [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
         [CONDUCTOR_PROJECT_ID_LABEL]: projectId,
       },
-      config: { systemPrompt: conductorSystemPrompt(projectId) },
+      config: {
+        systemPrompt: conductorSystemPrompt(projectId),
+        // Hard-lock the conductor to board management only: block every editing,
+        // shell, and agent/terminal-spawning tool so it can never write code,
+        // commit, push, or deploy — even under a permissive mode. See
+        // CONDUCTOR_DISALLOWED_TOOLS for the rationale.
+        extra: { claude: { disallowedTools: [...CONDUCTOR_DISALLOWED_TOOLS] } },
+      },
     });
 
     this.logger.info(
