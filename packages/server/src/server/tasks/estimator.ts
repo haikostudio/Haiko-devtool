@@ -22,7 +22,15 @@ interface TaskEstimatorOptions {
   taskBoardService: TaskBoardService;
   projectRegistry: ProjectRegistry;
   logger: pino.Logger;
+  /**
+   * How many task analyses may run at once. Bounded on purpose: each analysis of
+   * a fresh folder cuts a worktree, and a saturated disk makes tasks fail
+   * silently (see the VPS disk gotcha). Defaults to {@link DEFAULT_MAX_CONCURRENT}.
+   */
+  maxConcurrent?: number;
 }
+
+const DEFAULT_MAX_CONCURRENT = 4;
 
 /**
  * Analysis phase of the task pipeline. When a task enters "Validé"/"Planifié",
@@ -34,8 +42,12 @@ interface TaskEstimatorOptions {
  * left alive: the scheduler reuses it for execution — same conversation, so the
  * analysis is the starting point and execution simply continues it.
  *
- * Requests are processed one at a time so validating a batch of tasks doesn't
- * spawn a dozen worktrees/agents at once.
+ * Analyses run in PARALLEL — one agent per task — up to {@link maxConcurrent},
+ * so validating a batch no longer waits one-at-a-time. The single exception is
+ * tasks of the same branch-folder: they share one worktree (the first task cuts
+ * it, the rest reuse it), so they're serialized among themselves to avoid a
+ * double-create race. Tasks in different folders (and folderless/legacy tasks,
+ * each with their own branch) analyze concurrently.
  */
 export class TaskEstimator {
   private readonly agentManager: Pick<AgentManager, "runAgent">;
@@ -43,9 +55,16 @@ export class TaskEstimator {
   private readonly taskBoardService: TaskBoardService;
   private readonly projectRegistry: ProjectRegistry;
   private readonly logger: pino.Logger;
-  private readonly queue: { projectId: string; taskId: string }[] = [];
+  private readonly maxConcurrent: number;
+  // Pending analyses, each tagged with its serialization group (a branch-folder
+  // key when the task shares a folder's worktree, otherwise a task-unique key).
+  private readonly queue: { projectId: string; taskId: string; groupKey: string }[] = [];
+  // Dedup set (`projectId:taskId`) covering both queued and enqueue-in-flight
+  // requests, so a repeated validation doesn't double-analyze a task.
   private readonly queued = new Set<string>();
-  private processing = false;
+  // Groups with an analysis currently running; a group holds at most one slot.
+  private readonly activeGroups = new Set<string>();
+  private activeCount = 0;
 
   constructor(options: TaskEstimatorOptions) {
     this.agentManager = options.agentManager;
@@ -53,6 +72,7 @@ export class TaskEstimator {
     this.taskBoardService = options.taskBoardService;
     this.projectRegistry = options.projectRegistry;
     this.logger = options.logger.child({ module: "task-estimator" });
+    this.maxConcurrent = Math.max(1, options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT);
   }
 
   requestEstimate(projectId: string, taskId: string): void {
@@ -61,33 +81,76 @@ export class TaskEstimator {
       return;
     }
     this.queued.add(key);
-    this.queue.push({ projectId, taskId });
-    void this.processQueue();
+    void this.enqueue(projectId, taskId);
   }
 
-  private async processQueue(): Promise<void> {
-    if (this.processing) {
-      return;
-    }
-    this.processing = true;
+  private async enqueue(projectId: string, taskId: string): Promise<void> {
+    // Resolving the group needs the board (folder lookup); do it before queuing
+    // so the scheduling loop below stays synchronous and race-free.
+    const groupKey = await this.resolveGroupKey(projectId, taskId);
+    this.queue.push({ projectId, taskId, groupKey });
+    this.pump();
+  }
+
+  /**
+   * A branch-folder's tasks share one worktree, so they serialize under the
+   * folder key. Everything else — folderless/legacy tasks, plan-mode, or a
+   * lookup failure — gets a task-unique key so it analyzes fully in parallel.
+   */
+  private async resolveGroupKey(projectId: string, taskId: string): Promise<string> {
     try {
-      while (this.queue.length > 0) {
-        const next = this.queue.shift();
-        if (!next) {
-          break;
-        }
-        this.queued.delete(`${next.projectId}:${next.taskId}`);
-        try {
-          await this.estimate(next.projectId, next.taskId);
-        } catch (error) {
-          this.logger.warn(
-            { err: error, projectId: next.projectId, taskId: next.taskId },
-            "Task analysis failed",
-          );
-        }
+      const board = await this.taskBoardService.getBoard(projectId);
+      const task = board.tasks.find((entry) => entry.id === taskId);
+      const folder = task?.folderId
+        ? board.folders.find((entry) => entry.id === task.folderId)
+        : undefined;
+      if (folder?.branch) {
+        return `${projectId}:folder:${folder.id}`;
       }
+    } catch (error) {
+      this.logger.warn({ err: error, projectId, taskId }, "Failed to resolve analysis group");
+    }
+    return `${projectId}:task:${taskId}`;
+  }
+
+  /**
+   * Fills free concurrency slots. Synchronous and re-entrant-safe: it claims the
+   * first queued item whose group isn't already running, launches it, and stops
+   * when it hits the concurrency cap or every remaining item is group-blocked.
+   */
+  private pump(): void {
+    while (this.activeCount < this.maxConcurrent) {
+      const index = this.queue.findIndex((item) => !this.activeGroups.has(item.groupKey));
+      if (index === -1) {
+        break;
+      }
+      const [item] = this.queue.splice(index, 1);
+      if (!item) {
+        break;
+      }
+      this.queued.delete(`${item.projectId}:${item.taskId}`);
+      this.activeGroups.add(item.groupKey);
+      this.activeCount += 1;
+      void this.runOne(item);
+    }
+  }
+
+  private async runOne(item: {
+    projectId: string;
+    taskId: string;
+    groupKey: string;
+  }): Promise<void> {
+    try {
+      await this.estimate(item.projectId, item.taskId);
+    } catch (error) {
+      this.logger.warn(
+        { err: error, projectId: item.projectId, taskId: item.taskId },
+        "Task analysis failed",
+      );
     } finally {
-      this.processing = false;
+      this.activeGroups.delete(item.groupKey);
+      this.activeCount -= 1;
+      this.pump();
     }
   }
 
