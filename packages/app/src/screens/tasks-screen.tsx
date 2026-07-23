@@ -48,6 +48,7 @@ import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import {
   AgentBucketProvider,
+  type LiveProjectBoard,
   TaskStatusVoyant,
   useFolderToneMap,
   useProjectToneMap,
@@ -602,7 +603,12 @@ function DesktopLayout({
 
   return (
     <View style={styles.desktopRow}>
-      <ProjectsRail projects={projects} serverId={serverId} projectId={projectId} />
+      <ProjectsRail
+        projects={projects}
+        serverId={serverId}
+        projectId={projectId}
+        boardHandle={boardHandle}
+      />
       {serverId && projectId && supportsTasksBoard ? (
         <FoldersRail
           folders={folders}
@@ -620,16 +626,27 @@ function ProjectsRail({
   projects,
   serverId,
   projectId,
+  boardHandle,
 }: {
   projects: ProjectEntry[];
   serverId: string | null;
   projectId: string | null;
+  boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<ProjectSortMode>("recent");
   const counts = useProjectTaskCounts(projects);
-  const tones = useProjectToneMap(projects);
+  // Feed the selected project's live board in so its dot animates the instant a
+  // child task starts, without waiting for the rail's periodic re-poll.
+  const liveBoard = useMemo<LiveProjectBoard | null>(
+    () =>
+      serverId && projectId && boardHandle.board
+        ? { key: `${serverId}:${projectId}`, tasks: boardHandle.board.tasks }
+        : null,
+    [serverId, projectId, boardHandle.board],
+  );
+  const tones = useProjectToneMap(projects, liveBoard);
 
   const displayed = useMemo(() => {
     const needle = query.trim().toLowerCase();
