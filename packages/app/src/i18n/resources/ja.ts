@@ -376,6 +376,7 @@ export const ja: TranslationResources = {
     searchTasks: "タスクを検索",
     sortTasks: "タスクを並べ替え",
     sort: {
+      updated: "更新順",
       deadline: "期限順",
       priority: "優先度順",
       title: "名前順",

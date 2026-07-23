@@ -375,6 +375,7 @@ export const ru: TranslationResources = {
     searchTasks: "Поиск задач",
     sortTasks: "Сортировать задачи",
     sort: {
+      updated: "По изменению",
       deadline: "По сроку",
       priority: "По приоритету",
       title: "По алфавиту",

@@ -372,6 +372,7 @@ export const zhCN: TranslationResources = {
     searchTasks: "搜索任务",
     sortTasks: "排序任务",
     sort: {
+      updated: "按更新时间",
       deadline: "按截止日期",
       priority: "按优先级",
       title: "按名称",
