@@ -189,8 +189,10 @@ import {
 } from "./session/git-mutation/git-mutation-service.js";
 import {
   createWorkspaceProvisioningService,
+  WorkspaceProvisioningError,
   type WorkspaceProvisioningService,
 } from "./session/workspace-provisioning/workspace-provisioning-service.js";
+import { DiskFullError } from "../utils/worktree.js";
 import {
   createAgentUpdatesService,
   matchesAgentUpdatesFilter,
@@ -5376,6 +5378,7 @@ export class Session {
         { err: error, sourceKind: request.source.kind, requestId: request.requestId },
         "Failed to create workspace",
       );
+      const errorCode = resolveWorkspaceCreateErrorCode(error);
       this.emit({
         type: "workspace.create.response",
         payload: {
@@ -5383,6 +5386,7 @@ export class Session {
           workspace: null,
           setupTerminalId: null,
           error: message,
+          errorCode,
         },
       });
     }
@@ -7287,4 +7291,14 @@ function normalizeCloneRepository(input: {
 
 function isValidGitHubRepoSegment(value: string): boolean {
   return /^[A-Za-z0-9._-]+$/u.test(value);
+}
+
+function resolveWorkspaceCreateErrorCode(error: unknown): string | undefined {
+  if (error instanceof DiskFullError) {
+    return "disk_full";
+  }
+  if (error instanceof WorkspaceProvisioningError) {
+    return error.code;
+  }
+  return undefined;
 }

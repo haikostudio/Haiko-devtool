@@ -1,7 +1,7 @@
 {
   "worktree": {
     "setup": [
-      "npm ci",
+      "node ./scripts/setup-worktree-deps.mjs",
       "node ./scripts/seed-ios-native-cache.mjs",
       "PASEO_DEV_MANAGED_HOME=1 PASEO_DEV_SEED_HOME=\"$PASEO_SOURCE_CHECKOUT_PATH/.dev/paseo-home\" PASEO_HOME=\"$PWD/.dev/paseo-home\" ./scripts/dev-home.sh",
       "npm run build:server",

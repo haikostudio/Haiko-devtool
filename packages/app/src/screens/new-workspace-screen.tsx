@@ -778,6 +778,18 @@ interface WorkspaceDraftSubmissionConfig {
   target: WorkspaceTabTarget;
 }
 
+// Prefer the localized "host disk is full" hint over the raw server/git error
+// when the daemon flagged the failure as a disk-space problem.
+function resolveWorkspaceCreateErrorMessage(
+  payload: { error?: string | null; errorCode?: string },
+  labels: { createFailedMessage: string; diskFullMessage: string },
+): string {
+  if (payload.errorCode === "disk_full") {
+    return labels.diskFullMessage;
+  }
+  return payload.error ?? labels.createFailedMessage;
+}
+
 async function createAndMergeWorkspace(input: {
   client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   createInput: Parameters<
@@ -789,10 +801,11 @@ async function createAndMergeWorkspace(input: {
   ) => void;
   serverId: string;
   createFailedMessage: string;
+  diskFullMessage: string;
 }): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
   const payload = await input.client.createPaseoWorktree(input.createInput);
   if (payload.error || !payload.workspace) {
-    throw new Error(payload.error ?? input.createFailedMessage);
+    throw new Error(resolveWorkspaceCreateErrorMessage(payload, input));
   }
   const normalizedWorkspace = normalizeWorkspaceDescriptor(payload.workspace);
   const workspaceForInitialMerge = input.createInput.firstAgentContext
@@ -818,6 +831,7 @@ async function createMultiplicityWorkspace(input: {
   ) => void;
   serverId: string;
   createFailedMessage: string;
+  diskFullMessage: string;
 }): Promise<ReturnType<typeof normalizeWorkspaceDescriptor>> {
   const isWorktree = input.isolation === "worktree";
   const checkoutRequest = isWorktree
@@ -844,7 +858,7 @@ async function createMultiplicityWorkspace(input: {
     ...(firstAgentContext ? { firstAgentContext } : {}),
   });
   if (payload.error || !payload.workspace) {
-    throw new Error(payload.error ?? input.createFailedMessage);
+    throw new Error(resolveWorkspaceCreateErrorMessage(payload, input));
   }
   const normalizedWorkspace = normalizeWorkspaceDescriptor(payload.workspace);
   const workspaceForInitialMerge = input.withInitialAgent
@@ -1911,6 +1925,7 @@ export function NewWorkspaceScreen({
             mergeWorkspaces,
             serverId: selectedServerId,
             createFailedMessage: t("newWorkspace.errors.createWorktreeFailed"),
+            diskFullMessage: t("workspaceSetup.errors.hostDiskFull"),
           })
         : await createAndMergeWorkspace({
             client: withConnectedClient(),
@@ -1918,6 +1933,7 @@ export function NewWorkspaceScreen({
             mergeWorkspaces,
             serverId: selectedServerId,
             createFailedMessage: t("newWorkspace.errors.createWorktreeFailed"),
+            diskFullMessage: t("workspaceSetup.errors.hostDiskFull"),
           });
       setCreatedWorkspace(normalizedWorkspace);
       return normalizedWorkspace;

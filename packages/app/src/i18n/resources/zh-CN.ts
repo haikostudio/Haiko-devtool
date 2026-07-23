@@ -1580,6 +1580,7 @@ export const zhCN: TranslationResources = {
     title: "创建 workspace",
     errors: {
       failedCreateWorktree: "创建 worktree 失败",
+      hostDiskFull: "主机磁盘已满，请释放空间后重试",
       failedOpenProject: "打开 project 失败",
       selectModel: "请选择模型",
       hostDisconnected: "Host 未连接",
