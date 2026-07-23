@@ -10,6 +10,7 @@ import {
   deletePaseoWorktree,
   isPaseoOwnedWorktreeCwd,
   runWorktreeTeardownCommands,
+  worktreeHasUncommittedChanges,
   WorktreeTeardownError,
 } from "../utils/worktree.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
@@ -65,6 +66,11 @@ export interface ArchiveResult {
 export interface ArchiveByScopeRequest {
   scope: ArchiveScope;
   requestId: string;
+  // When set, refuse to delete the worktree directory if it still holds
+  // uncommitted changes. Used by post-deployment cleanup so we never discard
+  // work that was not committed. Defaults to false (force removal) to preserve
+  // the explicit user-initiated archive behavior.
+  requireCleanWorktree?: boolean;
 }
 
 export async function requireActiveWorkspaceForArchive(
@@ -304,12 +310,22 @@ async function archiveTargetRecords(
 
 async function maybeRemoveDirectory(
   dependencies: ArchiveDependencies,
-  request: Pick<ArchiveByScopeRequest, "requestId">,
+  request: Pick<ArchiveByScopeRequest, "requestId" | "requireCleanWorktree">,
   target: ArchiveTarget,
   archivedWorkspaceIds: string[],
 ): Promise<boolean> {
   const backing = target.backing;
   if (!backing?.isPaseoOwnedWorktree) {
+    return false;
+  }
+
+  // Post-deployment cleanup asks us to keep the worktree if it still holds
+  // uncommitted work, so a crashed or forgotten change is never silently lost.
+  if (request.requireCleanWorktree && (await worktreeHasUncommittedChanges(backing.path))) {
+    dependencies.sessionLogger?.warn(
+      { targetPath: backing.path, requestId: request.requestId },
+      "Skipping worktree removal: uncommitted changes present",
+    );
     return false;
   }
 

@@ -1,10 +1,15 @@
 import { MissingCheckoutTargetError } from "./resolve-worktree-creation-intent.js";
-import { BranchAlreadyCheckedOutError, UnknownBranchError } from "../utils/worktree.js";
+import {
+  BranchAlreadyCheckedOutError,
+  DiskFullError,
+  UnknownBranchError,
+} from "../utils/worktree.js";
 
 export type WorktreeWireErrorCode =
   | "branch_already_checked_out"
   | "missing_checkout_target"
   | "unknown_branch"
+  | "disk_full"
   | "unknown";
 
 export interface WorktreeWireError {
@@ -31,6 +36,9 @@ export function toWorktreeWireError(error: unknown): WorktreeWireError {
   }
   if (error instanceof UnknownBranchError) {
     return { code: "unknown_branch", message: error.message };
+  }
+  if (error instanceof DiskFullError) {
+    return { code: "disk_full", message: error.message };
   }
   if (error instanceof Error) {
     return { code: "unknown", message: error.message };

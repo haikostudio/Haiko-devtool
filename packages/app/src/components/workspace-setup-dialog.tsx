@@ -265,8 +265,12 @@ export function WorkspaceSetupDialog() {
       });
 
       if (payload.error || !payload.workspace) {
+        const errorCode = "errorCode" in payload ? payload.errorCode : undefined;
         throw new Error(
-          payload.error ?? failureMessageForCreationMethod(pendingWorkspaceSetup.creationMethod, t),
+          errorCode === "disk_full"
+            ? t("workspaceSetup.errors.hostDiskFull")
+            : (payload.error ??
+                failureMessageForCreationMethod(pendingWorkspaceSetup.creationMethod, t)),
         );
       }
 
