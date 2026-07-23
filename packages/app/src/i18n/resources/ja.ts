@@ -295,6 +295,7 @@ export const ja: TranslationResources = {
       now: "現在",
       inProgress: "実行中",
       quotaWindow: "5時間クォータ",
+      noBranchToSwitch: "このタスクにはまだブランチがありません — 切り替え先がありません。",
     },
     view: {
       board: "ボード",

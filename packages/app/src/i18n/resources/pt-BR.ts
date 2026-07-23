@@ -296,6 +296,7 @@ export const ptBR: TranslationResources = {
       now: "Agora",
       inProgress: "Em execução",
       quotaWindow: "Cota de 5 h",
+      noBranchToSwitch: "Esta tarefa ainda não tem branch — nada para exibir.",
     },
     view: {
       board: "Quadro",

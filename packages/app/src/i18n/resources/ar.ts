@@ -292,6 +292,7 @@ export const ar: TranslationResources = {
       now: "الآن",
       inProgress: "قيد التنفيذ",
       quotaWindow: "حصة ٥ ساعات",
+      noBranchToSwitch: "لا يوجد فرع لهذه المهمة بعد — لا شيء لعرضه.",
     },
     view: {
       board: "اللوحة",

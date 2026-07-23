@@ -294,6 +294,7 @@ export const ru: TranslationResources = {
       now: "Сейчас",
       inProgress: "Выполняется",
       quotaWindow: "Квота 5 ч",
+      noBranchToSwitch: "У этой задачи пока нет ветки — переключаться не на что.",
     },
     view: {
       board: "Доска",
