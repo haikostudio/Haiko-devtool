@@ -69,6 +69,7 @@ import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { rememberProjectBranch } from "@/stores/project-branch-selection-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
@@ -1062,6 +1063,28 @@ function BoardContent({
     [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId],
   );
 
+  // Tapping a task on the timeline does everything a card tap does (open its
+  // drawer/dock) AND points the project at that task's git branch, so the strip
+  // above the board doubles as a branch picker. We reuse the per-project branch
+  // memory the sidebar switcher already writes to (project-branch-selection), so
+  // a reload restores the same branch. A task's branch is the one its agent runs
+  // on once launched (links.branch), falling back to its folder's shared branch;
+  // an un-launched task with neither just opens its drawer.
+  const handlePressTimelineTask = useCallback(
+    (task: KanbanTask) => {
+      handlePressTask(task);
+      if (!serverId || !projectId) {
+        return;
+      }
+      const folder = boardHandle.board?.folders.find((entry) => entry.id === task.folderId);
+      const branch = task.links.branch ?? folder?.branch ?? null;
+      if (branch) {
+        rememberProjectBranch({ serverId, projectId, branch });
+      }
+    },
+    [handlePressTask, serverId, projectId, boardHandle.board],
+  );
+
   const handleCancelNewTask = useCallback(() => {
     setNewTaskColumn(null);
   }, []);
@@ -1154,7 +1177,7 @@ function BoardContent({
       {boardHandle.board && showTimeline ? (
         <TaskGantt
           board={boardHandle.board}
-          onPressTask={handlePressTask}
+          onPressTask={handlePressTimelineTask}
           containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
           fill={isCompact}
         />
