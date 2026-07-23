@@ -76,6 +76,51 @@ describe("TaskEstimator", () => {
     return { estimator, runAgent, createAgent };
   }
 
+  const okEstimate = JSON.stringify({
+    tokens: 10_000,
+    quotaPercent: 2,
+    estimatedMinutes: 10,
+    confidence: "high",
+    summary: "ok",
+  });
+
+  /**
+   * Estimator whose analysis turn is gated on a shared latch so a test can
+   * observe how many analyses run at once. `runAgent` bumps a live counter,
+   * records the peak, then waits a tick before returning — long enough for a
+   * sibling analysis to overlap if the scheduler allows it.
+   */
+  function buildConcurrencyProbe(maxConcurrent?: number) {
+    let active = 0;
+    let peak = 0;
+    let agentSeq = 0;
+    const runAgent = vi.fn(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      active -= 1;
+      return { canceled: false, finalText: okEstimate, timeline: [] };
+    });
+    const createAgent = vi.fn(async () => {
+      agentSeq += 1;
+      return { snapshot: { id: `estimator-agent-${agentSeq}` }, initialPromptError: null };
+    });
+    const estimator = new TaskEstimator({
+      agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
+      createAgent: createAgent as never,
+      taskBoardService: service,
+      projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
+      logger,
+      ...(maxConcurrent != null ? { maxConcurrent } : {}),
+    });
+    return { estimator, runAgent, peak: () => peak };
+  }
+
+  async function scheduledTaskInFolder(folderName: string, title: string) {
+    const folder = await service.createFolder("proj-1", folderName);
+    return service.createTask("proj-1", { folderId: folder.id, title, column: "scheduled" });
+  }
+
   test("applies a structured estimate with estimatedMinutes and advances the schedule", async () => {
     const task = await seedScheduledTask();
     const { estimator } = buildEstimator({
@@ -158,5 +203,67 @@ describe("TaskEstimator", () => {
     // waits for quiet hours rather than launching mid-day.
     expect(estimated?.estimate?.estimatedMinutes).toBe(60);
     expect(estimated?.schedule?.state).toBe("awaiting_slot");
+  });
+
+  test("analyzes tasks from different folders in parallel", async () => {
+    const taskA = await scheduledTaskInFolder("Auth", "Login flow");
+    const taskB = await scheduledTaskInFolder("Billing", "Invoices");
+    const { estimator, peak } = buildConcurrencyProbe();
+
+    estimator.requestEstimate("proj-1", taskA.id);
+    estimator.requestEstimate("proj-1", taskB.id);
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks.every((entry) => entry.estimate)).toBe(true);
+    });
+    // Independent folders => their analyses overlapped instead of queueing.
+    expect(peak()).toBe(2);
+  });
+
+  test("serializes tasks that share a branch-folder", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const taskA = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Login flow",
+      column: "scheduled",
+    });
+    const taskB = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Logout flow",
+      column: "scheduled",
+    });
+    const { estimator, peak } = buildConcurrencyProbe();
+
+    estimator.requestEstimate("proj-1", taskA.id);
+    estimator.requestEstimate("proj-1", taskB.id);
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks.every((entry) => entry.estimate)).toBe(true);
+    });
+    // Same folder = one shared worktree, so the two analyses never overlapped.
+    expect(peak()).toBe(1);
+  });
+
+  test("caps parallelism at maxConcurrent across independent tasks", async () => {
+    const tasks = await Promise.all([
+      scheduledTaskInFolder("A", "one"),
+      scheduledTaskInFolder("B", "two"),
+      scheduledTaskInFolder("C", "three"),
+      scheduledTaskInFolder("D", "four"),
+    ]);
+    const { estimator, peak } = buildConcurrencyProbe(2);
+
+    for (const task of tasks) {
+      estimator.requestEstimate("proj-1", task.id);
+    }
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks.every((entry) => entry.estimate)).toBe(true);
+    });
+    // Four independent tasks, but the cap holds the peak at two at a time.
+    expect(peak()).toBe(2);
   });
 });
