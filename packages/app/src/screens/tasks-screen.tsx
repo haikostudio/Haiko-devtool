@@ -69,6 +69,7 @@ import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
+import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
@@ -395,6 +396,18 @@ function tasksHeaderTitle(
   return t("tasks.title");
 }
 
+// A task "owns" an agent when that agent is one of its linked conversations —
+// the pipeline/primary agent or any agent-sync link. Used to map a toast (which
+// carries an agent) back to its board task so a tap can open the task's drawer.
+function taskOwnsAgent(task: KanbanTask, agentId: string): boolean {
+  const { links } = task;
+  return (
+    links.primaryAgentId === agentId ||
+    links.taskAgentId === agentId ||
+    links.agentIds.includes(agentId)
+  );
+}
+
 export function TasksScreen() {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -445,10 +458,46 @@ export function TasksScreen() {
   // lingers from another project. These store fields are ephemeral (not persisted).
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
   const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
+  const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   useEffect(() => {
     setDockTaskId(null);
     setDetailsTaskId(null);
   }, [serverId, projectId, setDockTaskId, setDetailsTaskId]);
+
+  // While the board is on screen, teach the global agent-task toast stack to open
+  // a task's drawer instead of navigating to its raw agent — the same thing a card
+  // tap does (dock the task's chat when the conductor is available, otherwise pop
+  // the Details drawer). The latest board/serverId live in refs so the registered
+  // resolver stays stable and doesn't re-register on every board refresh.
+  const supportsConductor = useHostFeature(serverId, "tasksConductor");
+  const setResolveAgentTask = useTaskBoardToastNavStore((state) => state.setResolveAgentTask);
+  const boardRef = useRef(boardHandle.board);
+  const serverIdRef = useRef(serverId);
+  const supportsConductorRef = useRef(supportsConductor);
+  useEffect(() => {
+    boardRef.current = boardHandle.board;
+    serverIdRef.current = serverId;
+    supportsConductorRef.current = supportsConductor;
+  });
+  useEffect(() => {
+    setResolveAgentTask(({ serverId: targetServerId, agentId }) => {
+      if (!serverIdRef.current || serverIdRef.current !== targetServerId) {
+        return false;
+      }
+      const task = boardRef.current?.tasks.find((entry) => taskOwnsAgent(entry, agentId));
+      if (!task) {
+        return false;
+      }
+      if (supportsConductorRef.current) {
+        setDockTaskId(task.id);
+        setConductorOpen(true);
+      } else {
+        setDetailsTaskId(task.id);
+      }
+      return true;
+    });
+    return () => setResolveAgentTask(null);
+  }, [setResolveAgentTask, setDockTaskId, setDetailsTaskId, setConductorOpen]);
 
   const title = tasksHeaderTitle(t, isCompact, selectedFolder, selectedProject);
 
