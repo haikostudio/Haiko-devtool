@@ -9,6 +9,16 @@ import {
   type ReactNode,
 } from "react";
 import { View } from "react-native";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import {
@@ -168,12 +178,74 @@ export function useProjectToneMap(projects: ProjectRef[]): Map<string, TaskTone 
   }, [tasksByProject, bucketMap]);
 }
 
+// Vertical hop (px) of the attention bounce, and how often it repeats — kept in
+// step with the card's attention shake so the light and the card pulse together.
+const BOUNCE_LIFT = 3;
+const BOUNCE_INTERVAL_MS = 5000;
+
+/**
+ * Drives the "waiting for you" bounce on the amber light: a light up-and-settle
+ * hop (~0.4s) followed by a rest, looping every `BOUNCE_INTERVAL_MS`. Returns an
+ * animated transform to spread on the dot. Disabled (identity transform) when the
+ * OS asks for reduced motion. Only mounted for the `attention` tone, so the hook
+ * runs solely while the light is actually waiting.
+ */
+function useAttentionBounce() {
+  const offset = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (reduceMotion) {
+      offset.value = 0;
+      return;
+    }
+    // One hop: lift up, overshoot back down a touch, then settle — mirrors the
+    // card shake's burst-then-hold cadence, just on the vertical axis.
+    const burst = withSequence(
+      withTiming(-1, { duration: 150 }),
+      withTiming(0.25, { duration: 130 }),
+      withTiming(0, { duration: 110 }),
+    );
+    offset.value = withRepeat(withDelay(BOUNCE_INTERVAL_MS - 390, burst), -1, false);
+    return () => {
+      cancelAnimation(offset);
+      offset.value = 0;
+    };
+  }, [reduceMotion, offset]);
+
+  return useAnimatedStyle(() => ({
+    transform: [{ translateY: offset.value * BOUNCE_LIFT }],
+  }));
+}
+
+// The amber "wants you" light, isolated into its own component so the bounce
+// hooks only run while an attention light is actually on screen (the parent bails
+// out early for the null / running / static tones).
+function AttentionLight({
+  variant,
+  label,
+}: {
+  variant: "dot" | "pip";
+  label: string;
+}): ReactElement {
+  const bounceStyle = useAttentionBounce();
+  // Memoized so the combined [static, animated] array keeps a stable reference
+  // across renders (react-perf/jsx-no-new-array-as-prop). `bounceStyle` from
+  // useAnimatedStyle is itself stable, so this only rebuilds when the variant flips.
+  const style = useMemo(
+    () => [VOYANT_STYLE[variant].attention, bounceStyle],
+    [variant, bounceStyle],
+  );
+  return <Animated.View style={style} accessibilityLabel={label} />;
+}
+
 /**
  * The status "voyant": echoes the agent toast badge. A `running` task shows the
- * exact same shared square loader as the toasts (a spinning dot grid); every
- * other tone is a small static colored light — amber = wants you, blue =
- * scheduled, green = done. `dot` sits inline in a rail row; `pip` straddles the
- * top-left corner of a card. Renders nothing when there is no tone to show.
+ * exact same shared square loader as the toasts (a spinning dot grid); the
+ * `attention` light gives a light bounce to say it wants a reply (like the
+ * sidebar dot); the rest are small static colored lights — blue = scheduled,
+ * green = done. `dot` sits inline in a rail row; `pip` straddles the top-left
+ * corner of a card. Renders nothing when there is no tone to show.
  */
 export function TaskStatusVoyant({
   tone,
@@ -195,6 +267,10 @@ export function TaskStatusVoyant({
         <SyncedLoader size={LOADER_SIZE[variant]} color={styles.loaderColor.color} />
       </View>
     );
+  }
+  // Waiting for a reply: the amber light bounces, echoing the card's shake.
+  if (tone === "attention") {
+    return <AttentionLight variant={variant} label={label} />;
   }
   return <View style={VOYANT_STYLE[variant][tone]} accessibilityLabel={label} />;
 }
