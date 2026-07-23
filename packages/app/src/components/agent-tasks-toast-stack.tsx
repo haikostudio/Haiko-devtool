@@ -37,6 +37,7 @@ import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { agentTaskToastKey, useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
+import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import {
   buildWorkspaceTabPersistenceKey,
@@ -292,18 +293,28 @@ export function TaskToast({
   // JSX doesn't allocate a fresh style array every render.
   const rowStyle = useMemo(() => [styles.contentRow, contentStyle], [contentStyle]);
 
+  const resolveAgentTask = useTaskBoardToastNavStore((state) => state.resolveAgentTask);
   const handlePress = useCallback(() => {
-    navigateToAgent({
-      serverId: task.agent.serverId,
-      agentId: task.agent.id,
-      workspaceId: task.agent.workspaceId,
-      pin: false,
-    });
+    // Contextual navigation: when the tasks board is on screen it registers a
+    // resolver (see TasksScreen). If this toast's agent belongs to one of the
+    // board's tasks, it opens that task's drawer — the same as tapping its card.
+    // Anywhere else (base interface, or an agent not on the current board), fall
+    // back to opening the agent conversation.
+    const handled =
+      resolveAgentTask?.({ serverId: task.agent.serverId, agentId: task.agent.id }) ?? false;
+    if (!handled) {
+      navigateToAgent({
+        serverId: task.agent.serverId,
+        agentId: task.agent.id,
+        workspaceId: task.agent.workspaceId,
+        pin: false,
+      });
+    }
     // No dismissal here: opening the agent makes it a pane's focused tab, and the
     // stack drops the finished card only once that agent is genuinely on screen
     // (see useTrackedTasks). A click that never surfaces the agent keeps the card.
     onActivate?.();
-  }, [task, onActivate]);
+  }, [task, onActivate, resolveAgentTask]);
 
   return (
     <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
