@@ -428,6 +428,7 @@ export const ar: TranslationResources = {
     status: {
       attention: "بانتظارك",
       running: "قيد التنفيذ",
+      scheduled: "مجدولة",
       done: "مكتمل",
     },
     triage: {

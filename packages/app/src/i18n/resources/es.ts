@@ -434,6 +434,7 @@ export const es: TranslationResources = {
     status: {
       attention: "Esperándote",
       running: "En curso",
+      scheduled: "Programada",
       done: "Hecho",
     },
     triage: {

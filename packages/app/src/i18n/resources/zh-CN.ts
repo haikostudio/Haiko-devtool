@@ -428,6 +428,7 @@ export const zhCN: TranslationResources = {
     status: {
       attention: "等待你",
       running: "进行中",
+      scheduled: "已排期",
       done: "已完成",
     },
     triage: {

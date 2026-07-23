@@ -427,6 +427,7 @@ export const en = {
     status: {
       attention: "Waiting for you",
       running: "In progress",
+      scheduled: "Scheduled",
       done: "Done",
     },
     triage: {
