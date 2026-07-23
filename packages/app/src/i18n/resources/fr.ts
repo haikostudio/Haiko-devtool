@@ -1287,6 +1287,7 @@ export const fr: TranslationResources = {
     title: "Créer un espace de travail",
     errors: {
       failedCreateWorktree: "Échec de la création de l'arbre de travail",
+      hostDiskFull: "Disque plein sur l'hôte — libérez de l'espace et réessayez",
       failedOpenProject: "Échec de l'ouverture du projet",
       selectModel: "Sélectionnez un modèle",
       hostDisconnected: "Hostn'est pas connecté",
