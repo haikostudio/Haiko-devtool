@@ -154,9 +154,19 @@ export function KanbanBoard({
       if (task.column === targetColumn && overId === taskId) {
         return;
       }
+      // Reordering a card within its own column is an explicit hand-arrange:
+      // pin that column to "manual" so the drag position sticks instead of
+      // being overridden by the recency (or any other) sort. Cross-column
+      // moves are the normal workflow and keep the column's chosen sort.
+      if (task.column === targetColumn) {
+        const current = controls[targetColumn] ?? EMPTY_COLUMN_CONTROLS;
+        if (current.sortMode !== "manual") {
+          setColumnControls(targetColumn, { ...current, sortMode: "manual" });
+        }
+      }
       onMoveTask({ taskId, column: targetColumn, index: targetIndex });
     },
-    [columns, onMoveTask, tasksById],
+    [columns, controls, onMoveTask, setColumnControls, tasksById],
   );
 
   return (

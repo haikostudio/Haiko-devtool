@@ -378,10 +378,12 @@ export const es: TranslationResources = {
     searchTasks: "Buscar tareas",
     sortTasks: "Ordenar tareas",
     sort: {
+      updated: "Modificadas recientemente",
       deadline: "Por fecha límite",
       priority: "Por prioridad",
       title: "Alfabético",
-      created: "Más recientes",
+      created: "Creación reciente",
+      manual: "Orden manual",
     },
     filter: {
       title: "Filtrar",

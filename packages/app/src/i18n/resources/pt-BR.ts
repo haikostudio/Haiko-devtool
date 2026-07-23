@@ -379,10 +379,12 @@ export const ptBR: TranslationResources = {
     searchTasks: "Buscar tarefas",
     sortTasks: "Ordenar tarefas",
     sort: {
+      updated: "Modificadas recentemente",
       deadline: "Por prazo",
       priority: "Por prioridade",
       title: "Alfabética",
-      created: "Mais recentes",
+      created: "Criadas recentemente",
+      manual: "Ordem manual",
     },
     filter: {
       title: "Filtrar",

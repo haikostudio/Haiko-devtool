@@ -375,10 +375,12 @@ export const ru: TranslationResources = {
     searchTasks: "Поиск задач",
     sortTasks: "Сортировать задачи",
     sort: {
+      updated: "Недавно изменённые",
       deadline: "По сроку",
       priority: "По приоритету",
       title: "По алфавиту",
-      created: "Сначала новые",
+      created: "Недавно созданные",
+      manual: "Вручную",
     },
     filter: {
       title: "Фильтр",

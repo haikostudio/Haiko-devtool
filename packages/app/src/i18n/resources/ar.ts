@@ -372,10 +372,12 @@ export const ar: TranslationResources = {
     searchTasks: "بحث في المهام",
     sortTasks: "ترتيب المهام",
     sort: {
+      updated: "المحدَّثة مؤخرًا",
       deadline: "حسب الموعد النهائي",
       priority: "حسب الأولوية",
       title: "أبجديًا",
-      created: "الأحدث",
+      created: "الأحدث إنشاءً",
+      manual: "ترتيب يدوي",
     },
     filter: {
       title: "تصفية",

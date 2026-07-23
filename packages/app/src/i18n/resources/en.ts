@@ -371,10 +371,12 @@ export const en = {
     searchTasks: "Search tasks",
     sortTasks: "Sort tasks",
     sort: {
+      updated: "Recently updated",
       deadline: "By deadline",
       priority: "By priority",
       title: "Alphabetical",
-      created: "Most recent",
+      created: "Newest created",
+      manual: "Manual order",
     },
     filter: {
       title: "Filter",

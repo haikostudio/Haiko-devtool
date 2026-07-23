@@ -3,11 +3,23 @@ import { useTranslation } from "react-i18next";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { daysUntil, parseTaskTags, type TaskPriorityLevel } from "./task-tags";
 
-// How the cards within each column are ordered. "deadline" is the default the
-// board has always used; the rest are opt-in via the board's sort control.
-export type TaskSortMode = "deadline" | "priority" | "title" | "created";
+// How the cards within each column are ordered. "updated" is the default —
+// most recently touched first, so the last task to finish sits at the top of
+// "done". The rest are opt-in via the board's sort control. "manual" is not a
+// pickable option: a column enters it implicitly when the user drags a card
+// within the column, so their hand-arranged order is preserved.
+export type TaskSortMode = "updated" | "deadline" | "priority" | "title" | "created" | "manual";
 
-export const TASK_SORT_MODES: TaskSortMode[] = ["deadline", "priority", "title", "created"];
+// The modes offered in the column toolbar (in order). "manual" is intentionally
+// excluded — it is entered by dragging, not chosen, and cleared by picking any
+// of these explicit sorts.
+export const TASK_SORT_MODES: TaskSortMode[] = [
+  "updated",
+  "deadline",
+  "priority",
+  "title",
+  "created",
+];
 
 export const KANBAN_COLUMNS: TaskColumn[] = [
   "backlog",
@@ -52,8 +64,34 @@ function priorityRank(task: KanbanTask): number {
   return level ? PRIORITY_RANK[level] : 4;
 }
 
+// Most recently modified first (the last task to finish rises to the top);
+// creation time then id break ties so cards touched in the same instant stay
+// stable across renders.
+function compareByUpdated(left: KanbanTask, right: KanbanTask): number {
+  return (
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    right.createdAt.localeCompare(left.createdAt) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+// The user's hand-arranged order, straight from the drag-packed `order` field
+// (ascending = top of column). Recency then id break ties so cards that never
+// received a distinct order stay stable.
+function compareByManual(left: KanbanTask, right: KanbanTask): number {
+  return (
+    left.order - right.order ||
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
 function comparatorFor(mode: TaskSortMode): (left: KanbanTask, right: KanbanTask) => number {
   switch (mode) {
+    case "manual":
+      return compareByManual;
+    case "deadline":
+      return compareByDeadline;
     case "priority":
       return (left, right) =>
         priorityRank(left) - priorityRank(right) || compareByDeadline(left, right);
@@ -65,7 +103,8 @@ function comparatorFor(mode: TaskSortMode): (left: KanbanTask, right: KanbanTask
       // Newest first.
       return (left, right) => right.createdAt.localeCompare(left.createdAt);
     default:
-      return compareByDeadline;
+      // "updated" — the board default.
+      return compareByUpdated;
   }
 }
 
@@ -203,7 +242,7 @@ export interface ColumnControls {
 
 export const EMPTY_COLUMN_CONTROLS: ColumnControls = {
   query: "",
-  sortMode: "deadline",
+  sortMode: "updated",
   filter: EMPTY_TASK_FILTER,
 };
 
@@ -276,10 +315,12 @@ export function useTaskSortLabels(): Record<TaskSortMode, string> {
   const { t } = useTranslation();
   return useMemo(
     () => ({
+      updated: t("tasks.sort.updated"),
       deadline: t("tasks.sort.deadline"),
       priority: t("tasks.sort.priority"),
       title: t("tasks.sort.title"),
       created: t("tasks.sort.created"),
+      manual: t("tasks.sort.manual"),
     }),
     [t],
   );
