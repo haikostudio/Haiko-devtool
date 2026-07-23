@@ -397,6 +397,7 @@ export const ar: TranslationResources = {
       scheduled: "مُجدولة",
       inProgress: "قيد التنفيذ",
       done: "منجزة",
+      deployed: "منشورة",
     },
     board: {
       emptyColumn: "لا مهام",

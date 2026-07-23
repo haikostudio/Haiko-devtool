@@ -125,6 +125,50 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([]);
   });
 
+  test("deployed is terminal: entering it stamps deployedAt and never re-arms", async () => {
+    const scheduled: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Ship it live" });
+
+    // Complete, then deploy the task.
+    await service.moveTask("proj-1", { taskId: task.id, column: "done", index: 0, manual: false });
+    const deployedBoard = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+    expect(deployedBoard.tasks[0]?.column).toBe("deployed");
+    expect(deployedBoard.tasks[0]?.deployedAt).toBeTruthy();
+    const deployedAt = deployedBoard.tasks[0]?.deployedAt;
+
+    // Drag it back into the pipeline: it must NOT re-arm or notify the scheduler.
+    const back = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "validated",
+      index: 0,
+      manual: true,
+    });
+    expect(back.tasks[0]?.schedule ?? null).toBeNull();
+    expect(back.tasks[0]?.deployedAt).toBe(deployedAt);
+    expect(scheduled).toEqual([]);
+  });
+
+  test("moving straight to deployed backfills completedAt", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Hotfix live" });
+
+    const board = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+    expect(board.tasks[0]?.deployedAt).toBeTruthy();
+    expect(board.tasks[0]?.completedAt).toBeTruthy();
+  });
+
   test("upsertSyncedTask dedupes by normalized title project-wide", async () => {
     const folder = await service.createFolder("proj-1", "Agent");
     const first = await service.upsertSyncedTask("proj-1", {

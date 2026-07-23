@@ -396,6 +396,7 @@ export const en = {
       scheduled: "Planned",
       inProgress: "In progress",
       done: "Done",
+      deployed: "Deployed",
     },
     board: {
       emptyColumn: "No tasks",

@@ -401,6 +401,7 @@ export const ja: TranslationResources = {
       scheduled: "予定",
       inProgress: "進行中",
       done: "完了",
+      deployed: "デプロイ済み",
     },
     board: {
       emptyColumn: "タスクなし",

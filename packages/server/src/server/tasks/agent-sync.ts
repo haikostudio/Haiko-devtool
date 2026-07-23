@@ -185,7 +185,9 @@ export class AgentTaskSyncService {
         continue;
       }
       const targetColumn = item.completed ? "done" : "in_progress";
-      if (task.column !== targetColumn && task.column !== "done") {
+      // "done" and "deployed" are terminal: agent-sync never drags a finished or
+      // shipped task backwards.
+      if (task.column !== targetColumn && task.column !== "done" && task.column !== "deployed") {
         await this.taskBoardService.transitionTask(projectId, task.id, targetColumn);
       }
     }
@@ -213,7 +215,7 @@ export class AgentTaskSyncService {
         continue;
       }
       const completed = todoState.get(task.normalizedTitle);
-      if (completed === true && task.column !== "done") {
+      if (completed === true && task.column !== "done" && task.column !== "deployed") {
         await this.taskBoardService.transitionTask(projectId, task.id, "done");
       }
     }

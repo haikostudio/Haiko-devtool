@@ -403,6 +403,7 @@ export const es: TranslationResources = {
       scheduled: "Planificado",
       inProgress: "En curso",
       done: "Hecho",
+      deployed: "Desplegado",
     },
     board: {
       emptyColumn: "Sin tareas",

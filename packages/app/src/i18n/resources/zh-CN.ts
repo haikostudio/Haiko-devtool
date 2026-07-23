@@ -397,6 +397,7 @@ export const zhCN: TranslationResources = {
       scheduled: "已计划",
       inProgress: "进行中",
       done: "已完成",
+      deployed: "已部署",
     },
     board: {
       emptyColumn: "暂无任务",
