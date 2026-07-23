@@ -305,4 +305,81 @@ describe("TaskBoardService", () => {
     expect(board.folders).toHaveLength(0);
     expect(board.tasks).toHaveLength(0);
   });
+
+  test("markTaskViewed stamps viewedAt once, idempotently, without reordering", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Seen me now" });
+    const before = (await service.getBoard("proj-1")).tasks[0];
+    expect(before?.viewedAt ?? null).toBeNull();
+
+    const board = await service.markTaskViewed("proj-1", task.id);
+    const viewed = board?.tasks.find((entry) => entry.id === task.id);
+    expect(viewed?.viewedAt).toBeTruthy();
+    // Marking viewed must never touch updatedAt (else the recency sort reshuffles).
+    expect(viewed?.updatedAt).toBe(before?.updatedAt);
+
+    // Idempotent: a second open returns null (nothing changed) and keeps the stamp.
+    const again = await service.markTaskViewed("proj-1", task.id);
+    expect(again).toBeNull();
+    const stillViewed = (await service.getBoard("proj-1")).tasks.find(
+      (entry) => entry.id === task.id,
+    );
+    expect(stillViewed?.viewedAt).toBe(viewed?.viewedAt);
+  });
+
+  test("promoteDoneTasksToDeployed moves only done cards on the merged branches", async () => {
+    // "Auth" derives branch feat/auth; "Billing" derives feat/billing.
+    const auth = await service.createFolder("proj-1", "Auth");
+    const billing = await service.createFolder("proj-1", "Billing");
+    const shipped = await service.createTask("proj-1", {
+      folderId: auth.id,
+      title: "Shipped auth work",
+    });
+    const otherDone = await service.createTask("proj-1", {
+      folderId: billing.id,
+      title: "Unrelated done work",
+    });
+    const stillOpen = await service.createTask("proj-1", {
+      folderId: auth.id,
+      title: "Auth work in flight",
+    });
+    await service.moveTask("proj-1", {
+      taskId: shipped.id,
+      column: "done",
+      index: 0,
+      manual: true,
+    });
+    await service.moveTask("proj-1", {
+      taskId: otherDone.id,
+      column: "done",
+      index: 0,
+      manual: true,
+    });
+
+    const moved = await service.promoteDoneTasksToDeployed({
+      projectId: "proj-1",
+      branches: new Set(["feat/auth"]),
+    });
+    expect(moved).toBe(1);
+
+    const board = await service.getBoard("proj-1");
+    const find = (id: string) => board.tasks.find((entry) => entry.id === id);
+    // The done card on feat/auth ships to "deployed" and gets a deployedAt stamp.
+    expect(find(shipped.id)?.column).toBe("deployed");
+    expect(find(shipped.id)?.deployedAt).toBeTruthy();
+    // A done card on another branch is untouched; an in-flight card never moves.
+    expect(find(otherDone.id)?.column).toBe("done");
+    expect(find(stillOpen.id)?.column).toBe("backlog");
+  });
+
+  test("promoteDoneTasksToDeployed is a no-op when no branches were merged", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const done = await service.createTask("proj-1", { folderId: folder.id, title: "Done but ur" });
+    await service.moveTask("proj-1", { taskId: done.id, column: "done", index: 0, manual: true });
+
+    const moved = await service.promoteDoneTasksToDeployed({ projectId: "proj-1", branches: null });
+    expect(moved).toBe(0);
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === done.id)?.column).toBe("done");
+  });
 });

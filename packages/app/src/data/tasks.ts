@@ -53,6 +53,7 @@ export interface TaskBoardHandle {
     executionHold?: boolean | null;
   }) => Promise<void>;
   moveTask: (input: { taskId: string; column: TaskColumn; index: number }) => Promise<void>;
+  markTaskViewed: (taskId: string) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   estimateTask: (taskId: string) => Promise<void>;
   runTaskNow: (taskId: string) => Promise<void>;
@@ -239,6 +240,28 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext],
   );
 
+  const markTaskViewed = useCallback(
+    async (taskId: string) => {
+      const { client, projectId: project } = requireContext();
+      // Optimistic: stamp locally so the card dims the instant it's opened,
+      // without waiting for the server push. viewedAt never affects sort order.
+      const current = boardRef.current;
+      const task = current?.tasks.find((entry) => entry.id === taskId);
+      if (current && task && !task.viewedAt) {
+        const stamped = { ...task, viewedAt: new Date().toISOString() };
+        setBoard({
+          ...current,
+          tasks: current.tasks.map((entry) => (entry.id === taskId ? stamped : entry)),
+        });
+      }
+      const payload = await client.tasksTaskMarkViewed({ projectId: project, taskId });
+      if (payload.board) {
+        setBoard(payload.board);
+      }
+    },
+    [requireContext],
+  );
+
   const deleteTask = useCallback(
     async (taskId: string) => {
       const { client, projectId: project } = requireContext();
@@ -286,6 +309,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       createTask,
       updateTask,
       moveTask,
+      markTaskViewed,
       deleteTask,
       estimateTask,
       runTaskNow,
@@ -302,6 +326,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       createTask,
       updateTask,
       moveTask,
+      markTaskViewed,
       deleteTask,
       estimateTask,
       runTaskNow,

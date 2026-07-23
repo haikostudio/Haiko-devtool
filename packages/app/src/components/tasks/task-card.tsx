@@ -52,8 +52,23 @@ interface TaskCardProps {
   testID?: string;
 }
 
-function cardStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
-  return [styles.card, (hovered || pressed) && styles.cardHovered];
+function cardStyle({
+  pressed,
+  hovered,
+  dimmed,
+}: {
+  pressed: boolean;
+  hovered?: boolean;
+  dimmed?: boolean;
+}) {
+  return [styles.card, (hovered || pressed) && styles.cardHovered, dimmed && styles.cardDimmed];
+}
+
+// A finished card the user has already opened recedes: dim it so unseen finished
+// work (full opacity) still catches the eye. Only "done"/"deployed" cards ever
+// dim — an in-flight card stays bright regardless of whether it's been opened.
+function isCardDimmed(task: KanbanTask): boolean {
+  return Boolean(task.viewedAt) && (task.column === "done" || task.column === "deployed");
 }
 
 type ScheduleBadgeVariant = "success" | "error" | "warning";
@@ -208,12 +223,18 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const hiddenTagCount = tags.length - visibleTags.length;
 
   const priorityLabel = priority?.label;
+  const dimmed = isCardDimmed(task);
+  const resolveCardStyle = useCallback(
+    ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
+      cardStyle({ pressed, hovered, dimmed }),
+    [dimmed],
+  );
 
   return (
     <Animated.View style={shakeStyle}>
       <Pressable
         onPress={handlePress}
-        style={cardStyle}
+        style={resolveCardStyle}
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
@@ -403,6 +424,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardHovered: {
     backgroundColor: theme.colors.surface1,
+  },
+  // Finished + already-seen: recede to half opacity so unseen finished work leads.
+  cardDimmed: {
+    opacity: 0.5,
   },
   chipRow: {
     flexDirection: "row",

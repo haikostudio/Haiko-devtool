@@ -150,6 +150,12 @@ export const KanbanTaskSchema = z.object({
   // is live (merged + published). Terminal, like completedAt; a task entering
   // "deployed" also gets a completedAt if it somehow skipped "done".
   deployedAt: z.string().nullable().optional(),
+  // Stamped the first time the user opens this card. Purely a "already seen"
+  // marker: a finished (done/deployed) card that has been viewed dims to ~50%
+  // opacity so it recedes behind still-unseen finished work. Deliberately never
+  // touches updatedAt when set, so marking a card viewed never reorders it.
+  // Optional + additive — old boards/clients simply omit it.
+  viewedAt: z.string().nullable().optional(),
   // Set once the task's line has been added to a billing document.
   billing: TaskBillingSchema.nullable().optional(),
   createdAt: z.string(),
