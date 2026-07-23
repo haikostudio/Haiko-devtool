@@ -141,6 +141,7 @@ Enables remote access when the daemon is behind a firewall.
 - Client and daemon channels with identical API (`createClientChannel`, `createDaemonChannel`)
 - Pairing via QR code transfers the daemon's public key to the client
 - Self-hosted relays opt into TLS with `daemon.relay.useTls` or `PASEO_RELAY_USE_TLS=true`; the public (client-facing) TLS setting can be overridden independently via `daemon.relay.publicUseTls` or `PASEO_RELAY_PUBLIC_USE_TLS`
+- **Cloudflare limits WebSocket frames to 1 MiB** and kills the socket with close code 1009 ("Transport closed (code 1009)" in the app) when exceeded. `EncryptedChannel` therefore splits large ciphertexts into `e2ee_chunk` envelopes (~800 KB each) and reassembles them on the other side. Chunked sending is negotiated via a `features: ["chunking_v1"]` field on the `e2ee_hello`/`e2ee_ready` handshake messages — peers that never advertised it receive the historical single-frame format, so old clients/daemons keep working. The relay forwards chunk frames opaquely; no relay deploy is needed for this feature.
 
 See [SECURITY.md](../SECURITY.md) for the full threat model.
 

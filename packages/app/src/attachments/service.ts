@@ -1,5 +1,14 @@
-import type { AttachmentMetadata } from "@/attachments/types";
+import type { AttachmentMetadata, SaveAttachmentInput } from "@/attachments/types";
 import { getAttachmentStore } from "@/attachments/store";
+import { maybeCompressImageAttachment } from "@/attachments/image-compression";
+
+async function persistAttachment(input: SaveAttachmentInput): Promise<AttachmentMetadata> {
+  const store = await getAttachmentStore();
+  // Downscale/re-encode large images at ingestion so previews, drafts, and
+  // the base64 payload sent to the daemon all use the smaller version.
+  const compressed = await maybeCompressImageAttachment(input);
+  return await store.save(compressed ?? input);
+}
 
 export async function persistAttachmentFromBlob(input: {
   blob: Blob;
@@ -7,8 +16,7 @@ export async function persistAttachmentFromBlob(input: {
   fileName?: string | null;
   id?: string;
 }): Promise<AttachmentMetadata> {
-  const store = await getAttachmentStore();
-  return await store.save({
+  return await persistAttachment({
     id: input.id,
     mimeType: input.mimeType,
     fileName: input.fileName,
@@ -22,8 +30,7 @@ export async function persistAttachmentFromDataUrl(input: {
   fileName?: string | null;
   id?: string;
 }): Promise<AttachmentMetadata> {
-  const store = await getAttachmentStore();
-  return await store.save({
+  return await persistAttachment({
     id: input.id,
     mimeType: input.mimeType,
     fileName: input.fileName,
@@ -37,8 +44,7 @@ export async function persistAttachmentFromBytes(input: {
   fileName?: string | null;
   id?: string;
 }): Promise<AttachmentMetadata> {
-  const store = await getAttachmentStore();
-  return await store.save({
+  return await persistAttachment({
     id: input.id,
     mimeType: input.mimeType,
     fileName: input.fileName,
@@ -52,8 +58,7 @@ export async function persistAttachmentFromFileUri(input: {
   fileName?: string | null;
   id?: string;
 }): Promise<AttachmentMetadata> {
-  const store = await getAttachmentStore();
-  return await store.save({
+  return await persistAttachment({
     id: input.id,
     mimeType: input.mimeType,
     fileName: input.fileName,

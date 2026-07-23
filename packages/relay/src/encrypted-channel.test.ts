@@ -269,4 +269,108 @@ describe("EncryptedChannel", () => {
 
     expect(daemonTransport.close).toHaveBeenCalledWith(1008, "E2EE re-handshake key mismatch");
   });
+
+  it("splits large messages into relay-safe chunks and reassembles them", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    const daemonMessages: (string | ArrayBuffer)[] = [];
+    let clientOpenedResolve: (() => void) | null = null;
+    const clientOpened = new Promise<void>((resolve) => {
+      clientOpenedResolve = resolve;
+    });
+
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair, {
+      onmessage: (data) => daemonMessages.push(data),
+    });
+    const clientChannel = await createClientChannel(clientTransport, daemonPubKeyB64, {
+      onopen: () => clientOpenedResolve?.(),
+    });
+    await daemonChannelPromise;
+    await clientOpened;
+
+    const sendMock = clientTransport.send as ReturnType<typeof vi.fn>;
+    sendMock.mockClear();
+
+    // ~2MB plaintext -> base64 ciphertext far above the 1MiB relay frame limit.
+    const largeMessage = "x".repeat(2_000_000);
+    await clientChannel.send(largeMessage);
+    await waitForAsyncDelivery();
+
+    expect(daemonMessages).toEqual([largeMessage]);
+    // Message was split, and every individual frame stays under Cloudflare's
+    // 1MiB WebSocket message limit.
+    expect(sendMock.mock.calls.length).toBeGreaterThan(1);
+    for (const [frame] of sendMock.mock.calls) {
+      expect(typeof frame).toBe("string");
+      expect((frame as string).length).toBeLessThan(1_048_576);
+    }
+  });
+
+  it("sends a single frame to peers that did not advertise chunking", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    const daemonMessages: (string | ArrayBuffer)[] = [];
+    let clientOpenedResolve: (() => void) | null = null;
+    const clientOpened = new Promise<void>((resolve) => {
+      clientOpenedResolve = resolve;
+    });
+
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair, {
+      onmessage: (data) => daemonMessages.push(data),
+    });
+    const clientChannel = await createClientChannel(clientTransport, daemonPubKeyB64, {
+      onopen: () => clientOpenedResolve?.(),
+    });
+    await daemonChannelPromise;
+    await clientOpened;
+
+    // Simulate an old daemon that never advertised chunking support.
+    clientChannel.setPeerFeatures([]);
+
+    const sendMock = clientTransport.send as ReturnType<typeof vi.fn>;
+    sendMock.mockClear();
+
+    const largeMessage = "x".repeat(2_000_000);
+    await clientChannel.send(largeMessage);
+    await waitForAsyncDelivery();
+
+    // Historical behavior: one oversized frame (the relay may reject it, but
+    // the wire format is unchanged for old peers).
+    expect(sendMock.mock.calls.length).toBe(1);
+    expect(daemonMessages).toEqual([largeMessage]);
+  });
+
+  it("closes the channel on out-of-order chunks", async () => {
+    const [daemonTransport, clientTransport] = createMockTransportPair();
+
+    const daemonKeyPair = generateKeyPair();
+    const daemonPubKeyB64 = exportPublicKey(daemonKeyPair.publicKey);
+
+    let clientOpenedResolve: (() => void) | null = null;
+    const clientOpened = new Promise<void>((resolve) => {
+      clientOpenedResolve = resolve;
+    });
+
+    const daemonChannelPromise = createDaemonChannel(daemonTransport, daemonKeyPair);
+    await createClientChannel(clientTransport, daemonPubKeyB64, {
+      onopen: () => clientOpenedResolve?.(),
+    });
+    await daemonChannelPromise;
+    await clientOpened;
+
+    // A chunk with seq > 0 arriving without its predecessors is a protocol
+    // violation; the channel must close so the peer can reconnect cleanly.
+    daemonTransport.onmessage?.(
+      JSON.stringify({ type: "e2ee_chunk", id: 1, seq: 1, of: 2, data: "AAAA" }),
+    );
+    await waitForAsyncDelivery();
+
+    expect(daemonTransport.close).toHaveBeenCalledWith(1011, "Received out-of-order e2ee chunk");
+  });
 });
