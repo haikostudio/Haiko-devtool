@@ -103,6 +103,15 @@ export const TasksTaskMoveRequestSchema = z.object({
   index: z.number().int().nonnegative(),
 });
 
+// Mark a card as seen (stamps viewedAt once, without reordering it). Dedicated
+// RPC — the generic update path bumps updatedAt, which would reshuffle the card.
+export const TasksTaskMarkViewedRequestSchema = z.object({
+  type: z.literal("tasks.task.mark_viewed.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
 export const TasksTaskDeleteRequestSchema = z.object({
   type: z.literal("tasks.task.delete.request"),
   requestId: z.string(),
@@ -211,6 +220,17 @@ export const TasksTaskMoveResponseSchema = z.object({
   type: z.literal("tasks.task.move.response"),
   payload: z.object({
     requestId: z.string(),
+    board: TaskBoardSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskMarkViewedResponseSchema = z.object({
+  type: z.literal("tasks.task.mark_viewed.response"),
+  payload: z.object({
+    requestId: z.string(),
+    // The refreshed board when the stamp actually changed, else null (already
+    // seen / task gone) — the subscription push carries the authoritative state.
     board: TaskBoardSchema.nullable(),
     error: z.string().nullable(),
   }),

@@ -153,6 +153,7 @@ export default function CarouselDemoScreen() {
       createTask: noop,
       updateTask,
       moveTask: noop,
+      markTaskViewed: noop,
       deleteTask,
       estimateTask: noop,
       runTaskNow: noop,

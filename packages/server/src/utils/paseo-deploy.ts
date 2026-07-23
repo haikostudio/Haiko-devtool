@@ -33,6 +33,25 @@ const DAEMON_CODE_PATHS = [
 let deploying = false;
 /** Error from the last finished deploy run, if it failed. */
 let lastError: string | null = null;
+
+/** Details of a publish that just went live. */
+export interface PaseoDeploySuccess {
+  /** Task branches merged into the deploy branch for this ship (may be empty). */
+  mergedBranches: string[];
+}
+
+/**
+ * Fired once a full publish (build + deploy) finishes successfully. Wired at
+ * bootstrap to promote the shipped tasks' cards into the "deployed" column.
+ * `--no-build` runs (commit-only, nothing goes live) never fire it.
+ */
+let onDeploySuccess: ((event: PaseoDeploySuccess) => void) | null = null;
+
+export function setPaseoDeploySuccessListener(
+  listener: ((event: PaseoDeploySuccess) => void) | null,
+): void {
+  onDeploySuccess = listener;
+}
 /**
  * HEAD at the moment the daemon booted — captured once so we can tell, later,
  * that new daemon-side commits have landed since this process started (they stay
@@ -646,8 +665,10 @@ export async function triggerPaseoDeploy(input: {
   // ateliers are skipped (aborted, never left half-merged); we ship whatever
   // merged. Only if EVERY requested merge failed do we bail without shipping.
   let skippedNote: string | null = null;
+  let mergedBranches: string[] = [];
   if (input.mergeBranches && input.mergeBranches.length > 0) {
     const { merged, skipped } = await mergeBranchesIntoDeploy(input.mergeBranches);
+    mergedBranches = merged;
     if (merged.length === 0) {
       const error = `La fusion a échoué (conflit) : ${skipped.join(", ")}. Rien n'a été publié ; résous les conflits dans l'atelier puis réessaie.`;
       lastError = error;
@@ -673,6 +694,16 @@ export async function triggerPaseoDeploy(input: {
       deploying = false;
       if (code !== 0) {
         lastError = `Le déploiement a échoué (code ${code}). Voir ${SHIP_LOG_FILE}`;
+        return;
+      }
+      // Full publish succeeded: let listeners (task board) react to what shipped.
+      // A --no-build run commits without publishing, so nothing went live — skip.
+      if (!input.noBuild && onDeploySuccess) {
+        try {
+          onDeploySuccess({ mergedBranches });
+        } catch {
+          // A listener failure must never break the deploy flow.
+        }
       }
     });
     child.on("error", (err) => {

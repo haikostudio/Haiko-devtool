@@ -567,6 +567,67 @@ export class TaskBoardService {
     return board;
   }
 
+  /**
+   * Stamp viewedAt the first time the user opens a card. Idempotent (a card
+   * already seen is left untouched) and — crucially — never bumps updatedAt, so
+   * marking a card viewed does NOT reorder it in the recency sort. Returns the
+   * refreshed board only when the stamp actually changed.
+   */
+  async markTaskViewed(projectId: string, taskId: string): Promise<TaskBoard | null> {
+    let changed = false;
+    const board = await this.store.mutate(projectId, (current) => {
+      const task = current.tasks.find((entry) => entry.id === taskId);
+      if (!task || task.viewedAt) {
+        return current;
+      }
+      changed = true;
+      const viewedAt = new Date().toISOString();
+      return {
+        ...current,
+        tasks: current.tasks.map((entry) => (entry.id === taskId ? { ...entry, viewedAt } : entry)),
+      };
+    });
+    if (!changed) {
+      return null;
+    }
+    this.broadcast(board);
+    return board;
+  }
+
+  /**
+   * After a successful publish, promote every finished ("done") card whose work
+   * just went live to the terminal "deployed" column. When `branches` is a set,
+   * only cards belonging to a folder (or task) on one of those merged branches
+   * move — the precise "these branches were shipped" case. When `branches` is
+   * null (a plain publish with no branch merges) nothing is promoted: we cannot
+   * attribute the ship to specific cards, so the user still drags those by hand.
+   * Reuses transitionTask so each move stamps deployedAt and broadcasts.
+   */
+  async promoteDoneTasksToDeployed(input: {
+    projectId: string;
+    branches: Set<string> | null;
+  }): Promise<number> {
+    if (input.branches === null || input.branches.size === 0) {
+      return 0;
+    }
+    const board = await this.store.getBoard(input.projectId);
+    const branchFolderIds = new Set(
+      board.folders
+        .filter((folder) => folder.branch != null && input.branches?.has(folder.branch))
+        .map((folder) => folder.id),
+    );
+    const doneToDeploy = board.tasks.filter(
+      (task) =>
+        task.column === "done" &&
+        (branchFolderIds.has(task.folderId) ||
+          (task.links.branch != null && input.branches?.has(task.links.branch))),
+    );
+    for (const task of doneToDeploy) {
+      await this.transitionTask(input.projectId, task.id, "deployed");
+    }
+    return doneToDeploy.length;
+  }
+
   async deleteTask(projectId: string, taskId: string): Promise<void> {
     const board = await this.store.mutate(projectId, (current) => {
       if (!current.tasks.some((entry) => entry.id === taskId)) {

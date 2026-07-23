@@ -1975,6 +1975,8 @@ export class Session {
         return tasksSession.handleTaskUpdateRequest(msg);
       case "tasks.task.move.request":
         return tasksSession.handleTaskMoveRequest(msg);
+      case "tasks.task.mark_viewed.request":
+        return tasksSession.handleTaskMarkViewedRequest(msg);
       case "tasks.task.delete.request":
         return tasksSession.handleTaskDeleteRequest(msg);
       case "tasks.task.estimate.request":

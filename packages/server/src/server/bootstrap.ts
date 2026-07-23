@@ -166,7 +166,11 @@ import { startRelayTransport, type RelayTransportController } from "./relay-tran
 import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
-import { getPaseoDeployRoots, recordDaemonBootSha } from "../utils/paseo-deploy.js";
+import {
+  getPaseoDeployRoots,
+  recordDaemonBootSha,
+  setPaseoDeploySuccessListener,
+} from "../utils/paseo-deploy.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@getpaseo/protocol/messages";
 import type {
@@ -1296,6 +1300,30 @@ export async function createPaseoDaemon(
   });
   taskBoardService.setOnTaskScheduled((projectId, taskId) => {
     taskEstimator.requestEstimate(projectId, taskId);
+  });
+  // Auto-move: when a publish goes live, promote the shipped task branches' done
+  // cards into the terminal "deployed" column across every project's board.
+  setPaseoDeploySuccessListener((event) => {
+    const branches = event.mergedBranches.length > 0 ? new Set(event.mergedBranches) : null;
+    if (branches === null) {
+      return;
+    }
+    void (async () => {
+      try {
+        const projects = await projectRegistry.list();
+        for (const project of projects) {
+          if (project.archivedAt) {
+            continue;
+          }
+          await taskBoardService.promoteDoneTasksToDeployed({
+            projectId: project.projectId,
+            branches,
+          });
+        }
+      } catch (error) {
+        logger.warn({ err: error }, "Auto-promotion of deployed tasks failed");
+      }
+    })();
   });
   // Rebound to the live websocket server once it exists (see setTasksServices site).
   let taskProposalPush: ((payload: PushPayload) => void) | null = null;

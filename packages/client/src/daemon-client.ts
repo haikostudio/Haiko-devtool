@@ -4594,6 +4594,13 @@ export class DaemonClient {
     });
   }
 
+  async tasksTaskMarkViewed(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.mark_viewed.response">({
+      requestId,
+      message: { type: "tasks.task.mark_viewed.request", ...input },
+    });
+  }
+
   async tasksTaskDelete(input: { projectId: string; taskId: string }, requestId?: string) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.delete.response">({
       requestId,

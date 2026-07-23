@@ -242,6 +242,20 @@ export class TasksSession {
     }
   }
 
+  async handleTaskMarkViewedRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.mark_viewed.request" }>,
+  ): Promise<void> {
+    try {
+      const board = await this.taskBoardService.markTaskViewed(request.projectId, request.taskId);
+      this.host.emit({
+        type: "tasks.task.mark_viewed.response",
+        payload: { requestId: request.requestId, board, error: null },
+      });
+    } catch (error) {
+      this.emitRpcError(request, error);
+    }
+  }
+
   async handleTaskDeleteRequest(
     request: Extract<SessionInboundMessage, { type: "tasks.task.delete.request" }>,
   ): Promise<void> {

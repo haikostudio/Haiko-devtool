@@ -1126,6 +1126,11 @@ function BoardContent({
   // directly (otherwise a task tap would do nothing visible).
   const handlePressTask = useCallback(
     (task: KanbanTask) => {
+      // Remember this card has been seen (persistent, idempotent). A finished
+      // card then dims once opened; still-unseen finished cards stay bright.
+      void boardHandle.markTaskViewed(task.id).catch(() => {
+        // Best-effort — a failed stamp just leaves the card at full opacity.
+      });
       if (supportsConductor) {
         setDockTaskId(task.id);
         setConductorOpen(true);
@@ -1133,7 +1138,7 @@ function BoardContent({
         setDetailsTaskId(task.id);
       }
     },
-    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId],
+    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId, boardHandle],
   );
 
   // Tapping a task on the timeline does everything a card tap does (open its
