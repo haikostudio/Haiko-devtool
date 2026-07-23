@@ -89,6 +89,18 @@ export function KanbanBoard({
   const setColumnControls = useCallback((column: TaskColumn, next: ColumnControls) => {
     setControls((prev) => ({ ...prev, [column]: next }));
   }, []);
+  // A hand-drag within a column pins that column to the arranged order for the
+  // session, so the recency sort stops yanking the just-moved card back to the
+  // top. Idempotent: leaves the map untouched once the column is already manual.
+  const markColumnManual = useCallback((column: TaskColumn) => {
+    setControls((prev) => {
+      const current = prev[column] ?? EMPTY_COLUMN_CONTROLS;
+      if (current.manualOrder) {
+        return prev;
+      }
+      return { ...prev, [column]: { ...current, manualOrder: true } };
+    });
+  }, []);
   const columns = useMemo(
     () => buildColumnModels(board, folderId, controls),
     [board, folderId, controls],
@@ -154,9 +166,14 @@ export function KanbanBoard({
       if (task.column === targetColumn && overId === taskId) {
         return;
       }
+      // A reorder within the same column is a manual arrangement — pin it so the
+      // card stays where it was dropped instead of snapping back by recency.
+      if (task.column === targetColumn) {
+        markColumnManual(targetColumn);
+      }
       onMoveTask({ taskId, column: targetColumn, index: targetIndex });
     },
-    [columns, onMoveTask, tasksById],
+    [columns, markColumnManual, onMoveTask, tasksById],
   );
 
   return (

@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo } from "react";
 import { View } from "react-native";
-import { ArrowUpDown, ListFilter } from "lucide-react-native";
+import { ListFilter } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { FormTextInput } from "@/components/ui/form-field";
@@ -18,20 +18,16 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
   collectBoardFacets,
   EMPTY_TASK_FILTER,
-  TASK_SORT_MODES,
   taskFilterCount,
   useFilterLabels,
-  useTaskSortLabels,
   type ColumnControls,
   type DeadlineFilter,
   type FilterPriorityLevel,
   type TaskFilter,
-  type TaskSortMode,
 } from "./kanban-columns";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedFilter = withUnistyles(ListFilter);
-const ThemedArrowUpDown = withUnistyles(ArrowUpDown);
 
 // Plain (non-Unistyles) style: FormTextInput's chrome/input style split runs the
 // value through RN's StyleSheet.flatten, which silently drops Unistyles proxy
@@ -62,14 +58,9 @@ export const BoardColumnToolbar = memo(function BoardColumnToolbar({
   onChange: (next: ColumnControls) => void;
 }) {
   const { t } = useTranslation();
-  const sortLabels = useTaskSortLabels();
 
   const handleQueryChange = useCallback(
     (query: string) => onChange({ ...controls, query }),
-    [controls, onChange],
-  );
-  const handleSortChange = useCallback(
-    (sortMode: TaskSortMode) => onChange({ ...controls, sortMode }),
     [controls, onChange],
   );
   const handleFilterChange = useCallback(
@@ -96,47 +87,7 @@ export const BoardColumnToolbar = memo(function BoardColumnToolbar({
         filter={controls.filter}
         onChange={handleFilterChange}
       />
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          style={iconButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t("tasks.sortTasks")}
-          testID={`tasks-column-sort-${column}`}
-        >
-          <ThemedArrowUpDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {TASK_SORT_MODES.map((mode) => (
-            <SortMenuItem
-              key={mode}
-              mode={mode}
-              label={sortLabels[mode]}
-              selected={mode === controls.sortMode}
-              onSelect={handleSortChange}
-            />
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
     </View>
-  );
-});
-
-const SortMenuItem = memo(function SortMenuItem({
-  mode,
-  label,
-  selected,
-  onSelect,
-}: {
-  mode: TaskSortMode;
-  label: string;
-  selected: boolean;
-  onSelect: (mode: TaskSortMode) => void;
-}) {
-  const handleSelect = useCallback(() => onSelect(mode), [onSelect, mode]);
-  return (
-    <DropdownMenuItem selected={selected} showSelectedCheck onSelect={handleSelect}>
-      {label}
-    </DropdownMenuItem>
   );
 });
 
@@ -304,8 +255,8 @@ const ColumnFilterMenu = memo(function ColumnFilterMenu({
 
 const styles = StyleSheet.create((theme) => ({
   // Sits in the column header, between the title row and the cards. Spans the
-  // full column width: the search field grows to fill, the funnel and sort
-  // buttons stay a fixed square on the right.
+  // full column width: the search field grows to fill, the funnel button stays
+  // a fixed square on the right.
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
