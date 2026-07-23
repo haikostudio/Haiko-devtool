@@ -53,23 +53,25 @@ export function NewTaskCard({ serverId, cwd, draftKey, onSubmit, onCancel }: New
 
   return (
     <View style={styles.card} testID="tasks-new-task-card">
-      <Composer
-        agentId={draftKey}
-        serverId={serverId}
-        isPaneFocused
-        value={text}
-        onChangeText={setText}
-        attachments={attachments}
-        onChangeAttachments={setAttachments}
-        cwd={cwd}
-        clearDraft={clearDraft}
-        onSubmitMessage={handleSubmitMessage}
-        submitIcon="return"
-        submitButtonAccessibilityLabel={t("tasks.actions.add")}
-        submitButtonTestID="tasks-new-task-save"
-        externalKeyboardShift
-        autoFocus
-      />
+      <View style={styles.composerBleed}>
+        <Composer
+          agentId={draftKey}
+          serverId={serverId}
+          isPaneFocused
+          value={text}
+          onChangeText={setText}
+          attachments={attachments}
+          onChangeAttachments={setAttachments}
+          cwd={cwd}
+          clearDraft={clearDraft}
+          onSubmitMessage={handleSubmitMessage}
+          submitIcon="return"
+          submitButtonAccessibilityLabel={t("tasks.actions.add")}
+          submitButtonTestID="tasks-new-task-save"
+          externalKeyboardShift
+          autoFocus
+        />
+      </View>
       <View style={styles.actionsRow}>
         <Button size="sm" variant="ghost" onPress={onCancel} testID="tasks-new-task-cancel">
           {t("common.actions.cancel")}
@@ -85,8 +87,19 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.xl,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    padding: theme.spacing[2],
-    gap: theme.spacing[1],
+    // The composer already insets its field by spacing[4] on the sides and
+    // bottom but adds nothing on top. Match that with a top-only inset and drop
+    // the card's own horizontal/bottom padding so the gap around the field is
+    // uniform on all four sides instead of tight-top / wide-sides.
+    paddingTop: theme.spacing[4],
+    paddingHorizontal: 0,
+    paddingBottom: theme.spacing[4],
+    gap: theme.spacing[2],
+  },
+  composerBleed: {
+    // Cancel the composer's built-in bottom inset so the action row sits snug
+    // under the field instead of floating far below it.
+    marginBottom: -theme.spacing[4],
   },
   actionsRow: {
     flexDirection: "row",
