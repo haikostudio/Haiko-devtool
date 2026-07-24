@@ -132,6 +132,12 @@ export const KanbanTaskSchema = z.object({
   origin: z.enum(["manual", "agent_sync"]),
   // Dedupe key for agent-sync: lowercase, trimmed, bullets/punctuation stripped.
   normalizedTitle: z.string(),
+  // Light analysis (backlog only): a cheap Haiku pass that turns a raw pasted
+  // prompt into a clear title + tidied description. "pending" while the refiner
+  // runs, "done" once it lands (or absent when never needed). It NEVER produces
+  // a cost/billing/schedule — that is the deep analysis that only fires at
+  // "Validé". Additive + optional: old boards/clients simply omit it.
+  refinement: z.enum(["pending", "done"]).nullable().optional(),
   estimate: TaskEstimateSchema.nullable().optional(),
   schedule: TaskScheduleStateSchema.nullable().optional(),
   runConfig: TaskRunConfigSchema.nullable().optional(),

@@ -55,7 +55,11 @@ function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
 // `agentBucket === "running"`, so nothing is lost.
 function isRunning(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
   const scheduleState = task.schedule?.state;
-  if (scheduleState === "pending_estimate" || scheduleState === "launching") {
+  if (
+    task.refinement === "pending" ||
+    scheduleState === "pending_estimate" ||
+    scheduleState === "launching"
+  ) {
     return true;
   }
   return agentBucket === "running";

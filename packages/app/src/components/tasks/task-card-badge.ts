@@ -24,6 +24,9 @@ export function getScheduleBadge(
   if (task.planReadyAt) {
     return { labelKey: "tasks.card.planReady", variant: "success" };
   }
+  if (task.refinement === "pending") {
+    return { labelKey: "tasks.schedule.estimating" };
+  }
   if (task.schedule?.state === "failed") {
     return { labelKey: "tasks.schedule.failed", variant: "error" };
   }

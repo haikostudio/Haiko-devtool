@@ -138,6 +138,7 @@ import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
 import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
+import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
@@ -1372,9 +1373,17 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
+  const taskLightAnalyzer = new TaskLightAnalyzer({
+    agentManager,
+    createAgent,
+    taskBoardService,
+    projectRegistry,
+    logger,
+  });
   const taskScheduler = new TaskScheduler({
     taskBoardService,
     taskEstimator,
+    taskLightAnalyzer,
     projectRegistry,
     agentManager,
     createAgent,
@@ -1402,6 +1411,10 @@ export async function createPaseoDaemon(
         "Automatic repaired-branch deploy did not start",
       );
     }
+  });
+  // Light analysis tidies manual backlog cards without running cost estimation.
+  taskBoardService.setOnBacklogRefine((projectId, taskId) => {
+    taskLightAnalyzer.refine(projectId, taskId);
   });
   // Auto-move: when a publish goes live, promote the shipped task branches' done
   // cards into the terminal "deployed" column across every project's board.

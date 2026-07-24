@@ -10,6 +10,7 @@ import {
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
+import type { TaskLightAnalyzer } from "./light-analyzer.js";
 import {
   buildTaskExecutionPrompt,
   resolveTaskLaunch,
@@ -42,6 +43,8 @@ const LIGHT_TASK_MAX_MINUTES = 45;
 interface TaskSchedulerOptions {
   taskBoardService: TaskBoardService;
   taskEstimator: TaskEstimator;
+  /** Light-analysis pass for backlog cards; re-armed here after a restart. */
+  taskLightAnalyzer?: Pick<TaskLightAnalyzer, "refine">;
   projectRegistry: ProjectRegistry;
   agentManager: Pick<AgentManager, "runAgent" | "appendTimelineItem" | "getLastAssistantMessage">;
   createAgent: BoundCreateAgentCommand;
@@ -125,6 +128,7 @@ function isValidatedReady(task: KanbanTask): boolean {
 export class TaskScheduler {
   private readonly taskBoardService: TaskBoardService;
   private readonly taskEstimator: TaskEstimator;
+  private readonly taskLightAnalyzer: Pick<TaskLightAnalyzer, "refine"> | null;
   private readonly projectRegistry: ProjectRegistry;
   private readonly agentManager: Pick<
     AgentManager,
@@ -151,6 +155,7 @@ export class TaskScheduler {
   constructor(options: TaskSchedulerOptions) {
     this.taskBoardService = options.taskBoardService;
     this.taskEstimator = options.taskEstimator;
+    this.taskLightAnalyzer = options.taskLightAnalyzer ?? null;
     this.projectRegistry = options.projectRegistry;
     this.agentManager = options.agentManager;
     this.createAgent = options.createAgent;
@@ -296,12 +301,11 @@ export class TaskScheduler {
           continue;
         }
         if (task.column === "backlog") {
-          // Backlog tasks are inert: no analysis, no execution until validated.
-          // Autopilot folders auto-validate their backlog (the folder flag is the
-          // consent) so the pipeline still always runs through "Validé".
-          if (folderAutopilot.get(task.folderId) === true && task.approval?.state !== "pending") {
-            this.autoTransition(project.projectId, task.id, "validated");
-          }
+          this.handleBacklogTask(
+            project.projectId,
+            task,
+            folderAutopilot.get(task.folderId) === true,
+          );
           continue;
         }
         task = await this.fallbackDeployConflictProvider(project.projectId, task);
@@ -352,6 +356,53 @@ export class TaskScheduler {
         this.busyBranchFolders.add(`${projectId}:${task.folderId}`);
       }
     }
+  }
+
+  /**
+   * Backlog is inert for the COST pipeline: no estimate, no execution here. This
+   * runs the two things that ARE allowed in backlog — self-healing cleanup of
+   * stray cost state, and the cheap light analysis (title + tidied prompt) —
+   * then, for autopilot folders only, hands the card to "Validé".
+   */
+  private handleBacklogTask(projectId: string, task: KanbanTask, autopilot: boolean): void {
+    // Self-heal legacy/dirty data — a backlog card must never carry a cost
+    // estimate or an armed schedule (those belong to "Validé" onward). Retro-
+    // cleans boards where analysis fired too early (e.g. Maestria).
+    if (task.estimate || task.schedule) {
+      this.clearBacklogPipelineState(projectId, task.id);
+    }
+    // Light analysis is cheap and produces NO cost/billing, so it's allowed in
+    // backlog. Re-arm it after a daemon restart, since the queue is in-memory.
+    if (task.refinement === "pending" && this.taskLightAnalyzer) {
+      this.taskLightAnalyzer.refine(projectId, task.id);
+    }
+    // Autopilot folders auto-validate their backlog (the folder flag is the
+    // consent) so the pipeline still always runs through "Validé".
+    if (autopilot && task.approval?.state !== "pending") {
+      this.autoTransition(projectId, task.id, "validated");
+    }
+  }
+
+  /**
+   * Self-healing cleanup: strip a stray cost estimate / armed schedule off a
+   * task that is (back) in backlog. Cost analysis is a "Validé"-only decision,
+   * so a backlog card must never show one. Runs once per dirty task (subsequent
+   * ticks see it clean and skip), fixing boards analyzed before this gate.
+   */
+  private clearBacklogPipelineState(projectId: string, taskId: string): void {
+    void this.taskBoardService
+      .patchTask(projectId, taskId, (task) => {
+        if (task.column !== "backlog" || (!task.estimate && !task.schedule)) {
+          return task;
+        }
+        const next = { ...task };
+        delete next.estimate;
+        delete next.schedule;
+        return next;
+      })
+      .catch((error) => {
+        this.logger.warn({ err: error, taskId }, "Backlog pipeline-state cleanup failed");
+      });
   }
 
   /** Fire-and-forget column move driven by the scheduler (never manual). */

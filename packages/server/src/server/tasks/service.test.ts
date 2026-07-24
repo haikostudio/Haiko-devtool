@@ -201,6 +201,56 @@ describe("TaskBoardService", () => {
     expect(snapshots[1]?.tasks).toHaveLength(1);
   });
 
+  test("a manual backlog task with a prompt fires light analysis, NOT the cost estimate", async () => {
+    const scheduled: string[] = [];
+    const refined: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    service.setOnBacklogRefine((_projectId, taskId) => refined.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Corrige le login",
+      description: "il faut que le champ mot de passe prenne toute la largeur",
+    });
+
+    // Backlog: the light refiner runs; the expensive estimate hook never fires,
+    // and the card carries no schedule/estimate.
+    expect(task.column).toBe("backlog");
+    expect(task.refinement).toBe("pending");
+    expect(task.schedule ?? null).toBeNull();
+    expect(task.estimate ?? null).toBeNull();
+    expect(refined).toEqual([task.id]);
+    expect(scheduled).toEqual([]);
+  });
+
+  test("a backlog task created from the '+' button (no prompt) is NOT light-analyzed", async () => {
+    const refined: string[] = [];
+    service.setOnBacklogRefine((_projectId, taskId) => refined.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Empty card" });
+
+    expect(task.refinement ?? null).toBeNull();
+    expect(refined).toEqual([]);
+  });
+
+  test("agent-proposed backlog tasks are not light-analyzed", async () => {
+    const refined: string[] = [];
+    service.setOnBacklogRefine((_projectId, taskId) => refined.push(taskId));
+    const folder = await service.createFolder("proj-1", "Agent");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Idea from the agent",
+      description: "some raw context",
+      origin: "agent_sync",
+    });
+
+    expect(task.refinement ?? null).toBeNull();
+    expect(refined).toEqual([]);
+  });
+
   test("createTask directly in scheduled arms the schedule and fires the estimate hook", async () => {
     const scheduled: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
