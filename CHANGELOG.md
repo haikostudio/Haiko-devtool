@@ -1,4 +1,4 @@
-# Changelog
+# Journal des modifications
 
 ## 0.2.0 - 2026-07-24
 
@@ -86,2008 +86,2008 @@
 
 ## 0.1.108 - 2026-07-16
 
-### Added
+### Ajouts
 
-- Create a new project folder or clone a GitHub repository from Add Project ([#1331](https://github.com/getpaseo/paseo/pull/1331), [#2045](https://github.com/getpaseo/paseo/pull/2045), [#2097](https://github.com/getpaseo/paseo/pull/2097) by [@mcowger](https://github.com/mcowger))
-- Search for and open workspaces from the search menu ([#2096](https://github.com/getpaseo/paseo/pull/2096))
-- Pin workspaces to the top of the sidebar ([#1981](https://github.com/getpaseo/paseo/pull/1981) by [@half144](https://github.com/half144))
-- Summarize tool calls in a single collapsed item with a new appearance setting ([#2031](https://github.com/getpaseo/paseo/pull/2031), [#2069](https://github.com/getpaseo/paseo/pull/2069), [#2090](https://github.com/getpaseo/paseo/pull/2090) by [@mcowger](https://github.com/mcowger))
-- Save browser cookies and site data across tabs and restarts ([#2089](https://github.com/getpaseo/paseo/pull/2089))
-- Claude and Codex subagents now show their actual names, with a new option to archive finished Claude Code, Codex, and OpenCode subagents ([#2073](https://github.com/getpaseo/paseo/pull/2073))
-- Fork chats from failed turns ([#2063](https://github.com/getpaseo/paseo/pull/2063))
+- Créez un nouveau dossier de projet ou clonez un dépôt GitHub depuis Ajouter un projet ([#1331](https://github.com/getpaseo/paseo/pull/1331), [#2045](https://github.com/getpaseo/paseo/pull/2045), [#2097](https://github.com/getpaseo/paseo/pull/2097) by [@mcowger](https://github.com/mcowger))
+- Recherchez et ouvrez des espaces de travail depuis le menu de recherche ([#2096](https://github.com/getpaseo/paseo/pull/2096))
+- Épinglez des espaces de travail en haut de la barre latérale ([#1981](https://github.com/getpaseo/paseo/pull/1981) by [@half144](https://github.com/half144))
+- Regroupez les appels d'outils dans un seul élément réduit, avec un nouveau réglage d'apparence ([#2031](https://github.com/getpaseo/paseo/pull/2031), [#2069](https://github.com/getpaseo/paseo/pull/2069), [#2090](https://github.com/getpaseo/paseo/pull/2090) by [@mcowger](https://github.com/mcowger))
+- Conservez les cookies et données de sites du navigateur d'un onglet à l'autre et après redémarrage ([#2089](https://github.com/getpaseo/paseo/pull/2089))
+- Les sous-agents Claude et Codex affichent désormais leur vrai nom, avec une nouvelle option pour archiver les sous-agents terminés de Claude Code, Codex et OpenCode ([#2073](https://github.com/getpaseo/paseo/pull/2073))
+- Dupliquez des conversations à partir de tours en échec ([#2063](https://github.com/getpaseo/paseo/pull/2063))
 
-### Improved
+### Améliorations
 
-- Permission modes have clearer icons ([#1980](https://github.com/getpaseo/paseo/pull/1980) by [@cleiter](https://github.com/cleiter))
-- Desktop stays usable in narrower windows ([#1983](https://github.com/getpaseo/paseo/pull/1983))
-- Sidebar controls stay in place when desktop panels open and close ([#2078](https://github.com/getpaseo/paseo/pull/2078))
-- Typing in long drafts is smoother ([#2086](https://github.com/getpaseo/paseo/pull/2086))
-- Codex terminal commands always appear in chat, even when they have no output ([#2037](https://github.com/getpaseo/paseo/pull/2037))
+- Les modes de permission ont des icônes plus claires ([#1980](https://github.com/getpaseo/paseo/pull/1980) by [@cleiter](https://github.com/cleiter))
+- Le bureau reste utilisable dans des fenêtres plus étroites ([#1983](https://github.com/getpaseo/paseo/pull/1983))
+- Les commandes de la barre latérale restent en place lorsque les panneaux du bureau s'ouvrent et se ferment ([#2078](https://github.com/getpaseo/paseo/pull/2078))
+- La saisie dans les longs brouillons est plus fluide ([#2086](https://github.com/getpaseo/paseo/pull/2086))
+- Les commandes de terminal Codex apparaissent toujours dans la conversation, même sans sortie ([#2037](https://github.com/getpaseo/paseo/pull/2037))
 
-### Fixed
+### Corrections
 
-- New Workspace keeps your prompt and attachments when you switch projects or hosts ([#2030](https://github.com/getpaseo/paseo/pull/2030), [#2036](https://github.com/getpaseo/paseo/pull/2036))
-- OpenCode sessions close without crashing Paseo ([#2027](https://github.com/getpaseo/paseo/pull/2027) by [@mcowger](https://github.com/mcowger))
-- Pi slash commands no longer leave chats stuck as running ([#2066](https://github.com/getpaseo/paseo/pull/2066) by [@ebg1223](https://github.com/ebg1223))
-- Background-agent updates now appear after the main reply ([#2058](https://github.com/getpaseo/paseo/pull/2058) by [@1254087415](https://github.com/1254087415))
-- Codex subagents no longer disappear from the Subagents track ([#2068](https://github.com/getpaseo/paseo/pull/2068))
-- Forked chats open ready to edit in their new tab ([#2038](https://github.com/getpaseo/paseo/pull/2038))
-- Paseo Desktop opens normally after an interrupted shutdown ([#1962](https://github.com/getpaseo/paseo/pull/1962))
-- Keyboard shortcuts now work with `-`, `=`, `;`, and `'` ([#2047](https://github.com/getpaseo/paseo/pull/2047) by [@OnCloud125252](https://github.com/OnCloud125252))
-- Codebuddy Code models now appear in the model picker ([#1979](https://github.com/getpaseo/paseo/pull/1979) by [@park0er](https://github.com/park0er))
-- Workspace search now includes OpenCode commands and workflows ([#2049](https://github.com/getpaseo/paseo/pull/2049))
-- Nix installations now include the Paseo web app ([#1978](https://github.com/getpaseo/paseo/pull/1978) by [@liamdiprose](https://github.com/liamdiprose))
+- Nouvel espace de travail conserve votre prompt et vos pièces jointes quand vous changez de projet ou d'hôte ([#2030](https://github.com/getpaseo/paseo/pull/2030), [#2036](https://github.com/getpaseo/paseo/pull/2036))
+- Les sessions OpenCode se ferment sans faire planter Paseo ([#2027](https://github.com/getpaseo/paseo/pull/2027) by [@mcowger](https://github.com/mcowger))
+- Les commandes slash de Pi ne laissent plus les conversations bloquées en cours d'exécution ([#2066](https://github.com/getpaseo/paseo/pull/2066) by [@ebg1223](https://github.com/ebg1223))
+- Les mises à jour des agents en arrière-plan apparaissent désormais après la réponse principale ([#2058](https://github.com/getpaseo/paseo/pull/2058) by [@1254087415](https://github.com/1254087415))
+- Les sous-agents Codex ne disparaissent plus de la piste Sous-agents ([#2068](https://github.com/getpaseo/paseo/pull/2068))
+- Les conversations dupliquées s'ouvrent prêtes à être modifiées dans leur nouvel onglet ([#2038](https://github.com/getpaseo/paseo/pull/2038))
+- Paseo Desktop s'ouvre normalement après un arrêt interrompu ([#1962](https://github.com/getpaseo/paseo/pull/1962))
+- Les raccourcis clavier fonctionnent maintenant avec `-`, `=`, `;` et `'` ([#2047](https://github.com/getpaseo/paseo/pull/2047) by [@OnCloud125252](https://github.com/OnCloud125252))
+- Les modèles Codebuddy Code apparaissent désormais dans le sélecteur de modèles ([#1979](https://github.com/getpaseo/paseo/pull/1979) by [@park0er](https://github.com/park0er))
+- La recherche d'espaces de travail inclut désormais les commandes et workflows OpenCode ([#2049](https://github.com/getpaseo/paseo/pull/2049))
+- Les installations Nix incluent désormais l'application web Paseo ([#1978](https://github.com/getpaseo/paseo/pull/1978) by [@liamdiprose](https://github.com/liamdiprose))
 
 ## 0.1.107 - 2026-07-13
 
-### Added
+### Ajouts
 
-- Inspect provider-created subagents and their live conversations from the Subagents track ([#2013](https://github.com/getpaseo/paseo/pull/2013) by [@omercnet](https://github.com/omercnet))
-- Fork chats with every supported agent provider ([#2022](https://github.com/getpaseo/paseo/pull/2022))
+- Inspectez les sous-agents créés par les providers et leurs conversations en direct depuis la piste Sous-agents ([#2013](https://github.com/getpaseo/paseo/pull/2013) by [@omercnet](https://github.com/omercnet))
+- Dupliquez des conversations avec tous les providers d'agents pris en charge ([#2022](https://github.com/getpaseo/paseo/pull/2022))
 
-### Improved
+### Améliorations
 
-- Add projects directly from New Workspace when none are configured ([#2026](https://github.com/getpaseo/paseo/pull/2026))
-- New terminals open at the correct size immediately ([#2023](https://github.com/getpaseo/paseo/pull/2023) by [@cleiter](https://github.com/cleiter))
-- Sidebar footer actions now explain themselves with tooltips ([#2025](https://github.com/getpaseo/paseo/pull/2025))
-- Codex shell tool calls show only the command being run ([#2029](https://github.com/getpaseo/paseo/pull/2029))
-- Custom ACP providers keep file and terminal work in the agent environment by default ([#2024](https://github.com/getpaseo/paseo/pull/2024))
-- ACP provider catalog updated to the latest registry versions
+- Ajoutez des projets directement depuis Nouvel espace de travail quand aucun n'est configuré ([#2026](https://github.com/getpaseo/paseo/pull/2026))
+- Les nouveaux terminaux s'ouvrent immédiatement à la bonne taille ([#2023](https://github.com/getpaseo/paseo/pull/2023) by [@cleiter](https://github.com/cleiter))
+- Les actions du pied de la barre latérale s'expliquent désormais via des infobulles ([#2025](https://github.com/getpaseo/paseo/pull/2025))
+- Les appels d'outil shell de Codex n'affichent que la commande exécutée ([#2029](https://github.com/getpaseo/paseo/pull/2029))
+- Les providers ACP personnalisés gardent par défaut le travail sur fichiers et terminal dans l'environnement de l'agent ([#2024](https://github.com/getpaseo/paseo/pull/2024))
+- Catalogue de providers ACP mis à jour vers les dernières versions du registre
 
-### Fixed
+### Corrections
 
-- Large tables no longer make iOS chats unresponsive
-- Chat controls remain clickable near the scroll-to-bottom button ([#2007](https://github.com/getpaseo/paseo/pull/2007))
-- Oversized tool output no longer slows or floods chat timelines ([#2020](https://github.com/getpaseo/paseo/pull/2020))
-- Cross-provider subagents can use providers without mode settings ([#2000](https://github.com/getpaseo/paseo/pull/2000) by [@githubbzxs](https://github.com/githubbzxs))
-- Pi's internal metadata tasks no longer clutter normal session history ([#1999](https://github.com/getpaseo/paseo/pull/1999) by [@githubbzxs](https://github.com/githubbzxs))
-- Pi chats remain usable after canceling extension commands ([#2019](https://github.com/getpaseo/paseo/pull/2019))
+- Les grands tableaux ne rendent plus les conversations iOS non réactives
+- Les commandes de conversation restent cliquables près du bouton de défilement vers le bas ([#2007](https://github.com/getpaseo/paseo/pull/2007))
+- Les sorties d'outil surdimensionnées ne ralentissent ni n'inondent plus les fils de conversation ([#2020](https://github.com/getpaseo/paseo/pull/2020))
+- Les sous-agents inter-providers peuvent utiliser des providers sans réglages de mode ([#2000](https://github.com/getpaseo/paseo/pull/2000) by [@githubbzxs](https://github.com/githubbzxs))
+- Les tâches de métadonnées internes de Pi n'encombrent plus l'historique normal des sessions ([#1999](https://github.com/getpaseo/paseo/pull/1999) by [@githubbzxs](https://github.com/githubbzxs))
+- Les conversations Pi restent utilisables après l'annulation de commandes d'extension ([#2019](https://github.com/getpaseo/paseo/pull/2019))
 
 ## 0.1.106 - 2026-07-12
 
-### Added
+### Ajouts
 
-- Approve Codex MCP permission requests in Paseo ([#2001](https://github.com/getpaseo/paseo/pull/2001))
+- Approuvez les demandes de permission MCP de Codex dans Paseo ([#2001](https://github.com/getpaseo/paseo/pull/2001))
 
-### Improved
+### Améliorations
 
-- ACP provider catalog updated to the latest registry versions
+- Catalogue de providers ACP mis à jour vers les dernières versions du registre
 
-### Fixed
+### Corrections
 
-- Reduced mobile chat freezes and blank screens when switching workspaces while agents are streaming ([#1989](https://github.com/getpaseo/paseo/pull/1989))
-- OpenCode sessions start reliably instead of occasionally losing the first turn ([#2015](https://github.com/getpaseo/paseo/pull/2015) by [@mcowger](https://github.com/mcowger))
-- Switching between workspaces no longer flashes a white screen
-- Pi keeps your existing MCP tools and settings when Paseo adds its own ([#1990](https://github.com/getpaseo/paseo/pull/1990) by [@mcowger](https://github.com/mcowger))
+- Moins de blocages et d'écrans vides sur mobile lors du changement d'espace de travail pendant que des agents diffusent ([#1989](https://github.com/getpaseo/paseo/pull/1989))
+- Les sessions OpenCode démarrent de façon fiable au lieu de perdre parfois le premier tour ([#2015](https://github.com/getpaseo/paseo/pull/2015) by [@mcowger](https://github.com/mcowger))
+- Le passage d'un espace de travail à l'autre n'affiche plus d'écran blanc
+- Pi conserve vos outils et réglages MCP existants quand Paseo ajoute les siens ([#1990](https://github.com/getpaseo/paseo/pull/1990) by [@mcowger](https://github.com/mcowger))
 
 ## 0.1.105 - 2026-07-10
 
-### Added
+### Ajouts
 
-- Browse changed files as a collapsible folder tree or flat list ([#1918](https://github.com/getpaseo/paseo/pull/1918), [#1945](https://github.com/getpaseo/paseo/pull/1945) by [@cleiter](https://github.com/cleiter))
-- Always expand agent reasoning with a new appearance setting ([#1943](https://github.com/getpaseo/paseo/pull/1943) by [@mcowger](https://github.com/mcowger))
+- Parcourez les fichiers modifiés sous forme d'arborescence de dossiers repliable ou de liste à plat ([#1918](https://github.com/getpaseo/paseo/pull/1918), [#1945](https://github.com/getpaseo/paseo/pull/1945) by [@cleiter](https://github.com/cleiter))
+- Déployez toujours le raisonnement de l'agent grâce à un nouveau réglage d'apparence ([#1943](https://github.com/getpaseo/paseo/pull/1943) by [@mcowger](https://github.com/mcowger))
 
-### Improved
+### Améliorations
 
-- Project picker finds folders with fuzzy search and native desktop browsing ([#1968](https://github.com/getpaseo/paseo/pull/1968))
-- Large workspace sidebars stay responsive ([#1966](https://github.com/getpaseo/paseo/pull/1966))
-- Generated workspace names and Git text can use MiniMax M3 ([#1955](https://github.com/getpaseo/paseo/pull/1955) by [@octo-patch](https://github.com/octo-patch))
-- Cursor now exposes thinking and fast mode ([#1952](https://github.com/getpaseo/paseo/pull/1952))
+- Le sélecteur de projet trouve les dossiers via recherche approximative et navigation native sur le bureau ([#1968](https://github.com/getpaseo/paseo/pull/1968))
+- Les grandes barres latérales d'espaces de travail restent réactives ([#1966](https://github.com/getpaseo/paseo/pull/1966))
+- Les noms d'espaces de travail générés et le texte Git peuvent utiliser MiniMax M3 ([#1955](https://github.com/getpaseo/paseo/pull/1955) by [@octo-patch](https://github.com/octo-patch))
+- Cursor expose désormais le mode réflexion et le mode rapide ([#1952](https://github.com/getpaseo/paseo/pull/1952))
 
-### Fixed
+### Corrections
 
-- Codex stays active and streams correctly while subagents run ([#1967](https://github.com/getpaseo/paseo/pull/1967))
-- Android audio interruptions no longer crash voice mode or leave dictation stuck ([#1941](https://github.com/getpaseo/paseo/pull/1941))
-- Mobile sidebars stay in sync and retain swipe-to-open gestures ([#1953](https://github.com/getpaseo/paseo/pull/1953), [#1976](https://github.com/getpaseo/paseo/pull/1976))
-- Pi text-only models accept image prompts without breaking the session ([#1960](https://github.com/getpaseo/paseo/pull/1960))
-- App render failures show a retryable recovery screen instead of a blank screen ([#1924](https://github.com/getpaseo/paseo/pull/1924))
-- Pi context usage remains visible with older Oh My Pi versions ([#1886](https://github.com/getpaseo/paseo/pull/1886) by [@theslava](https://github.com/theslava))
-- Provider usage popovers no longer error when opened and closed quickly ([#1885](https://github.com/getpaseo/paseo/pull/1885) by [@theslava](https://github.com/theslava))
-- Mobile workspace menus hide desktop-only shortcut badges ([#1964](https://github.com/getpaseo/paseo/pull/1964))
+- Codex reste actif et diffuse correctement pendant l'exécution des sous-agents ([#1967](https://github.com/getpaseo/paseo/pull/1967))
+- Les interruptions audio sous Android ne font plus planter le mode vocal ni ne bloquent la dictée ([#1941](https://github.com/getpaseo/paseo/pull/1941))
+- Les barres latérales mobiles restent synchronisées et conservent les gestes de balayage pour ouvrir ([#1953](https://github.com/getpaseo/paseo/pull/1953), [#1976](https://github.com/getpaseo/paseo/pull/1976))
+- Les modèles Pi texte seul acceptent les prompts avec image sans casser la session ([#1960](https://github.com/getpaseo/paseo/pull/1960))
+- Les échecs de rendu de l'app affichent un écran de récupération réessayable au lieu d'un écran blanc ([#1924](https://github.com/getpaseo/paseo/pull/1924))
+- L'usage du contexte de Pi reste visible avec les anciennes versions d'Oh My Pi ([#1886](https://github.com/getpaseo/paseo/pull/1886) by [@theslava](https://github.com/theslava))
+- Les popovers d'usage des providers ne génèrent plus d'erreur lorsqu'ils sont ouverts et fermés rapidement ([#1885](https://github.com/getpaseo/paseo/pull/1885) by [@theslava](https://github.com/theslava))
+- Les menus d'espaces de travail sur mobile masquent les badges de raccourcis réservés au bureau ([#1964](https://github.com/getpaseo/paseo/pull/1964))
 
 ## 0.1.104 - 2026-07-08
 
-### Added
+### Ajouts
 
-- Agents can drive the in-app browser with page snapshots, trusted input, dialogs, and tab controls ([#1881](https://github.com/getpaseo/paseo/pull/1881))
-- Inspect, annotate, and send page elements from a browser tab to the agent ([#1708](https://github.com/getpaseo/paseo/pull/1708) by [@huiliaoning](https://github.com/huiliaoning))
-- Schedules screen to create and manage recurring agents ([#1246](https://github.com/getpaseo/paseo/pull/1246))
-- Open a project from anywhere with Cmd+O ([#1849](https://github.com/getpaseo/paseo/pull/1849))
-- Agents can rename workspaces after they understand the task ([#1876](https://github.com/getpaseo/paseo/pull/1876))
-- Claude Ultra Code is available for supported Claude models ([#1872](https://github.com/getpaseo/paseo/pull/1872))
-- ByteDance TRAE CLI available as an agent provider ([#1831](https://github.com/getpaseo/paseo/pull/1831), [#1896](https://github.com/getpaseo/paseo/pull/1896) by [@park0er](https://github.com/park0er))
+- Les agents peuvent piloter le navigateur intégré avec captures de page, saisie de confiance, boîtes de dialogue et contrôle des onglets ([#1881](https://github.com/getpaseo/paseo/pull/1881))
+- Inspectez, annotez et envoyez des éléments de page depuis un onglet de navigateur vers l'agent ([#1708](https://github.com/getpaseo/paseo/pull/1708) by [@huiliaoning](https://github.com/huiliaoning))
+- Écran Planifications pour créer et gérer des agents récurrents ([#1246](https://github.com/getpaseo/paseo/pull/1246))
+- Ouvrez un projet depuis n'importe où avec Cmd+O ([#1849](https://github.com/getpaseo/paseo/pull/1849))
+- Les agents peuvent renommer les espaces de travail une fois la tâche comprise ([#1876](https://github.com/getpaseo/paseo/pull/1876))
+- Claude Ultra Code est disponible pour les modèles Claude pris en charge ([#1872](https://github.com/getpaseo/paseo/pull/1872))
+- ByteDance TRAE CLI disponible comme provider d'agent ([#1831](https://github.com/getpaseo/paseo/pull/1831), [#1896](https://github.com/getpaseo/paseo/pull/1896) by [@park0er](https://github.com/park0er))
 
-### Improved
+### Améliorations
 
-- Manage the built-in daemon from one place in desktop settings ([#1938](https://github.com/getpaseo/paseo/pull/1938))
-- Scheduled and loop runs each get their own workspace in the sidebar ([#1909](https://github.com/getpaseo/paseo/pull/1909), [#1934](https://github.com/getpaseo/paseo/pull/1934))
-- Large provider and model refreshes load faster in the app ([#1895](https://github.com/getpaseo/paseo/pull/1895))
-- Workspaces created by agents now get readable generated names ([#1887](https://github.com/getpaseo/paseo/pull/1887))
-- Browser tabs opened by agents stay in the background until you switch to them ([#1875](https://github.com/getpaseo/paseo/pull/1875))
-- Clearer cards when an agent asks a question ([#1643](https://github.com/getpaseo/paseo/pull/1643) by [@cleiter](https://github.com/cleiter))
-- Diagnostic reports include desktop app logs ([#1914](https://github.com/getpaseo/paseo/pull/1914))
-- Paseo's built-in tools take less context ([#1939](https://github.com/getpaseo/paseo/pull/1939))
+- Gérez le démon intégré depuis un seul endroit dans les réglages du bureau ([#1938](https://github.com/getpaseo/paseo/pull/1938))
+- Les exécutions planifiées et en boucle obtiennent chacune leur propre espace de travail dans la barre latérale ([#1909](https://github.com/getpaseo/paseo/pull/1909), [#1934](https://github.com/getpaseo/paseo/pull/1934))
+- Les gros rafraîchissements de providers et de modèles se chargent plus vite dans l'app ([#1895](https://github.com/getpaseo/paseo/pull/1895))
+- Les espaces de travail créés par les agents obtiennent désormais des noms générés lisibles ([#1887](https://github.com/getpaseo/paseo/pull/1887))
+- Les onglets de navigateur ouverts par les agents restent en arrière-plan jusqu'à ce que vous y basculiez ([#1875](https://github.com/getpaseo/paseo/pull/1875))
+- Cartes plus claires lorsqu'un agent pose une question ([#1643](https://github.com/getpaseo/paseo/pull/1643) by [@cleiter](https://github.com/cleiter))
+- Les rapports de diagnostic incluent les journaux de l'application de bureau ([#1914](https://github.com/getpaseo/paseo/pull/1914))
+- Les outils intégrés de Paseo prennent moins de contexte ([#1939](https://github.com/getpaseo/paseo/pull/1939))
 
-### Fixed
+### Corrections
 
-- Renamed hosts keep their name after reconnecting ([#1940](https://github.com/getpaseo/paseo/pull/1940))
-- Desktop finds your installed CLIs even when your shell is slow to start ([#1916](https://github.com/getpaseo/paseo/pull/1916))
-- Restarting the daemon from desktop settings works reliably ([#1915](https://github.com/getpaseo/paseo/pull/1915))
-- Restarting the daemon from the bundled CLI keeps it managed by the desktop app ([#1919](https://github.com/getpaseo/paseo/pull/1919))
-- Web UI loads when the daemon is started from the bundled CLI ([#1899](https://github.com/getpaseo/paseo/pull/1899) by [@yzim](https://github.com/yzim))
-- Worktree setup scripts keep your PATH ([#1908](https://github.com/getpaseo/paseo/pull/1908))
-- Docker images keep running during provider cleanup and diagnostics ([#1877](https://github.com/getpaseo/paseo/pull/1877))
-- New Workspace drafts survive archiving a workspace ([#1838](https://github.com/getpaseo/paseo/pull/1838))
-- Composer autocomplete stays open after switching screens ([#1851](https://github.com/getpaseo/paseo/pull/1851))
-- Claude usage appears when a quota window has no scheduled reset ([#1855](https://github.com/getpaseo/paseo/pull/1855))
-- New workspace action shows for non-git projects in the sidebar ([#1857](https://github.com/getpaseo/paseo/pull/1857) by [@cleiter](https://github.com/cleiter))
+- Les hôtes renommés conservent leur nom après reconnexion ([#1940](https://github.com/getpaseo/paseo/pull/1940))
+- Le bureau trouve vos CLI installés même quand votre shell est lent à démarrer ([#1916](https://github.com/getpaseo/paseo/pull/1916))
+- Le redémarrage du démon depuis les réglages du bureau fonctionne de façon fiable ([#1915](https://github.com/getpaseo/paseo/pull/1915))
+- Le redémarrage du démon depuis le CLI intégré le laisse géré par l'application de bureau ([#1919](https://github.com/getpaseo/paseo/pull/1919))
+- L'interface web se charge quand le démon est démarré depuis le CLI intégré ([#1899](https://github.com/getpaseo/paseo/pull/1899) by [@yzim](https://github.com/yzim))
+- Les scripts de configuration de worktree conservent votre PATH ([#1908](https://github.com/getpaseo/paseo/pull/1908))
+- Les images Docker continuent de tourner pendant le nettoyage des providers et les diagnostics ([#1877](https://github.com/getpaseo/paseo/pull/1877))
+- Les brouillons de Nouvel espace de travail survivent à l'archivage d'un espace de travail ([#1838](https://github.com/getpaseo/paseo/pull/1838))
+- L'autocomplétion du composeur reste ouverte après un changement d'écran ([#1851](https://github.com/getpaseo/paseo/pull/1851))
+- L'usage de Claude apparaît quand une fenêtre de quota n'a pas de réinitialisation planifiée ([#1855](https://github.com/getpaseo/paseo/pull/1855))
+- L'action Nouvel espace de travail s'affiche pour les projets non-git dans la barre latérale ([#1857](https://github.com/getpaseo/paseo/pull/1857) by [@cleiter](https://github.com/cleiter))
 
 ## 0.1.103 - 2026-07-01
 
-### Added
+### Ajouts
 
-- Claude Sonnet 5 is available in the Claude model picker ([#1850](https://github.com/getpaseo/paseo/pull/1850))
+- Claude Sonnet 5 est disponible dans le sélecteur de modèles Claude ([#1850](https://github.com/getpaseo/paseo/pull/1850))
 
 ## 0.1.102 - 2026-06-30
 
-### Added
+### Ajouts
 
-- Fork chats into a new tab or new worktree ([#1788](https://github.com/getpaseo/paseo/pull/1788))
-- See workspaces from all connected hosts ([#1538](https://github.com/getpaseo/paseo/pull/1538), [#1775](https://github.com/getpaseo/paseo/pull/1775), [#1825](https://github.com/getpaseo/paseo/pull/1825))
-- Daemon can now serve the web UI ([#1635](https://github.com/getpaseo/paseo/pull/1635), [#1739](https://github.com/getpaseo/paseo/pull/1739))
-- Run Paseo from an official Docker image ([#1740](https://github.com/getpaseo/paseo/pull/1740) by [@Herbrant](https://github.com/Herbrant))
-- Update a daemon remotely from the app ([#1513](https://github.com/getpaseo/paseo/pull/1513) by [@thedavidweng](https://github.com/thedavidweng))
-- Configure separate OpenAI endpoints for speech-to-text and text-to-speech ([#1823](https://github.com/getpaseo/paseo/pull/1823))
-- Drop files into any composer ([#1750](https://github.com/getpaseo/paseo/pull/1750), [#1801](https://github.com/getpaseo/paseo/pull/1801))
-- Show MiniMax usage in quota views ([#1662](https://github.com/getpaseo/paseo/pull/1662) by [@ilteoood](https://github.com/ilteoood))
-- Highlight C# code blocks ([#1651](https://github.com/getpaseo/paseo/pull/1651) by [@dev693](https://github.com/dev693))
+- Dupliquez des conversations dans un nouvel onglet ou un nouveau worktree ([#1788](https://github.com/getpaseo/paseo/pull/1788))
+- Voyez les espaces de travail de tous les hôtes connectés ([#1538](https://github.com/getpaseo/paseo/pull/1538), [#1775](https://github.com/getpaseo/paseo/pull/1775), [#1825](https://github.com/getpaseo/paseo/pull/1825))
+- Le démon peut désormais servir l'interface web ([#1635](https://github.com/getpaseo/paseo/pull/1635), [#1739](https://github.com/getpaseo/paseo/pull/1739))
+- Lancez Paseo depuis une image Docker officielle ([#1740](https://github.com/getpaseo/paseo/pull/1740) by [@Herbrant](https://github.com/Herbrant))
+- Mettez à jour un démon à distance depuis l'app ([#1513](https://github.com/getpaseo/paseo/pull/1513) by [@thedavidweng](https://github.com/thedavidweng))
+- Configurez des points d'accès OpenAI distincts pour la reconnaissance vocale et la synthèse vocale ([#1823](https://github.com/getpaseo/paseo/pull/1823))
+- Déposez des fichiers dans n'importe quel composeur ([#1750](https://github.com/getpaseo/paseo/pull/1750), [#1801](https://github.com/getpaseo/paseo/pull/1801))
+- Affichez l'usage de MiniMax dans les vues de quota ([#1662](https://github.com/getpaseo/paseo/pull/1662) by [@ilteoood](https://github.com/ilteoood))
+- Coloration syntaxique des blocs de code C# ([#1651](https://github.com/getpaseo/paseo/pull/1651) by [@dev693](https://github.com/dev693))
 
-### Improved
+### Améliorations
 
-- New Workspace opens from anywhere ([#1746](https://github.com/getpaseo/paseo/pull/1746), [#1806](https://github.com/getpaseo/paseo/pull/1806))
-- Project search shows loading progress ([#1762](https://github.com/getpaseo/paseo/pull/1762))
-- Desktop update checks show clearer status ([#1808](https://github.com/getpaseo/paseo/pull/1808), [#1815](https://github.com/getpaseo/paseo/pull/1815))
-- Slow remote hosts time out less aggressively ([#1789](https://github.com/getpaseo/paseo/pull/1789))
-- Pi waits longer for extension results ([#1732](https://github.com/getpaseo/paseo/pull/1732) by [@theslava](https://github.com/theslava))
-- Open file tabs refresh when you revisit them ([#1699](https://github.com/getpaseo/paseo/pull/1699) by [@cleiter](https://github.com/cleiter))
-- Web terminals scroll more smoothly ([#1622](https://github.com/getpaseo/paseo/pull/1622) by [@TommyLike](https://github.com/TommyLike))
+- Nouvel espace de travail s'ouvre depuis n'importe où ([#1746](https://github.com/getpaseo/paseo/pull/1746), [#1806](https://github.com/getpaseo/paseo/pull/1806))
+- La recherche de projet affiche la progression du chargement ([#1762](https://github.com/getpaseo/paseo/pull/1762))
+- Les vérifications de mise à jour du bureau affichent un statut plus clair ([#1808](https://github.com/getpaseo/paseo/pull/1808), [#1815](https://github.com/getpaseo/paseo/pull/1815))
+- Les hôtes distants lents expirent moins agressivement ([#1789](https://github.com/getpaseo/paseo/pull/1789))
+- Pi attend plus longtemps les résultats d'extension ([#1732](https://github.com/getpaseo/paseo/pull/1732) by [@theslava](https://github.com/theslava))
+- Les onglets de fichiers ouverts se rafraîchissent quand vous y revenez ([#1699](https://github.com/getpaseo/paseo/pull/1699) by [@cleiter](https://github.com/cleiter))
+- Les terminaux web défilent plus fluidement ([#1622](https://github.com/getpaseo/paseo/pull/1622) by [@TommyLike](https://github.com/TommyLike))
 
-### Fixed
+### Corrections
 
-- Freshly added projects can be edited without restarting ([#1761](https://github.com/getpaseo/paseo/pull/1761) by [@huiliaoning](https://github.com/huiliaoning))
-- Large repos open more reliably ([#1620](https://github.com/getpaseo/paseo/pull/1620) by [@jms830](https://github.com/jms830))
-- Mobile restores the saved workspace on launch ([#1777](https://github.com/getpaseo/paseo/pull/1777))
-- Agent prompts no longer rename workspaces ([#1779](https://github.com/getpaseo/paseo/pull/1779))
-- Chat stays put when delayed history arrives ([#1776](https://github.com/getpaseo/paseo/pull/1776))
-- Streamed chat images stay in order ([#1805](https://github.com/getpaseo/paseo/pull/1805))
-- Chat actions stay below tool output ([#1827](https://github.com/getpaseo/paseo/pull/1827))
-- Claude subagent narration stays out of chat ([#1807](https://github.com/getpaseo/paseo/pull/1807))
-- Kiro slash commands and skills appear in Paseo ([#1792](https://github.com/getpaseo/paseo/pull/1792) by [@park0er](https://github.com/park0er))
-- Agent lists survive stale project records ([#1812](https://github.com/getpaseo/paseo/pull/1812))
-- Windows image previews handle drive-letter paths ([#1811](https://github.com/getpaseo/paseo/pull/1811))
-- OpenCode closes cleanly on Windows ([#1771](https://github.com/getpaseo/paseo/pull/1771) by [@agamotto](https://github.com/agamotto))
-- Desktop file uploads keep their extensions ([#1741](https://github.com/getpaseo/paseo/pull/1741))
-- Claude Code cleanup kills child processes ([#1540](https://github.com/getpaseo/paseo/pull/1540) by [@TommyLike](https://github.com/TommyLike))
-- OpenCode no longer indexes your home directory ([#1704](https://github.com/getpaseo/paseo/pull/1704) by [@rex-chang](https://github.com/rex-chang))
-- Packaged macOS CLI daemon no longer shows extra Dock icons ([#1759](https://github.com/getpaseo/paseo/pull/1759) by [@yzim](https://github.com/yzim))
-- `paseo daemon status` works without loading agents ([#1810](https://github.com/getpaseo/paseo/pull/1810))
-- PR worktrees show pushed state correctly ([#1804](https://github.com/getpaseo/paseo/pull/1804))
+- Les projets fraîchement ajoutés peuvent être modifiés sans redémarrage ([#1761](https://github.com/getpaseo/paseo/pull/1761) by [@huiliaoning](https://github.com/huiliaoning))
+- Les gros dépôts s'ouvrent de façon plus fiable ([#1620](https://github.com/getpaseo/paseo/pull/1620) by [@jms830](https://github.com/jms830))
+- Le mobile restaure l'espace de travail sauvegardé au lancement ([#1777](https://github.com/getpaseo/paseo/pull/1777))
+- Les prompts d'agent ne renomment plus les espaces de travail ([#1779](https://github.com/getpaseo/paseo/pull/1779))
+- La conversation reste en place quand un historique retardé arrive ([#1776](https://github.com/getpaseo/paseo/pull/1776))
+- Les images diffusées dans la conversation restent dans l'ordre ([#1805](https://github.com/getpaseo/paseo/pull/1805))
+- Les actions de conversation restent sous la sortie des outils ([#1827](https://github.com/getpaseo/paseo/pull/1827))
+- La narration des sous-agents Claude reste hors de la conversation ([#1807](https://github.com/getpaseo/paseo/pull/1807))
+- Les commandes slash et compétences de Kiro apparaissent dans Paseo ([#1792](https://github.com/getpaseo/paseo/pull/1792) by [@park0er](https://github.com/park0er))
+- Les listes d'agents survivent aux enregistrements de projet obsolètes ([#1812](https://github.com/getpaseo/paseo/pull/1812))
+- Les aperçus d'image sous Windows gèrent les chemins avec lettre de lecteur ([#1811](https://github.com/getpaseo/paseo/pull/1811))
+- OpenCode se ferme proprement sous Windows ([#1771](https://github.com/getpaseo/paseo/pull/1771) by [@agamotto](https://github.com/agamotto))
+- Les téléversements de fichiers sur le bureau conservent leur extension ([#1741](https://github.com/getpaseo/paseo/pull/1741))
+- Le nettoyage de Claude Code tue les processus enfants ([#1540](https://github.com/getpaseo/paseo/pull/1540) by [@TommyLike](https://github.com/TommyLike))
+- OpenCode n'indexe plus votre répertoire personnel ([#1704](https://github.com/getpaseo/paseo/pull/1704) by [@rex-chang](https://github.com/rex-chang))
+- Le démon CLI macOS empaqueté n'affiche plus d'icônes supplémentaires dans le Dock ([#1759](https://github.com/getpaseo/paseo/pull/1759) by [@yzim](https://github.com/yzim))
+- `paseo daemon status` fonctionne sans charger les agents ([#1810](https://github.com/getpaseo/paseo/pull/1810))
+- Les worktrees de PR affichent correctement l'état poussé ([#1804](https://github.com/getpaseo/paseo/pull/1804))
 
 ## 0.1.101 - 2026-06-26
 
-### Added
+### Ajouts
 
-- Copy a troubleshooting report from Settings when support needs host, daemon, provider, and log details ([#1728](https://github.com/getpaseo/paseo/pull/1728))
-- Claude image tool results now render as images in chat ([#1717](https://github.com/getpaseo/paseo/pull/1717))
-- Added Japanese ([#1694](https://github.com/getpaseo/paseo/pull/1694) by [@sysCat64](https://github.com/sysCat64))
-- Added Brazilian Portuguese ([#1653](https://github.com/getpaseo/paseo/pull/1653) by [@Alcimerio](https://github.com/Alcimerio))
+- Copiez un rapport de dépannage depuis les Réglages quand le support a besoin des détails d'hôte, de démon, de provider et de journaux ([#1728](https://github.com/getpaseo/paseo/pull/1728))
+- Les résultats de l'outil image de Claude s'affichent désormais comme des images dans la conversation ([#1717](https://github.com/getpaseo/paseo/pull/1717))
+- Ajout du japonais ([#1694](https://github.com/getpaseo/paseo/pull/1694) by [@sysCat64](https://github.com/sysCat64))
+- Ajout du portugais brésilien ([#1653](https://github.com/getpaseo/paseo/pull/1653) by [@Alcimerio](https://github.com/Alcimerio))
 
-### Improved
+### Améliorations
 
-- Provider diagnostics stay useful even when model discovery is slow ([#1724](https://github.com/getpaseo/paseo/pull/1724))
-- Slow provider requests no longer make the app look disconnected ([#1723](https://github.com/getpaseo/paseo/pull/1723))
-- Worktrees linked to differently named tracked branches find their PRs correctly ([#1718](https://github.com/getpaseo/paseo/pull/1718))
-- Workspaces started from slash-command prompts get clearer names ([#1709](https://github.com/getpaseo/paseo/pull/1709))
-- ACP provider catalog updated to the latest registry versions
+- Les diagnostics de provider restent utiles même quand la découverte de modèles est lente ([#1724](https://github.com/getpaseo/paseo/pull/1724))
+- Les requêtes de provider lentes ne font plus paraître l'app déconnectée ([#1723](https://github.com/getpaseo/paseo/pull/1723))
+- Les worktrees liés à des branches suivies nommées différemment trouvent correctement leurs PR ([#1718](https://github.com/getpaseo/paseo/pull/1718))
+- Les espaces de travail lancés depuis des prompts de commande slash obtiennent des noms plus clairs ([#1709](https://github.com/getpaseo/paseo/pull/1709))
+- Catalogue de providers ACP mis à jour vers les dernières versions du registre
 
-### Fixed
+### Corrections
 
-- Pi no longer creates empty sessions while loading new-agent options ([#1727](https://github.com/getpaseo/paseo/pull/1727))
-- Windows daemon status finds the daemon process more reliably ([#1725](https://github.com/getpaseo/paseo/pull/1725))
-- OpenAI voice credentials no longer affect other OpenAI-backed tools
-- Provider model lists no longer disappear during refresh
+- Pi ne crée plus de sessions vides pendant le chargement des options de nouvel agent ([#1727](https://github.com/getpaseo/paseo/pull/1727))
+- Le statut du démon sous Windows trouve le processus du démon de façon plus fiable ([#1725](https://github.com/getpaseo/paseo/pull/1725))
+- Les identifiants vocaux OpenAI n'affectent plus les autres outils basés sur OpenAI
+- Les listes de modèles de provider ne disparaissent plus pendant le rafraîchissement
 
 ## 0.1.100 - 2026-06-24
 
-### Added
+### Ajouts
 
-- Cycle agent modes with Shift+Tab
-- Select a custom Copilot agent when starting or mid-session ([#1700](https://github.com/getpaseo/paseo/pull/1700))
+- Faites défiler les modes de l'agent avec Shift+Tab
+- Sélectionnez un agent Copilot personnalisé au démarrage ou en cours de session ([#1700](https://github.com/getpaseo/paseo/pull/1700))
 
-### Improved
+### Améliorations
 
-- ACP provider catalog updated to the latest registry versions
+- Catalogue de providers ACP mis à jour vers les dernières versions du registre
 
-### Fixed
+### Corrections
 
-- Claude no longer sends an extra API request after each message ([#1701](https://github.com/getpaseo/paseo/pull/1701))
-- OpenCode no longer leaves stray background servers running after sessions end ([#1697](https://github.com/getpaseo/paseo/pull/1697))
-- Slash commands and skills now load in OMP agents ([#1698](https://github.com/getpaseo/paseo/pull/1698))
+- Claude n'envoie plus de requête API supplémentaire après chaque message ([#1701](https://github.com/getpaseo/paseo/pull/1701))
+- OpenCode ne laisse plus de serveurs en arrière-plan tourner après la fin des sessions ([#1697](https://github.com/getpaseo/paseo/pull/1697))
+- Les commandes slash et compétences se chargent désormais dans les agents OMP ([#1698](https://github.com/getpaseo/paseo/pull/1698))
 
 ## 0.1.99 - 2026-06-23
 
-### Improved
+### Améliorations
 
-- The PR panel now has a refresh button and clearer loading states ([#1664](https://github.com/getpaseo/paseo/pull/1664))
-- Provider diagnostics and model lists now stay in sync ([#1660](https://github.com/getpaseo/paseo/pull/1660))
+- Le panneau des PR dispose désormais d'un bouton de rafraîchissement et d'états de chargement plus clairs ([#1664](https://github.com/getpaseo/paseo/pull/1664))
+- Les diagnostics de provider et les listes de modèles restent désormais synchronisés ([#1660](https://github.com/getpaseo/paseo/pull/1660))
 
-### Fixed
+### Corrections
 
-- ACP providers like Grok no longer show duplicate user messages
-- Saved composer modes no longer reset while provider data is loading ([#1658](https://github.com/getpaseo/paseo/pull/1658))
-- The right sidebar no longer gets stuck on mobile ([#1661](https://github.com/getpaseo/paseo/pull/1661))
+- Les providers ACP comme Grok n'affichent plus de messages utilisateur en double
+- Les modes du composeur sauvegardés ne se réinitialisent plus pendant le chargement des données de provider ([#1658](https://github.com/getpaseo/paseo/pull/1658))
+- La barre latérale droite ne reste plus bloquée sur mobile ([#1661](https://github.com/getpaseo/paseo/pull/1661))
 
 ## 0.1.98 - 2026-06-21
 
-### Added
+### Ajouts
 
-- See plan usage in-app for Claude, Codex, Copilot, Cursor, Z.AI, Grok, and Kimi ([#1278](https://github.com/getpaseo/paseo/pull/1278) by [@ABorakati](https://github.com/ABorakati))
-- Added Ultracode for Claude ([#1625](https://github.com/getpaseo/paseo/pull/1625))
-- Detach a subagent to run it on its own ([#1612](https://github.com/getpaseo/paseo/pull/1612))
-- Add a project without creating a workspace
-- Add a setting to show branch names instead of titles in the sidebar
+- Consultez l'usage de votre forfait dans l'app pour Claude, Codex, Copilot, Cursor, Z.AI, Grok et Kimi ([#1278](https://github.com/getpaseo/paseo/pull/1278) by [@ABorakati](https://github.com/ABorakati))
+- Ajout d'Ultracode pour Claude ([#1625](https://github.com/getpaseo/paseo/pull/1625))
+- Détachez un sous-agent pour l'exécuter de façon autonome ([#1612](https://github.com/getpaseo/paseo/pull/1612))
+- Ajoutez un projet sans créer d'espace de travail
+- Ajout d'un réglage pour afficher les noms de branches plutôt que les titres dans la barre latérale
 
-### Improved
+### Améliorations
 
-- Mid-turn thinking and mode changes now say they apply next turn
-- PR merge options name their method: squash, merge, or rebase ([#1608](https://github.com/getpaseo/paseo/pull/1608) by [@mcowger](https://github.com/mcowger))
-- A running agent's mode change is remembered for new agents
-- Copy a provider's launch diagnostic in one tap ([#1611](https://github.com/getpaseo/paseo/pull/1611))
+- Les changements de réflexion et de mode en cours de tour indiquent désormais qu'ils s'appliquent au tour suivant
+- Les options de fusion de PR nomment leur méthode : squash, merge ou rebase ([#1608](https://github.com/getpaseo/paseo/pull/1608) by [@mcowger](https://github.com/mcowger))
+- Le changement de mode d'un agent en cours d'exécution est mémorisé pour les nouveaux agents
+- Copiez le diagnostic de lancement d'un provider en un seul geste ([#1611](https://github.com/getpaseo/paseo/pull/1611))
 
-### Fixed
+### Corrections
 
-- OpenCode no longer scans your whole disk on macOS desktop ([#1626](https://github.com/getpaseo/paseo/pull/1626))
-- Daemon no longer crashes when OpenAI speech has no API key ([#1368](https://github.com/getpaseo/paseo/pull/1368) by [@mcowger](https://github.com/mcowger))
-- Reopening an archived Codex agent no longer hangs
-- Claude's context meter no longer jumps to subagent usage
-- Claude's context meter fills from the first message in a new session
-- OpenCode's mode picker now respects your disabled modes ([#1366](https://github.com/getpaseo/paseo/pull/1366) by [@mcowger](https://github.com/mcowger))
-- File links and @-mentions find files in dot-folders and deep paths ([#1609](https://github.com/getpaseo/paseo/pull/1609))
-- Archiving a project's last workspace no longer makes it vanish ([#1631](https://github.com/getpaseo/paseo/pull/1631))
-- Collapsed sidebar projects stay collapsed
+- OpenCode n'analyse plus tout votre disque sur le bureau macOS ([#1626](https://github.com/getpaseo/paseo/pull/1626))
+- Le démon ne plante plus quand la synthèse vocale OpenAI n'a pas de clé API ([#1368](https://github.com/getpaseo/paseo/pull/1368) by [@mcowger](https://github.com/mcowger))
+- La réouverture d'un agent Codex archivé ne se bloque plus
+- Le compteur de contexte de Claude ne saute plus à l'usage des sous-agents
+- Le compteur de contexte de Claude se remplit dès le premier message d'une nouvelle session
+- Le sélecteur de mode d'OpenCode respecte désormais vos modes désactivés ([#1366](https://github.com/getpaseo/paseo/pull/1366) by [@mcowger](https://github.com/mcowger))
+- Les liens de fichiers et mentions @ trouvent les fichiers dans les dossiers cachés et les chemins profonds ([#1609](https://github.com/getpaseo/paseo/pull/1609))
+- L'archivage du dernier espace de travail d'un projet ne le fait plus disparaître ([#1631](https://github.com/getpaseo/paseo/pull/1631))
+- Les projets repliés dans la barre latérale restent repliés
 
 ## 0.1.97 - 2026-06-18
 
-### Added
+### Ajouts
 
-- **Simplify workspace model** — run multiple workspaces on the same code without a worktree, each with its own agents, terminals, and status ([#1539](https://github.com/getpaseo/paseo/pull/1539))
-- **Reopen archived workspaces from History** — restore a past workspace even after its worktree was removed
-- **Terminals show when their agent is working, idle, or waiting for input** ([#1507](https://github.com/getpaseo/paseo/pull/1507))
-- **Attach files to agents on mobile** ([#1501](https://github.com/getpaseo/paseo/pull/1501))
-- **Hide dotfiles in the file explorer** ([#1516](https://github.com/getpaseo/paseo/pull/1516) by [@yuruiz](https://github.com/yuruiz))
-- **Pin terminal, browser, and new-tab buttons to the tab row and sidebar**
-- **Create a new workspace with a keyboard shortcut**
+- **Modèle d'espace de travail simplifié** — lancez plusieurs espaces de travail sur le même code sans worktree, chacun avec ses propres agents, terminaux et statut ([#1539](https://github.com/getpaseo/paseo/pull/1539))
+- **Rouvrez des espaces de travail archivés depuis l'Historique** — restaurez un ancien espace même après la suppression de son worktree
+- **Les terminaux indiquent si leur agent travaille, est au repos ou attend une saisie** ([#1507](https://github.com/getpaseo/paseo/pull/1507))
+- **Joignez des fichiers aux agents sur mobile** ([#1501](https://github.com/getpaseo/paseo/pull/1501))
+- **Masquez les fichiers cachés dans l'explorateur de fichiers** ([#1516](https://github.com/getpaseo/paseo/pull/1516) by [@yuruiz](https://github.com/yuruiz))
+- **Épinglez les boutons terminal, navigateur et nouvel onglet à la barre d'onglets et à la barre latérale**
+- **Créez un nouvel espace de travail avec un raccourci clavier**
 
-### Improved
+### Améliorations
 
-- Workspace titles come from your first prompt and are shorter ([#1563](https://github.com/getpaseo/paseo/pull/1563))
-- Copy a workspace's branch or path from its hover card
-- Terminals stay smooth under heavy output ([#1500](https://github.com/getpaseo/paseo/pull/1500))
-- Worktrees are removed when their last workspace is archived ([#1562](https://github.com/getpaseo/paseo/pull/1562))
-- Finish notifications include subagent results ([#1558](https://github.com/getpaseo/paseo/pull/1558))
-- Cursor lists only models you can select ([#1556](https://github.com/getpaseo/paseo/pull/1556))
-- ACP provider catalog updated to the latest registry versions
+- Les titres d'espace de travail proviennent de votre premier prompt et sont plus courts ([#1563](https://github.com/getpaseo/paseo/pull/1563))
+- Copiez la branche ou le chemin d'un espace de travail depuis sa fiche au survol
+- Les terminaux restent fluides même avec une sortie volumineuse ([#1500](https://github.com/getpaseo/paseo/pull/1500))
+- Les worktrees sont supprimés quand leur dernier espace de travail est archivé ([#1562](https://github.com/getpaseo/paseo/pull/1562))
+- Les notifications de fin incluent les résultats des sous-agents ([#1558](https://github.com/getpaseo/paseo/pull/1558))
+- Cursor ne liste que les modèles que vous pouvez sélectionner ([#1556](https://github.com/getpaseo/paseo/pull/1556))
+- Le catalogue de providers ACP est mis à jour avec les dernières versions du registre
 
-### Fixed
+### Corrections
 
-- Brief daemon slowdowns no longer drop your connection
-- Linux AppImage updates no longer hang on quit or delete the app ([#1485](https://github.com/getpaseo/paseo/pull/1485) by [@xpufx](https://github.com/xpufx))
-- Opening Providers settings no longer crashes on Android ([#1537](https://github.com/getpaseo/paseo/pull/1537))
-- Coding-agent terminal shortcuts work on Windows ([#1509](https://github.com/getpaseo/paseo/pull/1509))
-- ACP and Kimi sessions can be imported again ([#1510](https://github.com/getpaseo/paseo/pull/1510) by [@wbxl2000](https://github.com/wbxl2000))
-- ACP agents shut down without leaving orphaned processes ([#1460](https://github.com/getpaseo/paseo/pull/1460) by [@yeshan333](https://github.com/yeshan333))
-- Imported session previews show clean prompts ([#1502](https://github.com/getpaseo/paseo/pull/1502))
-- Local pairing offers use the correct app URL ([#1187](https://github.com/getpaseo/paseo/pull/1187) by [@aibaiiqpl](https://github.com/aibaiiqpl))
-- The app no longer freezes from repeated provider re-probes
-- Removing a project from the sidebar now removes the project itself instead of leaving it behind
-- Workspace shortcut numbers no longer appear for the wrong key ([#1580](https://github.com/getpaseo/paseo/pull/1580) by [@cleiter](https://github.com/cleiter))
-- Chats no longer hang when a message contains unmatched backticks ([#1585](https://github.com/getpaseo/paseo/pull/1585) by [@thaning0](https://github.com/thaning0))
+- Les brefs ralentissements du démon ne coupent plus votre connexion
+- Les mises à jour de l'AppImage Linux ne bloquent plus à la fermeture ni ne suppriment l'application ([#1485](https://github.com/getpaseo/paseo/pull/1485) by [@xpufx](https://github.com/xpufx))
+- L'ouverture des réglages Providers ne plante plus sur Android ([#1537](https://github.com/getpaseo/paseo/pull/1537))
+- Les raccourcis de terminal des agents de code fonctionnent sur Windows ([#1509](https://github.com/getpaseo/paseo/pull/1509))
+- Les sessions ACP et Kimi peuvent à nouveau être importées ([#1510](https://github.com/getpaseo/paseo/pull/1510) by [@wbxl2000](https://github.com/wbxl2000))
+- Les agents ACP s'arrêtent sans laisser de processus orphelins ([#1460](https://github.com/getpaseo/paseo/pull/1460) by [@yeshan333](https://github.com/yeshan333))
+- Les aperçus des sessions importées affichent des prompts propres ([#1502](https://github.com/getpaseo/paseo/pull/1502))
+- Les offres d'appairage local utilisent la bonne URL d'application ([#1187](https://github.com/getpaseo/paseo/pull/1187) by [@aibaiiqpl](https://github.com/aibaiiqpl))
+- L'application ne se fige plus à cause de re-sondages répétés des providers
+- Retirer un projet de la barre latérale supprime désormais le projet lui-même au lieu de le laisser en place
+- Les numéros de raccourci d'espace de travail n'apparaissent plus pour la mauvaise touche ([#1580](https://github.com/getpaseo/paseo/pull/1580) by [@cleiter](https://github.com/cleiter))
+- Les conversations ne se bloquent plus quand un message contient des backticks non appariés ([#1585](https://github.com/getpaseo/paseo/pull/1585) by [@thaning0](https://github.com/thaning0))
 
 ## 0.1.96 - 2026-06-13
 
-_This release only fixes an Android issue — desktop users don't need to update._
+_Cette version corrige uniquement un problème Android — les utilisateurs desktop n'ont pas besoin de mettre à jour._
 
-### Fixed
+### Corrections
 
-- On Android, the sidebar no longer reappears and gets stuck after you open a chat
+- Sur Android, la barre latérale ne réapparaît plus et ne reste plus bloquée après l'ouverture d'une conversation
 
 ## 0.1.95 - 2026-06-13
 
-### Added
+### Ajouts
 
-- **Attach any file to agents on desktop** ([#1474](https://github.com/getpaseo/paseo/pull/1474))
+- **Joignez n'importe quel fichier aux agents sur desktop** ([#1474](https://github.com/getpaseo/paseo/pull/1474))
 
-### Improved
+### Améliorations
 
-- The git push button shows before merge actions when your branch is ahead ([#1488](https://github.com/getpaseo/paseo/pull/1488))
-- SVG attachments are uploaded to disk
-- Switching workspaces feels smoother
+- Le bouton git push apparaît avant les actions de merge quand votre branche est en avance ([#1488](https://github.com/getpaseo/paseo/pull/1488))
+- Les pièces jointes SVG sont téléversées sur le disque
+- Le changement d'espace de travail est plus fluide
 
-### Fixed
+### Corrections
 
-- Fixed cases where outdated GitHub data could be shown ([#1491](https://github.com/getpaseo/paseo/pull/1491))
-- Uploaded images in PR comments and review threads now load in the PR panel ([#1486](https://github.com/getpaseo/paseo/pull/1486))
-- Opening a project whose folder is missing shows a clear error ([#1490](https://github.com/getpaseo/paseo/pull/1490))
-- The new workspace title moves out of the way of the keyboard ([#1489](https://github.com/getpaseo/paseo/pull/1489))
-- Sidebars no longer open on their own on Android
+- Correction des cas où des données GitHub obsolètes pouvaient s'afficher ([#1491](https://github.com/getpaseo/paseo/pull/1491))
+- Les images téléversées dans les commentaires et fils de revue de PR se chargent désormais dans le panneau PR ([#1486](https://github.com/getpaseo/paseo/pull/1486))
+- Ouvrir un projet dont le dossier est manquant affiche une erreur claire ([#1490](https://github.com/getpaseo/paseo/pull/1490))
+- Le titre du nouvel espace de travail s'écarte du clavier ([#1489](https://github.com/getpaseo/paseo/pull/1489))
+- Les barres latérales ne s'ouvrent plus toutes seules sur Android
 
 ## 0.1.94 - 2026-06-12
 
-### Added
+### Ajouts
 
-- **Attach pull request comments, reviews, threads, and failed check logs to chat from the PR panel** ([#1400](https://github.com/getpaseo/paseo/pull/1400))
-- **Use Paseo in Arabic, Chinese, English, French, Russian, and Spanish** ([#1282](https://github.com/getpaseo/paseo/pull/1282), [#1478](https://github.com/getpaseo/paseo/pull/1478) by [@chyendongnhanh338](https://github.com/chyendongnhanh338), [@dwyanewang](https://github.com/dwyanewang))
-- **Create reusable terminal profiles from Host settings**
-- **Open workspaces in Antigravity** ([#1424](https://github.com/getpaseo/paseo/pull/1424) by [@krumpyzoid](https://github.com/krumpyzoid))
+- **Joignez à une conversation les commentaires, revues, fils et journaux de vérifications échouées d'une pull request depuis le panneau PR** ([#1400](https://github.com/getpaseo/paseo/pull/1400))
+- **Utilisez Paseo en arabe, chinois, anglais, français, russe et espagnol** ([#1282](https://github.com/getpaseo/paseo/pull/1282), [#1478](https://github.com/getpaseo/paseo/pull/1478) by [@chyendongnhanh338](https://github.com/chyendongnhanh338), [@dwyanewang](https://github.com/dwyanewang))
+- **Créez des profils de terminal réutilisables depuis les réglages Hôte**
+- **Ouvrez des espaces de travail dans Antigravity** ([#1424](https://github.com/getpaseo/paseo/pull/1424) by [@krumpyzoid](https://github.com/krumpyzoid))
 
-### Improved
+### Améliorations
 
-- Claude skills appear in prompt autocomplete as you type ([#1464](https://github.com/getpaseo/paseo/pull/1464))
-- Copy file paths directly from file preview tab menus ([#1473](https://github.com/getpaseo/paseo/pull/1473))
-- PR status stays current after an agent merges a branch ([#1455](https://github.com/getpaseo/paseo/pull/1455))
-- Workspace tabs stay fast by retaining only the active workspace screens ([#1472](https://github.com/getpaseo/paseo/pull/1472))
+- Les skills Claude apparaissent dans l'autocomplétion du prompt au fur et à mesure que vous tapez ([#1464](https://github.com/getpaseo/paseo/pull/1464))
+- Copiez les chemins de fichiers directement depuis les menus des onglets d'aperçu ([#1473](https://github.com/getpaseo/paseo/pull/1473))
+- Le statut de PR reste à jour après qu'un agent a mergé une branche ([#1455](https://github.com/getpaseo/paseo/pull/1455))
+- Les onglets d'espace de travail restent rapides en ne conservant que les écrans de l'espace actif ([#1472](https://github.com/getpaseo/paseo/pull/1472))
 
-### Fixed
+### Corrections
 
-- Composer send shortcuts no longer conflict with other keyboard shortcuts
-- Multi-question prompts advance one answer at a time ([#1462](https://github.com/getpaseo/paseo/pull/1462))
-- Imported Pi sessions keep their original model and thinking settings ([#1441](https://github.com/getpaseo/paseo/pull/1441) by [@thomasaull](https://github.com/thomasaull))
-- Reconnecting to a desktop host keeps the saved shell and workspace route
-- Worktree terminals no longer appear in parent workspaces
-- Mobile reconnects show the welcome screen correctly
+- Les raccourcis d'envoi du composeur n'entrent plus en conflit avec d'autres raccourcis clavier
+- Les prompts à questions multiples avancent une réponse à la fois ([#1462](https://github.com/getpaseo/paseo/pull/1462))
+- Les sessions Pi importées conservent leur modèle et leurs réglages de réflexion d'origine ([#1441](https://github.com/getpaseo/paseo/pull/1441) by [@thomasaull](https://github.com/thomasaull))
+- La reconnexion à un hôte desktop conserve le shell et la route d'espace de travail enregistrés
+- Les terminaux de worktree n'apparaissent plus dans les espaces de travail parents
+- Les reconnexions mobiles affichent correctement l'écran d'accueil
 
 ## 0.1.93 - 2026-06-10
 
-### Added
+### Ajouts
 
-- **Claude Fable 5 is available in the Claude model picker** ([#1443](https://github.com/getpaseo/paseo/pull/1443) by [@0-Captain](https://github.com/0-Captain))
+- **Claude Fable 5 est disponible dans le sélecteur de modèles Claude** ([#1443](https://github.com/getpaseo/paseo/pull/1443) by [@0-Captain](https://github.com/0-Captain))
 
 ## 0.1.92 - 2026-06-10
 
-### Added
+### Ajouts
 
-- **Skills autocomplete inside prompts**
+- **Autocomplétion des skills dans les prompts**
 
-### Improved
+### Améliorations
 
-- Provider catalog is inline in Host settings ([#1423](https://github.com/getpaseo/paseo/pull/1423))
-- Manual update checks skip staged rollout delays
-- CodeWhale replaces DeepSeek TUI in the provider catalog
-- ACP provider catalog entries are updated for Cline, Codebuddy Code, DimCode, Factory Droid, Gemini, Nova, and Qoder
-- OMP has its own icon and website page
-- Model selector descriptions are clearer
-- ACP provider errors show the provider's real failure message
+- Le catalogue de providers est intégré aux réglages Hôte ([#1423](https://github.com/getpaseo/paseo/pull/1423))
+- Les vérifications manuelles de mise à jour ignorent les délais de déploiement échelonné
+- CodeWhale remplace DeepSeek TUI dans le catalogue de providers
+- Les entrées du catalogue de providers ACP sont mises à jour pour Cline, Codebuddy Code, DimCode, Factory Droid, Gemini, Nova et Qoder
+- OMP a sa propre icône et sa page web
+- Les descriptions du sélecteur de modèles sont plus claires
+- Les erreurs des providers ACP affichent le vrai message d'échec du provider
 
-### Fixed
+### Corrections
 
-- New Paseo worktree branches can push their first commits
-- Imported sessions no longer open blank or in the wrong workspace
-- Windows Explorer opens the selected workspace instead of Documents ([#1412](https://github.com/getpaseo/paseo/pull/1412) by [@bjspi](https://github.com/bjspi))
-- Windows editor shortcuts installed as command shims launch correctly ([#1387](https://github.com/getpaseo/paseo/pull/1387) by [@Peter7896](https://github.com/Peter7896))
-- ACP providers that cannot use MCP servers can start correctly
-- Removed hosts no longer leave host pages stuck connecting
-- File preview links open in your external browser
-- Chat stays pinned to the latest message while output streams
-- The mobile composer send button no longer shifts while typing
+- Les nouvelles branches de worktree Paseo peuvent pousser leurs premiers commits
+- Les sessions importées ne s'ouvrent plus vides ni dans le mauvais espace de travail
+- L'Explorateur Windows ouvre l'espace de travail sélectionné au lieu de Documents ([#1412](https://github.com/getpaseo/paseo/pull/1412) by [@bjspi](https://github.com/bjspi))
+- Les raccourcis d'éditeur Windows installés comme command shims se lancent correctement ([#1387](https://github.com/getpaseo/paseo/pull/1387) by [@Peter7896](https://github.com/Peter7896))
+- Les providers ACP qui ne peuvent pas utiliser de serveurs MCP démarrent correctement
+- Les hôtes retirés ne laissent plus de pages d'hôte bloquées en connexion
+- Les liens d'aperçu de fichier s'ouvrent dans votre navigateur externe
+- La conversation reste ancrée au dernier message pendant que la sortie défile
+- Le bouton d'envoi du composeur mobile ne se décale plus pendant la saisie
 
 ## 0.1.91 - 2026-06-08
 
-### Added
+### Ajouts
 
-- **Open multiple desktop windows** ([#1355](https://github.com/getpaseo/paseo/pull/1355) by [@arieel-ost](https://github.com/arieel-ost))
-- **Open browser pop-ups and links inside workspace tabs** ([#1375](https://github.com/getpaseo/paseo/pull/1375))
-- **Use the command center from mobile**
-- **Add OMP as a provider** ([#1388](https://github.com/getpaseo/paseo/pull/1388))
+- **Ouvrez plusieurs fenêtres desktop** ([#1355](https://github.com/getpaseo/paseo/pull/1355) by [@arieel-ost](https://github.com/arieel-ost))
+- **Ouvrez les pop-ups et liens du navigateur dans les onglets d'espace de travail** ([#1375](https://github.com/getpaseo/paseo/pull/1375))
+- **Utilisez le centre de commande depuis le mobile**
+- **Ajoutez OMP comme provider** ([#1388](https://github.com/getpaseo/paseo/pull/1388))
 
-### Improved
+### Améliorations
 
-- New workspaces remember your last provider, mode, and thinking choices
-- Git controls now default ready branches to pull requests and hide unavailable pull or push actions
-- Desktop-managed hosts recover more reliably after stale daemon state
-- Daemon status now explains authentication failures
-- Project search skips Python virtual environments ([#1356](https://github.com/getpaseo/paseo/pull/1356))
-- Config files can include `$schema` for editor help
-- Claude MCP servers preserve always-load tool settings ([#1333](https://github.com/getpaseo/paseo/pull/1333) by [@nodomain](https://github.com/nodomain))
-- Claude profiles keep their configured models ([#1311](https://github.com/getpaseo/paseo/pull/1311) by [@ilteoood](https://github.com/ilteoood))
-- Provider loading can wait longer on slow machines ([#1346](https://github.com/getpaseo/paseo/pull/1346) by [@nodomain](https://github.com/nodomain))
-- The Kimi catalog entry now points to Kimi Code CLI ([#1403](https://github.com/getpaseo/paseo/pull/1403) by [@wbxl2000](https://github.com/wbxl2000))
-- ACP provider catalog entries are updated for Auggie, Claude Agent, Cline, Codebuddy Code, DimCode, Factory Droid, fast-agent, Gemini, GitHub Copilot, and Nova
-- Local dictation crash reports show more useful details ([#1379](https://github.com/getpaseo/paseo/pull/1379))
-- Daemon logs show why managed workers exit
+- Les nouveaux espaces de travail mémorisent vos derniers choix de provider, mode et réflexion
+- Les contrôles git orientent désormais par défaut les branches prêtes vers les pull requests et masquent les actions pull ou push indisponibles
+- Les hôtes gérés par le desktop récupèrent plus fiablement après un état de démon obsolète
+- Le statut du démon explique désormais les échecs d'authentification
+- La recherche de projets ignore les environnements virtuels Python ([#1356](https://github.com/getpaseo/paseo/pull/1356))
+- Les fichiers de configuration peuvent inclure `$schema` pour l'aide de l'éditeur
+- Les serveurs MCP Claude conservent les réglages d'outils toujours chargés ([#1333](https://github.com/getpaseo/paseo/pull/1333) by [@nodomain](https://github.com/nodomain))
+- Les profils Claude conservent leurs modèles configurés ([#1311](https://github.com/getpaseo/paseo/pull/1311) by [@ilteoood](https://github.com/ilteoood))
+- Le chargement des providers peut patienter plus longtemps sur les machines lentes ([#1346](https://github.com/getpaseo/paseo/pull/1346) by [@nodomain](https://github.com/nodomain))
+- L'entrée de catalogue Kimi pointe désormais vers Kimi Code CLI ([#1403](https://github.com/getpaseo/paseo/pull/1403) by [@wbxl2000](https://github.com/wbxl2000))
+- Les entrées du catalogue de providers ACP sont mises à jour pour Auggie, Claude Agent, Cline, Codebuddy Code, DimCode, Factory Droid, fast-agent, Gemini, GitHub Copilot et Nova
+- Les rapports de plantage de la dictée locale affichent des détails plus utiles ([#1379](https://github.com/getpaseo/paseo/pull/1379))
+- Les journaux du démon indiquent pourquoi les workers gérés se ferment
 
-### Fixed
+### Corrections
 
-- Pi compaction slash commands run correctly ([#1338](https://github.com/getpaseo/paseo/pull/1338) by [@chyendongnhanh338](https://github.com/chyendongnhanh338))
-- Auto-archiving still works after a merged PR branch is deleted ([#1378](https://github.com/getpaseo/paseo/pull/1378))
-- Worktrees can check out existing branch refs correctly ([#1358](https://github.com/getpaseo/paseo/pull/1358) by [@dixonl90](https://github.com/dixonl90))
-- File downloads work when daemon password protection is enabled ([#1351](https://github.com/getpaseo/paseo/pull/1351) by [@nodomain](https://github.com/nodomain))
-- iOS markdown links are tappable again ([#1334](https://github.com/getpaseo/paseo/pull/1334) by [@kaspesi](https://github.com/kaspesi))
-- iOS markdown images render correctly
-- Windows workspaces load their providers correctly ([#1329](https://github.com/getpaseo/paseo/pull/1329))
-- Removing a localhost host stops its local daemon ([#1297](https://github.com/getpaseo/paseo/pull/1297) by [@mcowger](https://github.com/mcowger))
-- Provider settings sheets stack correctly
-- The new workspace screen no longer opens behind the mobile sidebar
-- Global agent listing works again ([#1420](https://github.com/getpaseo/paseo/pull/1420))
-- OpenCode compaction summaries stay out of chat
-- OpenCode agents sharing a workspace keep their own Paseo tools
+- Les commandes slash de compaction Pi s'exécutent correctement ([#1338](https://github.com/getpaseo/paseo/pull/1338) by [@chyendongnhanh338](https://github.com/chyendongnhanh338))
+- L'auto-archivage fonctionne toujours après la suppression d'une branche de PR mergée ([#1378](https://github.com/getpaseo/paseo/pull/1378))
+- Les worktrees peuvent extraire correctement les refs de branches existantes ([#1358](https://github.com/getpaseo/paseo/pull/1358) by [@dixonl90](https://github.com/dixonl90))
+- Les téléchargements de fichiers fonctionnent quand la protection par mot de passe du démon est activée ([#1351](https://github.com/getpaseo/paseo/pull/1351) by [@nodomain](https://github.com/nodomain))
+- Les liens markdown iOS sont à nouveau cliquables ([#1334](https://github.com/getpaseo/paseo/pull/1334) by [@kaspesi](https://github.com/kaspesi))
+- Les images markdown iOS s'affichent correctement
+- Les espaces de travail Windows chargent correctement leurs providers ([#1329](https://github.com/getpaseo/paseo/pull/1329))
+- Retirer un hôte localhost arrête son démon local ([#1297](https://github.com/getpaseo/paseo/pull/1297) by [@mcowger](https://github.com/mcowger))
+- Les feuilles de réglages des providers s'empilent correctement
+- L'écran de nouvel espace de travail ne s'ouvre plus derrière la barre latérale mobile
+- Le listage global des agents fonctionne à nouveau ([#1420](https://github.com/getpaseo/paseo/pull/1420))
+- Les résumés de compaction OpenCode restent hors de la conversation
+- Les agents OpenCode partageant un espace de travail conservent leurs propres outils Paseo
 
 ## 0.1.90 - 2026-06-04
 
-### Added
+### Ajouts
 
-- **Group the sidebar by status so workspaces waiting on you, ready to review, working, and done are visible at a glance** ([#1317](https://github.com/getpaseo/paseo/pull/1317))
-- **Start a new workspace from the global sidebar button without choosing a project first** ([#1324](https://github.com/getpaseo/paseo/pull/1324))
-- **Open the active file directly in your editor, file manager, or GitHub instead of only opening the workspace root** ([#1285](https://github.com/getpaseo/paseo/pull/1285) by [@aaronzhongg](https://github.com/aaronzhongg))
-- **Automatically archive clean PR workspaces after the PR is merged from host settings** ([#1313](https://github.com/getpaseo/paseo/pull/1313))
-- **Desktop-managed Paseo skills stay current after installing a newer desktop build** ([#1309](https://github.com/getpaseo/paseo/pull/1309))
-- **Dart files and Dart code blocks are now syntax-highlighted** ([#1326](https://github.com/getpaseo/paseo/pull/1326))
+- **Groupez la barre latérale par statut pour voir d'un coup d'œil les espaces de travail qui vous attendent, prêts à relire, en cours et terminés** ([#1317](https://github.com/getpaseo/paseo/pull/1317))
+- **Démarrez un nouvel espace de travail depuis le bouton global de la barre latérale sans choisir de projet au préalable** ([#1324](https://github.com/getpaseo/paseo/pull/1324))
+- **Ouvrez le fichier actif directement dans votre éditeur, gestionnaire de fichiers ou GitHub au lieu de n'ouvrir que la racine de l'espace de travail** ([#1285](https://github.com/getpaseo/paseo/pull/1285) by [@aaronzhongg](https://github.com/aaronzhongg))
+- **Archivez automatiquement les espaces de travail de PR propres après le merge de la PR, depuis les réglages hôte** ([#1313](https://github.com/getpaseo/paseo/pull/1313))
+- **Les skills Paseo gérés par le desktop restent à jour après l'installation d'une nouvelle build desktop** ([#1309](https://github.com/getpaseo/paseo/pull/1309))
+- **Les fichiers Dart et les blocs de code Dart bénéficient désormais de la coloration syntaxique** ([#1326](https://github.com/getpaseo/paseo/pull/1326))
 
-### Improved
+### Améliorations
 
-- Sidebar workspaces can be marked as read when they are ready to review or failed ([#1317](https://github.com/getpaseo/paseo/pull/1317))
-- Child agents keep unattended permissions when delegated across providers ([#1315](https://github.com/getpaseo/paseo/pull/1315))
-- Scheduled agents open with the real prompt and title instead of looking empty ([#1316](https://github.com/getpaseo/paseo/pull/1316))
-- Git controls prioritize the action that gets a ready branch shipped ([#1316](https://github.com/getpaseo/paseo/pull/1316))
-- Multiple agent questions are shown one at a time
-- OpenCode questions with free-write answers show the typed response in Paseo
-- Delegated agent activity is visible on the parent workspace
-- Sessions are ordered by latest activity
-- ACP provider catalog entries are updated for Claude Agent, Cline, Codebuddy Code, Factory Droid, and Qoder
+- Les espaces de travail de la barre latérale peuvent être marqués comme lus quand ils sont prêts à relire ou en échec ([#1317](https://github.com/getpaseo/paseo/pull/1317))
+- Les agents enfants conservent leurs permissions sans surveillance lorsqu'ils sont délégués entre providers ([#1315](https://github.com/getpaseo/paseo/pull/1315))
+- Les agents planifiés s'ouvrent avec le vrai prompt et le vrai titre au lieu de paraître vides ([#1316](https://github.com/getpaseo/paseo/pull/1316))
+- Les contrôles git priorisent l'action qui permet de livrer une branche prête ([#1316](https://github.com/getpaseo/paseo/pull/1316))
+- Les questions multiples d'un agent sont affichées une à la fois
+- Les questions OpenCode à réponse libre affichent la réponse saisie dans Paseo
+- L'activité des agents délégués est visible sur l'espace de travail parent
+- Les sessions sont classées par activité la plus récente
+- Les entrées du catalogue de providers ACP sont mises à jour pour Claude Agent, Cline, Codebuddy Code, Factory Droid et Qoder
 
-### Fixed
+### Corrections
 
-- Timeline catch-up no longer leaves older messages unloaded
-- Markdown code in file previews renders correctly
-- Long dictation retries no longer stall new audio
-- Settings host picker navigation works from host settings pages
-- Diff gutter rows stay aligned with changed code
-- Mobile sidebar gestures stay responsive under load
-- Compact sheets keep their footer and bottom spacing visible
+- Le rattrapage de la timeline ne laisse plus d'anciens messages non chargés
+- Le code markdown des aperçus de fichiers s'affiche correctement
+- Les longues nouvelles tentatives de dictée ne bloquent plus le nouvel audio
+- La navigation du sélecteur d'hôte des réglages fonctionne depuis les pages de réglages hôte
+- Les lignes de gouttière de diff restent alignées avec le code modifié
+- Les gestes de la barre latérale mobile restent réactifs sous charge
+- Les feuilles compactes gardent leur pied de page et leur espacement du bas visibles
 
 ## 0.1.89 - 2026-06-02
 
-### Added
+### Ajouts
 
-- **Open workspace services through public service proxy links** ([#1280](https://github.com/getpaseo/paseo/pull/1280) by [@mcowger](https://github.com/mcowger))
-- **Choose where new worktrees are created** ([#1230](https://github.com/getpaseo/paseo/pull/1230) by [@mcowger](https://github.com/mcowger))
-- **Desktop windows reopen at the same size and position** ([#1224](https://github.com/getpaseo/paseo/pull/1224) by [@everton-dgn](https://github.com/everton-dgn))
-- **Delegated agents can run independently and send recurring heartbeat updates**
+- **Ouvrez les services d'un espace de travail via des liens de proxy de service publics** ([#1280](https://github.com/getpaseo/paseo/pull/1280) by [@mcowger](https://github.com/mcowger))
+- **Choisissez où les nouveaux worktrees sont créés** ([#1230](https://github.com/getpaseo/paseo/pull/1230) by [@mcowger](https://github.com/mcowger))
+- **Les fenêtres desktop se rouvrent à la même taille et à la même position** ([#1224](https://github.com/getpaseo/paseo/pull/1224) by [@everton-dgn](https://github.com/everton-dgn))
+- **Les agents délégués peuvent fonctionner de manière autonome et envoyer des mises à jour de heartbeat récurrentes**
 
-### Improved
+### Améliorations
 
-- Composer controls fit better in narrow panes
-- Fork pull request badges stay visible in worktrees
-- Cline in the ACP catalog is updated to v3
+- Les contrôles du composeur s'ajustent mieux dans les panneaux étroits
+- Les badges de pull request des forks restent visibles dans les worktrees
+- Cline dans le catalogue ACP est mis à jour vers la v3
 
-### Fixed
+### Corrections
 
-- Archiving a worktree finishes even if teardown hits an error ([#1260](https://github.com/getpaseo/paseo/pull/1260) by [@mcowger](https://github.com/mcowger))
-- iOS chat messages render bold, italics, strikethrough, and line breaks correctly ([#1254](https://github.com/getpaseo/paseo/pull/1254) by [@outofrange-consulting](https://github.com/outofrange-consulting))
-- Right-edge split pane resizing no longer clips ([#1261](https://github.com/getpaseo/paseo/pull/1261) by [@everton-dgn](https://github.com/everton-dgn))
-- Pi extension command output no longer hangs
-- Delegated agents no longer appear in workspace alert counts
+- L'archivage d'un worktree se termine même si le démontage rencontre une erreur ([#1260](https://github.com/getpaseo/paseo/pull/1260) by [@mcowger](https://github.com/mcowger))
+- Les messages de conversation iOS affichent correctement le gras, l'italique, le barré et les sauts de ligne ([#1254](https://github.com/getpaseo/paseo/pull/1254) by [@outofrange-consulting](https://github.com/outofrange-consulting))
+- Le redimensionnement du panneau divisé sur le bord droit ne rogne plus ([#1261](https://github.com/getpaseo/paseo/pull/1261) by [@everton-dgn](https://github.com/everton-dgn))
+- La sortie des commandes d'extension Pi ne se bloque plus
+- Les agents délégués n'apparaissent plus dans les compteurs d'alertes des espaces de travail
 
 ## 0.1.88 - 2026-06-01
 
-### Added
+### Ajouts
 
-- **Choose an app theme from the new Appearance settings**
-- **Set a custom interface font**
-- **Set a custom code font**
-- **Adjust the interface text size**
-- **Adjust the code text size**
-- **Choose a syntax highlighting theme**
-- **Keep cron schedules aligned to a chosen time zone** ([#1232](https://github.com/getpaseo/paseo/pull/1232) by [@damselem](https://github.com/damselem))
+- **Choisissez un thème d'application depuis les nouveaux réglages Apparence**
+- **Définissez une police d'interface personnalisée**
+- **Définissez une police de code personnalisée**
+- **Ajustez la taille du texte de l'interface**
+- **Ajustez la taille du texte de code**
+- **Choisissez un thème de coloration syntaxique**
+- **Gardez les planifications cron alignées sur un fuseau horaire choisi** ([#1232](https://github.com/getpaseo/paseo/pull/1232) by [@damselem](https://github.com/damselem))
 
-### Improved
+### Améliorations
 
-- Settings now has a flatter sidebar with a host picker
-- Workspace tab switching is faster
-- Compact composers now show context usage as a percentage
-- Agent terminals opened in workspace subdirectories now appear with the rest of the workspace terminals
-- macOS displays can idle normally while the desktop app is open ([#1242](https://github.com/getpaseo/paseo/pull/1242) by [@fireblue](https://github.com/fireblue))
-- Large generated diffs now show a clear too-large placeholder instead of trying to render the whole file
+- Les réglages ont désormais une barre latérale plus plate avec un sélecteur d'hôte
+- Le changement d'onglet d'espace de travail est plus rapide
+- Les composeurs compacts affichent désormais l'utilisation du contexte en pourcentage
+- Les terminaux d'agent ouverts dans des sous-répertoires d'espace de travail apparaissent désormais avec le reste des terminaux de l'espace
+- Les écrans macOS peuvent se mettre en veille normalement pendant que l'application desktop est ouverte ([#1242](https://github.com/getpaseo/paseo/pull/1242) by [@fireblue](https://github.com/fireblue))
+- Les grands diffs générés affichent désormais un espace réservé « trop volumineux » clair au lieu d'essayer d'afficher tout le fichier
 
-### Fixed
+### Corrections
 
-- Chat history catches up correctly around long-running tool updates
-- Terminal panes keep the right size after splitting or resizing panes
-- Restored terminal snapshots reflow correctly after the pane size changes
-- Workspace scripts menus keep the right size after launching a service
-- iOS chat messages no longer hide inline links, URLs, or linked file paths ([#1257](https://github.com/getpaseo/paseo/pull/1257) by [@outofrange-consulting](https://github.com/outofrange-consulting))
+- L'historique de conversation se rattrape correctement autour des mises à jour d'outils de longue durée
+- Les panneaux de terminal conservent la bonne taille après un partage ou un redimensionnement des panneaux
+- Les instantanés de terminal restaurés se réagencent correctement après un changement de taille du panneau
+- Les menus de scripts d'espace de travail conservent la bonne taille après le lancement d'un service
+- Les messages de conversation iOS ne masquent plus les liens en ligne, les URL ni les chemins de fichiers liés ([#1257](https://github.com/getpaseo/paseo/pull/1257) by [@outofrange-consulting](https://github.com/outofrange-consulting))
 
 ## 0.1.87 - 2026-05-30
 
-### Added
+### Ajouts
 
-- Permission prompts from OpenCode subagents now surface in Paseo so you can approve or deny them
+- Les demandes de permission des sous-agents OpenCode apparaissent désormais dans Paseo pour que vous puissiez les approuver ou les refuser
 
-### Fixed
+### Corrections
 
-- Fixed an intermittent Android crash while animated views were drawing
-- Fixed mobile bottom sheets not reopening after being dismissed
+- Correction d'un plantage Android intermittent pendant le dessin de vues animées
+- Correction des feuilles du bas mobiles qui ne se rouvraient pas après avoir été fermées
 
 ## 0.1.86 - 2026-05-29
 
-### Added
+### Ajouts
 
-- **Launch Grok (xAI) as a coding agent**
-- **Fast mode for Claude Opus**
-- **Multilingual local dictation with the new Parakeet v3 speech model**
+- **Lancez Grok (xAI) comme agent de code**
+- **Mode rapide pour Claude Opus**
+- **Dictée locale multilingue avec le nouveau modèle vocal Parakeet v3**
 
-### Improved
+### Améliorations
 
-- Edit, Write, and Read tool calls are now syntax-highlighted
-- The model selector shows the error when a provider fails to load
-- The About page shows the versions of connected host daemons
-- Refresh git diffs on demand with a new refresh button
-- Previews can open readable files outside the current workspace
-- Projects without an icon now show a colored icon instead of a grey placeholder
-- Auto-generated agent titles and worktree branch names now use your configured provider fallbacks ([#1219](https://github.com/getpaseo/paseo/pull/1219) by [@mcowger](https://github.com/mcowger))
-- Local dictation keeps its speech models out of the daemon, lowering its memory use
+- Les appels aux outils Edit, Write et Read sont désormais colorés syntaxiquement
+- Le sélecteur de modèle affiche l'erreur lorsqu'un fournisseur échoue au chargement
+- La page À propos indique les versions des démons hôtes connectés
+- Rafraîchissez les diffs git à la demande avec un nouveau bouton de rafraîchissement
+- Les aperçus peuvent ouvrir des fichiers lisibles en dehors de l'espace de travail actuel
+- Les projets sans icône affichent désormais une icône colorée plutôt qu'un carré gris
+- Les titres d'agents générés automatiquement et les noms de branche des worktrees utilisent maintenant les fournisseurs de repli que vous avez configurés ([#1219](https://github.com/getpaseo/paseo/pull/1219) by [@mcowger](https://github.com/mcowger))
+- La dictée locale garde ses modèles vocaux hors du démon, réduisant sa consommation mémoire
 
-### Fixed
+### Corrections
 
-- On mobile, the whole composer now stays above the keyboard so the subagents track and draft pills no longer hide behind it
-- The mobile agent timeline now catches up fully after reconnecting, so no messages go missing
-- The slash command menu no longer shows /clear twice
+- Sur mobile, tout le composeur reste désormais au-dessus du clavier, si bien que la piste des sous-agents et les pastilles de brouillon ne disparaissent plus derrière lui
+- La chronologie d'agent sur mobile se remet à jour intégralement après une reconnexion, plus aucun message perdu
+- Le menu des commandes slash n'affiche plus /clear en double
 
 ## 0.1.85 - 2026-05-29
 
-### Added
+### Ajouts
 
-- **Opus 4.8 in the Claude model picker**, with a 1M-context variant
+- **Opus 4.8 dans le sélecteur de modèles Claude**, avec une variante à contexte 1M
 
-### Improved
+### Améliorations
 
-- Archiving a worktree now keeps its agents under the archived list instead of removing them
-- Archiving an agent cleans up any schedules targeting it
+- Archiver un worktree conserve désormais ses agents dans la liste archivée au lieu de les supprimer
+- Archiver un agent nettoie les planifications qui le ciblent
 
 ## 0.1.84 - 2026-05-28
 
-### Added
+### Ajouts
 
-- **Auto-accept tool calls for OpenCode agents**
+- **Acceptation automatique des appels d'outils pour les agents OpenCode**
 
-### Improved
+### Améliorations
 
-- Copy an OpenCode resume command to continue the session outside Paseo
-- Model selector lists every enabled provider, with a Retry button when one fails to load
-- Provider settings are easier to search and manage
-- Other agents connecting to Paseo via MCP see the same providers, models, and modes as the app ([#1198](https://github.com/getpaseo/paseo/pull/1198))
-- OpenCode Edit tool calls render as inline diffs
-- Typing a slash command shows the best match first
-- Daemon starts faster on workspaces with many git folders
-- Markdown lists have tighter spacing
-- Less jank when streaming agent responses
-- User message footer controls align with the rest of the chat
-- Agent mode controls use a cleaner monochrome treatment
-- Compact layouts move the context ring to the footer right edge
+- Copiez une commande de reprise OpenCode pour continuer la session en dehors de Paseo
+- Le sélecteur de modèle liste tous les fournisseurs activés, avec un bouton Réessayer quand l'un échoue au chargement
+- Les réglages des fournisseurs sont plus faciles à rechercher et à gérer
+- Les autres agents qui se connectent à Paseo via MCP voient les mêmes fournisseurs, modèles et modes que l'app ([#1198](https://github.com/getpaseo/paseo/pull/1198))
+- Les appels à l'outil Edit d'OpenCode s'affichent en diffs intégrés
+- Taper une commande slash affiche d'abord la meilleure correspondance
+- Le démon démarre plus vite sur les espaces de travail comportant de nombreux dossiers git
+- Les listes Markdown ont un espacement plus resserré
+- Moins de saccades lors du streaming des réponses d'agent
+- Les contrôles du pied de page des messages utilisateur s'alignent avec le reste du chat
+- Les contrôles de mode d'agent adoptent un traitement monochrome plus épuré
+- Les mises en page compactes déplacent l'anneau de contexte vers le bord droit du pied de page
 
-### Fixed
+### Corrections
 
-- Allow selecting text in the chat on mobile ([#1153](https://github.com/getpaseo/paseo/pull/1153) by [@muzhi1991](https://github.com/muzhi1991))
-- Submitting a Pi question no longer looks like a second prompt opened ([#1188](https://github.com/getpaseo/paseo/pull/1188) by [@yuruiz](https://github.com/yuruiz))
-- Daemon memory leak from unbounded workspace git caches ([#1200](https://github.com/getpaseo/paseo/pull/1200))
-- Provider diagnostics include the command override binary path ([#1191](https://github.com/getpaseo/paseo/pull/1191))
-- OpenCode MCP servers connect correctly when the daemon binds to wildcard addresses
-- Tool calls from MCP servers that return non-spec output no longer fail validation
+- Autorise la sélection de texte dans le chat sur mobile ([#1153](https://github.com/getpaseo/paseo/pull/1153) by [@muzhi1991](https://github.com/muzhi1991))
+- Soumettre une question Pi ne donne plus l'impression qu'un second prompt s'est ouvert ([#1188](https://github.com/getpaseo/paseo/pull/1188) by [@yuruiz](https://github.com/yuruiz))
+- Fuite mémoire du démon due à des caches git d'espace de travail non bornés ([#1200](https://github.com/getpaseo/paseo/pull/1200))
+- Les diagnostics des fournisseurs incluent le chemin du binaire de remplacement de commande ([#1191](https://github.com/getpaseo/paseo/pull/1191))
+- Les serveurs MCP d'OpenCode se connectent correctement lorsque le démon écoute sur des adresses génériques
+- Les appels d'outils des serveurs MCP renvoyant une sortie non conforme ne échouent plus à la validation
 
 ## 0.1.83 - 2026-05-26
 
-### Fixed
+### Corrections
 
-- Creating an agent via MCP now waits for it to actually start, so failures surface as a clear create error
-- Scheduling an agent via MCP no longer rejects blank cadence placeholders
-- Draft messages show the agent mode chip again on models without thinking options
+- Créer un agent via MCP attend désormais son démarrage effectif, de sorte que les échecs remontent comme une erreur de création claire
+- Planifier un agent via MCP ne rejette plus les espaces réservés de cadence laissés vides
+- Les messages de brouillon réaffichent la pastille de mode d'agent sur les modèles sans options de réflexion
 
 ## 0.1.82 - 2026-05-26
 
-### Added
+### Ajouts
 
-- **Rewind chat or files from any user message** ([#1154](https://github.com/getpaseo/paseo/pull/1154))
-- **See the cumulative cost of an agent session** ([#1163](https://github.com/getpaseo/paseo/pull/1163))
-- **Drop files onto the terminal to insert their paths** ([#1173](https://github.com/getpaseo/paseo/pull/1173))
-- **Tap a file path in the terminal to open it in the workspace preview** ([#1174](https://github.com/getpaseo/paseo/pull/1174))
-- **Approve OpenCode permissions for the whole session** ([#1168](https://github.com/getpaseo/paseo/pull/1168))
-- **Workspace scripts now appear on the mobile header** ([#1093](https://github.com/getpaseo/paseo/pull/1093) by [@ayhanmalkoc](https://github.com/ayhanmalkoc))
-- Devin CLI in the ACP provider catalog (by [@Alcimerio](https://github.com/Alcimerio))
-- OpenCode agents show their mode colors
+- **Rembobinez le chat ou les fichiers depuis n'importe quel message utilisateur** ([#1154](https://github.com/getpaseo/paseo/pull/1154))
+- **Consultez le coût cumulé d'une session d'agent** ([#1163](https://github.com/getpaseo/paseo/pull/1163))
+- **Déposez des fichiers sur le terminal pour insérer leurs chemins** ([#1173](https://github.com/getpaseo/paseo/pull/1173))
+- **Touchez un chemin de fichier dans le terminal pour l'ouvrir dans l'aperçu de l'espace de travail** ([#1174](https://github.com/getpaseo/paseo/pull/1174))
+- **Approuvez les permissions OpenCode pour toute la session** ([#1168](https://github.com/getpaseo/paseo/pull/1168))
+- **Les scripts d'espace de travail apparaissent désormais dans l'en-tête mobile** ([#1093](https://github.com/getpaseo/paseo/pull/1093) by [@ayhanmalkoc](https://github.com/ayhanmalkoc))
+- Devin CLI dans le catalogue de fournisseurs ACP (by [@Alcimerio](https://github.com/Alcimerio))
+- Les agents OpenCode affichent les couleurs de leur mode
 
-### Improved
+### Améliorations
 
-- Mobile terminal keyboard hides when you open a sidebar
-- Tool activity for read, write, and OpenCode tools renders more consistently ([#1171](https://github.com/getpaseo/paseo/pull/1171))
-- Compact workspace header actions are tidier
-- Settings latency readouts are easier to scan ([#1170](https://github.com/getpaseo/paseo/pull/1170))
-- Pull request merge is available as soon as GitHub reports the PR is ready ([#1172](https://github.com/getpaseo/paseo/pull/1172))
+- Le clavier du terminal mobile se cache quand vous ouvrez une barre latérale
+- L'activité des outils de lecture, d'écriture et des outils OpenCode s'affiche plus uniformément ([#1171](https://github.com/getpaseo/paseo/pull/1171))
+- Les actions de l'en-tête d'espace de travail compact sont plus soignées
+- Les mesures de latence dans les réglages sont plus faciles à parcourir ([#1170](https://github.com/getpaseo/paseo/pull/1170))
+- La fusion d'une pull request est disponible dès que GitHub signale que la PR est prête ([#1172](https://github.com/getpaseo/paseo/pull/1172))
 
-### Fixed
+### Corrections
 
-- Mobile slash command autocomplete no longer flickers or mis-layers
-- Interrupting an OpenCode agent returns it to idle instead of showing an error ([#1169](https://github.com/getpaseo/paseo/pull/1169))
-- Provider model selection per workspace is honored ([#1167](https://github.com/getpaseo/paseo/pull/1167))
-- Draft composer keeps the permission mode you selected ([#1175](https://github.com/getpaseo/paseo/pull/1175))
-- Terminal color queries no longer return malformed replies
-- File links in chat no longer crash when a message contains a bare '%' (by [@Elliotwu-7](https://github.com/Elliotwu-7))
+- L'autocomplétion des commandes slash sur mobile ne scintille plus et ne se superpose plus mal
+- Interrompre un agent OpenCode le remet au repos au lieu d'afficher une erreur ([#1169](https://github.com/getpaseo/paseo/pull/1169))
+- La sélection de modèle par fournisseur et par espace de travail est respectée ([#1167](https://github.com/getpaseo/paseo/pull/1167))
+- Le composeur de brouillon conserve le mode de permission que vous avez choisi ([#1175](https://github.com/getpaseo/paseo/pull/1175))
+- Les requêtes de couleur du terminal ne renvoient plus de réponses malformées
+- Les liens de fichiers dans le chat ne plantent plus quand un message contient un '%' isolé (by [@Elliotwu-7](https://github.com/Elliotwu-7))
 
 ## 0.1.81 - 2026-05-24
 
-### Added
+### Ajouts
 
-- **Paseo can now be installed as a web app from supported browsers** ([#1144](https://github.com/getpaseo/paseo/pull/1144))
-- **Pi extension dialogs now appear as Paseo permission prompts** ([#1134](https://github.com/getpaseo/paseo/pull/1134) by [@yuruiz](https://github.com/yuruiz))
-- Added community links and a home button to the sidebar
+- **Paseo peut désormais être installé comme application web depuis les navigateurs compatibles** ([#1144](https://github.com/getpaseo/paseo/pull/1144))
+- **Les dialogues d'extension Pi apparaissent désormais comme des demandes de permission Paseo** ([#1134](https://github.com/getpaseo/paseo/pull/1134) by [@yuruiz](https://github.com/yuruiz))
+- Ajout de liens communautaires et d'un bouton d'accueil dans la barre latérale
 
-### Improved
+### Améliorations
 
-- **Mobile terminals load faster and restore existing output more smoothly** ([#1147](https://github.com/getpaseo/paseo/pull/1147))
-- Copying assistant messages preserves formatting
-- Agent metadata fallback failures now log each provider attempt for easier debugging
+- **Les terminaux mobiles se chargent plus vite et restaurent la sortie existante plus en douceur** ([#1147](https://github.com/getpaseo/paseo/pull/1147))
+- La copie des messages de l'assistant préserve la mise en forme
+- Les échecs de repli des métadonnées d'agent consignent désormais chaque tentative de fournisseur pour faciliter le débogage
 
-### Fixed
+### Corrections
 
-- Android: slash command suggestions stay interactive when opened from the composer
-- macOS: Alt+letter shortcuts work again
-- Terminal panes no longer flicker during resize
-- OpenCode MCP servers are injected once instead of being connected twice
-- Import session no longer shows empty sessions
-- Worktree archive status no longer reports false unpushed commits ([#1158](https://github.com/getpaseo/paseo/pull/1158))
-- The `/exit`, `/quit`, and `/q` slash command aliases now show as one row
-- Shortcut chord badges are readable in light mode
-- Segmented controls show their track under every segment
-- Sheet header search text is readable in dark mode
+- Android : les suggestions de commandes slash restent interactives quand elles sont ouvertes depuis le composeur
+- macOS : les raccourcis Alt+lettre fonctionnent à nouveau
+- Les panneaux de terminal ne scintillent plus lors du redimensionnement
+- Les serveurs MCP d'OpenCode sont injectés une seule fois au lieu d'être connectés deux fois
+- L'import de session n'affiche plus de sessions vides
+- Le statut d'archive des worktrees ne signale plus de faux commits non poussés ([#1158](https://github.com/getpaseo/paseo/pull/1158))
+- Les alias de commande slash `/exit`, `/quit` et `/q` s'affichent maintenant sur une seule ligne
+- Les badges de raccourcis en accord sont lisibles en mode clair
+- Les contrôles segmentés affichent leur piste sous chaque segment
+- Le texte de recherche de l'en-tête de feuille est lisible en mode sombre
 
 ## 0.1.80 - 2026-05-21
 
-### Fixed
+### Corrections
 
-- Opening dropdown menus no longer crashes on mobile
+- Ouvrir les menus déroulants ne plante plus sur mobile
 
 ## 0.1.79 - 2026-05-21
 
-### Added
+### Ajouts
 
-- **Pi has been revamped with first-class support**
-  - Runs through your installed Pi CLI, so your Pi extensions and configuration carry over
-  - Pi agents can call Paseo tools when you have the Pi MCP extension installed
-  - Import a Pi session you started in the terminal
-  - Copy Pi's resume command from any agent to continue the session in your terminal
-  - Windows: Pi sessions match correctly across symlinked and junctioned workspace paths
-- **New home screen with quick tiles for adding a project, importing a session, setting up providers, and pairing a device**
-- **Create an agent directly into a fresh worktree that auto-archives when the run finishes**
-- **Set a custom system prompt that applies to every agent you start**
-- **Rename workspaces, terminals, and agent tabs** ([#531](https://github.com/getpaseo/paseo/pull/531))
-- **DeepSeek TUI in the ACP provider catalog** ([#1096](https://github.com/getpaseo/paseo/pull/1096))
-- **Kiro CLI in the ACP provider catalog** (by [@huhusmang](https://github.com/huhusmang))
-- Catalog providers show their icons in the model picker ([#1098](https://github.com/getpaseo/paseo/pull/1098))
-- Custom environment variables passed when creating an agent now reach the agent process ([#1112](https://github.com/getpaseo/paseo/pull/1112))
-- NixOS module supports the public TLS option for self-hosted relays ([#1106](https://github.com/getpaseo/paseo/pull/1106) by [@yzx9](https://github.com/yzx9))
+- **Pi a été repensé avec un support de premier ordre**
+  - Fonctionne via votre CLI Pi installée, de sorte que vos extensions et votre configuration Pi sont reprises
+  - Les agents Pi peuvent appeler les outils Paseo lorsque l'extension MCP Pi est installée
+  - Importez une session Pi que vous avez démarrée dans le terminal
+  - Copiez la commande de reprise de Pi depuis n'importe quel agent pour continuer la session dans votre terminal
+  - Windows : les sessions Pi correspondent correctement entre les chemins d'espace de travail liés par symlink et par jonction
+- **Nouvel écran d'accueil avec des tuiles rapides pour ajouter un projet, importer une session, configurer des fournisseurs et appairer un appareil**
+- **Créez un agent directement dans un worktree neuf qui s'auto-archive à la fin de l'exécution**
+- **Définissez un prompt système personnalisé qui s'applique à chaque agent que vous démarrez**
+- **Renommez les espaces de travail, les terminaux et les onglets d'agent** ([#531](https://github.com/getpaseo/paseo/pull/531))
+- **DeepSeek TUI dans le catalogue de fournisseurs ACP** ([#1096](https://github.com/getpaseo/paseo/pull/1096))
+- **Kiro CLI dans le catalogue de fournisseurs ACP** (by [@huhusmang](https://github.com/huhusmang))
+- Les fournisseurs du catalogue affichent leurs icônes dans le sélecteur de modèle ([#1098](https://github.com/getpaseo/paseo/pull/1098))
+- Les variables d'environnement personnalisées passées à la création d'un agent atteignent désormais le processus de l'agent ([#1112](https://github.com/getpaseo/paseo/pull/1112))
+- Le module NixOS prend en charge l'option TLS publique pour les relais auto-hébergés ([#1106](https://github.com/getpaseo/paseo/pull/1106) by [@yzx9](https://github.com/yzx9))
 
-### Improved
+### Améliorations
 
-- **Stale host connections recover automatically without a manual refresh**
-- Paseo opens to the workspace you were on last time you used it ([#1101](https://github.com/getpaseo/paseo/pull/1101))
-- Workspaces remember which editor you opened them in
-- Outdated daemons now suggest an upgrade when they receive a command they don't understand
-- Voice mode is hidden while an agent is running
-- Agent file-link tooltips show the full resolved file path ([#1088](https://github.com/getpaseo/paseo/pull/1088))
-- Workspace git status refreshes less aggressively in the background ([#1102](https://github.com/getpaseo/paseo/pull/1102))
+- **Les connexions hôtes obsolètes se rétablissent automatiquement sans rafraîchissement manuel**
+- Paseo s'ouvre sur l'espace de travail où vous étiez la dernière fois ([#1101](https://github.com/getpaseo/paseo/pull/1101))
+- Les espaces de travail mémorisent l'éditeur dans lequel vous les avez ouverts
+- Les démons obsolètes suggèrent désormais une mise à jour lorsqu'ils reçoivent une commande qu'ils ne comprennent pas
+- Le mode vocal est masqué pendant qu'un agent tourne
+- Les infobulles des liens de fichiers d'agent affichent le chemin complet résolu ([#1088](https://github.com/getpaseo/paseo/pull/1088))
+- Le statut git de l'espace de travail se rafraîchit moins agressivement en arrière-plan ([#1102](https://github.com/getpaseo/paseo/pull/1102))
 
-### Fixed
+### Corrections
 
-- macOS desktop no longer freezes after the display wakes from sleep ([#745](https://github.com/getpaseo/paseo/pull/745))
-- Windows: Codex picks up the Microsoft Store install correctly ([#1020](https://github.com/getpaseo/paseo/pull/1020) by [@32r4](https://github.com/32r4))
-- Workspace selection survives a daemon restart ([#1111](https://github.com/getpaseo/paseo/pull/1111))
-- Cursor agents wait for slash commands to load before listing them ([#1099](https://github.com/getpaseo/paseo/pull/1099) by [@chrisbanes](https://github.com/chrisbanes))
-- Codex sub-agents keep running through transient child process errors (by [@xy-plus](https://github.com/xy-plus))
-- iPad terminals send Ctrl+C correctly from a hardware keyboard (by [@samatar26](https://github.com/samatar26))
-- Git filenames with non-ASCII characters render correctly (by [@samatar26](https://github.com/samatar26))
-- Paste shortcuts work on Dvorak keyboard layouts (by [@qin-nz](https://github.com/qin-nz))
-- Claude file links resolve correctly for projects whose paths need SDK encoding
-- Duplicate Claude result text no longer appears in chat ([#1095](https://github.com/getpaseo/paseo/pull/1095))
-- Dynamic UI styles no longer leak CSS rules across the page ([#1103](https://github.com/getpaseo/paseo/pull/1103))
-- Relay handshakes reject sessions that try to change encryption keys mid-flight ([#1037](https://github.com/getpaseo/paseo/pull/1037) by [@joaosa](https://github.com/joaosa))
+- Le bureau macOS ne se fige plus après le réveil de l'écran ([#745](https://github.com/getpaseo/paseo/pull/745))
+- Windows : Codex détecte correctement l'installation du Microsoft Store ([#1020](https://github.com/getpaseo/paseo/pull/1020) by [@32r4](https://github.com/32r4))
+- La sélection d'espace de travail survit à un redémarrage du démon ([#1111](https://github.com/getpaseo/paseo/pull/1111))
+- Les agents Cursor attendent le chargement des commandes slash avant de les lister ([#1099](https://github.com/getpaseo/paseo/pull/1099) by [@chrisbanes](https://github.com/chrisbanes))
+- Les sous-agents Codex continuent de tourner malgré des erreurs transitoires de processus enfant (by [@xy-plus](https://github.com/xy-plus))
+- Les terminaux iPad envoient correctement Ctrl+C depuis un clavier matériel (by [@samatar26](https://github.com/samatar26))
+- Les noms de fichiers git avec des caractères non-ASCII s'affichent correctement (by [@samatar26](https://github.com/samatar26))
+- Les raccourcis de collage fonctionnent sur les dispositions de clavier Dvorak (by [@qin-nz](https://github.com/qin-nz))
+- Les liens de fichiers Claude se résolvent correctement pour les projets dont les chemins nécessitent un encodage SDK
+- Le texte de résultat Claude en double n'apparaît plus dans le chat ([#1095](https://github.com/getpaseo/paseo/pull/1095))
+- Les styles d'interface dynamiques ne débordent plus de règles CSS sur toute la page ([#1103](https://github.com/getpaseo/paseo/pull/1103))
+- Les poignées de main du relais rejettent les sessions qui tentent de changer de clé de chiffrement en cours de route ([#1037](https://github.com/getpaseo/paseo/pull/1037) by [@joaosa](https://github.com/joaosa))
 
 ## 0.1.78 - 2026-05-18
 
-### Improved
+### Améliorations
 
-- **Mobile model selector is faster and more straightforward** Picking a model, mode, or thinking option takes fewer taps
+- **Le sélecteur de modèle mobile est plus rapide et plus direct** Choisir un modèle, un mode ou une option de réflexion demande moins de touches
 
-### Fixed
+### Corrections
 
-- Splitting a pane no longer loses your scroll position
-- Typing in mobile sheets no longer flickers
-- Sheets on mobile web no longer crash when swiped to dismiss
+- Diviser un panneau ne perd plus votre position de défilement
+- Taper dans les feuilles mobiles ne scintille plus
+- Les feuilles sur le web mobile ne plantent plus quand on les balaie pour les fermer
 
 ## 0.1.77 - 2026-05-18
 
-### Added
+### Ajouts
 
-- **Slash commands to end and restart an agent**
-- **Syntax highlighting for code blocks in chat**
-- **Copy button on code blocks in chat**
-- **Configurable terminal scrollback** ([#1021](https://github.com/getpaseo/paseo/pull/1021) by [@32r4](https://github.com/32r4))
-- Assistant file links open at a specific line range when one is included
-- Mode icons appear in the agent status menu ([#1059](https://github.com/getpaseo/paseo/pull/1059) by [@32r4](https://github.com/32r4))
-- MCP exposes schedule update, logs, and run-once tools ([#1032](https://github.com/getpaseo/paseo/pull/1032) by [@skevetter](https://github.com/skevetter))
-- Self-hosted relays can use a different TLS setting for the public endpoint ([#1045](https://github.com/getpaseo/paseo/pull/1045) by [@yzx9](https://github.com/yzx9))
+- **Commandes slash pour terminer et redémarrer un agent**
+- **Coloration syntaxique des blocs de code dans le chat**
+- **Bouton de copie sur les blocs de code dans le chat**
+- **Historique de défilement du terminal configurable** ([#1021](https://github.com/getpaseo/paseo/pull/1021) by [@32r4](https://github.com/32r4))
+- Les liens de fichiers de l'assistant s'ouvrent sur une plage de lignes précise lorsqu'elle est incluse
+- Les icônes de mode apparaissent dans le menu de statut de l'agent ([#1059](https://github.com/getpaseo/paseo/pull/1059) by [@32r4](https://github.com/32r4))
+- MCP expose les outils de mise à jour, de journaux et d'exécution unique des planifications ([#1032](https://github.com/getpaseo/paseo/pull/1032) by [@skevetter](https://github.com/skevetter))
+- Les relais auto-hébergés peuvent utiliser un réglage TLS différent pour le point d'accès public ([#1045](https://github.com/getpaseo/paseo/pull/1045) by [@yzx9](https://github.com/yzx9))
 
-### Improved
+### Améliorations
 
-- User messages now have a distinct bubble fill for clearer chat hierarchy
-- Closing a tab returns to its parent tab
-- Diff rows show the full file path on hover ([#1061](https://github.com/getpaseo/paseo/pull/1061) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
-- The CLI shows the remote daemon host when `ls` cannot connect ([#1043](https://github.com/getpaseo/paseo/pull/1043) by [@mturac](https://github.com/mturac))
-- Nix install of the daemon is smaller ([#966](https://github.com/getpaseo/paseo/pull/966) by [@ixxie](https://github.com/ixxie))
-- Nix install honors home-manager profile paths when inheriting the user PATH ([#1040](https://github.com/getpaseo/paseo/pull/1040) by [@ixxie](https://github.com/ixxie))
+- Les messages utilisateur ont désormais un remplissage de bulle distinct pour une hiérarchie de chat plus claire
+- Fermer un onglet ramène à son onglet parent
+- Les lignes de diff affichent le chemin complet du fichier au survol ([#1061](https://github.com/getpaseo/paseo/pull/1061) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
+- La CLI affiche l'hôte du démon distant quand `ls` ne parvient pas à se connecter ([#1043](https://github.com/getpaseo/paseo/pull/1043) by [@mturac](https://github.com/mturac))
+- L'installation Nix du démon est plus légère ([#966](https://github.com/getpaseo/paseo/pull/966) by [@ixxie](https://github.com/ixxie))
+- L'installation Nix respecte les chemins de profil home-manager lors de l'héritage du PATH utilisateur ([#1040](https://github.com/getpaseo/paseo/pull/1040) by [@ixxie](https://github.com/ixxie))
 
-### Fixed
+### Corrections
 
-- OpenCode probes no longer create empty sessions
-- OpenCode custom commands no longer hang
-- OpenCode session imports succeed across more environments
-- Native diff rows expand correctly ([#940](https://github.com/getpaseo/paseo/pull/940) by [@bolasblack](https://github.com/bolasblack))
-- Mobile sidebar interactions work correctly on web ([#900](https://github.com/getpaseo/paseo/pull/900) by [@nikuscs](https://github.com/nikuscs))
-- Mobile web drag gestures fire reliably ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- Mobile web drag-and-drop activates correctly ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- iOS Safari no longer zooms when focusing the composer ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- Enter behavior in the mobile web composer is consistent ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
-- Composer no longer flickers when resizing with long prompts
-- Inline code links in assistant messages open the correct file
-- Host switcher popover is wide enough to show host names ([#981](https://github.com/getpaseo/paseo/pull/981) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
-- Windows: importing existing sessions matches paths correctly ([#1012](https://github.com/getpaseo/paseo/pull/1012) by [@kj1534](https://github.com/kj1534))
+- Les sondes OpenCode ne créent plus de sessions vides
+- Les commandes personnalisées OpenCode ne se bloquent plus
+- Les imports de session OpenCode réussissent dans davantage d'environnements
+- Les lignes de diff natives se déplient correctement ([#940](https://github.com/getpaseo/paseo/pull/940) by [@bolasblack](https://github.com/bolasblack))
+- Les interactions de la barre latérale mobile fonctionnent correctement sur le web ([#900](https://github.com/getpaseo/paseo/pull/900) by [@nikuscs](https://github.com/nikuscs))
+- Les gestes de glissement sur le web mobile se déclenchent de façon fiable ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Le glisser-déposer sur le web mobile s'active correctement ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Safari iOS ne zoome plus au focus du composeur ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Le comportement de la touche Entrée dans le composeur web mobile est cohérent ([#1048](https://github.com/getpaseo/paseo/pull/1048) by [@nikuscs](https://github.com/nikuscs))
+- Le composeur ne scintille plus lors du redimensionnement avec de longs prompts
+- Les liens de code intégrés dans les messages de l'assistant ouvrent le bon fichier
+- La popover de changement d'hôte est assez large pour afficher les noms d'hôtes ([#981](https://github.com/getpaseo/paseo/pull/981) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- Windows : l'import des sessions existantes fait correspondre les chemins correctement ([#1012](https://github.com/getpaseo/paseo/pull/1012) by [@kj1534](https://github.com/kj1534))
 
 ## 0.1.76 - 2026-05-15
 
-### Added
+### Ajouts
 
-- **Chat timestamps and turn durations** Every message shows when it was sent, and each turn surfaces how long the agent took
-- **Auto Review permission mode for Claude Code and Codex** Agents stop after each assistant turn for review instead of running unattended ([#928](https://github.com/getpaseo/paseo/pull/928), [#963](https://github.com/getpaseo/paseo/pull/963) by [@bolasblack](https://github.com/bolasblack))
-- Surface Codex's context compaction events and the `/compact` command in chat
-- Optional auto-archive for worktrees once their PR merges
-- Paste a GitHub PR or issue URL into the composer to attach it as context
-- Surface GitHub auto-merge actions in the PR hover card
-- Show all PR check counts in the PR hover card
-- Rename a project to disambiguate duplicates that share a folder name
-- Confirm before archiving a worktree with uncommitted or unpushed work
-- Claude Code now picks up models from `~/.claude/settings.json` so custom model lists show up in the model picker
-- Local Claude Code settings (`.claude/settings.local.json`) apply per workspace
-- Diagnostics for generic ACP providers surface in the model picker
-- Allow setting fast mode for Paseo subagents ([#909](https://github.com/getpaseo/paseo/pull/909), [#910](https://github.com/getpaseo/paseo/pull/910) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- **Horodatages du chat et durées des tours** Chaque message indique quand il a été envoyé, et chaque tour révèle le temps pris par l'agent
+- **Mode de permission Revue automatique pour Claude Code et Codex** Les agents s'arrêtent après chaque tour d'assistant pour revue au lieu de tourner sans surveillance ([#928](https://github.com/getpaseo/paseo/pull/928), [#963](https://github.com/getpaseo/paseo/pull/963) by [@bolasblack](https://github.com/bolasblack))
+- Faites apparaître les événements de compaction de contexte de Codex et la commande `/compact` dans le chat
+- Auto-archivage optionnel des worktrees dès que leur PR est fusionnée
+- Collez l'URL d'une PR ou d'un ticket GitHub dans le composeur pour l'attacher comme contexte
+- Faites apparaître les actions de fusion automatique GitHub dans la carte de survol de la PR
+- Affichez tous les décomptes de vérifications de PR dans la carte de survol de la PR
+- Renommez un projet pour distinguer les doublons qui partagent un nom de dossier
+- Confirmez avant d'archiver un worktree contenant du travail non commité ou non poussé
+- Claude Code récupère désormais les modèles depuis `~/.claude/settings.json`, de sorte que les listes de modèles personnalisées apparaissent dans le sélecteur de modèle
+- Les réglages Claude Code locaux (`.claude/settings.local.json`) s'appliquent par espace de travail
+- Les diagnostics des fournisseurs ACP génériques apparaissent dans le sélecteur de modèle
+- Autorise l'activation du mode rapide pour les sous-agents Paseo ([#909](https://github.com/getpaseo/paseo/pull/909), [#910](https://github.com/getpaseo/paseo/pull/910) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
 
-### Improved
+### Améliorations
 
-- Surface Claude error messages in chat instead of ending the turn silently
-- Workspace checkout picker auto-selects when a single PR is attached
-- New workspace flow honors the currently checked-out branch when branching off ([#909](https://github.com/getpaseo/paseo/pull/908) by [@sbtobb](https://github.com/sbtobb))
-- OpenCode models from console subscription providers now appear in the model picker ([#917](https://github.com/getpaseo/paseo/pull/917) by [@t2o2](https://github.com/t2o2))
-- Cursor model picker reflects the models advertised by the Cursor ACP client ([#958](https://github.com/getpaseo/paseo/pull/958) by [@chrisbanes](https://github.com/chrisbanes))
+- Fait apparaître les messages d'erreur Claude dans le chat au lieu de terminer le tour en silence
+- Le sélecteur de checkout d'espace de travail sélectionne automatiquement quand une seule PR est attachée
+- Le flux de nouvel espace de travail respecte la branche actuellement extraite lors de la création d'une branche ([#909](https://github.com/getpaseo/paseo/pull/908) by [@sbtobb](https://github.com/sbtobb))
+- Les modèles OpenCode des fournisseurs à abonnement console apparaissent désormais dans le sélecteur de modèle ([#917](https://github.com/getpaseo/paseo/pull/917) by [@t2o2](https://github.com/t2o2))
+- Le sélecteur de modèle Cursor reflète les modèles annoncés par le client ACP Cursor ([#958](https://github.com/getpaseo/paseo/pull/958) by [@chrisbanes](https://github.com/chrisbanes))
 
-### Fixed
+### Corrections
 
-- iPad hardware Enter submits the composer ([#919](https://github.com/getpaseo/paseo/pull/919) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
-- PR status falls back to a non-checks query for fine-grained GitHub tokens ([#932](https://github.com/getpaseo/paseo/pull/932) by [@32r4](https://github.com/32r4))
-- ACP errors display as readable text instead of `[object Object]`
-- OpenCode no longer hangs on retry when the upstream provider stalls
-- Worktree ahead count is correct when the upstream branch has been deleted
-- Branch-off worktrees track the correct upstream
-- File changes view works on empty repositories with no commits yet
-- Assistant message file links open the correct file
-- Default thinking option matches the selected model's capabilities
-- Shift+Enter works again in terminal input modes
-- Duplicate project entries no longer appear after reopening a project
-- Pi-backed sessions recover after a Copilot 413 instead of staying stuck
-- Skip probing unrelated executable candidates when launching agents
-- Relay E2EE reconnects cleanly under racing connect/disconnect
-- Workspace kind stays in sync with project kind after reconfiguration
-- zsh integration files install with usable runtime modes
-- MCP worktree cache refreshes after create and archive ([#911](https://github.com/getpaseo/paseo/pull/911) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- La touche Entrée matérielle de l'iPad soumet le composeur ([#919](https://github.com/getpaseo/paseo/pull/919) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- Le statut de PR se rabat sur une requête sans vérifications pour les jetons GitHub à granularité fine ([#932](https://github.com/getpaseo/paseo/pull/932) by [@32r4](https://github.com/32r4))
+- Les erreurs ACP s'affichent en texte lisible au lieu de `[object Object]`
+- OpenCode ne se bloque plus à la nouvelle tentative quand le fournisseur en amont cale
+- Le décompte d'avance du worktree est correct quand la branche amont a été supprimée
+- Les worktrees créés par branche suivent la bonne branche amont
+- La vue des changements de fichiers fonctionne sur les dépôts vides sans commit
+- Les liens de fichiers des messages de l'assistant ouvrent le bon fichier
+- L'option de réflexion par défaut correspond aux capacités du modèle sélectionné
+- Shift+Entrée fonctionne à nouveau dans les modes de saisie du terminal
+- Les entrées de projet en double n'apparaissent plus après réouverture d'un projet
+- Les sessions basées sur Pi se rétablissent après un 413 de Copilot au lieu de rester bloquées
+- Ignore le sondage des candidats exécutables non pertinents au lancement des agents
+- Le chiffrement de bout en bout du relais se reconnecte proprement lors de connexions/déconnexions concurrentes
+- Le type d'espace de travail reste synchronisé avec le type de projet après reconfiguration
+- Les fichiers d'intégration zsh s'installent avec des modes d'exécution utilisables
+- Le cache des worktrees MCP se rafraîchit après création et archivage ([#911](https://github.com/getpaseo/paseo/pull/911) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
 
 ## 0.1.75 - 2026-05-12
 
-### Added
+### Ajouts
 
-- Set the speech-to-text language used by dictation and voice mode from settings ([#941](https://github.com/getpaseo/paseo/pull/941))
+- Définissez la langue de reconnaissance vocale utilisée par la dictée et le mode vocal depuis les réglages ([#941](https://github.com/getpaseo/paseo/pull/941))
 
-### Fixed
+### Corrections
 
-- Codex resume failures now surface as explicit errors instead of leaving the agent silently stuck ([#947](https://github.com/getpaseo/paseo/pull/947))
-- Custom providers extending Codex now route correctly when they set a custom `OPENAI_BASE_URL` ([#915](https://github.com/getpaseo/paseo/pull/915))
-- Fixed Copilot's **Allow All** mode (renamed from Autopilot) ([#935](https://github.com/getpaseo/paseo/pull/935))
-- Desktop: daemon startup no longer fails when a stale PID file is left next to a still-running daemon ([#913](https://github.com/getpaseo/paseo/pull/913) by [@biaoma-ty](https://github.com/biaoma-ty))
-- iPhone HEIC photos now attach correctly from the image picker ([#934](https://github.com/getpaseo/paseo/pull/934))
-- Scheduled agents now archive automatically after each run ([#945](https://github.com/getpaseo/paseo/pull/945))
-- Windows: Codex command summaries trim `pwsh`, `powershell`, or `cmd` wrappers ([#931](https://github.com/getpaseo/paseo/pull/931) by [@32r4](https://github.com/32r4))
-- iPad: settings sidebar and main sidebar respect the top safe area in wide layouts ([#922](https://github.com/getpaseo/paseo/pull/922), [#937](https://github.com/getpaseo/paseo/pull/937) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
+- Les échecs de reprise Codex remontent désormais comme des erreurs explicites au lieu de laisser l'agent silencieusement bloqué ([#947](https://github.com/getpaseo/paseo/pull/947))
+- Les fournisseurs personnalisés qui étendent Codex s'acheminent maintenant correctement quand ils définissent un `OPENAI_BASE_URL` personnalisé ([#915](https://github.com/getpaseo/paseo/pull/915))
+- Correction du mode **Allow All** de Copilot (renommé depuis Autopilot) ([#935](https://github.com/getpaseo/paseo/pull/935))
+- Bureau : le démarrage du démon n'échoue plus quand un fichier PID obsolète est laissé à côté d'un démon encore en cours ([#913](https://github.com/getpaseo/paseo/pull/913) by [@biaoma-ty](https://github.com/biaoma-ty))
+- Les photos HEIC de l'iPhone s'attachent désormais correctement depuis le sélecteur d'images ([#934](https://github.com/getpaseo/paseo/pull/934))
+- Les agents planifiés s'archivent désormais automatiquement après chaque exécution ([#945](https://github.com/getpaseo/paseo/pull/945))
+- Windows : les résumés de commandes Codex retirent les enrobages `pwsh`, `powershell` ou `cmd` ([#931](https://github.com/getpaseo/paseo/pull/931) by [@32r4](https://github.com/32r4))
+- iPad : la barre latérale des réglages et la barre latérale principale respectent la zone de sécurité supérieure dans les mises en page larges ([#922](https://github.com/getpaseo/paseo/pull/922), [#937](https://github.com/getpaseo/paseo/pull/937) by [@kongjiadongyuan](https://github.com/kongjiadongyuan))
 
 ## 0.1.74 - 2026-05-11
 
-### Fixed
+### Corrections
 
-- **OpenCode agent turns no longer stall** Paseo now follows OpenCode's global event stream, so turns stream reliably without falling back to fragile recovery paths ([#916](https://github.com/getpaseo/paseo/pull/916))
+- **Les tours d'agent OpenCode ne calent plus** Paseo suit désormais le flux d'événements global d'OpenCode, si bien que les tours se diffusent de façon fiable sans recourir à des chemins de récupération fragiles ([#916](https://github.com/getpaseo/paseo/pull/916))
 
 ## 0.1.73 - 2026-05-10
 
-### Fixed
+### Corrections
 
-- **OpenCode agents work again on OpenCode 1.14.42+** ([#895](https://github.com/getpaseo/paseo/pull/895), [#902](https://github.com/getpaseo/paseo/pull/902), [#904](https://github.com/getpaseo/paseo/pull/904) by [@atomlink-ye](https://github.com/atomlink-ye), [@plutofog](https://github.com/plutofog))
-- Web: opening a workspace no longer hangs in browsers without `crypto.randomUUID` ([#858](https://github.com/getpaseo/paseo/pull/858) by [@cokekitten](https://github.com/cokekitten))
-- Codex sub-agent child tool calls now report a final failure state instead of staying as "running" ([#899](https://github.com/getpaseo/paseo/pull/899))
-- Old relay pairing URLs without an explicit TLS flag work again ([#896](https://github.com/getpaseo/paseo/pull/896))
-- macOS: the tab-jump shortcut no longer collides with system shortcuts ([#859](https://github.com/getpaseo/paseo/pull/859) by [@nikuscs](https://github.com/nikuscs))
-- Web: the composer no longer triggers a bottom-sheet keyboard on desktop browsers ([#898](https://github.com/getpaseo/paseo/pull/898) by [@nikuscs](https://github.com/nikuscs))
-- Windows: git operations no longer flash a console window on each invocation ([#897](https://github.com/getpaseo/paseo/pull/897))
-- File explorer no longer follows symlinks outside the workspace root ([#847](https://github.com/getpaseo/paseo/pull/847) by [@joaosa](https://github.com/joaosa))
-- Desktop only opens external URLs via http(s) and mailto schemes ([#845](https://github.com/getpaseo/paseo/pull/845) by [@joaosa](https://github.com/joaosa))
-- MCP debug request logs now redact request bodies ([#842](https://github.com/getpaseo/paseo/pull/842) by [@joaosa](https://github.com/joaosa))
+- **Les agents OpenCode fonctionnent à nouveau sur OpenCode 1.14.42+** ([#895](https://github.com/getpaseo/paseo/pull/895), [#902](https://github.com/getpaseo/paseo/pull/902), [#904](https://github.com/getpaseo/paseo/pull/904) by [@atomlink-ye](https://github.com/atomlink-ye), [@plutofog](https://github.com/plutofog))
+- Web : l'ouverture d'un espace de travail ne se bloque plus dans les navigateurs dépourvus de `crypto.randomUUID` ([#858](https://github.com/getpaseo/paseo/pull/858) by [@cokekitten](https://github.com/cokekitten))
+- Les appels d'outils enfants des sous-agents Codex signalent désormais un état d'échec final au lieu de rester « en cours » ([#899](https://github.com/getpaseo/paseo/pull/899))
+- Les anciennes URL d'appairage de relais sans indicateur TLS explicite fonctionnent à nouveau ([#896](https://github.com/getpaseo/paseo/pull/896))
+- macOS : le raccourci de saut d'onglet n'entre plus en conflit avec les raccourcis système ([#859](https://github.com/getpaseo/paseo/pull/859) by [@nikuscs](https://github.com/nikuscs))
+- Web : le composeur ne déclenche plus de clavier en feuille inférieure sur les navigateurs de bureau ([#898](https://github.com/getpaseo/paseo/pull/898) by [@nikuscs](https://github.com/nikuscs))
+- Windows : les opérations git ne font plus clignoter une fenêtre de console à chaque invocation ([#897](https://github.com/getpaseo/paseo/pull/897))
+- L'explorateur de fichiers ne suit plus les symlinks en dehors de la racine de l'espace de travail ([#847](https://github.com/getpaseo/paseo/pull/847) by [@joaosa](https://github.com/joaosa))
+- Le bureau n'ouvre les URL externes que via les schémas http(s) et mailto ([#845](https://github.com/getpaseo/paseo/pull/845) by [@joaosa](https://github.com/joaosa))
+- Les journaux de requêtes de débogage MCP masquent désormais le corps des requêtes ([#842](https://github.com/getpaseo/paseo/pull/842) by [@joaosa](https://github.com/joaosa))
 
 ## 0.1.72 - 2026-05-10
 
-### Fixed
+### Corrections
 
-- **Codex approval prompts no longer hang** Fixes a regression introduced in 0.1.70 where Codex agents would wait forever on command and file approvals — the prompt never reached the app and the agent stayed stuck in "running" ([#866](https://github.com/getpaseo/paseo/pull/866), [#869](https://github.com/getpaseo/paseo/pull/869))
-- **Windows: daemon no longer crashes when Codex emits non-JSON output** Localized stdout lines from the Codex CLI are now ignored instead of taking down the daemon worker ([#866](https://github.com/getpaseo/paseo/pull/866))
-- Drag-and-drop images onto the new workspace screen now works ([#850](https://github.com/getpaseo/paseo/pull/850))
-- Archiving a worktree from the toolbar redirects you immediately instead of leaving you on the dead screen for a beat ([#852](https://github.com/getpaseo/paseo/pull/852))
-- Pi-backed sessions now shut down cleanly when you close them, releasing extension resources on the Pi side ([#863](https://github.com/getpaseo/paseo/pull/863))
+- **Les demandes d'approbation Codex ne se bloquent plus** Corrige une régression introduite en 0.1.70 où les agents Codex attendaient indéfiniment les approbations de commandes et de fichiers — la demande n'atteignait jamais l'app et l'agent restait bloqué « en cours » ([#866](https://github.com/getpaseo/paseo/pull/866), [#869](https://github.com/getpaseo/paseo/pull/869))
+- **Windows : le démon ne plante plus quand Codex émet une sortie non-JSON** Les lignes de stdout localisées de la CLI Codex sont désormais ignorées au lieu de faire tomber le worker du démon ([#866](https://github.com/getpaseo/paseo/pull/866))
+- Le glisser-déposer d'images sur l'écran de nouvel espace de travail fonctionne désormais ([#850](https://github.com/getpaseo/paseo/pull/850))
+- Archiver un worktree depuis la barre d'outils vous redirige immédiatement au lieu de vous laisser un instant sur l'écran mort ([#852](https://github.com/getpaseo/paseo/pull/852))
+- Les sessions basées sur Pi s'arrêtent désormais proprement quand vous les fermez, libérant les ressources d'extension côté Pi ([#863](https://github.com/getpaseo/paseo/pull/863))
 
 ## 0.1.71 - 2026-05-09
 
-### Added
+### Ajouts
 
-- **Import existing Claude, Codex, and OpenCode sessions** into Paseo — pick up a conversation you started in the terminal and keep going from the app, with the full timeline ([#766](https://github.com/getpaseo/paseo/pull/766), [#833](https://github.com/getpaseo/paseo/pull/833))
-- **Subagents now appear in a collapsible section above the composer** so you can jump into agents your main agent spawned ([#532](https://github.com/getpaseo/paseo/pull/532))
-- Merge a pull request directly from the checkout pane ([#814](https://github.com/getpaseo/paseo/pull/814))
-- Customize the per-project prompts Paseo uses to auto-generate agent titles, branch names, commit messages, and pull request descriptions ([#836](https://github.com/getpaseo/paseo/pull/836))
-- Open an empty workspace without typing a prompt first ([#834](https://github.com/getpaseo/paseo/pull/834))
-- Project settings are now grouped with inline links to the relevant docs ([#837](https://github.com/getpaseo/paseo/pull/837))
-- Rich context menu on desktop — copy link, copy image, and spellcheck suggestions
-- Archiving a Codex-backed agent now archives the underlying native Codex thread too ([#827](https://github.com/getpaseo/paseo/pull/827) by [@32r4](https://github.com/32r4))
+- **Importez des sessions Claude, Codex et OpenCode existantes** dans Paseo — reprenez une conversation que vous avez démarrée dans le terminal et continuez depuis l'app, avec la chronologie complète ([#766](https://github.com/getpaseo/paseo/pull/766), [#833](https://github.com/getpaseo/paseo/pull/833))
+- **Les sous-agents apparaissent désormais dans une section repliable au-dessus du composeur** pour que vous puissiez rejoindre les agents que votre agent principal a lancés ([#532](https://github.com/getpaseo/paseo/pull/532))
+- Fusionnez une pull request directement depuis le panneau de checkout ([#814](https://github.com/getpaseo/paseo/pull/814))
+- Personnalisez, par projet, les prompts que Paseo utilise pour générer automatiquement les titres d'agents, les noms de branche, les messages de commit et les descriptions de pull request ([#836](https://github.com/getpaseo/paseo/pull/836))
+- Ouvrez un espace de travail vide sans taper de prompt au préalable ([#834](https://github.com/getpaseo/paseo/pull/834))
+- Les réglages de projet sont désormais regroupés avec des liens intégrés vers les docs pertinentes ([#837](https://github.com/getpaseo/paseo/pull/837))
+- Menu contextuel riche sur le bureau — copier le lien, copier l'image et suggestions de correction orthographique
+- Archiver un agent basé sur Codex archive désormais aussi le fil Codex natif sous-jacent ([#827](https://github.com/getpaseo/paseo/pull/827) by [@32r4](https://github.com/32r4))
 
-### Improved
+### Améliorations
 
-- Opening a workspace auto-focuses the agent that needs your attention ([#828](https://github.com/getpaseo/paseo/pull/828))
-- An unattended agent that spawns a sub-agent on a different provider via MCP now starts the sub-agent in unattended mode too
+- Ouvrir un espace de travail met automatiquement le focus sur l'agent qui réclame votre attention ([#828](https://github.com/getpaseo/paseo/pull/828))
+- Un agent sans surveillance qui lance un sous-agent sur un autre fournisseur via MCP démarre désormais ce sous-agent en mode sans surveillance également
 
-### Fixed
+### Corrections
 
-- iOS project picker now submits the typed path ([#831](https://github.com/getpaseo/paseo/pull/831))
-- System messages and chat mentions routed to multiple agents now reach every recipient consistently ([#830](https://github.com/getpaseo/paseo/pull/830))
-- Clicking a Markdown link in agent output no longer reloads the desktop app on top of opening the link
-- macOS desktop tab-jump shortcuts now use Cmd+Option+1-9, avoiding conflicts with Option-based international keyboard characters such as `@`
+- Le sélecteur de projet iOS soumet désormais le chemin saisi ([#831](https://github.com/getpaseo/paseo/pull/831))
+- Les messages système et les mentions de chat routés vers plusieurs agents atteignent désormais chaque destinataire de façon cohérente ([#830](https://github.com/getpaseo/paseo/pull/830))
+- Cliquer sur un lien Markdown dans la sortie d'agent ne recharge plus l'app de bureau par-dessus l'ouverture du lien
+- Les raccourcis de saut d'onglet du bureau macOS utilisent désormais Cmd+Option+1-9, évitant les conflits avec les caractères de clavier internationaux basés sur Option comme `@`
 
-### Security
+### Sécurité
 
-- Local state files (daemon keypair, stored credentials, persisted config) are now readable only by the owning user ([#825](https://github.com/getpaseo/paseo/pull/825) by [@joaosa](https://github.com/joaosa))
+- Les fichiers d'état local (paire de clés du démon, identifiants stockés, configuration persistée) ne sont désormais lisibles que par l'utilisateur propriétaire ([#825](https://github.com/getpaseo/paseo/pull/825) by [@joaosa](https://github.com/joaosa))
 
 ## 0.1.70 - 2026-05-08
 
-### Breaking
+### Changements incompatibles
 
-- **Claude agents now require `claude` on your PATH** Install Claude Code globally (`npm install -g @anthropic-ai/claude-code`) before running a Claude agent — Paseo no longer ships a bundled fallback binary. Same posture as Codex and OpenCode, and shrinks the desktop install by ~210 MB per platform
+- **Les agents Claude nécessitent désormais `claude` dans votre PATH** Installez Claude Code globalement (`npm install -g @anthropic-ai/claude-code`) avant de lancer un agent Claude — Paseo ne fournit plus de binaire de secours intégré. Même approche que Codex et OpenCode, et cela allège l'installation bureau d'environ 210 Mo par plateforme
 
-### Added
+### Ajouts
 
-- **One-click ACP providers** — add Cursor, Hermes, Qwen Coder, Kimi Code, and other ACP agents from a built-in catalog instead of writing config by hand
-- Codex `/goal` slash command — set or update the goal mid-turn while a Codex agent is running
-- Claude's Sonnet 4.6 1M context model is now selectable in the model picker
-- Detect GitHub issue and PR URLs pasted into the composer search
-- `paseo worktree create` CLI command, with parity to the MCP `create_worktree` tool
-- `paseo schedule update` to edit a schedule in place without recreating it
-- `paseo schedule run-once` for cron-style triggers, plus `--mode` on `schedule` and `loop`. Background runs now default to unattended mode
-- Projects settings now lists workspaces from any remote — GitLab, Gitea, Bitbucket, self-hosted, and SSH-style URLs, not just GitHub ([#681](https://github.com/getpaseo/paseo/pull/681) by [@krumpyzoid](https://github.com/krumpyzoid))
+- **Fournisseurs ACP en un clic** — ajoutez Cursor, Hermes, Qwen Coder, Kimi Code et d'autres agents ACP depuis un catalogue intégré au lieu d'écrire la configuration à la main
+- Commande slash `/goal` pour Codex — définissez ou modifiez l'objectif en cours de tour pendant qu'un agent Codex tourne
+- Le modèle Sonnet 4.6 à contexte 1M de Claude est désormais sélectionnable dans le sélecteur de modèles
+- Détection des URL d'issues et de PR GitHub collées dans la recherche du composeur
+- Commande CLI `paseo worktree create`, à parité avec l'outil MCP `create_worktree`
+- `paseo schedule update` pour modifier un planning sur place sans le recréer
+- `paseo schedule run-once` pour des déclenchements de type cron, plus l'option `--mode` sur `schedule` et `loop`. Les exécutions en arrière-plan passent désormais par défaut en mode sans surveillance
+- Les paramètres de projets listent désormais les workspaces de n'importe quel remote — GitLab, Gitea, Bitbucket, auto-hébergés et URL de type SSH, pas seulement GitHub ([#681](https://github.com/getpaseo/paseo/pull/681) by [@krumpyzoid](https://github.com/krumpyzoid))
 
-### Improved
+### Améliorations
 
-- Skills now install, update, and uninstall on demand instead of silently auto-syncing on every desktop launch
-- Self-hosted relays can opt into `wss://` for TLS connections
-- Workspace open targets only show options reachable from the current daemon
-- Combobox search matches model descriptions, not just names
-- Codex image attachments render inline as path markdown
-- Subagent task notifications no longer clutter the parent agent's timeline
-- Voice mode: quieter thinking tone and small UI polish
-- Settings sidebar order: Projects now appears after General
-- Electron upgraded to 41.2.0 for the desktop app
+- Les skills s'installent, se mettent à jour et se désinstallent à la demande au lieu d'une synchronisation automatique silencieuse à chaque lancement du bureau
+- Les relais auto-hébergés peuvent opter pour `wss://` pour des connexions TLS
+- Les cibles d'ouverture de workspace n'affichent que les options accessibles depuis le démon actuel
+- La recherche du combobox correspond aux descriptions des modèles, pas seulement aux noms
+- Les images jointes de Codex s'affichent en ligne sous forme de markdown de chemin
+- Les notifications de tâches de sous-agents n'encombrent plus la timeline de l'agent parent
+- Mode vocal : tonalité de réflexion plus discrète et petites finitions d'interface
+- Ordre de la barre latérale des paramètres : Projets apparaît désormais après Général
+- Electron mis à jour vers 41.2.0 pour l'application bureau
 
-### Fixed
+### Corrections
 
-- **Claude agent: daemon no longer crashes mid-turn** when the underlying SDK fires a stray control message after the connection has been torn down
-- **Windows:** Terminals start reliably and shut down cleanly without leaving stuck processes behind
-- **Linux:** Workspace file watchers no longer storm with events on busy working trees, fixing CPU spikes on large repos ([#794](https://github.com/getpaseo/paseo/pull/794) by [@312223105](https://github.com/312223105))
-- ACP-based agents launch terminal shell commands reliably ([#793](https://github.com/getpaseo/paseo/pull/793) by [@ebg1223](https://github.com/ebg1223))
-- Checkout shortstat now counts untracked files ([#608](https://github.com/getpaseo/paseo/issues/608), [#762](https://github.com/getpaseo/paseo/pull/762) by [@somus](https://github.com/somus))
-- Relay endpoints on port 443 use TLS automatically ([#774](https://github.com/getpaseo/paseo/pull/774) by [@caoer](https://github.com/caoer))
-- Desktop CLI passthrough TTY handling — interactive commands now behave correctly when launched from the desktop app
-- The CLI honors the `PASEO_PASSWORD` environment variable for password-protected daemons
-- Daemon shutdown terminates all child processes cleanly using tree-kill
-- Agent spawn paths handle missing executables and unusual install layouts more reliably
-- OpenCode now forwards provider retry errors instead of silently swallowing them
-- Codex import no longer reverts to the wrong default mode
-- Pane keyboard shortcuts no longer fire while you're typing in an editable field
-- Cold workspace URL navigation now lands in the correct sidebar entry on web
-- Workspace navigation regression on web fixed
-- Duplicate workspace shell navigation eliminated
-- The 'Update installed' callout no longer flashes incorrectly
-- Browser pane reload focus and devtools handling
-- MCP terminal capture now includes scrollback
-- Worktree branches no longer get renamed when an agent is created against an existing worktree from MCP
-- Creating an agent in a subdirectory of a registered workspace now runs in that subdirectory instead of jumping up to the parent ([#551](https://github.com/getpaseo/paseo/issues/551))
-- Non-GitHub project display names are derived from the remote owner/repo instead of the local path
-- Desktop IPC wrapped in shared mutation/query hooks, fixing stale state and intermittent failures ([#761](https://github.com/getpaseo/paseo/issues/761))
-- `paseo schedule create --host` now requires `--cwd` to avoid running schedules in the wrong directory
-- `paseo schedule create --every` runs once immediately by default, then on the configured interval
-- MCP `create_agent` validates the requested mode and refuses silent cross-provider inheritance
+- **Agent Claude : le démon ne plante plus en cours de tour** lorsque le SDK sous-jacent émet un message de contrôle parasite après la fermeture de la connexion
+- **Windows :** les terminaux démarrent de façon fiable et s'arrêtent proprement sans laisser de processus bloqués
+- **Linux :** les surveillants de fichiers de workspace ne génèrent plus de tempêtes d'événements sur les arbres de travail chargés, corrigeant les pics de CPU sur les gros dépôts ([#794](https://github.com/getpaseo/paseo/pull/794) by [@312223105](https://github.com/312223105))
+- Les agents basés sur ACP lancent les commandes shell du terminal de façon fiable ([#793](https://github.com/getpaseo/paseo/pull/793) by [@ebg1223](https://github.com/ebg1223))
+- Le résumé court du checkout compte désormais les fichiers non suivis ([#608](https://github.com/getpaseo/paseo/issues/608), [#762](https://github.com/getpaseo/paseo/pull/762) by [@somus](https://github.com/somus))
+- Les points de terminaison de relais sur le port 443 utilisent automatiquement TLS ([#774](https://github.com/getpaseo/paseo/pull/774) by [@caoer](https://github.com/caoer))
+- Gestion du TTY en passthrough de la CLI bureau — les commandes interactives se comportent désormais correctement lorsqu'elles sont lancées depuis l'application bureau
+- La CLI respecte la variable d'environnement `PASEO_PASSWORD` pour les démons protégés par mot de passe
+- L'arrêt du démon termine proprement tous les processus enfants via tree-kill
+- Les chemins de lancement d'agents gèrent plus fiablement les exécutables manquants et les dispositions d'installation inhabituelles
+- OpenCode transmet désormais les erreurs de nouvelle tentative du fournisseur au lieu de les avaler silencieusement
+- L'import Codex ne revient plus au mauvais mode par défaut
+- Les raccourcis clavier des panneaux ne se déclenchent plus pendant que vous tapez dans un champ éditable
+- La navigation vers une URL de workspace à froid atterrit désormais dans la bonne entrée de barre latérale sur le web
+- Régression de navigation de workspace corrigée sur le web
+- Navigation shell de workspace en double éliminée
+- L'encart « Mise à jour installée » ne clignote plus par erreur
+- Gestion du focus au rechargement et des devtools du panneau navigateur
+- La capture de terminal MCP inclut désormais l'historique de défilement
+- Les branches de worktree ne sont plus renommées lorsqu'un agent est créé sur un worktree existant depuis MCP
+- Créer un agent dans un sous-répertoire d'un workspace enregistré s'exécute désormais dans ce sous-répertoire au lieu de remonter au parent ([#551](https://github.com/getpaseo/paseo/issues/551))
+- Les noms d'affichage des projets non-GitHub sont dérivés du propriétaire/dépôt du remote plutôt que du chemin local
+- L'IPC bureau est encapsulé dans des hooks de mutation/requête partagés, corrigeant les états obsolètes et les échecs intermittents ([#761](https://github.com/getpaseo/paseo/issues/761))
+- `paseo schedule create --host` exige désormais `--cwd` pour éviter d'exécuter des plannings dans le mauvais répertoire
+- `paseo schedule create --every` s'exécute une fois immédiatement par défaut, puis à l'intervalle configuré
+- L'outil MCP `create_agent` valide le mode demandé et refuse l'héritage silencieux entre fournisseurs
 
 ## 0.1.69 - 2026-05-05
 
-### Fixed
+### Corrections
 
-- Paseo now recovers automatically when an internal daemon process crashes — your agents stay connected instead of getting stuck and you don't have to restart anything
-- Answering an interactive question from a Claude agent now reaches Claude correctly instead of being dropped ([#760](https://github.com/getpaseo/paseo/pull/760) by [@somus](https://github.com/somus))
+- Paseo se rétablit désormais automatiquement lorsqu'un processus interne du démon plante — vos agents restent connectés au lieu de rester bloqués, et vous n'avez rien à redémarrer
+- Répondre à une question interactive d'un agent Claude atteint désormais correctement Claude au lieu d'être perdu ([#760](https://github.com/getpaseo/paseo/pull/760) by [@somus](https://github.com/somus))
 
 ## 0.1.68 - 2026-05-05
 
-### Fixed
+### Corrections
 
-- The desktop app no longer fails on first launch after a fresh install
+- L'application bureau ne plante plus au premier lancement après une nouvelle installation
 
 ## 0.1.67 - 2026-05-03
 
-### Fixed
+### Corrections
 
-- Archiving a worktree or workspace feels instant instead of waiting on the daemon, with automatic rollback if it fails
-- The built-in daemon toggle in desktop settings now actually takes effect
-- Desktop settings no longer reset on app launch after a legacy migration
-- Desktop daemon startup failures now surface on the splash screen and respond to retry, instead of leaving the app silently stuck
-- Internal LLM calls (branch names, commit messages, PR text) no longer leave behind ephemeral agent sessions in your provider history
+- Archiver un worktree ou un workspace paraît instantané au lieu d'attendre le démon, avec restauration automatique en cas d'échec
+- La bascule du démon intégré dans les paramètres bureau prend désormais réellement effet
+- Les paramètres bureau ne se réinitialisent plus au lancement de l'application après une migration ancienne
+- Les échecs de démarrage du démon bureau apparaissent désormais sur l'écran de démarrage et répondent à la nouvelle tentative, au lieu de laisser l'application silencieusement bloquée
+- Les appels LLM internes (noms de branches, messages de commit, textes de PR) ne laissent plus de sessions d'agent éphémères dans l'historique de votre fournisseur
 
 ## 0.1.66 - 2026-05-03
 
-### Fixed
+### Corrections
 
-- Streaming markdown preserves trailing newlines so paragraph spacing stays correct while the agent is still typing
-- Agent initialization failures surface within 30 seconds instead of 5 minutes
-- Terminals reply to ANSI cursor-position queries, so tools that ask for cursor location no longer hang
+- Le markdown en streaming préserve les sauts de ligne finaux, de sorte que l'espacement des paragraphes reste correct pendant que l'agent est encore en train d'écrire
+- Les échecs d'initialisation d'agent apparaissent en moins de 30 secondes au lieu de 5 minutes
+- Les terminaux répondent aux requêtes ANSI de position du curseur, de sorte que les outils qui demandent l'emplacement du curseur ne se bloquent plus
 
 ## 0.1.65 - 2026-05-03
 
-### Added
+### Ajouts
 
-- **In-app browser** — open a real web browser in any workspace to test your app ([#670](https://github.com/getpaseo/paseo/pull/670) by [@jasonkneen](https://github.com/jasonkneen))
-- Inline review comments in the git diff pane. Tap a line number to start a comment ([#530](https://github.com/getpaseo/paseo/pull/530))
-- Sub-agent activity is now shown for Codex, OpenCode, and Claude ([#672](https://github.com/getpaseo/paseo/pull/672), [#658](https://github.com/getpaseo/paseo/pull/658) by [@thisisryanswift](https://github.com/thisisryanswift))
-- Pull and push your branch in one step from the git actions menu in the changes pane
-- Resume existing agent sessions with `paseo import --provider <name> <id>` ([#632](https://github.com/getpaseo/paseo/pull/632))
-- Password authentication and SSL support for daemon connections ([#635](https://github.com/getpaseo/paseo/pull/635))
-- Connect to a daemon via relay using a pairing offer URL from the CLI ([#639](https://github.com/getpaseo/paseo/pull/639))
-- **Windows:** Native ARM64 builds are now available
-- Bundled Paseo skills now refresh automatically on desktop app launch
+- **Navigateur intégré** — ouvrez un vrai navigateur web dans n'importe quel workspace pour tester votre application ([#670](https://github.com/getpaseo/paseo/pull/670) by [@jasonkneen](https://github.com/jasonkneen))
+- Commentaires de revue en ligne dans le panneau de diff git. Touchez un numéro de ligne pour démarrer un commentaire ([#530](https://github.com/getpaseo/paseo/pull/530))
+- L'activité des sous-agents est désormais affichée pour Codex, OpenCode et Claude ([#672](https://github.com/getpaseo/paseo/pull/672), [#658](https://github.com/getpaseo/paseo/pull/658) by [@thisisryanswift](https://github.com/thisisryanswift))
+- Tirez et poussez votre branche en une étape depuis le menu d'actions git dans le panneau des changements
+- Reprenez des sessions d'agent existantes avec `paseo import --provider <name> <id>` ([#632](https://github.com/getpaseo/paseo/pull/632))
+- Authentification par mot de passe et prise en charge SSL pour les connexions au démon ([#635](https://github.com/getpaseo/paseo/pull/635))
+- Connectez-vous à un démon via relais à l'aide d'une URL d'offre d'appairage depuis la CLI ([#639](https://github.com/getpaseo/paseo/pull/639))
+- **Windows :** des builds ARM64 natifs sont désormais disponibles
+- Les skills Paseo intégrées se rafraîchissent désormais automatiquement au lancement de l'application bureau
 
-### Improved
+### Améliorations
 
-- Codex streaming feels more responsive — message boundaries are preserved and output arrives sooner
-- Terminal sessions run in a dedicated worker process for better stability
-- New worktree branch names are derived from your prompt and attachments instead of a generic placeholder
-- Review comment UI is cleaner and easier to scan
-- The daemon's `/api/status` endpoint is now protected by password auth when one is configured
+- Le streaming de Codex paraît plus réactif — les limites de messages sont préservées et la sortie arrive plus tôt
+- Les sessions de terminal s'exécutent dans un processus worker dédié pour une meilleure stabilité
+- Les noms des nouvelles branches de worktree sont dérivés de votre prompt et de vos pièces jointes au lieu d'un espace réservé générique
+- L'interface des commentaires de revue est plus épurée et plus facile à parcourir
+- Le point de terminaison `/api/status` du démon est désormais protégé par authentification par mot de passe lorsqu'il en est configuré un
 
-### Fixed
+### Corrections
 
-- **Apple Silicon Mac:** The desktop update pipeline now publishes manifests atomically, closing a race that could install the Intel build on Apple Silicon Macs and cause 100%+ renderer CPU usage. Affected users will self-heal — electron-updater's Rosetta detection migrates back to arm64 on the next update poll ([#555](https://github.com/getpaseo/paseo/issues/555))
-- **Linux:** `.deb` and `.rpm` packages now show as `Paseo` in the dock and process list instead of `Paseo.bin`. `--no-sandbox` is now scoped to AppImage only, matching VS Code's sandbox handling ([#602](https://github.com/getpaseo/paseo/issues/602))
-- **Windows:** Git diff commands no longer break on paths with special characters ([#629](https://github.com/getpaseo/paseo/pull/629))
-- Cursor CLI and other ACP custom providers launch reliably ([#628](https://github.com/getpaseo/paseo/pull/628))
-- Daemon stays up when WebSocket clients disconnect mid-stream, and crashes now write a fatal log entry instead of disappearing silently ([#613](https://github.com/getpaseo/paseo/pull/613) by [@yuruiz](https://github.com/yuruiz))
-- Long agent timelines reconnect cleanly over the relay instead of looping through disconnects while catching up ([#657](https://github.com/getpaseo/paseo/pull/657) by [@fireblue](https://github.com/fireblue))
-- Agent timelines refresh with smaller catch-up requests when you reopen an agent
-- Terminal snapshots flush reliably before clients reconnect
-- Workspace reconnects avoid unnecessary refresh work when the focused workspace is already current
-- Voice dictation keeps recording when the agent tab loses focus
-- OpenCode mode picker now lists agents available in every mode ([#606](https://github.com/getpaseo/paseo/pull/606) by [@thisisryanswift](https://github.com/thisisryanswift))
-- Codex plan approval panels no longer duplicate
-- Imported agents display the correct title immediately
-- OpenCode surfaces invalid mode/model errors instead of hanging
-- Archived worktrees stay hidden without flashing back into the list ([#640](https://github.com/getpaseo/paseo/pull/640))
-- Web dropdown menus no longer resize unexpectedly
-- The visible changes pane keeps in sync with the working tree diff
-- Tool detail rows on the timeline are selectable again
-- `paseo.json` parse errors in setup, teardown, and terminal actions now surface a clear error instead of failing silently
-- Diff gutter line numbers were shifted one row out of alignment in some cases on web
-- Streamed agent output reconciles cleanly when the timeline hydrates mid-turn ([#663](https://github.com/getpaseo/paseo/pull/663))
-- Images in assistant messages show a loading spinner while they load and an "Image unavailable" fallback if they fail, instead of a blank space
-- Isolated bottom sheet modals close and re-open without getting stuck
+- **Mac Apple Silicon :** le pipeline de mise à jour bureau publie désormais les manifestes de façon atomique, fermant une course qui pouvait installer la version Intel sur les Mac Apple Silicon et provoquer une utilisation CPU du moteur de rendu supérieure à 100 %. Les utilisateurs affectés se corrigeront d'eux-mêmes — la détection Rosetta d'electron-updater bascule à nouveau vers arm64 au prochain sondage de mise à jour ([#555](https://github.com/getpaseo/paseo/issues/555))
+- **Linux :** les paquets `.deb` et `.rpm` s'affichent désormais comme `Paseo` dans le dock et la liste des processus au lieu de `Paseo.bin`. `--no-sandbox` est désormais limité à AppImage uniquement, correspondant à la gestion du bac à sable de VS Code ([#602](https://github.com/getpaseo/paseo/issues/602))
+- **Windows :** les commandes de diff git ne cassent plus sur les chemins comportant des caractères spéciaux ([#629](https://github.com/getpaseo/paseo/pull/629))
+- La CLI Cursor et d'autres fournisseurs ACP personnalisés se lancent de façon fiable ([#628](https://github.com/getpaseo/paseo/pull/628))
+- Le démon reste actif lorsque des clients WebSocket se déconnectent en cours de stream, et les plantages écrivent désormais une entrée de log fatale au lieu de disparaître silencieusement ([#613](https://github.com/getpaseo/paseo/pull/613) by [@yuruiz](https://github.com/yuruiz))
+- Les longues timelines d'agents se reconnectent proprement via le relais au lieu de boucler à travers des déconnexions pendant le rattrapage ([#657](https://github.com/getpaseo/paseo/pull/657) by [@fireblue](https://github.com/fireblue))
+- Les timelines d'agents se rafraîchissent avec des requêtes de rattrapage plus petites lorsque vous rouvrez un agent
+- Les instantanés de terminal se vident de façon fiable avant que les clients ne se reconnectent
+- Les reconnexions de workspace évitent le travail de rafraîchissement inutile lorsque le workspace focalisé est déjà à jour
+- La dictée vocale continue d'enregistrer lorsque l'onglet de l'agent perd le focus
+- Le sélecteur de mode OpenCode liste désormais les agents disponibles dans chaque mode ([#606](https://github.com/getpaseo/paseo/pull/606) by [@thisisryanswift](https://github.com/thisisryanswift))
+- Les panneaux d'approbation de plan Codex ne se dupliquent plus
+- Les agents importés affichent immédiatement le bon titre
+- OpenCode fait remonter les erreurs de mode/modèle invalides au lieu de se bloquer
+- Les worktrees archivés restent masqués sans réapparaître par intermittence dans la liste ([#640](https://github.com/getpaseo/paseo/pull/640))
+- Les menus déroulants web ne se redimensionnent plus de façon inattendue
+- Le panneau des changements visibles reste synchronisé avec le diff de l'arbre de travail
+- Les lignes de détail d'appels d'outils sur la timeline sont à nouveau sélectionnables
+- Les erreurs d'analyse de `paseo.json` dans les actions de setup, teardown et terminal font désormais remonter une erreur claire au lieu d'échouer silencieusement
+- Les numéros de ligne de la gouttière de diff étaient décalés d'une ligne dans certains cas sur le web
+- La sortie d'agent en streaming se réconcilie proprement lorsque la timeline s'hydrate en cours de tour ([#663](https://github.com/getpaseo/paseo/pull/663))
+- Les images dans les messages de l'assistant affichent un indicateur de chargement pendant le chargement et un repli « Image indisponible » en cas d'échec, au lieu d'un espace vide
+- Les feuilles modales isolées du bas se ferment et se rouvrent sans rester bloquées
 
 ## 0.1.64 - 2026-04-28
 
-### Added
+### Ajouts
 
-- OpenCode now has a Full Access mode that auto-approves tool calls ([#595](https://github.com/getpaseo/paseo/pull/595) by [@tmih06](https://github.com/tmih06))
-- OpenCode supports executable slash commands ([#597](https://github.com/getpaseo/paseo/pull/597) by [@tmih06](https://github.com/tmih06))
+- OpenCode dispose désormais d'un mode Accès complet qui approuve automatiquement les appels d'outils ([#595](https://github.com/getpaseo/paseo/pull/595) by [@tmih06](https://github.com/tmih06))
+- OpenCode prend en charge les commandes slash exécutables ([#597](https://github.com/getpaseo/paseo/pull/597) by [@tmih06](https://github.com/tmih06))
 
-### Improved
+### Améliorations
 
-- `@`-mention stays responsive on very large projects ([#600](https://github.com/getpaseo/paseo/pull/600) by [@yuruiz](https://github.com/yuruiz))
+- La mention `@` reste réactive sur de très gros projets ([#600](https://github.com/getpaseo/paseo/pull/600) by [@yuruiz](https://github.com/yuruiz))
 
-### Fixed
+### Corrections
 
-- Workspaces still load when `paseo.json` has a parse error
+- Les workspaces se chargent toujours lorsque `paseo.json` comporte une erreur d'analyse
 
 ## 0.1.63 - 2026-04-28
 
-### Added
+### Ajouts
 
-- Project settings page with a built-in `paseo.json` editor
-- Cold start restores your last open workspace
-- Tool call badges have a button to open the referenced file directly
-- Open the current branch on GitHub from a workspace's open menu ([#583](https://github.com/getpaseo/paseo/pull/583) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
-- Enable or disable providers from Settings without editing config files
-- Paseo prompts you to configure a worktree setup script when one is missing
-- Choose whether the daemon shuts down when you close the desktop app
+- Page de paramètres de projet avec un éditeur `paseo.json` intégré
+- Le démarrage à froid restaure votre dernier workspace ouvert
+- Les badges d'appels d'outils comportent un bouton pour ouvrir directement le fichier référencé
+- Ouvrez la branche actuelle sur GitHub depuis le menu d'ouverture d'un workspace ([#583](https://github.com/getpaseo/paseo/pull/583) by [@Myriad-Dreamin](https://github.com/Myriad-Dreamin))
+- Activez ou désactivez des fournisseurs depuis les Paramètres sans éditer de fichiers de configuration
+- Paseo vous invite à configurer un script de setup de worktree lorsqu'il en manque un
+- Choisissez si le démon s'arrête lorsque vous fermez l'application bureau
 
-### Improved
+### Améliorations
 
-- Provider settings and model selection have been redesigned
-- Voice mode transcription endpoint is configurable for OpenAI-compatible providers ([#570](https://github.com/getpaseo/paseo/pull/570) by [@yuruiz](https://github.com/yuruiz))
-- Adding a project no longer waits for GitHub PR status to load
-- Startup splash screen is cleaner — just the logo with a subtle shimmer
-- `paseo.json` setup and teardown accept a single command string, not just an array
-- Archiving a worktree is instant instead of waiting for the backend to confirm
-- Agent timelines and git diff lists no longer jump around while loading or streaming
+- Les paramètres de fournisseurs et la sélection de modèles ont été repensés
+- Le point de terminaison de transcription du mode vocal est configurable pour les fournisseurs compatibles OpenAI ([#570](https://github.com/getpaseo/paseo/pull/570) by [@yuruiz](https://github.com/yuruiz))
+- Ajouter un projet n'attend plus le chargement de l'état des PR GitHub
+- L'écran de démarrage est plus épuré — juste le logo avec un léger miroitement
+- Le setup et le teardown de `paseo.json` acceptent une simple chaîne de commande, pas seulement un tableau
+- Archiver un worktree est instantané au lieu d'attendre la confirmation du backend
+- Les timelines d'agents et les listes de diff git ne sautillent plus pendant le chargement ou le streaming
 
-### Fixed
+### Corrections
 
-- `paseo loop run` and `paseo run` now respect the `--provider` and `--model` flags ([#594](https://github.com/getpaseo/paseo/pull/594) by [@VincenzoRocchi](https://github.com/VincenzoRocchi))
-- Pi provider shows up when only DeepSeek or other non-OpenAI/Anthropic/OpenRouter API keys are set
-- Custom models from `additionalModels` and `profileModels` are honored when picking a default for new agents
-- File preview line numbers stay on one line past line 99
-- Cmd+Q on macOS quits the desktop app instead of leaving it running in the background
-- Terminal sessions recover cleanly after rendering hiccups, including the initial resize for nvim
-- Terminal protocol query responses no longer leak into the browser
-- Assistant link color matches the theme again
-- File links with line numbers (like `foo.ts:42`) open correctly from assistant messages
-- Claude's Grep results show up in the search detail body
-- Reopening a worktree lands under the right project
-- Agents from disabled or unavailable providers stay visible in history
-- New CLI agents now require a provider instead of failing silently
-- Git diff headers no longer truncate
-- Provider diagnostic modal scrolls on short screens
-- Provider diagnostics show the real error and underlying child-process output instead of a generic message
-- Archived workspaces no longer interfere with working-directory resolution
-- Triple-click on a message no longer extends the selection into adjacent bubbles
-- The packaged desktop app preserves your zsh prompt
+- `paseo loop run` et `paseo run` respectent désormais les options `--provider` et `--model` ([#594](https://github.com/getpaseo/paseo/pull/594) by [@VincenzoRocchi](https://github.com/VincenzoRocchi))
+- Le fournisseur Pi apparaît lorsque seules des clés d'API DeepSeek ou d'autres clés non OpenAI/Anthropic/OpenRouter sont définies
+- Les modèles personnalisés d'`additionalModels` et `profileModels` sont respectés lors du choix d'un modèle par défaut pour les nouveaux agents
+- Les numéros de ligne d'aperçu de fichier restent sur une seule ligne au-delà de la ligne 99
+- Cmd+Q sur macOS quitte l'application bureau au lieu de la laisser tourner en arrière-plan
+- Les sessions de terminal se rétablissent proprement après des ratés de rendu, y compris le redimensionnement initial pour nvim
+- Les réponses aux requêtes de protocole de terminal ne fuient plus dans le navigateur
+- La couleur des liens de l'assistant correspond à nouveau au thème
+- Les liens de fichiers avec numéros de ligne (comme `foo.ts:42`) s'ouvrent correctement depuis les messages de l'assistant
+- Les résultats Grep de Claude s'affichent dans le corps de détail de recherche
+- Rouvrir un worktree l'atterrit sous le bon projet
+- Les agents de fournisseurs désactivés ou indisponibles restent visibles dans l'historique
+- Les nouveaux agents CLI exigent désormais un fournisseur au lieu d'échouer silencieusement
+- Les en-têtes de diff git ne se tronquent plus
+- Le modal de diagnostic de fournisseur défile sur les petits écrans
+- Les diagnostics de fournisseur affichent l'erreur réelle et la sortie du processus enfant sous-jacent au lieu d'un message générique
+- Les workspaces archivés n'interfèrent plus avec la résolution du répertoire de travail
+- Un triple-clic sur un message n'étend plus la sélection aux bulles adjacentes
+- L'application bureau packagée préserve votre prompt zsh
 
 ## 0.1.62 - 2026-04-23
 
-### Added
+### Ajouts
 
-- Sidebar warning when your app and daemon versions drift apart, with a shortcut to settings
+- Avertissement dans la barre latérale lorsque les versions de votre application et de votre démon divergent, avec un raccourci vers les paramètres
 
-### Improved
+### Améliorations
 
-- Workspaces appear in the sidebar immediately on startup instead of waiting for git registration
+- Les workspaces apparaissent dans la barre latérale immédiatement au démarrage au lieu d'attendre l'enregistrement git
 
-### Fixed
+### Corrections
 
-- Pull request status resolves correctly for PRs opened from forks
-- Installing the paseo CLI from the macOS desktop app now works in packaged builds
-- Agents launched from the desktop app no longer inherit Electron-only environment variables
+- L'état des pull requests se résout correctement pour les PR ouvertes depuis des forks
+- L'installation de la CLI paseo depuis l'application bureau macOS fonctionne désormais dans les builds packagés
+- Les agents lancés depuis l'application bureau n'héritent plus de variables d'environnement propres à Electron
 
 ## 0.1.61 - 2026-04-23
 
-### Added
+### Ajouts
 
-- `additionalModels` option in provider config lets you add or relabel models without replacing the full list — entries merge with runtime-discovered models (ACP) or your static `models` list. See the [Providers docs](https://paseo.sh/docs/providers)
-- New [Providers docs page](https://paseo.sh/docs/providers) covering first-class providers and every custom provider config pattern in one place
+- L'option `additionalModels` dans la configuration de fournisseur vous permet d'ajouter ou de renommer des modèles sans remplacer la liste complète — les entrées fusionnent avec les modèles découverts à l'exécution (ACP) ou votre liste statique `models`. Voir la [documentation Providers](https://paseo.sh/docs/providers)
+- Nouvelle [page de documentation Providers](https://paseo.sh/docs/providers) couvrant les fournisseurs de premier plan et tous les schémas de configuration de fournisseurs personnalisés en un seul endroit
 
-### Improved
+### Améliorations
 
-- Pi loads your installed extensions on startup so their models show up in the model picker
-- Resizing the explorer sidebar no longer rerenders the rest of the workspace
-- Images in assistant messages (both file paths and inline data URLs) persist as local attachments and open in the file pane
+- Pi charge vos extensions installées au démarrage afin que leurs modèles apparaissent dans le sélecteur de modèles
+- Redimensionner la barre latérale de l'explorateur ne re-rend plus le reste du workspace
+- Les images dans les messages de l'assistant (chemins de fichiers et URL de données en ligne) persistent comme pièces jointes locales et s'ouvrent dans le panneau de fichiers
 
 ## 0.1.60 - 2026-04-22
 
-### Added
+### Ajouts
 
-- Scripts and services per worktree — define named commands in `paseo.json`, and long-running services get supervised with their own ports and nice proxy URLs like `http://web.my-app.localhost:6767`. See the [worktrees guide](https://paseo.sh/docs/worktrees)
-- Launch scripts and services for a worktree directly from the workspace header
-- New Setup tab in every workspace showing setup, teardown, and script progress live
-- GitHub checks and PR reviews in the explorer sidebar, with a hover card for the full breakdown
-- New worktree creation flow lets you pick a base branch or check out an existing GitHub pull request
-- Attach GitHub issues and pull requests to an agent as part of its prompt context
-- Pull request pane in the workspace sidebar
-- Redesigned Settings screen with modular section navigation
-- Per-host provider configuration — set providers, models, and credentials independently on each remote host
-- Direct Pi integration replaces the ACP bridge, with faster streaming and fewer hiccups
-- Beta release channel — opt in from Settings to receive beta desktop builds before they are promoted to stable
-- New-workspace picker ranks branches by recency with fast search
+- Scripts et services par worktree — définissez des commandes nommées dans `paseo.json`, et les services de longue durée sont supervisés avec leurs propres ports et de jolies URL de proxy comme `http://web.my-app.localhost:6767`. Voir le [guide des worktrees](https://paseo.sh/docs/worktrees)
+- Lancez les scripts et services d'un worktree directement depuis l'en-tête du workspace
+- Nouvel onglet Setup dans chaque workspace affichant en direct la progression du setup, du teardown et des scripts
+- Vérifications GitHub et revues de PR dans la barre latérale de l'explorateur, avec une carte au survol pour le détail complet
+- Le nouveau flux de création de worktree vous permet de choisir une branche de base ou de récupérer une pull request GitHub existante
+- Attachez des issues et pull requests GitHub à un agent dans le cadre du contexte de son prompt
+- Panneau de pull requests dans la barre latérale du workspace
+- Écran de paramètres repensé avec une navigation modulaire par section
+- Configuration de fournisseurs par hôte — définissez fournisseurs, modèles et identifiants indépendamment sur chaque hôte distant
+- L'intégration directe de Pi remplace le pont ACP, avec un streaming plus rapide et moins de ratés
+- Canal de version bêta — inscrivez-vous depuis les Paramètres pour recevoir les builds bureau bêta avant leur promotion en stable
+- Le sélecteur de nouveau workspace classe les branches par récence avec une recherche rapide
 
-### Improved
+### Améliorations
 
-- Workspace and tab switching are dramatically faster on desktop and mobile — you can keep many workspaces open in parallel without lag
-- Agent streams render more smoothly during heavy tool output
-- App startup routes through a stable connection and lands on the right screen without flicker
-- Provider refresh is reliable and no longer stalls on transient failures
-- Git and GitHub state stay in sync with local changes like commits, branch switches, and pushes
-- Composer attachments redesigned with a cleaner pill layout and an image lightbox
-- In-app notifications route to whichever surface you're actually looking at
-- Keyboard shortcuts keep working while Settings is open
-- Escape reliably interrupts the active agent
-- Checking out a pull request from a fork lands on an owner-prefixed branch so multiple forks don't collide
-- `paseo ls` defaults to active agents; pass `-a` to include archived
-- GitHub branch and PR picker loads faster — queries are deferred until the picker opens
+- Le changement de workspace et d'onglet est nettement plus rapide sur bureau et mobile — vous pouvez garder de nombreux workspaces ouverts en parallèle sans latence
+- Les streams d'agents s'affichent plus fluidement pendant une forte sortie d'outils
+- Le démarrage de l'application passe par une connexion stable et atterrit sur le bon écran sans scintillement
+- Le rafraîchissement des fournisseurs est fiable et ne bloque plus sur des échecs transitoires
+- L'état git et GitHub reste synchronisé avec les changements locaux comme les commits, changements de branche et pushs
+- Les pièces jointes du composeur ont été repensées avec une disposition de pastilles plus épurée et une visionneuse d'images
+- Les notifications intégrées à l'application sont dirigées vers la surface que vous regardez réellement
+- Les raccourcis clavier continuent de fonctionner pendant que les Paramètres sont ouverts
+- Échap interrompt de façon fiable l'agent actif
+- Récupérer une pull request depuis un fork atterrit sur une branche préfixée du propriétaire afin que plusieurs forks ne se télescopent pas
+- `paseo ls` liste par défaut les agents actifs ; passez `-a` pour inclure les archivés
+- Le sélecteur de branches et de PR GitHub se charge plus vite — les requêtes sont différées jusqu'à l'ouverture du sélecteur
 
-### Fixed
+### Corrections
 
-- Composer textarea shrinks back down after sending on web
-- New workspace drafts clear after submit instead of sticking around
-- Replacing a running agent cleans up the previous one without leaving it behind
-- Agent notifications no longer get swallowed by a backgrounded focused client
-- Removed workspace folders disappear from the workspace list again
-- Codex keeps fast mode after you approve a plan ([#526](https://github.com/getpaseo/paseo/pull/526) by [@therainisme](https://github.com/therainisme))
-- Workspace tab focus is preserved across page refreshes
-- Settings screen no longer pushes its header down with extra spacing
-- Branch switcher title no longer overflows on narrow rows
-- iOS image picker no longer leaves the screen unresponsive after cancelling
-- Archiving a worktree recovers cleanly if a previous attempt was interrupted
-- Images in agent messages with `~`-prefixed paths load instead of spinning forever
-- Tool call blocks expand correctly on mobile while an agent is still streaming
-- Timeline no longer stutters when catch-up and projected ranges overlap
-- Codex no longer flashes idle when a replacement turn is in progress
-- Branch state recovers correctly when a rebase is in progress
-- Workspace hover card no longer clips near screen edges
+- La zone de texte du composeur se rétracte après l'envoi sur le web
+- Les brouillons de nouveau workspace se vident après l'envoi au lieu de rester
+- Remplacer un agent en cours d'exécution nettoie le précédent sans le laisser traîner
+- Les notifications d'agents ne sont plus avalées par un client focalisé mis en arrière-plan
+- Les dossiers de workspace supprimés disparaissent à nouveau de la liste des workspaces
+- Codex conserve le mode rapide après que vous approuvez un plan ([#526](https://github.com/getpaseo/paseo/pull/526) by [@therainisme](https://github.com/therainisme))
+- Le focus de l'onglet de workspace est préservé entre les rafraîchissements de page
+- L'écran de paramètres ne repousse plus son en-tête vers le bas avec un espacement supplémentaire
+- Le titre du commutateur de branches ne déborde plus sur les lignes étroites
+- Le sélecteur d'images iOS ne laisse plus l'écran insensible après annulation
+- Archiver un worktree se rétablit proprement si une tentative précédente a été interrompue
+- Les images dans les messages d'agents avec des chemins préfixés par `~` se chargent au lieu de tourner indéfiniment
+- Les blocs d'appels d'outils s'étendent correctement sur mobile pendant qu'un agent est encore en streaming
+- La timeline ne saccade plus lorsque les plages de rattrapage et projetées se chevauchent
+- Codex n'affiche plus « inactif » par intermittence lorsqu'un tour de remplacement est en cours
+- L'état de branche se rétablit correctement lorsqu'un rebase est en cours
+- La carte de survol de workspace ne se coupe plus près des bords de l'écran
 
 ## 0.1.59 - 2026-04-16
 
-### Added
+### Ajouts
 
-- Opus 4.7 in the Claude model picker, with a 1M-context variant
-- Extra High reasoning effort for Opus 4.7, between High and Max
+- Opus 4.7 dans le sélecteur de modèles Claude, avec une variante à contexte 1M
+- Effort de réflexion Extra High pour Opus 4.7, entre High et Max
 
 ## 0.1.58 - 2026-04-16
 
-### Added
+### Ajouts
 
-- Markdown files render as formatted markdown in the file pane ([#427](https://github.com/getpaseo/paseo/pull/427) by [@aaronflorey](https://github.com/aaronflorey))
-- Cmd+L (Ctrl+L on Windows/Linux) focuses the agent message input
-- Provider models refresh on a freshness TTL; Settings shows last-updated time and any fetch errors ([#426](https://github.com/getpaseo/paseo/pull/426))
-- `disallowedTools` option in provider config to block specific tools from an agent
+- Les fichiers markdown s'affichent sous forme de markdown formaté dans le panneau de fichiers ([#427](https://github.com/getpaseo/paseo/pull/427) by [@aaronflorey](https://github.com/aaronflorey))
+- Cmd+L (Ctrl+L sur Windows/Linux) place le focus sur le champ de saisie de message de l'agent
+- Les modèles des fournisseurs se rafraîchissent selon un TTL de fraîcheur ; les Paramètres affichent l'heure de dernière mise à jour et toute erreur de récupération ([#426](https://github.com/getpaseo/paseo/pull/426))
+- Option `disallowedTools` dans la configuration de fournisseur pour bloquer des outils spécifiques d'un agent
 
-### Improved
+### Améliorations
 
-- Windows: agents launch reliably from npm `.cmd` shims, paths with spaces, and JSON config args — fixes `spawn EINVAL` startup errors ([#454](https://github.com/getpaseo/paseo/pull/454))
-- OpenCode permission prompts include the requesting tool's context ([#398](https://github.com/getpaseo/paseo/pull/398) by [@aaronflorey](https://github.com/aaronflorey))
-- OpenCode todo and compaction events render in the timeline ([#429](https://github.com/getpaseo/paseo/pull/429) by [@aaronflorey](https://github.com/aaronflorey))
-- OpenCode sessions archive cleanly when closed ([#408](https://github.com/getpaseo/paseo/pull/408) by [@aaronflorey](https://github.com/aaronflorey))
-- OpenCode slash commands recover from SSE timeouts ([#407](https://github.com/getpaseo/paseo/pull/407) by [@aaronflorey](https://github.com/aaronflorey))
-- Paseo MCP tools work against archived agents, matching the CLI ([#423](https://github.com/getpaseo/paseo/pull/423))
-- Native scrollbars match the active theme across all web views ([#399](https://github.com/getpaseo/paseo/pull/399) by [@ethersh](https://github.com/ethersh))
+- Windows : les agents se lancent de façon fiable depuis les shims `.cmd` de npm, les chemins comportant des espaces et les arguments de configuration JSON — corrige les erreurs de démarrage `spawn EINVAL` ([#454](https://github.com/getpaseo/paseo/pull/454))
+- Les invites de permission OpenCode incluent le contexte de l'outil demandeur ([#398](https://github.com/getpaseo/paseo/pull/398) by [@aaronflorey](https://github.com/aaronflorey))
+- Les événements de todo et de compaction d'OpenCode s'affichent dans la timeline ([#429](https://github.com/getpaseo/paseo/pull/429) by [@aaronflorey](https://github.com/aaronflorey))
+- Les sessions OpenCode s'archivent proprement à la fermeture ([#408](https://github.com/getpaseo/paseo/pull/408) by [@aaronflorey](https://github.com/aaronflorey))
+- Les commandes slash d'OpenCode se rétablissent après des délais d'expiration SSE ([#407](https://github.com/getpaseo/paseo/pull/407) by [@aaronflorey](https://github.com/aaronflorey))
+- Les outils MCP de Paseo fonctionnent sur les agents archivés, à parité avec la CLI ([#423](https://github.com/getpaseo/paseo/pull/423))
+- Les barres de défilement natives correspondent au thème actif dans toutes les vues web ([#399](https://github.com/getpaseo/paseo/pull/399) by [@ethersh](https://github.com/ethersh))
 
-### Fixed
+### Corrections
 
-- Code file previews can be selected and copied on iOS ([#447](https://github.com/getpaseo/paseo/pull/447) by [@muzhi1991](https://github.com/muzhi1991))
-- File preview no longer shows stale content when reopening the same file ([#411](https://github.com/getpaseo/paseo/pull/411) by [@muzhi1991](https://github.com/muzhi1991))
-- File explorer reinitialises when the client reconnects after a page refresh ([#442](https://github.com/getpaseo/paseo/pull/442) by [@1996fanrui](https://github.com/1996fanrui))
-- Generic ACP providers no longer receive duplicated command arguments ([#444](https://github.com/getpaseo/paseo/pull/444) by [@edvardchen](https://github.com/edvardchen))
-- Workspace headers no longer show a branch icon for non-git workspaces
-- Branch switcher layout is stable on mobile
-- Model names no longer truncate mid-word in the picker rows
-- Messages appear in the correct order after reconnecting on mobile
-- Clearing agent attention no longer throws on timeout
+- Les aperçus de fichiers de code peuvent être sélectionnés et copiés sur iOS ([#447](https://github.com/getpaseo/paseo/pull/447) by [@muzhi1991](https://github.com/muzhi1991))
+- L'aperçu de fichier n'affiche plus de contenu obsolète lors de la réouverture du même fichier ([#411](https://github.com/getpaseo/paseo/pull/411) by [@muzhi1991](https://github.com/muzhi1991))
+- L'explorateur de fichiers se réinitialise lorsque le client se reconnecte après un rafraîchissement de page ([#442](https://github.com/getpaseo/paseo/pull/442) by [@1996fanrui](https://github.com/1996fanrui))
+- Les fournisseurs ACP génériques ne reçoivent plus d'arguments de commande dupliqués ([#444](https://github.com/getpaseo/paseo/pull/444) by [@edvardchen](https://github.com/edvardchen))
+- Les en-têtes de workspace n'affichent plus d'icône de branche pour les workspaces non-git
+- La disposition du commutateur de branches est stable sur mobile
+- Les noms de modèles ne se tronquent plus en plein mot dans les lignes du sélecteur
+- Les messages apparaissent dans le bon ordre après une reconnexion sur mobile
+- Effacer l'attention de l'agent ne génère plus d'erreur en cas de délai d'expiration
 
 ## 0.1.56 - 2026-04-14
 
-### Fixed
+### Corrections
 
-- Projects with empty git repositories (no commits yet) no longer crash the app on startup
-- A single problematic project can no longer prevent the rest of your workspaces from loading
+- Les projets avec des dépôts git vides (encore aucun commit) ne font plus planter l'application au démarrage
+- Un seul projet problématique ne peut plus empêcher le reste de vos workspaces de se charger
 
 ## 0.1.55 - 2026-04-14
 
-### Added
+### Ajouts
 
-- Provider profiles — define custom providers in your Paseo config that appear alongside built-ins. Override a built-in's binary, env, or models, or create entirely new providers. See the [configuration guide](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)
-- ACP agent support — add any ACP-compatible agent to Paseo with `extends: "acp"` in your provider config. No code changes needed
-- Choose provider and model when creating scheduled agents
-- Max reasoning effort option for Opus 4.6 models
-- Cmd+, (Ctrl+, on Windows/Linux) opens settings
+- Profils de fournisseurs — définissez des fournisseurs personnalisés dans votre configuration Paseo qui apparaissent aux côtés des intégrés. Remplacez le binaire, l'environnement ou les modèles d'un fournisseur intégré, ou créez des fournisseurs entièrement nouveaux. Voir le [guide de configuration](https://github.com/getpaseo/paseo/blob/main/docs/custom-providers.md)
+- Prise en charge des agents ACP — ajoutez n'importe quel agent compatible ACP à Paseo avec `extends: "acp"` dans votre configuration de fournisseur. Aucune modification de code nécessaire
+- Choisissez le fournisseur et le modèle lors de la création d'agents planifiés
+- Option d'effort de réflexion Max pour les modèles Opus 4.6
+- Cmd+, (Ctrl+, sur Windows/Linux) ouvre les paramètres
 
-### Improved
+### Améliorations
 
-- Git operations are dramatically faster — workspace status, PR checks, and branch data all use a shared cached snapshot service instead of shelling out to git on every request. Running 20+ workspaces simultaneously is now smooth
-- Windows support — the daemon and CLI run natively on Windows with proper shell quoting, executable resolution, and path handling
-- iPad and tablet layouts work correctly across all screen sizes
-- IME composition (Chinese, Japanese, Korean input) no longer submits prematurely when pressing Enter
+- Les opérations git sont nettement plus rapides — le statut du workspace, les vérifications de PR et les données de branche utilisent tous un service d'instantané mis en cache partagé au lieu d'invoquer git à chaque requête. Faire tourner plus de 20 workspaces simultanément est désormais fluide
+- Prise en charge de Windows — le démon et la CLI s'exécutent nativement sur Windows avec une gestion correcte des guillemets de shell, de la résolution d'exécutables et des chemins
+- Les dispositions iPad et tablette fonctionnent correctement sur toutes les tailles d'écran
+- La composition IME (saisie chinoise, japonaise, coréenne) ne soumet plus prématurément à l'appui sur Entrée
 
-### Fixed
+### Corrections
 
-- Creating a worktree no longer briefly flashes it as a standalone project before placing it under the correct repository
-- Worktree creation spinner stays visible throughout the process instead of disappearing on mouse-out
-- Workspace navigation updates correctly when switching between workspaces in the same project
-- Desktop workspace header alignment and model selector no longer overflow on narrow windows
-- Loading indicators are visible in light mode
+- Créer un worktree ne le fait plus clignoter brièvement comme un projet autonome avant de le placer sous le bon dépôt
+- L'indicateur de création de worktree reste visible tout au long du processus au lieu de disparaître au passage de la souris
+- La navigation de workspace se met à jour correctement lors du passage entre workspaces d'un même projet
+- L'alignement de l'en-tête de workspace bureau et le sélecteur de modèles ne débordent plus sur les fenêtres étroites
+- Les indicateurs de chargement sont visibles en mode clair
 
 ## 0.1.54 - 2026-04-12
 
-### Added
+### Ajouts
 
-- Inline image previews in agent messages — screenshots and images generated by agents render directly in the conversation instead of showing as raw markdown links
+- Aperçus d'images en ligne dans les messages d'agents — les captures d'écran et images générées par les agents s'affichent directement dans la conversation au lieu d'apparaître comme des liens markdown bruts
 
-### Improved
+### Améliorations
 
-- Paseo tools are no longer injected into agents by default — opt in from Settings when you need agent-to-agent orchestration
-- Agent provider and mode are now resolved server-side, so CLI commands like `paseo run` use consistent defaults without client-side lookups
+- Les outils Paseo ne sont plus injectés dans les agents par défaut — inscrivez-vous depuis les Paramètres lorsque vous avez besoin d'orchestration entre agents
+- Le fournisseur et le mode de l'agent sont désormais résolus côté serveur, de sorte que les commandes CLI comme `paseo run` utilisent des valeurs par défaut cohérentes sans recherches côté client
 
-### Fixed
+### Corrections
 
-- Shift+Enter now correctly inserts a newline in agent terminal input instead of submitting
-- Windows: MCP configuration is no longer mangled when spawning Claude agents
-- Branch ahead/behind count no longer errors for branches with no remote tracking branch
+- Shift+Entrée insère désormais correctement un saut de ligne dans la saisie de terminal d'agent au lieu de soumettre
+- Windows : la configuration MCP n'est plus altérée lors du lancement d'agents Claude
+- Le décompte d'avance/retard de branche ne génère plus d'erreur pour les branches sans branche de suivi distante
 
 ## 0.1.53 - 2026-04-12
 
-### Added
+### Ajouts
 
-- Agents get Paseo tools automatically — every new agent gets access to terminals, schedules, worktrees, and other agents through MCP. Toggle it off in Settings under "Inject Paseo tools"
-- Git pull — pull remote changes directly from the workspace header. Promoted to the primary action when your branch is behind origin
-- Child agent notifications — parent agents are automatically notified when a child agent finishes, errors, or needs permission approval
-- Agent reload — `paseo agent reload` restarts an agent's underlying process from the CLI
-- Middle-click to close tabs on desktop
-- Keyboard shortcut to cycle themes
+- Les agents obtiennent automatiquement les outils Paseo — chaque nouvel agent accède aux terminaux, plannings, worktrees et autres agents via MCP. Désactivez-le dans les Paramètres sous « Injecter les outils Paseo »
+- Git pull — tirez les changements distants directement depuis l'en-tête du workspace. Promu en action principale lorsque votre branche est en retard sur origin
+- Notifications d'agents enfants — les agents parents sont automatiquement notifiés lorsqu'un agent enfant se termine, échoue ou nécessite une approbation de permission
+- Rechargement d'agent — `paseo agent reload` redémarre le processus sous-jacent d'un agent depuis la CLI
+- Clic du milieu pour fermer les onglets sur bureau
+- Raccourci clavier pour parcourir les thèmes
 
-### Improved
+### Améliorations
 
-- Unavailable git actions now explain why in a toast instead of being silently greyed out
-- Streaming markdown on mobile renders significantly faster
-- Sidebar, branch switcher, and agent panel no longer re-render unnecessarily — noticeable on large workspaces
-- Paseo tool calls in agent timelines show the Paseo logo and human-readable names
-- Relay and pairing URLs are stripped from daemon logs
+- Les actions git indisponibles expliquent désormais pourquoi dans un toast au lieu d'être grisées silencieusement
+- Le markdown en streaming s'affiche nettement plus vite sur mobile
+- La barre latérale, le commutateur de branches et le panneau d'agent ne se re-rendent plus inutilement — perceptible sur les gros workspaces
+- Les appels d'outils Paseo dans les timelines d'agents affichent le logo Paseo et des noms lisibles
+- Les URL de relais et d'appairage sont retirées des logs du démon
 
-### Fixed
+### Corrections
 
-- Closed agent tabs no longer reappear after reconnecting
-- Desktop notification badge counts match across all workspaces
-- Host switcher status syncs correctly when switching between hosts
+- Les onglets d'agents fermés ne réapparaissent plus après reconnexion
+- Les décomptes de badge de notification bureau correspondent sur tous les workspaces
+- Le statut du commutateur d'hôtes se synchronise correctement lors du passage entre hôtes
 
 ## 0.1.52 - 2026-04-10
 
-### Added
+### Ajouts
 
-- Theme selector — choose from six themes including Midnight, Claude, and Ghostty dark variants
-- Branch switching — switch git branches directly from the workspace header, with automatic stash and restore for uncommitted changes
-- Auto-download updates — desktop updates download silently in the background so they're ready to install when you are
+- Sélecteur de thème — choisissez parmi six thèmes dont les variantes sombres Midnight, Claude et Ghostty
+- Changement de branche — changez de branche git directement depuis l'en-tête du workspace, avec stash et restauration automatiques des changements non commités
+- Téléchargement automatique des mises à jour — les mises à jour bureau se téléchargent silencieusement en arrière-plan afin d'être prêtes à installer quand vous l'êtes
 
-### Fixed
+### Corrections
 
-- Layout now responds correctly when resizing the window or rotating a tablet — previously the app could get stuck in mobile layout on a large screen
-- Terminal no longer causes massive memory spikes from snapshot thrashing during heavy output
-- Typing in the terminal works reliably — special keys, Ctrl combos, and paste are handled natively by the terminal emulator
-- Initializing agents no longer show a loading spinner as if they're running
-- Reconnecting to a running agent now works even when session persistence is unavailable
-- Error screens on desktop are now scrollable
-- Model list refreshes in the background when you open the model selector
-- Draft agent feature preferences (like thinking mode) are remembered across sessions
+- La disposition réagit désormais correctement lors du redimensionnement de la fenêtre ou de la rotation d'une tablette — auparavant l'application pouvait rester bloquée en disposition mobile sur un grand écran
+- Le terminal ne provoque plus de pics de mémoire massifs dus au brassage d'instantanés lors d'une forte sortie
+- La saisie dans le terminal fonctionne de façon fiable — les touches spéciales, combinaisons Ctrl et collage sont gérées nativement par l'émulateur de terminal
+- Les agents en cours d'initialisation n'affichent plus d'indicateur de chargement comme s'ils tournaient
+- La reconnexion à un agent en cours d'exécution fonctionne désormais même lorsque la persistance de session est indisponible
+- Les écrans d'erreur sur bureau sont désormais défilables
+- La liste des modèles se rafraîchit en arrière-plan lorsque vous ouvrez le sélecteur de modèles
+- Les préférences de fonctionnalités des brouillons d'agents (comme le mode réflexion) sont mémorisées entre les sessions
 
 ## 0.1.51 - 2026-04-09
 
-### Added
+### Ajouts
 
-- Image attachments for OpenCode — attach screenshots and images to OpenCode agent prompts
-- WebStorm — added to the "Open in editor" list alongside Cursor, VS Code, and Zed
-- Send behavior setting — choose whether pressing Enter while an agent is running interrupts immediately or queues your message
+- Pièces jointes d'images pour OpenCode — attachez des captures d'écran et des images aux prompts d'agents OpenCode
+- WebStorm — ajouté à la liste « Ouvrir dans l'éditeur » aux côtés de Cursor, VS Code et Zed
+- Réglage du comportement d'envoi — choisissez si appuyer sur Entrée pendant qu'un agent tourne interrompt immédiatement ou met votre message en file d'attente
 
-### Fixed
+### Corrections
 
-- Model selector no longer crashes on iPad
-- Pairing now uses the correct hostname, fixing connection failures on some network setups
-- OpenCode agents show the correct terminal state and refresh models reliably
-- Follow-up messages to agents that just finished a turn now work correctly
-- Commands now load properly for Pi agents
-- Internal debug output no longer appears in Claude agent timelines
-- QR scan screen cleaned up with simpler visuals
+- Le sélecteur de modèles ne plante plus sur iPad
+- L'appairage utilise désormais le bon nom d'hôte, corrigeant les échecs de connexion sur certaines configurations réseau
+- Les agents OpenCode affichent le bon état de terminal et rafraîchissent les modèles de façon fiable
+- Les messages de suivi aux agents qui viennent de terminer un tour fonctionnent désormais correctement
+- Les commandes se chargent désormais correctement pour les agents Pi
+- La sortie de débogage interne n'apparaît plus dans les timelines d'agents Claude
+- L'écran de scan QR épuré avec des visuels simplifiés
 
 ## 0.1.50 - 2026-04-07
 
-### Added
+### Ajouts
 
-- Context window meter — see how much of the context window your agent has used, with color thresholds at 70% and 90%. Works with Claude Code, Codex, and OpenCode
-- Open in editor — jump from any workspace straight into Cursor, VS Code, Zed, or your file manager. Paseo remembers your choice
-- Side-by-side diffs — toggle between unified and split-column diff views, with a whitespace visibility option
-- Spoken messages — when using voice mode, agent speech now appears as regular messages in the conversation instead of raw tool output
-- Plan actions — plan cards now show the actions your agent supports (e.g. "Implement", "Deny") instead of generic accept/reject buttons
-- Background git fetch — ahead/behind counts in the Changes pane stay up to date automatically
+- Jauge de fenêtre de contexte — voyez quelle part de la fenêtre de contexte votre agent a utilisée, avec des seuils de couleur à 70 % et 90 %. Fonctionne avec Claude Code, Codex et OpenCode
+- Ouvrir dans l'éditeur — passez de n'importe quel workspace directement à Cursor, VS Code, Zed ou votre gestionnaire de fichiers. Paseo mémorise votre choix
+- Diffs côte à côte — basculez entre les vues de diff unifiée et en colonnes séparées, avec une option de visibilité des espaces
+- Messages parlés — en mode vocal, la parole de l'agent apparaît désormais comme des messages normaux dans la conversation au lieu de sortie d'outil brute
+- Actions de plan — les cartes de plan affichent désormais les actions que votre agent prend en charge (par ex. « Implémenter », « Refuser ») au lieu de boutons génériques accepter/rejeter
+- Fetch git en arrière-plan — les décomptes d'avance/retard dans le panneau des changements restent à jour automatiquement
 
-### Improved
+### Améliorations
 
-- Workspaces load instantly on connect instead of waiting for a full sync
-- File explorer and diff pane remember which folders are expanded when you switch tabs
-- Closing a workspace tab is now instant
-- Settings shows a Refresh button for providers and displays error details inline
-- Reload agent moved away from the close button to prevent accidental taps
+- Les workspaces se chargent instantanément à la connexion au lieu d'attendre une synchronisation complète
+- L'explorateur de fichiers et le panneau de diff mémorisent quels dossiers sont dépliés lorsque vous changez d'onglet
+- Fermer un onglet de workspace est désormais instantané
+- Les Paramètres affichent un bouton Rafraîchir pour les fournisseurs et présentent les détails d'erreur en ligne
+- L'action de rechargement d'agent a été éloignée du bouton de fermeture pour éviter les appuis accidentels
 
-### Fixed
+### Corrections
 
-- Voice mode no longer drifts into false speech detection during long sessions
-- Garbled overlapping text on plan cards
-- Changes pane could show stale diffs when working with git worktrees
-- Restarting an agent quickly could crash the session
-- Copilot no longer pauses for permission prompts in autopilot mode
-- Connection and pairing dialogs now display correctly on tablets
-- Orchestration errors from agents are now surfaced instead of silently lost
-- Diff stats no longer reset to zero when reconnecting
+- Le mode vocal ne dérive plus vers de fausses détections de parole au cours de longues sessions
+- Texte brouillé et superposé sur les cartes de plan
+- Le panneau des changements pouvait afficher des diffs obsolètes en travaillant avec des worktrees git
+- Redémarrer un agent rapidement pouvait faire planter la session
+- Copilot ne s'arrête plus pour des invites de permission en mode autopilote
+- Les dialogues de connexion et d'appairage s'affichent désormais correctement sur tablettes
+- Les erreurs d'orchestration des agents sont désormais remontées au lieu d'être silencieusement perdues
+- Les statistiques de diff ne se réinitialisent plus à zéro lors de la reconnexion
 
 ## 0.1.49 - 2026-04-07
 
-### Fixed
+### Corrections
 
-- Models and providers now load reliably on first connect instead of requiring a manual refresh
-- Model picker only shows models from the agent's own provider, not every provider on the server
-- Model lists stay consistent regardless of which screen you open first
+- Les modèles et fournisseurs se chargent désormais de façon fiable à la première connexion au lieu d'exiger un rafraîchissement manuel
+- Le sélecteur de modèles n'affiche que les modèles du fournisseur propre à l'agent, pas tous les fournisseurs du serveur
+- Les listes de modèles restent cohérentes quel que soit l'écran que vous ouvrez en premier
 
 ## 0.1.48 - 2026-04-05
 
-### Added
+### Ajouts
 
-- Provider diagnostics — tap a provider in Settings to see binary path, version, model count, and status at a glance. Helps troubleshoot why an agent type isn't available
-- Provider snapshot system — daemon now pushes real-time provider availability and model lists to the app, replacing the old poll-based approach. Models and modes update live as providers come online or go offline
-- Codex question handling — Codex agents can now ask the user questions mid-session (e.g. "which file?") and receive answers inline, matching the Claude Code question flow
-- Reload tab action — right-click a workspace tab to reload its agent list without restarting the app
+- Diagnostics de fournisseur — touchez un fournisseur dans les Paramètres pour voir le chemin du binaire, la version, le nombre de modèles et le statut d'un coup d'œil. Aide à comprendre pourquoi un type d'agent est indisponible
+- Système d'instantané de fournisseur — le démon pousse désormais en temps réel la disponibilité des fournisseurs et les listes de modèles vers l'application, remplaçant l'ancienne approche par sondage. Les modèles et modes se mettent à jour en direct à mesure que les fournisseurs se connectent ou se déconnectent
+- Gestion des questions Codex — les agents Codex peuvent désormais poser des questions à l'utilisateur en cours de session (par ex. « quel fichier ? ») et recevoir des réponses en ligne, à parité avec le flux de questions de Claude Code
+- Action de rechargement d'onglet — cliquez droit sur un onglet de workspace pour recharger sa liste d'agents sans redémarrer l'application
 
-### Improved
+### Améliorations
 
-- Model selector redesigned — grouped by provider with status badges, search, and better touch targets on mobile
-- Enter key now submits question card answers and confirms dictation, matching the expected keyboard flow
-- Removed noisy agent lifecycle toasts that fired on every state change
+- Sélecteur de modèles repensé — groupé par fournisseur avec badges de statut, recherche et de meilleures cibles tactiles sur mobile
+- La touche Entrée soumet désormais les réponses des cartes de questions et confirme la dictée, à parité avec le flux clavier attendu
+- Suppression des toasts bruyants de cycle de vie d'agent qui se déclenchaient à chaque changement d'état
 
-### Fixed
+### Corrections
 
-- Desktop app now resolves the user's full login shell environment at startup, fixing tools like `codex`, `node`, `bun`, and `direnv` not being found when Paseo is launched from Finder or Dock. Terminals spawned by Paseo now inherit the same PATH and environment variables as a normal terminal session. Approach adapted from VS Code's battle-tested shell environment resolution
-- Input field on running agent screens now correctly receives keyboard focus
-- Mobile model selector alignment and sizing
+- L'application bureau résout désormais l'environnement complet du shell de connexion de l'utilisateur au démarrage, corrigeant les outils comme `codex`, `node`, `bun` et `direnv` introuvables lorsque Paseo est lancé depuis le Finder ou le Dock. Les terminaux générés par Paseo héritent désormais du même PATH et des mêmes variables d'environnement qu'une session de terminal normale. Approche adaptée de la résolution éprouvée de l'environnement de shell de VS Code
+- Le champ de saisie sur les écrans d'agents en cours d'exécution reçoit désormais correctement le focus clavier
+- Alignement et dimensionnement du sélecteur de modèles mobile
 
 ## 0.1.47 - 2026-04-05
 
-### Fixed
+### Corrections
 
-- Voice TTS in Electron — sherpa now requests copied buffers and the voice MCP bridge sets `ELECTRON_RUN_AS_NODE`, preventing "external buffers not allowed" crashes
-- QR pairing in desktop — CLI JSON output parsing now tolerates Node deprecation warnings in stdout
-- STT segment race condition — segment ID and audio buffer are snapshotted before the async transcription call, so rapid commits no longer interleave
-- Per-host "Add connection" button removed — it blocked multi-host setups by scoping new connections to a single server
+- TTS vocal dans Electron — sherpa demande désormais des tampons copiés et le pont MCP vocal définit `ELECTRON_RUN_AS_NODE`, évitant les plantages « external buffers not allowed »
+- Appairage QR sur bureau — l'analyse de la sortie JSON de la CLI tolère désormais les avertissements de dépréciation de Node dans stdout
+- Condition de course de segment STT — l'ID de segment et le tampon audio sont figés avant l'appel de transcription asynchrone, de sorte que des validations rapides ne s'entrelacent plus
+- Bouton « Ajouter une connexion » par hôte supprimé — il bloquait les configurations multi-hôtes en limitant les nouvelles connexions à un seul serveur
 
 ## 0.1.46 - 2026-04-04
 
-### Fixed
+### Corrections
 
-- Voice activation in packaged builds — Silero VAD model is now copied out of the Electron asar archive so native code can read it
-- App version sent in probe client hello so the daemon's version gate no longer hides Pi/Copilot from reconnected sessions
-- `worktreeRoot` schema made backward-compatible for old clients and daemons that don't send the field
-- Punycode deprecation warning (DEP0040) suppressed in CLI and desktop daemon entrypoints
+- Activation vocale dans les builds packagés — le modèle Silero VAD est désormais copié hors de l'archive asar d'Electron afin que le code natif puisse le lire
+- Version de l'application envoyée dans le hello client de sonde afin que le filtre de version du démon ne masque plus Pi/Copilot des sessions reconnectées
+- Schéma `worktreeRoot` rendu rétrocompatible pour les anciens clients et démons qui n'envoient pas le champ
+- Avertissement de dépréciation Punycode (DEP0040) supprimé dans les points d'entrée de la CLI et du démon bureau
 
 ## 0.1.45 - 2026-04-04
 
-### Added
+### Ajouts
 
-- Pi (pi.dev) agent provider — connect Pi as a new agent type with thinking levels and tool call support
-- Copilot agent provider re-enabled after ACP compatibility fixes
-- `paseo .` and `paseo <path>` open the desktop app with the given project, similar to `code .`
-- Provider-declared features system — providers can expose dynamic toggles and selects that the app renders automatically. First consumer: Codex fast mode
-- Codex plan mode — start agents in plan-only mode with a dedicated plan card UI for reviewing proposed changes before execution
-- OpenCode custom agents and slash commands — user-defined agents from opencode.json now appear in the mode picker, and slash commands accept optional arguments
-- Desktop Integrations settings — install the Paseo CLI and orchestration skills directly from the app without touching the terminal
-- Daemon status dialog in desktop settings for quick health checks
-- Auto-restart daemon on version mismatch — the desktop app detects when the running daemon is outdated and restarts it automatically
-- Setup hint and paseo.sh link on the mobile welcome screen so new App Store users know what to do next
+- Fournisseur d'agent Pi (pi.dev) — connectez Pi comme nouveau type d'agent avec des niveaux de réflexion et la prise en charge des appels d'outils
+- Fournisseur d'agent Copilot réactivé après des corrections de compatibilité ACP
+- `paseo .` et `paseo <path>` ouvrent l'application bureau avec le projet donné, comme `code .`
+- Système de fonctionnalités déclarées par le fournisseur — les fournisseurs peuvent exposer des bascules et sélecteurs dynamiques que l'application affiche automatiquement. Premier client : le mode rapide de Codex
+- Mode plan de Codex — démarrez des agents en mode plan uniquement avec une interface de carte de plan dédiée pour revoir les changements proposés avant exécution
+- Agents personnalisés et commandes slash OpenCode — les agents définis par l'utilisateur dans opencode.json apparaissent désormais dans le sélecteur de mode, et les commandes slash acceptent des arguments optionnels
+- Paramètres d'intégrations bureau — installez la CLI Paseo et les skills d'orchestration directement depuis l'application sans toucher au terminal
+- Dialogue de statut du démon dans les paramètres bureau pour des vérifications de santé rapides
+- Redémarrage automatique du démon en cas d'incompatibilité de version — l'application bureau détecte lorsque le démon en cours est obsolète et le redémarre automatiquement
+- Astuce de configuration et lien paseo.sh sur l'écran d'accueil mobile afin que les nouveaux utilisateurs de l'App Store sachent quoi faire ensuite
 
-### Improved
+### Améliorations
 
-- Desktop startup is faster — existing daemon connections are raced against bootstrap so the app is usable sooner
-- Settings sections reordered for better grouping (integrations and daemon together)
-- Sidebar projects and workspaces now persist across sessions, with a context menu to remove projects
+- Le démarrage bureau est plus rapide — les connexions au démon existantes sont mises en course contre le bootstrap afin que l'application soit utilisable plus tôt
+- Sections de paramètres réordonnées pour un meilleur regroupement (intégrations et démon ensemble)
+- Les projets et workspaces de la barre latérale persistent désormais entre les sessions, avec un menu contextuel pour retirer des projets
 
-### Fixed
+### Corrections
 
-- Sidebar crash when switching iOS theme (Unistyles/Reanimated interaction)
-- Silero VAD crash caused by external buffer mode in CircularBuffer
-- Bulk close now correctly archives stored agents instead of leaving orphans
-- Pinned archived agents are no longer pruned when closing tabs
-- OpenCode event stream starvation during slash command execution
-- Duplicate workspaces when multiple git worktrees share the same root
-- `gh` executable resolution for desktop users whose login shell sets a different PATH
-- Agent creation timeout increased to 60s to handle slow first-launch scenarios
-- Forward-compatible provider handling so older app clients don't break on new provider types
-- Input event listener race condition in the web scrollbar hook
-- Open-project screen content now vertically centered
-- Website download page fetches the release version at runtime with asset validation, fixing stale links
+- Plantage de la barre latérale lors du changement de thème iOS (interaction Unistyles/Reanimated)
+- Plantage Silero VAD causé par le mode de tampon externe dans CircularBuffer
+- La fermeture groupée archive désormais correctement les agents stockés au lieu de laisser des orphelins
+- Les agents archivés épinglés ne sont plus élagués lors de la fermeture d'onglets
+- Famine du flux d'événements OpenCode pendant l'exécution de commandes slash
+- Workspaces en double lorsque plusieurs worktrees git partagent la même racine
+- Résolution de l'exécutable `gh` pour les utilisateurs bureau dont le shell de connexion définit un PATH différent
+- Délai d'expiration de création d'agent porté à 60 s pour gérer les scénarios de premier lancement lents
+- Gestion des fournisseurs compatible avec l'avenir afin que les anciens clients d'application ne cassent pas sur de nouveaux types de fournisseurs
+- Condition de course de l'écouteur d'événements de saisie dans le hook de barre de défilement web
+- Le contenu de l'écran d'ouverture de projet est désormais centré verticalement
+- La page de téléchargement du site web récupère la version de release à l'exécution avec validation des ressources, corrigeant les liens obsolètes
 
 ## 0.1.44 - 2026-04-03
 
-### Fixed
+### Corrections
 
-- Desktop app now stops the daemon cleanly before auto-update restarts
-- Disabled claude-acp and copilot providers from the agent registry
-- Keyboard focus scope resolution now checks multiple candidates for broader compatibility
-- OpenCode interrupt now reaches correct terminal state parity with tool-call flows
-- Shell injection, symlink escape, and pairing endpoint security hardening
+- L'application bureau arrête désormais proprement le démon avant que la mise à jour automatique ne redémarre
+- Fournisseurs claude-acp et copilot désactivés du registre d'agents
+- La résolution de portée du focus clavier vérifie désormais plusieurs candidats pour une compatibilité plus large
+- L'interruption d'OpenCode atteint désormais la parité d'état de terminal correcte avec les flux d'appels d'outils
+- Renforcement de la sécurité contre l'injection de shell, l'évasion par symlink et sur le point de terminaison d'appairage
 
 ## 0.1.43 - 2026-04-02
 
-### Added
+### Ajouts
 
-- Copilot agent support via ACP base provider — connect GitHub Copilot as a new agent type
-- Searchable model favorites — quickly find and pin preferred models
-- Slash command support for OpenCode agents
+- Prise en charge de l'agent Copilot via le fournisseur de base ACP — connectez GitHub Copilot comme nouveau type d'agent
+- Favoris de modèles recherchables — trouvez et épinglez rapidement vos modèles préférés
+- Prise en charge des commandes slash pour les agents OpenCode
 
-### Improved
+### Améliorations
 
-- Refined model selector UX with better mobile sheet behavior
-- Workspace status now uses amber alert styling for "needs input" state
-- Themed scrollbar on message input for consistent styling
+- UX du sélecteur de modèles affinée avec un meilleur comportement de feuille sur mobile
+- Le statut de workspace utilise désormais un style d'alerte ambre pour l'état « saisie requise »
+- Barre de défilement thématisée sur la saisie de message pour un style cohérent
 
-### Fixed
+### Corrections
 
-- Ctrl+C/V copy and paste now works correctly in the terminal on Windows and Linux
-- Shell arguments with spaces are now properly quoted on Windows
-- Claude models with 1M context support are now correctly reported
+- Le copier-coller Ctrl+C/V fonctionne désormais correctement dans le terminal sur Windows et Linux
+- Les arguments de shell comportant des espaces sont désormais correctement mis entre guillemets sur Windows
+- Les modèles Claude avec prise en charge du contexte 1M sont désormais correctement signalés
 
 ## 0.1.42 - 2026-04-01
 
-### Fixed
+### Corrections
 
-- Fixed Claude Code failing to launch on Windows when installed to a path with spaces (e.g. `C:\Program Files\...`)
+- Correction du lancement de Claude Code qui échouait sur Windows lorsqu'installé dans un chemin comportant des espaces (par ex. `C:\Program Files\...`)
 
 ## 0.1.41 - 2026-04-01
 
-### Fixed
+### Corrections
 
-- Fixed agent spawning on Windows — all providers (Claude, Codex, OpenCode) now use shell mode so npm shims and `.cmd` wrappers resolve correctly
-- Fixed terminal creation on Windows defaulting to a Unix shell instead of `cmd.exe`
-- Fixed path handling across the app to support Windows drive-letter paths (`C:\...`) and UNC paths (`\\...`)
-- Fixed executable resolution on Windows to work with `nvm4w` and similar Node version managers
-- Eliminated white flash on window resize in dark mode by setting the native window background color to match the theme
-- Fixed titlebar drag region — replaced the fragile pointer-event approach with VS Code's proven static CSS `app-region: drag` pattern
-- Fixed context menu for copy/paste across the desktop app
-- Fixed shortcut rebinding UI to show held modifier keys and recognize additional keys (Tab, Delete, Home, End, Page Up/Down, Insert, F1–F12)
-- Removed the 40-item cap on activity timeline output so long agent sessions display their full history
+- Correction du lancement des agents sous Windows — tous les fournisseurs (Claude, Codex, OpenCode) utilisent désormais le mode shell afin que les shims npm et les wrappers `.cmd` soient résolus correctement
+- Correction de la création de terminal sous Windows qui basculait sur un shell Unix au lieu de `cmd.exe`
+- Correction de la gestion des chemins dans toute l'application pour prendre en charge les chemins Windows avec lettre de lecteur (`C:\...`) et les chemins UNC (`\\...`)
+- Correction de la résolution des exécutables sous Windows pour fonctionner avec `nvm4w` et les gestionnaires de versions Node similaires
+- Suppression du flash blanc lors du redimensionnement de la fenêtre en mode sombre en alignant la couleur de fond native de la fenêtre sur le thème
+- Correction de la zone de glissement de la barre de titre — l'approche fragile basée sur les événements pointeur est remplacée par le motif CSS statique `app-region: drag` éprouvé de VS Code
+- Correction du menu contextuel copier/coller dans l'application desktop
+- Correction de l'interface de réaffectation des raccourcis pour afficher les modificateurs maintenus et reconnaître des touches supplémentaires (Tab, Delete, Home, End, Page Up/Down, Insert, F1–F12)
+- Suppression de la limite de 40 éléments sur la timeline d'activité pour que les longues sessions d'agent affichent tout leur historique
 
-### Improved
+### Améliorations
 
-- Improved light mode theming with dedicated workspace background, scrollbar handle colors, and lighter shadows
-- Window controls overlay on Windows/Linux reduced from 48px to 29px height for a more compact titlebar
+- Amélioration du thème en mode clair avec un fond d'espace de travail dédié, des couleurs de poignée de barre de défilement et des ombres plus légères
+- La surcouche des contrôles de fenêtre sous Windows/Linux passe de 48px à 29px de hauteur pour une barre de titre plus compacte
 
 ## 0.1.40 - 2026-04-01
 
-### Added
+### Ajouts
 
-- Workspace tabs can now be closed in batches
+- Les onglets d'espace de travail peuvent désormais être fermés par lots
 
-### Improved
+### Améliorations
 
-- Provider model lists are now cached per server and provider, reducing redundant model lookups in the UI
+- Les listes de modèles des fournisseurs sont désormais mises en cache par serveur et par fournisseur, réduisant les recherches de modèles redondantes dans l'interface
 
-### Fixed
+### Corrections
 
-- OpenCode reasoning content no longer appears duplicated as assistant text
-- Daemon no longer crashes when a Codex binary is missing or fails to spawn
-- Archive tab now correctly reconciles agent visibility after archiving
-- File diff tracking in workspaces now works correctly on Linux
-- iPad layout now renders correctly in desktop mode
-- macOS auto-updater now correctly delivers both arm64 and x64 binaries — previously whichever architecture finished building last would overwrite the other's update manifest
+- Le contenu de raisonnement d'OpenCode n'apparaît plus dupliqué en tant que texte de l'assistant
+- Le démon ne plante plus lorsqu'un binaire Codex est absent ou échoue à démarrer
+- L'onglet Archive réconcilie désormais correctement la visibilité des agents après archivage
+- Le suivi des différences de fichiers dans les espaces de travail fonctionne désormais correctement sous Linux
+- La mise en page iPad s'affiche désormais correctement en mode desktop
+- L'outil de mise à jour automatique macOS livre désormais correctement les binaires arm64 et x64 — auparavant, l'architecture compilée en dernier écrasait le manifeste de mise à jour de l'autre
 
 ## 0.1.39 - 2026-03-30
 
-### Added
+### Ajouts
 
-- **Terminal management from the CLI** — new `paseo terminal` command group lets you list, create, and interact with workspace terminals without leaving your terminal
-- **Material file icons in the explorer** — the file explorer tree now shows language-specific icons (TypeScript, JSON, Markdown, etc.) so you can spot files at a glance
+- **Gestion des terminaux depuis la CLI** — le nouveau groupe de commandes `paseo terminal` permet de lister, créer et interagir avec les terminaux d'espace de travail sans quitter votre terminal
+- **Icônes de fichiers Material dans l'explorateur** — l'arborescence de l'explorateur de fichiers affiche désormais des icônes spécifiques au langage (TypeScript, JSON, Markdown, etc.) pour repérer les fichiers d'un coup d'œil
 
-### Fixed
+### Corrections
 
-- Fixed iOS sidebar scroll flicker caused by redundant overflow clipping
-- Centralized window controls padding into a shared hook, eliminating layout inconsistencies across platforms
+- Correction du scintillement du défilement de la barre latérale sous iOS causé par un rognage de débordement redondant
+- Centralisation du remplissage des contrôles de fenêtre dans un hook partagé, éliminant les incohérences de mise en page entre plateformes
 
 ## 0.1.38 - 2026-03-30
 
-### Fixed
+### Corrections
 
-- Fixed daemon startup race where the app could time out connecting on first launch because the PID file advertised a listen address before the server was ready
-- Fixed daemon log rotation losing startup traces — trace-level WebSocket logs no longer include full message payloads
+- Correction d'une situation de concurrence au démarrage du démon où l'application pouvait expirer lors de la première connexion parce que le fichier PID annonçait une adresse d'écoute avant que le serveur ne soit prêt
+- Correction de la rotation des journaux du démon qui perdait les traces de démarrage — les journaux WebSocket de niveau trace n'incluent plus les charges utiles complètes des messages
 
 ## 0.1.37 - 2026-03-29
 
-### Added
+### Ajouts
 
-- Custom window controls on Windows and Linux — the native titlebar is replaced with overlay controls that match the app's design
-- Desktop file logging with electron-log for easier debugging of daemon and app issues
+- Contrôles de fenêtre personnalisés sous Windows et Linux — la barre de titre native est remplacée par des contrôles en surcouche assortis au design de l'application
+- Journalisation de fichiers sur desktop avec electron-log pour faciliter le débogage des problèmes de démon et d'application
 
-### Fixed
+### Corrections
 
-- Fixed broken PATH propagation and Claude binary resolution on Windows
-- Dictation errors now show a visible toast instead of failing silently
+- Correction de la propagation défaillante du PATH et de la résolution du binaire Claude sous Windows
+- Les erreurs de dictée affichent désormais un toast visible au lieu d'échouer silencieusement
 
 ## 0.1.36 - 2026-03-27
 
-### Fixed
+### Corrections
 
-- Fixed Windows drive-letter path handling across the codebase
-- Fixed stale Nix hash with automatic lockfile-change detection
+- Correction de la gestion des chemins Windows avec lettre de lecteur dans toute la base de code
+- Correction d'un hash Nix obsolète grâce à la détection automatique des changements du fichier de verrouillage
 
-### Added
+### Ajouts
 
-- Added metrics collection and terminal performance tests
+- Ajout de la collecte de métriques et de tests de performance des terminaux
 
 ## 0.1.35 - 2026-03-26
 
-### Improved
+### Améliorations
 
-- Faster app startup by redirecting to the welcome screen immediately and showing host connection status inline
-- Codex file deletions now display correctly as removed lines in diffs
-- OpenCode questions are now surfaced in the permission UI
+- Démarrage de l'application plus rapide grâce à une redirection immédiate vers l'écran de bienvenue et à l'affichage en ligne de l'état de connexion à l'hôte
+- Les suppressions de fichiers par Codex s'affichent désormais correctement comme lignes retirées dans les différences
+- Les questions d'OpenCode sont désormais remontées dans l'interface des permissions
 
-### Fixed
+### Corrections
 
-- Fixed queued prompt dispatch after idle transition
-- Replaced bash-only `mapfile` with a portable `while-read` loop in the chat script
+- Correction de l'envoi des prompts en file d'attente après la transition en veille
+- Remplacement du `mapfile` propre à bash par une boucle `while-read` portable dans le script de chat
 
-### Added
+### Ajouts
 
-- Added support for Nix and NixOS installation
+- Ajout de la prise en charge de l'installation sous Nix et NixOS
 
 ## 0.1.34 - 2026-03-25
 
-### Added
+### Ajouts
 
-- Added `paseo archive` as a top-level alias for `paseo agent archive`
-- Added the `PASEO_AGENT_ID` environment variable for Claude and Codex agents
-- Added a redesigned command autocomplete with a detail card and dropdown styling
-- Linked Android download surfaces to the Google Play Store
+- Ajout de `paseo archive` comme alias de premier niveau pour `paseo agent archive`
+- Ajout de la variable d'environnement `PASEO_AGENT_ID` pour les agents Claude et Codex
+- Ajout d'une autocomplétion de commandes repensée avec une carte de détail et un style de menu déroulant
+- Liaison des surfaces de téléchargement Android au Google Play Store
 
-### Improved
+### Améliorations
 
-- Autonomous turns now complete gracefully on interrupt instead of being canceled
-- Thinking/model selection now always resolves to a real option instead of showing a generic Default choice
-- Restored per-provider form preferences and removed the Auto model fallback
-- Improved Codex activity logs with clearer tool-call summaries
-- Reduced unnecessary re-renders in the agent panel and input area for smoother interaction
-- Improved chat transcript readability
+- Les tours autonomes se terminent désormais proprement lors d'une interruption au lieu d'être annulés
+- La sélection de la réflexion/du modèle se résout désormais toujours sur une véritable option au lieu d'afficher un choix Défaut générique
+- Restauration des préférences de formulaire par fournisseur et suppression du repli sur le modèle Auto
+- Amélioration des journaux d'activité de Codex avec des résumés d'appels d'outils plus clairs
+- Réduction des rendus inutiles dans le panneau d'agent et la zone de saisie pour une interaction plus fluide
+- Amélioration de la lisibilité de la transcription de chat
 
-### Fixed
+### Corrections
 
-- Fixed `paseo send --no-wait` not taking effect
-- Fixed stale abort results contaminating replacement turns after an interrupt
-- Fixed Claude interrupt handling and autonomous wake reliability
-- Fixed nested Claude Code session detection and provider availability checks
-- Fixed agent input focus scoping across panels
-- Fixed terminal snapshot ordering when subscribing
-- Fixed `chat read --since` to accept message IDs
-- Fixed keyboard pane focus syncing with the active panel
-- Fixed assistant text selection on web
-- Fixed archived-agent notifications still appearing in chat rooms
-- Fixed the attach-images button interaction in the message composer
-- Pruned wrong-platform native binaries from Electron desktop builds
+- Correction de `paseo send --no-wait` qui ne prenait pas effet
+- Correction des résultats d'abandon obsolètes contaminant les tours de remplacement après une interruption
+- Correction de la gestion des interruptions de Claude et de la fiabilité du réveil autonome
+- Correction de la détection des sessions Claude Code imbriquées et des vérifications de disponibilité des fournisseurs
+- Correction du cadrage du focus de saisie des agents entre les panneaux
+- Correction de l'ordre des instantanés de terminal lors de l'abonnement
+- Correction de `chat read --since` pour accepter les identifiants de message
+- Correction de la synchronisation du focus du volet clavier avec le panneau actif
+- Correction de la sélection du texte de l'assistant sur le web
+- Correction des notifications d'agents archivés qui apparaissaient encore dans les salons de chat
+- Correction de l'interaction du bouton de pièces jointes d'images dans le compositeur de messages
+- Élagage des binaires natifs de mauvaise plateforme dans les builds desktop Electron
 
 ## 0.1.33 - 2026-03-23
 
-### Fixed
+### Corrections
 
-- Fixed the desktop app failing to reopen after closing on macOS — the daemon and agent processes were registering with Launch Services as instances of the main app, blocking subsequent launches
-- Fixed dictation not working in the packaged desktop app — the microphone entitlement was missing from the hardened runtime configuration
-- Fixed leaked Claude Code child processes when agents were closed — the SDK query stream was not being properly shut down
-- The notification test button now surfaces errors instead of failing silently
+- Correction de l'application desktop qui ne rouvrait pas après fermeture sous macOS — le démon et les processus d'agent s'enregistraient auprès de Launch Services comme instances de l'application principale, bloquant les lancements suivants
+- Correction de la dictée qui ne fonctionnait pas dans l'application desktop packagée — l'autorisation micro était absente de la configuration du runtime durci
+- Correction des processus enfants Claude Code fuités lors de la fermeture des agents — le flux de requête du SDK n'était pas correctement arrêté
+- Le bouton de test des notifications remonte désormais les erreurs au lieu d'échouer silencieusement
 
 ## 0.1.32 - 2026-03-23
 
-### Added
+### Ajouts
 
-- Fully rebindable keyboard shortcuts with chord support — all shortcuts are now declarative with proper Cmd (Mac) vs Ctrl (Windows/Linux) separation
-- Migrated the desktop app from Tauri to Electron, with macOS notarization, code signing, and Linux Wayland support
-- Added line numbers and word-wrap toggle to file previews
-- Added an archived agent callout with an unarchive button so you can restore agents directly from the chat view
-- Added workspace kind indicators in the sidebar (e.g. worktree vs standalone)
-- Expanded diff syntax highlighting to cover more languages
-- Added status bar tooltips for project and agent status
+- Raccourcis clavier entièrement réaffectables avec prise en charge des accords — tous les raccourcis sont désormais déclaratifs avec une séparation correcte entre Cmd (Mac) et Ctrl (Windows/Linux)
+- Migration de l'application desktop de Tauri vers Electron, avec notarisation macOS, signature de code et prise en charge de Linux Wayland
+- Ajout de numéros de ligne et d'un basculement du retour à la ligne dans les aperçus de fichiers
+- Ajout d'un encart d'agent archivé avec un bouton de désarchivage pour restaurer les agents directement depuis la vue chat
+- Ajout d'indicateurs de type d'espace de travail dans la barre latérale (par ex. worktree vs autonome)
+- Extension de la coloration syntaxique des différences pour couvrir davantage de langages
+- Ajout d'infobulles de barre d'état pour l'état des projets et des agents
 
-### Improved
+### Améliorations
 
-- Redesigned the mobile tab switcher as a compact header row with quick access to new agents and terminals
-- Streamlined workspace creation — worktrees are now created inline with a single action instead of a multi-step flow
-- Agent history now streams from disk on reconnect, so you see past messages immediately instead of a blank screen
-- Automatic cleanup of stale workspaces: deleted worktree directories and fully-archived workspaces are pruned automatically
-- After archiving a workspace, the app now redirects to the next available workspace instead of leaving you on a dead screen
-- Reopening an archived agent tab now keeps it open instead of collapsing back to archived state
-- Reduced unnecessary re-renders across the workspace screen, sidebar, and agent list for smoother scrolling and interaction
-- Agent list no longer refreshes in the background when the screen is unfocused, saving resources
-- Desktop key repeat now works correctly on macOS
-- Desktop notifications on macOS are more reliable
-- Daemon startup no longer blocks on model downloads
-- Better error messages from the daemon — RPC errors now include the actual underlying details
+- Refonte du sélecteur d'onglets mobile en une rangée d'en-tête compacte offrant un accès rapide aux nouveaux agents et terminaux
+- Simplification de la création d'espace de travail — les worktrees sont désormais créés en ligne d'une seule action au lieu d'un flux en plusieurs étapes
+- L'historique des agents se diffuse désormais depuis le disque à la reconnexion, pour voir les messages passés immédiatement au lieu d'un écran vide
+- Nettoyage automatique des espaces de travail obsolètes : les répertoires de worktree supprimés et les espaces de travail entièrement archivés sont élagués automatiquement
+- Après l'archivage d'un espace de travail, l'application redirige désormais vers le prochain espace de travail disponible au lieu de vous laisser sur un écran mort
+- La réouverture d'un onglet d'agent archivé le maintient désormais ouvert au lieu de le replier en état archivé
+- Réduction des rendus inutiles dans l'écran d'espace de travail, la barre latérale et la liste d'agents pour un défilement et une interaction plus fluides
+- La liste d'agents ne se rafraîchit plus en arrière-plan lorsque l'écran n'a pas le focus, économisant des ressources
+- La répétition des touches sur desktop fonctionne désormais correctement sous macOS
+- Les notifications desktop sous macOS sont plus fiables
+- Le démarrage du démon ne se bloque plus sur les téléchargements de modèles
+- De meilleurs messages d'erreur du démon — les erreurs RPC incluent désormais les détails sous-jacents réels
 
-### Fixed
+### Corrections
 
-- Fixed user messages appearing as assistant output in the timeline when messages contained structured content blocks
-- Fixed archived workspace routing so navigating to an archived session no longer breaks the app
-- Fixed Linux AppImage failing to launch on Wayland-only desktops
-- Fixed desktop window drag coordinates being applied when they shouldn't be
+- Correction des messages utilisateur apparaissant comme sortie de l'assistant dans la timeline lorsque les messages contenaient des blocs de contenu structurés
+- Correction du routage des espaces de travail archivés pour que naviguer vers une session archivée ne casse plus l'application
+- Correction de l'AppImage Linux qui échouait à se lancer sur les bureaux uniquement Wayland
+- Correction des coordonnées de glissement de fenêtre desktop appliquées alors qu'elles ne devraient pas l'être
 
 ## 0.1.30 - 2026-03-19
 
-### Added
+### Ajouts
 
-- Added terminal tabs, split pane controls, and drop previews for workspace layouts
-- Added a combined model selector and agent mode visuals across key UI surfaces
-- Added Open Graph metadata improvements for richer website sharing previews
+- Ajout d'onglets de terminal, de contrôles de volet fractionné et d'aperçus de dépôt pour les mises en page d'espace de travail
+- Ajout d'un sélecteur de modèle combiné et de visuels de mode d'agent sur les surfaces d'interface clés
+- Ajout d'améliorations des métadonnées Open Graph pour des aperçus de partage du site web plus riches
 
-### Improved
+### Améliorations
 
-- Improved workspace navigation with better active-workspace tracking and keyboard-driven pane interactions
-- Improved terminal scrollbar behavior, pane focus handling, and status bar/message input spacing
-- Improved project picker path display and general workspace UI polish
+- Amélioration de la navigation dans les espaces de travail avec un meilleur suivi de l'espace de travail actif et des interactions de volet pilotées au clavier
+- Amélioration du comportement de la barre de défilement du terminal, de la gestion du focus des volets et de l'espacement de la barre d'état et de la saisie de messages
+- Amélioration de l'affichage des chemins dans le sélecteur de projet et polissage général de l'interface d'espace de travail
 
-### Fixed
+### Corrections
 
-- Fixed agent startup reliability by tightening PATH resolution and surfacing missing provider binaries in status
-- Fixed workspace route syncing, drag hit areas, and git diff panel header styling regressions
-- Fixed website mobile horizontal scrolling and ensured the workspace audio module builds during EAS installs
+- Correction de la fiabilité du démarrage des agents en resserrant la résolution du PATH et en signalant les binaires de fournisseurs manquants dans l'état
+- Correction de la synchronisation des routes d'espace de travail, des zones de glissement et des régressions de style de l'en-tête du panneau de différences git
+- Correction du défilement horizontal mobile du site web et assurance que le module audio d'espace de travail se compile lors des installs EAS
 
 ## 0.1.28 - 2026-03-15
 
-### Added
+### Ajouts
 
-- Added OpenCode build and plan modes
-- Added website landing pages for Claude Code, Codex, and OpenCode
+- Ajout des modes build et plan d'OpenCode
+- Ajout de pages de destination du site web pour Claude Code, Codex et OpenCode
 
-### Improved
+### Améliorations
 
-- Improved the git action menu for more reliable repository actions
-- Improved the mobile settings screen, workspace header actions, and welcome screen presentation
-- Updated the website hero copy and added a sponsor callout section
+- Amélioration du menu d'actions git pour des actions de dépôt plus fiables
+- Amélioration de l'écran des paramètres mobile, des actions de l'en-tête d'espace de travail et de la présentation de l'écran de bienvenue
+- Mise à jour du texte du hero du site web et ajout d'une section d'encart de parrainage
 
-### Fixed
+### Corrections
 
-- Fixed assistant file links so they open the correct workspace files from chat
+- Correction des liens de fichiers de l'assistant pour qu'ils ouvrent les bons fichiers d'espace de travail depuis le chat
 
 ## 0.1.27 - 2026-03-13
 
-### Added
+### Ajouts
 
-- Added voice runtime with new audio engine architecture for voice interactions
-- Added Grep tool support in Claude tool-call mapping
-- Added ability to open workspace files directly from agent chat messages
-- Added desktop notifications via a custom native bridge
+- Ajout d'un runtime vocal avec une nouvelle architecture de moteur audio pour les interactions vocales
+- Ajout de la prise en charge de l'outil Grep dans le mappage des appels d'outils Claude
+- Ajout de la possibilité d'ouvrir les fichiers d'espace de travail directement depuis les messages de chat de l'agent
+- Ajout de notifications desktop via un pont natif personnalisé
 
-### Improved
+### Améliorations
 
-- Improved image picker, markdown rendering, and UI interactions
-- Improved shell environment detection using shell-env
+- Amélioration du sélecteur d'images, du rendu markdown et des interactions de l'interface
+- Amélioration de la détection de l'environnement shell à l'aide de shell-env
 
-### Fixed
+### Corrections
 
-- Fixed platform-specific markdown link rendering
-- Fixed Linux AppImage CLI resource paths
-- Fixed Codex replacement stream being killed by stale turn notifications
+- Correction du rendu des liens markdown spécifique à la plateforme
+- Correction des chemins de ressources de la CLI de l'AppImage Linux
+- Correction du flux de remplacement de Codex tué par des notifications de tour obsolètes
 
 ## 0.1.26 - 2026-03-12
 
-### Added
+### Ajouts
 
-- Added single-instance desktop behavior, Android APK download access, and refreshed splash screen styling
-- Added bundled Codex and OpenCode binaries in the server so setup no longer depends on global installs
-- Added Windows support with improved cross-platform shell execution
+- Ajout d'un comportement desktop à instance unique, de l'accès au téléchargement de l'APK Android et d'un style d'écran de démarrage rafraîchi
+- Ajout de binaires Codex et OpenCode fournis dans le serveur pour que la configuration ne dépende plus d'installations globales
+- Ajout de la prise en charge de Windows avec une exécution shell multiplateforme améliorée
 
-### Improved
+### Améliorations
 
-- Improved desktop runtime behavior on Windows by suppressing console windows and defaulting app data to `~/.paseo`
-- Added a Discord link to the website navigation
+- Amélioration du comportement du runtime desktop sous Windows en supprimant les fenêtres de console et en plaçant par défaut les données de l'application dans `~/.paseo`
+- Ajout d'un lien Discord dans la navigation du site web
 
-### Fixed
+### Corrections
 
-- Fixed desktop Claude agent startup from the managed runtime and rotated logs correctly on restart
-- Fixed the home route to hide browser chrome when appropriate
-- Fixed Expo Metro compatibility by updating the `exclusionList` import
-- Fixed noisy shell output interfering with executable lookup
-- Fixed Windows resource-path handling by stripping the extended-length path prefix
+- Correction du démarrage de l'agent Claude desktop depuis le runtime géré et rotation correcte des journaux au redémarrage
+- Correction de la route d'accueil pour masquer le chrome du navigateur lorsque c'est approprié
+- Correction de la compatibilité Expo Metro en mettant à jour l'import `exclusionList`
+- Correction de la sortie shell bruyante interférant avec la recherche d'exécutables
+- Correction de la gestion des chemins de ressources Windows en retirant le préfixe de chemin étendu
 
 ## 0.1.25 - 2026-03-11
 
-### Fixed
+### Corrections
 
-- Fixed desktop app failing to start the built-in daemon on fresh macOS installs. The DMG was not notarized and code-signing stripped entitlements from the bundled Node runtime, causing Gatekeeper to block execution
-- Fixed Linux AppImage build by restoring the AppImage bundle format and stripping CUDA dependencies from onnxruntime
+- Correction de l'application desktop qui échouait à démarrer le démon intégré sur les installations macOS neuves. Le DMG n'était pas notarisé et la signature de code retirait les autorisations du runtime Node fourni, amenant Gatekeeper à bloquer l'exécution
+- Correction du build de l'AppImage Linux en restaurant le format de bundle AppImage et en retirant les dépendances CUDA d'onnxruntime
 
 ## 0.1.24 - 2026-03-10
 
-### Improved
+### Améliorations
 
-- Improved command center keyboard navigation and new tab shortcut
-- Simplified desktop release pipeline for faster and more reliable builds
+- Amélioration de la navigation clavier du centre de commandes et du raccourci de nouvel onglet
+- Simplification du pipeline de publication desktop pour des builds plus rapides et plus fiables
 
 ## 0.1.21 - 2026-03-10
 
-### Improved
+### Améliorations
 
-- Improved desktop release reliability by fixing the Windows managed-runtime build path during GitHub Actions releases
+- Amélioration de la fiabilité de la publication desktop en corrigeant le chemin de build du runtime géré Windows lors des publications GitHub Actions
 
-### Fixed
+### Corrections
 
-- Fixed a desktop release CI failure caused by a Unix-only server build script on Windows runners
-- Fixed server CI to build the relay dependency before running tests, restoring relay E2EE test coverage on clean runners
-- Fixed a Claude redesign test that depended on the local Claude CLI being installed
+- Correction d'un échec de CI de publication desktop causé par un script de build serveur uniquement Unix sur les runners Windows
+- Correction de la CI serveur pour compiler la dépendance relay avant d'exécuter les tests, restaurant la couverture de tests E2EE du relay sur des runners propres
+- Correction d'un test de refonte Claude qui dépendait de l'installation locale de la CLI Claude
 
 ## 0.1.20 - 2026-03-10
 
-### Added
+### Ajouts
 
-- Added workspace sidebar git actions with quick diff stats and archive controls
-- Added refreshed website downloads and homepage presentation for desktop installs
+- Ajout d'actions git dans la barre latérale de l'espace de travail avec des statistiques de différences rapides et des contrôles d'archivage
+- Ajout de téléchargements rafraîchis sur le site web et d'une présentation de la page d'accueil pour les installations desktop
 
-### Improved
+### Améliorations
 
-- Desktop release packaging now rebuilds and validates the bundled managed runtime during CI, improving installer reliability for macOS users
-- Improved desktop and web stream rendering, settings polish, and React 19.1.4 compatibility
+- Le packaging de publication desktop reconstruit et valide désormais le runtime géré fourni lors de la CI, améliorant la fiabilité de l'installeur pour les utilisateurs macOS
+- Amélioration du rendu des flux desktop et web, polissage des paramètres et compatibilité React 19.1.4
 
-### Fixed
+### Corrections
 
-- Fixed Claude interrupt/restart regressions and strengthened managed-daemon smoke coverage for desktop releases
+- Correction des régressions d'interruption/redémarrage de Claude et renforcement de la couverture de tests de fumée du démon géré pour les publications desktop
 
 ## 0.1.19 - 2026-03-09
 
-### Added
+### Ajouts
 
-- Added a draft GitHub release flow so maintainers can upload and review desktop and Android release assets before publishing the final release
+- Ajout d'un flux de publication GitHub en brouillon pour que les mainteneurs puissent téléverser et relire les assets de publication desktop et Android avant de publier la version finale
 
 ## 0.1.18 - 2026-03-06
 
-### Added
+### Ajouts
 
-- Added a desktop `Mod+W` shortcut to close the current tab
+- Ajout d'un raccourci desktop `Mod+W` pour fermer l'onglet courant
 
-### Improved
+### Améliorations
 
-- New and newly selected terminals now take focus automatically so you can type immediately
-- Kept newly created workspaces and projects in a more stable order in the sidebar
-- Improved project naming for GitHub remotes and expanded project icon discovery to Phoenix `priv/static` assets
-- Updated the website desktop download link to use the universal macOS DMG
+- Les terminaux nouveaux et nouvellement sélectionnés prennent désormais le focus automatiquement pour que vous puissiez taper immédiatement
+- Maintien des espaces de travail et projets nouvellement créés dans un ordre plus stable dans la barre latérale
+- Amélioration du nommage des projets pour les remotes GitHub et extension de la découverte d'icônes de projet aux assets `priv/static` de Phoenix
+- Mise à jour du lien de téléchargement desktop du site web pour utiliser le DMG macOS universel
 
-### Fixed
+### Corrections
 
-- Restored automatic agent metadata generation for Claude runs
+- Restauration de la génération automatique des métadonnées d'agent pour les exécutions Claude
 
 ## 0.1.17 - 2026-03-06
 
-### Added
+### Ajouts
 
-- New workspace-first navigation model with workspace tabs, file tabs, and sortable tab groups
-- Keyboard shortcuts for workspace and tab navigation, with shortcut badges in the sidebar
-- Workspace-level archive actions with improved worktree archiving flow and context menu support
-- In-chat task notifications rendered as synthetic tool-call events for clearer status tracking
+- Nouveau modèle de navigation axé sur l'espace de travail avec onglets d'espace de travail, onglets de fichiers et groupes d'onglets triables
+- Raccourcis clavier pour la navigation entre espaces de travail et onglets, avec des badges de raccourci dans la barre latérale
+- Actions d'archivage au niveau de l'espace de travail avec un flux d'archivage de worktree amélioré et une prise en charge du menu contextuel
+- Notifications de tâches dans le chat rendues comme événements d'appel d'outils synthétiques pour un suivi d'état plus clair
 
-### Improved
+### Améliorations
 
-- Desktop builds now ship as a universal macOS binary (Apple Silicon + Intel)
-- More reliable workspace routing and tab identity handling across refreshes and deep links
-- Better sidebar drag-and-drop behavior with explicit drag handles and nested list interactions
-- Smoother terminal/file rendering and WebGL-backed terminal performance improvements
-- Stronger provider error surfacing and updated Claude model/runtime handling
+- Les builds desktop sont désormais livrés en binaire macOS universel (Apple Silicon + Intel)
+- Routage d'espace de travail et gestion de l'identité des onglets plus fiables à travers les rafraîchissements et les liens profonds
+- Meilleur comportement de glisser-déposer dans la barre latérale avec des poignées de glissement explicites et des interactions de listes imbriquées
+- Rendu du terminal/des fichiers plus fluide et améliorations de performance du terminal soutenu par WebGL
+- Remontée des erreurs de fournisseurs renforcée et gestion mise à jour du modèle/runtime de Claude
 
-### Fixed
+### Corrections
 
-- Fixed orphan workspace runs caused by non-canonical tab routes
-- Fixed mobile terminal tab remount/routing restore issues
-- Fixed agent metadata title/branch update reliability
-- Fixed stream/timeline ordering and cursor synchronization issues in the app
-- Fixed reversed edge-wheel scroll behavior in chat/tool stream views
+- Correction des exécutions d'espace de travail orphelines causées par des routes d'onglets non canoniques
+- Correction des problèmes de remontage/restauration de routage des onglets de terminal mobile
+- Correction de la fiabilité de la mise à jour du titre/de la branche des métadonnées d'agent
+- Correction des problèmes d'ordre de flux/timeline et de synchronisation du curseur dans l'application
+- Correction du comportement inversé du défilement à la molette en bordure dans les vues de chat/flux d'outils
 
 ## 0.1.16 - 2026-02-22
 
-### Added
+### Ajouts
 
-- Update the Paseo desktop app and local daemon directly from Settings
-- Microphone and notification permission controls in Settings
-- Thinking/reasoning mode — agents can use extended thinking when the provider supports it
-- Autonomous run mode — let agents keep working without manual approval at each step
-- `paseo wait` now shows a snapshot of recent agent activity while you wait
+- Mettez à jour l'application desktop Paseo et le démon local directement depuis les Paramètres
+- Contrôles des permissions micro et notifications dans les Paramètres
+- Mode réflexion/raisonnement — les agents peuvent utiliser la réflexion étendue lorsque le fournisseur la prend en charge
+- Mode d'exécution autonome — laissez les agents continuer à travailler sans approbation manuelle à chaque étape
+- `paseo wait` affiche désormais un instantané de l'activité récente de l'agent pendant l'attente
 
-### Improved
+### Améliorations
 
-- Smoother streaming with less UI flicker and scroll jumping during long agent runs
-- Faster agent sidebar list rendering
-- Archiving an agent now stops it first instead of archiving a half-running session
-- Agent titles no longer reset when refreshing
-- More reliable relay connections
+- Streaming plus fluide avec moins de scintillement de l'interface et de sauts de défilement pendant les longues exécutions d'agent
+- Rendu plus rapide de la liste d'agents de la barre latérale
+- L'archivage d'un agent l'arrête désormais d'abord au lieu d'archiver une session à moitié en cours
+- Les titres d'agents ne se réinitialisent plus lors du rafraîchissement
+- Connexions relay plus fiables
 
-### Fixed
+### Corrections
 
-- Fixed Claude background tasks desyncing the chat
-- Fixed duplicate user messages appearing in the timeline
-- Fixed a startup crash caused by an OpenCode SDK update
-- Fixed spurious "needs attention" notifications from background agent activity
+- Correction des tâches d'arrière-plan de Claude désynchronisant le chat
+- Correction des messages utilisateur en double apparaissant dans la timeline
+- Correction d'un plantage au démarrage causé par une mise à jour du SDK OpenCode
+- Correction des notifications « nécessite attention » parasites provenant de l'activité d'agent en arrière-plan
 
 ## 0.1.15 - 2026-02-19
 
-### Added
+### Ajouts
 
-- Added a public changelog page on the website so users can browse release notes
+- Ajout d'une page de changelog publique sur le site web pour que les utilisateurs puissent parcourir les notes de version
 
-### Improved
+### Améliorations
 
-- Redesigned the website get-started experience into a clearer two-step flow
-- Simplified website GitHub navigation and changelog headings
-- Improved app draft/new-agent UX with clearer working directory placeholder and empty-state messaging
-- Enabled drag interactions in previously unhandled areas on the desktop draft screen
-- Hid empty filter groups in the left sidebar
+- Refonte de l'expérience de prise en main du site web en un flux plus clair en deux étapes
+- Simplification de la navigation GitHub du site web et des titres du changelog
+- Amélioration de l'UX brouillon/nouvel agent de l'application avec un placeholder de répertoire de travail plus clair et des messages d'état vide
+- Activation des interactions de glissement dans des zones auparavant non gérées de l'écran de brouillon desktop
+- Masquage des groupes de filtres vides dans la barre latérale gauche
 
-### Fixed
+### Corrections
 
-- Fixed archived-agent navigation by redirecting archived agent routes to draft
-- Fixed duplicate `/rewind` user-message behavior
+- Correction de la navigation des agents archivés en redirigeant les routes d'agents archivés vers le brouillon
+- Correction du comportement en double du message utilisateur `/rewind`
 
 ## 0.1.14 - 2026-02-19
 
-### Added
+### Ajouts
 
-- Added Claude `/rewind` command support
-- Added slash command access in the draft agent composer
-- Added `@` workspace file autocomplete in chat prompts
-- Added support for pasting images directly into prompt attachments
-- Added optimistic image previews for pending user message attachments
-- Added shared desktop/web overlay scroll handles, including file preview panes
+- Ajout de la prise en charge de la commande Claude `/rewind`
+- Ajout de l'accès aux commandes slash dans le compositeur d'agent en brouillon
+- Ajout de l'autocomplétion de fichiers d'espace de travail `@` dans les prompts de chat
+- Ajout de la prise en charge du collage d'images directement dans les pièces jointes de prompt
+- Ajout d'aperçus d'images optimistes pour les pièces jointes de messages utilisateur en attente
+- Ajout de poignées de défilement en surcouche partagées desktop/web, y compris pour les volets d'aperçu de fichiers
 
-### Improved
+### Améliorations
 
-- Improved worktree flow after shipping, including better merged PR detection
-- Improved draft workflow by enabling the explorer sidebar immediately after CWD selection
-- Improved new worktree-agent defaults by prefilling CWD to the main repository
-- Improved desktop command autocomplete behavior to match combobox interactions
-- Improved git sync UX by simplifying sync labels and only showing Sync when a branch diverges from origin
-- Improved desktop settings and permissions UX on desktop
-- Improved scrollbar visibility, drag interactions, tracking, and animation timing on web/desktop
+- Amélioration du flux de worktree après livraison, notamment une meilleure détection des PR fusionnées
+- Amélioration du flux de brouillon en activant la barre latérale de l'explorateur immédiatement après la sélection du CWD
+- Amélioration des valeurs par défaut des agents de nouveau worktree en préremplissant le CWD sur le dépôt principal
+- Amélioration du comportement de l'autocomplétion de commandes desktop pour correspondre aux interactions de combobox
+- Amélioration de l'UX de synchronisation git en simplifiant les libellés de synchro et en n'affichant Sync que lorsqu'une branche diverge de l'origine
+- Amélioration de l'UX des paramètres et permissions sur desktop
+- Amélioration de la visibilité de la barre de défilement, des interactions de glissement, du suivi et du timing d'animation sur web/desktop
 
-### Fixed
+### Corrections
 
-- Fixed worktree archive/setup lifecycle issues, including terminal cleanup and archive timing
-- Fixed worktree path collisions by hashing CWD for collision-safe worktree roots
-- Fixed terminal sizing when switching back to an agent session
-- Fixed accidental terminal closure risk by adding confirmation for running shell commands
-- Fixed archive loading-state consistency across the sidebar and agent screen
-- Fixed autocomplete popover stability and workspace suggestion ranking
-- Fixed dictation timeouts caused by dangling non-final segments
-- Fixed server lock ownership when spawned as a child process by using parent PID ownership
-- Fixed hidden directory leakage in server CWD suggestions
-- Fixed agent attention notification payload consistency across providers
-- Fixed daemon version badge visibility in settings when daemon version data is unavailable
+- Correction des problèmes de cycle de vie archivage/configuration de worktree, notamment le nettoyage des terminaux et le timing d'archivage
+- Correction des collisions de chemins de worktree en hachant le CWD pour des racines de worktree à l'abri des collisions
+- Correction du dimensionnement du terminal lors du retour vers une session d'agent
+- Correction du risque de fermeture accidentelle de terminal en ajoutant une confirmation pour les commandes shell en cours d'exécution
+- Correction de la cohérence de l'état de chargement de l'archivage dans la barre latérale et l'écran d'agent
+- Correction de la stabilité du popover d'autocomplétion et du classement des suggestions d'espace de travail
+- Correction des délais d'expiration de dictée causés par des segments non finaux en suspens
+- Correction de la propriété du verrou serveur lors du lancement en tant que processus enfant en utilisant la propriété par PID parent
+- Correction de la fuite de répertoires cachés dans les suggestions de CWD du serveur
+- Correction de la cohérence de la charge utile des notifications d'attention d'agent entre les fournisseurs
+- Correction de la visibilité du badge de version du démon dans les paramètres lorsque les données de version du démon sont indisponibles
 
 ## 0.1.9 - 2026-02-17
 
-### Improved
+### Améliorations
 
-- Unified structured-output generation through a single shared schema-validation and retry pipeline
-- Reused provider availability checks for structured generation fallback selection
-- Added structured generation waterfall ordering for internal metadata and git text generation: Claude Haiku, then Codex, then OpenCode
+- Unification de la génération de sortie structurée à travers un pipeline unique et partagé de validation de schéma et de nouvelle tentative
+- Réutilisation des vérifications de disponibilité des fournisseurs pour la sélection du repli de génération structurée
+- Ajout d'un ordonnancement en cascade de la génération structurée pour les métadonnées internes et la génération de texte git : Claude Haiku, puis Codex, puis OpenCode
 
-### Fixed
+### Corrections
 
-- Fixed CLI `run --output-schema` to use the shared structured-output path instead of ad-hoc JSON parsing
-- Fixed `run --output-schema` failures where providers returned empty `lastMessage` by recovering from timeline assistant output
-- Fixed internal commit message, pull request text, and agent metadata generation to follow one consistent structured pipeline
+- Correction de `run --output-schema` de la CLI pour utiliser le chemin de sortie structurée partagé au lieu d'une analyse JSON ad hoc
+- Correction des échecs de `run --output-schema` où les fournisseurs renvoyaient un `lastMessage` vide en récupérant depuis la sortie de l'assistant de la timeline
+- Correction de la génération des messages de commit internes, des textes de pull request et des métadonnées d'agent pour suivre un pipeline structuré cohérent
 
 ## 0.1.8 - 2026-02-17
 
-### Added
+### Ajouts
 
-- Added a cross-platform confirm dialog flow for daemon restarts
+- Ajout d'un flux de dialogue de confirmation multiplateforme pour les redémarrages du démon
 
-### Improved
+### Améliorations
 
-- Simplified local speech bootstrap and daemon startup locking behavior
-- Updated website hero copy to emphasize local execution
+- Simplification du bootstrap vocal local et du comportement de verrouillage au démarrage du démon
+- Mise à jour du texte du hero du site web pour mettre en avant l'exécution locale
 
-### Fixed
+### Corrections
 
-- Fixed stuck "send while running" recovery across app and server session handling
-- Fixed Claude session identity preservation when reloading existing agents
-- Fixed combobox option behavior and related interactions
-- Fixed desktop file-drop listener cleanup to avoid uncaught unlisten errors
-- Fixed web tool-detail wheel event routing at scroll edges
+- Correction de la récupération « envoi pendant l'exécution » bloquée dans la gestion des sessions de l'application et du serveur
+- Correction de la préservation de l'identité de session Claude lors du rechargement d'agents existants
+- Correction du comportement des options de combobox et des interactions associées
+- Correction du nettoyage de l'écouteur de dépôt de fichiers desktop pour éviter les erreurs de désabonnement non capturées
+- Correction du routage des événements de molette de détail d'outil web aux bordures de défilement
 
 ## 0.1.7 - 2026-02-16
 
-### Added
+### Ajouts
 
-- Improved agent workspace flows with better directory suggestions
-- Added iOS TestFlight and Android app access request forms on the website
+- Amélioration des flux d'espace de travail des agents avec de meilleures suggestions de répertoire
+- Ajout de formulaires de demande d'accès aux apps iOS TestFlight et Android sur le site web
 
-### Improved
+### Améliorations
 
-- Unified daemon startup behavior between dev and CLI paths for more predictable local runs
-- Improved website app download and update guidance
+- Unification du comportement de démarrage du démon entre les chemins dev et CLI pour des exécutions locales plus prévisibles
+- Amélioration des instructions de téléchargement et de mise à jour de l'application sur le site web
 
-### Fixed
+### Corrections
 
-- Prevented an initial desktop combobox `0,0` position flash
-- Fixed CLI version output issues
-- Hardened server runtime loading for local speech dependencies
+- Prévention d'un flash de position `0,0` initiale du combobox desktop
+- Correction des problèmes de sortie de version de la CLI
+- Renforcement du chargement du runtime serveur pour les dépendances de synthèse vocale locale
 
 ## 0.1.6 - 2026-02-16
 
 ### Notes
 
-- No major visible product changes in this patch release
+- Aucun changement produit visible majeur dans cette version corrective
 
 ## 0.1.5 - 2026-02-16
 
-### Added
+### Ajouts
 
-- Added terminal reattach support and better worktree terminal handling
-- Added global keyboard shortcut help in the app
-- Added sidebar host filtering and improved agent workflow controls
+- Ajout de la prise en charge du rattachement de terminal et d'une meilleure gestion des terminaux de worktree
+- Ajout de l'aide globale sur les raccourcis clavier dans l'application
+- Ajout du filtrage par hôte dans la barre latérale et de contrôles de flux de travail d'agent améliorés
 
-### Improved
+### Améliorations
 
-- Improved worktree setup visibility by streaming setup progress
-- Improved terminal streaming reliability and lifecycle handling
-- Preserved explorer tab state so context survives navigation better
+- Amélioration de la visibilité de la configuration de worktree en diffusant la progression de la configuration
+- Amélioration de la fiabilité du streaming de terminal et de la gestion du cycle de vie
+- Préservation de l'état des onglets de l'explorateur pour que le contexte survive mieux à la navigation
 
 ## 0.1.4 - 2026-02-14
 
-### Added
+### Ajouts
 
-- Added voice capability status reporting in the client
-- Added background local speech model downloads with runtime gating
-- Added adaptive dictation finish timing based on server-provided budgets
-- Added relay reconnect behavior with grace periods and branch suggestions
+- Ajout du rapport d'état de la capacité vocale dans le client
+- Ajout des téléchargements en arrière-plan des modèles de synthèse vocale locale avec gating au runtime
+- Ajout d'un timing de fin de dictée adaptatif basé sur les budgets fournis par le serveur
+- Ajout du comportement de reconnexion du relay avec des périodes de grâce et des suggestions de branche
 
-### Improved
+### Améliorations
 
-- Improved connection selection and agent hydration reliability
-- Improved timeline loading with cursor-based fetch behavior
-- Improved first-run experience by bootstrapping a default localhost connection
-- Improved inline code rendering by auto-linkifying URLs
+- Amélioration de la sélection de connexion et de la fiabilité de l'hydratation des agents
+- Amélioration du chargement de la timeline avec un comportement de récupération basé sur le curseur
+- Amélioration de l'expérience de première exécution en amorçant une connexion localhost par défaut
+- Amélioration du rendu du code en ligne en transformant automatiquement les URL en liens
 
-### Fixed
+### Corrections
 
-- Fixed Linux checkout diff watch behavior to avoid recursive watches
-- Fixed stale relay client timer behavior
-- Fixed unnecessary git diff header auto-scroll on collapse
+- Correction du comportement de surveillance des différences de checkout Linux pour éviter les surveillances récursives
+- Correction du comportement obsolète du minuteur du client relay
+- Correction du défilement automatique inutile de l'en-tête de différences git lors du repli
 
 ## 0.1.3 - 2026-02-12
 
-### Added
+### Ajouts
 
-- Added CLI onboarding command
-- Added CLI `--output-schema` support for structured agent output
-- Added CLI agent metadata update support for names and labels
-- Added provider availability detection with normalization of legacy default model IDs
+- Ajout d'une commande d'intégration CLI
+- Ajout de la prise en charge de `--output-schema` de la CLI pour une sortie d'agent structurée
+- Ajout de la prise en charge par la CLI de la mise à jour des métadonnées d'agent pour les noms et libellés
+- Ajout de la détection de disponibilité des fournisseurs avec normalisation des identifiants de modèle par défaut hérités
 
-### Improved
+### Améliorations
 
-- Improved file explorer refresh feedback and unresolved checkout fallback handling
-- Added better voice interrupt handling with a speech-start grace period
-- Improved CLI defaults to list all non-archived agents by default
-- Improved website UX with clearer install CTA and privacy policy access
+- Amélioration du retour de rafraîchissement de l'explorateur de fichiers et de la gestion du repli de checkout non résolu
+- Ajout d'une meilleure gestion de l'interruption vocale avec une période de grâce au démarrage de la parole
+- Amélioration des valeurs par défaut de la CLI pour lister tous les agents non archivés par défaut
+- Amélioration de l'UX du site web avec un CTA d'installation plus clair et un accès à la politique de confidentialité
 
-### Fixed
+### Corrections
 
-- Fixed dev runner entry issues and sherpa TTS initialization behavior
+- Correction des problèmes d'entrée du runner dev et du comportement d'initialisation TTS sherpa
 
 ## 0.1.2 - 2026-02-11
 
 ### Notes
 
-- No major visible product changes in this patch release
+- Aucun changement produit visible majeur dans cette version corrective
 
 ## 0.1.1 - 2026-02-11
 
-### Added
+### Ajouts
 
-- Initial `0.1.x` release line
+- Ligne de version initiale `0.1.x`

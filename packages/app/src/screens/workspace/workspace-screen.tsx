@@ -66,6 +66,7 @@ import { RetainedPanel } from "@/components/retained-panel";
 import { WindowChromeRegion } from "@/utils/desktop-window";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { WorkspaceActions } from "@/git/workspace-actions";
+import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
@@ -150,6 +151,7 @@ import type { WorkspaceRecoveryModel } from "@/workspace-recovery/model";
 import {
   buildWorkspaceTabSnapshot,
   deriveWorkspaceAgentVisibility,
+  excludeAutoOpenAgentIds,
   workspaceAgentVisibilityEqual,
 } from "@/workspace-tabs/agent-visibility";
 import {
@@ -163,7 +165,10 @@ import {
 } from "@/screens/workspace/workspace-pane-content";
 import { useMountedTabSet } from "@/screens/workspace/use-mounted-tab-set";
 import { WorkspaceFocusProvider } from "@/workspace/focus";
-import { shouldSeedEmptyWorkspaceDraft } from "@/screens/workspace/workspace-empty-draft-seed";
+import {
+  isWorkspaceEmpty,
+  isWorkspaceReadyForEmptyDraftSeed,
+} from "@/screens/workspace/workspace-empty-draft-seed";
 import {
   buildBulkCloseConfirmationMessage,
   type BulkCloseConfirmationLabels,
@@ -214,6 +219,13 @@ function getWorkspaceScripts(
   workspaceDescriptor: WorkspaceDescriptor | null | undefined,
 ): WorkspaceDescriptor["scripts"] {
   return workspaceDescriptor?.scripts ?? EMPTY_WORKSPACE_SCRIPTS;
+}
+
+/** Project id backing the Paseo deploy sheet's conductor delegation (null if none). */
+function getPaseoDeployProjectId(
+  workspaceDescriptor: WorkspaceDescriptor | null | undefined,
+): string | null {
+  return workspaceDescriptor?.projectId ?? null;
 }
 
 interface WorkspaceFileLocationFields {
@@ -1734,6 +1746,21 @@ function useWorkspaceTerminalTabActions({
   };
 }
 
+/**
+ * Whether the deploy button may appear for this workspace. The daemon sends the
+ * set of Paseo checkout roots (main repo + task worktrees); older daemons omit
+ * it, so we fall back to the main repo path.
+ */
+function isPaseoDeployCheckout(
+  workspaceDirectory: string | null,
+  roots: readonly string[] | undefined,
+): boolean {
+  if (roots) {
+    return !!workspaceDirectory && roots.includes(workspaceDirectory);
+  }
+  return workspaceDirectory === "/root/paseo";
+}
+
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1771,6 +1798,22 @@ function WorkspaceScreenContent({
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
   const workspaceDirectory = workspaceDescriptor?.workspaceDirectory || null;
   const isMissingWorkspaceDirectory = Boolean(workspaceDescriptor) && !workspaceDirectory;
+  // Paseo-only self-host deploy button: the Paseo repo OR any of its task-branch
+  // worktrees, on a host that advertises the capability. The daemon sends the set
+  // of checkout roots; older daemons omit it, so we fall back to the main repo
+  // path. Personal-fork feature; strings are French inline.
+  const paseoSelfhostDeploySupported = useSessionStore(
+    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeploy === true,
+  );
+  const paseoSelfhostDeployRoots = useSessionStore(
+    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeployRoots,
+  );
+  const showPaseoDeployButton =
+    paseoSelfhostDeploySupported &&
+    isPaseoDeployCheckout(workspaceDirectory, paseoSelfhostDeployRoots);
+  // The deploy sheet delegates to this project's "Chef d'orchestre" agent, so it
+  // needs the workspace's project id to reach (or spin up) that agent.
+  const paseoDeployProjectId = getPaseoDeployProjectId(workspaceDescriptor);
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
   const canOpenImportSheet = [client, isConnected, workspaceDirectory].every(Boolean);
   const openImportSheet = useCallback(() => {
@@ -2161,10 +2204,30 @@ function WorkspaceScreenContent({
       return pending?.serverId === normalizedServerId && pending.lifecycle === "active";
     });
 
+    // A create flow that has already resolved an agentId owns that agent through
+    // its draft tab: the tab retargets onto the agent in-place. Auto-open must
+    // never surface that agent as a *second* background tab. The draft-tab-based
+    // gate above can't cover this window — once the tab retargets it's no longer a
+    // draft, and the "active" -> "sent" lifecycle flip races the reconcile pass, so
+    // the agent briefly looks un-gated and un-represented and gets double-opened.
+    // Excluding pending-owned agentIds is race-proof: the pending entry lives with
+    // its agentId until the agent's authoritative history syncs (clearByAgent), by
+    // which point the retargeted tab already represents it.
+    const pendingCreateAgentIds = new Set<string>();
+    for (const pending of Object.values(pendingByDraftId)) {
+      if (pending.serverId === normalizedServerId && pending.agentId) {
+        pendingCreateAgentIds.add(pending.agentId);
+      }
+    }
+    const agentVisibility = excludeAutoOpenAgentIds(
+      workspaceAgentVisibility,
+      pendingCreateAgentIds,
+    );
+
     reconcileWorkspaceTabs(
       persistenceKey,
       buildWorkspaceTabSnapshot({
-        agentVisibility: workspaceAgentVisibility,
+        agentVisibility,
         agentsHydrated: hasHydratedAgents,
         terminalsHydrated: terminalsQuery.isSuccess,
         knownTerminalIds,
@@ -2246,20 +2309,23 @@ function WorkspaceScreenContent({
   ]);
 
   useEffect(() => {
-    if (
-      !shouldSeedEmptyWorkspaceDraft({
-        isRouteFocused,
-        hasPersistenceKey: Boolean(persistenceKey),
-        hasWorkspaceDirectory: Boolean(workspaceDirectory),
-        hasHydratedWorkspaceLayoutStore,
-        hasHydratedAgents,
-        hasLoadedTerminals: terminalsQuery.isSuccess,
-        activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
-        terminalCount: terminals.length,
-        tabCount: tabs.length,
-      })
-    ) {
-      emptyWorkspaceSeedRef.current = null;
+    // Seed a starting draft AT MOST ONCE per workspace visit. The gate
+    // (readiness) is kept distinct from emptiness on purpose: when the user
+    // closes their last/only empty tab the workspace momentarily reports empty
+    // again, and the old "reset the ref whenever non-empty" logic re-armed the
+    // seed — so the just-closed tab immediately reopened. By committing the
+    // decision the first time the workspace is fully hydrated (empty or not) and
+    // never re-arming within the same visit, a user-initiated close now stays
+    // closed. A fresh mount (reload / switching projects) re-arms naturally.
+    const ready = isWorkspaceReadyForEmptyDraftSeed({
+      isRouteFocused,
+      hasPersistenceKey: Boolean(persistenceKey),
+      hasWorkspaceDirectory: Boolean(workspaceDirectory),
+      hasHydratedWorkspaceLayoutStore,
+      hasHydratedAgents,
+      hasLoadedTerminals: terminalsQuery.isSuccess,
+    });
+    if (!ready) {
       return;
     }
     const workspaceKey = `${normalizedServerId}:${normalizedWorkspaceId}`;
@@ -2267,6 +2333,18 @@ function WorkspaceScreenContent({
       return;
     }
     emptyWorkspaceSeedRef.current = workspaceKey;
+    const empty = isWorkspaceEmpty({
+      activeAgentCount: workspaceAgentVisibility.activeAgentIds.size,
+      terminalCount: terminals.length,
+      tabCount: tabs.length,
+    });
+    if (!empty) {
+      return;
+    }
+    console.info(
+      "[paseo:tab-seed] seeding empty-workspace draft tab (workspace fully hydrated and empty on entry)",
+      { workspaceKey },
+    );
     openWorkspaceDraftTab();
   }, [
     normalizedServerId,
@@ -3505,6 +3583,9 @@ function WorkspaceScreenContent({
               cwd={workspaceDirectory}
               hideLabels={showCompactButtonLabels}
             />
+            {showPaseoDeployButton ? (
+              <PaseoDeployButton serverId={normalizedServerId} projectId={paseoDeployProjectId} />
+            ) : null}
             {isGitCheckout ? (
               <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
                 <TooltipTrigger asChild>
@@ -3570,6 +3651,13 @@ function WorkspaceScreenContent({
             }}
           </HeaderToggleButton>
         ) : null}
+        {isMobile && showPaseoDeployButton ? (
+          <PaseoDeployButton
+            serverId={normalizedServerId}
+            projectId={paseoDeployProjectId}
+            compact
+          />
+        ) : null}
         {isMobile ? (
           <HeaderToggleButton
             testID="workspace-explorer-toggle"
@@ -3612,6 +3700,8 @@ function WorkspaceScreenContent({
       handleViewScriptTerminal,
       handleOpenUrlInBrowserTab,
       showCompactButtonLabels,
+      showPaseoDeployButton,
+      paseoDeployProjectId,
       isGitCheckout,
       handleToggleExplorer,
       isExplorerOpen,
@@ -4064,7 +4154,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2] + theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
     paddingVertical: theme.spacing[2],
   },
   switcherTriggerPressed: {

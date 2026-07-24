@@ -314,6 +314,7 @@ function mergeMutableConfigIntoPersistedConfig(params: {
       ...(mutable.terminalProfiles !== undefined
         ? { terminalProfiles: mutable.terminalProfiles }
         : {}),
+      ...(mutable.tasks !== undefined ? { tasks: mutable.tasks } : {}),
     },
     agents: nextAgents,
   } as PersistedConfig;

@@ -130,7 +130,7 @@ function secondaryWorkspaceTabTargetsEqual(
   return false;
 }
 
-function workspaceDraftTabSetupsEqual(
+export function workspaceDraftTabSetupsEqual(
   left: WorkspaceDraftTabSetup | undefined,
   right: WorkspaceDraftTabSetup | undefined,
 ): boolean {

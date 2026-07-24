@@ -25,6 +25,7 @@ interface SegmentedControlProps<T extends string> {
   onValueChange: (value: T) => void;
   size?: SegmentedControlSize;
   hideLabels?: boolean;
+  fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -41,7 +42,7 @@ function SegmentIcon({ icon, iconSize, iconColor }: SegmentIconProps) {
 
 const ThemedSegmentIcon = withUnistyles(SegmentIcon);
 
-const selectedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.surface0 });
+const selectedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.foreground });
 const mutedIconMapping = (theme: Theme) => ({ iconColor: theme.colors.foregroundMuted });
 
 export function SegmentedControl<T extends string>({
@@ -50,22 +51,18 @@ export function SegmentedControl<T extends string>({
   onValueChange,
   size = "md",
   hideLabels = false,
+  fullWidth = false,
   style,
   testID,
 }: SegmentedControlProps<T>) {
-  const sizeStyles = {
-    xs: { container: styles.containerXs, segment: styles.segmentXs, label: styles.labelXs },
-    sm: { container: styles.containerSm, segment: styles.segmentSm, label: styles.labelSm },
-    md: { container: styles.containerMd, segment: styles.segmentMd, label: styles.labelMd },
-  }[size];
-  const containerSizeStyle = sizeStyles.container;
-  const segmentSizeStyle = sizeStyles.segment;
-  const labelSizeStyle = sizeStyles.label;
+  const containerSizeStyle = size === "sm" ? styles.containerSm : styles.containerMd;
+  const segmentSizeStyle = size === "sm" ? styles.segmentSm : styles.segmentMd;
+  const labelSizeStyle = size === "sm" ? styles.labelSm : styles.labelMd;
   const iconSize = segmentedIconSize[size];
 
   const containerStyle = useMemo(
-    () => [styles.container, containerSizeStyle, style],
-    [containerSizeStyle, style],
+    () => [styles.container, containerSizeStyle, fullWidth && styles.containerFullWidth, style],
+    [containerSizeStyle, fullWidth, style],
   );
 
   return (
@@ -82,6 +79,7 @@ export function SegmentedControl<T extends string>({
             hideLabels={hideLabels}
             segmentSizeStyle={segmentSizeStyle}
             labelSizeStyle={labelSizeStyle}
+            fullWidth={fullWidth}
             currentValue={value}
             onValueChange={onValueChange}
           />
@@ -98,6 +96,7 @@ function SegmentItem<T extends string>({
   hideLabels,
   segmentSizeStyle,
   labelSizeStyle,
+  fullWidth,
   currentValue,
   onValueChange,
 }: {
@@ -107,6 +106,7 @@ function SegmentItem<T extends string>({
   hideLabels: boolean;
   segmentSizeStyle: StyleProp<ViewStyle>;
   labelSizeStyle: StyleProp<TextStyle>;
+  fullWidth: boolean;
   currentValue: T;
   onValueChange: (value: T) => void;
 }) {
@@ -123,12 +123,13 @@ function SegmentItem<T extends string>({
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.segment,
       segmentSizeStyle,
+      fullWidth && styles.segmentFullWidth,
       isSelected && styles.segmentSelected,
       Boolean(hovered) && !isSelected && styles.segmentHover,
       pressed && !isSelected && styles.segmentPressed,
       option.disabled && styles.segmentDisabled,
     ],
-    [isSelected, option.disabled, segmentSizeStyle],
+    [fullWidth, isSelected, option.disabled, segmentSizeStyle],
   );
   const accessibilityState = useMemo(
     () => ({ selected: isSelected, disabled: option.disabled }),
@@ -166,12 +167,12 @@ const styles = StyleSheet.create((theme) => {
   return {
     container: {
       flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: "transparent",
-      gap: theme.spacing[1],
+      alignItems: "stretch",
+      backgroundColor: theme.colors.surface2,
+      gap: 2,
     },
-    containerXs: {
-      ...geometry.segmentedContainerXs,
+    containerFullWidth: {
+      alignSelf: "stretch",
     },
     containerSm: {
       ...geometry.segmentedContainerSm,
@@ -186,8 +187,9 @@ const styles = StyleSheet.create((theme) => {
       flexShrink: 0,
       gap: theme.spacing[1],
     },
-    segmentXs: {
-      ...geometry.segmentedSegmentXs,
+    segmentFullWidth: {
+      flex: 1,
+      flexShrink: 1,
     },
     segmentSm: {
       ...geometry.segmentedSegmentSm,
@@ -196,13 +198,18 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedSegmentMd,
     },
     segmentSelected: {
-      backgroundColor: theme.colors.foreground,
+      backgroundColor: theme.colors.surface0,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 2,
+      elevation: 1,
     },
     segmentHover: {
-      backgroundColor: theme.colors.surface2,
+      backgroundColor: theme.colors.surface1,
     },
     segmentPressed: {
-      backgroundColor: theme.colors.surface3,
+      backgroundColor: theme.colors.surface1,
     },
     segmentDisabled: {
       opacity: theme.opacity[50],
@@ -215,9 +222,6 @@ const styles = StyleSheet.create((theme) => {
       color: theme.colors.foregroundMuted,
       fontWeight: theme.fontWeight.normal,
     },
-    labelXs: {
-      ...geometry.segmentedLabelXs,
-    },
     labelSm: {
       ...geometry.segmentedLabelSm,
     },
@@ -225,7 +229,7 @@ const styles = StyleSheet.create((theme) => {
       ...geometry.segmentedLabelMd,
     },
     labelSelected: {
-      color: theme.colors.surface0,
+      color: theme.colors.foreground,
     },
   };
 });

@@ -9,6 +9,7 @@ import {
   buildHostRootRoute,
   buildHostWorkspaceRoute,
   buildOpenProjectRoute,
+  buildTasksRoute,
 } from "@/utils/host-routes";
 
 export interface HostRuntimeBootstrapStore {
@@ -157,7 +158,9 @@ export function resolveHostIndexRoute(input: {
   ) {
     return buildHostWorkspaceRoute(input.serverId, input.workspaceSelection.workspaceId);
   }
-  return buildOpenProjectRoute();
+  // With no workspace to restore, cold launch lands on the task board (the
+  // Conductor home) instead of the empty project picker.
+  return buildTasksRoute({ host: input.serverId });
 }
 
 function isIndexPathname(pathname: string) {

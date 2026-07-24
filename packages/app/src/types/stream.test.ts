@@ -1116,6 +1116,42 @@ describe("turn lifecycle events", () => {
     );
   });
 
+  it("slots a user message ahead of its trailing Cerveau pill (replay/observer order)", () => {
+    // The daemon emits the brain_context pill just BEFORE the user_message it
+    // was recalled for, so replay/observer streams arrive as [pill, message].
+    // The pill belongs UNDER the message, so it must end up after it.
+    const state = hydrateStreamState([
+      {
+        event: {
+          type: "timeline",
+          provider: "claude",
+          item: {
+            type: "brain_context",
+            query: "ajoute un bandeau",
+            portee: "projet",
+            count: 0,
+            memories: [],
+            status: "done",
+          },
+        },
+        timestamp: new Date("2025-01-01T15:03:00Z"),
+      },
+      {
+        event: {
+          type: "timeline",
+          provider: "claude",
+          item: { type: "user_message", text: "ajoute un bandeau" },
+        },
+        timestamp: new Date("2025-01-01T15:03:01Z"),
+      },
+    ]);
+
+    assert.deepStrictEqual(
+      state.map((item) => item.kind),
+      ["user_message", "brain_context"],
+    );
+  });
+
   it.each(["codex", "opencode", "pi"] satisfies AgentProvider[])(
     "replaces an optimistic user message when a live %s provider-owned id echo arrives without text matching",
     (provider) => {

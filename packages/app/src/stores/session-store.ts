@@ -22,6 +22,7 @@ import type {
   AgentPersistenceHandle,
 } from "@getpaseo/protocol/agent-types";
 import type {
+  AgentSynthesis,
   ServerInfoStatusPayload,
   ProjectPlacementPayload,
   ServerCapabilities,
@@ -110,6 +111,8 @@ export interface Agent {
   lastUsage?: AgentUsage;
   lastError?: string | null;
   title: string | null;
+  synthesis?: AgentSynthesis | null;
+  synthesisHistory?: AgentSynthesis[] | null;
   cwd: string;
   workspaceId?: string;
   model: string | null;
@@ -1722,6 +1725,7 @@ export const useSessionStore = create<SessionStore>()(
             title: agent.title ?? null,
             status: agent.status,
             lastActivityAt,
+            lastUserMessageAt: agent.lastUserMessageAt,
             cwd: agent.cwd,
             provider: agent.provider,
             pendingPermissionCount: agent.pendingPermissions.length,

@@ -1,28 +1,21 @@
 import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import type { TFunction } from "i18next";
 import { SquarePen } from "lucide-react-native";
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, type LayoutChangeEvent, Text, View } from "react-native";
 import ReanimatedAnimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { PortalHost } from "@gorhom/portal";
 import invariant from "tiny-invariant";
 import { shallow, useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { AgentStreamView, type AgentStreamViewHandle } from "@/agent-stream/view";
+import { AgentSynthesisBanner } from "@/panels/agent-synthesis-banner";
+import { AgentSynthesisScrim } from "@/panels/agent-synthesis-scrim";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
-import { useRetainedPanelActive } from "@/components/retained-panel";
-import { SidebarCallout } from "@/components/sidebar-callout";
 import { Composer } from "@/composer";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
@@ -35,7 +28,7 @@ import {
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
 import { useWorkspaceAttachmentScopeKey } from "@/attachments/workspace-attachments-store";
 import { COMPACT_FORM_FACTOR_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
-import { isWeb } from "@/constants/platform";
+import { isNative, isWeb } from "@/constants/platform";
 import { useAgentAttentionClear } from "@/hooks/use-agent-attention-clear";
 import { useAgentInitialization } from "@/hooks/use-agent-initialization";
 import { useAgentInputDraft, type AgentInputDraft } from "@/composer/draft/input-draft";
@@ -49,7 +42,10 @@ import {
 import { useArchiveAgent } from "@/hooks/use-archive-agent";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
 import { useContainerWidthBelow } from "@/hooks/use-container-width";
-import { reconcileMissingAgentStateWithPresentAgent } from "@/panels/agent-panel-load-state";
+import {
+  clearHistorySyncErrorAfterSuccessfulSync,
+  reconcileMissingAgentStateWithPresentAgent,
+} from "@/panels/agent-panel-load-state";
 import { usePaneContext, usePaneFocus } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
 import { RenderProfile } from "@/utils/render-profiler";
@@ -67,12 +63,17 @@ import {
   deriveRouteBottomAnchorRequest,
 } from "@/screens/agent/agent-ready-screen-bottom-anchor";
 import { WorkspaceDraftAgentTab } from "@/composer/draft/workspace-tab";
+import { buildDraftSetupEchoKey, getLocalDraftSetup } from "@/composer/draft/local-setup-echo";
+import {
+  normalizeWorkspaceDraftTabSetup,
+  workspaceDraftTabSetupsEqual,
+} from "@/workspace-tabs/identity";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import { buildDraftStoreKey, generateDraftId } from "@/stores/draft-keys";
 import { usePanelStore } from "@/stores/panel-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
 import type { Theme } from "@/styles/theme";
 import {
   useHideFinishedProviderSubagents,
@@ -325,7 +326,6 @@ function useAgentPanelDescriptor(
   return {
     label: label ?? "",
     subtitle: `${formatProviderLabel(provider)} agent`,
-    tooltip: label ?? `${formatProviderLabel(provider)} agent`,
     titleState: label ? "ready" : "loading",
     icon,
     statusBucket: descriptorState.status
@@ -340,14 +340,13 @@ function useAgentPanelDescriptor(
 }
 
 function AgentPanel() {
-  const { serverId, workspaceId, target, openFileInWorkspace } = usePaneContext();
+  const { serverId, target, openFileInWorkspace } = usePaneContext();
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "agent", "AgentPanel requires agent target");
 
   return (
     <AgentPanelContent
       serverId={serverId}
-      workspaceId={workspaceId}
       agentId={target.agentId}
       isPaneFocused={isInteractive}
       onOpenWorkspaceFile={openFileInWorkspace}
@@ -368,6 +367,28 @@ function DraftPanel() {
   const { isInteractive } = usePaneFocus();
   invariant(target.kind === "draft", "DraftPanel requires draft target");
 
+  // Apply a REMOTE agent-config change (target.setup edited on another device) to
+  // this open composer. The config lives in the mount-once form, so a fresh mount
+  // is how it re-seeds. We remount only when target.setup diverges from the echo
+  // (the config this device's own composer is displaying) — a local edit keeps
+  // the echo equal to target.setup, so it never remounts here (no flash on the
+  // device making the change, and no loop). Gated on the text input NOT being
+  // focused, with autofocus suppressed so the keyboard never pops on the receiver.
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [reseedCount, setReseedCount] = useState(0);
+  const setupEchoKey = buildDraftSetupEchoKey(serverId, target.draftId);
+  useEffect(() => {
+    if (isInputFocused) {
+      return;
+    }
+    const remoteSetup = normalizeWorkspaceDraftTabSetup(target.setup);
+    if (workspaceDraftTabSetupsEqual(getLocalDraftSetup(setupEchoKey) ?? undefined, remoteSetup)) {
+      return;
+    }
+    setReseedCount((count) => count + 1);
+  }, [isInputFocused, setupEchoKey, target.setup]);
+  const suppressAutoFocus = reseedCount > 0;
+
   const handleCreated = useCallback(
     (agentSnapshot: Parameters<typeof normalizeAgentSnapshot>[0]) => {
       const normalized = normalizeAgentSnapshot(agentSnapshot, serverId);
@@ -384,6 +405,7 @@ function DraftPanel() {
 
   return (
     <WorkspaceDraftAgentTab
+      key={`${target.draftId}:${reseedCount}`}
       serverId={serverId}
       workspaceId={workspaceId}
       tabId={tabId}
@@ -393,6 +415,8 @@ function DraftPanel() {
       onOpenWorkspaceFile={openFileInWorkspace}
       onCreated={handleCreated}
       onOpenImportSheet={openImportSheet}
+      onInputFocusChange={setIsInputFocused}
+      suppressAutoFocus={suppressAutoFocus}
     />
   );
 }
@@ -443,6 +467,17 @@ export function useDraftPanelDescriptor(
 const EMPTY_STREAM_ITEMS: StreamItem[] = [];
 const EMPTY_PENDING_PERMISSIONS = new Map<string, PendingPermission>();
 const EMPTY_PENDING_PERMISSION_LIST: PendingPermission[] = [];
+// Breathing room between the magic scrollbar's bottom and the composer's top on
+// compact layouts, so the rail doesn't butt right up against the input area.
+const MAGIC_SCROLLBAR_COMPOSER_MARGIN = 8;
+// Breathing room between the floating synthesis banner and the first transcript
+// message once the content is inset below it.
+const SYNTHESIS_BANNER_CONTENT_GAP = 12;
+// Height of the scrim's fade below the banner. MUST match FADE_TAIL in
+// agent-synthesis-scrim.{tsx,web.tsx}: the transcript's top inset clears the
+// banner *and* the fade so the first message rests fully opaque, while later
+// messages scroll up under the banner and dissolve through the fade.
+const SYNTHESIS_BANNER_SCRIM_FADE = 28;
 
 type RouteBottomAnchorRequest = ReturnType<typeof deriveRouteBottomAnchorRequest>;
 
@@ -481,13 +516,11 @@ type AgentLookupState =
 
 function AgentPanelContent({
   serverId,
-  workspaceId,
   agentId,
   isPaneFocused,
   onOpenWorkspaceFile,
 }: {
   serverId: string;
-  workspaceId: string;
   agentId: string;
   isPaneFocused: boolean;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
@@ -501,13 +534,6 @@ function AgentPanelContent({
   const runtimeIsConnected = useHostRuntimeIsConnected(runtimeServerId);
   const runtimeConnectionStatus = useHostRuntimeConnectionStatus(runtimeServerId);
   const runtimeLastError = useHostRuntimeLastError(runtimeServerId);
-  const hasCachedAgent = useSessionStore((state) => {
-    if (!resolvedServerId || !resolvedAgentId) return false;
-    const session = state.sessions[resolvedServerId];
-    return Boolean(
-      session?.agents.has(resolvedAgentId) || session?.agentDetails.has(resolvedAgentId),
-    );
-  });
 
   const connectionServerId = resolvedServerId ?? null;
   const daemon = connectionServerId
@@ -522,7 +548,7 @@ function AgentPanelContent({
       : runtimeConnectionStatus;
   const lastConnectionError = runtimeLastError;
 
-  if (!resolvedServerId || (!runtimeClient && !hasCachedAgent)) {
+  if (!resolvedServerId || !runtimeClient) {
     return (
       <AgentSessionUnavailableState
         serverLabel={serverLabel}
@@ -537,7 +563,6 @@ function AgentPanelContent({
   return (
     <AgentPanelBody
       serverId={resolvedServerId}
-      workspaceId={workspaceId}
       agentId={resolvedAgentId}
       isPaneFocused={isPaneFocused}
       client={runtimeClient}
@@ -550,7 +575,6 @@ function AgentPanelContent({
 
 function AgentPanelBody({
   serverId,
-  workspaceId,
   agentId,
   isPaneFocused,
   client,
@@ -559,10 +583,9 @@ function AgentPanelBody({
   onOpenWorkspaceFile,
 }: {
   serverId: string;
-  workspaceId: string;
   agentId?: string;
   isPaneFocused: boolean;
-  client: ReturnType<typeof useHostRuntimeClient>;
+  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   isConnected: boolean;
   connectionStatus: HostRuntimeConnectionStatus;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
@@ -590,8 +613,6 @@ function AgentPanelBody({
   );
   const [lookupState, setLookupState] = useState<AgentLookupState>({ tag: "idle" });
   const lookupAttemptTokenRef = useRef(0);
-  const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
-  const resolvePendingAgent = useWorkspaceLayoutStore((state) => state.resolvePendingAgent);
 
   useEffect(() => {
     lookupAttemptTokenRef.current += 1;
@@ -603,15 +624,12 @@ function AgentPanelBody({
       return;
     }
     if (agentState.id) {
-      if (workspaceKey) {
-        resolvePendingAgent(workspaceKey, agentId);
-      }
       if (lookupState.tag !== "idle") {
         setLookupState({ tag: "idle" });
       }
       return;
     }
-    if (!client || !isConnected || !hasSession) {
+    if (!isConnected || !hasSession) {
       return;
     }
     if (lookupState.tag === "loading" || lookupState.tag === "not_found") {
@@ -628,9 +646,6 @@ function AgentPanelBody({
           return;
         }
         if (!result) {
-          if (workspaceKey) {
-            resolvePendingAgent(workspaceKey, agentId);
-          }
           setLookupState({
             tag: "not_found",
             message: `Agent not found: ${agentId}`,
@@ -639,9 +654,6 @@ function AgentPanelBody({
         }
 
         storeFetchedAgentDetail({ serverId, result });
-        if (workspaceKey) {
-          resolvePendingAgent(workspaceKey, agentId);
-        }
         setLookupState({ tag: "idle" });
         return;
       })
@@ -651,25 +663,12 @@ function AgentPanelBody({
         }
         const message = toErrorMessage(error);
         if (isNotFoundErrorMessage(message)) {
-          if (workspaceKey) {
-            resolvePendingAgent(workspaceKey, agentId);
-          }
           setLookupState({ tag: "not_found", message });
           return;
         }
         setLookupState({ tag: "error", message });
       });
-  }, [
-    agentId,
-    agentState.id,
-    client,
-    hasSession,
-    isConnected,
-    lookupState.tag,
-    resolvePendingAgent,
-    serverId,
-    workspaceKey,
-  ]);
+  }, [agentId, agentState.id, client, hasSession, isConnected, lookupState.tag, serverId]);
 
   if (lookupState.tag === "not_found") {
     return (
@@ -747,13 +746,12 @@ function ChatAgentContent({
   serverId: string;
   agentId?: string;
   isPaneFocused: boolean;
-  client: ReturnType<typeof useHostRuntimeClient>;
+  client: NonNullable<ReturnType<typeof useHostRuntimeClient>>;
   isConnected: boolean;
   connectionStatus: HostRuntimeConnectionStatus;
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
 }) {
   const { t } = useTranslation();
-  const isPaneVisible = useRetainedPanelActive();
   const { api: toastApi, toast: toastState, dismiss: dismissToast } = useToastHost();
   const { isArchivingAgent } = useArchiveAgent();
   const streamViewRef = useRef<AgentStreamViewHandle>(null);
@@ -797,26 +795,6 @@ function ChatAgentContent({
   const agentHistorySyncGeneration = useSessionStore((state) =>
     agentId ? (state.sessions[serverId]?.agentHistorySyncGeneration?.get(agentId) ?? -1) : -1,
   );
-  const viewedTimelineSync = useSessionStore(
-    (state) => state.sessions[serverId]?.viewedTimelineSync ?? null,
-  );
-  const subscribeToVisibilityCatchUp = useCallback(
-    (listener: () => void) => viewedTimelineSync?.subscribe(listener) ?? (() => {}),
-    [viewedTimelineSync],
-  );
-  const readTimelineStatus = useCallback(
-    () =>
-      !agentId || !viewedTimelineSync
-        ? ("ready" as const)
-        : viewedTimelineSync.getAgentTimelineStatus(agentId),
-    [agentId, viewedTimelineSync],
-  );
-  const timelineStatus = useSyncExternalStore(
-    subscribeToVisibilityCatchUp,
-    readTimelineStatus,
-    readTimelineStatus,
-  );
-  const visibilityCatchUpStatus = isPaneVisible ? timelineStatus : "ready";
   const hasActiveCreateHandoff = useCreateFlowStore((state) =>
     findActiveCreateHandoff({ pendingByDraftId: state.pendingByDraftId, serverId, agentId }),
   );
@@ -847,6 +825,44 @@ function ChatAgentContent({
     mode: "translate",
   });
 
+  const handleHistorySyncFailure = useCallback(
+    ({ origin, error }: { origin: "focus" | "entry"; error: unknown }) => {
+      if (agentId) {
+        console.warn("[AgentPanel] history sync failed", {
+          origin,
+          agentId,
+          error,
+        });
+      }
+      const message = toErrorMessage(error);
+      setMissingAgentState((previous) => {
+        if (previous.kind === "error" && previous.message === message) {
+          return previous;
+        }
+        return { kind: "error", message };
+      });
+    },
+    [agentId],
+  );
+
+  const ensureInitializedWithSyncErrorHandling = useCallback(
+    (origin: "focus" | "entry") => {
+      if (!agentId) {
+        return;
+      }
+      ensureAgentIsInitialized(agentId)
+        .then(() => {
+          setMissingAgentState(clearHistorySyncErrorAfterSuccessfulSync);
+          return undefined;
+        })
+        .catch((error) => {
+          handleHistorySyncFailure({ origin, error });
+          return undefined;
+        });
+    },
+    [agentId, ensureAgentIsInitialized, handleHistorySyncFailure],
+  );
+
   useEffect(() => {
     if (connectionStatus === "online") {
       if (reconnectToastArmedRef.current) {
@@ -866,6 +882,13 @@ function ChatAgentContent({
       });
     }
   }, [connectionStatus, dismissToast, toastApi, t]);
+
+  useEffect(() => {
+    if (!isPaneFocused || !agentId || !isConnected || !hasSession) {
+      return;
+    }
+    ensureInitializedWithSyncErrorHandling("focus");
+  }, [agentId, ensureInitializedWithSyncErrorHandling, hasSession, isConnected, isPaneFocused]);
 
   const isArchivingCurrentAgent = Boolean(agentId && isArchivingAgent({ serverId, agentId }));
 
@@ -923,13 +946,11 @@ function ChatAgentContent({
     routeKey: `${serverId}:${agentId ?? ""}`,
     input: {
       agent: agent ?? null,
-      isArchived: agentState.archivedAt !== null,
       missingAgentState,
       isConnected,
       isArchivingCurrentAgent,
       isHistorySyncing,
       needsAuthoritativeSync,
-      visibilityCatchUpStatus,
       continuity,
       hasHydratedHistoryBefore,
     },
@@ -969,6 +990,27 @@ function ChatAgentContent({
   }, [agentId]);
 
   useEffect(() => {
+    if (!agentId) {
+      return;
+    }
+    if (!isConnected || !hasSession) {
+      return;
+    }
+    const shouldSyncOnEntry = needsAuthoritativeSync || isNative;
+    if (!shouldSyncOnEntry) {
+      return;
+    }
+
+    ensureInitializedWithSyncErrorHandling("entry");
+  }, [
+    agentId,
+    ensureInitializedWithSyncErrorHandling,
+    hasSession,
+    isConnected,
+    needsAuthoritativeSync,
+  ]);
+
+  useEffect(() => {
     initAttemptTokenRef.current += 1;
     setMissingAgentState({ kind: "idle" });
   }, [agentId, serverId]);
@@ -977,27 +1019,16 @@ function ChatAgentContent({
     if (!agentId) {
       return;
     }
-    if (agentState.archivedAt) {
-      return;
-    }
-    if (agentState.id && hasAppliedAuthoritativeHistory) {
-      if (
-        missingAgentState.kind === "resolving" ||
-        missingAgentState.kind === "not_found" ||
-        missingAgentState.kind === "error"
-      ) {
+    if (agentState.id) {
+      if (missingAgentState.kind === "resolving" || missingAgentState.kind === "not_found") {
         setMissingAgentState(reconcileMissingAgentStateWithPresentAgent);
       }
       return;
     }
-    if (!client || !isPaneVisible || !isConnected || !hasSession) {
+    if (!isConnected || !hasSession) {
       return;
     }
-    if (
-      missingAgentState.kind === "resolving" ||
-      missingAgentState.kind === "not_found" ||
-      missingAgentState.kind === "error"
-    ) {
+    if (missingAgentState.kind === "resolving" || missingAgentState.kind === "not_found") {
       return;
     }
 
@@ -1045,20 +1076,17 @@ function ChatAgentContent({
       });
   }, [
     agentState.id,
-    agentState.archivedAt,
-    hasAppliedAuthoritativeHistory,
     agentId,
     client,
     ensureAgentIsInitialized,
     hasSession,
     isConnected,
-    isPaneVisible,
     missingAgentState.kind,
     serverId,
   ]);
 
   const animatedContentStyle = useMemo(
-    () => [animatedStaticStyles.content, animatedKeyboardStyle],
+    () => [styles.content, animatedKeyboardStyle],
     [animatedKeyboardStyle],
   );
 
@@ -1076,7 +1104,6 @@ function ChatAgentContent({
     viewState.tag === "ready" &&
     viewState.sync.status === "catching_up" &&
     viewState.sync.ui === "overlay";
-  const showHistorySyncError = viewState.tag === "ready" && viewState.sync.status === "sync_error";
 
   return (
     <ChatAgentReadyContent
@@ -1096,7 +1123,6 @@ function ChatAgentContent({
       handleComposerHeightChange={handleComposerHeightChange}
       handleMessageSent={handleMessageSent}
       showHistorySyncOverlay={showHistorySyncOverlay}
-      showHistorySyncError={showHistorySyncError}
       cwd={agentCwd}
       onAttentionInputFocus={attentionController.clearOnInputFocus}
       onAttentionPromptSend={attentionController.clearOnPromptSend}
@@ -1122,7 +1148,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   handleComposerHeightChange,
   handleMessageSent,
   showHistorySyncOverlay,
-  showHistorySyncError,
   cwd,
   onAttentionInputFocus,
   onAttentionPromptSend,
@@ -1144,7 +1169,6 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   handleComposerHeightChange: (height: number) => void;
   handleMessageSent: () => void;
   showHistorySyncOverlay: boolean;
-  showHistorySyncError: boolean;
   cwd: string;
   onAttentionInputFocus: () => void;
   onAttentionPromptSend: () => void;
@@ -1166,8 +1190,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
     setAttachments,
     clear,
     isHydrated,
-    attachmentFocusRequestId,
     composerState,
+    notifyInputFocus,
   } = rawAgentInputDraft;
   const agentInputDraft = useMemo(
     (): AgentInputDraft => ({
@@ -1177,8 +1201,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       setAttachments,
       clear,
       isHydrated,
-      attachmentFocusRequestId,
       composerState,
+      notifyInputFocus,
     }),
     [
       text,
@@ -1187,10 +1211,43 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       setAttachments,
       clear,
       isHydrated,
-      attachmentFocusRequestId,
       composerState,
+      notifyInputFocus,
     ],
   );
+  // Per-panel portal host so the magic scrollbar can paint over the full panel
+  // height (down past the composer) instead of being clipped to the message
+  // pane. Unique per agent so split panes don't collide.
+  const magicScrollbarPortalHostName = `magic-scrollbar-${serverId}-${agentId}`;
+  // On compact (mobile) layouts the composer takes up a big chunk of the
+  // bottom, so the rail should end just above it instead of running to the
+  // screen edge. Shrink the portal host to the space above the composer (plus a
+  // small margin) so the portalled rail is bounded to that region.
+  const isCompactFormFactor = useIsCompactFormFactor();
+  const [composerHeight, setComposerHeight] = useState(0);
+  const handleComposerAreaLayout = useCallback((event: LayoutChangeEvent) => {
+    setComposerHeight(Math.round(event.nativeEvent.layout.height));
+  }, []);
+  const magicScrollbarPortalHostStyle = useMemo(() => {
+    if (!isCompactFormFactor || composerHeight <= 0) {
+      return styles.magicScrollbarPortalHost;
+    }
+    return [
+      styles.magicScrollbarPortalHost,
+      { bottom: composerHeight + MAGIC_SCROLLBAR_COMPOSER_MARGIN },
+    ];
+  }, [composerHeight, isCompactFormFactor]);
+  // When the floating synthesis banner is present it overlaps the top of the
+  // transcript, hiding the first message. Inset the content by the banner's
+  // occupied extent (plus a small gap) so the first message clears it.
+  const [synthesisBannerExtent, setSynthesisBannerExtent] = useState(0);
+  // The transcript fills the whole panel (behind the banner); the banner
+  // clearance is applied as the list's own top content inset instead of a
+  // clipping wrapper, so messages can scroll up under the banner and fade there.
+  const synthesisTopInset =
+    synthesisBannerExtent > 0
+      ? synthesisBannerExtent + SYNTHESIS_BANNER_SCRIM_FADE + SYNTHESIS_BANNER_CONTENT_GAP
+      : 0;
   const streamSection = (
     <RenderProfile id={`AgentStreamSection:${agentId}`}>
       <AgentStreamSection
@@ -1202,6 +1259,8 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         hasAppliedAuthoritativeHistory={hasAppliedAuthoritativeHistory}
         toast={toastApi}
         onOpenWorkspaceFile={onOpenWorkspaceFile}
+        magicScrollbarPortalHostName={magicScrollbarPortalHostName}
+        topContentInset={synthesisTopInset}
       />
     </RenderProfile>
   );
@@ -1234,15 +1293,22 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
           {contentContainer}
 
-          {showHistorySyncError ? (
-            <SidebarCallout
-              title={t("agentPanel.states.timelineSyncFailed")}
-              variant="error"
-              testID="agent-timeline-sync-error"
-            />
-          ) : null}
+          <AgentSynthesisScrim extent={synthesisBannerExtent} />
 
-          {composerSection}
+          <AgentSynthesisBanner
+            serverId={serverId}
+            agentId={agentId}
+            onHeightChange={setSynthesisBannerExtent}
+          />
+
+          <View onLayout={handleComposerAreaLayout}>{composerSection}</View>
+
+          {/* Host for the magic scrollbar; box-none so only the rail itself
+              (rendered into it) captures pointer events. On compact layouts it
+              stops above the composer; otherwise it spans the full panel. */}
+          <View style={magicScrollbarPortalHostStyle} pointerEvents="box-none" collapsable={false}>
+            <PortalHost name={magicScrollbarPortalHostName} />
+          </View>
 
           {showHistorySyncOverlay ? (
             <View style={styles.historySyncOverlay} testID="agent-history-overlay">
@@ -1274,6 +1340,8 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory,
   toast,
   onOpenWorkspaceFile,
+  magicScrollbarPortalHostName,
+  topContentInset,
 }: {
   streamViewRef: React.RefObject<AgentStreamViewHandle | null>;
   serverId: string;
@@ -1283,6 +1351,8 @@ const AgentStreamSection = memo(function AgentStreamSection({
   hasAppliedAuthoritativeHistory: boolean;
   toast: ReturnType<typeof useToastHost>["api"];
   onOpenWorkspaceFile?: (request: WorkspaceFileOpenRequest) => void;
+  magicScrollbarPortalHostName?: string;
+  topContentInset?: number;
 }) {
   const streamItemsRaw = useSessionStore((state) =>
     agentId ? state.sessions[serverId]?.agentStreamTail?.get(agentId) : undefined,
@@ -1327,6 +1397,8 @@ const AgentStreamSection = memo(function AgentStreamSection({
       isAuthoritativeHistoryReady={hasAppliedAuthoritativeHistory}
       toast={toast}
       onOpenWorkspaceFile={onOpenWorkspaceFile}
+      magicScrollbarPortalHostName={magicScrollbarPortalHostName}
+      topContentInset={topContentInset}
     />
   );
 });
@@ -1520,13 +1592,13 @@ function ActiveAgentComposer({
   });
 
   const inputAreaStyle = useMemo(
-    () => [
-      animatedStaticStyles.inputAreaWrapper,
-      { paddingBottom: insets.bottom },
-      composerKeyboardStyle,
-    ],
+    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
     [insets.bottom, composerKeyboardStyle],
   );
+
+  // The compact mode selector now lives inside the composer's options drawer
+  // (grouped behind the kebab), so there is no dedicated footer control anymore.
+  const composerFooter = undefined;
 
   return (
     <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>
@@ -1541,7 +1613,6 @@ function ActiveAgentComposer({
       <Composer
         agentId={agentId}
         serverId={serverId}
-        workspaceId={workspaceId}
         externalKeyboardShift
         isPaneFocused={isPaneFocused}
         value={agentInputDraft.text}
@@ -1553,13 +1624,14 @@ function ActiveAgentComposer({
         cwd={cwd}
         clearDraft={agentInputDraft.clear}
         autoFocus={isPaneFocused}
-        autoFocusKey={String(agentInputDraft.attachmentFocusRequestId)}
         isSubmitLoading={isSubmitLoading}
+        onInputFocusChange={agentInputDraft.notifyInputFocus}
         onAttentionInputFocus={onAttentionInputFocus}
         onAttentionPromptSend={onAttentionPromptSend}
         onComposerHeightChange={onComposerHeightChange}
         onMessageSent={onMessageSent}
         onClientSlashCommand={handleClientSlashCommand}
+        footer={composerFooter}
         isCompactLayout={isCompactComposerLayout}
       />
     </ReanimatedAnimated.View>
@@ -1637,15 +1709,6 @@ const foregroundColorMapping = (theme: Theme) => ({
   color: theme.colors.foreground,
 });
 
-const animatedStaticStyles = RNStyleSheet.create({
-  content: {
-    flex: 1,
-  },
-  inputAreaWrapper: {
-    width: "100%",
-  },
-});
-
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
@@ -1659,6 +1722,20 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     overflow: "hidden",
     ...(isWeb ? { userSelect: "none" as const } : {}),
+  },
+  magicScrollbarPortalHost: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  content: {
+    flex: 1,
+  },
+  inputAreaWrapper: {
+    width: "100%",
+    backgroundColor: theme.colors.surface0,
   },
   historySyncOverlay: {
     position: "absolute",

@@ -147,7 +147,10 @@ export interface StartCreatedAgentInitialPromptParams {
   logger: Logger;
 }
 
-const AGENT_RUN_START_TIMEOUT_MS = 15_000;
+// The Cerveau recall (REST search + librarian filter, hard-capped at 20s)
+// runs inside streamAgent before startTurn, so run-start now includes it —
+// keep this comfortably above that cap plus provider spawn time.
+const AGENT_RUN_START_TIMEOUT_MS = 45_000;
 
 export async function waitForAgentRunStartWithTimeout(
   agentManager: AgentManager,

@@ -164,7 +164,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
   rowNote: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
   },

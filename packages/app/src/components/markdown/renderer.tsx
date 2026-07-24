@@ -38,6 +38,7 @@ import {
 } from "./html-ish";
 import { resolveInlineImageSize, type InlineImageDimensions } from "./inline-image-size";
 import { groupMarkdownParts, type MarkdownPartGroup } from "./part-groups";
+import { resolveSectionIcon, SECTION_ICON_COLOR } from "./section-icons";
 
 export type MarkdownStyles = Record<string, TextStyle & ViewStyle & { [key: string]: unknown }>;
 
@@ -500,8 +501,61 @@ function getMarkdownLinkHref(node: ASTNode): string {
   return typeof href === "string" ? href : "";
 }
 
+// A task-report heading (`## 1. Ce qui est fait`) gets a lucide glyph prepended
+// so every agent's report reads the same regardless of exact wording. Layout is
+// static (no theme), so plain objects are fine.
+const headingIconRowStyle: ViewStyle = { flexDirection: "row", alignItems: "center", gap: 8 };
+const headingIconTextStyle: ViewStyle = { flex: 1 };
+const HEADING_ICON_SIZE: Record<number, number> = { 1: 22, 2: 20, 3: 18, 4: 16, 5: 15, 6: 14 };
+
+/** Recursively collect the plain text of a heading node to key the icon off. */
+function headingPlainText(node: ASTNode): string {
+  if (typeof node.content === "string" && node.content.length > 0) return node.content;
+  const children = (node as ASTNode & { children?: ASTNode[] }).children;
+  if (Array.isArray(children)) return children.map(headingPlainText).join("");
+  return "";
+}
+
+/** Wraps a heading's children, prepending a section icon when the title matches
+ * one of the fixed task-report sections. Non-report headings render unchanged. */
+function renderHeading(
+  level: number,
+  viewSafeStyle: MarkdownStyles[string],
+  node: ASTNode,
+  children: ReactNode[],
+): ReactNode {
+  const Icon = resolveSectionIcon(headingPlainText(node));
+  if (!Icon) {
+    return (
+      <View key={node.key} style={viewSafeStyle}>
+        {children}
+      </View>
+    );
+  }
+  return (
+    <View key={node.key} style={viewSafeStyle}>
+      <View style={headingIconRowStyle}>
+        <Icon size={HEADING_ICON_SIZE[level] ?? 18} color={SECTION_ICON_COLOR} />
+        <View style={headingIconTextStyle}>{children}</View>
+      </View>
+    </View>
+  );
+}
+
 export function createSharedMarkdownRules(): RenderRules {
   return {
+    heading1: (node, children, _parent, styles) =>
+      renderHeading(1, styles._VIEW_SAFE_heading1, node, children),
+    heading2: (node, children, _parent, styles) =>
+      renderHeading(2, styles._VIEW_SAFE_heading2, node, children),
+    heading3: (node, children, _parent, styles) =>
+      renderHeading(3, styles._VIEW_SAFE_heading3, node, children),
+    heading4: (node, children, _parent, styles) =>
+      renderHeading(4, styles._VIEW_SAFE_heading4, node, children),
+    heading5: (node, children, _parent, styles) =>
+      renderHeading(5, styles._VIEW_SAFE_heading5, node, children),
+    heading6: (node, children, _parent, styles) =>
+      renderHeading(6, styles._VIEW_SAFE_heading6, node, children),
     text: (
       node: ASTNode,
       _children: ReactNode[],
@@ -771,10 +825,10 @@ const detailsStyles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   flowImage: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
   },
   flowImageFallback: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     paddingHorizontal: theme.spacing[1],
     borderRadius: theme.borderRadius.sm,
     backgroundColor: theme.colors.surface2,

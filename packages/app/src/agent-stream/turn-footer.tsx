@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useMemo, type ReactNode } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { isWeb } from "@/constants/platform";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import type { Theme } from "@/styles/theme";
 import type { TurnTiming } from "@/timeline/turn-time";
@@ -97,6 +98,25 @@ export const CompletedTurnFooterRow = memo(function CompletedTurnFooterRow({
         onForkAssistantTurn={onForkAssistantTurn}
       />
     </TurnFooterRow>
+  );
+});
+
+/**
+ * Transient user bubble shown at the bottom of the stream while a committed
+ * prompt is still finalizing locally (dictation transcription). Mirrors the
+ * UserMessage bubble style so the real optimistic message replaces it
+ * seamlessly once the submit happens.
+ */
+export const PendingPromptBubble = memo(function PendingPromptBubble({ text }: { text: string }) {
+  const trimmed = text.trim();
+  return (
+    <View style={stylesheet.streamItemWrapper} testID="pending-prompt-bubble">
+      <View style={stylesheet.pendingPromptRow}>
+        <View style={stylesheet.pendingPromptBubble}>
+          <Text style={stylesheet.pendingPromptText}>{trimmed.length > 0 ? trimmed : "…"}</Text>
+        </View>
+      </View>
+    </View>
   );
 });
 
@@ -217,5 +237,26 @@ const stylesheet = StyleSheet.create((theme) => ({
   },
   workingLoader: {
     marginLeft: -2,
+  },
+  // Mirrors userMessageStylesheet in components/message.tsx so the pending
+  // bubble is visually identical to the optimistic message that replaces it.
+  pendingPromptRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: theme.spacing[4],
+  },
+  pendingPromptBubble: {
+    backgroundColor: theme.colors.surface3,
+    borderRadius: theme.borderRadius["2xl"],
+    borderTopRightRadius: theme.borderRadius.sm,
+    paddingHorizontal: theme.spacing[4],
+    paddingVertical: theme.spacing[4],
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  pendingPromptText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.base,
+    ...(isWeb ? { lineHeight: 22, overflowWrap: "anywhere" as const } : {}),
   },
 }));

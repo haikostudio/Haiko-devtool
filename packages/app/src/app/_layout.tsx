@@ -26,9 +26,12 @@ import { CommandCenterProvider } from "@/command-center/provider";
 import { AddProjectFlowHost } from "@/components/add-project-flow-host";
 import { WorktreeSetupCalloutSource } from "@/components/worktree-setup-callout-source";
 import { DownloadToast } from "@/components/download-toast";
+import { AgentTasksToastStack } from "@/components/agent-tasks-toast-stack";
+import { AgentTasksToastFab } from "@/components/agent-tasks-toast-fab";
 import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
+import { AppUpdateBanner } from "@/components/app-update-banner";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { WindowSidebarMenuToggle } from "@/components/headers/menu-header";
 import { SidebarModelProvider } from "@/components/sidebar/sidebar-model";
@@ -78,6 +81,7 @@ import { useActiveWorktreeNewAction } from "@/hooks/use-active-worktree-new-acti
 import { useGlobalNewWorkspaceAction } from "@/hooks/use-global-new-workspace-action";
 import { useFaviconStatus } from "@/hooks/use-favicon-status";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useLeftEdgePeek } from "@/hooks/use-left-edge-peek";
 import { KeyboardShiftProvider } from "@/hooks/use-keyboard-shift-style";
 import { useCompactWebViewportZoomLock } from "@/hooks/use-compact-web-viewport-zoom-lock";
 import { useOpenProject } from "@/hooks/use-open-project";
@@ -548,6 +552,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <FloatingPanelPortalHost />
       {isCompactLayout ? sidebarChrome : null}
       <DownloadToast />
+      {isCompactLayout ? <AgentTasksToastFab /> : <AgentTasksToastStack />}
       <RosettaCalloutSource />
       <UpdateCalloutSource />
       <WorktreeSetupCalloutSource />
@@ -561,6 +566,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <KeyboardShortcutsDialog />
       <AppDiagnosticHost />
       <QuittingOverlay />
+      <AppUpdateBanner />
     </View>
   );
 
@@ -586,10 +592,17 @@ function SidebarChrome({
   const isOpen = usePanelStore((state) =>
     selectIsAgentListOpen(state, { isCompact: isCompactLayout }),
   );
-  const active = visible && isOpen;
+  const sidebarWidth = usePanelStore((state) => state.sidebarWidth);
+  // When the sidebar is collapsed on desktop, reveal it as an overlay while the
+  // pointer hugs the left edge. Disabled once the sidebar is pinned open.
+  const peek = useLeftEdgePeek({
+    enabled: mounted && !isCompactLayout && !isOpen,
+    sidebarWidth,
+  });
+  const active = (visible && isOpen) || peek;
   return (
     <SidebarModelProvider active={active}>
-      {mounted ? <LeftSidebar active={active} /> : null}
+      {mounted ? <LeftSidebar active={active} overlay={peek} /> : null}
       <WorkspaceShortcutTargetsSubscriber enabled={keyboardShortcutsEnabled} />
     </SidebarModelProvider>
   );
@@ -856,8 +869,12 @@ function AppWithSidebar({ children }: { children: ReactNode }) {
     storeReady &&
     (pathname === "/open-project" ||
       pathname === "/new" ||
+      pathname === "/dashboard" ||
       pathname === "/sessions" ||
       pathname === "/schedules" ||
+      pathname === "/tasks" ||
+      pathname === "/changelog" ||
+      pathname === "/activity" ||
       routeHasKnownHost);
 
   return <AppContainer chromeEnabled={shouldShowAppChrome}>{children}</AppContainer>;
@@ -886,8 +903,12 @@ function RootStack() {
         <Stack.Screen name="settings/projects/[projectKey]" />
         <Stack.Screen name="new" />
         <Stack.Screen name="open-project" />
+        <Stack.Screen name="dashboard" />
         <Stack.Screen name="sessions" />
         <Stack.Screen name="schedules" />
+        <Stack.Screen name="tasks" />
+        <Stack.Screen name="changelog" />
+        <Stack.Screen name="activity" />
         <Stack.Screen name="pair-scan" />
       </Stack.Protected>
       <Stack.Screen name="h/[serverId]" />
@@ -927,9 +948,7 @@ function RuntimeProviders({ children }: { children: ReactNode }) {
     <HostRuntimeBootstrapProvider>
       <PushNotificationRouter />
       <SidebarCalloutProvider>
-        <ToastProvider>
-          <ProvidersWrapper>{children}</ProvidersWrapper>
-        </ToastProvider>
+        <ProvidersWrapper>{children}</ProvidersWrapper>
       </SidebarCalloutProvider>
     </HostRuntimeBootstrapProvider>
   );
@@ -947,9 +966,14 @@ function RootProviders({ children }: { children: ReactNode }) {
       <WindowChromeProvider>
         <KeyboardProvider>
           <KeyboardShiftProvider>
-            <PortalProvider>
-              <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
-            </PortalProvider>
+            {/* ToastProvider wraps PortalProvider so gorhom-portaled sheets
+                (which re-parent to the PortalProvider host) keep access to the
+                toast context — see the useToast consumers inside bottom sheets. */}
+            <ToastProvider>
+              <PortalProvider>
+                <BottomSheetModalProvider>{children}</BottomSheetModalProvider>
+              </PortalProvider>
+            </ToastProvider>
           </KeyboardShiftProvider>
         </KeyboardProvider>
       </WindowChromeProvider>

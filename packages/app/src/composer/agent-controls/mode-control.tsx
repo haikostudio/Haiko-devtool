@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useMemo,
   useRef,
@@ -7,7 +8,7 @@ import {
   type ReactElement,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Text, View } from "react-native";
+import { Text, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -21,6 +22,7 @@ import {
   ShieldPlus,
   ShieldQuestionMark,
 } from "lucide-react-native";
+import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
 import { type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Combobox, ComboboxItem, type ComboboxOption } from "@/components/ui/combobox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,6 +32,7 @@ import { useProvidersSnapshot } from "@/hooks/use-providers-snapshot";
 import { mergeProviderPreferences, useFormPreferences } from "@/hooks/use-form-preferences";
 import { resolveProviderDefinition } from "@/utils/provider-definitions";
 import { useToast } from "@/contexts/toast-context";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { toErrorMessage } from "@/utils/error-messages";
 import { showProviderNoticeToast } from "@/utils/provider-notice-toast";
 import { formatAgentModeLabel, getAgentControlHintKey } from "@/composer/agent-controls/utils";
@@ -38,10 +41,15 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import { resolveNextAgentModeId } from "@/composer/agent-controls/mode";
 import { useComposerKeyboardScope } from "@/composer/keyboard-scope";
-import { useComposerControlLayout } from "@/composer/agent-controls/layout-context";
-import { AgentControlTrigger } from "@/composer/agent-controls/control";
-import type { AgentMode } from "@getpaseo/protocol/agent-types";
+import type { AgentMode, AgentProvider } from "@getpaseo/protocol/agent-types";
 import { getModeVisuals, type AgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
+
+export type AgentModeControlPlacement = "toolbar" | "footer" | "drawer";
+
+function shouldRenderForPlacement(placement: AgentModeControlPlacement, isCompact: boolean) {
+  // "toolbar" is the desktop inline chip; "footer"/"drawer" are the compact placements.
+  return placement === "toolbar" ? !isCompact : isCompact;
+}
 
 interface ModeIconProps {
   size?: number;
@@ -95,7 +103,7 @@ function ModeComboboxOption({
   );
 }
 
-export interface AgentModeControlValue {
+interface AgentModeControlViewProps {
   provider: string;
   providerDefinitions: AgentProviderDefinition[];
   modeOptions: AgentMode[];
@@ -104,28 +112,91 @@ export interface AgentModeControlValue {
   disabled?: boolean;
 }
 
+function AgentModeControlSectionRow({
+  mode,
+  selected,
+  onSelectMode,
+  provider,
+  providerDefinitions,
+  iconColor,
+}: {
+  mode: AgentMode;
+  selected: boolean;
+  onSelectMode: (modeId: string) => void;
+  provider: string;
+  providerDefinitions: AgentProviderDefinition[];
+  iconColor: string;
+}) {
+  const option = useMemo<ComboboxOption>(
+    () => ({ id: mode.id, label: formatAgentModeLabel(mode) }),
+    [mode],
+  );
+  const handlePress = useCallback(() => onSelectMode(mode.id), [onSelectMode, mode.id]);
+  return (
+    <ModeComboboxOption
+      option={option}
+      selected={selected}
+      active={false}
+      onPress={handlePress}
+      provider={provider}
+      providerDefinitions={providerDefinitions}
+      iconColor={iconColor}
+    />
+  );
+}
+
+function AgentModeControlSection({
+  provider,
+  providerDefinitions,
+  modeOptions,
+  selectedModeId,
+  onSelectMode,
+}: AgentModeControlViewProps) {
+  const { theme } = useUnistyles();
+  const { t } = useTranslation();
+  const selectedMode = useMemo(() => {
+    if (modeOptions.length === 0) return null;
+    return modeOptions.find((m) => m.id === selectedModeId) ?? modeOptions[0];
+  }, [modeOptions, selectedModeId]);
+
+  if (!selectedMode) return null;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{t("agentControls.mode.title")}</Text>
+      {modeOptions.map((mode) => (
+        <AgentModeControlSectionRow
+          key={mode.id}
+          mode={mode}
+          selected={mode.id === selectedMode.id}
+          onSelectMode={onSelectMode}
+          provider={provider}
+          providerDefinitions={providerDefinitions}
+          iconColor={theme.colors.foreground}
+        />
+      ))}
+    </View>
+  );
+}
+
 function normalizeSearchQuery(value: string): string {
   return value.trim().toLowerCase();
 }
 
-export function AgentModeControl({
+function AgentModeControlView({
   provider,
   providerDefinitions,
   modeOptions,
   selectedModeId,
   onSelectMode,
   disabled = false,
-  surface = "toolbar",
-  onClose,
-}: AgentModeControlValue & { surface?: "toolbar" | "sheet"; onClose?: () => void }) {
+}: AgentModeControlViewProps) {
   const { theme } = useUnistyles();
-  const { presentation } = useComposerControlLayout();
   const { t } = useTranslation();
   const { isActiveComposer } = useComposerKeyboardScope();
   const cycleShortcutKeys = useShortcutKeys("cycle-agent-mode");
   const anchorRef = useRef<View>(null);
   const keyboardHandlerIdRef = useRef(`mode-control:${Math.random().toString(36).slice(2)}`);
-  const openRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -137,7 +208,7 @@ export function AgentModeControl({
   const visuals = selectedMode
     ? getModeVisuals(provider, selectedMode.id, providerDefinitions)
     : undefined;
-  const Icon = visuals?.icon ? (MODE_ICONS[visuals.icon] ?? Bot) : Bot;
+  const Icon = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
   const iconColor = theme.colors.foregroundMuted;
   const selectedModeLabel = selectedMode ? formatAgentModeLabel(selectedMode) : "";
 
@@ -151,18 +222,10 @@ export function AgentModeControl({
     return allOptions.filter((o) => o.label.toLowerCase().includes(q));
   }, [allOptions, searchQuery]);
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      const wasOpen = openRef.current;
-      openRef.current = next;
-      setOpen(next);
-      if (!next) {
-        setSearchQuery("");
-        if (wasOpen) onClose?.();
-      }
-    },
-    [onClose],
-  );
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    if (!next) setSearchQuery("");
+  }, []);
 
   const handlePress = useCallback(() => handleOpenChange(!open), [handleOpenChange, open]);
   const handleSelect = useCallback(
@@ -213,6 +276,18 @@ export function AgentModeControl({
     [provider, providerDefinitions, theme.colors.foreground],
   );
 
+  const pressableStyle = useCallback(
+    ({ pressed, hovered }: PressableStateCallbackType) => [
+      styles.chip,
+      hovered && styles.chipHovered,
+      (pressed || open) && styles.chipPressed,
+      disabled && styles.chipDisabled,
+    ],
+    [open, disabled],
+  );
+
+  const labelStyle = styles.chipLabel;
+
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
       title: t("agentControls.mode.title"),
@@ -231,23 +306,21 @@ export function AgentModeControl({
     <>
       <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
         <TooltipTrigger asChild triggerRefProp="ref">
-          <AgentControlTrigger
+          <ComboboxTrigger
             ref={anchorRef}
-            icon={Icon}
-            iconColor={iconColor}
-            surface={surface}
-            label={t("agentControls.mode.title")}
-            value={selectedModeLabel}
-            showToolbarLabel={presentation.showModeLabel}
-            showCaret={surface === "toolbar" && presentation.showCarets}
-            open={open}
+            collapsable={false}
             disabled={disabled}
             onPress={handlePress}
+            style={pressableStyle}
+            accessibilityRole="button"
             accessibilityLabel={t("agentControls.mode.selectWithValue", {
               value: selectedModeLabel,
             })}
             testID="mode-control"
-          />
+          >
+            {Icon ? <Icon size={theme.iconSize.md} color={iconColor} /> : null}
+            <Text style={labelStyle}>{selectedModeLabel}</Text>
+          </ComboboxTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
           <View style={styles.tooltipRow}>
@@ -264,7 +337,6 @@ export function AgentModeControl({
         onOpenChange={handleOpenChange}
         anchorRef={anchorRef}
         desktopPlacement="top-start"
-        desktopMinWidth={260}
         header={sheetHeader}
         renderOption={renderOption}
       />
@@ -278,10 +350,32 @@ function compareAvailableModes(a: AgentMode[], b: AgentMode[]): boolean {
   return a === b || JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function useLiveAgentModeControl(
+interface AgentModeControlProps {
+  serverId: string;
+  agentId: string;
+  placement: AgentModeControlPlacement;
+  isCompactLayout?: boolean;
+}
+
+interface AgentModeController {
+  provider: string;
+  providerDefinitions: AgentProviderDefinition[];
+  modeOptions: AgentMode[];
+  selectedModeId: string | null | undefined;
+  onSelectMode: (modeId: string) => void;
+  disabled: boolean;
+}
+
+/**
+ * Resolves the agent's mode state + a persist/select handler. Consumes app
+ * contexts (toast, form preferences, provider snapshot), so it must run inside
+ * the provider tree — never inside a bottom-sheet/portal. Callers render the
+ * resulting data with a pure view/section that is safe to mount in a portal.
+ */
+export function useAgentModeController(
   serverId: string,
   agentId: string,
-): AgentModeControlValue | null {
+): AgentModeController | null {
   const slice = useSessionStore(
     useShallow((state) => {
       const agent = state.sessions[serverId]?.agents?.get(agentId);
@@ -334,20 +428,133 @@ export function useLiveAgentModeControl(
     [agentId, client, slice?.provider, toast, updatePreferences],
   );
 
-  return useMemo(() => {
-    if (!slice || availableModes.length === 0) return null;
-    return {
-      provider: slice.provider,
-      providerDefinitions,
-      modeOptions: availableModes,
-      selectedModeId: slice.currentModeId,
-      onSelectMode: handleSelectMode,
-      disabled: !client,
-    };
-  }, [availableModes, client, handleSelectMode, providerDefinitions, slice]);
+  if (!slice || availableModes.length === 0) return null;
+
+  return {
+    provider: slice.provider,
+    providerDefinitions,
+    modeOptions: availableModes,
+    selectedModeId: slice.currentModeId,
+    onSelectMode: handleSelectMode,
+    disabled: !client,
+  };
+}
+
+/**
+ * Pure presentational mode list for the options drawer. Safe to render inside a
+ * portal — resolve the data with {@link useAgentModeController} in the parent.
+ */
+export function AgentModeDrawerSection({ controller }: { controller: AgentModeController | null }) {
+  if (!controller) return null;
+  return <AgentModeControlSection {...controller} />;
+}
+
+export const AgentModeControl = memo(function AgentModeControl({
+  serverId,
+  agentId,
+  placement,
+  isCompactLayout,
+}: AgentModeControlProps) {
+  const isCompactFormFactor = useIsCompactFormFactor();
+  const isCompact = isCompactLayout ?? isCompactFormFactor;
+  const controller = useAgentModeController(serverId, agentId);
+
+  if (!controller) return null;
+  if (!shouldRenderForPlacement(placement, isCompact)) return null;
+
+  if (placement === "drawer") {
+    return <AgentModeControlSection {...controller} />;
+  }
+
+  return <AgentModeControlView {...controller} />;
+});
+
+export interface DraftAgentModeControlProps {
+  selectedProvider: AgentProvider | null;
+  providerDefinitions: AgentProviderDefinition[];
+  modeOptions: AgentMode[];
+  selectedMode: string;
+  onSelectMode: (modeId: string) => void;
+  disabled?: boolean;
+  placement: AgentModeControlPlacement;
+  isCompactLayout?: boolean;
+}
+
+export function DraftAgentModeControl({
+  selectedProvider,
+  providerDefinitions,
+  modeOptions,
+  selectedMode,
+  onSelectMode,
+  disabled,
+  placement,
+  isCompactLayout,
+}: DraftAgentModeControlProps) {
+  const isCompactFormFactor = useIsCompactFormFactor();
+  const isCompact = isCompactLayout ?? isCompactFormFactor;
+  if (!selectedProvider || modeOptions.length === 0) return null;
+  if (!shouldRenderForPlacement(placement, isCompact)) return null;
+  if (placement === "drawer") {
+    return (
+      <AgentModeControlSection
+        provider={selectedProvider}
+        providerDefinitions={providerDefinitions}
+        modeOptions={modeOptions}
+        selectedModeId={selectedMode}
+        onSelectMode={onSelectMode}
+        disabled={disabled}
+      />
+    );
+  }
+  return (
+    <AgentModeControlView
+      provider={selectedProvider}
+      providerDefinitions={providerDefinitions}
+      modeOptions={modeOptions}
+      selectedModeId={selectedMode}
+      onSelectMode={onSelectMode}
+      disabled={disabled}
+    />
+  );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  chip: {
+    height: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "transparent",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius["2xl"],
+  },
+  chipHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  chipPressed: {
+    backgroundColor: theme.colors.surface0,
+  },
+  chipDisabled: {
+    opacity: 0.5,
+  },
+  chipLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+  },
+  section: {
+    gap: theme.spacing[1],
+  },
+  sectionTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    // Aligns with the ComboboxItem row content (item margin + padding = spacing[4]).
+    paddingHorizontal: theme.spacing[4],
+    marginBottom: theme.spacing[1],
+  },
   tooltipRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -167,7 +167,7 @@ export function createMarkdownStyles(theme: Theme) {
       backgroundColor: theme.colors.surface2,
       color: theme.colors.foreground,
       paddingHorizontal: theme.spacing[1],
-      paddingVertical: 2,
+      paddingVertical: theme.spacing[1],
       borderRadius: theme.borderRadius.md,
       borderWidth: 0,
       fontFamily: theme.fontFamily.mono,
@@ -264,7 +264,9 @@ export function createMarkdownStyles(theme: Theme) {
     },
 
     list_item: {
-      marginBottom: theme.spacing[1],
+      // A touch more air between items so lists read as scannable rows rather
+      // than one dense block of text.
+      marginBottom: theme.spacing[2],
       flexDirection: "row" as const,
       alignItems: "flex-start" as const,
       flexShrink: 1,
@@ -282,16 +284,16 @@ export function createMarkdownStyles(theme: Theme) {
 
     bullet_list_icon: {
       ...webSelectableTextStyle,
-      color: theme.colors.foregroundMuted,
-      marginRight: 4,
+      color: theme.colors.foreground,
+      marginRight: theme.spacing[2],
       fontSize: theme.fontSize.base,
       lineHeight: 22,
     },
 
     ordered_list_icon: {
       ...webSelectableTextStyle,
-      color: theme.colors.foregroundMuted,
-      marginRight: 4,
+      color: theme.colors.foreground,
+      marginRight: theme.spacing[2],
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.normal,
       lineHeight: 22,
@@ -302,12 +304,16 @@ export function createMarkdownStyles(theme: Theme) {
     // BLOCKQUOTE
     // =========================================================================
 
+    // Fallback styling for blockquotes that don't reach the block-level callout
+    // renderer (e.g. a quote glued to a paragraph inside one block, or nested).
+    // Keep it in sync with the neutral grey card in message.tsx: surface tint,
+    // uniform border, no left accent bar.
     blockquote: {
-      backgroundColor: theme.colors.surface2,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.colors.primary,
-      paddingHorizontal: theme.spacing[4],
-      paddingVertical: theme.spacing[3],
+      backgroundColor: theme.colors.surface1,
+      borderWidth: theme.borderWidth[1],
+      borderColor: theme.colors.border,
+      paddingHorizontal: theme.spacing[3],
+      paddingVertical: theme.spacing[2],
       marginVertical: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },

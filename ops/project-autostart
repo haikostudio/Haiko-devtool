@@ -1,0 +1,899 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+import { execFileSync, execSync } from "node:child_process";
+
+const ROOT = process.env.PROJECT_AUTOSTART_ROOT ?? "/root";
+const PORT_BASE = Number(process.env.PROJECT_AUTOSTART_PORT_BASE ?? "15000");
+const CADDYFILE = process.env.PROJECT_AUTOSTART_CADDYFILE ?? "/etc/caddy/Caddyfile";
+const UNIT_DIR = "/etc/systemd/system";
+const CONFIG_ONLY = process.argv.includes("--config-only") || process.env.PROJECT_AUTOSTART_CONFIG_ONLY === "1";
+const ANALYSIS_DIR = process.env.PROJECT_AUTOSTART_ANALYSIS_DIR ?? "/var/lib/project-autostart/analysis";
+const RUN_DIR = process.env.PROJECT_AUTOSTART_RUN_DIR ?? "/var/lib/project-autostart/run";
+const ANALYSIS_SCHEMA = process.env.PROJECT_AUTOSTART_ANALYSIS_SCHEMA ?? "/usr/local/share/project-autostart-analysis.schema.json";
+const CODEX_BIN = process.env.PROJECT_AUTOSTART_CODEX_BIN ?? "codex";
+const CODEX_MODEL = process.env.PROJECT_AUTOSTART_CODEX_MODEL ?? "";
+const CODEX_TIMEOUT_MS = Number(process.env.PROJECT_AUTOSTART_CODEX_TIMEOUT_MS ?? "60000");
+const CODEX_ONLY_PROJECT = process.env.PROJECT_AUTOSTART_CODEX_ONLY_PROJECT ?? "";
+const DISABLE_CODEX_ANALYSIS = process.env.PROJECT_AUTOSTART_DISABLE_CODEX_ANALYSIS === "1";
+const ANALYSIS_VERSION = 2;
+const EXCLUDED = new Set([
+  "paseo",
+  "paseo-worktrees",
+  "project-launcher",
+]);
+
+function run(cmd, args, options = {}) {
+  return execFileSync(cmd, args, { stdio: "inherit", ...options });
+}
+
+function output(cmd) {
+  return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+}
+
+function outputFile(cmd, args, options = {}) {
+  return execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options }).trim();
+}
+
+function publicIp() {
+  const fromEnv = process.env.PROJECT_AUTOSTART_PUBLIC_IP;
+  if (fromEnv) return fromEnv.trim();
+
+  const ip = output("ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1");
+  if (!ip) throw new Error("Unable to detect public IPv4 address");
+  return ip;
+}
+
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63);
+}
+
+function readPackageJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function ensureAnalysisSchema() {
+  fs.mkdirSync(path.dirname(ANALYSIS_SCHEMA), { recursive: true });
+  fs.writeFileSync(
+    ANALYSIS_SCHEMA,
+    JSON.stringify(
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["apps", "composeFile", "composeServices", "notes"],
+        properties: {
+          apps: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "suffix",
+                "appDir",
+                "commandDir",
+                "packageRoot",
+                "commandTemplate",
+                "backgroundCommands",
+                "framework",
+                "reason",
+              ],
+              properties: {
+                suffix: { type: "string" },
+                appDir: { type: "string" },
+                commandDir: { type: "string" },
+                packageRoot: { type: "string" },
+                commandTemplate: { type: "string" },
+                backgroundCommands: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["commandDir", "command", "reason"],
+                    properties: {
+                      commandDir: { type: "string" },
+                      command: { type: "string" },
+                      reason: { type: "string" },
+                    },
+                  },
+                },
+                framework: { type: "string" },
+                reason: { type: "string" },
+              },
+            },
+          },
+          composeFile: { type: "string" },
+          composeServices: {
+            type: "array",
+            items: { type: "string" },
+          },
+          notes: { type: "string" },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function projectFingerprint(projectDir) {
+  const tracked = [
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+    "docker-compose.dev.yml",
+    "docker-compose.dev.yaml",
+    "compose.dev.yml",
+    "compose.dev.yaml",
+    "web/package.json",
+    "web/nuxt.config.ts",
+    "web/nuxt.config.js",
+    "web/vite.config.ts",
+    "web/vite.config.js",
+    "web/next.config.ts",
+    "web/next.config.js",
+    "frontend/package.json",
+    "frontend/next.config.ts",
+    "frontend/next.config.js",
+    "frontend/vite.config.ts",
+    "frontend/vite.config.js",
+    "packages/website/package.json",
+    "packages/website/nuxt.config.ts",
+    "packages/website/vite.config.ts",
+    "packages/app/package.json",
+    "packages/app/nuxt.config.ts",
+    "packages/app/vite.config.ts",
+  ];
+
+  return JSON.stringify(
+    tracked
+      .map((relativePath) => {
+        const fullPath = path.join(projectDir, relativePath);
+        try {
+          const stat = fs.statSync(fullPath);
+          return [relativePath, stat.size, Math.floor(stat.mtimeMs)];
+        } catch {
+          return [relativePath, null, null];
+        }
+      })
+      .filter(([, size]) => size !== null),
+  );
+}
+
+function analysisCacheFile(projectDir) {
+  fs.mkdirSync(ANALYSIS_DIR, { recursive: true });
+  return path.join(ANALYSIS_DIR, `${slugify(path.basename(projectDir))}.json`);
+}
+
+function readCachedAnalysis(projectDir, fingerprint) {
+  try {
+    const cached = JSON.parse(fs.readFileSync(analysisCacheFile(projectDir), "utf8"));
+    if (cached?.version === ANALYSIS_VERSION && cached?.fingerprint === fingerprint && cached?.analysis?.apps) {
+      return cached.analysis;
+    }
+  } catch {
+  }
+  return null;
+}
+
+function writeCachedAnalysis(projectDir, fingerprint, analysis, source = "codex") {
+  fs.writeFileSync(
+    analysisCacheFile(projectDir),
+    JSON.stringify(
+      {
+        version: ANALYSIS_VERSION,
+        source,
+        createdAt: new Date().toISOString(),
+        fingerprint,
+        analysis,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+function codexPrompt(projectName) {
+  return `Analyze this local web project and return only JSON that matches the provided schema.
+
+Goal: decide how this project should be configured and launched by systemd behind a reverse proxy.
+
+Rules:
+- Inspect package.json files, workspaces, Nuxt/Next/Vite config files, and compose files.
+- Return every runnable web app in apps.
+- Use paths relative to this project root.
+- commandTemplate must run the dev server on 127.0.0.1 and include the literal token {PORT}.
+- commandTemplate must be a single command, no shell control operators, no semicolon, no ampersand, no background process.
+- backgroundCommands is for long-running local dependencies that must run with this app but are not docker compose services, such as local PocketBase. Use an empty array if none are needed.
+- backgroundCommands commands must be single commands, no shell control operators, no semicolon, no ampersand, and no public bind address unless the project explicitly requires it.
+- Do not add backgroundCommands for production or remote databases, or for Vite proxies that intentionally point /api to production.
+- For Nuxt workspace apps, prefer: npx nuxt dev <relative-app-dir> --host 127.0.0.1 --port {PORT}
+- For normal Nuxt apps, prefer: npx nuxt dev --host 127.0.0.1 --port {PORT}
+- For Next apps, prefer: npx next dev --webpack -H 127.0.0.1 -p {PORT}
+- For Vite apps, prefer: npx vite --host 127.0.0.1 --port {PORT}
+- packageRoot should be where npm install must run.
+- commandDir should be where the command should run.
+- composeServices should include only local infrastructure services needed before app start, such as redis, postgres, qdrant, db. Exclude services that publish a public port.
+- If a project contains multiple apps, suffix should distinguish them, for example website or app. If it contains one app, suffix can be empty.
+
+Project name: ${projectName}`;
+}
+
+function analyzeProjectWithCodex(projectDir) {
+  if (DISABLE_CODEX_ANALYSIS) return null;
+  ensureAnalysisSchema();
+
+  const lastMessageFile = path.join(ANALYSIS_DIR, `${slugify(path.basename(projectDir))}.last-message.json`);
+  const args = [
+    "--ask-for-approval",
+    "never",
+    "-c",
+    'model_reasoning_effort="low"',
+    "exec",
+    "--ephemeral",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "read-only",
+    "--output-schema",
+    ANALYSIS_SCHEMA,
+    "--output-last-message",
+    lastMessageFile,
+    "-C",
+    projectDir,
+  ];
+  if (CODEX_MODEL) args.push("-m", CODEX_MODEL);
+  args.push(codexPrompt(path.basename(projectDir)));
+
+  outputFile(CODEX_BIN, args, { timeout: CODEX_TIMEOUT_MS });
+  return JSON.parse(fs.readFileSync(lastMessageFile, "utf8"));
+}
+
+function fallbackAnalysis(projectDir) {
+  const apps = discoverAppDirs(projectDir)
+    .map((app) => {
+      const portToken = "{PORT}";
+      const start = detectCommand(projectDir, app.dir, portToken);
+      if (!start) return null;
+      const packageRoot = fs.existsSync(path.join(projectDir, "package-lock.json"))
+        ? projectDir
+        : app.dir;
+
+      return {
+        suffix: app.suffix,
+        appDir: path.relative(projectDir, app.dir) || ".",
+        commandDir: path.relative(projectDir, start.commandDir) || ".",
+        packageRoot: path.relative(projectDir, packageRoot) || ".",
+        commandTemplate: start.command,
+        backgroundCommands: [],
+        framework: "fallback",
+        reason: "Heuristic fallback because Codex CLI analysis failed or was disabled.",
+      };
+    })
+    .filter(Boolean);
+
+  return { apps, composeFile: "", composeServices: [], notes: "fallback" };
+}
+
+function projectAnalysis(projectDir) {
+  const fingerprint = projectFingerprint(projectDir);
+  const cached = readCachedAnalysis(projectDir, fingerprint);
+  if (cached) return cached;
+
+  if (CODEX_ONLY_PROJECT && path.basename(projectDir) !== CODEX_ONLY_PROJECT) {
+    return fallbackAnalysis(projectDir);
+  }
+
+  try {
+    const analysis = analyzeProjectWithCodex(projectDir);
+    writeCachedAnalysis(projectDir, fingerprint, analysis, "codex");
+    return analysis;
+  } catch (error) {
+    const analysis = fallbackAnalysis(projectDir);
+    writeCachedAnalysis(projectDir, fingerprint, analysis, `fallback: ${error.message}`);
+    return analysis;
+  }
+}
+
+function hasPackage(appDir) {
+  return fs.existsSync(path.join(appDir, "package.json"));
+}
+
+function discoverAppDirs(projectDir) {
+  const candidates = [
+    { suffix: "", dir: path.join(projectDir, "web") },
+    { suffix: "", dir: path.join(projectDir, "frontend") },
+    { suffix: "website", dir: path.join(projectDir, "packages", "website") },
+    { suffix: "app", dir: path.join(projectDir, "packages", "app") },
+    { suffix: "", dir: projectDir },
+  ];
+
+  const seen = new Set();
+  const apps = [];
+  for (const candidate of candidates) {
+    if (seen.has(candidate.dir) || !hasPackage(candidate.dir)) continue;
+    seen.add(candidate.dir);
+    apps.push(candidate);
+  }
+
+  if (apps.length > 1) {
+    return apps.filter((app) => app.dir !== projectDir);
+  }
+
+  return apps;
+}
+
+function detectCommand(projectDir, appDir, port) {
+  const pkg = readPackageJson(path.join(appDir, "package.json"));
+  const rootPkg = readPackageJson(path.join(projectDir, "package.json"));
+  const hasNuxtConfig = ["nuxt.config.ts", "nuxt.config.js", "nuxt.config.mjs"].some((file) =>
+    fs.existsSync(path.join(appDir, file)),
+  );
+  const hasViteConfig = ["vite.config.ts", "vite.config.js", "vite.config.mjs"].some((file) =>
+    fs.existsSync(path.join(appDir, file)),
+  );
+  const hasNextConfig = ["next.config.ts", "next.config.js", "next.config.mjs"].some((file) =>
+    fs.existsSync(path.join(appDir, file)),
+  );
+
+  if (!pkg?.scripts?.dev && !hasNuxtConfig && !hasViteConfig && !hasNextConfig) return null;
+
+  const deps = {
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
+  };
+  const rootDeps = {
+    ...rootPkg?.dependencies,
+    ...rootPkg?.devDependencies,
+  };
+  const dev = String(pkg?.scripts?.dev ?? "");
+  const isWorkspaceApp = appDir !== projectDir && Array.isArray(rootPkg?.workspaces);
+
+  if (isWorkspaceApp && hasNuxtConfig && rootDeps.nuxt) {
+    return {
+      commandDir: projectDir,
+      command: `npx nuxt dev ${shellSingleQuote(path.relative(projectDir, appDir))} --host 127.0.0.1 --port ${port}`,
+    };
+  }
+
+  if (deps.nuxt || /\bnuxt\b/.test(dev) || hasNuxtConfig) {
+    return {
+      commandDir: appDir,
+      command: `npx nuxt dev --host 127.0.0.1 --port ${port}`,
+    };
+  }
+  if (deps.next || /\bnext\b/.test(dev) || hasNextConfig) {
+    return {
+      commandDir: appDir,
+      command: `npx next dev --webpack -H 127.0.0.1 -p ${port}`,
+    };
+  }
+  if (deps.vite || /\bvite\b/.test(dev) || hasViteConfig) {
+    return {
+      commandDir: appDir,
+      command: `npx vite --host 127.0.0.1 --port ${port}`,
+    };
+  }
+
+  return {
+    commandDir: appDir,
+    command: `npm run dev -- --host 127.0.0.1 --port ${port}`,
+  };
+}
+
+function safeRelativePath(projectDir, relativePath) {
+  if (!relativePath || relativePath === ".") return projectDir;
+  if (path.isAbsolute(relativePath)) return null;
+  const fullPath = path.resolve(projectDir, relativePath);
+  return fullPath.startsWith(`${path.resolve(projectDir)}${path.sep}`) ? fullPath : null;
+}
+
+function safeSingleCommand(command) {
+  if (!command || command.includes("\n") || /[;&|`$<>]/.test(command)) return null;
+  if (!/^(?:[A-Z_][A-Z0-9_]*=[^\s;&|`$<>]+\s+)*((npx|npm|pnpm|yarn|bun|node|deno|bash|sh)\s+|\.\/)/.test(command)) return null;
+  return command;
+}
+
+function commandFromTemplate(template, port) {
+  const command = String(template ?? "").replaceAll("{PORT}", String(port)).trim();
+  return safeSingleCommand(command);
+}
+
+function backgroundCommandFromAnalysis(projectDir, commandSpec) {
+  const commandDir = safeRelativePath(projectDir, commandSpec?.commandDir);
+  const command = safeSingleCommand(String(commandSpec?.command ?? "").trim());
+  if (!commandDir || !command) return null;
+  return {
+    commandDir,
+    command,
+    reason: String(commandSpec?.reason ?? ""),
+  };
+}
+
+function analysisApps(projectDir, analysis, portStart) {
+  const apps = [];
+  for (const app of analysis?.apps ?? []) {
+    const appDir = safeRelativePath(projectDir, app.appDir);
+    const commandDir = safeRelativePath(projectDir, app.commandDir);
+    const packageRoot = safeRelativePath(projectDir, app.packageRoot);
+    if (!appDir || !commandDir || !packageRoot || !hasPackage(appDir)) continue;
+
+    apps.push({
+      suffix: String(app.suffix ?? ""),
+      dir: appDir,
+      commandDir,
+      packageRoot,
+      commandTemplate: String(app.commandTemplate ?? ""),
+      backgroundCommands: (app.backgroundCommands ?? [])
+        .map((commandSpec) => backgroundCommandFromAnalysis(projectDir, commandSpec))
+        .filter(Boolean),
+      reason: app.reason ?? "",
+      framework: app.framework ?? "",
+    });
+  }
+
+  if (apps.length > 0) return apps;
+
+  return discoverAppDirs(projectDir).map((app) => ({
+    suffix: app.suffix,
+    dir: app.dir,
+    commandDir: null,
+    packageRoot: null,
+    commandTemplate: "",
+    backgroundCommands: [],
+    framework: "fallback",
+    reason: "",
+  }));
+}
+
+function pickComposeFile(projectDir) {
+  const preferred = [
+    "docker-compose.dev.yml",
+    "docker-compose.dev.yaml",
+    "compose.dev.yml",
+    "compose.dev.yaml",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+  ];
+
+  for (const file of preferred) {
+    const fullPath = path.join(projectDir, file);
+    if (fs.existsSync(fullPath) && isComposeFileUsable(projectDir, fullPath)) return fullPath;
+  }
+
+  return null;
+}
+
+function isComposeFileUsable(projectDir, composeFile) {
+  const content = fs.readFileSync(composeFile, "utf8");
+  const envRefs = [...content.matchAll(/(?:^|[^\w.-])(\.env\.[\w.-]+)/g)].map((match) => match[1]);
+  for (const envRef of envRefs) {
+    if (!fs.existsSync(path.join(projectDir, envRef))) return false;
+  }
+  return true;
+}
+
+function composeBaseArgs(projectDir, composeFile) {
+  const composeName = path.basename(composeFile);
+  if (composeName === "docker-compose.yml" || composeName === "docker-compose.yaml") {
+    return ["compose"];
+  }
+  return ["compose", "-f", composeFile];
+}
+
+function pickComposeServices(projectDir, composeFile) {
+  if (!composeFile) return [];
+
+  let config = null;
+  try {
+    config = JSON.parse(execFileSync("docker", [...composeBaseArgs(projectDir, composeFile), "config", "--format", "json"], {
+      cwd: projectDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }));
+  } catch {
+    return [];
+  }
+
+  const infraServicePattern =
+    /^(postgres|postgis|db|database|mysql|mariadb|mongo|mongodb|redis|qdrant|meilisearch|minio|mailhog|mailpit|centrifugo|rspamd|rabbitmq|nats|typesense|elasticsearch|opensearch)$/i;
+
+  return Object.entries(config.services ?? {})
+    .filter(([service]) => infraServicePattern.test(service))
+    .filter(([, serviceConfig]) => !hasPublicPublishedPort(serviceConfig))
+    .map(([service]) => service);
+}
+
+function hasPublicPublishedPort(serviceConfig) {
+  for (const port of serviceConfig?.ports ?? []) {
+    const hostIp = port.host_ip ?? port.hostIP ?? null;
+    if (port.published && hostIp !== "127.0.0.1" && hostIp !== "localhost") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildComposeCommand(project) {
+  if (!project.composeFile || project.composeServices.length === 0) return "";
+
+  const composeName = path.basename(project.composeFile);
+  const services = project.composeServices.map(shellSingleQuote).join(" ");
+  if (composeName === "docker-compose.yml" || composeName === "docker-compose.yaml") {
+    return `cd ${shellSingleQuote(project.projectDir)} && docker compose up -d ${services}`;
+  }
+
+  return `cd ${shellSingleQuote(project.projectDir)} && docker compose -f ${shellSingleQuote(project.composeFile)} up -d ${services}`;
+}
+
+function buildComposeLines(project) {
+  const command = buildComposeCommand(project);
+  return command ? [command] : [];
+}
+
+function buildInstallCommand(project) {
+  const packageRoot = project.packageRoot ?? (fs.existsSync(path.join(project.projectDir, "package-lock.json"))
+    ? project.projectDir
+    : project.appDir);
+
+  return `cd ${shellSingleQuote(packageRoot)} && if [ ! -d node_modules ] || [ ! -d node_modules/.bin ]; then npm install; fi`;
+}
+
+function buildInstallLines(project) {
+  return [buildInstallCommand(project)];
+}
+
+function buildBackgroundCommands(project) {
+  const commands = [];
+  for (const background of project.backgroundCommands ?? []) {
+    if (background.command.includes("./pb/pocketbase")) {
+      const pbPort = background.command.match(/--http=127\.0\.0\.1:(\d+)/)?.[1] ?? "10001";
+      const containerName = `autoproject-${project.slug}-pb`;
+      const imageName = `autoproject-${project.slug}-pb:local`;
+      commands.push(`cd ${shellSingleQuote(background.commandDir)}
+if [ -x ./pb/pocketbase ] && file ./pb/pocketbase | grep -Eq 'ELF.*(x86-64|x86_64)'; then
+  (${background.command}) &
+elif [ -f Dockerfile.pb ] && command -v docker >/dev/null 2>&1; then
+  echo "Local PocketBase binary is not compatible with this host; using Dockerfile.pb."
+  docker rm -f ${shellSingleQuote(containerName)} >/dev/null 2>&1 || true
+  docker build -f Dockerfile.pb -t ${shellSingleQuote(imageName)} .
+  docker run --rm -d --name ${shellSingleQuote(containerName)} -p 127.0.0.1:${pbPort}:8090 -v "$PWD/pb/pb_data:/pb/pb_data" ${shellSingleQuote(imageName)}
+else
+  echo "Skipping PocketBase background command: no compatible local binary and no Dockerfile.pb."
+fi`);
+      continue;
+    }
+    commands.push(`(cd ${shellSingleQuote(background.commandDir)} && ${background.command}) &`);
+  }
+  if (commands.length > 0) commands.push("sleep 1");
+  return commands;
+}
+
+function buildRunScriptContent(project) {
+  return `#!/usr/bin/env bash
+set -e
+
+export HOME=/root
+export NODE_ENV=development
+export HOST=127.0.0.1
+export PORT=${project.port}
+export NUXT_HOST=127.0.0.1
+export NUXT_PORT=${project.port}
+export NUXT_DEVTOOLS_ENABLED=false
+export NEXT_PRIVATE_DEV_SERVER_BUNDLER=webpack
+
+# Generated by /usr/local/bin/project-autostart from Codex/project analysis.
+# Project: ${project.slug}
+# App dir: ${project.appDir}
+# Framework: ${project.analysisFramework || "unknown"}
+# Reason: ${String(project.analysisReason || "").replaceAll("\n", " ")}
+
+${[
+    ...buildComposeLines(project),
+    ...buildInstallLines(project),
+    ...buildBackgroundCommands(project),
+    `cd ${shellSingleQuote(project.commandDir)}`,
+    `exec ${project.command}`,
+  ]
+    .filter(Boolean)
+    .join("\n")}
+`;
+}
+
+function buildStartCommand(project) {
+  return [
+    "set -e",
+    buildComposeCommand(project),
+    buildInstallCommand(project),
+    ...buildBackgroundCommands(project),
+    `cd ${shellSingleQuote(project.commandDir)}`,
+    `exec ${project.command}`,
+  ]
+    .filter(Boolean)
+    .join("; ");
+}
+
+function shellSingleQuote(value) {
+  return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
+}
+
+function unitContent(project) {
+  return `[Unit]
+Description=Auto project dev server: ${project.slug}
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=2
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${project.appDir}
+Environment=HOME=/root
+Environment=NODE_ENV=development
+Environment=HOST=127.0.0.1
+Environment=PORT=${project.port}
+Environment=NUXT_HOST=127.0.0.1
+Environment=NUXT_PORT=${project.port}
+Environment=NUXT_DEVTOOLS_ENABLED=false
+Environment=NEXT_PRIVATE_DEV_SERVER_BUNDLER=webpack
+ExecStart=${project.runScript}
+Restart=always
+RestartSec=15
+TimeoutStartSec=0
+MemoryAccounting=true
+MemoryHigh=1000M
+MemoryMax=1400M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
+`;
+}
+
+function existingProjectPorts() {
+  const ports = new Map();
+  for (const unit of fs.readdirSync(UNIT_DIR).filter((name) => /^autoproject-.+\.service$/.test(name))) {
+    try {
+      const content = fs.readFileSync(path.join(UNIT_DIR, unit), "utf8");
+      const slug = unit.replace(/^autoproject-/, "").replace(/\.service$/, "");
+      const port = Number(content.match(/^Environment=PORT=(\d+)$/m)?.[1] ?? "0");
+      if (slug && port > 0) ports.set(slug, port);
+    } catch {
+    }
+  }
+  return ports;
+}
+
+function createPortAllocator() {
+  const existing = existingProjectPorts();
+  const reservedByPort = new Map(Array.from(existing.entries()).map(([slug, port]) => [port, slug]));
+  const used = new Set();
+
+  return (slug) => {
+    const previous = existing.get(slug);
+    if (previous && !used.has(previous)) {
+      used.add(previous);
+      return previous;
+    }
+
+    let port = PORT_BASE;
+    while (used.has(port) || (reservedByPort.has(port) && reservedByPort.get(port) !== slug)) {
+      port += 1;
+    }
+    used.add(port);
+    return port;
+  };
+}
+
+function discoverProjects() {
+  const allocatePort = createPortAllocator();
+  const entries = fs
+    .readdirSync(ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .filter((entry) => !entry.name.startsWith("."))
+    .filter((entry) => !EXCLUDED.has(entry.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const projects = [];
+  for (const [index, entry] of entries.entries()) {
+    const projectDir = path.join(ROOT, entry.name);
+    const analysis = projectAnalysis(projectDir);
+    const apps = analysisApps(projectDir, analysis);
+    const analyzedComposeFile = analysis?.composeFile ? safeRelativePath(projectDir, analysis.composeFile) : null;
+    const composeFile = analyzedComposeFile && fs.existsSync(analyzedComposeFile)
+      ? analyzedComposeFile
+      : pickComposeFile(projectDir);
+    const detectedComposeServices = pickComposeServices(projectDir, composeFile);
+    const analyzedComposeServices = Array.isArray(analysis?.composeServices)
+      ? analysis.composeServices.filter((service) => detectedComposeServices.includes(service))
+      : [];
+    const composeServices = analyzedComposeServices.length > 0 ? analyzedComposeServices : detectedComposeServices;
+
+    for (const app of apps) {
+      const baseSlug = slugify(entry.name);
+      const suffix = slugify(app.suffix);
+      const slug = suffix ? `${baseSlug}-${suffix}` : baseSlug;
+      if (!slug) continue;
+
+      const port = allocatePort(slug);
+      const start = app.commandDir && app.commandTemplate
+        ? {
+            commandDir: app.commandDir,
+            command: commandFromTemplate(app.commandTemplate, port),
+          }
+        : detectCommand(projectDir, app.dir, port);
+      if (start && !start.command) continue;
+      if (!start) continue;
+
+      projects.push({
+        slug,
+        projectDir,
+        appDir: app.dir,
+        composeFile,
+        composeServices,
+        backgroundCommands: app.backgroundCommands ?? [],
+        port,
+        command: start.command,
+        commandDir: start.commandDir,
+        packageRoot: app.packageRoot,
+        analysisFramework: app.framework,
+        analysisReason: app.reason,
+        runScript: path.join(RUN_DIR, `${slug}.sh`),
+        unitName: `autoproject-${slug}.service`,
+      });
+    }
+  }
+  return projects;
+}
+
+function writeIfChanged(filePath, content) {
+  const previous = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : null;
+  if (previous === content) return false;
+  fs.writeFileSync(filePath, content, { mode: 0o644 });
+  return true;
+}
+
+function writeExecutableIfChanged(filePath, content) {
+  const changed = writeIfChanged(filePath, content);
+  fs.chmodSync(filePath, 0o755);
+  return changed;
+}
+
+function reconcileUnits(projects, { startServices = true } = {}) {
+  const expected = new Map(projects.map((project) => [project.unitName, project]));
+  const expectedScripts = new Set(projects.map((project) => path.basename(project.runScript)));
+  const existing = fs
+    .readdirSync(UNIT_DIR)
+    .filter((name) => /^autoproject-.+\.service$/.test(name));
+  fs.mkdirSync(RUN_DIR, { recursive: true });
+
+  for (const name of existing) {
+    if (expected.has(name)) continue;
+    run("systemctl", ["disable", "--now", name], { stdio: "ignore" });
+    fs.rmSync(path.join(UNIT_DIR, name), { force: true });
+  }
+
+  for (const name of fs.readdirSync(RUN_DIR)) {
+    if (expectedScripts.has(name) || !name.endsWith(".sh")) continue;
+    fs.rmSync(path.join(RUN_DIR, name), { force: true });
+  }
+
+  let changed = false;
+  for (const project of projects) {
+    const unitPath = path.join(UNIT_DIR, project.unitName);
+    if (writeExecutableIfChanged(project.runScript, buildRunScriptContent(project))) {
+      changed = true;
+    }
+    if (writeIfChanged(unitPath, unitContent(project))) {
+      changed = true;
+    }
+  }
+
+  run("systemctl", ["daemon-reload"]);
+
+  if (!startServices) return;
+
+  for (const project of projects) {
+    run("systemctl", ["enable", "--now", project.unitName]);
+    if (changed) {
+      run("systemctl", ["restart", project.unitName]);
+    }
+  }
+}
+
+function caddyContent(projects, ip) {
+  const launcherRoute = fs.existsSync(path.join(UNIT_DIR, "project-launcher.service"))
+    ? `\thandle_path /project-launcher* {
+\t\treverse_proxy 127.0.0.1:14999
+\t}
+
+`
+    : "";
+
+  const pathRoutes = projects
+    .map(
+      (project) => `\thandle_path /${project.slug}* {
+\t\treverse_proxy 127.0.0.1:${project.port} {
+\t\t\theader_up Host {upstream_hostport}
+\t\t}
+\t}`,
+    )
+    .join("\n\n");
+
+  const list = projects
+    .map(
+      (project) =>
+        `${project.slug}: http://${project.slug}.${ip}.sslip.io or http://${ip}/${project.slug}`,
+    )
+    .join("\\n");
+
+  const hostBlocks = projects
+    .map(
+      (project) => `http://${project.slug}.${ip}.sslip.io {
+\tencode gzip
+\treverse_proxy 127.0.0.1:${project.port} {
+\t\theader_up Host {upstream_hostport}
+\t}
+}`,
+    )
+    .join("\n\n");
+
+  return `# Generated by /usr/local/bin/project-autostart. Manual edits will be overwritten.
+{
+\tauto_https off
+}
+
+:80 {
+\tencode gzip
+
+${launcherRoute}
+${pathRoutes}
+
+\thandle {
+\t\trespond "Auto project proxy\\n\\n${list}" 200
+\t}
+}
+
+${hostBlocks}
+`;
+}
+
+function reconcileCaddy(projects, ip) {
+  writeIfChanged(CADDYFILE, caddyContent(projects, ip));
+  run("caddy", ["validate", "--config", CADDYFILE]);
+  run("systemctl", ["enable", "--now", "caddy"]);
+  try {
+    run("systemctl", ["reload", "caddy"]);
+  } catch {
+    run("systemctl", ["restart", "caddy"]);
+  }
+}
+
+const ip = publicIp();
+const projects = discoverProjects();
+if (projects.length === 0) {
+  throw new Error(`No runnable projects found under ${ROOT}`);
+}
+
+reconcileUnits(projects, { startServices: !CONFIG_ONLY });
+reconcileCaddy(projects, ip);
+
+for (const project of projects) {
+  console.log(`${project.slug}\t${project.appDir}\t${project.port}\thttp://${project.slug}.${ip}.sslip.io\thttp://${ip}/${project.slug}`);
+}

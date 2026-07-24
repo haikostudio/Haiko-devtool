@@ -4,7 +4,12 @@ import { z } from "zod";
 import type { Logger } from "pino";
 
 import { writeJsonFileAtomic } from "../atomic-file.js";
-import { AgentFeatureSchema, AgentStatusSchema } from "../messages.js";
+import {
+  AgentFeatureSchema,
+  AgentStatusSchema,
+  type AgentSynthesis,
+  AgentSynthesisSchema,
+} from "../messages.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
 import type { ManagedAgent } from "./agent-manager.js";
 import type { AgentSessionConfig } from "./agent-sdk-types.js";
@@ -16,6 +21,10 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
     model: z.string().nullable().optional(),
     thinkingOptionId: z.string().nullable().optional(),
     featureValues: z.record(z.string(), z.unknown()).nullable().optional(),
+    approvalPolicy: z.string().nullable().optional(),
+    sandboxMode: z.string().nullable().optional(),
+    networkAccess: z.boolean().nullable().optional(),
+    webSearch: z.boolean().nullable().optional(),
     extra: z.record(z.string(), z.any()).nullable().optional(),
     systemPrompt: z.string().nullable().optional(),
     mcpServers: z.record(z.string(), z.any()).nullable().optional(),
@@ -43,6 +52,11 @@ const STORED_AGENT_SCHEMA = z.object({
   lastActivityAt: z.string().optional(),
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
+  // True once the user has renamed this agent's tab by hand. The per-turn
+  // auto-titler defers to it and never overwrites a hand-picked tab title.
+  titleLockedByUser: z.boolean().optional(),
+  synthesis: AgentSynthesisSchema.nullable().optional(),
+  synthesisHistory: z.array(AgentSynthesisSchema).optional(),
   labels: z.record(z.string(), z.string()).default({}),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
@@ -74,6 +88,10 @@ export type SerializableAgentConfig = Pick<
   | "model"
   | "thinkingOptionId"
   | "featureValues"
+  | "approvalPolicy"
+  | "sandboxMode"
+  | "networkAccess"
+  | "webSearch"
   | "extra"
   | "systemPrompt"
   | "mcpServers"
@@ -82,6 +100,62 @@ export type SerializableAgentConfig = Pick<
 export type StoredAgentRecord = z.infer<typeof STORED_AGENT_SCHEMA>;
 export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
   return STORED_AGENT_SCHEMA.parse(value);
+}
+
+interface ApplySnapshotOptions {
+  title?: string | null;
+  titleLockedByUser?: boolean;
+  synthesis?: AgentSynthesis | null;
+  synthesisHistory?: AgentSynthesis[] | null;
+  internal?: boolean;
+}
+
+/**
+ * Resolve which persisted fields an applySnapshot call overrides. Fields not
+ * explicitly present in `options` fall back to the existing stored value so a
+ * routine snapshot flush never clobbers title/synthesis/internal.
+ */
+function resolveSnapshotOverrides(
+  agent: ManagedAgent,
+  existing: StoredAgentRecord | null,
+  options?: ApplySnapshotOptions,
+): {
+  title: string | null;
+  titleLockedByUser?: boolean;
+  synthesis: AgentSynthesis | null;
+  synthesisHistory: AgentSynthesis[] | null;
+  createdAt?: string;
+  internal?: boolean;
+} {
+  const has = (key: keyof ApplySnapshotOptions): boolean =>
+    options !== undefined && Object.prototype.hasOwnProperty.call(options, key);
+  return {
+    title: resolveOverrideField(has("title"), options?.title, existing?.title),
+    titleLockedByUser: has("titleLockedByUser")
+      ? options?.titleLockedByUser
+      : existing?.titleLockedByUser,
+    synthesis: resolveOverrideField(has("synthesis"), options?.synthesis, existing?.synthesis),
+    synthesisHistory: resolveOverrideField(
+      has("synthesisHistory"),
+      options?.synthesisHistory,
+      existing?.synthesisHistory,
+    ),
+    createdAt: existing?.createdAt,
+    internal: has("internal") ? options?.internal : (agent.internal ?? existing?.internal),
+  };
+}
+
+// Pick the override value when the caller explicitly provided the key, else fall
+// back to the existing stored value. Keeps resolveSnapshotOverrides flat.
+function resolveOverrideField<T>(
+  present: boolean,
+  optionValue: T | null | undefined,
+  existingValue: T | null | undefined,
+): T | null {
+  if (present) {
+    return optionValue ?? null;
+  }
+  return existingValue ?? null;
 }
 
 export class AgentStorage {
@@ -202,22 +276,11 @@ export class AgentStorage {
     this.pathsById.delete(agentId);
   }
 
-  async applySnapshot(
-    agent: ManagedAgent,
-    options?: { title?: string | null; internal?: boolean },
-  ): Promise<void> {
+  async applySnapshot(agent: ManagedAgent, options?: ApplySnapshotOptions): Promise<void> {
     await this.load();
     await this.waitForPendingWrite(agent.id);
     const existing = (await this.get(agent.id)) ?? null;
-    const hasTitleOverride =
-      options !== undefined && Object.prototype.hasOwnProperty.call(options, "title");
-    const hasInternalOverride =
-      options !== undefined && Object.prototype.hasOwnProperty.call(options, "internal");
-    const record = toStoredAgentRecord(agent, {
-      title: hasTitleOverride ? (options?.title ?? null) : (existing?.title ?? null),
-      createdAt: existing?.createdAt,
-      internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
-    });
+    const record = toStoredAgentRecord(agent, resolveSnapshotOverrides(agent, existing, options));
 
     // Preserve soft-delete/archive status across snapshot flushes.
     // `archivedAt` is not part of the ManagedAgent snapshot, so a naive projection

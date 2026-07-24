@@ -20,7 +20,7 @@ import {
   SquareTerminal,
 } from "lucide-react-native";
 import { WorkspaceHoverCard } from "@/components/workspace-hover-card";
-import { SyncedLoader } from "@/components/synced-loader";
+import { CircularStatusLoader } from "@/components/circular-status-loader";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useAppSettings } from "@/hooks/use-settings";
 import type { Theme } from "@/styles/theme";
@@ -41,7 +41,7 @@ const EMPHASIZED_STATUS_DOT_OFFSET = -1;
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
 const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const amberColorMapping = (theme: Theme) => ({ color: theme.colors.palette.amber[500] });
-const syncedLoaderColorMapping = (theme: Theme) => ({
+const runningLoaderColorMapping = (theme: Theme) => ({
   color:
     theme.colorScheme === "light"
       ? theme.colors.palette.amber[700]
@@ -56,7 +56,7 @@ const ThemedExternalLink = withUnistyles(ExternalLink);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCircleAlert = withUnistyles(CircleAlert);
-const ThemedSyncedLoader = withUnistyles(SyncedLoader);
+const ThemedCircularStatusLoader = withUnistyles(CircularStatusLoader);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedFolder = withUnistyles(Folder);
 const ThemedFolderGit2 = withUnistyles(FolderGit2);
@@ -215,7 +215,7 @@ function WorkspaceStatusIndicator({
   if (shouldShowSyncedLoader) {
     return (
       <View style={styles.workspaceStatusDot} testID="workspace-status-indicator-running">
-        <ThemedSyncedLoader size={11} uniProps={syncedLoaderColorMapping} />
+        <ThemedCircularStatusLoader size={12} uniProps={runningLoaderColorMapping} />
       </View>
     );
   }
@@ -390,7 +390,7 @@ const prBadgeStyles = StyleSheet.create((theme) => ({
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: theme.spacing[1],
   },
   badgePressed: {
     opacity: 0.82,
@@ -410,7 +410,7 @@ const checksBadgeStyles = StyleSheet.create((theme) => ({
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: theme.spacing[1],
   },
   text: {
     fontSize: theme.fontSize.xs,

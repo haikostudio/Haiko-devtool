@@ -1811,6 +1811,81 @@ test("readFile resolves from binary file frames when the daemon supports them", 
   expect(new TextDecoder().decode(result.bytes)).toBe("hello");
 });
 
+test("readFile falls back to an inline read when binary bytes never arrive", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.readFile("/tmp/project", "README.md", "req-binary");
+
+  // Binary transfer is acknowledged but no frames arrive (dropped over the relay).
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: "/tmp/project",
+        path: "README.md",
+        mode: "file",
+        directory: null,
+        file: null,
+        error: null,
+        requestId: "req-binary",
+      },
+    }),
+  );
+
+  // The client retries with a non-binary (inline) read using a fresh requestId.
+  await vi.waitFor(() => expect(mock.sent.length).toBeGreaterThan(1));
+  const inlineRequest = JSON.parse(assertStr(mock.sent[1]));
+  expect(inlineRequest.message).toMatchObject({
+    type: "file_explorer_request",
+    cwd: "/tmp/project",
+    path: "README.md",
+    mode: "file",
+  });
+  expect(inlineRequest.message.acceptBinary).toBeUndefined();
+  const inlineRequestId = inlineRequest.message.requestId as string;
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: "/tmp/project",
+        path: "README.md",
+        mode: "file",
+        directory: null,
+        file: {
+          path: "README.md",
+          kind: "text",
+          encoding: "utf-8",
+          content: "# Hello",
+          mimeType: "text/markdown",
+          size: 7,
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+        },
+        error: null,
+        requestId: inlineRequestId,
+      },
+    }),
+  );
+
+  const result = await responsePromise;
+  expect(result).toMatchObject({ mime: "text/markdown", kind: "text", path: "README.md" });
+  expect(new TextDecoder().decode(result.bytes)).toBe("# Hello");
+});
+
 test("uploadFile sends metadata request and file bytes as binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

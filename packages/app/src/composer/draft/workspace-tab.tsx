@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Keyboard, ScrollView, StyleSheet as RNStyleSheet, Text, View } from "react-native";
+import { Keyboard, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import ReanimatedAnimated from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
@@ -9,23 +9,30 @@ import { useContainerWidthBelow } from "@/hooks/use-container-width";
 import invariant from "tiny-invariant";
 import { Composer } from "@/composer";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
+import { DraftAgentModeControl } from "@/composer/agent-controls/mode-control";
 import { ComposerImportPill } from "@/composer/draft/import-pill";
 import { AgentStreamView } from "@/agent-stream/view";
 import { composerWorkspaceAttachment } from "@/composer/attachments/workspace";
 import { useAgentInputDraft } from "@/composer/draft/input-draft";
+import { buildDraftSetupEchoKey, recordLocalDraftSetup } from "@/composer/draft/local-setup-echo";
 import type { CreateAgentInitialValues } from "@/hooks/use-agent-form-state";
 import { useDraftAgentCreateFlow, type DraftCreateAttempt } from "@/composer/draft/create-flow";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { buildWorkspaceDraftAgentConfig } from "@/screens/workspace/workspace-draft-agent-config";
 import { buildDraftStoreKey } from "@/stores/draft-keys";
+import {
+  buildWorkspaceTabPersistenceKey,
+  useWorkspaceLayoutStore,
+} from "@/stores/workspace-layout-store";
+import {
+  normalizeWorkspaceDraftTabSetup,
+  workspaceDraftTabSetupsEqual,
+} from "@/workspace-tabs/identity";
 import { usePanelStore } from "@/stores/panel-store";
 import { useCreateFlowStore } from "@/stores/create-flow-store";
 import type { Agent } from "@/stores/session-store";
 import { useWorkspaceFields } from "@/stores/session-store-hooks";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
-import { useCommandCenterActions } from "@/command-center/provider";
-import { buildModelChoiceContributions } from "@/command-center/model-contributions";
-import { getCommandCenterProviderIcon } from "@/command-center/provider-icon";
 import { encodeImages } from "@/utils/encode-images";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { shouldAutoFocusWorkspaceDraftComposer } from "@/screens/workspace/workspace-draft-pane-focus";
@@ -49,7 +56,7 @@ import {
   useIsCompactFormFactor,
 } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
-import type { WorkspaceDraftTabSetup } from "@/workspace-tabs/model";
+import type { WorkspaceDraftTabSetup } from "@/stores/workspace-tabs-store";
 
 const EMPTY_PENDING_PERMISSIONS = new Map();
 const EMPTY_ONLINE_SERVER_IDS: string[] = [];
@@ -311,6 +318,12 @@ interface WorkspaceDraftAgentTabProps {
   onCreated: (snapshot: AgentSnapshotPayload) => void;
   onOpenWorkspaceFile: (request: WorkspaceFileOpenRequest) => void;
   onOpenImportSheet?: () => void;
+  /** Reports composer text-input focus to the parent so it can defer the remote
+   * config re-seed while the user is actively typing here. */
+  onInputFocusChange?: (focused: boolean) => void;
+  /** When true, skip auto-focusing the input on mount. Set by the parent for a
+   * remote-config re-seed remount so the keyboard never pops on the receiver. */
+  suppressAutoFocus?: boolean;
 }
 
 function resolveImportPillPress(
@@ -333,6 +346,8 @@ export function WorkspaceDraftAgentTab({
   onCreated,
   onOpenWorkspaceFile,
   onOpenImportSheet,
+  onInputFocusChange,
+  suppressAutoFocus = false,
 }: WorkspaceDraftAgentTabProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -377,31 +392,72 @@ export function WorkspaceDraftAgentTab({
   if (!composerState) {
     throw new Error("Workspace draft composer state is required");
   }
-
-  const draftModelActions = useMemo(
-    () =>
-      buildModelChoiceContributions({
-        serverId,
-        providers: composerState.modelSelectorProviders,
-        selectedProvider: composerState.selectedProvider,
-        selectedModelId: composerState.effectiveModelId || null,
-        groupLabel: t("shell.commandCenter.modelGroupLabel"),
-        searchKeywords: t("shell.commandCenter.modelSearchKeywords"),
-        getIcon: getCommandCenterProviderIcon,
-        select: composerState.setProviderAndModelFromUser,
-      }),
-    [
-      composerState.effectiveModelId,
-      composerState.modelSelectorProviders,
-      composerState.selectedProvider,
-      composerState.setProviderAndModelFromUser,
-      serverId,
-      t,
-    ],
-  );
   const clearDraftInput = draftInput.clear;
   const setDraftText = draftInput.setText;
   const setDraftAttachments = draftInput.setAttachments;
+
+  // Cross-device agent config (target.setup) sync. The config lives in the
+  // mount-once form; two one-directional halves keep it in sync without the write
+  // loop the reactive version caused:
+  //  - Capture (this device -> target.setup): only when the local user changed a
+  //    control (pendingConfigCaptureRef), never reactively, so a device that
+  //    RECEIVES a config change never writes it back.
+  //  - Apply (target.setup -> this device): the draft panel remounts the composer
+  //    when target.setup diverges from the echo (a remote change); see DraftPanel.
+  // The echo records the setup this composer currently displays: seeded at mount
+  // and updated on each local capture, so local edits never look "remote".
+  const composerSetup = useMemo(
+    () =>
+      normalizeWorkspaceDraftTabSetup({
+        provider: composerState.selectedProvider,
+        cwd: composerState.workingDir,
+        modeId: composerState.selectedMode || null,
+        model: composerState.effectiveModelId || null,
+        thinkingOptionId: composerState.effectiveThinkingOptionId || null,
+        featureValues: composerState.featureValues ?? {},
+      }),
+    [
+      composerState.selectedProvider,
+      composerState.workingDir,
+      composerState.selectedMode,
+      composerState.effectiveModelId,
+      composerState.effectiveThinkingOptionId,
+      composerState.featureValues,
+    ],
+  );
+  const setupEchoKey = buildDraftSetupEchoKey(serverId, draftId);
+  const initialSetupAtMountRef = useRef(initialSetup);
+  useEffect(() => {
+    // Seed the echo to what this composer mounts with, so the panel does not read
+    // a stale/missing echo and remount spuriously on first render.
+    recordLocalDraftSetup(
+      setupEchoKey,
+      normalizeWorkspaceDraftTabSetup(initialSetupAtMountRef.current) ?? null,
+    );
+  }, [setupEchoKey]);
+  useEffect(() => {
+    if (!pendingConfigCaptureRef.current) {
+      return;
+    }
+    pendingConfigCaptureRef.current = false;
+    if (!composerSetup) {
+      return;
+    }
+    if (
+      workspaceDraftTabSetupsEqual(normalizeWorkspaceDraftTabSetup(initialSetup), composerSetup)
+    ) {
+      return;
+    }
+    const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
+    if (!workspaceKey) {
+      return;
+    }
+    recordLocalDraftSetup(setupEchoKey, composerSetup);
+    useWorkspaceLayoutStore
+      .getState()
+      .retargetTab(workspaceKey, tabId, { kind: "draft", draftId, setup: composerSetup });
+  }, [composerSetup, initialSetup, serverId, workspaceId, tabId, draftId, setupEchoKey]);
+
   const pendingAutoSubmit = useWorkspaceDraftSubmissionStore((state) => {
     const pending = state.pendingByDraftId[draftId] ?? null;
     return pending?.serverId === serverId && pending.workspaceId === workspaceId ? pending : null;
@@ -541,11 +597,6 @@ export function WorkspaceDraftAgentTab({
       onCreated(result);
     },
   });
-  useCommandCenterActions({
-    sourceId: `draft:${serverId}:${tabId}`,
-    enabled: isPaneFocused && !isSubmitting,
-    actions: draftModelActions,
-  });
 
   const isReadyForPendingAutoSubmit = Boolean(
     pendingAutoSubmit &&
@@ -608,16 +659,89 @@ export function WorkspaceDraftAgentTab({
     focusInputRef.current = focus;
   }, []);
 
+  // Set by the config controls when the LOCAL user changes a setting, so the
+  // capture effect below writes target.setup ONLY for genuine local edits (never
+  // for remote-driven form changes — that reactive write-back is what caused the
+  // cross-device loop). Read-and-cleared on the next composer config change.
+  const pendingConfigCaptureRef = useRef(false);
+  const markConfigCaptureFromUser = useCallback(() => {
+    pendingConfigCaptureRef.current = true;
+  }, []);
+
+  const notifyInputFocus = draftInput.notifyInputFocus;
+  const handleInputFocusChange = useCallback(
+    (focused: boolean) => {
+      // Drive both the in-place text/attachment adoption (hook) and the parent's
+      // config re-seed gate.
+      notifyInputFocus(focused);
+      onInputFocusChange?.(focused);
+    },
+    [notifyInputFocus, onInputFocusChange],
+  );
+
+  const handleProviderSelectWithFocus = useCallback(
+    (provider: Parameters<typeof composerState.setProviderFromUser>[0]) => {
+      markConfigCaptureFromUser();
+      composerState.setProviderFromUser(provider);
+      focusInputRef.current?.();
+    },
+    [composerState, markConfigCaptureFromUser],
+  );
+
+  const handleModeSelectWithFocus = useCallback(
+    (modeId: string) => {
+      markConfigCaptureFromUser();
+      composerState.setModeFromUser(modeId);
+      focusInputRef.current?.();
+    },
+    [composerState, markConfigCaptureFromUser],
+  );
+
+  const handleModelSelectWithFocus = useCallback(
+    (modelId: string) => {
+      markConfigCaptureFromUser();
+      composerState.setModelFromUser(modelId);
+      focusInputRef.current?.();
+    },
+    [composerState, markConfigCaptureFromUser],
+  );
+
+  const handleProviderAndModelSelectWithFocus = useCallback(
+    (
+      provider: Parameters<typeof composerState.setProviderAndModelFromUser>[0],
+      modelId: string,
+    ) => {
+      markConfigCaptureFromUser();
+      composerState.setProviderAndModelFromUser(provider, modelId);
+      focusInputRef.current?.();
+    },
+    [composerState, markConfigCaptureFromUser],
+  );
+
+  const handleThinkingOptionSelectWithFocus = useCallback(
+    (optionId: string) => {
+      markConfigCaptureFromUser();
+      composerState.setThinkingOptionFromUser(optionId);
+      focusInputRef.current?.();
+    },
+    [composerState, markConfigCaptureFromUser],
+  );
+
+  const handleSetFeatureWithFocus = useCallback(
+    (featureId: string, value: unknown) => {
+      markConfigCaptureFromUser();
+      composerState.agentControls.onSetFeature?.(featureId, value);
+      focusInputRef.current?.();
+    },
+    [composerState, markConfigCaptureFromUser],
+  );
+
   const { style: composerKeyboardStyle } = useKeyboardShiftStyle({
     mode: "translate",
   });
 
   const inputAreaWrapperStyle = useMemo(
-    () => [
-      animatedStaticStyles.inputAreaWrapper,
-      { paddingBottom: insets.bottom },
-      composerKeyboardStyle,
-    ],
+    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
     [insets.bottom, composerKeyboardStyle],
   );
 
@@ -628,11 +752,39 @@ export function WorkspaceDraftAgentTab({
   const composerAgentControls = useMemo(
     () => ({
       ...composerState.agentControls,
+      onSelectProvider: handleProviderSelectWithFocus,
+      onSelectMode: handleModeSelectWithFocus,
+      onSelectModel: handleModelSelectWithFocus,
+      onSelectProviderAndModel: handleProviderAndModelSelectWithFocus,
+      onSelectThinkingOption: handleThinkingOptionSelectWithFocus,
+      onSetFeature: handleSetFeatureWithFocus,
       onDropdownClose: handleDropdownCloseFocus,
       disabled: isSubmitting,
     }),
-    [composerState.agentControls, handleDropdownCloseFocus, isSubmitting],
+    [
+      composerState.agentControls,
+      handleProviderSelectWithFocus,
+      handleModeSelectWithFocus,
+      handleModelSelectWithFocus,
+      handleProviderAndModelSelectWithFocus,
+      handleThinkingOptionSelectWithFocus,
+      handleSetFeatureWithFocus,
+      handleDropdownCloseFocus,
+      isSubmitting,
+    ],
   );
+  const composerFooter = useMemo(
+    () =>
+      isCompactComposerLayout ? (
+        <DraftAgentModeControl
+          placement="footer"
+          {...composerAgentControls}
+          isCompactLayout={isCompactComposerLayout}
+        />
+      ) : undefined,
+    [isCompactComposerLayout, composerAgentControls],
+  );
+
   return (
     <FileDropZone style={styles.container}>
       <View style={styles.contentContainer}>
@@ -671,7 +823,6 @@ export function WorkspaceDraftAgentTab({
         <Composer
           agentId={tabId}
           serverId={serverId}
-          workspaceId={workspaceId}
           externalKeyboardShift
           isPaneFocused={isPaneFocused}
           onSubmitMessage={handleCreateFromInput}
@@ -685,23 +836,21 @@ export function WorkspaceDraftAgentTab({
           onChangeAttachments={draftInput.setAttachments}
           cwd={composerState.workingDir}
           clearDraft={draftInput.clear}
-          autoFocus={shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })}
-          autoFocusKey={String(draftInput.attachmentFocusRequestId)}
+          autoFocus={
+            !suppressAutoFocus &&
+            shouldAutoFocusWorkspaceDraftComposer({ isPaneFocused, isSubmitting })
+          }
           onFocusInput={handleFocusInputCallback}
+          onInputFocusChange={handleInputFocusChange}
           commandDraftConfig={composerState.commandDraftConfig}
           agentControls={composerAgentControls}
+          footer={composerFooter}
           isCompactLayout={isCompactComposerLayout}
         />
       </ReanimatedAnimated.View>
     </FileDropZone>
   );
 }
-
-const animatedStaticStyles = RNStyleSheet.create({
-  inputAreaWrapper: {
-    width: "100%",
-  },
-});
 
 const styles = StyleSheet.create((theme) => ({
   container: {
@@ -725,6 +874,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   configSection: {
     gap: theme.spacing[3],
+  },
+  inputAreaWrapper: {
+    width: "100%",
+    backgroundColor: theme.colors.surface0,
   },
   importPillRow: {
     width: "100%",

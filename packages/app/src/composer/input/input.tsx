@@ -24,7 +24,8 @@ import {
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { ArrowUp, Mic, MicOff, CornerDownLeft, Plus, Square } from "lucide-react-native";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
+import { ArrowUp, Mic, MicOff, CornerDownLeft, Paperclip, Square } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
@@ -70,7 +71,6 @@ import {
   resolveComposerSurfacePresentation,
   runAlternateSendAction,
   runDefaultSendAction,
-  runMessageInputKeyboardAction,
   stopRealtimeVoice,
 } from "./state";
 
@@ -138,6 +138,14 @@ export interface MessageInputProps {
   /** Reports cursor selection updates from the underlying input. */
   onSelectionChange?: (selection: { start: number; end: number }) => void;
   onFocusChange?: (focused: boolean) => void;
+  /**
+   * Reports a prompt the user has committed to sending but whose text is still
+   * finalizing locally (confirm-with-send dictation transcription). Called with
+   * the live partial transcript while finalizing, then with null once the real
+   * submit (or a cancel/failure) happens. Lets the chat show a pending bubble
+   * immediately instead of only the send-button spinner.
+   */
+  onPendingSendChange?: (text: string | null) => void;
   onHeightChange?: (height: number) => void;
   /** Extra styles merged onto the input wrapper (e.g. elevated background). */
   inputWrapperStyle?: import("react-native").ViewStyle;
@@ -199,7 +207,7 @@ function AttachButtonIcon({
   const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
   return (
     <View ref={onAttachButtonRef} collapsable={false} style={styles.attachButtonAnchor}>
-      <ThemedPlus size={buttonIconSize} uniProps={colorMapping} />
+      <ThemedPaperclip size={buttonIconSize} uniProps={colorMapping} />
     </View>
   );
 }
@@ -495,6 +503,65 @@ function handleDesktopKeyPressImpl(
   if (ctx.isSubmitDisabled || ctx.isSubmitLoading || ctx.disabled) return;
   event.preventDefault();
   ctx.handleDefaultSendAction();
+}
+
+interface KeyboardActionHandlers {
+  textInputRef: React.MutableRefObject<
+    TextInput | (TextInput & { getNativeRef?: () => unknown }) | null
+  >;
+  isDictatingRef: React.MutableRefObject<boolean>;
+  sendAfterTranscriptRef: React.MutableRefObject<boolean>;
+  confirmDictation: () => void | Promise<void>;
+  cancelDictation: () => void | Promise<void>;
+  startDictationIfAvailable: () => Promise<void>;
+  handleToggleRealtimeVoiceShortcut: () => void;
+  isRealtimeVoiceForCurrentAgent: boolean;
+  voice: { toggleMute: () => void } | null | undefined;
+}
+
+function runKeyboardActionImpl(
+  action: MessageInputKeyboardActionKind,
+  h: KeyboardActionHandlers,
+): boolean {
+  if (action === "focus") {
+    h.textInputRef.current?.focus();
+    return true;
+  }
+  if (action === "send" || action === "dictation-confirm") {
+    if (h.isDictatingRef.current) {
+      h.sendAfterTranscriptRef.current = true;
+      void h.confirmDictation();
+      return true;
+    }
+    return false;
+  }
+  if (action === "voice-toggle") {
+    h.handleToggleRealtimeVoiceShortcut();
+    return true;
+  }
+  if (action === "voice-mute-toggle") {
+    if (h.isRealtimeVoiceForCurrentAgent) {
+      h.voice?.toggleMute();
+    }
+    return true;
+  }
+  if (action === "dictation-cancel") {
+    if (h.isDictatingRef.current) {
+      void h.cancelDictation();
+      return true;
+    }
+    return false;
+  }
+  if (action === "dictation-toggle") {
+    if (h.isDictatingRef.current) {
+      h.sendAfterTranscriptRef.current = true;
+      void h.confirmDictation();
+    } else {
+      void h.startDictationIfAvailable();
+    }
+    return true;
+  }
+  return false;
 }
 
 function getTextInputNativeElement(
@@ -858,18 +925,22 @@ function toggleRealtimeVoiceImpl(ctx: ToggleRealtimeVoiceContext): void {
 interface StartDictationContext {
   dictationUnavailableMessage: string | null | undefined;
   canStartDictation: () => boolean;
+  isDictatingRef: React.MutableRefObject<boolean>;
   toast: { error: (msg: string) => void };
   startDictation: () => Promise<void>;
 }
 
 async function startDictationIfAvailableImpl(ctx: StartDictationContext): Promise<void> {
   if (ctx.dictationUnavailableMessage) {
+    ctx.isDictatingRef.current = false;
     ctx.toast.error(ctx.dictationUnavailableMessage);
     return;
   }
   if (!ctx.canStartDictation()) {
+    ctx.isDictatingRef.current = false;
     return;
   }
+  ctx.isDictatingRef.current = true;
   await ctx.startDictation();
 }
 
@@ -1091,6 +1162,7 @@ interface ResolvedMessageInputProps {
   onKeyPressCallback: ((event: { key: string; preventDefault: () => void }) => boolean) | undefined;
   onSelectionChangeCallback: ((selection: { start: number; end: number }) => void) | undefined;
   onFocusChange: ((focused: boolean) => void) | undefined;
+  onPendingSendChange: ((text: string | null) => void) | undefined;
   onHeightChange: ((height: number) => void) | undefined;
   inputWrapperStyle: import("react-native").ViewStyle | undefined;
   attachmentSlot: React.ReactNode;
@@ -1133,6 +1205,7 @@ function resolveMessageInputProps(props: MessageInputProps): ResolvedMessageInpu
     onKeyPressCallback: props.onKeyPress,
     onSelectionChangeCallback: props.onSelectionChange,
     onFocusChange: props.onFocusChange,
+    onPendingSendChange: props.onPendingSendChange,
     onHeightChange: props.onHeightChange,
     inputWrapperStyle: props.inputWrapperStyle,
     attachmentSlot: props.attachmentSlot,
@@ -1183,6 +1256,7 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       onKeyPressCallback,
       onSelectionChangeCallback,
       onFocusChange,
+      onPendingSendChange,
       onHeightChange,
       inputWrapperStyle,
       attachmentSlot,
@@ -1214,18 +1288,16 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         textInputRef.current?.blur?.();
       },
       runKeyboardAction: (action) =>
-        runMessageInputKeyboardAction(action, {
-          focusInput: () => textInputRef.current?.focus(),
-          isDictationRecording: isDictationActive,
-          markTranscriptForSend: () => {
-            sendAfterTranscriptRef.current = true;
-          },
+        runKeyboardActionImpl(action, {
+          textInputRef,
+          isDictatingRef,
+          sendAfterTranscriptRef,
           confirmDictation,
           cancelDictation,
-          startDictation: startDictationIfAvailable,
-          toggleRealtimeVoice: handleToggleRealtimeVoiceShortcut,
-          isRealtimeVoiceActive: isRealtimeVoiceForCurrentAgent,
-          toggleRealtimeVoiceMute: () => voice?.toggleMute(),
+          startDictationIfAvailable,
+          handleToggleRealtimeVoiceShortcut,
+          isRealtimeVoiceForCurrentAgent,
+          voice,
         }),
       getNativeElement: () => (isWeb ? getTextInputNativeElement(textInputRef.current) : null),
     }));
@@ -1309,9 +1381,8 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const {
       isRecording: isDictating,
-      isRecordingActive: isDictationActive,
       isProcessing: isDictationProcessing,
-      partialTranscript: _dictationPartialTranscript,
+      partialTranscript: dictationPartialTranscript,
       volume: dictationVolume,
       duration: dictationDuration,
       error: dictationError,
@@ -1329,6 +1400,11 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       canConfirm: canConfirmDictation,
       enableDuration: true,
     });
+
+    const isDictatingRef = useRef(isDictating);
+    useEffect(() => {
+      isDictatingRef.current = isDictating;
+    }, [isDictating]);
 
     const isRealtimeVoiceForCurrentAgent = computeIsRealtimeVoiceForAgent(
       voice,
@@ -1351,11 +1427,33 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       sendAfterTranscriptRef.current = false;
     }, [dictationStatus, isDictating, isDictationProcessing]);
 
+    // While a confirm-with-send dictation is finalizing, surface the live
+    // partial transcript as a pending send so the chat shows the prompt (and a
+    // loader) immediately. The cleanup covers every exit path: final transcript
+    // (the real submit takes over), cancel, failure, and unmount.
+    useEffect(() => {
+      if (!onPendingSendChange) {
+        return;
+      }
+      if (!(isDictationProcessing && sendAfterTranscriptRef.current)) {
+        return;
+      }
+      // Mirror applyDictationTranscript: the submit prepends any text already
+      // present in the input, so the pending bubble shows the same thing.
+      const prefix = valueRef.current;
+      const shouldPad = prefix.length > 0 && !/\s$/.test(prefix);
+      onPendingSendChange(`${prefix}${shouldPad ? " " : ""}${dictationPartialTranscript}`);
+      return () => {
+        onPendingSendChange(null);
+      };
+    }, [dictationPartialTranscript, isDictationProcessing, onPendingSendChange]);
+
     const startDictationIfAvailable = useCallback(
       () =>
         startDictationIfAvailableImpl({
           dictationUnavailableMessage,
           canStartDictation,
+          isDictatingRef,
           toast,
           startDictation,
         }),
@@ -1893,7 +1991,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    marginHorizontal: -6,
+    marginHorizontal: -theme.spacing[1.5],
   },
   leftButtonGroup: {
     minWidth: 0,
@@ -1960,12 +2058,12 @@ const styles = StyleSheet.create((theme: Theme) => ({
     gap: theme.spacing[1],
   },
   attachmentSheetItem: {
-    minHeight: 44,
+    minHeight: LIST_ROW_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.xl,
   },
   attachmentSheetItemPressed: {
@@ -1995,7 +2093,7 @@ const styles = StyleSheet.create((theme: Theme) => ({
   },
 })) as unknown as Record<string, object>;
 
-const ThemedPlus = withUnistyles(Plus);
+const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedMic = withUnistyles(Mic);
 const ThemedMicOff = withUnistyles(MicOff);
 const ThemedArrowUp = withUnistyles(ArrowUp);

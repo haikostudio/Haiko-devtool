@@ -33,13 +33,13 @@ export function BrowserPane({ browserId }: BrowserPaneProps) {
   );
 }
 
-const styles = StyleSheet.create(() => ({
+const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    padding: 16,
+    gap: theme.spacing[2],
+    padding: theme.spacing[4],
   },
   title: {
     fontSize: 16,

@@ -203,10 +203,20 @@ export function useDraftAgentCreateFlow<TDraftAgent, TCreateResult>({
               attachments: attempt.attachments,
             }),
           );
-          markPendingCreateLifecycle({ draftId, lifecycle: "sent" });
         }
 
         await onCreateSuccess({ result: createResult.result, attempt });
+
+        if (createResult.agentId) {
+          // Drop the "active" create flag only AFTER onCreateSuccess has retargeted
+          // the draft tab onto the freshly created agent. That flag is what tells the
+          // workspace reconcile pass to hold off auto-opening a *background* agent tab
+          // while the handoff is in flight (see hasActivePendingDraftCreate). Marking
+          // "sent" before the retarget opened a race: reconcile could spawn the agent
+          // in a separate background tab while the draft stayed put and empty, leaving
+          // the user focused on a blank "New agent" instead of the agent they launched.
+          markPendingCreateLifecycle({ draftId, lifecycle: "sent" });
+        }
       } catch (error) {
         const resolved =
           error instanceof Error ? error : new Error(t("composer.errors.failedToCreateAgent"));

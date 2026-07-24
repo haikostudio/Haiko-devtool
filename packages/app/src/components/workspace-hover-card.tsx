@@ -40,6 +40,7 @@ import { PrBadge } from "@/components/sidebar-workspace-list";
 import { useHoverSafeZone } from "@/hooks/use-hover-safe-zone";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { FloatingSurface } from "@/components/ui/floating";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { isWeb } from "@/constants/platform";
 import { useHosts } from "@/runtime/host-runtime";
 
@@ -601,7 +602,7 @@ const styles = StyleSheet.create((theme) => ({
   cardMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
@@ -634,8 +635,8 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[1.5],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 6,
-    minHeight: 28,
+    paddingVertical: theme.spacing[1],
+    minHeight: LIST_ROW_HEIGHT,
   },
   checksSummaryLabel: {
     fontSize: theme.fontSize.xs,
@@ -655,7 +656,7 @@ const styles = StyleSheet.create((theme) => ({
   checksSummaryPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: theme.spacing[1],
   },
   checksStatusTextFailed: {
     fontSize: theme.fontSize.xs,

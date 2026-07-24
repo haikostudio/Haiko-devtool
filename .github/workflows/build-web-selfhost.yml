@@ -1,0 +1,60 @@
+name: Build Web (self-host)
+
+# RETIRED — the self-host web app is now built LOCALLY on the VPS.
+#
+# The deploy button in the app triggers /home/paseo/paseo-build-local.sh, which
+# runs `expo export` on the server and copies the static site straight into the
+# Caddy webroot (see packages/server/src/utils/paseo-deploy.ts). That removes the
+# GitHub-Actions round-trip entirely and, with it, ~148 $/month of Actions minutes.
+#
+# All automatic triggers are removed so this workflow never runs (and never bills)
+# on its own. It is kept, dispatch-only, purely as an emergency fallback: run it by
+# hand from the Actions tab if the local build chain is ever unavailable.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        # Full history so generate-changelog-data.mjs can read the commit log for
+        # the changelog page's Commits + Unreleased sections (default shallow
+        # checkout gives 1 commit).
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      # generate-changelog-data.mjs runs `git log --all` so the changelog reflects
+      # work on ANY branch, not just the triggering one. checkout only brings down
+      # the triggering ref, so fetch every remote head here to make them visible.
+      - name: Fetch all branches
+        run: git fetch --no-tags --prune origin "+refs/heads/*:refs/remotes/origin/*"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app (static export)
+        run: npm run build:web --workspace=@getpaseo/app
+        env:
+          # Baked into the bundle so the running app knows which build it is.
+          # The app polls /version.json (written below) and shows a "reload"
+          # banner when the live build differs from this baked value.
+          EXPO_PUBLIC_BUILD_SHA: ${{ github.sha }}
+
+      - name: Write version marker
+        run: printf '{"sha":"%s"}\n' "${{ github.sha }}" > packages/app/dist/version.json
+
+      - name: Upload static site
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: packages/app/dist
+          if-no-files-found: error
+          retention-days: 14

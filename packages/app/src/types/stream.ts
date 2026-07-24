@@ -79,18 +79,35 @@ export type StreamItem =
   | ToolCallItem
   | TodoListItem
   | ActivityLogItem
-  | CompactionItem;
+  | CompactionItem
+  | BrainContextItem
+  | TaskTriageItem
+  | TurnRecapItem;
 
 export type UserMessageImageAttachment = AttachmentMetadata;
+
+/**
+ * An image that arrived with a user message from the server (base64 over the
+ * wire) rather than from this client's local attachment store. Other clients —
+ * and this client after a reload — have no local copy, so we render the bytes
+ * directly from a data URI instead of resolving a local storage key.
+ */
+export interface RemoteUserMessageImage {
+  id: string;
+  mimeType: string;
+  /** Ready-to-render `data:<mime>;base64,<bytes>` URI. */
+  dataUrl: string;
+}
 
 export interface UserMessageItem {
   kind: "user_message";
   id: string;
-  clientMessageId?: string;
   text: string;
   timestamp: Date;
   optimistic?: true;
   images?: UserMessageImageAttachment[];
+  /** Server-persisted images, present on non-optimistic messages from other clients. */
+  remoteImages?: RemoteUserMessageImage[];
   attachments?: AgentAttachment[];
 }
 
@@ -191,6 +208,66 @@ export interface CompactionItem {
   preTokens?: number;
 }
 
+export interface BrainContextMemoryEntry {
+  texte: string;
+  rejete?: boolean;
+  motif?: string;
+  /** ISO date the memory was last confirmed in the Cerveau (optional). */
+  date?: string;
+}
+
+/** Cerveau recall performed by the daemon before dispatching the prompt. */
+export interface BrainContextItem {
+  kind: "brain_context";
+  id: string;
+  timestamp: Date;
+  query: string;
+  portee: "projet" | "global" | "apercu";
+  count: number;
+  memories: BrainContextMemoryEntry[];
+  status?: "loading" | "done";
+}
+
+export interface TaskTriageProposalRef {
+  taskId: string;
+  title: string;
+}
+
+/** Inline task-intent triage result surfaced by the daemon in the chat thread. */
+export interface TaskTriageItem {
+  kind: "task_triage";
+  id: string;
+  timestamp: Date;
+  status: "questions" | "proposed";
+  questions: string[];
+  proposedCount: number;
+  projectId?: string;
+  // Task refs for the actionable proposal cards; empty on pre-carousel items.
+  tasks: TaskTriageProposalRef[];
+}
+
+export type TurnRecapFileOperation = "created" | "edited" | "deleted";
+
+export interface TurnRecapFileEntry {
+  path: string;
+  operation: TurnRecapFileOperation;
+}
+
+/**
+ * Plain-language recap block the daemon appends at the end of a turn that
+ * changed files. `files` is exact (derived server-side from the turn's tool
+ * calls); `summary`/`highlights` are model-written in the user's language.
+ */
+export interface TurnRecapItem {
+  kind: "turn_recap";
+  id: string;
+  timestamp: Date;
+  summary: string;
+  highlights: string[];
+  files: TurnRecapFileEntry[];
+  cwd?: string;
+}
+
 export interface TodoEntry {
   text: string;
   completed: boolean;
@@ -237,18 +314,42 @@ function markThoughtReady(item: ThoughtItem): ThoughtItem {
   };
 }
 
+function buildRemoteUserMessageImages(
+  entryId: string,
+  images: readonly { data: string; mimeType: string }[] | undefined,
+): RemoteUserMessageImage[] | undefined {
+  if (!images || images.length === 0) {
+    return undefined;
+  }
+  const result: RemoteUserMessageImage[] = [];
+  for (let index = 0; index < images.length; index += 1) {
+    const image = images[index];
+    if (!image || !image.data) {
+      continue;
+    }
+    const mimeType = image.mimeType || "image/jpeg";
+    result.push({
+      id: `${entryId}:img:${index}`,
+      mimeType,
+      dataUrl: `data:${mimeType};base64,${image.data}`,
+    });
+  }
+  return result.length > 0 ? result : undefined;
+}
+
 function buildUserMessageItem(input: {
   id: string;
-  clientMessageId?: string;
   text: string;
   timestamp: Date;
   optimistic?: UserMessageItem | null;
+  remoteImages?: RemoteUserMessageImage[];
 }): UserMessageItem {
   if (input.optimistic) {
+    // The sender keeps its local (optimistic) image copies; the server echo's
+    // remote bytes are redundant here, so they are intentionally dropped.
     return {
       kind: "user_message",
       id: input.id,
-      ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
       text: input.optimistic.text,
       timestamp: input.optimistic.timestamp,
       ...(input.optimistic.images && input.optimistic.images.length > 0
@@ -263,9 +364,11 @@ function buildUserMessageItem(input: {
   return {
     kind: "user_message",
     id: input.id,
-    ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
     text: input.text,
     timestamp: input.timestamp,
+    ...(input.remoteImages && input.remoteImages.length > 0
+      ? { remoteImages: input.remoteImages }
+      : {}),
   };
 }
 
@@ -354,39 +457,47 @@ function appendUserMessage(
   state: StreamItem[],
   text: string,
   timestamp: Date,
-  source: StreamUpdateSource,
   messageId?: string,
-  clientMessageId?: string,
+  images?: readonly { data: string; mimeType: string }[],
 ): StreamItem[] {
   const { chunk, hasContent } = normalizeChunk(text);
-  if (!hasContent) {
+  const hasImages = Boolean(images && images.length > 0);
+  // An image-only message has no text but must still appear, so we keep it when
+  // it carries images.
+  if (!hasContent && !hasImages) {
     return state;
   }
 
-  const chunkSeed = chunk.trim() || chunk;
+  const chunkSeed = chunk.trim() || chunk || messageId || "image";
   const entryId = messageId ?? createUniqueTimelineId(state, "user", chunkSeed, timestamp);
   const optimisticIndex = state.findIndex(
-    (entry) =>
-      entry.kind === "user_message" &&
-      entry.optimistic &&
-      (clientMessageId !== undefined
-        ? entry.id === clientMessageId
-        : source === "live" || entry.id === messageId || entry.text === chunk),
+    (entry) => entry.kind === "user_message" && entry.optimistic,
   );
   const optimistic = optimisticIndex >= 0 ? (state[optimisticIndex] as UserMessageItem) : null;
 
   const nextItem = buildUserMessageItem({
     id: entryId,
-    clientMessageId,
     text: chunk,
     timestamp,
     optimistic,
+    remoteImages: optimistic ? undefined : buildRemoteUserMessageImages(entryId, images),
   });
 
   if (optimisticIndex >= 0) {
     const next = [...state];
     next[optimisticIndex] = nextItem;
     return next;
+  }
+
+  // The Cerveau pill is emitted just BEFORE the user_message it was recalled
+  // for (live-observer + history-replay paths append them as [brain_context,
+  // user_message]). Semantically the pill belongs UNDER the message that
+  // triggered it, so when the last item is that pill, slot the message ahead of
+  // it. The sender's own optimistic path already yields [user_message,
+  // brain_context], so it never reaches here.
+  const last = state[state.length - 1];
+  if (last?.kind === "brain_context") {
+    return [...state.slice(0, -1), nextItem, last];
   }
 
   return [...state, nextItem];
@@ -834,6 +945,28 @@ function reduceTimelineCompaction(
   return [...state, compaction];
 }
 
+function buildTaskTriageItem(
+  item: {
+    status: "questions" | "proposed";
+    questions?: string[];
+    proposedCount?: number;
+    projectId?: string;
+    tasks?: TaskTriageProposalRef[];
+  },
+  timestamp: Date,
+): TaskTriageItem {
+  return {
+    kind: "task_triage",
+    id: createTimelineId("task_triage", item.status, timestamp),
+    timestamp,
+    status: item.status,
+    questions: item.questions ?? [],
+    proposedCount: item.proposedCount ?? 0,
+    projectId: item.projectId,
+    tasks: item.tasks ?? [],
+  };
+}
+
 function reduceTimelineEvent(
   state: StreamItem[],
   event: Extract<AgentStreamEventPayload, { type: "timeline" }>,
@@ -846,14 +979,7 @@ function reduceTimelineEvent(
   switch (item.type) {
     case "user_message":
       return finalizeActiveThoughts(
-        appendUserMessage(
-          state,
-          item.text,
-          timestamp,
-          source,
-          item.messageId,
-          item.clientMessageId,
-        ),
+        appendUserMessage(state, item.text, timestamp, item.messageId, item.images),
       );
     case "assistant_message":
       return finalizeActiveThoughts(
@@ -893,6 +1019,41 @@ function reduceTimelineEvent(
     }
     case "compaction":
       return finalizeActiveThoughts(reduceTimelineCompaction(state, item, timestamp));
+    case "brain_context": {
+      const brainItem: BrainContextItem = {
+        kind: "brain_context",
+        id: createTimelineId("brain_context", item.query, timestamp),
+        timestamp,
+        query: item.query,
+        portee: item.portee,
+        count: item.count,
+        memories: (item.memories ?? []).map((memory) => ({
+          texte: memory.texte,
+          rejete: memory.rejete,
+          motif: memory.motif,
+          date: memory.date,
+        })),
+        status: item.status,
+      };
+      return finalizeActiveThoughts([...state, brainItem]);
+    }
+    case "task_triage":
+      return finalizeActiveThoughts([...state, buildTaskTriageItem(item, timestamp)]);
+    case "turn_recap": {
+      const recapItem: TurnRecapItem = {
+        kind: "turn_recap",
+        id: createTimelineId("turn_recap", item.summary, timestamp),
+        timestamp,
+        summary: item.summary,
+        highlights: item.highlights ?? [],
+        files: (item.files ?? []).map((file) => ({
+          path: file.path,
+          operation: file.operation,
+        })),
+        cwd: item.cwd,
+      };
+      return finalizeActiveThoughts([...state, recapItem]);
+    }
     default:
       return state;
   }
@@ -998,6 +1159,10 @@ function getEventItemKind(event: AgentStreamEventPayload): StreamItem["kind"] | 
       return "todo_list";
     case "error":
       return "activity_log";
+    case "brain_context":
+      return "brain_context";
+    case "task_triage":
+      return "task_triage";
     default:
       return null;
   }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import {
   AGENT_LIFECYCLE_STATUSES,
@@ -7,9 +7,11 @@ import {
 } from "@getpaseo/protocol/agent-lifecycle";
 import {
   getParentAgentIdFromLabels,
+  isConductorAgent,
   isDelegatedAgent,
   PARENT_AGENT_ID_LABEL,
 } from "@getpaseo/protocol/agent-labels";
+import type { AgentSynthesis } from "@getpaseo/protocol/messages";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -19,7 +21,6 @@ import {
   type AgentCapabilityFlags,
   type AgentClient,
   type AgentCreateSessionOptions,
-  type AgentResumeSessionOptions,
   type AgentFeature,
   type AgentLaunchContext,
   type AgentSlashCommand,
@@ -45,7 +46,8 @@ import {
 } from "./agent-sdk-types.js";
 import { buildArchivedAgentRecord, type ArchivedStoredAgentRecord } from "./agent-archive.js";
 import type { StoredAgentRecord, AgentStorage } from "./agent-storage.js";
-import type { AgentOwner } from "./agent-owner.js";
+import { PRESENTATION_GUIDANCE } from "./presentation-guidance.js";
+import type { UsageStatsStore } from "../stats/usage-stats-store.js";
 import {
   InMemoryAgentTimelineStore,
   type SeedAgentTimelineOptions,
@@ -65,6 +67,14 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
+import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js";
+import type { BrainCapturePromptHook } from "../../services/brain-memory/capture.js";
+import type { BrainRecallPromptHook } from "../../services/brain-memory/recall.js";
+import {
+  hasResponseFormatDirective,
+  injectResponseFormat,
+  stripResponseFormat,
+} from "../../services/response-format.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
 import type { PaseoToolCatalogFactory } from "./tools/types.js";
@@ -76,6 +86,10 @@ import {
 
 const RELOAD_SESSION_CLOSE_TIMEOUT_MS = 3_000;
 const INTERRUPT_SESSION_TIMEOUT_MS = 2_000;
+// Cap on the running conversation-synthesis thread kept per agent (newest
+// first). Bounds the persisted record and the wire payload; the banner shows
+// the latest at the top and the rest as an expandable "fil conducteur".
+const MAX_SYNTHESIS_HISTORY = 40;
 const STORED_AGENT_CAPABILITIES: AgentCapabilityFlags = {
   supportsStreaming: false,
   supportsSessionPersistence: true,
@@ -118,7 +132,33 @@ interface PreparedSessionConfig {
 
 interface NormalizeConfigOptions {
   resolveDefaultModel?: boolean;
-  env?: Record<string, string>;
+  // When resuming a persisted agent whose worktree directory has been deleted
+  // (task cleanup, archived worktree, manual `rm -rf`), fall back to the nearest
+  // existing ancestor directory instead of hard-failing the load. Lets the user
+  // still open the conversation and read its history.
+  allowMissingCwd?: boolean;
+}
+
+// Walks up from a (now missing) directory to the nearest existing ancestor.
+// Used to recover a loadable cwd when an agent's worktree has been deleted.
+// Guaranteed to terminate: the filesystem root always exists.
+async function findNearestExistingDirectory(startDir: string): Promise<string> {
+  let current = resolve(startDir);
+  while (true) {
+    try {
+      const stats = await stat(current);
+      if (stats.isDirectory()) {
+        return current;
+      }
+    } catch {
+      // Keep climbing.
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    current = parent;
+  }
 }
 
 interface TimeoutOptions {
@@ -146,6 +186,18 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   }
   if (record.config.featureValues != null) {
     config.featureValues = record.config.featureValues;
+  }
+  if (record.config.approvalPolicy != null) {
+    config.approvalPolicy = record.config.approvalPolicy;
+  }
+  if (record.config.sandboxMode != null) {
+    config.sandboxMode = record.config.sandboxMode;
+  }
+  if (record.config.networkAccess != null) {
+    config.networkAccess = record.config.networkAccess;
+  }
+  if (record.config.webSearch != null) {
+    config.webSearch = record.config.webSearch;
   }
   if (record.config.extra != null) config.extra = record.config.extra;
   if (record.config.systemPrompt != null) {
@@ -186,7 +238,7 @@ export interface SubscribeOptions {
 
 interface HydrateTimelineOptions {
   force?: boolean;
-  broadcast?: boolean | (() => boolean);
+  broadcast?: boolean;
 }
 
 export type ImportablePersistedAgentQueryOptions = ListImportableSessionsOptions & {
@@ -235,7 +287,9 @@ export interface CreateAgentOptions {
   initialTitle?: string | null;
   // undefined is an explicit decision: the agent never appears in the sidebar.
   workspaceId: string | undefined;
-  owner?: AgentOwner;
+  // When true, a missing working directory (e.g. a pruned worktree) falls back to
+  // the nearest existing ancestor instead of throwing, so the conversation can still open.
+  allowMissingCwd?: boolean;
 }
 
 export interface AgentManagerOptions {
@@ -246,6 +300,7 @@ export interface AgentManagerOptions {
   onAgentAttention?: AgentAttentionCallback;
   onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   durableTimelineStore?: AgentTimelineStore;
+  usageStatsStore?: UsageStatsStore;
   terminalManager?: TerminalManager | null;
   mcpBaseUrl?: string;
   mcpAuthToken?: string;
@@ -310,7 +365,6 @@ interface ManagedAgentBase {
    * Null/undefined for legacy agents created before ownership stamping.
    */
   workspaceId?: string;
-  owner?: AgentOwner;
   capabilities: AgentCapabilityFlags;
   config: AgentSessionConfig;
   runtimeInfo?: AgentRuntimeInfo;
@@ -385,28 +439,12 @@ export type ManagedAgent =
 
 export interface AgentMetricsSnapshot {
   total: number;
-  subscriptionCount: number;
   byLifecycle: Record<string, number>;
   withActiveForegroundTurn: number;
   timelineStats: {
     totalItems: number;
     maxItemsPerAgent: number;
   };
-}
-
-export interface IdleAgentCollectionEntry {
-  agentId: string;
-  provider: AgentProvider;
-  sessionId?: string;
-}
-
-export interface IdleAgentCollectionFailure extends IdleAgentCollectionEntry {
-  error: unknown;
-}
-
-export interface IdleAgentCollectionResult {
-  collected: IdleAgentCollectionEntry[];
-  failures: IdleAgentCollectionFailure[];
 }
 
 type ActiveManagedAgent =
@@ -526,17 +564,61 @@ function buildExplicitTimelineSeedForRegister(
   };
 }
 
+/**
+ * Provider transcripts contain the prompt the daemon actually dispatched —
+ * including the injected <contexte_memoire> block. Split such a user_message
+ * back into the user's own text, and on history replay (where the daemon's own
+ * brain_context rows were wiped) reconstruct the yellow pill in front of it.
+ * The live echo path must NOT reconstruct: the real pill was already appended
+ * before dispatch, so it only strips.
+ */
+function unwrapBrainContextUserMessage(
+  item: AgentTimelineItem,
+  options: { reconstructPill: boolean },
+): AgentTimelineItem[] {
+  if (item.type !== "user_message") {
+    return [item];
+  }
+  // Strip the response-format directive (outermost, injected on every dispatch)
+  // before the brain envelope, so neither leaks as raw XML in the displayed
+  // user message.
+  const withoutFormat = stripResponseFormat(item.text);
+  const formatItem: AgentTimelineItem =
+    withoutFormat === item.text ? item : { ...item, text: withoutFormat };
+  const parsed = parseBrainContextEnvelope(withoutFormat);
+  if (!parsed || !parsed.userText.trim()) {
+    return [formatItem];
+  }
+  const stripped: AgentTimelineItem = { ...item, text: parsed.userText };
+  if (!options.reconstructPill) {
+    return [stripped];
+  }
+  return [
+    {
+      type: "brain_context",
+      query: parsed.userText.slice(0, 500),
+      portee: parsed.portee,
+      count: parsed.memories.length,
+      memories: parsed.memories,
+      status: "done",
+    },
+    stripped,
+  ];
+}
+
 function buildImportedTimelineRows(entries: readonly ImportedTimelineEntry[]): AgentTimelineRow[] {
   const rows: AgentTimelineRow[] = [];
   for (const entry of entries) {
     if (entry.item.type === "user_message" && isSystemInjectedEnvelope(entry.item.text)) {
       continue;
     }
-    rows.push({
-      seq: rows.length + 1,
-      timestamp: entry.timestamp ?? new Date().toISOString(),
-      item: limitAgentTimelineItemContent(entry.item),
-    });
+    for (const item of unwrapBrainContextUserMessage(entry.item, { reconstructPill: true })) {
+      rows.push({
+        seq: rows.length + 1,
+        timestamp: entry.timestamp ?? new Date().toISOString(),
+        item: limitAgentTimelineItemContent(item),
+      });
+    }
   }
   return rows;
 }
@@ -583,10 +665,10 @@ export class AgentManager {
   private readonly idFactory: () => string;
   private readonly registry?: AgentStorage;
   private readonly durableTimelineStore?: AgentTimelineStore;
+  private readonly usageStatsStore?: UsageStatsStore;
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
-  private readonly inFlightAgentCloses = new Map<string, Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
@@ -595,6 +677,8 @@ export class AgentManager {
   private appendSystemPrompt: string;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
+  private brainRecallHook: BrainRecallPromptHook | null = null;
+  private brainCaptureHook: BrainCapturePromptHook | null = null;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -604,6 +688,7 @@ export class AgentManager {
     this.idFactory = options?.idFactory ?? (() => randomUUID());
     this.registry = options?.registry;
     this.durableTimelineStore = options?.durableTimelineStore;
+    this.usageStatsStore = options?.usageStatsStore;
     this.onAgentAttention = options?.onAgentAttention;
     this.onWorkspaceStateMayHaveChanged = options?.onWorkspaceStateMayHaveChanged;
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
@@ -631,6 +716,10 @@ export class AgentManager {
     });
   }
 
+  getUsageStatsStore(): UsageStatsStore | undefined {
+    return this.usageStatsStore;
+  }
+
   private configurePaseoTools(options: AgentManagerOptions): void {
     this.paseoToolsEnabled = options.paseoToolsEnabled ?? true;
     this.paseoToolCatalogFactory = options.paseoToolCatalogFactory ?? null;
@@ -644,14 +733,11 @@ export class AgentManager {
     providerDefinitions: ProviderEnabledMap;
     clients: ProviderClientMap;
   }): void {
-    this.providerEnabled.clear();
     for (const [provider, definition] of Object.entries(input.providerDefinitions)) {
       if (definition) {
         this.providerEnabled.set(provider, definition.enabled);
       }
     }
-
-    this.clients.clear();
     for (const [provider, client] of Object.entries(input.clients)) {
       if (client) {
         this.clients.set(provider, client);
@@ -669,6 +755,28 @@ export class AgentManager {
 
   setAgentArchivedCallback(callback: AgentArchivedCallback): void {
     this.onAgentArchived = callback;
+  }
+
+  /**
+   * Install the Cerveau recall hook applied to every foreground prompt of
+   * every non-internal agent, whatever the entrypoint — session message, MCP
+   * send_agent_prompt, schedules, loops, task launches, notify-on-finish. Set
+   * once at bootstrap. Internal agents (curator, triage, estimator, quota
+   * keep-alive) are excluded: recalling for the librarian's own runs would
+   * recurse.
+   */
+  setBrainRecallHook(hook: BrainRecallPromptHook | null): void {
+    this.brainRecallHook = hook;
+  }
+
+  /**
+   * Install the end-of-turn Cerveau capture hook. Symmetric to the recall hook:
+   * fires for every fresh foreground prompt of every non-internal agent at this
+   * choke point, so autonomous work (schedules, loops, tasks) is distilled into
+   * the brain just like an interactive chat. Set once at bootstrap.
+   */
+  setBrainCaptureHook(hook: BrainCapturePromptHook | null): void {
+    this.brainCaptureHook = hook;
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -727,7 +835,6 @@ export class AgentManager {
 
     return {
       total: this.agents.size,
-      subscriptionCount: this.subscribers.size,
       byLifecycle,
       withActiveForegroundTurn,
       timelineStats: {
@@ -803,14 +910,17 @@ export class AgentManager {
     };
   }
 
-  subscriptionCount(): number {
-    return this.subscribers.size;
-  }
-
   listAgents(): ManagedAgent[] {
-    return Array.from(this.agents.values())
-      .filter((agent) => !agent.internal)
-      .map((agent) => Object.assign({}, agent));
+    return (
+      Array.from(this.agents.values())
+        .filter((agent) => !agent.internal)
+        // The persistent per-project conductor is a normal (non-internal)
+        // persisted agent so it survives restarts, but it must never surface as a
+        // browsable tab/agent card. The conductor panel subscribes to it directly
+        // by agentId instead.
+        .filter((agent) => !isConductorAgent(agent))
+        .map((agent) => Object.assign({}, agent))
+    );
   }
 
   async listImportableSessions(
@@ -969,19 +1079,6 @@ export class AgentManager {
     return agent ? { ...agent } : null;
   }
 
-  touchAgentActivity(id: string): ManagedAgent | null {
-    const agent = this.agents?.get(id);
-    if (!agent) {
-      return null;
-    }
-    this.touchUpdatedAt(agent);
-    return { ...agent };
-  }
-
-  async waitForAgentClose(agentId: string): Promise<void> {
-    await this.inFlightAgentCloses?.get(agentId)?.catch(() => undefined);
-  }
-
   getTimeline(id: string): AgentTimelineItem[] {
     this.requireAgent(id);
     return this.timelineStore.getItems(id);
@@ -1037,11 +1134,12 @@ export class AgentManager {
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     const resolvedAgentId = validateAgentId(agentId ?? this.idFactory(), "createAgent");
-    await this.deleteAgentState(resolvedAgentId);
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(
       config,
       resolvedAgentId,
-      options?.env,
+      {
+        allowMissingCwd: options.allowMissingCwd ?? false,
+      },
     );
     this.requireEnabledProvider(storedConfig.provider);
     const client = await this.requireAvailableClient({
@@ -1055,7 +1153,6 @@ export class AgentManager {
       labels: options.labels,
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
-      owner: options.owner,
     });
   }
 
@@ -1079,12 +1176,10 @@ export class AgentManager {
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
-      owner?: AgentOwner;
     },
-    resumeOptions?: AgentResumeSessionOptions,
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
-      this.resumeAgentFromPersistenceInternal(handle, overrides, agentId, options, resumeOptions),
+      this.resumeAgentFromPersistenceInternal(handle, overrides, agentId, options),
     );
   }
 
@@ -1098,9 +1193,7 @@ export class AgentManager {
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
-      owner?: AgentOwner;
     },
-    resumeOptions?: AgentResumeSessionOptions,
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
     const resolvedAgentId = validateAgentId(
@@ -1116,6 +1209,7 @@ export class AgentManager {
     const { storedConfig, launchConfig } = await this.prepareSessionConfig(
       mergedConfig,
       resolvedAgentId,
+      { allowMissingCwd: true },
     );
 
     const client = this.requireClient(handle.provider);
@@ -1127,16 +1221,8 @@ export class AgentManager {
     }
     const launchContext = await this.buildLaunchContext(resolvedAgentId, client);
     const providerLaunchConfig = this.resolveProviderLaunchConfig(launchConfig, launchContext);
-    const session = await client.resumeSession(
-      handle,
-      providerLaunchConfig,
-      launchContext,
-      resumeOptions,
-    );
-    return this.registerSession(session, storedConfig, resolvedAgentId, {
-      ...options,
-      persistence: handle,
-    });
+    const session = await client.resumeSession(handle, providerLaunchConfig, launchContext);
+    return this.registerSession(session, storedConfig, resolvedAgentId, options);
   }
 
   importProviderSession(input: {
@@ -1287,7 +1373,6 @@ export class AgentManager {
       return this.registerSession(session, storedConfig, agentId, {
         labels: existing.labels,
         workspaceId: existing.workspaceId,
-        owner: existing.owner,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
         lastUserMessageAt: existing.lastUserMessageAt,
@@ -1357,24 +1442,7 @@ export class AgentManager {
     }
   }
 
-  closeAgent(agentId: string): Promise<void> {
-    const existing = this.inFlightAgentCloses.get(agentId);
-    if (existing) {
-      return existing;
-    }
-
-    const close = this.closeAgentRuntime(agentId);
-    this.inFlightAgentCloses.set(agentId, close);
-    const clearClose = () => {
-      if (this.inFlightAgentCloses.get(agentId) === close) {
-        this.inFlightAgentCloses.delete(agentId);
-      }
-    };
-    void close.then(clearClose, clearClose);
-    return close;
-  }
-
-  private async closeAgentRuntime(agentId: string): Promise<void> {
+  async closeAgent(agentId: string): Promise<void> {
     const agent = this.requireAgent(agentId);
     this.logger.trace(
       {
@@ -1389,19 +1457,12 @@ export class AgentManager {
       "agent.manager.close.start",
     );
     const closedAgent = this.prepareAgentForClosure(agent, "agent closed");
-    let closeError: unknown;
-    try {
-      await agent.session.close();
-    } catch (error) {
-      closeError = error;
+    await agent.session.close();
+    this.timelineStore.delete(agentId);
+    for (const event of this.providerSubagents.deleteParent(agentId)) {
+      this.dispatch({ type: "provider_subagent", event });
     }
-
-    let persistError: unknown;
-    try {
-      await this.persistSnapshot(closedAgent);
-    } catch (error) {
-      persistError = error;
-    }
+    await this.persistSnapshot(closedAgent);
     this.emitClosedAgent(closedAgent, { persist: false });
     this.logger.trace(
       {
@@ -1410,58 +1471,6 @@ export class AgentManager {
         sessionId: closedAgent.persistence?.sessionId ?? undefined,
       },
       "agent.manager.close.complete",
-    );
-
-    if (closeError !== undefined) {
-      throw closeError;
-    }
-    if (persistError !== undefined) {
-      throw persistError;
-    }
-  }
-
-  async collectIdleAgents(options: {
-    cutoff: Date;
-    protectedAgentIds: ReadonlySet<string>;
-  }): Promise<IdleAgentCollectionResult> {
-    const result: IdleAgentCollectionResult = { collected: [], failures: [] };
-
-    for (const agent of Array.from(this.agents.values())) {
-      const current = this.agents.get(agent.id);
-      if (!current || !this.isIdleAgentCollectable(current, options)) {
-        continue;
-      }
-
-      const entry: IdleAgentCollectionEntry = {
-        agentId: current.id,
-        provider: current.provider,
-        ...(current.persistence?.sessionId ? { sessionId: current.persistence.sessionId } : {}),
-      };
-      try {
-        await this.closeAgent(current.id);
-        result.collected.push(entry);
-      } catch (error) {
-        result.failures.push({ ...entry, error });
-      }
-    }
-
-    return result;
-  }
-
-  private isIdleAgentCollectable(
-    agent: LiveManagedAgent,
-    options: { cutoff: Date; protectedAgentIds: ReadonlySet<string> },
-  ): agent is ManagedAgentIdle {
-    return (
-      agent.lifecycle === "idle" &&
-      agent.updatedAt.getTime() <= options.cutoff.getTime() &&
-      !agent.internal &&
-      !options.protectedAgentIds.has(agent.id) &&
-      agent.activeForegroundTurnId === null &&
-      !this.runs.hasRun(agent.id) &&
-      !agent.pendingReplacement &&
-      agent.pendingPermissions.size === 0 &&
-      agent.inFlightPermissionResponses.size === 0
     );
   }
 
@@ -1482,7 +1491,6 @@ export class AgentManager {
     const { archivedAt } = await this.markRecordArchived(stored);
     agent.updatedAt = new Date(archivedAt);
     await this.closeAgent(agentId);
-    this.discardRetainedAgentState(agentId);
 
     await this.cascadeArchiveChildren(agentId);
 
@@ -1509,7 +1517,8 @@ export class AgentManager {
       if (this.agents.has(record.id)) {
         await this.archiveAgent(record.id);
       } else {
-        await this.archiveSnapshot(record.id, new Date().toISOString());
+        await this.markRecordArchived(record);
+        await this.cascadeArchiveChildren(record.id);
       }
     }
   }
@@ -1555,7 +1564,6 @@ export class AgentManager {
         provider: record.provider,
         cwd: record.cwd,
         workspaceId: record.workspaceId,
-        owner: record.owner,
         session: null,
         capabilities: STORED_AGENT_CAPABILITIES,
         config: buildStoredAgentConfig(record),
@@ -1589,7 +1597,6 @@ export class AgentManager {
   async setAgentMode(agentId: string, modeId: string): Promise<AgentProviderNotice | null> {
     const agent = this.requireSessionAgent(agentId);
     const notice = (await agent.session.setMode(modeId)) ?? null;
-    await this.drainSessionEvents(agentId);
     const currentMode = (await agent.session.getCurrentMode()) ?? modeId;
     agent.config.modeId = currentMode ?? undefined;
     agent.currentModeId = currentMode;
@@ -1610,7 +1617,6 @@ export class AgentManager {
     if (agent.session.setModel) {
       await agent.session.setModel(normalizedModelId);
     }
-    await this.drainSessionEvents(agentId);
 
     agent.config.model = normalizedModelId ?? undefined;
     if (agent.runtimeInfo) {
@@ -1634,7 +1640,6 @@ export class AgentManager {
     if (agent.session.setThinkingOption) {
       notice = (await agent.session.setThinkingOption(normalizedThinkingOptionId)) ?? null;
     }
-    await this.drainSessionEvents(agentId);
 
     agent.config.thinkingOptionId = normalizedThinkingOptionId ?? undefined;
     if (agent.runtimeInfo) {
@@ -1656,13 +1661,16 @@ export class AgentManager {
     }
 
     await agent.session.setFeature(featureId, value);
-    await this.drainSessionEvents(agentId);
     agent.config.featureValues = { ...agent.config.featureValues, [featureId]: value };
     this.touchUpdatedAt(agent);
     this.emitState(agent);
   }
 
-  async setTitle(agentId: string, title: string): Promise<void> {
+  async setTitle(
+    agentId: string,
+    title: string,
+    options?: { lockedByUser?: boolean },
+  ): Promise<void> {
     const agent = this.requireAgent(agentId);
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -1676,7 +1684,113 @@ export class AgentManager {
       return;
     }
     this.touchUpdatedAt(agent);
-    await this.persistSnapshot(agent, { title: normalizedTitle });
+    await this.persistSnapshot(agent, {
+      title: normalizedTitle,
+      // Only stamp the lock when a human explicitly renames — never on the
+      // auto-titler path, which omits the option and leaves the flag untouched.
+      ...(options?.lockedByUser ? { titleLockedByUser: true } : {}),
+    });
+    this.emitState(agent, { persist: false });
+  }
+
+  /**
+   * Set the tab title from the per-turn auto-titler. Defers to a hand-picked
+   * title: if the user has renamed this agent (titleLockedByUser), leave it
+   * alone. Best-effort — returns true when it applied a new title.
+   */
+  async setAutoTitle(agentId: string, title: string): Promise<boolean> {
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      return false;
+    }
+    const record = this.registry ? await this.registry.get(agentId) : null;
+    if (record?.titleLockedByUser) {
+      return false;
+    }
+    if (record && record.title === normalizedTitle) {
+      return false;
+    }
+    await this.setTitle(agentId, normalizedTitle);
+    return true;
+  }
+
+  /**
+   * Overlay the generated one-sentence headline onto the agent's live synthesis
+   * (the floating banner's bold title line). Kept separate from the deterministic
+   * summary rebuild so the two update independently. Best-effort: if no synthesis
+   * exists yet, or nothing changed, it does nothing.
+   */
+  async setSynthesisHeadline(agentId: string, headline: string): Promise<void> {
+    const trimmed = headline.trim();
+    if (!trimmed || !this.registry) {
+      return;
+    }
+    const agent = this.getAgent(agentId);
+    if (!agent) {
+      return;
+    }
+    const current = (await this.registry.get(agentId))?.synthesis;
+    if (!current || current.headline === trimmed) {
+      return;
+    }
+    this.touchUpdatedAt(agent);
+    await this.persistSnapshot(agent, { synthesis: { ...current, headline: trimmed } });
+    this.emitState(agent, { persist: false });
+  }
+
+  /**
+   * Persist and broadcast the always-fresh conversation synthesis (the floating
+   * "what are we doing" block). Best-effort caller: regenerated on each prompt
+   * and after each turn.
+   *
+   * - `synthesis` becomes the live/latest read (the collapsed banner text),
+   *   refreshed both when a prompt is sent and when a turn settles.
+   * - `pushHistory` prepends this synthesis to the running thread
+   *   (`synthesisHistory`, newest first, capped) — set it only for settled,
+   *   per-turn entries so the expandable "fil conducteur" stays meaningful.
+   *
+   * Pass `synthesis: null` to clear both the latest read and the thread. Never
+   * touches the title or the git branch.
+   */
+  async setSynthesis(
+    agentId: string,
+    synthesis: AgentSynthesis | null,
+    options?: { pushHistory?: boolean },
+  ): Promise<void> {
+    const agent = this.getAgent(agentId);
+    if (!agent) {
+      return;
+    }
+    if (
+      this.agentsAwaitingInitialSnapshotPersist.has(agent.id) &&
+      this.registry &&
+      (await this.registry.get(agent.id)) === null
+    ) {
+      return;
+    }
+    this.touchUpdatedAt(agent);
+    // Only touch the history array when we clear it (null) or push a settled
+    // entry. Otherwise omit the key so the existing thread is preserved.
+    if (synthesis === null) {
+      await this.persistSnapshot(agent, { synthesis: null, synthesisHistory: null });
+    } else {
+      const existingRecord = this.registry ? await this.registry.get(agentId) : null;
+      // The deterministic rebuild carries no headline; preserve the last
+      // generated one so the banner's bold line survives every summary refresh.
+      const merged: AgentSynthesis =
+        synthesis.headline == null && existingRecord?.synthesis?.headline != null
+          ? { ...synthesis, headline: existingRecord.synthesis.headline }
+          : synthesis;
+      if (options?.pushHistory) {
+        const history = [merged, ...(existingRecord?.synthesisHistory ?? [])].slice(
+          0,
+          MAX_SYNTHESIS_HISTORY,
+        );
+        await this.persistSnapshot(agent, { synthesis: merged, synthesisHistory: history });
+      } else {
+        await this.persistSnapshot(agent, { synthesis: merged });
+      }
+    }
     this.emitState(agent, { persist: false });
   }
 
@@ -1712,7 +1826,8 @@ export class AgentManager {
 
     const nextRecord = {
       ...record,
-      ...(patch.title ? { title: patch.title } : {}),
+      // Explicit rename locks the tab title against the per-turn auto-titler.
+      ...(patch.title ? { title: patch.title, titleLockedByUser: true } : {}),
       ...(patch.labels ? { labels: applyLabelPatch(record.labels, patch.labels) } : {}),
       updatedAt: this.nextStoredUpdatedAt(record),
     };
@@ -1800,23 +1915,16 @@ export class AgentManager {
 
     if (this.agents.has(agentId)) {
       this.notifyAgentState(agentId);
-    } else {
-      this.discardRetainedAgentState(agentId);
-      if (!nextRecord.internal) {
-        this.dispatchArchivedStoredAgent(nextRecord);
-      }
+    } else if (!nextRecord.internal) {
+      this.dispatchArchivedStoredAgent(nextRecord);
     }
 
     await this.fireAgentArchived(agentId);
-    await this.cascadeArchiveChildren(agentId);
 
     return nextRecord;
   }
 
-  async unarchiveSnapshot(
-    agentId: string,
-    updates?: { workspaceId?: string; labels?: AgentLabelPatch },
-  ): Promise<boolean> {
+  async unarchiveSnapshot(agentId: string): Promise<boolean> {
     const registry = this.requireRegistry();
     const record = await registry.get(agentId);
     if (!record || !record.archivedAt) {
@@ -1827,8 +1935,6 @@ export class AgentManager {
 
     await registry.upsert({
       ...record,
-      ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
-      ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
       updatedAt: new Date().toISOString(),
     });
@@ -1864,7 +1970,8 @@ export class AgentManager {
     const liveAgent = this.getAgent(agentId);
     if (liveAgent) {
       if (updates.title) {
-        await this.setTitle(agentId, updates.title);
+        // Explicit rename: lock the tab title against the per-turn auto-titler.
+        await this.setTitle(agentId, updates.title, { lockedByUser: true });
       }
       if (updates.labels) {
         await this.writeLabels(agentId, updates.labels);
@@ -2032,8 +2139,12 @@ export class AgentManager {
     const streamForwarder = async function* streamForwarder(this: AgentManager) {
       let turnId: string;
       let turnStream: ReturnType<AgentRunState["createTurnStream"]> | null = null;
+      // Cerveau recall lives here — the single point every foreground prompt
+      // passes through (runAgent and replaceAgentRun both funnel into
+      // streamAgent) — so every entrypoint queries the brain. Never throws.
+      const effectivePrompt = await this.applyBrainRecall(agent, prompt);
       try {
-        const result = await agent.session.startTurn(prompt, options);
+        const result = await agent.session.startTurn(effectivePrompt, options);
         turnId = result.turnId;
       } catch (error) {
         agent.pendingReplacement = false;
@@ -2088,6 +2199,69 @@ export class AgentManager {
     }.call(this);
 
     return streamForwarder;
+  }
+
+  /**
+   * Recall Cerveau context for this prompt and return the augmented prompt
+   * (string prompts get the <contexte_memoire> envelope prepended; structured
+   * prompts get it inside their user-text block — text attachments carry a
+   * mimeType and are left alone). Skips internal agents (recursion), empty
+   * text, and prompts already carrying an envelope (requeues/replays).
+   * Best-effort: any failure returns the prompt unchanged.
+   */
+  private async applyBrainRecall(
+    agent: ActiveManagedAgent,
+    prompt: AgentPromptInput,
+  ): Promise<AgentPromptInput> {
+    // Internal agents (curator/librarian, keep-alive) get neither the Cerveau
+    // recall (recursion) nor the response-format directive (they emit data, not
+    // user-facing reports).
+    if (agent.internal) {
+      return prompt;
+    }
+    const hook = this.brainRecallHook;
+    try {
+      // Applied to the single non-empty text of the prompt: run the Cerveau
+      // recall first (its envelope wraps the user text), then prepend the
+      // response-format directive so it sits ahead of the recall block. Both
+      // are idempotent, so requeues/replays don't double-wrap.
+      const augment = async (text: string): Promise<string> => {
+        // Requeues/replays echo the already-augmented prompt: the directive
+        // envelope (outermost) or a bare recall envelope (older messages) both
+        // mean "already processed" — leave it untouched to avoid double-wrap.
+        if (hasResponseFormatDirective(text) || parseBrainContextEnvelope(text)) {
+          return text;
+        }
+        // Fresh prompt: schedule the end-of-turn capture (fire-and-forget) at the
+        // same choke point as recall, so every entrypoint's turn is distilled.
+        this.brainCaptureHook?.({ agentId: agent.id, text });
+        const recalled = hook ? await hook({ agentId: agent.id, text }) : text;
+        return injectResponseFormat(recalled);
+      };
+      if (typeof prompt === "string") {
+        if (!prompt.trim()) {
+          return prompt;
+        }
+        return await augment(prompt);
+      }
+      const textIndex = prompt.findIndex(
+        (block) => block.type === "text" && !("mimeType" in block) && block.text.trim().length > 0,
+      );
+      if (textIndex === -1) {
+        return prompt;
+      }
+      const textBlock = prompt[textIndex] as { type: "text"; text: string };
+      const augmented = await augment(textBlock.text);
+      if (augmented === textBlock.text) {
+        return prompt;
+      }
+      const next = [...prompt];
+      next[textIndex] = { type: "text", text: augmented };
+      return next;
+    } catch (err) {
+      this.logger.debug({ err, agentId: agent.id }, "brain: prompt recall failed");
+      return prompt;
+    }
   }
 
   private finalizeForegroundTurn(agent: ActiveManagedAgent, turnId?: string): void {
@@ -2459,11 +2633,6 @@ export class AgentManager {
     await this.durableTimelineStore.deleteAgent(agentId);
   }
 
-  async deleteAgentState(agentId: string): Promise<void> {
-    this.discardRetainedAgentState(agentId);
-    await this.deleteCommittedTimeline(agentId);
-  }
-
   async getLastAssistantMessage(agentId: string): Promise<string | null> {
     const agent = this.agents.get(agentId);
     if (!agent) {
@@ -2471,6 +2640,22 @@ export class AgentManager {
     }
 
     return await this.getLastAssistantMessageFromStores(agentId);
+  }
+
+  /**
+   * Best-effort read of the fields a completion notification wants: the agent's
+   * current tab title and its latest synthesis summary ("what it just did").
+   * Both come from the persisted record so they reflect the auto-titler and the
+   * post-turn synthesis rebuild. Returns nulls when unavailable.
+   */
+  async getAgentNotificationContext(
+    agentId: string,
+  ): Promise<{ title: string | null; synthesisSummary: string | null }> {
+    const record = this.registry ? await this.registry.get(agentId) : null;
+    return {
+      title: record?.title ?? null,
+      synthesisSummary: record?.synthesis?.summary ?? null,
+    };
   }
 
   private getLastAssistantMessageFromTimeline(
@@ -2723,7 +2908,6 @@ export class AgentManager {
       initialTitle?: string | null;
       publishWhenReady?: boolean;
       workspaceId?: string;
-      owner?: AgentOwner;
     },
   ): Promise<ManagedAgent> {
     let registered = false;
@@ -2773,7 +2957,6 @@ export class AgentManager {
       await this.refreshSessionState(managed, { emit: false });
       this.assertAgentRegistrationActive(managed);
       managed.lifecycle = "idle";
-      this.touchUpdatedAt(managed);
       await this.persistSnapshot(managed);
       this.assertAgentRegistrationActive(managed);
       this.emitState(managed, { persist: false });
@@ -2822,7 +3005,6 @@ export class AgentManager {
       | undefined;
   }): Promise<{ durableTimelineHasRows: boolean }> {
     const { agentId, now, options } = params;
-    const timelineAlreadyPrimed = this.timelineStore.has(agentId);
     const explicitTimelineSeed = buildExplicitTimelineSeedForRegister(now, options);
     const shouldSeedFromDurable =
       !explicitTimelineSeed &&
@@ -2832,8 +3014,7 @@ export class AgentManager {
       ? await this.loadCommittedTimelineSeed(agentId, now)
       : null;
     const durableTimelineHasRows =
-      timelineAlreadyPrimed ||
-      (durableTimelineSeed != null && (durableTimelineSeed.nextSeq ?? 1) > 1);
+      durableTimelineSeed != null && (durableTimelineSeed.nextSeq ?? 1) > 1;
     const timelineSeed = explicitTimelineSeed ?? durableTimelineSeed;
     if (timelineSeed || !this.timelineStore.has(agentId)) {
       this.timelineStore.initialize(agentId, timelineSeed ?? { timestamp: now.toISOString() });
@@ -2862,7 +3043,6 @@ export class AgentManager {
           attention?: AttentionState;
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
-          owner?: AgentOwner;
         }
       | undefined;
   }): ActiveManagedAgent {
@@ -2872,7 +3052,6 @@ export class AgentManager {
       provider: config.provider,
       cwd: config.cwd,
       workspaceId: options?.workspaceId,
-      owner: options?.owner,
       session,
       capabilities: session.capabilities,
       config,
@@ -2941,21 +3120,7 @@ export class AgentManager {
       lifecycle: "closed",
       session: null,
       activeForegroundTurnId: null,
-      pendingPermissions: new Map(),
-      bufferedPermissionResolutions: new Map(),
-      inFlightPermissionResponses: new Set(),
-      pendingReplacement: false,
-      foregroundTurnWaiters: new Set(),
-      finalizedForegroundTurnIds: new Set(),
-      unsubscribeSession: null,
     };
-  }
-
-  private discardRetainedAgentState(agentId: string): void {
-    this.timelineStore.delete(agentId);
-    for (const event of this.providerSubagents.deleteParent(agentId)) {
-      this.dispatch({ type: "provider_subagent", event });
-    }
   }
 
   private emitClosedAgent(agent: ManagedAgentClosed, options?: { persist?: boolean }): void {
@@ -3023,24 +3188,6 @@ export class AgentManager {
     });
   }
 
-  /**
-   * Provider mutations may synchronously emit config events that are processed through the
-   * asynchronous session queue. Apply those events before committing the mutation's explicit
-   * manager state so call order remains authoritative.
-   */
-  private async drainSessionEvents(agentId: string): Promise<void> {
-    while (true) {
-      const tail = this.sessionEventTails.get(agentId);
-      if (!tail) {
-        return;
-      }
-      await tail;
-      if (this.sessionEventTails.get(agentId) === tail) {
-        return;
-      }
-    }
-  }
-
   private async dispatchSessionEvent(
     agent: ActiveManagedAgent,
     event: AgentStreamEvent,
@@ -3105,7 +3252,12 @@ export class AgentManager {
 
   private async persistSnapshot(
     agent: ManagedAgent,
-    options?: { title?: string | null; internal?: boolean },
+    options?: {
+      title?: string | null;
+      synthesis?: AgentSynthesis | null;
+      synthesisHistory?: AgentSynthesis[] | null;
+      internal?: boolean;
+    },
   ): Promise<void> {
     if (!this.registry) {
       return;
@@ -3187,17 +3339,12 @@ export class AgentManager {
       return;
     }
 
-    const broadcast = options?.broadcast ?? false;
-
     if (options?.force) {
-      await this.forceHydrateTimelineFromLegacyProviderHistory(
-        agent,
-        typeof broadcast === "function" ? broadcast() : broadcast,
-      );
+      await this.forceHydrateTimelineFromLegacyProviderHistory(agent, options.broadcast === true);
       return;
     }
 
-    await this.primeTimelineFromLegacyProviderHistory(agent, broadcast);
+    await this.primeTimelineFromLegacyProviderHistory(agent, options?.broadcast === true);
   }
 
   private async forceHydrateTimelineFromLegacyProviderHistory(
@@ -3211,7 +3358,9 @@ export class AgentManager {
         if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
           continue;
         }
-        historyEvents.push(event);
+        for (const item of unwrapBrainContextUserMessage(event.item, { reconstructPill: true })) {
+          historyEvents.push({ ...event, item });
+        }
       } else if (event.type === "provider_subagent") {
         providerSubagentEvents.push(event);
       }
@@ -3254,24 +3403,15 @@ export class AgentManager {
 
   private async primeTimelineFromLegacyProviderHistory(
     agent: ActiveManagedAgent,
-    broadcast: boolean | (() => boolean),
+    broadcast: boolean,
   ): Promise<void> {
-    const deferredBroadcast = typeof broadcast === "function";
-    const timelineEvents: Array<{
-      event: Extract<AgentStreamEvent, { type: "timeline" }>;
-      row: AgentTimelineRow;
-    }> = [];
-    const providerSubagentEvents: AgentManagerEvent[] = [];
     agent.historyPrimed = true;
     try {
       for await (const event of agent.session.streamHistory()) {
         if (event.type === "provider_subagent") {
           const update = this.providerSubagents.apply(agent.id, event.provider, event.event);
-          const managerEvent: AgentManagerEvent = { type: "provider_subagent", event: update };
-          if (deferredBroadcast) {
-            providerSubagentEvents.push(managerEvent);
-          } else if (broadcast) {
-            this.dispatch(managerEvent);
+          if (broadcast) {
+            this.dispatch({ type: "provider_subagent", event: update });
           }
           continue;
         }
@@ -3281,37 +3421,16 @@ export class AgentManager {
         if (event.item.type === "user_message" && isSystemInjectedEnvelope(event.item.text)) {
           continue;
         }
-        const row = this.recordTimeline(
-          agent.id,
-          event.item,
-          event.timestamp ? { timestamp: event.timestamp } : undefined,
-        );
-        if (deferredBroadcast) {
-          timelineEvents.push({ event, row });
-        } else if (broadcast) {
-          this.dispatchStream(agent.id, event, {
-            seq: row.seq,
-            epoch: this.timelineStore.getEpoch(agent.id),
-            timestamp: row.timestamp,
-          });
+        for (const item of unwrapBrainContextUserMessage(event.item, { reconstructPill: true })) {
+          this.recordTimeline(
+            agent.id,
+            item,
+            event.timestamp ? { timestamp: event.timestamp } : undefined,
+          );
         }
       }
     } catch {
       // ignore history failures
-    }
-
-    if (typeof broadcast !== "function" || !broadcast()) {
-      return;
-    }
-    for (const event of providerSubagentEvents) {
-      this.dispatch(event);
-    }
-    for (const { event, row } of timelineEvents) {
-      this.dispatchStream(agent.id, event, {
-        seq: row.seq,
-        epoch: this.timelineStore.getEpoch(agent.id),
-        timestamp: row.timestamp,
-      });
     }
   }
 
@@ -3476,6 +3595,7 @@ export class AgentManager {
         return undefined;
       case "usage_updated":
         agent.lastUsage = event.usage;
+        this.recordUsageStats(agent, event.usage, false);
         this.emitState(agent);
         return undefined;
       case "mode_changed":
@@ -3500,7 +3620,6 @@ export class AgentManager {
         this.emitState(agent);
         return undefined;
       case "thinking_option_changed":
-        agent.config.thinkingOptionId = event.thinkingOptionId ?? undefined;
         if (agent.runtimeInfo) {
           agent.runtimeInfo = {
             ...agent.runtimeInfo,
@@ -3540,6 +3659,32 @@ export class AgentManager {
     }
   }
 
+  /**
+   * Feed provider-reported cumulative usage into the persisted usage stats.
+   * The store turns cumulative counters into deltas; internal agents (hidden
+   * helpers) are excluded so stats reflect user-visible work only.
+   */
+  private recordUsageStats(
+    agent: ActiveManagedAgent,
+    usage: AgentUsage | undefined,
+    countTurn: boolean,
+  ): void {
+    if (!this.usageStatsStore || agent.internal) {
+      return;
+    }
+    if (!usage && !countTurn) {
+      return;
+    }
+    this.usageStatsStore.noteAgentUsage({
+      agentId: agent.id,
+      projectKey: agent.cwd,
+      projectName: basename(agent.cwd),
+      usage: usage ?? {},
+      timestamp: new Date(),
+      countTurn,
+    });
+  }
+
   private onStreamThreadStarted(agent: ActiveManagedAgent): void {
     const previousSessionId = agent.persistence?.sessionId ?? null;
     const handle = agent.session.describePersistence();
@@ -3568,17 +3713,23 @@ export class AgentManager {
     }
 
     if (options?.fromHistory) {
-      this.recordTimeline(
-        agent.id,
-        event.item,
-        event.timestamp ? { timestamp: event.timestamp } : undefined,
-      );
+      for (const item of unwrapBrainContextUserMessage(event.item, { reconstructPill: true })) {
+        this.recordTimeline(
+          agent.id,
+          item,
+          event.timestamp ? { timestamp: event.timestamp } : undefined,
+        );
+      }
       flags.shouldDispatchEvent = false;
       flags.shouldNotifyWaiters = false;
       return;
     }
 
-    this.recordAndDispatchTimelineItem(agent.id, event.item, event.provider, event.turnId);
+    // Live echo of the just-dispatched prompt: strip the injected block only —
+    // the real brain_context pill was appended before dispatch.
+    const strippedItem =
+      unwrapBrainContextUserMessage(event.item, { reconstructPill: false })[0] ?? event.item;
+    this.recordAndDispatchTimelineItem(agent.id, strippedItem, event.provider, event.turnId);
     if (event.item.type === "user_message") {
       agent.lastUserMessageAt = new Date();
       this.emitState(agent);
@@ -3606,6 +3757,7 @@ export class AgentManager {
       "agent.manager.turn.completed",
     );
     agent.lastUsage = event.usage;
+    this.recordUsageStats(agent, event.usage, true);
     agent.lastError = undefined;
     if (!isForegroundEvent && agent.lifecycle !== "idle" && !agent.pendingReplacement) {
       (agent as ActiveManagedAgent).lifecycle = "idle";
@@ -4127,7 +4279,18 @@ export class AgentManager {
           "code" in error &&
           (error as NodeJS.ErrnoException).code === "ENOENT"
         ) {
-          throw new Error(`Working directory does not exist: ${normalized.cwd}`, { cause: error });
+          if (options.allowMissingCwd) {
+            const fallback = await findNearestExistingDirectory(normalized.cwd);
+            console.warn(
+              `[agent-manager] Working directory missing (${normalized.cwd}); ` +
+                `falling back to ${fallback} so the conversation can still be opened.`,
+            );
+            normalized.cwd = fallback;
+          } else {
+            throw new Error(`Working directory does not exist: ${normalized.cwd}`, {
+              cause: error,
+            });
+          }
         }
         if (error instanceof Error) {
           throw error;
@@ -4150,25 +4313,15 @@ export class AgentManager {
     }
 
     if (!normalized.modeId) {
-      normalized.modeId = await this.resolveDefaultModeId(normalized, options.env);
+      try {
+        normalized.modeId =
+          getAgentProviderDefinition(normalized.provider).defaultModeId ?? undefined;
+      } catch {
+        // Unknown provider
+      }
     }
 
     return normalized;
-  }
-
-  private async resolveDefaultModeId(
-    config: AgentSessionConfig,
-    env?: Record<string, string>,
-  ): Promise<string | undefined> {
-    const providerDefault = await this.clients
-      .get(config.provider)
-      ?.resolveDefaultModeId?.({ config, env });
-    if (providerDefault) return providerDefault;
-    try {
-      return getAgentProviderDefinition(config.provider).defaultModeId ?? undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   private async resolveDefaultModelId(config: AgentSessionConfig): Promise<string | undefined> {
@@ -4192,9 +4345,12 @@ export class AgentManager {
   private async prepareSessionConfig(
     config: AgentSessionConfig,
     agentId: string,
-    env?: Record<string, string>,
+    normalizeOptions: NormalizeConfigOptions = {},
   ): Promise<PreparedSessionConfig> {
-    const storedConfig = await this.normalizeConfig(stripInternalPaseoMcpServer(config), { env });
+    const storedConfig = await this.normalizeConfig(
+      stripInternalPaseoMcpServer(config),
+      normalizeOptions,
+    );
     const launchConfig = this.applyDaemonAppendSystemPrompt(
       withRuntimePaseoMcpServer({
         config: storedConfig,
@@ -4207,16 +4363,23 @@ export class AgentManager {
   }
 
   private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
-    const daemonAppendSystemPrompt = this.appendSystemPrompt.trim();
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 
-    return daemonAppendSystemPrompt
-      ? {
-          ...next,
-          daemonAppendSystemPrompt,
-        }
-      : next;
+    const parts: string[] = [];
+    const userAppend = this.appendSystemPrompt.trim();
+    if (userAppend) {
+      parts.push(userAppend);
+    }
+    // Presentation guidance (colored callouts) is for real, user-facing agents
+    // only. Internal ephemeral agents (synthesis, estimation, recap) must stay
+    // unshaped so their structured output is not perturbed.
+    if (config.internal !== true) {
+      parts.push(PRESENTATION_GUIDANCE);
+    }
+
+    const daemonAppendSystemPrompt = parts.join("\n\n");
+    return daemonAppendSystemPrompt ? { ...next, daemonAppendSystemPrompt } : next;
   }
 
   private async buildLaunchContext(

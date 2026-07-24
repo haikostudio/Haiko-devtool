@@ -81,12 +81,16 @@ export const baseColors = {
   // Teal scale
   teal: {
     200: "#99f6e4",
+    500: "#14b8a6",
   },
 
   // Amber scale
   amber: {
+    100: "#fef3c7",
+    200: "#fde68a",
     500: "#f59e0b",
     700: "#b45309",
+    900: "#78350f",
   },
 
   // Yellow scale

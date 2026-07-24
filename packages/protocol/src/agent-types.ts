@@ -104,7 +104,6 @@ export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;
-  source?: "builtin" | "custom";
   error?: string;
   models?: AgentModelDefinition[];
   modes?: AgentMode[];
@@ -337,14 +336,105 @@ export interface CompactionTimelineItem {
   preTokens?: number;
 }
 
+/**
+ * Recall performed by the daemon against the external "Cerveau" memory service
+ * before the prompt is dispatched to the agent. Rendered as a distinct (yellow)
+ * pill in the chat so the user sees what was looked up and what came back.
+ */
+export interface BrainContextMemory {
+  texte: string;
+  rejete?: boolean;
+  motif?: string;
+  /** ISO date the memory was last confirmed in the Cerveau (optional). */
+  date?: string;
+}
+
+export interface BrainContextTimelineItem {
+  [key: string]: unknown;
+  type: "brain_context";
+  query: string;
+  portee: "projet" | "global" | "apercu";
+  count: number;
+  memories: BrainContextMemory[];
+  status?: "loading" | "done";
+}
+
+/**
+ * Result of the daemon's inline task-intent triage: when a user message looks
+ * like it wants task(s) created, a lightweight LLM either proposed task(s) (now
+ * on the board awaiting approval) or needs clarification. Rendered as a distinct
+ * pill in the chat so the user sees what happened without leaving the thread.
+ */
+export interface TaskTriageTimelineItem {
+  [key: string]: unknown;
+  type: "task_triage";
+  status: "questions" | "proposed";
+  questions?: string[];
+  proposedCount?: number;
+  projectId?: string;
+  // Ids + title snapshots of the proposed tasks so clients can render live
+  // actionable cards against the board. Absent on pre-carousel items.
+  tasks?: Array<{ taskId: string; title: string }>;
+}
+
+/**
+ * Plain-language recap the daemon appends at the end of a turn that changed
+ * files. It lets a non-technical reader see, at a glance, what the agent did
+ * and which files moved — each tappable to open its diff. `files` is derived
+ * deterministically from the turn's edit/write tool calls (never the model);
+ * only `summary`/`highlights` are model-written. Rendered as a distinct block
+ * at the end of the turn in the chat thread.
+ */
+export type TurnRecapFileOperation = "created" | "edited" | "deleted";
+
+export interface TurnRecapFileChange {
+  /** Path as reported by the tool call (may be absolute or workspace-relative). */
+  path: string;
+  operation: TurnRecapFileOperation;
+}
+
+export interface TurnRecapTimelineItem {
+  [key: string]: unknown;
+  type: "turn_recap";
+  /** One or two plain sentences: what was accomplished this turn. */
+  summary: string;
+  /** Optional short bullets naming concrete things done, in plain language. */
+  highlights?: string[];
+  /** Files touched this turn, deduped, driving the "modifications" list. */
+  files: TurnRecapFileChange[];
+  /** Absolute workspace root, so the client can open each file's diff. */
+  cwd?: string;
+}
+
+/**
+ * Image bytes attached to a user message, carried inside the timeline so that
+ * every client — not just the sender that still holds the local copy — can
+ * render it. Base64-encoded, matching the `send_agent_message` wire shape.
+ */
+export interface TimelineImageAttachment {
+  /** Base64-encoded image bytes (no `data:` prefix). */
+  data: string;
+  /** MIME type, e.g. "image/jpeg", "image/png". */
+  mimeType: string;
+}
+
 export type AgentTimelineItem =
-  | { type: "user_message"; text: string; messageId?: string; clientMessageId?: string }
+  | {
+      type: "user_message";
+      text: string;
+      messageId?: string;
+      /** Attached images, so other clients render them instead of just the text. */
+      images?: TimelineImageAttachment[];
+    }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
-  | CompactionTimelineItem;
+  | CompactionTimelineItem
+  | BrainContextTimelineItem
+  | TaskTriageTimelineItem
+  | TurnRecapTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }

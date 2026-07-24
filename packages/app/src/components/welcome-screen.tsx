@@ -95,7 +95,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: theme.spacing[1.5],
   },
   setupLinkText: {
     color: theme.colors.accent,

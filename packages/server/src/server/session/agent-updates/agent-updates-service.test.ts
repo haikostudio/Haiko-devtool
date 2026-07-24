@@ -150,11 +150,11 @@ function buildHarness() {
             (message as Extract<SessionOutboundMessage, { type: "agent_update" }>).payload,
         );
     },
-    managed(id: string): ManagedAgent {
-      return { id } as unknown as ManagedAgent;
+    managed(id: string, overrides?: Partial<ManagedAgent>): ManagedAgent {
+      return { id, ...overrides } as unknown as ManagedAgent;
     },
-    stored(id: string): StoredAgentRecord {
-      return { id } as unknown as StoredAgentRecord;
+    stored(id: string, overrides?: Partial<StoredAgentRecord>): StoredAgentRecord {
+      return { id, ...overrides } as unknown as StoredAgentRecord;
     },
   };
 }
@@ -298,6 +298,20 @@ describe("forwardLiveAgent", () => {
     expect(h.workspaceUpdates).toEqual(["ws-1"]);
   });
 
+  test("never forwards an internal agent, not even a workspace update", async () => {
+    const h = buildHarness();
+    h.service.beginSubscription({ subscriptionId: "sub", filter: {} });
+    h.service.flushBootstrapped("sub");
+    // A payload IS registered so a leak would surface as an emitted upsert; the
+    // gate must short-circuit before the payload/project machinery runs.
+    h.register(makeAgentPayload({ id: "brain", workspaceId: "ws-1" }));
+
+    await h.service.forwardLiveAgent(h.managed("brain", { internal: true }));
+
+    expect(h.agentUpdates()).toEqual([]);
+    expect(h.workspaceUpdates).toEqual([]);
+  });
+
   test("swallows and logs a build error without throwing", async () => {
     const h = buildHarness();
     h.service.beginSubscription({ subscriptionId: "sub", filter: {} });
@@ -356,6 +370,18 @@ describe("emitStoredRecord", () => {
     const payload = await h.service.emitStoredRecord(h.stored("a"));
 
     expect(payload.id).toBe("a");
+    expect(h.agentUpdates()).toEqual([]);
+  });
+
+  test("returns the payload but emits nothing for an internal record", async () => {
+    const h = buildHarness();
+    h.service.beginSubscription({ subscriptionId: "sub", filter: {} });
+    h.service.flushBootstrapped("sub");
+    h.register(makeAgentPayload({ id: "brain", workspaceId: "ws-1" }));
+
+    const payload = await h.service.emitStoredRecord(h.stored("brain", { internal: true }));
+
+    expect(payload.id).toBe("brain");
     expect(h.agentUpdates()).toEqual([]);
   });
 });

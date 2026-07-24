@@ -420,12 +420,39 @@ export function buildHostSessionsRoute(serverId: string) {
   return `${base}/sessions` as const;
 }
 
+export function buildDashboardRoute() {
+  return "/dashboard" as const;
+}
+
 export function buildSessionsRoute() {
   return "/sessions" as const;
 }
 
+export function buildChangelogRoute() {
+  return "/changelog" as const;
+}
+
+export function buildActivityRoute() {
+  return "/activity" as const;
+}
+
 export function buildSchedulesRoute() {
   return "/schedules" as const;
+}
+
+export function buildTasksRoute(params?: { host?: string; project?: string; folder?: string }) {
+  const query = new URLSearchParams();
+  if (params?.host) {
+    query.set("host", params.host);
+  }
+  if (params?.project) {
+    query.set("project", params.project);
+  }
+  if (params?.folder) {
+    query.set("folder", params.folder);
+  }
+  const suffix = query.toString();
+  return suffix ? (`/tasks?${suffix}` as const) : ("/tasks" as const);
 }
 
 export function buildOpenProjectRoute() {

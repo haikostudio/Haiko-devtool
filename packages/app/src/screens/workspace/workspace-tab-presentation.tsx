@@ -5,6 +5,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import invariant from "tiny-invariant";
 import { SyncedLoader } from "@/components/synced-loader";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { ensurePanelsRegistered } from "@/panels/register-panels";
 import { getPanelRegistration } from "@/panels/panel-registry";
 import type { WorkspaceTabDescriptor } from "@/screens/workspace/workspace-tabs-types";
@@ -277,12 +278,11 @@ const styles = StyleSheet.create((theme) => ({
   optionRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[1],
     borderRadius: 0,
-    marginHorizontal: theme.spacing[1],
     marginBottom: theme.spacing[1],
   },
   optionMainPressable: {
@@ -291,8 +291,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[2],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
   },
   optionRowActive: {
     backgroundColor: theme.colors.surface1,

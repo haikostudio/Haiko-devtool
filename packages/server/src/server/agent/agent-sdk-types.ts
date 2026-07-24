@@ -105,7 +105,6 @@ export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;
-  source?: "builtin" | "custom";
   error?: string;
   models?: AgentModelDefinition[];
   modes?: AgentMode[];
@@ -199,7 +198,7 @@ export interface AgentRunOptions {
   outputSchema?: unknown;
   resumeFrom?: AgentPersistenceHandle;
   maxThinkingTokens?: number;
-  clientMessageId?: string;
+  messageId?: string;
 }
 
 export interface AgentUsage {
@@ -367,14 +366,68 @@ export interface CompactionTimelineItem {
   preTokens?: number;
 }
 
+export interface BrainContextTimelineItem {
+  [key: string]: unknown;
+  type: "brain_context";
+  query: string;
+  portee: "projet" | "global" | "apercu";
+  count: number;
+  memories: { texte: string; rejete?: boolean; motif?: string }[];
+  status?: "loading" | "done";
+}
+
+export interface TaskTriageTimelineItem {
+  [key: string]: unknown;
+  type: "task_triage";
+  status: "questions" | "proposed";
+  questions?: string[];
+  proposedCount?: number;
+  projectId?: string;
+  // Ids + title snapshots of the proposed tasks so clients can render live
+  // actionable cards against the board. Absent on pre-carousel items.
+  tasks?: Array<{ taskId: string; title: string }>;
+}
+
+/** Mirrors the protocol {@link TurnRecapTimelineItem}; see agent-types.ts. */
+export interface TurnRecapTimelineItem {
+  [key: string]: unknown;
+  type: "turn_recap";
+  summary: string;
+  highlights?: string[];
+  files: { path: string; operation: "created" | "edited" | "deleted" }[];
+  cwd?: string;
+}
+
+/**
+ * Image bytes attached to a user message, carried inside the timeline so every
+ * client — not just the sender that still holds the local copy — can render it.
+ * Base64-encoded, matching the `send_agent_message` wire shape. Mirrors
+ * `TimelineImageAttachment` in the protocol package.
+ */
+export interface TimelineImageAttachment {
+  /** Base64-encoded image bytes (no `data:` prefix). */
+  data: string;
+  /** MIME type, e.g. "image/jpeg", "image/png". */
+  mimeType: string;
+}
+
 export type AgentTimelineItem =
-  | { type: "user_message"; text: string; messageId?: string; clientMessageId?: string }
+  | {
+      type: "user_message";
+      text: string;
+      messageId?: string;
+      /** Attached images, so other clients render them instead of just the text. */
+      images?: TimelineImageAttachment[];
+    }
   | { type: "assistant_message"; text: string; messageId?: string }
   | { type: "reasoning"; text: string }
   | ToolCallTimelineItem
   | { type: "todo"; items: { text: string; completed: boolean }[] }
   | { type: "error"; message: string }
-  | CompactionTimelineItem;
+  | CompactionTimelineItem
+  | BrainContextTimelineItem
+  | TaskTriageTimelineItem
+  | TurnRecapTimelineItem;
 
 export type AgentStreamEvent =
   | { type: "thread_started"; sessionId: string; provider: AgentProvider }
@@ -602,12 +655,6 @@ export interface AgentCreateSessionOptions {
   persistSession?: boolean;
 }
 
-/** Runtime-only intent for a persisted-session resume. Never persist this option. */
-export interface AgentResumeSessionOptions {
-  /** Defaults to interactive. History loading may be read-only for archived native sessions. */
-  purpose?: "interactive" | "history";
-}
-
 /**
  * Returned by respondToPermission when the permission resolution requires
  * a follow-up turn (e.g. Codex plan approval → implementation).
@@ -636,7 +683,6 @@ export interface AgentSession {
   ): Promise<AgentPermissionResult | void>;
   describePersistence(): AgentPersistenceHandle | null;
   interrupt(): Promise<void>;
-  /** Release live runtime resources without archiving or deleting the durable native session. */
   close(): Promise<void>;
   listCommands?(): Promise<AgentSlashCommand[]>;
   setModel?(modelId: string | null): Promise<void>;
@@ -674,12 +720,6 @@ export type FetchCatalogOptions =
 export interface ProviderCatalog {
   models: AgentModelDefinition[];
   modes: AgentMode[];
-  defaultModeId?: string | null;
-}
-
-export interface ResolveAgentDefaultModeInput {
-  config: AgentSessionConfig;
-  env?: Record<string, string>;
 }
 
 export interface AgentClient {
@@ -694,7 +734,6 @@ export interface AgentClient {
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
     launchContext?: AgentLaunchContext,
-    options?: AgentResumeSessionOptions,
   ): Promise<AgentSession>;
   /**
    * Discover models and modes together. Implementations may use one upstream
@@ -703,7 +742,6 @@ export interface AgentClient {
    * The registry is responsible for merging configured model overrides.
    */
   fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog>;
-  resolveDefaultModeId?(input: ResolveAgentDefaultModeInput): Promise<string | undefined>;
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;
   listCommands?(config: AgentSessionConfig): Promise<AgentSlashCommand[]>;
@@ -722,12 +760,12 @@ export interface AgentClient {
   isAvailable(): Promise<boolean>;
   getDiagnostic?(): Promise<{ diagnostic: string }>;
   /**
-   * Archive a durable native session (best-effort). Runtime release belongs to AgentSession.close().
+   * Archive a persisted session in the native provider (best-effort).
    * Called when Paseo archives an agent so the provider's own UI reflects the same state.
    */
   archiveNativeSession?(handle: AgentPersistenceHandle): Promise<void>;
   /**
-   * Unarchive a durable native session in the provider.
+   * Unarchive a persisted session in the native provider.
    * Called before Paseo clears its archived flag so provider resume can succeed.
    */
   unarchiveNativeSession?(handle: AgentPersistenceHandle): Promise<void>;

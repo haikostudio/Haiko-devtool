@@ -33,6 +33,7 @@ import {
   BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, File, Folder, Search } from "lucide-react-native";
 import {
   flip,
@@ -63,6 +64,7 @@ import {
 import { FloatingSurface } from "@/components/ui/floating";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
 import { buildDesktopFrameStyle } from "./combobox-frame-style";
+import { LIST_ROW_HEIGHT } from "./control-geometry";
 
 export { buildDesktopFrameStyle } from "./combobox-frame-style";
 
@@ -955,6 +957,7 @@ interface MobileBodyProps {
 }
 
 function MobileComboboxBody(props: MobileBodyProps): ReactElement {
+  const insets = useSafeAreaInsets();
   const renderBackdrop = useCallback(
     (backdropProps: React.ComponentProps<typeof BottomSheetBackdrop>) => (
       <BottomSheetBackdrop
@@ -1001,6 +1004,10 @@ function MobileComboboxBody(props: MobileBodyProps): ReactElement {
       enablePanDownToClose
       backgroundComponent={ComboboxSheetBackground}
       handleIndicatorStyle={props.handleIndicatorStyle}
+      // Cap the sheet at the safe-area top so the handle and header stay below
+      // the status bar/notch instead of sliding under the clock at the tall snap
+      // point (and when `keyboardBehavior="extend"` grows the sheet).
+      topInset={insets.top}
       keyboardBehavior="extend"
       keyboardBlurBehavior="none"
       presentation={props.presentation}
@@ -1615,16 +1622,15 @@ const styles = StyleSheet.create((theme) => ({
   comboboxItem: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderRadius: 0,
     ...(IS_WEB
       ? {}
       : {
           marginHorizontal: theme.spacing[1],
-          marginBottom: theme.spacing[1],
         }),
   },
   comboboxItemHovered: {
@@ -1691,7 +1697,7 @@ const styles = StyleSheet.create((theme) => ({
     borderTopColor: theme.colors.border,
   },
   bottomSheetHeader: {
-    paddingHorizontal: theme.spacing[6],
+    paddingHorizontal: theme.spacing[4],
     paddingBottom: theme.spacing[2],
   },
   comboboxTitle: {

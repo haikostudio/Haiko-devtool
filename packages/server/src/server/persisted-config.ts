@@ -157,6 +157,34 @@ const FeatureWebUiSchema = z
   })
   .strict();
 
+// External "Cerveau" long-term memory service (REST). When enabled and keyed,
+// the daemon recalls relevant memories before each prompt and notes the
+// exchange afterwards. See services/brain-memory/client.ts.
+const FeatureBrainMemorySchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    baseUrl: z.string().trim().min(1).optional(),
+    apiKey: z.string().min(1).optional(),
+    globalFallback: z.boolean().optional(),
+    // Curation layer (librarian recall filter + scribe distillation), on by
+    // default when brain memory is enabled. providerModel is the internal
+    // agent model, e.g. "claude/haiku".
+    curation: z.boolean().optional(),
+    providerModel: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+// Inline task-intent triage: a lightweight LLM reads chat messages that look
+// like task requests and proposes tasks (awaiting approval) or asks for
+// clarification. providerModel defaults to a cheap model (claude/haiku) but can
+// point elsewhere (e.g. an OpenRouter-backed provider) via config.
+const FeatureMessageTriageSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    providerModel: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
 const StructuredGenerationProviderConfigSchema = z
   .object({
     provider: z.string().min(1),
@@ -252,6 +280,18 @@ export const PersistedConfigSchema = z
         enableTerminalAgentHooks: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
         terminalProfiles: z.array(TerminalProfileSchema).optional(),
+        tasks: z
+          .object({
+            quietHours: z
+              .object({
+                startHour: z.number().int().min(0).max(23),
+                endHour: z.number().int().min(0).max(23),
+                timeZone: z.string().min(1),
+              })
+              .optional(),
+          })
+          .passthrough()
+          .optional(),
         cors: z
           .object({
             allowedOrigins: z.array(z.string()).optional(),
@@ -309,6 +349,8 @@ export const PersistedConfigSchema = z
         dictation: FeatureDictationSchema.optional(),
         voiceMode: FeatureVoiceModeSchema.optional(),
         webUi: FeatureWebUiSchema.optional(),
+        brainMemory: FeatureBrainMemorySchema.optional(),
+        messageTriage: FeatureMessageTriageSchema.optional(),
       })
       .strict()
       .optional(),

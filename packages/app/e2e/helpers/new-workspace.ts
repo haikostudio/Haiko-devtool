@@ -170,6 +170,8 @@ export async function openNewWorkspaceComposer(
 }
 
 export async function openGlobalNewWorkspaceComposer(page: Page): Promise<void> {
+  // New workspace now lives inside the grouped sidebar primary menu, so open it first.
+  await page.getByTestId("sidebar-primary-menu").click();
   await page.getByTestId("sidebar-global-new-workspace").click();
 
   await expect(page).toHaveURL(/\/new(?:\?.*)?$/, {

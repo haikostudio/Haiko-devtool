@@ -10,6 +10,9 @@ import type {
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
+  PaseoDeployCommitWorktreeRequest,
+  PaseoDeployStatusRequest,
+  PaseoDeployTriggerRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
   SubscribeCheckoutDiffRequest,
@@ -53,6 +56,11 @@ import {
 } from "../../../utils/checkout-git.js";
 import { execCommand } from "../../../utils/spawn.js";
 import { expandTilde } from "../../../utils/path.js";
+import {
+  commitWorktreeChanges,
+  getPaseoDeployStatus,
+  triggerPaseoDeploy,
+} from "../../../utils/paseo-deploy.js";
 import type { GitMetadataGenerator } from "./git-metadata-generator.js";
 
 /**
@@ -440,6 +448,49 @@ export class CheckoutSession {
     const unsubscribe = this.diffSubscriptions.get(msg.subscriptionId);
     this.diffSubscriptions.delete(msg.subscriptionId);
     unsubscribe?.();
+  }
+
+  async handlePaseoDeployStatusRequest(msg: PaseoDeployStatusRequest): Promise<void> {
+    const status = await getPaseoDeployStatus();
+    this.host.emit({
+      type: "checkout.deploy.status.response",
+      payload: {
+        ...status,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployTriggerRequest(msg: PaseoDeployTriggerRequest): Promise<void> {
+    const { started, error } = await triggerPaseoDeploy({
+      noBuild: msg.noBuild,
+      projectId: msg.projectId,
+      mergeBranches: msg.mergeBranches,
+    });
+    this.host.emit({
+      type: "checkout.deploy.trigger.response",
+      payload: {
+        started,
+        error,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployCommitWorktreeRequest(
+    msg: PaseoDeployCommitWorktreeRequest,
+  ): Promise<void> {
+    const { committed, error } = await commitWorktreeChanges({
+      worktreePath: msg.worktreePath,
+    });
+    this.host.emit({
+      type: "checkout.deploy.commit-worktree.response",
+      payload: {
+        committed,
+        error,
+        requestId: msg.requestId,
+      },
+    });
   }
 
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {

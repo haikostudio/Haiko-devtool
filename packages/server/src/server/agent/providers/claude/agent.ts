@@ -40,6 +40,7 @@ import {
   resolveClaudeDisabledThinkingForModel,
 } from "./model-manifest.js";
 import { parsePartialJsonObject } from "./partial-json.js";
+import { isClaudeAbortMessage, toReadableClaudeError } from "./error-messages.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
 import { buildClaudeFeatures, claudeModelSupportsFastMode } from "./feature-definitions.js";
 import {
@@ -86,6 +87,7 @@ import {
   type AgentSlashCommand,
   type AgentStreamEvent,
   type AgentTimelineItem,
+  type TimelineImageAttachment,
   type AgentUsage,
   type AgentRuntimeInfo,
   type FetchCatalogOptions,
@@ -478,6 +480,31 @@ interface ClaudeOptionsLogSummary {
 const MAX_RECENT_STDERR_CHARS = 4000;
 const STDERR_FLUSH_WAIT_MS = 150;
 const STDERR_FLUSH_POLL_INTERVAL_MS = 10;
+
+// A foreground turn may be retried once when it dies to a transient SDK glitch
+// (momentary strain on the connection to the Claude process) instead of
+// surfacing a "[System Error]" that the user would just re-send by hand.
+const MAX_TRANSIENT_TURN_RETRIES = 1;
+const TRANSIENT_TURN_RETRY_DELAY_MS = 250;
+// Signatures of transient SDK crashes that reliably clear on the next attempt.
+// Kept deliberately narrow so genuine failures still surface immediately.
+const TRANSIENT_SDK_ERROR_PATTERNS: RegExp[] = [
+  // e.g. "Cannot read properties of null (reading 'push')" — the SDK's internal
+  // stream state was torn down mid-flight; a fresh query resubmits cleanly.
+  /cannot read propert(?:y|ies) of (?:null|undefined) \(reading ['"]?push['"]?\)/i,
+];
+
+function isTransientSdkError(error: unknown): boolean {
+  let message: string;
+  if (typeof error === "string") {
+    message = error;
+  } else if (error instanceof Error) {
+    message = `${error.message}\n${error.stack ?? ""}`;
+  } else {
+    message = JSON.stringify(error);
+  }
+  return TRANSIENT_SDK_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
 
 function summarizeClaudeOptionsForLog(options: ClaudeOptions): ClaudeOptionsLogSummary {
   const systemPromptRaw = options.systemPrompt;
@@ -1966,9 +1993,18 @@ class ClaudeAgentSession implements AgentSession {
   private pendingInterruptAbort = false;
   private foregroundHasVisibleActivity = false;
   private activeTurnHasAssistantText = false;
+  // Retained payload + retry count for the active foreground turn, so a turn
+  // that dies to a transient SDK glitch can be resubmitted once automatically.
+  private activeForegroundSdkMessage: SDKUserMessage | null = null;
+  private foregroundTransientRetries = 0;
   private readonly contextUsage: ClaudeContextUsageState;
   private userMessageIds: string[] = [];
   private readonly emittedUserMessageIds = new Set<string>();
+  // Images sent with a prompt, keyed by the outgoing user-message uuid. The SDK
+  // echoes that uuid back on the user turn (see appendUserMessageEvents), which
+  // is where we re-attach the bytes so the persisted/broadcast timeline item
+  // carries them for every client — not just the sender's optimistic copy.
+  private readonly pendingUserImagesByUuid = new Map<string, TimelineImageAttachment[]>();
   private readonly rewindTurnAnchors: ClaudeRewindTurnAnchor[] = [];
   private pendingFreshSessionId: string | null = null;
   private recentStderr = "";
@@ -2102,6 +2138,8 @@ class ClaudeAgentSession implements AgentSession {
     this.rememberRewindUserAnchor(sdkUserMessageId);
     const turnId = this.createTurnId("foreground");
     this.activeForegroundTurnId = turnId;
+    this.activeForegroundSdkMessage = sdkMessage;
+    this.foregroundTransientRetries = 0;
     this.foregroundHasVisibleActivity = false;
     this.activeTurnHasAssistantText = false;
     this.contextUsage.beginTurn();
@@ -2702,6 +2740,7 @@ class ClaudeAgentSession implements AgentSession {
     this.historyPending = false;
     this.userMessageIds = [];
     this.emittedUserMessageIds.clear();
+    this.pendingUserImagesByUuid.clear();
     this.rewindTurnAnchors.length = 0;
     this.loadPersistedHistory(sessionId);
     if (oldSessionId && oldSessionId !== sessionId) {
@@ -2732,6 +2771,7 @@ class ClaudeAgentSession implements AgentSession {
     this.historyPending = false;
     this.userMessageIds = [];
     this.emittedUserMessageIds.clear();
+    this.pendingUserImagesByUuid.clear();
     this.rewindTurnAnchors.length = 0;
   }
 
@@ -2751,6 +2791,34 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
     this.emittedUserMessageIds.add(messageId);
+  }
+
+  // Bounded so a prompt whose echo never arrives (message dropped, provider
+  // quirk) can't leak base64 image bytes forever. Entries are normally consumed
+  // within the same turn; the cap just evicts the oldest stragglers.
+  private static readonly MAX_PENDING_USER_IMAGE_ENTRIES = 32;
+
+  private stashPendingUserImages(messageId: string, images: TimelineImageAttachment[]): void {
+    if (this.pendingUserImagesByUuid.size >= ClaudeAgentSession.MAX_PENDING_USER_IMAGE_ENTRIES) {
+      const oldest = this.pendingUserImagesByUuid.keys().next().value;
+      if (oldest !== undefined) {
+        this.pendingUserImagesByUuid.delete(oldest);
+      }
+    }
+    this.pendingUserImagesByUuid.set(messageId, images);
+  }
+
+  private takePendingUserImages(
+    messageId: string | undefined,
+  ): TimelineImageAttachment[] | undefined {
+    if (!messageId) {
+      return undefined;
+    }
+    const images = this.pendingUserImagesByUuid.get(messageId);
+    if (images) {
+      this.pendingUserImagesByUuid.delete(messageId);
+    }
+    return images;
   }
 
   private rememberRewindUserAnchor(userMessageId: string | null | undefined): void {
@@ -3032,6 +3100,13 @@ class ClaudeAgentSession implements AgentSession {
         append: appendedSystemPrompt,
       },
       settingSources: CLAUDE_SETTING_SOURCES,
+      // Lock the agent's MCP surface to exactly what Paseo injects programmatically
+      // (the `paseo` daemon server + any per-agent configured servers). This drops
+      // claude.ai account connectors — notably the "Memoire" connector, which would
+      // otherwise give the model a direct back-door into the Cerveau. The Cerveau
+      // must only reach the agent through the daemon's REST injection (brain-memory),
+      // never as a tool the model can call on its own.
+      strictMcpConfig: true,
       stderr: (data: string) => {
         this.captureStderr(data);
         this.logger.error({ stderr: data.trim() }, "Claude Agent SDK stderr");
@@ -3114,6 +3189,7 @@ class ClaudeAgentSession implements AgentSession {
           };
         }
     > = [];
+    const promptImages: TimelineImageAttachment[] = [];
     if (Array.isArray(prompt)) {
       for (const chunk of prompt) {
         if (chunk.type === "text") {
@@ -3128,6 +3204,7 @@ class ClaudeAgentSession implements AgentSession {
                 data: chunk.data,
               },
             });
+            promptImages.push({ data: chunk.data, mimeType: chunk.mimeType });
           }
         } else {
           content.push({ type: "text", text: renderPromptAttachmentAsText(chunk) });
@@ -3139,6 +3216,9 @@ class ClaudeAgentSession implements AgentSession {
 
     const messageId = randomUUID();
     this.rememberUserMessageId(messageId);
+    if (promptImages.length > 0) {
+      this.stashPendingUserImages(messageId, promptImages);
+    }
 
     return {
       type: "user",
@@ -3180,14 +3260,21 @@ class ClaudeAgentSession implements AgentSession {
   private buildTurnFailedEvent(
     errorMessage: string,
   ): Extract<AgentStreamEvent, { type: "turn_failed" }> {
-    const normalized = errorMessage.trim() || "Claude run failed";
-    const exitCodeMatch = normalized.match(/\bcode\s+(\d+)\b/i);
+    const raw = errorMessage.trim() || "Claude run failed";
+    const exitCodeMatch = raw.match(/\bcode\s+(\d+)\b/i);
     const code = exitCodeMatch ? exitCodeMatch[1] : undefined;
     const diagnostic = this.getRecentStderrDiagnostic();
+    // User cancellations are surfaced as-is; only genuine failures are rewritten
+    // into a readable French sentence. The raw technical message is preserved in
+    // the daemon log for debugging.
+    const error = isClaudeAbortMessage(raw) ? raw : toReadableClaudeError(raw);
+    if (error !== raw) {
+      this.logger.warn({ rawError: raw }, "Claude turn failed (raw SDK error)");
+    }
     return {
       type: "turn_failed",
       provider: "claude",
-      error: normalized,
+      error,
       ...(code ? { code } : {}),
       ...(diagnostic ? { diagnostic } : {}),
     };
@@ -3296,6 +3383,92 @@ class ClaudeAgentSession implements AgentSession {
     return message.toLowerCase().includes("request was aborted");
   }
 
+  /**
+   * Handle a query-pump drain error that was not an interrupt abort: try a
+   * transient-error retry first, and otherwise surface the failure as a
+   * terminal turn_failed. The caller stops the current pump afterwards either
+   * way (a successful retry has already spun up a fresh pump).
+   */
+  private async recoverOrFailPumpDrain(error: unknown, activeQuery: Query): Promise<void> {
+    if (
+      !this.closed &&
+      this.query === activeQuery &&
+      (await this.attemptTransientForegroundRetry(error))
+    ) {
+      // A fresh query + pump have taken over with the resubmitted message.
+      return;
+    }
+    if (!this.closed && this.query === activeQuery) {
+      await this.awaitRecentStderrAfterProcessExit(error);
+      this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
+    }
+  }
+
+  /**
+   * Recover a foreground turn that died to a transient SDK glitch (e.g. "Cannot
+   * read properties of null (reading 'push')") by rebuilding the query and
+   * resubmitting the original user message, instead of surfacing a
+   * "[System Error]" the user would just re-send by hand. Returns true when a
+   * fresh query + pump have taken over so the caller stops the current pump.
+   */
+  private async attemptTransientForegroundRetry(error: unknown): Promise<boolean> {
+    // Only foreground turns carry a retained payload we can safely resubmit.
+    if (this.closed || !this.activeForegroundTurnId || !this.activeForegroundSdkMessage) {
+      return false;
+    }
+    // Never replay a turn that already streamed visible output — a retry would
+    // duplicate it. Transient push-crashes fire before any output is produced.
+    if (this.foregroundHasVisibleActivity) {
+      return false;
+    }
+    if (this.foregroundTransientRetries >= MAX_TRANSIENT_TURN_RETRIES) {
+      return false;
+    }
+    if (!isTransientSdkError(error)) {
+      return false;
+    }
+
+    this.foregroundTransientRetries += 1;
+    const message = this.activeForegroundSdkMessage;
+    this.logger.warn(
+      {
+        agentId: this.agentId,
+        provider: "claude",
+        sessionId: this.claudeSessionId,
+        turnId: this.activeForegroundTurnId,
+        attempt: this.foregroundTransientRetries,
+        err: error,
+      },
+      "Retrying Claude foreground turn after transient SDK error",
+    );
+
+    if (TRANSIENT_TURN_RETRY_DELAY_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, TRANSIENT_TURN_RETRY_DELAY_MS));
+    }
+    // The turn may have been cancelled or the session closed during the delay.
+    if (this.closed || !this.activeForegroundTurnId) {
+      return false;
+    }
+
+    try {
+      this.queryRestartNeeded = true;
+      await this.ensureQuery();
+      if (!this.input) {
+        return false;
+      }
+      this.input.push(message);
+      // ensureQuery() cleared queryPumpPromise; spawn a fresh pump on the new query.
+      this.startQueryPump();
+      return true;
+    } catch (retryError) {
+      this.logger.warn(
+        { agentId: this.agentId, provider: "claude", err: retryError },
+        "Failed to restart Claude query for transient retry",
+      );
+      return false;
+    }
+  }
+
   private finishForegroundTurn(
     event: Extract<AgentStreamEvent, { type: "turn_completed" | "turn_failed" | "turn_canceled" }>,
   ): void {
@@ -3304,6 +3477,7 @@ class ClaudeAgentSession implements AgentSession {
     }
     this.notifySubscribers(event);
     this.activeForegroundTurnId = null;
+    this.activeForegroundSdkMessage = null;
     this.cancelCurrentTurn = null;
     this.activeTurnHasAssistantText = false;
     this.syncTurnState("foreground turn terminal");
@@ -3466,10 +3640,7 @@ class ClaudeAgentSession implements AgentSession {
             );
             continue;
           }
-          if (!this.closed && this.query === activeQuery) {
-            await this.awaitRecentStderrAfterProcessExit(error);
-            this.failActiveTurns(error instanceof Error ? error.message : "Claude stream failed");
-          }
+          await this.recoverOrFailPumpDrain(error, activeQuery);
           return;
         }
       }
@@ -3877,6 +4048,9 @@ class ClaudeAgentSession implements AgentSession {
       });
       return;
     }
+    // Re-attach the images we sent with this prompt (keyed by the echoed uuid)
+    // so the persisted/broadcast user_message carries them for every client.
+    const images = this.takePendingUserImages(messageId);
     if (typeof content === "string" && content.length > 0) {
       if (!isClaudeTranscriptNoiseText(content)) {
         events.push({
@@ -3885,6 +4059,7 @@ class ClaudeAgentSession implements AgentSession {
             type: "user_message",
             text: content,
             ...(messageId ? { messageId } : {}),
+            ...(images && images.length > 0 ? { images } : {}),
           },
           provider: "claude",
         });
@@ -3892,28 +4067,50 @@ class ClaudeAgentSession implements AgentSession {
       return;
     }
     if (Array.isArray(content)) {
-      this.appendUserContentArrayEvents(content, messageId, events);
+      this.appendUserContentArrayEvents(content, messageId, images, events);
     }
   }
 
   private appendUserContentArrayEvents(
     content: ReadonlyArray<unknown>,
     messageId: string | undefined,
+    images: TimelineImageAttachment[] | undefined,
     events: AgentStreamEvent[],
   ): void {
     const timelineItems = this.mapBlocksToTimeline(content, {
       textMessageType: "user_message",
     });
+    const hasImages = Boolean(images && images.length > 0);
+    let attachedImages = false;
     for (const item of timelineItems) {
-      if (item.type === "user_message" && messageId && !item.messageId) {
+      if (item.type === "user_message" && ((messageId && !item.messageId) || hasImages)) {
         events.push({
           type: "timeline",
-          item: { ...item, messageId },
+          item: {
+            ...item,
+            ...(messageId && !item.messageId ? { messageId } : {}),
+            ...(hasImages ? { images } : {}),
+          },
           provider: "claude",
         });
+        attachedImages = true;
         continue;
       }
       events.push({ type: "timeline", item, provider: "claude" });
+    }
+    // Image-only prompt: no text block yielded a user_message item, but the
+    // images still need a home so every client renders them.
+    if (hasImages && !attachedImages) {
+      events.push({
+        type: "timeline",
+        item: {
+          type: "user_message",
+          text: "",
+          ...(messageId ? { messageId } : {}),
+          images,
+        },
+        provider: "claude",
+      });
     }
   }
 

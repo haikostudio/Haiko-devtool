@@ -75,9 +75,16 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     scrollEnabled,
     listStyle,
     baseListContentContainerStyle,
+    topContentInset = 0,
     strategy,
   } = props;
   const { renderHistoryMountedRow, renderLiveHeadRow, renderLiveAuxiliary } = renderers;
+  // The list is inverted, so its visual top is paddingBottom. Reserve room there
+  // for the floating synthesis banner; later messages still scroll up under it.
+  const listContentContainerStyle = useMemo(
+    () => [baseListContentContainerStyle, { paddingBottom: topContentInset }],
+    [baseListContentContainerStyle, topContentInset],
+  );
   const flatListRef = useRef<FlatList<StreamItem>>(null);
   const streamViewportMetricsRef = useRef({
     containerKey: "native-virtualized",
@@ -469,7 +476,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       nativeID="agent-chat-scroll-native-virtualized"
       ListHeaderComponent={liveHeaderContent ?? undefined}
       ListFooterComponent={historyFooterContent ?? undefined}
-      contentContainerStyle={baseListContentContainerStyle}
+      contentContainerStyle={listContentContainerStyle}
       style={listStyle}
       onLayout={handleListLayout}
       onScroll={handleScroll}

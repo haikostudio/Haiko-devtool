@@ -73,11 +73,16 @@ export async function closeMobileAgentSidebar(page: Page): Promise<void> {
 }
 
 // The mobile sidebar panel animates via translateX. Waiting for its header to be fully visible
-// prevents a close click from targeting a button while the panel is still moving.
+// prevents a close click from targeting a button while the panel is still moving. The grouped
+// primary menu button is the always-visible header control (New workspace / History / Schedules
+// now live inside it).
 export async function expectMobileAgentSidebarVisible(page: Page): Promise<void> {
-  await expect(page.getByTestId("sidebar-sessions")).toBeInViewport({ ratio: 1, timeout: 5_000 });
+  await expect(page.getByTestId("sidebar-primary-menu")).toBeInViewport({
+    ratio: 1,
+    timeout: 5_000,
+  });
 }
 
 export async function expectMobileAgentSidebarHidden(page: Page): Promise<void> {
-  await expect(page.getByTestId("sidebar-sessions")).not.toBeInViewport({ timeout: 5_000 });
+  await expect(page.getByTestId("sidebar-primary-menu")).not.toBeInViewport({ timeout: 5_000 });
 }

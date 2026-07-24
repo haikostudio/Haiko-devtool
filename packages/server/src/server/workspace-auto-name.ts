@@ -103,6 +103,37 @@ export class WorkspaceAutoName {
     );
   }
 
+  /**
+   * Apply a title that was already generated elsewhere (the per-turn agent-label
+   * generator) to the workspace, so the sidebar name tracks the same subject as
+   * the tab without a second model call. Title-only, best-effort, async; defers
+   * to a hand-picked workspace title (titleLockedByUser).
+   */
+  applyGeneratedTitle(input: { workspaceId: string; title: string }): void {
+    const title = input.title.trim();
+    if (!title) {
+      return;
+    }
+    this.schedule(
+      async () => {
+        const current = await this.workspaceRegistry.get(input.workspaceId);
+        if (!current || current.archivedAt || current.titleLockedByUser) {
+          return;
+        }
+        if (current.title === title) {
+          return;
+        }
+        await this.workspaceRegistry.upsert({
+          ...current,
+          title,
+          updatedAt: new Date().toISOString(),
+        });
+        await this.emitWorkspaceUpdateForWorkspaceId(input.workspaceId);
+      },
+      { cwd: "", message: "Failed to apply generated workspace title" },
+    );
+  }
+
   private async maybeAutoNameWorkspaceBranchForFirstAgent(input: {
     workspace: PersistedWorkspaceRecord;
     firstAgentContext: FirstAgentContext;

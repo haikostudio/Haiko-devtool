@@ -516,6 +516,49 @@ describe("dispatchComposerAgentMessage", () => {
       },
     ]);
   });
+
+  it("removes the optimistic user_message from the stream when the send rejects", async () => {
+    const client = createFakeSendClient({ rejection: new Error("daemon rejected") });
+    const stream = createFakeStream();
+
+    await expect(
+      dispatchComposerAgentMessage({
+        client,
+        agentId: "agent",
+        text: "will fail",
+        attachments: [],
+        encodeImages: passthroughEncodeImages,
+        stream,
+      }),
+    ).rejects.toThrow("daemon rejected");
+
+    expect(stream.tail.get("agent") ?? []).toHaveLength(0);
+    expect(stream.head.get("agent") ?? []).toHaveLength(0);
+  });
+
+  it("keeps other stream items when dropping a failed optimistic message", async () => {
+    const existingItem: StreamItem = {
+      kind: "user_message",
+      id: "prior",
+      text: "prior",
+      timestamp: new Date(0),
+    };
+    const stream = createFakeStream(new Map([["agent", [existingItem]]]));
+    const client = createFakeSendClient({ rejection: new Error("nope") });
+
+    await expect(
+      dispatchComposerAgentMessage({
+        client,
+        agentId: "agent",
+        text: "will fail",
+        attachments: [],
+        encodeImages: passthroughEncodeImages,
+        stream,
+      }),
+    ).rejects.toThrow("nope");
+
+    expect(stream.head.get("agent")).toEqual([existingItem]);
+  });
 });
 
 describe("queueComposerMessage", () => {

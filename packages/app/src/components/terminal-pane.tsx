@@ -13,7 +13,7 @@ import type { TerminalInputModeState } from "@getpaseo/protocol/terminal-input-m
 import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useKeyboardShiftStyle } from "@/hooks/use-keyboard-shift-style";
-import { useAppActivelyVisible } from "@/hooks/use-app-visible";
+import { useAppVisible } from "@/hooks/use-app-visible";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import {
   hasPendingTerminalModifiers,
@@ -177,7 +177,7 @@ export function TerminalPane({
   onOpenWorkspaceFile,
 }: TerminalPaneProps) {
   const { t } = useTranslation();
-  const isAppActivelyVisible = useAppActivelyVisible();
+  const isAppVisible = useAppVisible();
   const { theme } = useUnistyles();
   const { settings } = useAppSettings();
   const xtermTheme = useMemo(() => toXtermTheme(theme.colors.terminal), [theme]);
@@ -283,7 +283,7 @@ export function TerminalPane({
   useEffect(() => {
     const canRequest = canRequestFocusClaim({
       isWorkspaceFocused,
-      isAppActivelyVisible,
+      isAppVisible,
       isClientReady: client !== null,
       isConnected,
       isRendererReady: rendererReadyStreamKey === terminalStreamKey,
@@ -299,7 +299,7 @@ export function TerminalPane({
     }
   }, [
     client,
-    isAppActivelyVisible,
+    isAppVisible,
     isConnected,
     isPaneFocused,
     isWorkspaceFocused,
@@ -654,7 +654,7 @@ export function TerminalPane({
       let sent = false;
       const canSend = canRequestFocusClaim({
         isWorkspaceFocused,
-        isAppActivelyVisible,
+        isAppVisible,
         isClientReady: client !== null,
         isConnected,
         isRendererReady: true,

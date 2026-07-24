@@ -90,6 +90,7 @@ function createServer(agentManagerOverrides?: Record<string, unknown>) {
     setAgentAttentionCallback: vi.fn(),
     getAgent: vi.fn(() => ({ workspaceId: WORKSPACE_ID, pendingPermissions: new Map() })),
     getLastAssistantMessage: vi.fn(async () => null),
+    getAgentNotificationContext: vi.fn(async () => ({ title: null, synthesisSummary: null })),
     getMetricsSnapshot: vi.fn(() => ({
       total: 0,
       byLifecycle: {},
@@ -252,6 +253,39 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
       },
     ]);
     expect(getLastAssistantMessage).toHaveBeenCalledWith("agent-1");
+  });
+
+  it("titles finished pushes with the agent title and bodies them with the synthesis summary", async () => {
+    const { server, pushNotifications } = createServer({
+      getAgent: vi.fn(() => ({
+        config: { title: "Refonte notifications" },
+        cwd: "/tmp/worktree",
+        pendingPermissions: new Map(),
+      })),
+      getLastAssistantMessage: vi.fn(async () => "Rambling last message we skip."),
+      getAgentNotificationContext: vi.fn(async () => ({
+        title: "Refonte notifications",
+        synthesisSummary: "Reworked completion notifications to show title and summary.",
+      })),
+    });
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-1",
+      provider: "claude",
+      reason: "finished",
+    });
+
+    expect(pushNotifications.sent).toEqual([
+      {
+        title: "Refonte notifications",
+        body: "Reworked completion notifications to show title and summary.",
+        data: {
+          serverId: "srv-test",
+          agentId: "agent-1",
+          reason: "finished",
+        },
+      },
+    ]);
   });
 
   it("sends push notifications regardless of UI label presence", async () => {

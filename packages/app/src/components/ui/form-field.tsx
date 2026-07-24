@@ -25,7 +25,12 @@ import {
 } from "@/components/ui/control-geometry";
 
 interface FieldProps {
-  label: string;
+  /**
+   * Visible label above the control. Omit when the surrounding surface already
+   * names the field (e.g. a SettingsSection title) so the label isn't shown
+   * twice — the control still keeps its hint/error row.
+   */
+  label?: string;
   children: ReactNode;
   hint?: string;
   error?: string | null;
@@ -55,7 +60,7 @@ export function Field({ label, children, hint, error, testID }: FieldProps) {
 
   return (
     <View style={styles.container} testID={testID}>
-      <Text style={styles.label}>{label}</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       {children}
       {subtext}
     </View>

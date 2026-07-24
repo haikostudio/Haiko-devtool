@@ -51,7 +51,7 @@ export function Shortcut({
 const styles = StyleSheet.create((theme) => ({
   badge: {
     paddingHorizontal: theme.spacing[1],
-    paddingVertical: 2,
+    paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surface2,
     borderWidth: 0,

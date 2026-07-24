@@ -43,6 +43,41 @@ describe("buildAgentAttentionNotificationPayload", () => {
     });
   });
 
+  it("titles finished notifications with the agent title and bodies them with the synthesis summary", () => {
+    const payload = buildAgentAttentionNotificationPayload({
+      reason: "finished",
+      serverId: "srv-1",
+      agentId: "agent-1",
+      agentTitle: "Refonte notifications",
+      finishedSummary: "Reworked the completion notification to show the title and summary.",
+      assistantMessage: "Long rambling last message that we do not want to surface verbatim.",
+    });
+
+    expect(payload).toEqual({
+      title: "Refonte notifications",
+      body: "Reworked the completion notification to show the title and summary.",
+      data: {
+        serverId: "srv-1",
+        agentId: "agent-1",
+        reason: "finished",
+      },
+    });
+  });
+
+  it("falls back to the assistant message when no synthesis summary exists", () => {
+    const payload = buildAgentAttentionNotificationPayload({
+      reason: "finished",
+      serverId: "srv-1",
+      agentId: "agent-1",
+      agentTitle: "  ",
+      finishedSummary: null,
+      assistantMessage: "Done. Shipped the change.",
+    });
+
+    expect(payload.title).toBe("Agent finished");
+    expect(payload.body).toBe("Done. Shipped the change.");
+  });
+
   it("builds permission notifications from request details", () => {
     const payload = buildAgentAttentionNotificationPayload({
       reason: "permission",
