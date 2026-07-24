@@ -27,7 +27,12 @@ const ThemedWand = withUnistyles(Wand2);
 
 type EnsureState =
   | { status: "loading" }
-  | { status: "ready"; agentId: string; workspaceId: string | null }
+  | {
+      status: "ready";
+      agentId: string;
+      workspaceId: string | null;
+      provider: ConductorProvider;
+    }
   | { status: "error"; message: string };
 
 /** Task-mode tabs, chat first. Details/Billing live here too — no separate drawer. */
@@ -107,6 +112,10 @@ export function ConductorPanel({
   // Save / delete / run from the Details tab hop back to the chat rather than
   // closing the whole drawer — the task stays open in front of the user.
   const handleTaskFormClose = useCallback(() => setTaskView("chat"), []);
+  const handleConductorProviderChange = useCallback((provider: ConductorProvider) => {
+    setEnsure({ status: "loading" });
+    setConductorProvider(provider);
+  }, []);
 
   const taskViewOptions = useMemo<SegmentedControlOption<TaskView>[]>(
     () => [
@@ -162,6 +171,7 @@ export function ConductorPanel({
           status: "ready",
           agentId: payload.agentId,
           workspaceId: payload.workspaceId ?? null,
+          provider: conductorProvider,
         });
       } catch (error) {
         if (!cancelled) {
@@ -243,15 +253,16 @@ export function ConductorPanel({
         </View>
       );
     }
-    if (!serverId) {
+    if (!serverId || ensure.status !== "ready" || ensure.provider !== conductorProvider) {
       return null;
     }
     return (
       <EmbeddedConductorPane
-        key={`conductor:${ensure.agentId}`}
+        key={`conductor:${ensure.provider}:${ensure.agentId}`}
         serverId={serverId}
         agentId={ensure.agentId}
         workspaceId={ensure.workspaceId}
+        provider={ensure.provider}
       />
     );
   };
@@ -294,7 +305,7 @@ export function ConductorPanel({
             <SegmentedControl
               options={conductorProviderOptions}
               value={conductorProvider}
-              onValueChange={setConductorProvider}
+              onValueChange={handleConductorProviderChange}
               size="sm"
               fullWidth
               testID="conductor-provider-switch"
@@ -311,10 +322,12 @@ function EmbeddedConductorPane({
   serverId,
   agentId,
   workspaceId,
+  provider,
 }: {
   serverId: string;
   agentId: string;
   workspaceId: string | null;
+  provider: ConductorProvider;
 }) {
   const content = useMemo(() => {
     const openInNativeWorkspace = () => {
@@ -324,8 +337,8 @@ function EmbeddedConductorPane({
     };
     return buildWorkspacePaneContentModel({
       tab: {
-        key: `tasks:conductor:${agentId}`,
-        tabId: `tasks:conductor:${agentId}`,
+        key: `tasks:conductor:${provider}:${agentId}`,
+        tabId: `tasks:conductor:${provider}:${agentId}`,
         kind: "agent",
         target: { kind: "agent", agentId },
       },
@@ -337,7 +350,7 @@ function EmbeddedConductorPane({
       onOpenWorkspaceFile: openInNativeWorkspace,
       onOpenImportSheet: openInNativeWorkspace,
     });
-  }, [serverId, agentId, workspaceId]);
+  }, [serverId, agentId, workspaceId, provider]);
 
   return (
     <View style={styles.paneHost}>

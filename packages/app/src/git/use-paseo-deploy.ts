@@ -25,8 +25,11 @@ export interface PaseoDeployWorktreeEntry {
   path: string;
   branch: string;
   ahead: number;
+  commitCount?: number;
   commits: PaseoDeployCommitEntry[];
   uncommittedCount: number;
+  mergeable?: boolean;
+  mergeReason?: string;
 }
 
 export interface PaseoDeployStatus {

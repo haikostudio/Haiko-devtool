@@ -1,7 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Check, ChevronDown, ChevronRight, Rocket } from "lucide-react-native";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Rocket,
+} from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -21,6 +28,8 @@ const EMPTY_WORKTREES: PaseoDeployWorktreeEntry[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedCheck = withUnistyles(Check);
+const ThemedCheckCircle = withUnistyles(CheckCircle2);
+const ThemedAlertTriangle = withUnistyles(AlertTriangle);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
@@ -39,6 +48,12 @@ const progressSpinnerColorMapping = (theme: Theme) => ({
 });
 const chevronColorMapping = (theme: Theme) => ({
   color: theme.colors.foregroundMuted,
+});
+const readyColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.green[400],
+});
+const blockedColorMapping = (theme: Theme) => ({
+  color: theme.colors.palette.amber[500],
 });
 // Compact (mobile header) uses the header's monochrome look instead of the
 // black pill, so the rocket matches the neighbouring play / source-control icons.
@@ -78,6 +93,10 @@ function describeFilePath(path: string): string {
   return `…/${parts.slice(-2).join("/")}`;
 }
 
+function isGeneratedDeployFile(path: string): boolean {
+  return path === "packages/app/src/generated/changelog-data.ts";
+}
+
 /**
  * Strip a leading conventional-commit prefix like "feat(scope): " so the reader
  * sees the plain sentence instead of developer jargon.
@@ -111,16 +130,22 @@ function DeployChangesSummary({ count }: { count: number }) {
  */
 function WorktreesSummary({ worktrees }: { worktrees: PaseoDeployWorktreeEntry[] }) {
   if (worktrees.length === 0) return null;
-  const total = worktrees.reduce(
-    (sum, worktree) => sum + worktree.ahead + worktree.uncommittedCount,
-    0,
-  );
-  const changeLabel = total > 1 ? "changements" : "changement";
-  const atelierLabel = worktrees.length > 1 ? "ateliers" : "atelier";
+  const ready = worktrees.filter(
+    (worktree) => worktree.mergeable === true && worktree.uncommittedCount === 0,
+  ).length;
+  const blocked = worktrees.length - ready;
   return (
-    <Text style={styles.worktreesSummary}>
-      {`${total} ${changeLabel} dans ${worktrees.length} ${atelierLabel}`}
-    </Text>
+    <View style={styles.worktreesSummary}>
+      <Text style={styles.worktreesSummaryTitle}>
+        {worktrees.length} {worktrees.length > 1 ? "ateliers" : "atelier"} en attente
+      </Text>
+      <Text style={styles.worktreesSummaryText}>
+        {ready > 0
+          ? `${ready} ${ready > 1 ? "peuvent être publiés" : "peut être publié"}`
+          : "Aucun atelier ne peut être publié tel quel"}
+        {blocked > 0 ? ` · ${blocked} à reprendre` : ""}
+      </Text>
+    </View>
   );
 }
 
@@ -396,6 +421,29 @@ function WorktreeUncommittedHint({ count }: { count: number }) {
   );
 }
 
+function WorktreeReadiness({ worktree }: { worktree: PaseoDeployWorktreeEntry }) {
+  let label = "Conflit à reprendre";
+  if (worktree.uncommittedCount > 0) {
+    label = "À enregistrer d'abord";
+  } else if (worktree.mergeReason === "unknown") {
+    label = "Vérification indisponible";
+  }
+  if (worktree.mergeable === true && worktree.uncommittedCount === 0) {
+    return (
+      <View style={styles.readiness}>
+        <ThemedCheckCircle size={14} uniProps={readyColorMapping} />
+        <Text style={styles.readinessReady}>Prête à publier</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.readiness}>
+      <ThemedAlertTriangle size={14} uniProps={blockedColorMapping} />
+      <Text style={styles.readinessBlocked}>{label}</Text>
+    </View>
+  );
+}
+
 /** Small square checkbox (filled + check when on). Disabled ateliers show muted. */
 function WorktreeCheckbox({ checked, disabled }: { checked: boolean; disabled: boolean }) {
   const boxStyle = useMemo(
@@ -429,8 +477,8 @@ function WorktreeCard({
   committing: boolean;
   busy: boolean;
 }) {
-  const mergeable = worktree.ahead > 0;
   const hasUncommitted = worktree.uncommittedCount > 0;
+  const mergeable = worktree.mergeable === true && !hasUncommitted;
   const [expanded, setExpanded] = useState(false);
   const handleToggleExpand = useCallback(() => setExpanded((previous) => !previous), []);
   const handleToggleSelect = useCallback(() => {
@@ -471,11 +519,7 @@ function WorktreeCard({
         <Text style={styles.worktreeBranch} numberOfLines={1}>
           {describeBranch(worktree.branch)}
         </Text>
-        {mergeable && !expanded ? (
-          <Text style={styles.worktreeCount}>
-            {worktree.ahead > 1 ? `${worktree.ahead} changements` : "1 changement"}
-          </Text>
-        ) : null}
+        <WorktreeReadiness worktree={worktree} />
         {hasUncommitted ? (
           <Button
             variant="secondary"
@@ -497,6 +541,9 @@ function WorktreeCard({
       </Pressable>
       {expanded ? (
         <View style={styles.worktreeDetails}>
+          <Text style={styles.worktreeDetailStatus}>
+            {worktree.commitCount ?? worktree.ahead} commits dans cet atelier
+          </Text>
           {worktree.commits.map((commit) => (
             <View key={commit.sha} style={styles.itemRow}>
               <Text style={styles.bullet}>•</Text>
@@ -539,7 +586,11 @@ function WorktreesSection({
           <WorktreeCard
             key={worktree.path}
             worktree={worktree}
-            selected={!deselected.has(worktree.branch)}
+            selected={
+              worktree.mergeable === true &&
+              worktree.uncommittedCount === 0 &&
+              !deselected.has(worktree.branch)
+            }
             onToggle={onToggle}
             onCommit={onCommit}
             committing={committingPath === worktree.path}
@@ -557,6 +608,23 @@ function DeployErrorBanner({ message }: { message: string | null }) {
   return (
     <View style={styles.warning}>
       <Text style={styles.warningText}>{message}</Text>
+    </View>
+  );
+}
+
+function DeployBlockedNotice({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <View style={styles.blockedNotice}>
+      <Text style={styles.blockedNoticeTitle}>
+        {count > 1
+          ? `${count} ateliers ne peuvent pas être publiés tels quels`
+          : "Cet atelier ne peut pas être publié tel quel"}
+      </Text>
+      <Text style={styles.blockedNoticeText}>
+        Leur historique entre en conflit avec l&apos;application actuelle. Ils restent visibles,
+        mais ne peuvent plus être sélectionnés par erreur.
+      </Text>
     </View>
   );
 }
@@ -600,17 +668,29 @@ function DeployModalBody({
 }) {
   const deploying = status?.deploying ?? false;
   const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
+  const visibleUncommittedFiles = useMemo(
+    () => uncommittedFiles.filter((file) => !isGeneratedDeployFile(file.path)),
+    [uncommittedFiles],
+  );
   const unshippedCommits = status?.unshippedCommits ?? EMPTY_COMMITS;
   const worktrees = status?.worktrees ?? EMPTY_WORKTREES;
   const isClean =
     !deploying &&
-    uncommittedFiles.length === 0 &&
+    visibleUncommittedFiles.length === 0 &&
     unshippedCommits.length === 0 &&
     worktrees.length === 0;
   // Real number of changes to ship — honest even after work is grouped into a
   // few commits (older daemons that don't send it fall back to the list sum).
-  const changesCount = status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length;
+  const generatedFileCount = uncommittedFiles.length - visibleUncommittedFiles.length;
+  const changesCount = Math.max(
+    0,
+    (status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length) -
+      generatedFileCount,
+  );
   const daemonBehindCount = status?.daemonBehindCount ?? 0;
+  const blockedWorktrees = worktrees.filter(
+    (worktree) => worktree.mergeable !== true || worktree.uncommittedCount > 0,
+  ).length;
 
   return (
     <View style={styles.body}>
@@ -622,8 +702,9 @@ function DeployModalBody({
       />
       <DeployPhaseProgress deploying={deploying} phase={status?.deployPhase} />
       <WorktreesSummary worktrees={worktrees} />
+      <DeployBlockedNotice count={blockedWorktrees} />
 
-      <PendingFilesSection files={uncommittedFiles} />
+      <PendingFilesSection files={visibleUncommittedFiles} />
       <PendingCommitsSection commits={unshippedCommits} />
       <WorktreesSection
         worktrees={worktrees}
@@ -674,7 +755,13 @@ function PaseoDeployModal({
   }, []);
   // The ticked, shippable ateliers (source of both the branch list and the count).
   const selectedWorktrees = useMemo(
-    () => worktrees.filter((worktree) => worktree.ahead > 0 && !deselected.has(worktree.branch)),
+    () =>
+      worktrees.filter(
+        (worktree) =>
+          worktree.mergeable === true &&
+          worktree.uncommittedCount === 0 &&
+          !deselected.has(worktree.branch),
+      ),
     [worktrees, deselected],
   );
   const selectedBranches = useMemo(
@@ -745,15 +832,25 @@ function PaseoDeployModal({
   const inProgress = deploying || triggering;
   const canDeploy = (selectedBranches.length > 0 || hasTrunkPending) && !inProgress;
   const selectionCount = selectedBranches.length;
+  const blockedCount = worktrees.filter(
+    (worktree) => worktree.mergeable !== true || worktree.uncommittedCount > 0,
+  ).length;
   // Lock the atelier cards (checkboxes + "Enregistrer") while a build is running
   // or the trigger request is in flight.
   const busy = inProgress;
 
   // A single sticky footer action. "Déployer" triggers the local build directly;
   // while it runs, the label follows the phase (Construction → Publication → OK).
-  const deployLabel = inProgress
-    ? deployPhaseLabel(status?.deployPhase, triggering)
-    : `Déployer${selectionCount > 0 ? ` (${selectionCount})` : ""}`;
+  let deployLabel = "Rien à publier";
+  if (inProgress) {
+    deployLabel = deployPhaseLabel(status?.deployPhase, triggering);
+  } else if (selectionCount > 0) {
+    deployLabel = `Publier ${selectionCount} ${selectionCount > 1 ? "ateliers" : "atelier"}`;
+  } else if (hasTrunkPending) {
+    deployLabel = "Publier les changements du projet";
+  } else if (blockedCount > 0) {
+    deployLabel = "Aucune branche publiable";
+  }
   const footer = useMemo(
     () => (
       <View style={styles.actions}>
@@ -1018,7 +1115,20 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: "700",
     color: theme.colors.foreground,
   },
-  worktreeCount: {
+  readiness: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  readinessReady: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.palette.green[400],
+  },
+  readinessBlocked: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.palette.amber[500],
+  },
+  worktreeDetailStatus: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
   },
@@ -1038,8 +1148,16 @@ const styles = StyleSheet.create((theme) => ({
   checkboxDisabled: {
     opacity: 0.4,
   },
-  // One-line spread across ateliers, under the main tally.
+  // Compact status block for ateliers, under the main tally.
   worktreesSummary: {
+    gap: theme.spacing[1],
+  },
+  worktreesSummaryTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: "700",
+    color: theme.colors.foreground,
+  },
+  worktreesSummaryText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
@@ -1066,6 +1184,22 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.palette.amber[100],
   },
   behindText: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.4,
+    color: theme.colors.palette.amber[200],
+  },
+  blockedNotice: {
+    gap: theme.spacing[1],
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.palette.amber[900],
+  },
+  blockedNoticeTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: "700",
+    color: theme.colors.palette.amber[100],
+  },
+  blockedNoticeText: {
     fontSize: theme.fontSize.sm,
     lineHeight: theme.fontSize.sm * 1.4,
     color: theme.colors.palette.amber[200],

@@ -360,6 +360,54 @@ async function getBranchAheadCommits(
   }
 }
 
+/** Exact history size for display; the commit preview above is intentionally capped. */
+async function getBranchCommitCount(
+  deployHeadSha: string | null,
+  branchHead: string | null,
+): Promise<number> {
+  if (deployHeadSha === null || branchHead === null || deployHeadSha === branchHead) {
+    return 0;
+  }
+  try {
+    const result = await runGitCommand(["rev-list", "--count", `${deployHeadSha}..${branchHead}`], {
+      cwd: REPO_ROOT,
+    });
+    return Number.parseInt(result.stdout.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+interface BranchMergeCheck {
+  mergeable: boolean;
+  mergeReason: "ready" | "conflict" | "unknown";
+}
+
+/**
+ * Check a branch without touching the checkout. This is the same three-way
+ * merge Git would attempt later, but it leaves no half-merged files behind.
+ */
+async function checkBranchMerge(
+  deployHeadSha: string | null,
+  branchHead: string | null,
+): Promise<BranchMergeCheck> {
+  if (deployHeadSha === null || branchHead === null || deployHeadSha === branchHead) {
+    return { mergeable: false, mergeReason: "unknown" };
+  }
+  try {
+    const result = await runGitCommand(["merge-tree", "--write-tree", deployHeadSha, branchHead], {
+      cwd: REPO_ROOT,
+      acceptExitCodes: [0, 1],
+      maxOutputBytes: 64 * 1024,
+    });
+    return result.exitCode === 0
+      ? { mergeable: true, mergeReason: "ready" }
+      : { mergeable: false, mergeReason: "conflict" };
+  } catch {
+    return { mergeable: false, mergeReason: "unknown" };
+  }
+}
+
 /**
  * Every OTHER Paseo checkout (task-branch worktree) that carries work not yet on
  * the deploy branch — committed commits ahead and/or uncommitted files. The
@@ -375,9 +423,11 @@ async function getPendingWorktrees(
       .filter((wt) => wt.path !== REPO_ROOT && wt.branch !== null)
       .map(async (wt): Promise<PaseoDeployWorktree | null> => {
         const branch = wt.branch as string;
-        const [commits, uncommittedCount] = await Promise.all([
+        const [commits, commitCount, uncommittedCount, mergeCheck] = await Promise.all([
           getBranchAheadCommits(deployHeadSha, wt.head),
+          getBranchCommitCount(deployHeadSha, wt.head),
           getWorktreeUncommittedCount(wt.path),
+          checkBranchMerge(deployHeadSha, wt.head),
         ]);
         if (commits.length === 0 && uncommittedCount === 0) {
           return null;
@@ -385,9 +435,12 @@ async function getPendingWorktrees(
         return {
           path: wt.path,
           branch,
-          ahead: commits.length,
+          ahead: commitCount,
+          commitCount,
           commits,
           uncommittedCount,
+          mergeable: mergeCheck.mergeable,
+          mergeReason: mergeCheck.mergeReason,
         };
       }),
   );
@@ -600,6 +653,31 @@ async function mergeBranchIntoDeploy(
     }
   } catch {
     // Fall through and let the merge attempt surface any real problem.
+  }
+
+  let mergeCheck: BranchMergeCheck;
+  try {
+    const branchHead = (
+      await runGitCommand(["rev-parse", "--verify", `refs/heads/${branch}`], { cwd: REPO_ROOT })
+    ).stdout.trim();
+    const deployHead = (
+      await runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT })
+    ).stdout.trim();
+    mergeCheck = await checkBranchMerge(deployHead, branchHead);
+  } catch {
+    return {
+      ok: false,
+      error: `La branche « ${branch} » n'a pas pu être vérifiée. Elle n'a pas été publiée.`,
+    };
+  }
+  if (!mergeCheck.mergeable) {
+    return {
+      ok: false,
+      error:
+        mergeCheck.mergeReason === "conflict"
+          ? `La branche « ${branch} » entre en conflit avec l'application actuelle. Elle n'a pas été publiée.`
+          : `La branche « ${branch} » n'a pas pu être vérifiée. Elle n'a pas été publiée.`,
+    };
   }
 
   try {

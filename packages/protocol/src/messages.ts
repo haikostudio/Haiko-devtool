@@ -4632,10 +4632,16 @@ export const PaseoDeployWorktreeSchema = z.object({
   branch: z.string(),
   /** Number of commits on this branch not yet on the deploy branch. */
   ahead: z.number(),
+  /** Exact number of commits, even when the preview list is capped. */
+  commitCount: z.number().optional(),
   /** Those commits (newest first), for a human-readable list. */
   commits: z.array(PaseoDeployPendingCommitSchema),
   /** Uncommitted files in that worktree (shown as an info count only). */
   uncommittedCount: z.number(),
+  /** Whether a read-only merge check says this branch can be published safely. */
+  mergeable: z.boolean().optional(),
+  /** Plain-language reason when the branch cannot be selected. */
+  mergeReason: z.string().optional(),
 });
 
 export const PaseoDeployStatusResponseSchema = z.object({
