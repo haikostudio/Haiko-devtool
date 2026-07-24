@@ -31,6 +31,12 @@ export interface PaseoDeployWorktreeEntry {
 
 export interface PaseoDeployStatus {
   deploying: boolean;
+  /**
+   * Coarse phase of a running local build (`save` | `build` | `publish` |
+   * `done` | `error`), or null/undefined when idle or on older daemons. Drives
+   * the button's "Construction → Publication → En ligne" progress.
+   */
+  deployPhase?: string | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployFileEntry[];
   unshippedCommits: PaseoDeployCommitEntry[];

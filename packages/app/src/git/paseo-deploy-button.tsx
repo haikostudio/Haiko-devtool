@@ -11,7 +11,6 @@ import {
   type PaseoDeployWorktreeEntry,
   usePaseoDeployStatus,
 } from "@/git/use-paseo-deploy";
-import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import type { Theme } from "@/styles/theme";
 
 // Stable empty arrays so the list props keep a constant identity when the status
@@ -149,10 +148,9 @@ interface PaseoDeployButtonProps {
    */
   compact?: boolean;
   /**
-   * Task-board project this deploy sheet belongs to. When set, the sheet offers a
-   * "Déployer via le chef d'orchestre" action that hands the checked branches to
-   * the board's conductor agent. Omitted outside the tasks board (workspace
-   * header), where there is no conductor to delegate to.
+   * Accepted for call-site compatibility (the tasks board passes its project id),
+   * but no longer used: "Déployer" now triggers the daemon's local build directly
+   * instead of delegating to the board's conductor agent.
    */
   projectId?: string | null;
 }
@@ -162,11 +160,7 @@ interface PaseoDeployButtonProps {
  * Rendered only for the Paseo repo itself and only when the host advertises
  * the `paseoSelfhostDeploy` capability (gated by the caller).
  */
-export function PaseoDeployButton({
-  serverId,
-  compact = false,
-  projectId = null,
-}: PaseoDeployButtonProps) {
+export function PaseoDeployButton({ serverId, compact = false }: PaseoDeployButtonProps) {
   const [open, setOpen] = useState(false);
   const { status, pendingCount, refetch } = usePaseoDeployStatus({ serverId, enabled: true });
 
@@ -207,7 +201,6 @@ export function PaseoDeployButton({
       <PaseoDeployModal
         visible={open}
         serverId={serverId}
-        projectId={projectId}
         status={status}
         onClose={handleClose}
         onDeployed={refetch}
@@ -219,7 +212,6 @@ export function PaseoDeployButton({
 interface PaseoDeployModalProps {
   visible: boolean;
   serverId: string;
-  projectId: string | null;
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   onClose: () => void;
   onDeployed: () => void;
@@ -273,46 +265,26 @@ function describeBranch(branch: string): string {
 }
 
 /**
- * Build the prompt handed to the "Chef d'orchestre" agent when the user hits
- * "Déployer". It carries ONLY the branches ticked at click time plus their state,
- * and asks the agent to run the whole deploy end to end: fetch, merge the
- * resolvable conflicts, ship it live, verify, then ARCHIVE each deployed branch
- * so the board restarts clean — instead of a raw "merge all" that fails on the
- * deeply-diverged ateliers and leaves branches lingering.
+ * Human label for the current local-build phase reported by the daemon
+ * (`deployPhase`). Drives both the footer button and the in-sheet progress line
+ * so the user follows "Construction → Publication → En ligne". `triggering`
+ * covers the brief gap before the first status poll reports a phase.
  */
-function buildConductorDeployPrompt(
-  worktrees: PaseoDeployWorktreeEntry[],
-  trunkPending: boolean,
-): string {
-  const lines = worktrees.map((worktree) => {
-    const count = worktree.ahead;
-    const changeLabel = count > 1 ? "changements prêts" : "changement prêt";
-    return `- ${describeBranch(worktree.branch)} (\`${worktree.branch}\`) — ${count} ${changeLabel}`;
-  });
-  const parts: string[] = [
-    "Prends en charge le déploiement complet des ateliers cochés ci-dessous, du début à la fin. Passe par toi (chef d'orchestre) : tu résous intelligemment les cas délicats au lieu d'une fusion automatique qui échoue sur les branches trop divergentes.",
-    "",
-    "Déroulé attendu, pour CHAQUE branche cochée :",
-    "1. Récupère la branche et sa dernière version.",
-    "2. Fusionne-la dans le tronc de déploiement en résolvant les conflits fusionnables (fichiers générés, changelog, lockfiles).",
-    "3. Publie / mets en ligne, puis vérifie que la mise en ligne a réussi.",
-    "4. Une fois la branche déployée avec succès, ARCHIVE l'atelier et sa branche pour repartir sur un flux propre et libérer l'espace disque.",
-    "",
-    "Objectif global : mets TOUT ce qui est prêt en ligne, puis laisse le tableau propre — aucune branche déployée ne doit rester ouverte.",
-    "",
-    "Si une branche bloque (divergence trop profonde, vrai conflit de code), ne force pas : déploie et archive les autres, et signale clairement celle qui coince.",
-  ];
-  if (worktrees.length > 0) {
-    parts.push("", `Branches à déployer (${worktrees.length}) — UNIQUEMENT celles-ci :`, ...lines);
+function deployPhaseLabel(phase: string | null | undefined, triggering: boolean): string {
+  switch (phase) {
+    case "save":
+      return "Sauvegarde…";
+    case "build":
+      return "Construction du site…";
+    case "publish":
+      return "Publication en ligne…";
+    case "done":
+      return "En ligne ✅";
+    case "error":
+      return "Échec du déploiement";
+    default:
+      return triggering ? "Démarrage…" : "Déploiement en cours…";
   }
-  if (trunkPending) {
-    parts.push(
-      "",
-      "Publie aussi les changements déjà enregistrés sur le tronc de déploiement (pas encore en ligne) et vérifie leur mise en ligne.",
-    );
-  }
-  parts.push("", "Tiens-moi au courant de l'avancement ici même, au fur et à mesure.");
-  return parts.join("\n");
 }
 
 /** Uncommitted-files hint for an atelier card (info only; shipping needs a commit). */
@@ -529,7 +501,9 @@ function DeployModalBody({
         busy={busy}
       />
 
-      {deploying ? <Text style={styles.infoText}>Déploiement en cours…</Text> : null}
+      {deploying ? (
+        <Text style={styles.infoText}>{deployPhaseLabel(status?.deployPhase, false)}</Text>
+      ) : null}
 
       <DeployErrorBanner message={status?.lastError ?? null} />
       <DeployErrorBanner message={error} />
@@ -540,19 +514,17 @@ function DeployModalBody({
 function PaseoDeployModal({
   visible,
   serverId,
-  projectId,
   status,
   onClose,
   onDeployed,
 }: PaseoDeployModalProps) {
   const client = useHostRuntimeClient(serverId);
-  const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
-  const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
   const [error, setError] = useState<string | null>(null);
   // Worktree path whose "Enregistrer" (commit) action is currently running.
   const [committingPath, setCommittingPath] = useState<string | null>(null);
-  // True while the deploy is being handed to the conductor agent.
-  const [delegating, setDelegating] = useState(false);
+  // True during the brief window between clicking "Déployer" and the daemon
+  // reporting `deploying: true` on the next status poll.
+  const [triggering, setTriggering] = useState(false);
 
   const sheetHeader = useMemo<SheetHeader>(() => ({ title: "À déployer" }), []);
 
@@ -581,49 +553,39 @@ function PaseoDeployModal({
     [selectedWorktrees],
   );
 
-  // The single "Déployer" action: hand the whole deploy to the board's "Chef
-  // d'orchestre" agent. Ensure the agent exists, send it a prefilled prompt
-  // carrying only the ticked branches, open the board's chat dock so the user
-  // watches it live, then close the sheet. The agent merges, publishes, verifies
-  // and archives each deployed branch — no direct "merge all" that would fail on
-  // the deeply-diverged ateliers.
+  // The single "Déployer" action: trigger the daemon's LOCAL build directly —
+  // no agent in the middle. The daemon merges the ticked branches into the
+  // deploy checkout, then runs the local build+publish script; the sheet stays
+  // open and polls the status so the user watches "Construction → Publication →
+  // En ligne" live via `deployPhase`.
   const handleDeploy = useCallback(async () => {
-    if (!client || !projectId || delegating) return;
+    if (!client || triggering || deploying) return;
     const trunkPending = unshippedCommits.length > 0;
     if (selectedWorktrees.length === 0 && !trunkPending) return;
     setError(null);
-    setDelegating(true);
+    setTriggering(true);
     try {
-      const ensured = await client.tasksConductorEnsure(projectId);
-      if (ensured.error || !ensured.agentId) {
-        setError(ensured.error ?? "Chef d'orchestre indisponible.");
+      const result = await client.paseoDeployTrigger({ mergeBranches: selectedBranches });
+      if (!result.started) {
+        setError(result.error ?? "Le déploiement n'a pas pu démarrer.");
         return;
       }
-      await client.sendAgentMessage(
-        ensured.agentId,
-        buildConductorDeployPrompt(selectedWorktrees, trunkPending),
-      );
-      // Show the conductor (not a task chat) in the board's bottom dock so the
-      // user follows the deploy as the agent works through the branches.
-      setDockTaskId(null);
-      setConductorOpen(true);
-      onClose();
+      // Kick an immediate status refresh so `deploying`/`deployPhase` appear
+      // without waiting for the next poll tick.
+      onDeployed();
     } catch (err) {
-      setError(
-        err instanceof Error && err.message ? err.message : "Échec de l'envoi au chef d'orchestre.",
-      );
+      setError(err instanceof Error && err.message ? err.message : "Échec du déploiement.");
     } finally {
-      setDelegating(false);
+      setTriggering(false);
     }
   }, [
     client,
-    projectId,
-    delegating,
+    triggering,
+    deploying,
     selectedWorktrees,
+    selectedBranches,
     unshippedCommits.length,
-    setDockTaskId,
-    setConductorOpen,
-    onClose,
+    onDeployed,
   ]);
 
   // Save (commit) an atelier's pending work so its card becomes selectable —
@@ -648,20 +610,20 @@ function PaseoDeployModal({
     [client, committingPath, onDeployed],
   );
 
-  // Something to deploy = at least one ticked atelier, or changes already ready on
-  // the deploy trunk. Without a project we have no conductor to delegate to.
+  // Something to deploy = at least one ticked atelier, or changes already ready
+  // on the deploy trunk. No project needed anymore — the daemon builds directly.
   const hasTrunkPending = unshippedCommits.length > 0;
-  const canDeploy =
-    projectId !== null && (selectedBranches.length > 0 || hasTrunkPending) && !deploying;
+  const inProgress = deploying || triggering;
+  const canDeploy = (selectedBranches.length > 0 || hasTrunkPending) && !inProgress;
   const selectionCount = selectedBranches.length;
-  // Lock the atelier cards (checkboxes + "Enregistrer") while a deploy is in
-  // flight or the run is being handed to the conductor.
-  const busy = deploying || delegating;
+  // Lock the atelier cards (checkboxes + "Enregistrer") while a build is running
+  // or the trigger request is in flight.
+  const busy = inProgress;
 
-  // A single sticky footer action. "Déployer" hands the whole run to the chef
-  // d'orchestre — it merges, publishes, verifies and archives each branch.
-  const deployLabel = delegating
-    ? "Envoi au chef d'orchestre…"
+  // A single sticky footer action. "Déployer" triggers the local build directly;
+  // while it runs, the label follows the phase (Construction → Publication → OK).
+  const deployLabel = inProgress
+    ? deployPhaseLabel(status?.deployPhase, triggering)
     : `Déployer${selectionCount > 0 ? ` (${selectionCount})` : ""}`;
   const footer = useMemo(
     () => (
@@ -672,14 +634,14 @@ function PaseoDeployModal({
           style={styles.actionButton}
           textStyle={styles.actionButtonText}
           onPress={handleDeploy}
-          disabled={!canDeploy || delegating}
+          disabled={!canDeploy}
           testID="paseo-deploy-confirm"
         >
           {deployLabel}
         </Button>
       </View>
     ),
-    [handleDeploy, canDeploy, delegating, deployLabel],
+    [handleDeploy, canDeploy, deployLabel],
   );
 
   return (

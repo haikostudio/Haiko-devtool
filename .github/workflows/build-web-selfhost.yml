@@ -1,14 +1,18 @@
 name: Build Web (self-host)
 
-# Builds the Expo web app as static files and uploads them as an artifact.
-# The self-hosted VPS downloads this artifact and serves it via Caddy at
-# app.haikostudio.cloud. No Cloudflare / paseo.sh infra involved.
+# RETIRED — the self-host web app is now built LOCALLY on the VPS.
+#
+# The deploy button in the app triggers /home/paseo/paseo-build-local.sh, which
+# runs `expo export` on the server and copies the static site straight into the
+# Caddy webroot (see packages/server/src/utils/paseo-deploy.ts). That removes the
+# GitHub-Actions round-trip entirely and, with it, ~148 $/month of Actions minutes.
+#
+# All automatic triggers are removed so this workflow never runs (and never bills)
+# on its own. It is kept, dispatch-only, purely as an emergency fallback: run it by
+# hand from the Actions tab if the local build chain is ever unavailable.
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/github-repo-picker
 
 jobs:
   build:

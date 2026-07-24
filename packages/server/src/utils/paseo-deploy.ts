@@ -11,9 +11,22 @@ import { runGitCommand } from "./run-git-command.js";
 
 /** Personal self-host fork feature — these paths are hardcoded for this host. */
 const REPO_ROOT = "/root/paseo";
-const SHIP_SCRIPT = "/home/paseo/paseo-ship-now.sh";
+/**
+ * Local build + publish script. Replaces the old GitHub-Actions round-trip
+ * (`paseo-ship-now.sh` dispatched `build-web-selfhost.yml`, waited for CI, then
+ * downloaded the artifact): the server now builds the static site itself and
+ * copies it straight into the Caddy webroot. No commit/CI required to publish —
+ * git is kept for backup only. ~3-5 min on the KVM4 host.
+ */
+const SHIP_SCRIPT = "/home/paseo/paseo-build-local.sh";
 const DEPLOYED_SHA_FILE = "/var/www/paseo-app/.deployed-sha";
 const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
+/**
+ * Coarse progress phase written by the local build script at each step
+ * (`save` → `build` → `publish` → `done`, or `error`). Read while a deploy is
+ * running so the button can show "Construction → Publication → En ligne".
+ */
+const PHASE_FILE = "/home/paseo/paseo-build-local.phase";
 
 /**
  * Repo paths whose changes only take effect once the daemon is restarted —
@@ -95,6 +108,12 @@ async function getDaemonBehindCount(headSha: string | null): Promise<number> {
 
 export interface PaseoDeployStatus {
   deploying: boolean;
+  /**
+   * Coarse phase of a running local build (`save` | `build` | `publish` |
+   * `done` | `error`), or null when idle/unknown. Drives the button's
+   * "Construction → Publication → En ligne" progress.
+   */
+  deployPhase: string | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployPendingFile[];
   unshippedCommits: PaseoDeployPendingCommit[];
@@ -134,6 +153,21 @@ export interface PaseoDeployCommitWorktreeResult {
 async function readDeployedSha(): Promise<string | null> {
   try {
     const raw = await readFile(DEPLOYED_SHA_FILE, "utf8");
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Current coarse phase of a running local build, read from {@link PHASE_FILE}.
+ * Only meaningful while `deploying` is true; returns null when unknown so the
+ * client just shows a generic "in progress" state.
+ */
+async function readDeployPhase(): Promise<string | null> {
+  try {
+    const raw = await readFile(PHASE_FILE, "utf8");
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : null;
   } catch {
@@ -372,6 +406,9 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const uncommittedFiles = parseUncommittedFiles(statusResult.stdout);
     const headSha = headResult.stdout.trim() || null;
     const branch = branchResult.stdout.trim() || null;
+    // Only surface a phase while a build is actually running; a stale file from a
+    // finished run must not read as "still building".
+    const deployPhase = deploying ? await readDeployPhase() : null;
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
     const changesCount = await getChangedFileCount(deployedSha, uncommittedFiles);
     const daemonBehindCount = await getDaemonBehindCount(headSha);
@@ -390,6 +427,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
 
     return {
       deploying,
+      deployPhase,
       hasPending,
       uncommittedFiles,
       unshippedCommits,
@@ -406,6 +444,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
   } catch (error) {
     return {
       deploying,
+      deployPhase: null,
       hasPending: false,
       uncommittedFiles: [],
       unshippedCommits: [],

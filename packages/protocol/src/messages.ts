@@ -4643,6 +4643,13 @@ export const PaseoDeployStatusResponseSchema = z.object({
   payload: z.object({
     /** A ship (commit/push/build/deploy) is currently running. */
     deploying: z.boolean(),
+    /**
+     * Coarse phase of a running local build (`save` | `build` | `publish` |
+     * `done` | `error`), or null when idle/unknown. Lets the button show
+     * "Construction → Publication → En ligne". Optional so older daemons that
+     * don't send it still parse.
+     */
+    deployPhase: z.string().nullable().optional(),
     /** True when the live app differs from the current code (something to ship). */
     hasPending: z.boolean(),
     uncommittedFiles: z.array(PaseoDeployPendingFileSchema),
