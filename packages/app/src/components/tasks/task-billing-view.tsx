@@ -24,6 +24,11 @@ import {
   formatChf,
 } from "@/components/tasks/task-cost";
 
+// Conservative human-effort seed when a task was analyzed but the agent omitted
+// billingHours (e.g. an estimate persisted before the server-side backfill).
+// Mirrors DEFAULT_BILLING_HOURS on the server so old and new tasks read alike.
+const DEFAULT_BILLING_HOURS = 1;
+
 // Invoice title stays short (<= 5 words); fall back to the task title trimmed.
 function toShortTitle(source: string): string {
   return source.trim().split(/\s+/).slice(0, 5).join(" ");
@@ -40,16 +45,29 @@ interface ResolvedBilling {
   billingDescription: string;
 }
 
+// Hours seed for the editable field. No estimate yet → undefined, so an
+// un-analyzed task shows no billing line. Analyzed but missing/zero hours (a
+// legacy estimate) → the conservative default so the amount still computes.
+function resolveBillingHours(estimate: KanbanTask["estimate"]): number | undefined {
+  if (!estimate) {
+    return undefined;
+  }
+  return estimate.billingHours && estimate.billingHours > 0
+    ? estimate.billingHours
+    : DEFAULT_BILLING_HOURS;
+}
+
 // Resolves the invoice line the analysis agent produced (senior-dev hours +
 // short title/description), falling back to the task's own fields when the
 // agent omitted them. These values only seed the editable fields below.
 function resolveTaskBilling(task: KanbanTask): ResolvedBilling {
   const estimate = task.estimate;
   const description = task.description?.trim() ? toShortDescription(task.description) : "";
+  const title = estimate?.billingTitle?.trim() || toShortTitle(task.title);
   return {
-    billingHours: estimate?.billingHours,
-    billingTitle: estimate?.billingTitle?.trim() || toShortTitle(task.title),
-    billingDescription: estimate?.billingDescription?.trim() || description,
+    billingHours: resolveBillingHours(estimate),
+    billingTitle: title,
+    billingDescription: estimate?.billingDescription?.trim() || description || title,
   };
 }
 

@@ -3,7 +3,9 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import {
   ANALYSIS_FALLBACK_ESTIMATE,
   buildTaskAnalysisPrompt,
+  DEFAULT_BILLING_HOURS,
   parseTaskAnalysisEstimate,
+  withBillingDefaults,
   withTaskAttachments,
 } from "./agent-launch.js";
 
@@ -74,6 +76,54 @@ describe("task analysis estimation", () => {
     );
     expect(parsed?.estimatedMinutes).toBe(8);
     expect(parsed?.billingHours).toBe(3);
+  });
+});
+
+describe("billing backfill for the Facturation tab", () => {
+  test("keeps the agent's billing fields when it provided them", () => {
+    const result = withBillingDefaults(
+      {
+        ...ANALYSIS_FALLBACK_ESTIMATE,
+        billingTitle: "Connexion Google",
+        billingDescription: "Ajout du bouton et du flux OAuth.",
+        billingHours: 4,
+      },
+      makeTask(),
+    );
+    expect(result.billingTitle).toBe("Connexion Google");
+    expect(result.billingDescription).toBe("Ajout du bouton et du flux OAuth.");
+    expect(result.billingHours).toBe(4);
+  });
+
+  test("backfills missing billing fields from the task so the tab is never blank", () => {
+    // The fallback estimate carries no billing fields at all.
+    const result = withBillingDefaults(
+      ANALYSIS_FALLBACK_ESTIMATE,
+      makeTask({ title: "Ajouter la connexion Google au tableau de bord" }),
+    );
+    // Title trimmed to <= 5 words from the task title.
+    expect(result.billingTitle).toBe("Ajouter la connexion Google au");
+    // A non-zero, editable hours seed so the invoice line computes an amount.
+    expect(result.billingHours).toBe(DEFAULT_BILLING_HOURS);
+    expect(result.billingHours).toBeGreaterThan(0);
+    // Never blank: falls back to the title when the task has no description.
+    expect(result.billingDescription).toBe("Ajouter la connexion Google au");
+  });
+
+  test("replaces a zero or blank hours value with the default", () => {
+    const result = withBillingDefaults(
+      { ...ANALYSIS_FALLBACK_ESTIMATE, billingHours: 0 },
+      makeTask(),
+    );
+    expect(result.billingHours).toBe(DEFAULT_BILLING_HOURS);
+  });
+
+  test("prefers the task description when the agent omitted one", () => {
+    const result = withBillingDefaults(
+      ANALYSIS_FALLBACK_ESTIMATE,
+      makeTask({ description: "Première ligne du besoin.\nSeconde ligne." }),
+    );
+    expect(result.billingDescription).toBe("Première ligne du besoin.\nSeconde ligne.");
   });
 });
 
