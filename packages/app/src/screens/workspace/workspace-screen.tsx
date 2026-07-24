@@ -3407,10 +3407,7 @@ function WorkspaceScreenContent({
               hideLabels={showCompactButtonLabels}
             />
             {showPaseoDeployButton ? (
-              <PaseoDeployButton
-                serverId={normalizedServerId}
-                projectId={paseoDeployProjectId}
-              />
+              <PaseoDeployButton serverId={normalizedServerId} projectId={paseoDeployProjectId} />
             ) : null}
             {isGitCheckout ? (
               <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>

@@ -378,6 +378,9 @@ export const ru: TranslationResources = {
       autopilotField: "Автопилот",
       autopilotHint:
         "Задачи из бэклога запускаются сами — квота и часы низкой нагрузки под контролем.",
+      requireValidationField: "Ждать моего подтверждения",
+      requireValidationHint:
+        "Выкл.: задачи запускаются сразу. Вкл.: каждая задача ждёт вашего подтверждения перед запуском.",
       create: "Создать",
       save: "Сохранить",
     },

@@ -143,6 +143,7 @@ export class TasksSession {
         request.color,
         request.autopilot,
         request.branch,
+        request.requireValidation,
       );
       this.host.emit({
         type: "tasks.folder.create.response",
@@ -160,6 +161,9 @@ export class TasksSession {
       const folder = await this.taskBoardService.updateFolder(request.projectId, request.folderId, {
         ...(request.name !== undefined ? { name: request.name } : {}),
         ...(request.color !== undefined ? { color: request.color } : {}),
+        ...(request.requireValidation !== undefined
+          ? { requireValidation: request.requireValidation }
+          : {}),
         ...(request.autopilot !== undefined ? { autopilot: request.autopilot } : {}),
         ...(request.branch !== undefined ? { branch: request.branch } : {}),
         ...(request.order !== undefined ? { order: request.order } : {}),

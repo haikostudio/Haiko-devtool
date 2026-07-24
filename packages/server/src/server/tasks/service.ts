@@ -233,6 +233,7 @@ export class TaskBoardService {
     color?: string,
     autopilot?: boolean,
     branch?: string,
+    requireValidation?: boolean,
   ): Promise<TaskFolder> {
     let created: TaskFolder | null = null;
     const resolvedBranch = deriveFolderBranch(name, branch);
@@ -241,6 +242,7 @@ export class TaskBoardService {
         id: generateTaskEntityId(),
         name: name.trim(),
         ...(color ? { color } : {}),
+        ...(requireValidation !== undefined ? { requireValidation } : {}),
         ...(autopilot !== undefined ? { autopilot } : {}),
         ...(resolvedBranch ? { branch: resolvedBranch } : {}),
         order: current.folders.length,
@@ -262,6 +264,7 @@ export class TaskBoardService {
       name?: string;
       color?: string;
       autopilot?: boolean;
+      requireValidation?: boolean;
       branch?: string;
       order?: number;
     },
@@ -284,6 +287,9 @@ export class TaskBoardService {
         ...folder,
         ...(changes.name !== undefined ? { name: changes.name.trim() } : {}),
         ...(changes.color !== undefined ? { color: changes.color } : {}),
+        ...(changes.requireValidation !== undefined
+          ? { requireValidation: changes.requireValidation }
+          : {}),
         ...(changes.autopilot !== undefined ? { autopilot: changes.autopilot } : {}),
         ...(changes.branch !== undefined ? { branch: nextBranch } : {}),
         ...(branchChanged ? { workspaceId: null, worktreeCwd: null } : {}),

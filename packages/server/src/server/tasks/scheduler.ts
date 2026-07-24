@@ -95,8 +95,9 @@ function isValidatedReady(task: KanbanTask): boolean {
  *   "Planifié" and launched. Backlog tasks are inert — never analyzed or run.
  * - "Planifié" column: estimated tasks awaiting a launch slot (also a valid
  *   direct-drop entry point that skips straight to the queue).
- * - Autopilot folders: the scheduler auto-validates the folder's backlog —
- *   turning autopilot on IS the consent — so execution still flows via "Validé".
+ * - Auto-start folders (the default): the scheduler auto-validates the folder's
+ *   backlog — immediate start IS the consent — so execution still flows via
+ *   "Validé". A folder with `requireValidation` set holds its backlog instead.
  *
  * Every launch opens a fresh visible (non-internal) agent in its own isolated
  * worktree + branch (task/<slug>-<id>), so several task agents can run in the
@@ -284,8 +285,10 @@ export class TaskScheduler {
       }
       const foldersById = new Map(board.folders.map((folder) => [folder.id, folder]));
       const folderOrders = new Map(board.folders.map((folder) => [folder.id, folder.order]));
-      const folderAutopilot = new Map(
-        board.folders.map((folder) => [folder.id, folder.autopilot === true]),
+      // Immediate start is the default: a folder auto-validates (and launches) its
+      // backlog unless the user opted into manual review via `requireValidation`.
+      const folderAutoStart = new Map(
+        board.folders.map((folder) => [folder.id, folder.requireValidation !== true]),
       );
       this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
       for (const task of board.tasks) {
@@ -296,7 +299,7 @@ export class TaskScheduler {
           this.handleBacklogTask(
             project.projectId,
             task,
-            folderAutopilot.get(task.folderId) === true,
+            folderAutoStart.get(task.folderId) !== false,
           );
           continue;
         }
@@ -353,9 +356,10 @@ export class TaskScheduler {
    * Backlog is inert for the COST pipeline: no estimate, no execution here. This
    * runs the two things that ARE allowed in backlog — self-healing cleanup of
    * stray cost state, and the cheap light analysis (title + tidied prompt) —
-   * then, for autopilot folders only, hands the card to "Validé".
+   * then, for auto-start folders (the default), hands the card to "Validé". Only
+   * "require validation" folders hold their backlog for the user.
    */
-  private handleBacklogTask(projectId: string, task: KanbanTask, autopilot: boolean): void {
+  private handleBacklogTask(projectId: string, task: KanbanTask, autoStart: boolean): void {
     // Self-heal legacy/dirty data — a backlog card must never carry a cost
     // estimate or an armed schedule (those belong to "Validé" onward). Retro-
     // cleans boards where analysis fired too early (e.g. Maestria).
@@ -367,9 +371,10 @@ export class TaskScheduler {
     if (task.refinement === "pending" && this.taskLightAnalyzer) {
       this.taskLightAnalyzer.refine(projectId, task.id);
     }
-    // Autopilot folders auto-validate their backlog (the folder flag is the
-    // consent) so the pipeline still always runs through "Validé".
-    if (autopilot && task.approval?.state !== "pending") {
+    // Auto-start folders (the default) auto-validate their backlog — immediate
+    // start IS the consent — so the pipeline still always runs through "Validé".
+    // "Require validation" folders skip this and wait for the user.
+    if (autoStart && task.approval?.state !== "pending") {
       this.autoTransition(projectId, task.id, "validated");
     }
   }

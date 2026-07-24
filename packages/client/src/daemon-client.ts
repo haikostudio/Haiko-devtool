@@ -4535,7 +4535,14 @@ export class DaemonClient {
   }
 
   async tasksFolderCreate(
-    input: { projectId: string; name: string; color?: string; autopilot?: boolean },
+    input: {
+      projectId: string;
+      name: string;
+      color?: string;
+      autopilot?: boolean;
+      requireValidation?: boolean;
+      branch?: string;
+    },
     requestId?: string,
   ) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.create.response">({
@@ -4551,6 +4558,8 @@ export class DaemonClient {
       name?: string;
       color?: string;
       autopilot?: boolean;
+      requireValidation?: boolean;
+      branch?: string;
       order?: number;
     },
     requestId?: string,

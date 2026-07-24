@@ -375,6 +375,8 @@ export const zhCN: TranslationResources = {
       colorField: "颜色",
       autopilotField: "自动驾驶",
       autopilotHint: "待办任务将自动启动 — 配额和低峰时段自动管理。",
+      requireValidationField: "等待我的确认",
+      requireValidationHint: "关闭：任务立即开始。开启：每个任务在运行前等待你的确认。",
       create: "创建",
       save: "保存",
     },

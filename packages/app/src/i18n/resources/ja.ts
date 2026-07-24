@@ -379,6 +379,9 @@ export const ja: TranslationResources = {
       colorField: "カラー",
       autopilotField: "オートパイロット",
       autopilotHint: "バックログのタスクが自動で起動します — クォータとオフピークは管理されます。",
+      requireValidationField: "承認を待つ",
+      requireValidationHint:
+        "オフ: タスクはすぐに開始します。オン: 各タスクは実行前にあなたの承認を待ちます。",
       create: "作成",
       save: "保存",
     },

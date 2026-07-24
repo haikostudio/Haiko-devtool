@@ -382,6 +382,9 @@ export const fr: TranslationResources = {
       autopilotField: "Autopilote",
       autopilotHint:
         "Les tâches du backlog se lancent toutes seules — quota et heures creuses gérés.",
+      requireValidationField: "Attendre ma validation",
+      requireValidationHint:
+        "Désactivé : les tâches démarrent tout de suite. Activé : chaque tâche attend votre validation avant de se lancer.",
       create: "Créer",
       save: "Enregistrer",
     },

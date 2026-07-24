@@ -38,6 +38,9 @@ export const TasksFolderCreateRequestSchema = z.object({
   projectId: z.string(),
   name: z.string().min(1),
   color: z.string().optional(),
+  // Hold the folder's tasks until the user validates each one. Absent = immediate
+  // start (the default). Supersedes `autopilot`.
+  requireValidation: z.boolean().optional(),
   autopilot: z.boolean().optional(),
   // Git branch this folder represents; derived from the name when omitted.
   branch: z.string().optional(),
@@ -50,6 +53,7 @@ export const TasksFolderUpdateRequestSchema = z.object({
   folderId: z.string(),
   name: z.string().min(1).optional(),
   color: z.string().optional(),
+  requireValidation: z.boolean().optional(),
   autopilot: z.boolean().optional(),
   branch: z.string().optional(),
   order: z.number().int().optional(),

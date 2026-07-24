@@ -25,6 +25,7 @@ export interface TaskBoardHandle {
     name: string;
     color?: string;
     autopilot?: boolean;
+    requireValidation?: boolean;
     branch?: string;
   }) => Promise<void>;
   renameFolder: (folderId: string, name: string) => Promise<void>;
@@ -33,6 +34,7 @@ export interface TaskBoardHandle {
     name?: string;
     color?: string;
     autopilot?: boolean;
+    requireValidation?: boolean;
     branch?: string;
   }) => Promise<void>;
   deleteFolder: (folderId: string) => Promise<void>;
@@ -152,7 +154,13 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   }, [getClient, projectId]);
 
   const createFolder = useCallback(
-    async (input: { name: string; color?: string; autopilot?: boolean; branch?: string }) => {
+    async (input: {
+      name: string;
+      color?: string;
+      autopilot?: boolean;
+      requireValidation?: boolean;
+      branch?: string;
+    }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksFolderCreate({ projectId: project, ...input });
     },
@@ -173,6 +181,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       name?: string;
       color?: string;
       autopilot?: boolean;
+      requireValidation?: boolean;
       branch?: string;
     }) => {
       const { client, projectId: project } = requireContext();
