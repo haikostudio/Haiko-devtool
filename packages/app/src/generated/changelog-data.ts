@@ -21,7 +21,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
   {
     "version": "Unreleased",
     "date": "2026-07-25",
-    "markdown": "### Corrections\n\n- Restore github search query bridge\n- Unblock self-host web build\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)"
+    "markdown": "### Corrections\n\n- Point file panel at current pane\n- Restore github search query bridge\n- Unblock self-host web build\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)"
   },
   {
     "version": "0.2.0",
@@ -536,6 +536,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    "hash": "fa2747475a4c32478a1f59adc8066ceab8b5c725",
+    "shortHash": "fa2747475",
+    "date": "2026-07-25T01:54:57+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): point file panel at current pane"
+  },
   {
     "hash": "8cad67b16f63a1e4fe42157a0f0518b324a50755",
     "shortHash": "8cad67b16",
@@ -2628,15 +2635,8 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     "date": "2026-07-21T05:39:46+08:00",
     "author": "True Byte",
     "subject": "feat(pi): add 'max' thinking level support (#2267)"
-  },
-  {
-    "hash": "0eda457233e476caa7883717153db584f13e6bfc",
-    "shortHash": "0eda45723",
-    "date": "2026-07-20T23:23:14+02:00",
-    "author": "haikostudio",
-    "subject": "fix(tâches): drover mobile — poignée de glissement + layout, onglet facturation lint-clean"
   }
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:51:30+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:54:57+02:00";
