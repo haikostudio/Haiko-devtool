@@ -1126,11 +1126,10 @@ function BoardContent({
   // directly (otherwise a task tap would do nothing visible).
   const handlePressTask = useCallback(
     (task: KanbanTask) => {
-      // Remember this card has been seen (persistent, idempotent). A finished
-      // card then dims once opened; still-unseen finished cards stay bright.
-      void boardHandle.markTaskViewed(task.id).catch(() => {
-        // Best-effort — a failed stamp just leaves the card at full opacity.
-      });
+      // Opening the drawer alone does NOT count as "seen" — the card is only
+      // marked viewed once the user really touches its content inside the
+      // drawer/dock (see useTaskViewedOnInteract, wired in the dock bodies). So a
+      // finished card that merely auto-opened stays bright until real contact.
       if (supportsConductor) {
         setDockTaskId(task.id);
         setConductorOpen(true);
@@ -1138,7 +1137,7 @@ function BoardContent({
         setDetailsTaskId(task.id);
       }
     },
-    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId, boardHandle],
+    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId],
   );
 
   // Tapping a task on the timeline does everything a card tap does (open its
@@ -1378,6 +1377,16 @@ function ConductorDock({
   }, [setConductorOpen, setDockTaskId]);
   const handleOpen = useCallback(() => setConductorOpen(true), [setConductorOpen]);
   const handleBack = useCallback(() => setDockTaskId(null), [setDockTaskId]);
+  // Real contact with the open task body → mark it "viewed" (idempotent). This
+  // is what finally dims a finished card; opening the dock alone never does.
+  const handleTaskInteract = useCallback(
+    (taskId: string) => {
+      void boardHandle.markTaskViewed(taskId).catch(() => {
+        // Best-effort — a failed stamp just leaves the card at full opacity.
+      });
+    },
+    [boardHandle],
+  );
 
   // Proximity animation (desktop web only): the toggle fades in and grows as the
   // cursor approaches, then springs back to dormant when it moves away. On touch
@@ -1443,6 +1452,7 @@ function ConductorDock({
         onApprove={taskActions.handleApprove}
         onSetHold={taskActions.handleSetHold}
         onClose={handleClose}
+        onTaskInteract={handleTaskInteract}
       />
     );
   }
@@ -1490,6 +1500,14 @@ function TasksDetailDock({
 
   const handleClose = useCallback(() => setDetailsTaskId(null), [setDetailsTaskId]);
   const taskActions = useBoardTaskActions(boardHandle);
+  const handleInteract = useCallback(
+    (taskId: string) => {
+      void boardHandle.markTaskViewed(taskId).catch(() => {
+        // Best-effort — a failed stamp just leaves the card at full opacity.
+      });
+    },
+    [boardHandle],
+  );
 
   return (
     <TaskDetailDrawer
@@ -1504,6 +1522,7 @@ function TasksDetailDock({
       onRunNow={taskActions.handleRunNow}
       onApprove={taskActions.handleApprove}
       onSetHold={taskActions.handleSetHold}
+      onInteract={handleInteract}
     />
   );
 }

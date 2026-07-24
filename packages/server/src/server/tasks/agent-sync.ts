@@ -1,5 +1,10 @@
 import type pino from "pino";
-import type { AgentManager, AgentManagerEvent, ManagedAgent } from "../agent/agent-manager.js";
+import {
+  agentAwaitsUserInput,
+  type AgentManager,
+  type AgentManagerEvent,
+  type ManagedAgent,
+} from "../agent/agent-manager.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
 import { normalizeTaskTitle, type TaskBoardService } from "./service.js";
 
@@ -184,7 +189,7 @@ export class AgentTaskSyncService {
       ) {
         continue;
       }
-      const targetColumn = item.completed ? "done" : "in_progress";
+      const targetColumn = this.syncTargetColumn(agentId, item.completed);
       // "done" and "deployed" are terminal: agent-sync never drags a finished or
       // shipped task backwards.
       if (task.column !== targetColumn && task.column !== "done" && task.column !== "deployed") {
@@ -215,7 +220,12 @@ export class AgentTaskSyncService {
         continue;
       }
       const completed = todoState.get(task.normalizedTitle);
-      if (completed === true && task.column !== "done" && task.column !== "deployed") {
+      if (
+        completed === true &&
+        !this.agentAwaitsUser(agentId) &&
+        task.column !== "done" &&
+        task.column !== "deployed"
+      ) {
         await this.taskBoardService.transitionTask(projectId, task.id, "done");
       }
     }
@@ -245,7 +255,32 @@ export class AgentTaskSyncService {
       }
       if (task.column === "backlog" || task.column === "validated" || task.column === "scheduled") {
         await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
+      } else if (task.column === "done") {
+        // A finished card whose agent came back to life (e.g. the user relaunched
+        // a prompt on it). "done" means nothing is running — so pull it back to
+        // "in_progress" to signal work resumed. Shipped ("deployed") stays put.
+        await this.taskBoardService.reactivateTask(projectId, task.id);
       }
     }
+  }
+
+  /**
+   * Whether the agent behind a card is currently blocked on the user. Delegates
+   * to the shared AgentManager helper; a missing/closed agent counts as "not
+   * waiting" so it never wedges a card out of "done".
+   */
+  private agentAwaitsUser(agentId: string): boolean {
+    const agent = this.agentManager.getAgent(agentId);
+    return agent ? agentAwaitsUserInput(agent) : false;
+  }
+
+  /**
+   * Column a synced todo item should drag its card to. A completed item lands in
+   * "done" — UNLESS its agent is still waiting on the user (a pending permission
+   * / question), in which case the work isn't finished and the card stays
+   * "in_progress" wearing its attention state.
+   */
+  private syncTargetColumn(agentId: string, completed: boolean): "done" | "in_progress" {
+    return completed && !this.agentAwaitsUser(agentId) ? "done" : "in_progress";
   }
 }

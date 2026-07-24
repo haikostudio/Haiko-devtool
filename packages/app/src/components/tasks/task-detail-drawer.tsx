@@ -11,6 +11,7 @@ import {
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
+import { useTaskViewedOnInteract } from "@/hooks/use-task-viewed-on-interact";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import type { KanbanTask } from "@/data/tasks";
 
@@ -28,6 +29,12 @@ export interface TaskDetailDrawerProps {
   onRunNow: (taskId: string) => void;
   onApprove: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
+  /**
+   * Called on the first real user interaction with the open drawer body (a tap or
+   * the touch that starts a scroll) — NOT on mere opening. Stamps the card
+   * "viewed" so a finished card only dims once actually looked at.
+   */
+  onInteract?: (taskId: string) => void;
 }
 
 /**
@@ -61,9 +68,12 @@ function TaskDetailDrawerInner({
   onRunNow,
   onApprove,
   onSetHold,
+  onInteract,
 }: TaskDetailDrawerProps & { task: KanbanTask }) {
   const { t } = useTranslation();
   const [view, setView] = useState<PanelView>("details");
+  const noopInteract = useCallback(() => {}, []);
+  const interactProps = useTaskViewedOnInteract(task.id, onInteract ?? noopInteract);
 
   const detailsHeight = useTasksBoardUiStore((state) => state.detailsHeight);
   const detailsOffsetX = useTasksBoardUiStore((state) => state.detailsOffsetX);
@@ -122,7 +132,7 @@ function TaskDetailDrawerInner({
         />
       </View>
       <EvolutionTaskProvider serverId={serverId} projectId={projectId} folderId={task.folderId}>
-        <View style={styles.body}>
+        <View style={styles.body} {...interactProps}>
           {view === "billing" ? (
             <TaskBillingView task={task} serverId={serverId} projectId={projectId} />
           ) : (

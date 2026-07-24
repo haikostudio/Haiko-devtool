@@ -425,6 +425,20 @@ export type ManagedAgent =
   | ManagedAgentError
   | ManagedAgentClosed;
 
+/**
+ * True when the agent is blocked waiting on the user — a pending permission
+ * prompt or an explicit "permission" attention flag. Mirrors the `needs_input`
+ * branch of `deriveAgentStateBucket` so task-board collaborators (agent-sync,
+ * scheduler) can gate on the exact same "the user still owes an answer" signal
+ * the yellow badge shows. A task must never be filed as "done" while this holds.
+ */
+export function agentAwaitsUserInput(agent: ManagedAgent): boolean {
+  return (
+    agent.pendingPermissions.size > 0 ||
+    (agent.attention.requiresAttention && agent.attention.attentionReason === "permission")
+  );
+}
+
 export interface AgentMetricsSnapshot {
   total: number;
   byLifecycle: Record<string, number>;

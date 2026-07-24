@@ -20,6 +20,10 @@ function fakeAgent(overrides: Partial<ManagedAgent>): ManagedAgent {
     id: "agent-1",
     workspaceId: "ws-1",
     lifecycle: "running",
+    // Real ManagedAgent shape the "awaiting user" gate reads: no pending
+    // permission and no attention flag = not blocked on the user.
+    pendingPermissions: new Map(),
+    attention: { requiresAttention: false },
     ...overrides,
   } as ManagedAgent;
 }
@@ -100,6 +104,12 @@ describe("AgentTaskSyncService", () => {
     });
   }
 
+  function emitState(agent: ManagedAgent): void {
+    subscriber({ type: "agent_state", agent });
+  }
+
+  const awaitingAgent = () => fakeAgent({ pendingPermissions: new Map([["req-1", {} as never]]) });
+
   async function waitForBoard(
     predicate: (board: Awaited<ReturnType<TaskBoardService["getBoard"]>>) => boolean,
   ) {
@@ -151,6 +161,38 @@ describe("AgentTaskSyncService", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     board = await service.getBoard("proj-1");
     expect(board.tasks[0]?.column).toBe("backlog");
+  });
+
+  test("keeps a completed card in progress while its agent awaits the user", async () => {
+    // Agent is blocked on a pending permission/question: a completed todo item
+    // must NOT file the card as "done" — it's waiting, not finished.
+    agents.set("agent-1", awaitingAgent());
+    emitTodos([{ text: "Implement the login form", completed: false }]);
+    await waitForBoard(
+      (board) => board.tasks.length === 1 && board.tasks[0]?.column === "in_progress",
+    );
+
+    emitTodos([{ text: "Implement the login form", completed: true }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks[0]?.column).toBe("in_progress");
+  });
+
+  test("reactivates a finished card when its agent starts running again", async () => {
+    emitTodos([{ text: "Implement the login form", completed: false }]);
+    await waitForBoard((board) => board.tasks.length === 1);
+    emitTodos([{ text: "Implement the login form", completed: true }]);
+    await waitForBoard(hasLoginFormTaskDone);
+    const finished = (await service.getBoard("proj-1")).tasks[0];
+    expect(finished?.completedAt).toBeTruthy();
+
+    // The agent behind the finished card comes back to life: the card must drop
+    // back to "in_progress" and shed its terminal completedAt stamp.
+    emitState(fakeAgent({ lifecycle: "running" }));
+    await waitForBoard((board) => board.tasks[0]?.column === "in_progress");
+    const revived = (await service.getBoard("proj-1")).tasks[0];
+    expect(revived?.completedAt).toBeNull();
   });
 
   test("never moves a task awaiting user approval", async () => {

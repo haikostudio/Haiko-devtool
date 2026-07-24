@@ -1,6 +1,6 @@
 import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 import type pino from "pino";
-import type { AgentManager } from "../agent/agent-manager.js";
+import { agentAwaitsUserInput, type AgentManager } from "../agent/agent-manager.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { ProviderUsageService } from "../../services/quota-fetcher/service.js";
@@ -39,7 +39,10 @@ interface TaskSchedulerOptions {
   taskBoardService: TaskBoardService;
   taskEstimator: TaskEstimator;
   projectRegistry: ProjectRegistry;
-  agentManager: Pick<AgentManager, "runAgent" | "appendTimelineItem" | "getLastAssistantMessage">;
+  agentManager: Pick<
+    AgentManager,
+    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage" | "getAgent"
+  >;
   createAgent: BoundCreateAgentCommand;
   providerUsageService: Pick<ProviderUsageService, "listUsage">;
   logger: pino.Logger;
@@ -124,7 +127,7 @@ export class TaskScheduler {
   private readonly projectRegistry: ProjectRegistry;
   private readonly agentManager: Pick<
     AgentManager,
-    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage"
+    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage" | "getAgent"
   >;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly providerUsageService: Pick<ProviderUsageService, "listUsage">;
@@ -617,11 +620,7 @@ export class TaskScheduler {
         ...current,
         schedule: null,
       }));
-      await this.taskBoardService.transitionTask(projectId, task.id, "done");
-      this.logger.info(
-        { taskId: task.id, agentId, branch },
-        "Task executed in an isolated worktree",
-      );
+      await this.finalizeSuccessfulRun(projectId, task.id, agentId, branch);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.taskBoardService
@@ -646,5 +645,26 @@ export class TaskScheduler {
         });
       throw error;
     }
+  }
+
+  /**
+   * A non-plan run returned without cancelling: file the card as "done" — UNLESS
+   * the agent is blocked on a user answer (a pending permission / question). In
+   * that case the work isn't finished, it's waiting, so leave the card in
+   * "in_progress" wearing its attention state until the user replies.
+   */
+  private async finalizeSuccessfulRun(
+    projectId: string,
+    taskId: string,
+    agentId: string,
+    branch: string | null | undefined,
+  ): Promise<void> {
+    const agent = this.agentManager.getAgent(agentId);
+    if (agent && agentAwaitsUserInput(agent)) {
+      this.logger.info({ taskId, agentId }, "Task run awaits user input; kept in progress");
+      return;
+    }
+    await this.taskBoardService.transitionTask(projectId, taskId, "done");
+    this.logger.info({ taskId, agentId, branch }, "Task executed in an isolated worktree");
   }
 }

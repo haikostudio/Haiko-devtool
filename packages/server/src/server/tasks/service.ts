@@ -716,6 +716,24 @@ export class TaskBoardService {
     return this.moveTask(projectId, { taskId, column, index: targetCount, manual: false });
   }
 
+  /**
+   * A finished ("done") card whose agent just came back to life: pull it back to
+   * "in_progress" AND clear its terminal `completedAt` stamp so the card reads as
+   * live again — both the status tone and the 50%-dimming key off `completedAt` +
+   * column, so leaving the stamp would keep it green/greyed while it works. Only
+   * "done" reactivates; a shipped ("deployed") card stays shipped. Idempotent:
+   * returns null (no broadcast) when the task isn't a plain finished card.
+   */
+  async reactivateTask(projectId: string, taskId: string): Promise<TaskBoard | null> {
+    const board = await this.store.getBoard(projectId);
+    const task = board.tasks.find((entry) => entry.id === taskId);
+    if (!task || task.column !== "done" || task.completedAt == null) {
+      return null;
+    }
+    await this.patchTask(projectId, taskId, (current) => ({ ...current, completedAt: null }));
+    return this.transitionTask(projectId, taskId, "in_progress");
+  }
+
   private notifyScheduled(projectId: string, task: KanbanTask): void {
     if (this.onTaskScheduled) {
       try {

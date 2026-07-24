@@ -129,6 +129,9 @@ describe("TaskScheduler", () => {
     runAgent?: () => Promise<{ canceled: boolean; finalText: string; timeline: [] }>;
     quietHours?: QuietHours;
     nowMs?: number;
+    // Lets a test make the post-run agent look "blocked on the user" (a pending
+    // permission / question) so the card must stay in progress instead of "done".
+    getAgent?: (agentId: string) => unknown;
   }) {
     const createAgent = vi.fn(async () => ({
       snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1", cwd: "/tmp/wt/feat-auth" },
@@ -146,7 +149,7 @@ describe("TaskScheduler", () => {
       taskBoardService: service,
       taskEstimator: estimator,
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
-      agentManager: { runAgent } as never,
+      agentManager: { runAgent, getAgent: options.getAgent ?? (() => undefined) } as never,
       createAgent: createAgent as never,
       providerUsageService: usageWithRemaining(options.remainingPct),
       logger,
@@ -191,6 +194,28 @@ describe("TaskScheduler", () => {
         }),
       }),
     );
+  });
+
+  test("keeps a task in progress when the run ends with the agent awaiting the user", async () => {
+    const task = await seedScheduledTask({ quotaPercent: 15 });
+    // The run returns, but the agent is blocked on a pending permission/question:
+    // the card must stay "in_progress" wearing its attention state, never "done".
+    const awaitingUserAgent = {
+      pendingPermissions: new Map([["req-1", {}]]),
+      attention: { requiresAttention: false },
+    };
+    const { scheduler } = buildScheduler({ remainingPct: 80, getAgent: () => awaitingUserAgent });
+
+    await scheduler.tick();
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.schedule ?? null).toBeNull();
+    });
+
+    const held = (await service.getBoard("proj-1")).tasks[0];
+    expect(held?.id).toBe(task.id);
+    expect(held?.column).toBe("in_progress");
+    expect(held?.completedAt ?? null).toBeNull();
   });
 
   test("reuses the analysis agent for execution instead of creating a new one", async () => {

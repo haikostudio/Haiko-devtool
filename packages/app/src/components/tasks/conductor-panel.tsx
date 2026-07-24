@@ -12,6 +12,7 @@ import {
   type TaskDetailSaveInput,
 } from "@/components/tasks/task-detail-sheet";
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
+import { useTaskViewedOnInteract } from "@/hooks/use-task-viewed-on-interact";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
@@ -52,6 +53,12 @@ export interface ConductorPanelProps {
   onApprove: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
+  /**
+   * Called on the first real user interaction with the open task body (a tap or
+   * the touch that starts a scroll) — NOT on mere opening. Used to stamp the
+   * card "viewed" so a finished card only dims once actually looked at.
+   */
+  onTaskInteract?: (taskId: string) => void;
 }
 
 /**
@@ -79,8 +86,14 @@ export function ConductorPanel({
   onApprove,
   onSetHold,
   onClose,
+  onTaskInteract,
 }: ConductorPanelProps) {
   const { t } = useTranslation();
+  const noopInteract = useCallback(() => {}, []);
+  const interactProps = useTaskViewedOnInteract(
+    dockTask?.id ?? null,
+    onTaskInteract ?? noopInteract,
+  );
 
   const conductorHeight = useTasksBoardUiStore((state) => state.conductorHeight);
   const conductorOffsetX = useTasksBoardUiStore((state) => state.conductorOffsetX);
@@ -277,7 +290,9 @@ export function ConductorPanel({
       onToggleCollapse={handleToggleCollapse}
       testID="conductor-panel"
     >
-      <View style={styles.body}>{renderBody()}</View>
+      <View style={styles.body} {...interactProps}>
+        {renderBody()}
+      </View>
     </TaskBottomDock>
   );
 }
