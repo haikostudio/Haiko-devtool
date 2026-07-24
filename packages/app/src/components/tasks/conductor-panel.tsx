@@ -52,6 +52,12 @@ export interface ConductorPanelProps {
   onApprove: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
+  /**
+   * Fired on the first real user interaction inside the dock (tap/scroll). Used
+   * to mark the open task seen — opening the dock alone must not. No-op in
+   * conductor mode (no task to stamp).
+   */
+  onInteraction?: () => void;
 }
 
 /**
@@ -79,6 +85,7 @@ export function ConductorPanel({
   onApprove,
   onSetHold,
   onClose,
+  onInteraction,
 }: ConductorPanelProps) {
   const { t } = useTranslation();
 
@@ -275,6 +282,7 @@ export function ConductorPanel({
       onResize={setConductorHeight}
       onMove={setConductorOffsetX}
       onToggleCollapse={handleToggleCollapse}
+      onInteraction={onInteraction}
       testID="conductor-panel"
     >
       <View style={styles.body}>{renderBody()}</View>

@@ -1126,11 +1126,10 @@ function BoardContent({
   // directly (otherwise a task tap would do nothing visible).
   const handlePressTask = useCallback(
     (task: KanbanTask) => {
-      // Remember this card has been seen (persistent, idempotent). A finished
-      // card then dims once opened; still-unseen finished cards stay bright.
-      void boardHandle.markTaskViewed(task.id).catch(() => {
-        // Best-effort — a failed stamp just leaves the card at full opacity.
-      });
+      // Opening a card no longer marks it seen — merely opening the drawer (or
+      // hovering it open) must not dim a finished card. viewedAt is stamped only
+      // once the user actually interacts inside the drawer (see the dock's
+      // onInteraction wiring), so a card dims only when there's a real read.
       if (supportsConductor) {
         setDockTaskId(task.id);
         setConductorOpen(true);
@@ -1138,7 +1137,7 @@ function BoardContent({
         setDetailsTaskId(task.id);
       }
     },
-    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId, boardHandle],
+    [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId],
   );
 
   // Tapping a task on the timeline does everything a card tap does (open its
@@ -1370,6 +1369,20 @@ function ConductorDock({
     [dockTaskId, boardHandle.board],
   );
 
+  // First real interaction inside the dock (a tap or the start of a scroll)
+  // marks the open task seen — this is what lets a finished card dim. Merely
+  // opening the dock doesn't count. Idempotent + guarded so it only fires the
+  // one RPC: once viewedAt is set, further touches are no-ops.
+  const handleInteraction = useCallback(() => {
+    const task = dockTask;
+    if (!task || task.viewedAt) {
+      return;
+    }
+    void boardHandle.markTaskViewed(task.id).catch(() => {
+      // Best-effort — a failed stamp just leaves the card at full opacity.
+    });
+  }, [dockTask, boardHandle]);
+
   // Closing the dock also drops the task selection so it never reopens pointed at
   // a task that has since gone away.
   const handleClose = useCallback(() => {
@@ -1443,6 +1456,7 @@ function ConductorDock({
         onApprove={taskActions.handleApprove}
         onSetHold={taskActions.handleSetHold}
         onClose={handleClose}
+        onInteraction={handleInteraction}
       />
     );
   }
@@ -1491,6 +1505,18 @@ function TasksDetailDock({
   const handleClose = useCallback(() => setDetailsTaskId(null), [setDetailsTaskId]);
   const taskActions = useBoardTaskActions(boardHandle);
 
+  // Mark the open card seen only on a real interaction inside the drawer (tap or
+  // scroll start), never on open. Guarded + idempotent so it fires the one RPC.
+  const handleInteraction = useCallback(() => {
+    const task = detailsTask;
+    if (!task || task.viewedAt) {
+      return;
+    }
+    void boardHandle.markTaskViewed(task.id).catch(() => {
+      // Best-effort — a failed stamp just leaves the card at full opacity.
+    });
+  }, [detailsTask, boardHandle]);
+
   return (
     <TaskDetailDrawer
       serverId={serverId}
@@ -1504,6 +1530,7 @@ function TasksDetailDock({
       onRunNow={taskActions.handleRunNow}
       onApprove={taskActions.handleApprove}
       onSetHold={taskActions.handleSetHold}
+      onInteraction={handleInteraction}
     />
   );
 }

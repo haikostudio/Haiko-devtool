@@ -716,6 +716,30 @@ export class TaskBoardService {
     return this.moveTask(projectId, { taskId, column, index: targetCount, manual: false });
   }
 
+  /**
+   * Agent-sync reopens a finished card when its linked agent starts executing
+   * again: move it out of "done" back to "in_progress" AND clear completedAt, so
+   * the card stops reading as terminal (its voyant relights to "running", its
+   * dimming resets to full opacity). "deployed" is shipped and stays terminal —
+   * only "done" reopens. No-op when the task isn't in "done".
+   */
+  async reopenTask(projectId: string, taskId: string): Promise<void> {
+    const board = await this.store.getBoard(projectId);
+    const task = board.tasks.find((entry) => entry.id === taskId);
+    if (!task || task.column !== "done") {
+      return;
+    }
+    await this.transitionTask(projectId, taskId, "in_progress");
+    await this.patchTask(projectId, taskId, (entry) => {
+      if (entry.completedAt == null) {
+        return entry;
+      }
+      const next = { ...entry };
+      delete next.completedAt;
+      return next;
+    });
+  }
+
   private notifyScheduled(projectId: string, task: KanbanTask): void {
     if (this.onTaskScheduled) {
       try {

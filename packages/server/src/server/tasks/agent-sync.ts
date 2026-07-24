@@ -1,4 +1,5 @@
 import type pino from "pino";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager, AgentManagerEvent, ManagedAgent } from "../agent/agent-manager.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
 import { normalizeTaskTitle, type TaskBoardService } from "./service.js";
@@ -177,14 +178,15 @@ export class AgentTaskSyncService {
       if (created) {
         this.syncedTaskCounts.set(agentId, count + 1);
       }
-      if (
-        task.manualOverrideAt ||
-        task.schedule?.state === "running" ||
-        task.approval?.state === "pending"
-      ) {
+      if (this.isSyncLocked(task)) {
         continue;
       }
       const targetColumn = item.completed ? "done" : "in_progress";
+      // Never bury an unanswered prompt: a task waiting on the user must not
+      // auto-complete. (Moving forward to "in_progress" stays allowed.)
+      if (targetColumn === "done" && this.isAwaitingUser(task, agentId)) {
+        continue;
+      }
       // "done" and "deployed" are terminal: agent-sync never drags a finished or
       // shipped task backwards.
       if (task.column !== targetColumn && task.column !== "done" && task.column !== "deployed") {
@@ -207,15 +209,16 @@ export class AgentTaskSyncService {
       if (!task.links.agentIds.includes(agentId)) {
         continue;
       }
-      if (
-        task.manualOverrideAt ||
-        task.schedule?.state === "running" ||
-        task.approval?.state === "pending"
-      ) {
+      if (this.isSyncLocked(task)) {
         continue;
       }
       const completed = todoState.get(task.normalizedTitle);
       if (completed === true && task.column !== "done" && task.column !== "deployed") {
+        // A task blocking on the user (permission/question, hold, plan review)
+        // must not slip into the terminal "done" column and hide that request.
+        if (this.isAwaitingUser(task, agentId)) {
+          continue;
+        }
         await this.taskBoardService.transitionTask(projectId, task.id, "done");
       }
     }
@@ -236,16 +239,43 @@ export class AgentTaskSyncService {
       if (!task.links.agentIds.includes(agent.id)) {
         continue;
       }
-      if (
-        task.manualOverrideAt ||
-        task.schedule?.state === "running" ||
-        task.approval?.state === "pending"
-      ) {
+      if (this.isSyncLocked(task)) {
         continue;
       }
       if (task.column === "backlog" || task.column === "validated" || task.column === "scheduled") {
         await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
+      } else if (task.column === "done") {
+        // The card was finished, but its agent is executing again: reopen it to
+        // "in_progress" so the board shows live movement instead of a terminal
+        // "done" card. "deployed" (shipped) stays terminal and is left alone.
+        await this.taskBoardService.reopenTask(projectId, task.id);
       }
     }
+  }
+
+  // A task the user has taken charge of is off-limits to automatic column sync:
+  // a manual move, a running schedule, or a still-pending agent proposal.
+  private isSyncLocked(task: KanbanTask): boolean {
+    return (
+      task.manualOverrideAt != null ||
+      task.schedule?.state === "running" ||
+      task.approval?.state === "pending"
+    );
+  }
+
+  // A task must not auto-complete while it's still blocking on the user: a pending
+  // approval, an explicit execution hold, a plan waiting for review, or a live
+  // agent parked on a permission/question prompt. Burying such a task under a
+  // terminal "done" card would hide the unanswered request.
+  private isAwaitingUser(task: KanbanTask, agentId: string): boolean {
+    if (
+      task.approval?.state === "pending" ||
+      task.executionHold === true ||
+      task.planReadyAt != null
+    ) {
+      return true;
+    }
+    const agent = this.agentManager.getAgent(agentId);
+    return agent != null && agent.pendingPermissions.size > 0;
   }
 }

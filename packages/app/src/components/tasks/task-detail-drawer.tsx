@@ -27,6 +27,8 @@ export interface TaskDetailDrawerProps {
   onRunNow: (taskId: string) => void;
   onApprove: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
+  /** Fired on the first real user interaction inside the drawer (tap/scroll). */
+  onInteraction?: () => void;
 }
 
 /**
@@ -60,6 +62,7 @@ function TaskDetailDrawerInner({
   onRunNow,
   onApprove,
   onSetHold,
+  onInteraction,
 }: TaskDetailDrawerProps & { task: KanbanTask }) {
   const { t } = useTranslation();
   const [view, setView] = useState<PanelView>("details");
@@ -96,6 +99,7 @@ function TaskDetailDrawerInner({
       onResize={setDetailsHeight}
       onMove={setDetailsOffsetX}
       onToggleCollapse={handleToggleCollapse}
+      onInteraction={onInteraction}
       testID="task-detail-drawer"
     >
       <View style={styles.tabs}>

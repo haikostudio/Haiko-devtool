@@ -155,6 +155,37 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([]);
   });
 
+  test("reopenTask moves a done card to in_progress and clears completedAt", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Wire it up" });
+    await service.moveTask("proj-1", { taskId: task.id, column: "done", index: 0, manual: false });
+
+    await service.reopenTask("proj-1", task.id);
+
+    const board = await service.getBoard("proj-1");
+    const reopened = board.tasks.find((entry) => entry.id === task.id);
+    expect(reopened?.column).toBe("in_progress");
+    expect(reopened?.completedAt ?? null).toBeNull();
+  });
+
+  test("reopenTask leaves a deployed (shipped) card untouched", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Shipped work" });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+
+    await service.reopenTask("proj-1", task.id);
+
+    const board = await service.getBoard("proj-1");
+    const entry = board.tasks.find((item) => item.id === task.id);
+    expect(entry?.column).toBe("deployed");
+    expect(entry?.completedAt).toBeTruthy();
+  });
+
   test("moving straight to deployed backfills completedAt", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Hotfix live" });

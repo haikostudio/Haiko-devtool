@@ -61,6 +61,13 @@ export interface TaskBottomDockProps {
   onResize: (height: number) => void;
   onMove: (offsetX: number) => void;
   onToggleCollapse: () => void;
+  /**
+   * Fired on the first touch that lands inside the dock body — a tap or the
+   * start of a scroll. Observed via a non-capturing responder so it never steals
+   * the gesture (scrolling and inner buttons keep working). Header controls
+   * (close/collapse/drag) sit outside the body and don't trigger it.
+   */
+  onInteraction?: () => void;
   desktopMaxWidth?: number;
   testID?: string;
 }
@@ -87,7 +94,25 @@ export function TaskBottomDock(props: TaskBottomDockProps) {
 
 // Compact: the standard bottom sheet. Drag/resize/collapse are desktop
 // affordances the sheet's own pan/snap already covers.
-function MobileDockSheet({ visible, header, children, onClose, testID }: TaskBottomDockProps) {
+// Non-capturing responder that reports the first touch (tap or scroll start)
+// inside the body WITHOUT becoming the responder: returning false leaves the
+// gesture to the content, so scrolling and inner presses stay untouched.
+function useInteractionSniffer(onInteraction?: () => void) {
+  return useCallback(() => {
+    onInteraction?.();
+    return false;
+  }, [onInteraction]);
+}
+
+function MobileDockSheet({
+  visible,
+  header,
+  children,
+  onClose,
+  onInteraction,
+  testID,
+}: TaskBottomDockProps) {
+  const sniff = useInteractionSniffer(onInteraction);
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
       title: header.title,
@@ -117,7 +142,12 @@ function MobileDockSheet({ visible, header, children, onClose, testID }: TaskBot
       contentPaddingScale={0}
       testID={testID}
     >
-      <View style={styles.mobileBody}>{children}</View>
+      <View
+        style={styles.mobileBody}
+        onStartShouldSetResponderCapture={onInteraction ? sniff : undefined}
+      >
+        {children}
+      </View>
     </AdaptiveModalSheet>
   );
 }
@@ -135,10 +165,12 @@ function DesktopBottomDock({
   onResize,
   onMove,
   onToggleCollapse,
+  onInteraction,
   desktopMaxWidth = DESKTOP_MAX_WIDTH,
   testID,
 }: TaskBottomDockProps) {
   const { t } = useTranslation();
+  const sniff = useInteractionSniffer(onInteraction);
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
@@ -224,7 +256,12 @@ function DesktopBottomDock({
         </View>
         {/* Kept mounted while collapsed (display:none) so the live agent chat
             keeps its scroll/terminal state instead of re-mounting on expand. */}
-        <View style={collapsed ? styles.bodyHidden : styles.body}>{children}</View>
+        <View
+          style={collapsed ? styles.bodyHidden : styles.body}
+          onStartShouldSetResponderCapture={onInteraction ? sniff : undefined}
+        >
+          {children}
+        </View>
       </View>
     </View>
   );

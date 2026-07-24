@@ -20,6 +20,9 @@ function fakeAgent(overrides: Partial<ManagedAgent>): ManagedAgent {
     id: "agent-1",
     workspaceId: "ws-1",
     lifecycle: "running",
+    // A real ManagedAgent always carries a (possibly empty) permissions map; the
+    // sync's "awaiting user" guard reads its size.
+    pendingPermissions: new Map(),
     ...overrides,
   } as ManagedAgent;
 }
@@ -151,6 +154,34 @@ describe("AgentTaskSyncService", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     board = await service.getBoard("proj-1");
     expect(board.tasks[0]?.column).toBe("backlog");
+  });
+
+  test("never completes a task while its agent is blocked on a permission", async () => {
+    // Card exists in progress; the agent then hits a permission prompt.
+    emitTodos([{ text: "Implement the login form", completed: false }]);
+    await waitForBoard((current) => current.tasks[0]?.column === "in_progress");
+    agents.set("agent-1", fakeAgent({ pendingPermissions: new Map([["req-1", {} as never]]) }));
+
+    // The same todo now reports done — but the pending permission must keep the
+    // card in progress rather than burying the prompt under a terminal "done".
+    emitTodos([{ text: "Implement the login form", completed: true }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks[0]?.column).toBe("in_progress");
+  });
+
+  test("reopens a finished card when its agent starts executing again", async () => {
+    // Drive the card to "done" through a completed todo.
+    emitTodos([{ text: "Implement the login form", completed: true }]);
+    const doneBoard = await waitForBoard(hasLoginFormTaskDone);
+    expect(doneBoard.tasks[0]?.completedAt).toBeTruthy();
+
+    // The agent picks the work back up (lifecycle → running): the card must
+    // reopen to "in_progress" and shed its completion stamp so it reads as live.
+    subscriber({ type: "agent_state", agent: fakeAgent({ lifecycle: "running" }) });
+    const reopened = await waitForBoard((current) => current.tasks[0]?.column === "in_progress");
+    expect(reopened.tasks[0]?.completedAt ?? null).toBeNull();
   });
 
   test("never moves a task awaiting user approval", async () => {
