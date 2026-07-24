@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Check, Rocket } from "lucide-react-native";
+import { Check, ChevronDown, ChevronRight, Rocket } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
@@ -22,9 +23,14 @@ const EMPTY_WORKTREES: PaseoDeployWorktreeEntry[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedCheck = withUnistyles(Check);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const checkColorMapping = (theme: Theme) => ({
   color: theme.colors.primaryForeground,
+});
+const chevronColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
 });
 
 const rocketColorMapping = (theme: Theme) => ({
@@ -126,18 +132,20 @@ function WorktreesSummary({ worktrees }: { worktrees: PaseoDeployWorktreeEntry[]
 function DaemonBehindNotice({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <View style={styles.behind}>
-      <Text style={styles.behindTitle}>
-        {count > 1
+    <Alert
+      variant="warning"
+      title={
+        count > 1
           ? `Le moteur est en retard sur ${count} nouveautés`
-          : "Le moteur est en retard sur 1 nouveauté"}
-      </Text>
-      <Text style={styles.behindText}>
-        {count > 1
+          : "Le moteur est en retard sur 1 nouveauté"
+      }
+      description={
+        count > 1
           ? "Ces changements sont enregistrés mais dorment tant que le moteur n'a pas redémarré. Redémarre-le pour les activer."
-          : "Ce changement est enregistré mais dort tant que le moteur n'a pas redémarré. Redémarre-le pour l'activer."}
-      </Text>
-    </View>
+          : "Ce changement est enregistré mais dort tant que le moteur n'a pas redémarré. Redémarre-le pour l'activer."
+      }
+      testID="paseo-deploy-behind"
+    />
   );
 }
 
@@ -344,7 +352,13 @@ function WorktreeCheckbox({ checked, disabled }: { checked: boolean; disabled: b
   );
 }
 
-/** One atelier card — a checkbox to include it in the batch, plus its commits. */
+/**
+ * One atelier card — an accordion. The header (checkbox + branch title + a compact
+ * change count) is always visible; the detail (per-commit list + the unsaved hint)
+ * folds away, collapsed by default so the list stays compact. Tapping the row
+ * toggles the fold; the checkbox is its own tap target so ticking an atelier for
+ * the batch never expands it, and vice-versa.
+ */
 function WorktreeCard({
   worktree,
   selected,
@@ -362,8 +376,12 @@ function WorktreeCard({
 }) {
   const mergeable = worktree.ahead > 0;
   const hasUncommitted = worktree.uncommittedCount > 0;
-  const handlePress = useCallback(() => onToggle(worktree.branch), [onToggle, worktree.branch]);
-  // Stop the tap from also toggling the card's selection underneath the button.
+  const [expanded, setExpanded] = useState(false);
+  const handleToggleExpand = useCallback(() => setExpanded((prev) => !prev), []);
+  const handleToggleSelect = useCallback(() => {
+    if (mergeable && !busy) onToggle(worktree.branch);
+  }, [mergeable, busy, onToggle, worktree.branch]);
+  // Stop the tap from also toggling the card's fold underneath the button.
   const handleCommit = useCallback(
     (event: { stopPropagation?: () => void }) => {
       event.stopPropagation?.();
@@ -371,16 +389,35 @@ function WorktreeCard({
     },
     [onCommit, worktree.path],
   );
+  const changeLabel = worktree.ahead > 1 ? `${worktree.ahead} changements` : "1 changement";
+  const expandedState = useMemo(() => ({ expanded }), [expanded]);
+  const checkboxState = useMemo(
+    () => ({ checked: selected && mergeable, disabled: !mergeable }),
+    [selected, mergeable],
+  );
   return (
-    <Pressable
-      style={styles.worktreeCard}
-      onPress={handlePress}
-      disabled={busy || !mergeable}
-      testID={`paseo-deploy-worktree-${worktree.branch}`}
-    >
-      <View style={styles.worktreeHeader}>
-        <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
-        <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
+    <View style={styles.worktreeCard}>
+      <Pressable
+        style={styles.worktreeHeader}
+        onPress={handleToggleExpand}
+        accessibilityRole="button"
+        accessibilityState={expandedState}
+        testID={`paseo-deploy-worktree-${worktree.branch}`}
+      >
+        <Pressable
+          onPress={handleToggleSelect}
+          disabled={busy || !mergeable}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={checkboxState}
+          testID={`paseo-deploy-select-${worktree.branch}`}
+        >
+          <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
+        </Pressable>
+        <Text style={styles.worktreeBranch} numberOfLines={1}>
+          {describeBranch(worktree.branch)}
+        </Text>
+        {mergeable && !expanded ? <Text style={styles.worktreeCount}>{changeLabel}</Text> : null}
         {hasUncommitted ? (
           <Button
             variant="secondary"
@@ -394,15 +431,24 @@ function WorktreeCard({
             {committing ? "Enregistrement…" : "Enregistrer"}
           </Button>
         ) : null}
-      </View>
-      {worktree.commits.map((commit) => (
-        <View key={commit.sha} style={styles.itemRow}>
-          <Text style={styles.bullet}>•</Text>
-          <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
+        {expanded ? (
+          <ThemedChevronDown size={16} uniProps={chevronColorMapping} />
+        ) : (
+          <ThemedChevronRight size={16} uniProps={chevronColorMapping} />
+        )}
+      </Pressable>
+      {expanded ? (
+        <View style={styles.worktreeDetails}>
+          {worktree.commits.map((commit) => (
+            <View key={commit.sha} style={styles.itemRow}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
+            </View>
+          ))}
+          <WorktreeUncommittedHint count={worktree.uncommittedCount} />
         </View>
-      ))}
-      <WorktreeUncommittedHint count={worktree.uncommittedCount} />
-    </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -548,6 +594,7 @@ function PaseoDeployModal({
   const client = useHostRuntimeClient(serverId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const startDeployProgress = useTasksBoardUiStore((state) => state.startDeployProgress);
   const [error, setError] = useState<string | null>(null);
   // Worktree path whose "Enregistrer" (commit) action is currently running.
   const [committingPath, setCommittingPath] = useState<string | null>(null);
@@ -604,8 +651,10 @@ function PaseoDeployModal({
         buildConductorDeployPrompt(selectedWorktrees, trunkPending),
       );
       // Show the conductor (not a task chat) in the board's bottom dock so the
-      // user follows the deploy as the agent works through the branches.
+      // user follows the deploy as the agent works through the branches, and start
+      // the visual progress stepper at the top of that dock.
       setDockTaskId(null);
+      startDeployProgress();
       setConductorOpen(true);
       onClose();
     } catch (err) {
@@ -623,6 +672,7 @@ function PaseoDeployModal({
     unshippedCommits.length,
     setDockTaskId,
     setConductorOpen,
+    startDeployProgress,
     onClose,
   ]);
 
@@ -851,6 +901,18 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: "700",
     color: theme.colors.foreground,
   },
+  // Compact "N changement(s)" tally shown on the collapsed header so the reader
+  // sees the atelier's weight without unfolding it.
+  worktreeCount: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
+  // The folded-away detail (per-commit list + unsaved hint), indented under the
+  // header so it reads as belonging to this atelier.
+  worktreeDetails: {
+    gap: theme.spacing[1],
+    paddingLeft: theme.spacing[6],
+  },
   checkbox: {
     width: theme.spacing[4],
     height: theme.spacing[4],
@@ -880,24 +942,6 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: theme.spacing[1],
     alignSelf: "flex-start",
     paddingHorizontal: theme.spacing[2],
-  },
-  // "Engine is behind" hint — amber, distinct from the red error banner so it
-  // reads as an actionable heads-up (restart me) rather than a failure.
-  behind: {
-    gap: theme.spacing[1],
-    padding: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.palette.amber[900],
-  },
-  behindTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: "700",
-    color: theme.colors.palette.amber[100],
-  },
-  behindText: {
-    fontSize: theme.fontSize.sm,
-    lineHeight: theme.fontSize.sm * 1.4,
-    color: theme.colors.palette.amber[200],
   },
   warning: {
     padding: theme.spacing[2],

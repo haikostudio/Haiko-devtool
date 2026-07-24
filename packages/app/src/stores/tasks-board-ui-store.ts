@@ -45,6 +45,17 @@ interface TasksBoardUiState {
    */
   detailsTaskId: string | null;
   setDetailsTaskId: (detailsTaskId: string | null) => void;
+  /**
+   * Ephemeral (not persisted): epoch-ms when a deploy was handed to the conductor
+   * from the "À déployer" sheet, or `null` when no deploy banner is showing. Drives
+   * the deploy-progress stepper at the top of the conductor dock. It's a best-effort
+   * visual (no structured phase feed yet), so the timestamp is all it needs.
+   */
+  deployStartedAt: number | null;
+  /** Mark a deploy as just launched (shows the progress stepper). */
+  startDeployProgress: () => void;
+  /** Dismiss the deploy-progress stepper. */
+  clearDeployProgress: () => void;
 }
 
 // Mirrors DEFAULT_PANEL_WIDTH in tasks-screen.tsx — the width a fresh install
@@ -75,6 +86,9 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setDockTaskId: (dockTaskId) => set({ dockTaskId }),
       detailsTaskId: null,
       setDetailsTaskId: (detailsTaskId) => set({ detailsTaskId }),
+      deployStartedAt: null,
+      startDeployProgress: () => set({ deployStartedAt: Date.now() }),
+      clearDeployProgress: () => set({ deployStartedAt: null }),
     }),
     {
       name: "tasks-board-ui",

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Wand2 } from "lucide-react-native";
 import { TaskBottomDock, type TaskDockHeader } from "@/components/tasks/task-bottom-dock";
+import { DeployProgress } from "@/components/tasks/deploy-progress";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
@@ -277,7 +278,12 @@ export function ConductorPanel({
       onToggleCollapse={handleToggleCollapse}
       testID="conductor-panel"
     >
-      <View style={styles.body}>{renderBody()}</View>
+      <View style={styles.body}>
+        {/* Deploy stepper only belongs to the persistent conductor (where the
+            deploy is handed off), never to an individual task's chat. */}
+        {inTaskMode ? null : <DeployProgress />}
+        <View style={styles.bodyContent}>{renderBody()}</View>
+      </View>
     </TaskBottomDock>
   );
 }
@@ -325,6 +331,12 @@ const styles = StyleSheet.create((theme) => ({
   // The embedded pane / chat manages its own scroll and needs a bounded flex
   // height, so the sheet body is a static flex column with `minHeight: 0`.
   body: {
+    flex: 1,
+    minHeight: 0,
+  },
+  // Holds the live pane/chat below the optional deploy stepper; keeps the bounded
+  // flex height the embedded pane needs.
+  bodyContent: {
     flex: 1,
     minHeight: 0,
   },
