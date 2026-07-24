@@ -99,6 +99,7 @@ import type {
   PaseoConfigRevision,
   WorkspaceCreateRequest,
   WorkspaceRecoveryState,
+  ProjectAttachment,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -2479,6 +2480,24 @@ export class DaemonClient {
       throw new Error(payload.error ?? "removeProject rejected");
     }
     return { removedWorkspaceIds: payload.removedWorkspaceIds };
+  }
+
+  async listProjectAttachments(
+    projectId: string,
+    requestId?: string,
+  ): Promise<ProjectAttachment[]> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"project.attachments.list.response">({
+        requestId,
+        message: {
+          type: "project.attachments.list.request",
+          projectId,
+        },
+      });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return payload.attachments;
   }
 
   async setWorkspaceTitle(

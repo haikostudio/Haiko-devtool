@@ -123,6 +123,10 @@ import {
 } from "./workspace-registry-model.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
 import {
+  getProjectAttachmentLibrary,
+  type ProjectAttachmentLibrary,
+} from "./project-attachments/index.js";
+import {
   resolveProjectDisplayName,
   resolveWorkspaceDisplayName,
   resolveWorkspaceName,
@@ -578,6 +582,7 @@ export class Session {
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly workspaceRegistry: WorkspaceRegistry;
+  private readonly projectAttachmentLibrary: ProjectAttachmentLibrary;
   private readonly filesystem: SessionFileSystem;
   private readonly github: ForgeService;
   private readonly renameCurrentBranch: typeof renameCurrentBranchDefault;
@@ -720,6 +725,7 @@ export class Session {
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry;
     this.workspaceRegistry = workspaceRegistry;
+    this.projectAttachmentLibrary = getProjectAttachmentLibrary(paseoHome);
     this.filesystem = filesystem ?? nodeSessionFileSystem;
     this.github = github ?? createGitHubService();
     this.renameCurrentBranch = renameCurrentBranch ?? renameCurrentBranchDefault;
@@ -2086,6 +2092,8 @@ export class Session {
         return this.handleArchiveWorkspaceRequest(msg);
       case "project.remove.request":
         return this.handleProjectRemoveRequest(msg);
+      case "project.attachments.list.request":
+        return this.handleProjectAttachmentsListRequest(msg.projectId, msg.requestId);
       case "workspace.create.request":
         return this.handleWorkspaceCreateRequest(msg);
       case "workspace.clear_attention.request":
@@ -6173,6 +6181,114 @@ export class Session {
     }
   }
 
+  private async resolveProjectIdForAgent(agentId: string): Promise<{
+    projectId: string;
+    workspaceId: string | null;
+    agentTitle: string | null;
+  } | null> {
+    const agent = await this.agentStorage.get(agentId);
+    if (!agent) {
+      return null;
+    }
+    let workspaceId = agent.workspaceId ?? null;
+    if (!workspaceId) {
+      workspaceId = resolveWorkspaceIdForPath(agent.cwd, await this.workspaceRegistry.list());
+    }
+    if (!workspaceId) {
+      return null;
+    }
+    const workspace = await this.workspaceRegistry.get(workspaceId);
+    if (!workspace) {
+      return null;
+    }
+    return {
+      projectId: workspace.projectId,
+      workspaceId,
+      agentTitle: agent.title ?? null,
+    };
+  }
+
+  private async recordProjectAttachments(
+    agentId: string,
+    msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
+  ): Promise<void> {
+    const uploads = (msg.attachments ?? []).filter(
+      (attachment): attachment is Extract<AgentAttachment, { type: "uploaded_file" }> =>
+        attachment.type === "uploaded_file",
+    );
+    const images = msg.images ?? [];
+    if (uploads.length === 0 && images.length === 0) {
+      return;
+    }
+
+    const context = await this.resolveProjectIdForAgent(agentId);
+    if (!context) {
+      return;
+    }
+    const addedAt = new Date().toISOString();
+
+    for (const upload of uploads) {
+      await this.projectAttachmentLibrary.record(context.projectId, {
+        id: upload.id,
+        fileName: upload.fileName,
+        mimeType: upload.mimeType,
+        size: upload.size,
+        addedAt,
+        source: "upload",
+        agentId,
+        agentTitle: context.agentTitle,
+        workspaceId: context.workspaceId,
+      });
+    }
+
+    images.forEach((image, index) => {
+      const extension = mimeTypeToExtension(image.mimeType);
+      void this.projectAttachmentLibrary.record(context.projectId, {
+        id: `${msg.messageId ?? msg.requestId}_image_${index}`,
+        fileName: `image-${index + 1}.${extension}`,
+        mimeType: image.mimeType,
+        size: estimateBase64Size(image.data),
+        addedAt,
+        source: "image",
+        agentId,
+        agentTitle: context.agentTitle,
+        workspaceId: context.workspaceId,
+      });
+    });
+  }
+
+  private async handleProjectAttachmentsListRequest(
+    projectId: string,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      const attachments = await this.projectAttachmentLibrary.list(projectId);
+      this.emit({
+        type: "project.attachments.list.response",
+        payload: {
+          requestId,
+          projectId,
+          attachments,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, projectId, requestId },
+        "session: project.attachments.list.request error",
+      );
+      this.emit({
+        type: "project.attachments.list.response",
+        payload: {
+          requestId,
+          projectId,
+          attachments: [],
+          error: getErrorMessageOr(error, "Failed to list project attachments"),
+        },
+      });
+    }
+  }
+
   private async handleSendAgentMessageRequest(
     msg: Extract<SessionInboundMessage, { type: "send_agent_message_request" }>,
   ): Promise<void> {
@@ -6192,6 +6308,16 @@ export class Session {
 
     try {
       const agentId = resolved.agentId;
+
+      // Index any files/images that ride along with this message into the
+      // project-wide attachment library. Best-effort: never block or fail the
+      // send on a bookkeeping error.
+      void this.recordProjectAttachments(agentId, msg).catch((error) => {
+        this.sessionLogger.warn(
+          { err: error, agentId },
+          "session: failed to record project attachments",
+        );
+      });
 
       const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
       this.sessionLogger.trace(
@@ -6515,4 +6641,37 @@ function normalizeCloneRepository(input: {
 
 function isValidGitHubRepoSegment(value: string): boolean {
   return /^[A-Za-z0-9._-]+$/u.test(value);
+}
+
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/svg+xml": "svg",
+};
+
+function mimeTypeToExtension(mimeType: string): string {
+  const normalized = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
+  const mapped = MIME_EXTENSION_MAP[normalized];
+  if (mapped) {
+    return mapped;
+  }
+  const subtype = normalized.split("/")[1];
+  return subtype && /^[a-z0-9]+$/.test(subtype) ? subtype : "bin";
+}
+
+function estimateBase64Size(data: string): number {
+  // A base64 payload may include a `data:...;base64,` prefix; strip it first.
+  const commaIndex = data.indexOf(",");
+  const body = data.startsWith("data:") && commaIndex !== -1 ? data.slice(commaIndex + 1) : data;
+  let padding = 0;
+  if (body.endsWith("==")) {
+    padding = 2;
+  } else if (body.endsWith("=")) {
+    padding = 1;
+  }
+  return Math.max(0, Math.floor((body.length * 3) / 4) - padding);
 }

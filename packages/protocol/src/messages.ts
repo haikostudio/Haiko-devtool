@@ -827,6 +827,12 @@ export const ProjectRemoveRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const ProjectAttachmentsListRequestSchema = z.object({
+  type: z.literal("project.attachments.list.request"),
+  projectId: z.string(),
+  requestId: z.string(),
+});
+
 export const WorkspaceTitleSetRequestSchema = z.object({
   type: z.literal("workspace.title.set.request"),
   workspaceId: z.string(),
@@ -1521,6 +1527,30 @@ export const ProjectRemoveResponsePayloadSchema = z.object({
 export const ProjectRemoveResponseSchema = z.object({
   type: z.literal("project.remove.response"),
   payload: ProjectRemoveResponsePayloadSchema,
+});
+
+export const ProjectAttachmentSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  size: z.number().int().nonnegative(),
+  addedAt: z.string(),
+  source: z.string(),
+  agentId: z.string().nullable().optional(),
+  agentTitle: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
+});
+
+export const ProjectAttachmentsListResponsePayloadSchema = z.object({
+  requestId: z.string(),
+  projectId: z.string(),
+  attachments: z.array(ProjectAttachmentSchema).default([]),
+  error: z.string().nullable(),
+});
+
+export const ProjectAttachmentsListResponseSchema = z.object({
+  type: z.literal("project.attachments.list.response"),
+  payload: ProjectAttachmentsListResponsePayloadSchema,
 });
 
 export const WorkspaceTitleSetResponsePayloadSchema = z.object({
@@ -2420,6 +2450,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   UpdateAgentRequestMessageSchema,
   ProjectRenameRequestSchema,
   ProjectRemoveRequestSchema,
+  ProjectAttachmentsListRequestSchema,
   WorkspaceTitleSetRequestSchema,
   WorkspacePinSetRequestSchema,
   WorkspaceRecoveryInspectRequestSchema,
@@ -5157,6 +5188,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
   ProjectRemoveResponseSchema,
+  ProjectAttachmentsListResponseSchema,
   WorkspaceTitleSetResponseSchema,
   WorkspacePinSetResponseSchema,
   WorkspaceRecoveryInspectResponseSchema,
@@ -5328,6 +5360,12 @@ export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessa
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
 export type ProjectRemoveResponse = z.infer<typeof ProjectRemoveResponseSchema>;
+export type ProjectAttachment = z.infer<typeof ProjectAttachmentSchema>;
+export type ProjectAttachmentsListRequest = z.infer<typeof ProjectAttachmentsListRequestSchema>;
+export type ProjectAttachmentsListResponse = z.infer<typeof ProjectAttachmentsListResponseSchema>;
+export type ProjectAttachmentsListResponsePayload = z.infer<
+  typeof ProjectAttachmentsListResponsePayloadSchema
+>;
 export type WorkspaceTitleSetResponse = z.infer<typeof WorkspaceTitleSetResponseSchema>;
 export type WorkspaceTitleSetResponsePayload = z.infer<
   typeof WorkspaceTitleSetResponsePayloadSchema

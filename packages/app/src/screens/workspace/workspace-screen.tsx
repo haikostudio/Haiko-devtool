@@ -68,6 +68,7 @@ import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
+import { ProjectAttachmentsButton } from "@/screens/workspace/project-attachments-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useToast } from "@/contexts/toast-context";
 import { selectIsFileExplorerOpen, usePanelStore } from "@/stores/panel-store";
@@ -3457,6 +3458,12 @@ function WorkspaceScreenContent({
   const headerRight = useMemo(
     () => (
       <View style={styles.headerRight}>
+        {!isMobile && workspaceDescriptor ? (
+          <ProjectAttachmentsButton
+            serverId={normalizedServerId}
+            projectId={workspaceDescriptor.projectId}
+          />
+        ) : null}
         {!isMobile && workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
           <WorkspaceScriptsButton
             serverId={normalizedServerId}
