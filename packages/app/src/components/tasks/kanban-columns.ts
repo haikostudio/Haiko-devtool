@@ -9,7 +9,11 @@ import { daysUntil, parseTaskTags, type TaskPriorityLevel } from "./task-tags";
 // top); every other column ranks by updatedAt. A column the user has hand-
 // arranged by dragging switches to manual order — see ColumnControls.manualOrder.
 
+// "notes" leads the board — a pre-backlog scratchpad ("Avant affaire") for
+// lightweight drafts/reminders. It sits before "backlog" in display order even
+// though the wire enum appends it (the enum order is wire-compat, not layout).
 export const KANBAN_COLUMNS: TaskColumn[] = [
+  "notes",
   "backlog",
   "validated",
   "scheduled",
@@ -265,6 +269,7 @@ export function useColumnLabels(): Record<TaskColumn, string> {
   const { t } = useTranslation();
   return useMemo(
     () => ({
+      notes: t("tasks.columns.notes"),
       backlog: t("tasks.columns.backlog"),
       validated: t("tasks.columns.validated"),
       scheduled: t("tasks.columns.scheduled"),

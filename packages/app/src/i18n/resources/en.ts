@@ -405,6 +405,7 @@ export const en = {
     },
     updateHost: "Update the host to use Tasks.",
     columns: {
+      notes: "Notes",
       backlog: "To do",
       validated: "Validated",
       scheduled: "Planned",

@@ -19,8 +19,10 @@ export type TaskBoardListener = (board: TaskBoard) => void;
 // remains a valid direct-drop entry point (and the queued-for-launch state).
 const PIPELINE_COLUMNS = new Set<TaskColumn>(["validated", "scheduled"]);
 
-// The kanban columns, in board order. The last entry is terminal.
+// The kanban columns, in board order. "notes" is the pre-backlog scratchpad
+// (drafts/reminders that never run). The last entry is terminal.
 const COLUMN_ORDER = [
+  "notes",
   "backlog",
   "validated",
   "scheduled",

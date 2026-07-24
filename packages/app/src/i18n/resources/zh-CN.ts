@@ -406,6 +406,7 @@ export const zhCN: TranslationResources = {
     },
     updateHost: "请更新主机以使用任务功能。",
     columns: {
+      notes: "笔记",
       backlog: "待办",
       validated: "已验证",
       scheduled: "已计划",

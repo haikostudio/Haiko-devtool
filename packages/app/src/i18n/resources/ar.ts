@@ -406,6 +406,7 @@ export const ar: TranslationResources = {
     },
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {
+      notes: "ملاحظات",
       backlog: "للإنجاز",
       validated: "تم التحقق",
       scheduled: "مُجدولة",

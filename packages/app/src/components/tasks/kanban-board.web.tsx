@@ -278,10 +278,10 @@ const DroppableColumn = memo(function DroppableColumn({
         <Text style={styles.columnTitle}>{label}</Text>
         <Text style={styles.columnCount}>{tasks.length}</Text>
         <View style={styles.columnHeaderSpacer} />
-        {/* Adding a task is a backlog-only action: tasks always start in "À faire"
-            and flow rightward through the pipeline, so the other columns get no
-            "+". */}
-        {column === "backlog" ? (
+        {/* Adding is allowed in the two entry columns: "notes" (a draft/reminder
+            that never runs) and "backlog" (a real task that flows rightward
+            through the pipeline). The pipeline columns get no "+". */}
+        {column === "notes" || column === "backlog" ? (
           <Pressable
             onPress={handleAddTask}
             style={addButtonStyle}

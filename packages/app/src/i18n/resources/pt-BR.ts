@@ -413,6 +413,7 @@ export const ptBR: TranslationResources = {
     },
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {
+      notes: "Notas",
       backlog: "A fazer",
       validated: "Validado",
       scheduled: "Planejado",

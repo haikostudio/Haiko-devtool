@@ -8,8 +8,13 @@ import { AgentAttachmentSchema } from "../attachments.js";
 // (estimation) and execution only ever start here, never from "backlog".
 // "deployed": terminal, post-"done" column. A task lands here once the
 // conductor has confirmed its work is actually live (merged + published).
-// Appending it keeps the wire enum backward-compatible: an old daemon simply
-// never emits it, and an old client that receives it is one release away.
+// "notes": a pre-backlog scratchpad, rendered as the board's first column
+// ("Avant affaire"). Holds lightweight drafts/reminders (a title, an optional
+// deadline + importance carried as tags) that never trigger analysis or
+// execution — the user drags a note into "backlog" once it becomes real work.
+// Appended, not inserted, to keep the wire enum backward-compatible: display
+// order lives in the client's KANBAN_COLUMNS, not the enum. An old daemon
+// simply never emits it, and an old client that receives it is one release away.
 export const TaskColumnSchema = z.enum([
   "backlog",
   "validated",
@@ -17,6 +22,7 @@ export const TaskColumnSchema = z.enum([
   "in_progress",
   "done",
   "deployed",
+  "notes",
 ]);
 export type TaskColumn = z.infer<typeof TaskColumnSchema>;
 

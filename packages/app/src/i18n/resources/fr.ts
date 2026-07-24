@@ -413,6 +413,7 @@ export const fr: TranslationResources = {
     },
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {
+      notes: "Avant affaire",
       backlog: "À faire",
       validated: "Validé",
       scheduled: "Planifié",

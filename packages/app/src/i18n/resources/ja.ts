@@ -410,6 +410,7 @@ export const ja: TranslationResources = {
     },
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
+      notes: "メモ",
       backlog: "未着手",
       validated: "検証済み",
       scheduled: "予定",

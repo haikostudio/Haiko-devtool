@@ -412,6 +412,7 @@ export const es: TranslationResources = {
     },
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {
+      notes: "Notas",
       backlog: "Por hacer",
       validated: "Validado",
       scheduled: "Planificado",

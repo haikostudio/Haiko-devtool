@@ -287,6 +287,12 @@ export class TaskScheduler {
         if (task.column === "done" || task.column === "deployed" || task.column === "in_progress") {
           continue;
         }
+        if (task.column === "notes") {
+          // Pre-backlog scratchpad: drafts/reminders. Fully inert — never
+          // estimated, never auto-validated (not even under autopilot). The user
+          // drags a note into "backlog" when it becomes real work.
+          continue;
+        }
         if (task.column === "backlog") {
           // Backlog tasks are inert: no analysis, no execution until validated.
           // Autopilot folders auto-validate their backlog (the folder flag is the
