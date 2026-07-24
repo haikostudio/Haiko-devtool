@@ -81,6 +81,7 @@ export function KanbanBoard({
   onAddTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -204,6 +205,7 @@ export function KanbanBoard({
               onMoveTask={onMoveTask}
               onRunTask={onRunTask}
               onReanalyzeTask={onReanalyzeTask}
+              onDeleteTask={onDeleteTask}
             />
           ))}
         </View>
@@ -235,6 +237,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onMoveTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
 }: {
   board: TaskBoard | null;
   folderId: string;
@@ -251,6 +254,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
+  onDeleteTask: KanbanBoardProps["onDeleteTask"];
 }) {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({ id: `${COLUMN_DROPPABLE_PREFIX}${column}` });
@@ -313,6 +317,7 @@ const DroppableColumn = memo(function DroppableColumn({
               onMoveTask={onMoveTask}
               onRunTask={onRunTask}
               onReanalyzeTask={onReanalyzeTask}
+              onDeleteTask={onDeleteTask}
             />
           ))}
         </SortableContext>
@@ -352,6 +357,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   onMoveTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
@@ -359,6 +365,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
+  onDeleteTask: KanbanBoardProps["onDeleteTask"];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -413,6 +420,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
           onMoveTask={onMoveTask}
           onRunTask={onRunTask}
           onReanalyzeTask={onReanalyzeTask}
+          onDeleteTask={onDeleteTask}
         />
       </div>
     </div>

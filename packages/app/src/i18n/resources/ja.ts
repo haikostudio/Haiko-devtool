@@ -527,11 +527,18 @@ export const ja: TranslationResources = {
       save: "保存",
       edit: "編集",
       delete: "削除",
+      deleteTask: "Delete task",
       folderActions: "フォルダー操作",
     },
     toast: {
       launching: "タスクを開始しています…",
       reanalyzing: "タスクを再分析しています…",
+    },
+    confirmDelete: {
+      title: "Delete task?",
+      message: "This task will be permanently removed. This can’t be undone.",
+      confirm: "Delete",
+      cancel: "Cancel",
     },
   },
   sessions: {

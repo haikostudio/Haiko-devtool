@@ -1236,6 +1236,17 @@ function BoardContent({
     [boardHandle, toast, t],
   );
 
+  // The card menu already confirmed the deletion; here we just perform it. The
+  // card leaves the board on its own via the live task sync.
+  const handleDeleteTask = useCallback(
+    (taskId: string) => {
+      boardHandle.deleteTask(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast],
+  );
+
   // Desktop keeps the strip-above-board layout; compact swaps to one-at-a-time
   // tabs so neither view is squeezed.
   const showTimeline = !isCompact || compactView === "timeline";
@@ -1273,6 +1284,7 @@ function BoardContent({
           onAddTask={setNewTaskColumn}
           onRunTask={handleRunTaskNow}
           onReanalyzeTask={handleEstimateTask}
+          onDeleteTask={handleDeleteTask}
           columnExtras={columnExtras}
         />
       ) : null}

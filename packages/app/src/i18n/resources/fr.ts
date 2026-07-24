@@ -530,11 +530,18 @@ export const fr: TranslationResources = {
       save: "Enregistrer",
       edit: "Modifier",
       delete: "Supprimer",
+      deleteTask: "Supprimer la tâche",
       folderActions: "Actions de la branche",
     },
     toast: {
       launching: "Lancement de la tâche…",
       reanalyzing: "Analyse relancée…",
+    },
+    confirmDelete: {
+      title: "Supprimer la tâche ?",
+      message: "Cette tâche sera définitivement supprimée. Cette action est irréversible.",
+      confirm: "Supprimer",
+      cancel: "Annuler",
     },
   },
   sessions: {

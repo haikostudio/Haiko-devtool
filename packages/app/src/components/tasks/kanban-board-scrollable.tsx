@@ -43,6 +43,7 @@ export function ScrollableKanbanBoard({
   onAddTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -85,6 +86,7 @@ export function ScrollableKanbanBoard({
             onAddTask={onAddTask}
             onRunTask={onRunTask}
             onReanalyzeTask={onReanalyzeTask}
+            onDeleteTask={onDeleteTask}
           />
         ))}
       </View>
@@ -107,6 +109,7 @@ const BoardColumn = memo(function BoardColumn({
   onAddTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
 }: {
   board: TaskBoard | null;
   folderId: string;
@@ -122,6 +125,7 @@ const BoardColumn = memo(function BoardColumn({
   onAddTask: KanbanBoardProps["onAddTask"];
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
+  onDeleteTask: KanbanBoardProps["onDeleteTask"];
 }) {
   const { t } = useTranslation();
   const handleAddTask = useCallback(() => {
@@ -174,6 +178,7 @@ const BoardColumn = memo(function BoardColumn({
               onPressTask={onPressTask}
               onRunTask={onRunTask}
               onReanalyzeTask={onReanalyzeTask}
+              onDeleteTask={onDeleteTask}
             />
           ))}
           {tasks.length === 0 && !extras ? (
@@ -210,6 +215,7 @@ const BoardCardRow = memo(function BoardCardRow({
   onPressTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
@@ -217,6 +223,7 @@ const BoardCardRow = memo(function BoardCardRow({
   onPressTask: KanbanBoardProps["onPressTask"];
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
+  onDeleteTask: KanbanBoardProps["onDeleteTask"];
 }) {
   return (
     <View style={styles.cardRow}>
@@ -228,6 +235,7 @@ const BoardCardRow = memo(function BoardCardRow({
           onMoveTask={onMoveTask}
           onRunTask={onRunTask}
           onReanalyzeTask={onReanalyzeTask}
+          onDeleteTask={onDeleteTask}
         />
       </View>
     </View>

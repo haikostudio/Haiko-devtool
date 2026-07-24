@@ -530,11 +530,18 @@ export const ptBR: TranslationResources = {
       save: "Salvar",
       edit: "Editar",
       delete: "Excluir",
+      deleteTask: "Excluir tarefa",
       folderActions: "Ações da pasta",
     },
     toast: {
       launching: "Iniciando a tarefa…",
       reanalyzing: "Reanalisando a tarefa…",
+    },
+    confirmDelete: {
+      title: "Excluir tarefa?",
+      message: "Esta tarefa será removida permanentemente. Não é possível desfazer.",
+      confirm: "Excluir",
+      cancel: "Cancelar",
     },
   },
   sessions: {

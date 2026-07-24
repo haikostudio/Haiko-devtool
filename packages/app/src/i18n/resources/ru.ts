@@ -526,11 +526,18 @@ export const ru: TranslationResources = {
       save: "Сохранить",
       edit: "Изменить",
       delete: "Удалить",
+      deleteTask: "Delete task",
       folderActions: "Действия с папкой",
     },
     toast: {
       launching: "Запуск задачи…",
       reanalyzing: "Повторный анализ задачи…",
+    },
+    confirmDelete: {
+      title: "Delete task?",
+      message: "This task will be permanently removed. This can’t be undone.",
+      confirm: "Delete",
+      cancel: "Cancel",
     },
   },
   sessions: {

@@ -286,6 +286,7 @@ export interface KanbanBoardProps {
   // overflow menu — no need to open the detail sheet.
   onRunTask: (taskId: string) => void;
   onReanalyzeTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
   // Node rendered at the top of one column's body (inline new-task draft).
   columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
 }
