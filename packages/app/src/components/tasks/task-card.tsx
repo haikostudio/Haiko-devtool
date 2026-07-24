@@ -23,6 +23,7 @@ import {
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
+import type { TaskTone } from "@/components/tasks/task-status-tone";
 import {
   isQuietTime,
   nextQuietHoursStartMs,
@@ -64,11 +65,18 @@ function cardStyle({
   return [styles.card, (hovered || pressed) && styles.cardHovered, dimmed && styles.cardDimmed];
 }
 
-// A finished card the user has already opened recedes: dim it so unseen finished
-// work (full opacity) still catches the eye. Only "done"/"deployed" cards ever
-// dim — an in-flight card stays bright regardless of whether it's been opened.
-function isCardDimmed(task: KanbanTask): boolean {
-  return Boolean(task.viewedAt) && (task.column === "done" || task.column === "deployed");
+// A card the user has already opened recedes to half opacity so unseen work
+// (full opacity) still leads the eye. Two cases dim, but only once seen:
+//   - a terminal "done"/"deployed" card at rest, and
+//   - a card that is merely *waiting on a reply* (amber "attention") after a
+//     relaunch — it stays dim, but its amber voyant still flags that it wants
+//     the user. A card that is actively *running* (loader) is never dimmed:
+//     the movement should catch the eye, so it stays at full opacity.
+function isCardDimmed(task: KanbanTask, tone: TaskTone | null): boolean {
+  if (!task.viewedAt || tone === "running") {
+    return false;
+  }
+  return task.column === "done" || task.column === "deployed" || tone === "attention";
 }
 
 type ScheduleBadgeVariant = "success" | "error" | "warning";
@@ -223,7 +231,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const hiddenTagCount = tags.length - visibleTags.length;
 
   const priorityLabel = priority?.label;
-  const dimmed = isCardDimmed(task);
+  const dimmed = isCardDimmed(task, tone);
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
       cardStyle({ pressed, hovered, dimmed }),

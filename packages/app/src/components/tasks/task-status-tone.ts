@@ -71,16 +71,22 @@ export function deriveTaskTone(
   task: KanbanTask,
   agentBucket: WorkspaceStateBucket | undefined,
 ): TaskTone | null {
-  // "done" and "deployed" are terminal in the board model — never re-light a
-  // completed or shipped task.
-  if (task.completedAt || task.column === "done" || task.column === "deployed") {
-    return "done";
-  }
+  // A finished/shipped card whose linked agent has come back to life — the user
+  // relaunched a prompt, so the agent is running again or now waiting on a reply
+  // — must reflect that renewed activity instead of staying a static green
+  // "done" light. Surface the live running / wants-a-reply signal first so the
+  // amber "waiting" light (and the card's dim) survive a relaunch; only fall to
+  // the terminal "done" tone once the agent is idle or gone.
   if (wantsUser(task, agentBucket)) {
     return "attention";
   }
   if (isRunning(task, agentBucket)) {
     return "running";
+  }
+  // "done" and "deployed" are terminal in the board model — a completed or
+  // shipped task with no live agent activity stays a quiet green light.
+  if (task.completedAt || task.column === "done" || task.column === "deployed") {
+    return "done";
   }
   if (isScheduled(task)) {
     return "scheduled";
