@@ -101,16 +101,18 @@ function readCommits() {
   const format = ["%H", "%h", "%aI", "%an", "%s"].join(SEP);
   let raw;
   try {
-    // --all walks every branch/ref, not just the checked-out HEAD, so the
-    // changelog reflects work on ANY branch the moment it's committed — no need
-    // to be on (or merge into) a specific branch first. --date-order keeps the
-    // newest commits first regardless of which branch they came from. Each
-    // commit appears once even when reachable from multiple refs.
+    // Walk every branch, remote branch, and tag, not just the checked-out HEAD,
+    // so the changelog reflects committed work across branches while ignoring
+    // temporary refs such as git stash. --date-order keeps the newest commits
+    // first regardless of which branch they came from. Each commit appears once
+    // even when reachable from multiple refs.
     raw = execFileSync(
       "git",
       [
         "log",
-        "--all",
+        "--branches",
+        "--remotes",
+        "--tags",
         "--date-order",
         `-n${MAX_COMMITS}`,
         "--no-merges",

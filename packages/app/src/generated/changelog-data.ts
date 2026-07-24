@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-25",
     markdown:
-      "### Corrections\n\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)",
+      "### Corrections\n\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)",
   },
   {
     version: "0.2.0",
@@ -637,6 +637,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "ec6641d2d988d56f3946597c72cfe783399ad344",
+    shortHash: "ec6641d2d",
+    date: "2026-07-25T01:05:27+02:00",
+    author: "haikostudio",
+    subject: "fix(agents): enforce Paseo response structure",
+  },
   {
     hash: "71d92a61659ac5c219dd46a6f6b5ecd7c1d6c2f8",
     shortHash: "71d92a616",
@@ -2755,15 +2762,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "haikostudio",
     subject: "feat(toasts): les tâches terminées restent affichées jusqu'à l'ouverture de l'agent",
   },
-  {
-    hash: "187561e4335d2c83c099120d5b98fcd7e6cdd763",
-    shortHash: "187561e43",
-    date: "2026-07-20T22:04:03+01:00",
-    author: "nikuscs",
-    subject:
-      "fix: workspace-scoped session imports across Claude Code, OpenCode, Pi, and OMP (#2265)",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T00:53:59+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:05:27+02:00";

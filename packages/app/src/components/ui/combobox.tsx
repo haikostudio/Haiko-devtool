@@ -33,7 +33,6 @@ import {
   BottomSheetBackgroundProps,
 } from "@gorhom/bottom-sheet";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, File, Folder, Search } from "lucide-react-native";
 import {
   flip,
