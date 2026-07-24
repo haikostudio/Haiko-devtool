@@ -53,6 +53,55 @@ export const ANALYSIS_FALLBACK_ESTIMATE: TaskAnalysisEstimate = {
   summary: "Estimation automatique indisponible — valeur par défaut prudente.",
 };
 
+// Conservative human-effort floor for the Facturation tab when the analysis
+// agent omits billingHours. A non-zero seed matters: the invoice line only
+// computes an amount (and becomes addable) once hours > 0, so an empty field
+// reads as "no billing data". One hour is a safe, obviously-editable starting
+// point the user tweaks before adding the line.
+export const DEFAULT_BILLING_HOURS = 1;
+
+// Invoice title stays short (<= 5 words); mirrors the Facturation tab's own
+// trimming so the persisted seed matches what the UI would derive.
+function toInvoiceTitle(source: string): string {
+  return source.trim().split(/\s+/).slice(0, 5).join(" ");
+}
+
+// Invoice description stays short (<= 3 lines).
+function toInvoiceDescription(source: string): string {
+  return source.trim().split(/\r?\n/).slice(0, 3).join("\n");
+}
+
+/**
+ * Guarantees the Facturation tab is never blank. The analysis agent is asked to
+ * emit billingTitle/Description/Hours, but they're optional — a distracted agent
+ * (or the fallback estimate) can omit them, leaving the tab empty (especially
+ * the hours field, which has no client-side fallback and gates the amount). This
+ * backfills any missing billing field from the task itself before the estimate
+ * is persisted, so opening the tab always shows an editable, pre-filled line.
+ *
+ * Called only when a task enters analysis (Validé/Planifié), so the inert
+ * backlog is never touched. Values only SEED the editable fields — the user
+ * still tweaks them before adding the line.
+ */
+export function withBillingDefaults(
+  estimate: TaskAnalysisEstimate,
+  task: KanbanTask,
+): TaskAnalysisEstimate {
+  const description = task.description?.trim() ? toInvoiceDescription(task.description) : "";
+  const title = estimate.billingTitle?.trim() || toInvoiceTitle(task.title);
+  return {
+    ...estimate,
+    billingTitle: title,
+    // Fall back to the task's own description, then to the invoice title, so the
+    // line is never blank.
+    billingDescription: estimate.billingDescription?.trim() || description || title,
+    billingHours:
+      estimate.billingHours != null && estimate.billingHours > 0
+        ? estimate.billingHours
+        : DEFAULT_BILLING_HOURS,
+  };
+}
+
 // Turns free-form text into the branch-safe slug portion of a git ref: lowercase,
 // accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Shared
 // by task-branch naming and folder-branch derivation.
