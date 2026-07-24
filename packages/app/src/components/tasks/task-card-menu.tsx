@@ -1,5 +1,5 @@
 import { memo, useCallback } from "react";
-import { MoreVertical, Play, RefreshCw } from "lucide-react-native";
+import { MoreVertical, Play, RefreshCw, Trash2 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -12,20 +12,25 @@ import {
 import { KANBAN_COLUMNS } from "@/components/tasks/kanban-columns";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { confirmDialog } from "@/utils/confirm-dialog";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPlay = withUnistyles(Play);
 const ThemedRefresh = withUnistyles(RefreshCw);
+const ThemedTrash = withUnistyles(Trash2);
 
 const MENU_ICON_SIZE = 16;
 const runLeading = <ThemedPlay size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const reanalyzeLeading = <ThemedRefresh size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
+const deleteLeading = <ThemedTrash size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
 
 export interface TaskCardMenuHandlers {
   onMoveTask: (input: { taskId: string; column: TaskColumn; index: number }) => void;
   onRunTask: (taskId: string) => void;
   onReanalyzeTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
 /**
@@ -41,6 +46,7 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   onMoveTask,
   onRunTask,
   onReanalyzeTask,
+  onDeleteTask,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
@@ -56,6 +62,24 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   const handleReanalyze = useCallback(() => {
     onReanalyzeTask(task.id);
   }, [onReanalyzeTask, task.id]);
+
+  // Guard the destructive action behind a confirmation so a stray tap can't wipe
+  // a card. The confirm lives here so both board shapes get it for free; the
+  // screen handler only has to perform the delete + toast.
+  const handleDelete = useCallback(() => {
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("tasks.confirmDelete.title"),
+        message: t("tasks.confirmDelete.message"),
+        confirmLabel: t("tasks.confirmDelete.confirm"),
+        cancelLabel: t("tasks.confirmDelete.cancel"),
+        destructive: true,
+      });
+      if (confirmed) {
+        onDeleteTask(task.id);
+      }
+    })();
+  }, [onDeleteTask, task.id, t]);
 
   return (
     <DropdownMenu>
@@ -96,6 +120,15 @@ export const TaskCardMenu = memo(function TaskCardMenu({
             onMoveTask={onMoveTask}
           />
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          leading={deleteLeading}
+          destructive
+          onSelect={handleDelete}
+          testID={`tasks-delete-${task.id}`}
+        >
+          {t("tasks.actions.deleteTask")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

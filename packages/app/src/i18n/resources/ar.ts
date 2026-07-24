@@ -523,11 +523,18 @@ export const ar: TranslationResources = {
       save: "حفظ",
       edit: "تعديل",
       delete: "حذف",
+      deleteTask: "Delete task",
       folderActions: "إجراءات المجلد",
     },
     toast: {
       launching: "جارٍ تشغيل المهمة…",
       reanalyzing: "جارٍ إعادة تحليل المهمة…",
+    },
+    confirmDelete: {
+      title: "Delete task?",
+      message: "This task will be permanently removed. This can’t be undone.",
+      confirm: "Delete",
+      cancel: "Cancel",
     },
   },
   sessions: {

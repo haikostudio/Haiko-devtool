@@ -522,11 +522,18 @@ export const en = {
       save: "Save",
       edit: "Edit",
       delete: "Delete",
+      deleteTask: "Delete task",
       folderActions: "Folder actions",
     },
     toast: {
       launching: "Launching task…",
       reanalyzing: "Re-analyzing task…",
+    },
+    confirmDelete: {
+      title: "Delete task?",
+      message: "This task will be permanently removed. This can’t be undone.",
+      confirm: "Delete",
+      cancel: "Cancel",
     },
   },
   sessions: {

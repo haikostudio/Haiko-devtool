@@ -529,11 +529,18 @@ export const es: TranslationResources = {
       save: "Guardar",
       edit: "Editar",
       delete: "Eliminar",
+      deleteTask: "Eliminar tarea",
       folderActions: "Acciones de carpeta",
     },
     toast: {
       launching: "Iniciando la tarea…",
       reanalyzing: "Reanalizando la tarea…",
+    },
+    confirmDelete: {
+      title: "¿Eliminar tarea?",
+      message: "Esta tarea se eliminará de forma permanente. No se puede deshacer.",
+      confirm: "Eliminar",
+      cancel: "Cancelar",
     },
   },
   sessions: {

@@ -523,11 +523,18 @@ export const zhCN: TranslationResources = {
       save: "保存",
       edit: "编辑",
       delete: "删除",
+      deleteTask: "Delete task",
       folderActions: "文件夹操作",
     },
     toast: {
       launching: "正在启动任务…",
       reanalyzing: "正在重新分析任务…",
+    },
+    confirmDelete: {
+      title: "Delete task?",
+      message: "This task will be permanently removed. This can’t be undone.",
+      confirm: "Delete",
+      cancel: "Cancel",
     },
   },
   sessions: {
