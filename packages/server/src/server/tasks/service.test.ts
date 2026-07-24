@@ -216,6 +216,53 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([task.id]);
   });
 
+  test("createTask with launch arms the schedule in backlog and fires the estimate hook", async () => {
+    const scheduled: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Sent from the inline composer",
+      launch: true,
+    });
+
+    // The card stays in "À faire" but its agent is armed right away.
+    expect(task.column).toBe("backlog");
+    expect(task.schedule?.state).toBe("pending_estimate");
+    expect(scheduled).toEqual([task.id]);
+  });
+
+  test("createTask without launch leaves a backlog draft inert", async () => {
+    const scheduled: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Just a note for later",
+    });
+
+    expect(task.schedule ?? null).toBeNull();
+    expect(scheduled).toEqual([]);
+  });
+
+  test("launch never overrides a pending approval (proposals stay inert)", async () => {
+    const scheduled: string[] = [];
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Agent");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Proposed, must wait for consent",
+      launch: true,
+      approval: { state: "pending", requestedBy: "agent-7" },
+    });
+
+    expect(task.schedule ?? null).toBeNull();
+    expect(scheduled).toEqual([]);
+  });
+
   test("agent proposals stay pending and fire onTaskProposed", async () => {
     const proposed: string[] = [];
     service.setOnTaskProposed((projectId) => proposed.push(projectId));

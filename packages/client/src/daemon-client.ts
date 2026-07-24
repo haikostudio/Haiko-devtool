@@ -4607,6 +4607,8 @@ export class DaemonClient {
       column?: "backlog" | "validated" | "scheduled" | "in_progress" | "done" | "deployed";
       runConfig?: TaskRunConfig;
       schedulePreference?: TaskSchedulePreference;
+      // Spawn the task's dedicated agent immediately (inline composer send).
+      launch?: boolean;
     },
     requestId?: string,
   ) {

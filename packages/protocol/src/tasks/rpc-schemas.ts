@@ -74,6 +74,12 @@ export const TasksTaskCreateRequestSchema = z.object({
   column: TaskColumnSchema.optional(),
   runConfig: TaskRunConfigSchema.optional(),
   schedulePreference: TaskSchedulePreferenceSchema.optional(),
+  // Arm the task's dedicated agent immediately on creation, even in a non-
+  // pipeline column like "À faire" (backlog). The inline composer sets this so
+  // sending a prompt spawns the analysis/execution agent right away — the card
+  // stays in its column but fills in live with the agent's analysis. Omitted =
+  // false = a plain draft that only runs once dragged into the pipeline.
+  launch: z.boolean().optional(),
 });
 
 export const TasksTaskUpdateRequestSchema = z.object({
