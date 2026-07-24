@@ -1284,7 +1284,7 @@ export async function createPaseoDaemon(
     if (alreadyQueued) {
       return;
     }
-    const usage = await providerUsageService.listUsage();
+    const usage = await providerUsageService.listUsage({ forceRefresh: true });
     const claude = usage.providers.find((provider) => provider.providerId === "claude");
     const claudeWindow = claude?.windows.find((entry) => entry.id === "five_hour");
     const claudeRemaining = claudeWindow

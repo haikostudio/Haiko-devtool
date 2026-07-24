@@ -385,7 +385,7 @@ export class TaskScheduler {
       return task;
     }
     try {
-      const usage = await this.providerUsageService.listUsage();
+      const usage = await this.providerUsageService.listUsage({ forceRefresh: true });
       const claude = usage.providers.find((provider) => provider.providerId === "claude");
       if (!claude || claude.status !== "available") {
         return await this.switchDeployConflictToCodex(projectId, task);
