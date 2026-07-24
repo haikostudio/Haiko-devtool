@@ -497,6 +497,34 @@ describe("TaskScheduler", () => {
     });
   });
 
+  test("does not detach a repair that is already running on Codex", async () => {
+    const task = await seedScheduledTask({
+      title: "Réparer une branche déjà sur Codex",
+      runConfig: { provider: "codex", model: "gpt-5.4", mode: "direct" },
+    });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      column: "in_progress",
+      tags: ["paseo:deploy-conflict"],
+      schedule: { state: "running", attempts: 1 },
+      links: {
+        ...current.links,
+        agentIds: ["codex-existing"],
+        primaryAgentId: "codex-existing",
+        taskAgentId: "codex-existing",
+      },
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 0 });
+
+    await scheduler.tick();
+
+    const current = await findTask(task.id);
+    expect(createAgent).not.toHaveBeenCalled();
+    expect(current?.column).toBe("in_progress");
+    expect(current?.links.primaryAgentId).toBe("codex-existing");
+    expect(current?.links.taskAgentId).toBe("codex-existing");
+  });
+
   test("autopilot folder: backlog task auto-validates then launches", async () => {
     const folder = await service.createFolder("proj-1", "Auto", undefined, true);
     const task = await service.createTask("proj-1", {

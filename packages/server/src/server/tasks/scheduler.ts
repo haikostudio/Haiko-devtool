@@ -425,6 +425,13 @@ export class TaskScheduler {
     if (task.column !== "in_progress" || !task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)) {
       return task;
     }
+    // A repair already running on Codex is healthy. Only requeue a task when
+    // this tick actually switched it away from Claude; otherwise every tick
+    // would detach its visible agent and create a fresh, empty discussion.
+    const wasClaude = task.runConfig?.provider === "claude";
+    if (!wasClaude) {
+      return task;
+    }
     const switched = await this.fallbackDeployConflictProvider(projectId, task);
     return switched.runConfig?.provider === "codex"
       ? this.requeueSwitchedDeployConflictTask(projectId, switched)
