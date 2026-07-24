@@ -3,7 +3,9 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import {
   ANALYSIS_FALLBACK_ESTIMATE,
   buildTaskAnalysisPrompt,
+  DEFAULT_BILLING_HOURS,
   parseTaskAnalysisEstimate,
+  withBillingDefaults,
   withTaskAttachments,
 } from "./agent-launch.js";
 
@@ -74,6 +76,41 @@ describe("task analysis estimation", () => {
     );
     expect(parsed?.estimatedMinutes).toBe(8);
     expect(parsed?.billingHours).toBe(3);
+  });
+});
+
+describe("billing defaults for the Facturation tab", () => {
+  test("keeps the billing fields the agent produced", () => {
+    const filled = withBillingDefaults(
+      { ...ANALYSIS_FALLBACK_ESTIMATE, billingTitle: "Connexion OAuth", billingHours: 4.5 },
+      makeTask({ title: "Ajouter la connexion", description: "Détails" }),
+    );
+    expect(filled.billingTitle).toBe("Connexion OAuth");
+    expect(filled.billingHours).toBe(4.5);
+  });
+
+  test("backfills title, description and non-zero hours when the agent omits them", () => {
+    const filled = withBillingDefaults(
+      ANALYSIS_FALLBACK_ESTIMATE,
+      makeTask({
+        title: "Générer et injecter les données de facturation dans l'onglet",
+        description: "Ligne 1\nLigne 2\nLigne 3\nLigne 4",
+      }),
+    );
+    // Title trims to <= 5 words; description trims to <= 3 lines.
+    expect(filled.billingTitle).toBe("Générer et injecter les données");
+    expect(filled.billingDescription).toBe("Ligne 1\nLigne 2\nLigne 3");
+    // Never zero, so the tab's "add to invoice" button stays enabled.
+    expect(filled.billingHours).toBe(DEFAULT_BILLING_HOURS);
+    expect(filled.billingHours).toBeGreaterThan(0);
+  });
+
+  test("falls back to the task title when it has no description", () => {
+    const filled = withBillingDefaults(
+      ANALYSIS_FALLBACK_ESTIMATE,
+      makeTask({ title: "Corriger le bug", description: undefined }),
+    );
+    expect(filled.billingDescription).toBe("Corriger le bug");
   });
 });
 

@@ -53,6 +53,48 @@ export const ANALYSIS_FALLBACK_ESTIMATE: TaskAnalysisEstimate = {
   summary: "Estimation automatique indisponible — valeur par défaut prudente.",
 };
 
+// Conservative senior-developer hours seeded when the analysis omits billingHours,
+// so the Facturation tab always opens on a concrete, editable line (the user
+// corrects it by hand). NOT derived from estimatedMinutes: that's agent runtime,
+// never human effort — the two must never be conflated (see the schema note).
+export const DEFAULT_BILLING_HOURS = 1;
+
+// Short invoice label (<= 5 words), mirroring the client-side fallback.
+function toShortBillingTitle(source: string): string {
+  return source.trim().split(/\s+/).slice(0, 5).join(" ");
+}
+
+// Short invoice description (<= 3 lines), mirroring the client-side fallback.
+function toShortBillingDescription(source: string): string {
+  return source.trim().split(/\r?\n/).slice(0, 3).join("\n");
+}
+
+/**
+ * Guarantees the estimate carries the three billing fields the Facturation tab
+ * seeds its editable line from. They're optional on the wire (a lenient parser,
+ * and older prompts), but an estimate persisted without them leaves the tab with
+ * an empty hours field and a disabled "add to invoice" button. So every estimate
+ * that lands on a task is normalized here: title/description backfilled from the
+ * task itself when the agent omitted them, and hours defaulted to a non-zero
+ * senior-dev value. Values the agent DID produce are kept untouched.
+ */
+export function withBillingDefaults(
+  estimate: TaskAnalysisEstimate,
+  task: Pick<KanbanTask, "title" | "description">,
+): TaskAnalysisEstimate {
+  const descriptionSource = task.description?.trim() ? task.description : task.title;
+  return {
+    ...estimate,
+    billingTitle: estimate.billingTitle?.trim() || toShortBillingTitle(task.title),
+    billingDescription:
+      estimate.billingDescription?.trim() || toShortBillingDescription(descriptionSource),
+    billingHours:
+      estimate.billingHours != null && estimate.billingHours > 0
+        ? estimate.billingHours
+        : DEFAULT_BILLING_HOURS,
+  };
+}
+
 // Turns free-form text into the branch-safe slug portion of a git ref: lowercase,
 // accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Shared
 // by task-branch naming and folder-branch derivation.

@@ -13,6 +13,7 @@ import {
   resolveTaskLaunch,
   resolveTaskWorktreePlan,
   TASK_AGENT_LABEL,
+  withBillingDefaults,
   withTaskAttachments,
   type TaskAnalysisEstimate,
 } from "./agent-launch.js";
@@ -185,7 +186,9 @@ export class TaskEstimator {
     await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       estimate: {
-        ...estimate,
+        // Backfill the billing line so the Facturation tab always opens on a
+        // concrete, editable line even when the agent omitted the fields.
+        ...withBillingDefaults(estimate, current),
         model: resolveTaskLaunch(current).provider,
         estimatedAt: new Date().toISOString(),
       },
