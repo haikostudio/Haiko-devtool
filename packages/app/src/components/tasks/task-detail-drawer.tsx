@@ -9,6 +9,7 @@ import {
   type TaskDetailSaveInput,
 } from "@/components/tasks/task-detail-sheet";
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
+import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import type { KanbanTask } from "@/data/tasks";
@@ -75,7 +76,19 @@ function TaskDetailDrawerInner({
     [detailsCollapsed, setDetailsCollapsed],
   );
 
-  const header = useMemo((): TaskDockHeader => ({ title: task.title }), [task.title]);
+  // Echo the card's status light in the drawer header so opening a task keeps
+  // the same signal it shows on the board: while its agent is launching/working
+  // the same synced square loader spins next to the title, and it goes quiet the
+  // moment the run ends. Only the "running" tone gets a header light — the others
+  // (attention/scheduled/done) stay on the card to keep the header calm.
+  const tone = useTaskTone(task);
+  const header = useMemo(
+    (): TaskDockHeader => ({
+      title: task.title,
+      ...(tone === "running" ? { leading: <TaskStatusVoyant tone={tone} /> } : {}),
+    }),
+    [task.title, tone],
+  );
 
   const viewOptions = useMemo<SegmentedControlOption<PanelView>[]>(
     () => [
