@@ -637,6 +637,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    hash: "04b048f19baee4bd65ac248f3cc16da97330af0a",
+    shortHash: "04b048f19",
+    date: "2026-07-25T00:27:14+02:00",
+    author: "haikostudio",
+    subject: "chore: sauvegarde avant build local",
+  },
+  {
     hash: "1cbd82bfa43f7972c9181a33f02f9010f1a2a867",
     shortHash: "1cbd82bfa",
     date: "2026-07-25T00:07:45+02:00",
@@ -2755,15 +2762,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "Allow turning thinking off (#2257)",
   },
-  {
-    hash: "3422b4097a30d11508439d990c3176034738030d",
-    shortHash: "3422b4097",
-    date: "2026-07-20T22:49:58+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(synthese): la description reste masquée dans la bannière, visible seulement au clic",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T00:07:45+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T00:27:14+02:00";
