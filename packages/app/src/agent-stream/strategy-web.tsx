@@ -25,6 +25,7 @@ const SCROLL_TO_ITEM_TOP_MARGIN_PX = 12;
 const SCROLL_TO_ITEM_SETTLE_MS = 180;
 const ACTIVE_ITEM_MAX_OFFSET_PX = 160;
 const USER_SCROLL_DELTA_EPSILON = 1;
+const BOTTOM_OVERSCROLL_TOLERANCE_PX = 2;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
 const HISTORY_START_THRESHOLD_PX = 96;
@@ -95,7 +96,8 @@ function getScrollContainerDistanceFromBottom(
 function isScrollContainerOverscrolledPastBottom(
   scrollContainer: Pick<HTMLElement, "scrollTop" | "clientHeight" | "scrollHeight">,
 ): boolean {
-  return getScrollContainerDistanceFromBottom(scrollContainer) < 0;
+  // Browser zoom can leave scrollTop fractional while the height metrics remain integer-valued.
+  return getScrollContainerDistanceFromBottom(scrollContainer) < -BOTTOM_OVERSCROLL_TOLERANCE_PX;
 }
 
 function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: boolean }) {

@@ -5,6 +5,7 @@ export type AgentAttentionReason = "finished" | "error" | "permission";
 export interface AgentAttentionNotificationData {
   [key: string]: unknown;
   serverId: string;
+  workspaceId?: string;
   agentId: string;
   reason: AgentAttentionReason;
 }
@@ -18,6 +19,7 @@ export interface AgentAttentionNotificationPayload {
 interface BuildAgentAttentionNotificationPayloadInput {
   reason: AgentAttentionReason;
   serverId: string;
+  workspaceId: string;
   agentId: string;
   // The agent's current tab title. When present it becomes the notification
   // title for a finished agent ("which agent finished"), instead of the generic
@@ -216,6 +218,7 @@ export function buildAgentAttentionNotificationPayload(
     body,
     data: {
       serverId: input.serverId,
+      workspaceId: input.workspaceId,
       agentId: input.agentId,
       reason: input.reason,
     },

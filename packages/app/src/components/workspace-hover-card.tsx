@@ -23,7 +23,8 @@ import {
   GitBranch,
   Server,
 } from "lucide-react-native";
-import { GitHubIcon } from "@/components/icons/github-icon";
+import { getForgePresentation, normalizeForge } from "@/git/forge";
+import { ForgeBrandIcon } from "@/git/forge-icon";
 import type { Theme } from "@/styles/theme";
 import { DiffStat } from "@/components/diff-stat";
 import { Pressable } from "react-native";
@@ -320,7 +321,11 @@ function WorkspaceHoverCardContent({
           {prHint?.checks && prHint.checks.length > 0 ? (
             <>
               <View style={styles.separator} />
-              <ChecksSummaryPressable checks={prHint.checks} url={prHint.url} />
+              <ChecksSummaryPressable
+                checks={prHint.checks}
+                url={prHint.url}
+                forge={prHint.forge}
+              />
             </>
           ) : null}
         </FloatingSurface>
@@ -344,7 +349,6 @@ function HostRow({ serverId }: { serverId: string }): ReactElement | null {
 }
 
 const ThemedExternalLink = withUnistyles(ExternalLink);
-const ThemedGitHubIcon = withUnistyles(GitHubIcon);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
 const ThemedCircleDot = withUnistyles(CircleDot);
 const ThemedCircleX = withUnistyles(CircleX);
@@ -374,6 +378,10 @@ function InfoRow({
       </Text>
     </View>
   );
+}
+
+function renderChecksSummaryForgeIcon(icon: string, iconUniProps: typeof foregroundColorMapping) {
+  return <ForgeBrandIcon iconKind={icon} size={12} uniProps={iconUniProps} />;
 }
 
 function CopyableInfoRow({
@@ -411,7 +419,8 @@ function CopyableInfoRow({
   if (copied || isHovered) {
     iconUniProps = foregroundColorMapping;
   }
-  const textStyle = copied || isHovered ? cardInfoTextHoveredCombined : styles.cardInfoText;
+  const textStyle =
+    copied || isHovered ? [styles.cardInfoText, styles.cardInfoTextHovered] : styles.cardInfoText;
 
   return (
     <Pressable
@@ -489,23 +498,28 @@ function ChecksSummaryPill({
 
 function ChecksSummaryContent({
   checks,
+  forge,
   hovered,
 }: {
   checks: NonNullable<PrHint["checks"]>;
+  forge: PrHint["forge"];
   hovered: boolean;
 }) {
   const { t } = useTranslation();
   const { passed, failed, pending } = getChecksSummaryCounts(checks);
 
-  const labelStyle = hovered ? checksSummaryLabelHoveredCombined : styles.checksSummaryLabel;
+  const labelStyle = hovered
+    ? [styles.checksSummaryLabel, styles.checksSummaryLabelHovered]
+    : styles.checksSummaryLabel;
   const iconUniProps = hovered ? foregroundColorMapping : foregroundMutedColorMapping;
+  const icon = getForgePresentation(normalizeForge(forge)).icon;
 
   return (
     <>
       {hovered ? (
         <ThemedExternalLink size={12} uniProps={iconUniProps} />
       ) : (
-        <ThemedGitHubIcon size={12} uniProps={iconUniProps} />
+        renderChecksSummaryForgeIcon(icon, iconUniProps)
       )}
       <Text style={labelStyle}>{t("workspace.git.pr.sections.checks")}</Text>
       <View style={styles.checksSummaryCounts}>
@@ -519,9 +533,11 @@ function ChecksSummaryContent({
 
 function ChecksSummaryPressable({
   checks,
+  forge,
   url,
 }: {
   checks: NonNullable<PrHint["checks"]>;
+  forge: PrHint["forge"];
   url: string;
 }) {
   const handlePress = useCallback(() => {
@@ -530,9 +546,9 @@ function ChecksSummaryPressable({
 
   const renderChildren = useCallback(
     ({ hovered }: { pressed: boolean; hovered?: boolean }) => (
-      <ChecksSummaryContent checks={checks} hovered={Boolean(hovered)} />
+      <ChecksSummaryContent checks={checks} forge={forge} hovered={Boolean(hovered)} />
     ),
-    [checks],
+    [checks, forge],
   );
 
   return (
@@ -658,10 +674,3 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusSuccess,
   },
 }));
-
-const checksSummaryLabelHoveredCombined = [
-  styles.checksSummaryLabel,
-  styles.checksSummaryLabelHovered,
-];
-
-const cardInfoTextHoveredCombined = [styles.cardInfoText, styles.cardInfoTextHovered];

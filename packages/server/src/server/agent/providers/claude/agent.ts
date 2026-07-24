@@ -34,7 +34,11 @@ import {
   getClaudeModelsWithSettings,
   normalizeClaudeRuntimeModelId,
 } from "./models.js";
-import { CLAUDE_ULTRACODE_THINKING_OPTION_ID } from "./model-manifest.js";
+import {
+  CLAUDE_DISABLED_THINKING_OPTION_ID,
+  CLAUDE_ULTRACODE_THINKING_OPTION_ID,
+  resolveClaudeDisabledThinkingForModel,
+} from "./model-manifest.js";
 import { parsePartialJsonObject } from "./partial-json.js";
 import { isClaudeAbortMessage, toReadableClaudeError } from "./error-messages.js";
 import { ClaudeSidechainTracker } from "./sidechain-tracker.js";
@@ -51,7 +55,7 @@ import { claudeQuery, type ClaudeOptions, type ClaudeQueryFactory } from "./quer
 import { realClaudeRewindSdk, revertClaudeConversation, revertClaudeFiles } from "./rewind.js";
 import { normalizeProviderReplayTimestamp } from "../../provider-history-timestamps.js";
 import { claudeProjectDirSync } from "./project-dir.js";
-import { SETTING_APPLIES_NEXT_TURN_NOTICE } from "../../provider-notices.js";
+import { THINKING_APPLIES_NEXT_TURN_NOTICE } from "../../provider-notices.js";
 import {
   isProviderImageMarkdown,
   materializeProviderImage,
@@ -93,6 +97,7 @@ import {
   type ListImportableSessionsOptions,
   type McpServerConfig,
   type ProviderCatalog,
+  type ResolveAgentDefaultModeInput,
 } from "../../agent-sdk-types.js";
 import { importSessionFromPersistence } from "../../provider-session-import.js";
 import {
@@ -376,7 +381,10 @@ interface ClaudeAgentSessionOptions {
 }
 
 type ClaudeThinkingEffort = "low" | "medium" | "high" | "xhigh" | "max";
-type ClaudeThinkingOption = ClaudeThinkingEffort | typeof CLAUDE_ULTRACODE_THINKING_OPTION_ID;
+type ClaudeThinkingOption =
+  | ClaudeThinkingEffort
+  | typeof CLAUDE_DISABLED_THINKING_OPTION_ID
+  | typeof CLAUDE_ULTRACODE_THINKING_OPTION_ID;
 
 function resolvePathEnvKey(): "Path" | "PATH" | null {
   if (process.env["Path"] !== undefined) return "Path";
@@ -424,7 +432,26 @@ function isClaudeThinkingEffort(value: string | null | undefined): value is Clau
 }
 
 function isClaudeThinkingOption(value: string | null | undefined): value is ClaudeThinkingOption {
-  return value === CLAUDE_ULTRACODE_THINKING_OPTION_ID || isClaudeThinkingEffort(value);
+  return (
+    value === CLAUDE_DISABLED_THINKING_OPTION_ID ||
+    value === CLAUDE_ULTRACODE_THINKING_OPTION_ID ||
+    isClaudeThinkingEffort(value)
+  );
+}
+
+function assertClaudeThinkingOptionSupported(
+  modelId: string | null | undefined,
+  thinkingOptionId: string | null | undefined,
+): void {
+  if (
+    thinkingOptionId !== CLAUDE_DISABLED_THINKING_OPTION_ID ||
+    resolveClaudeDisabledThinkingForModel(modelId).supported
+  ) {
+    return;
+  }
+  throw new Error(
+    `Thinking option '${thinkingOptionId}' is not available for model '${modelId ?? "default"}'`,
+  );
 }
 
 interface ClaudeOptionsLogSummary {
@@ -1499,7 +1526,28 @@ export class ClaudeAgentClient implements AgentClient {
   async fetchCatalog(_options: FetchCatalogOptions): Promise<ProviderCatalog> {
     // Claude exposes a global catalog here; cwd/force are intentionally irrelevant.
     const models = await getClaudeModelsWithSettings(this.logger, this.configDir);
-    return { models, modes: DEFAULT_MODES };
+    const modes = detectIneligibleAutoModeTransport(
+      createProviderEnv({ baseEnv: process.env, runtimeSettings: this.runtimeSettings }),
+    )
+      ? DEFAULT_MODES.filter((mode) => mode.id !== "auto")
+      : DEFAULT_MODES;
+    return {
+      models,
+      modes,
+      defaultModeId: modes.some((mode) => mode.id === "auto") ? "auto" : "default",
+    };
+  }
+
+  async resolveDefaultModeId({
+    config,
+    env: launchEnv,
+  }: ResolveAgentDefaultModeInput): Promise<string> {
+    const env = createProviderEnv({
+      baseEnv: process.env,
+      runtimeSettings: this.runtimeSettings,
+      overlays: [config.extra?.claude?.env, launchEnv],
+    });
+    return detectIneligibleAutoModeTransport(env) ? "default" : "auto";
   }
 
   async listFeatures(config: AgentSessionConfig): Promise<AgentFeature[]> {
@@ -1514,12 +1562,16 @@ export class ClaudeAgentClient implements AgentClient {
     options?: ListImportableSessionsOptions,
   ): Promise<ImportableProviderSession[]> {
     const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
-    const projectsRoot = path.join(configDir, "projects");
-    if (!(await pathExists(projectsRoot))) {
+    const sessionsRoot = options?.cwd
+      ? claudeProjectDirSync(options.cwd, { configDir })
+      : path.join(configDir, "projects");
+    if (!(await pathExists(sessionsRoot))) {
       return [];
     }
     const limit = options?.limit ?? 20;
-    const candidates = await collectRecentClaudeSessions(projectsRoot, limit * 3);
+    const candidates = await collectRecentClaudeSessions(sessionsRoot, limit * 3, {
+      rootIsProjectDir: Boolean(options?.cwd),
+    });
     const parsed = await Promise.all(
       candidates.map((candidate) => parseClaudeSessionDescriptor(candidate.path, candidate.mtime)),
     );
@@ -1960,6 +2012,7 @@ class ClaudeAgentSession implements AgentSession {
 
   constructor(config: ClaudeAgentConfig, options: ClaudeAgentSessionOptions) {
     this.config = config;
+    assertClaudeThinkingOptionSupported(config.model, config.thinkingOptionId);
     this.launchEnv = options.launchEnv;
     this.agentId = options.agentId;
     this.defaults = options.defaults;
@@ -2057,7 +2110,7 @@ class ClaudeAgentSession implements AgentSession {
 
   async startTurn(
     prompt: AgentPromptInput,
-    _options?: AgentRunOptions,
+    options?: AgentRunOptions,
   ): Promise<{ turnId: string }> {
     if (this.closed) {
       throw new Error("Claude session is closed");
@@ -2125,7 +2178,7 @@ class ClaudeAgentSession implements AgentSession {
       this.input.push(sdkMessage);
       setTimeout(() => {
         if (this.activeForegroundTurnId === turnId) {
-          this.emitSubmittedUserMessage(sdkMessage, turnId);
+          this.emitSubmittedUserMessage(sdkMessage, turnId, options?.clientMessageId);
         }
       }, 0);
     } catch (error) {
@@ -2219,6 +2272,7 @@ class ClaudeAgentSession implements AgentSession {
     const activeQuery = await this.ensureQuery();
     await activeQuery.setModel(normalizedModelId ?? undefined);
     this.config.model = normalizedModelId ?? undefined;
+    this.reconcileThinkingOptionForModel(normalizedModelId);
     if (!claudeModelSupportsFastMode(this.config.model) && this.config.featureValues?.fast_mode) {
       await this.applyFastModeFeature(false, activeQuery);
     }
@@ -2232,6 +2286,26 @@ class ClaudeAgentSession implements AgentSession {
     this.persistence = null;
   }
 
+  private reconcileThinkingOptionForModel(modelId: string | null): void {
+    const thinkingOptionId = this.config.thinkingOptionId;
+    if (thinkingOptionId !== CLAUDE_DISABLED_THINKING_OPTION_ID) {
+      return;
+    }
+
+    const resolution = resolveClaudeDisabledThinkingForModel(modelId);
+    if (resolution.supported) {
+      return;
+    }
+
+    this.config.thinkingOptionId = resolution.fallbackThinkingOptionId;
+    this.queryRestartNeeded = true;
+    this.pushEvent({
+      type: "thinking_option_changed",
+      provider: "claude",
+      thinkingOptionId: this.config.thinkingOptionId ?? null,
+    });
+  }
+
   async setThinkingOption(thinkingOptionId: string | null): Promise<void | AgentProviderNotice> {
     const normalizedThinkingOptionId =
       typeof thinkingOptionId === "string" && thinkingOptionId.trim().length > 0
@@ -2241,13 +2315,14 @@ class ClaudeAgentSession implements AgentSession {
     if (!normalizedThinkingOptionId || normalizedThinkingOptionId === "default") {
       this.config.thinkingOptionId = undefined;
     } else if (isClaudeThinkingOption(normalizedThinkingOptionId)) {
+      assertClaudeThinkingOptionSupported(this.config.model, normalizedThinkingOptionId);
       this.config.thinkingOptionId = normalizedThinkingOptionId;
     } else {
       throw new Error(`Unknown thinking option: ${normalizedThinkingOptionId}`);
     }
     this.queryRestartNeeded = true;
     if (this.activeForegroundTurnId || this.autonomousTurn) {
-      return SETTING_APPLIES_NEXT_TURN_NOTICE;
+      return THINKING_APPLIES_NEXT_TURN_NOTICE;
     }
   }
 
@@ -2945,6 +3020,10 @@ class ClaudeAgentSession implements AgentSession {
       this.config.thinkingOptionId && this.config.thinkingOptionId !== "default"
         ? this.config.thinkingOptionId
         : undefined;
+    assertClaudeThinkingOptionSupported(this.config.model, thinkingOptionId);
+    if (thinkingOptionId === CLAUDE_DISABLED_THINKING_OPTION_ID) {
+      return { thinking: { type: "disabled" }, effort: undefined, ultracode: false };
+    }
     if (thinkingOptionId === CLAUDE_ULTRACODE_THINKING_OPTION_ID) {
       return { thinking: { type: "adaptive" }, effort: "xhigh", ultracode: true };
     }
@@ -3835,6 +3914,7 @@ class ClaudeAgentSession implements AgentSession {
   private emitSubmittedUserMessage(
     message: Extract<SDKMessage, { type: "user" }>,
     turnId: string,
+    clientMessageId?: string,
   ): void {
     const events: AgentStreamEvent[] = [];
     this.appendUserMessageEvents(message, events);
@@ -3844,7 +3924,11 @@ class ClaudeAgentSession implements AgentSession {
     this.foregroundHasVisibleActivity = true;
     for (const event of events) {
       if (event.type === "timeline") {
-        this.notifySubscribers({ ...event, turnId });
+        const item =
+          event.item.type === "user_message" && clientMessageId
+            ? { ...event.item, clientMessageId }
+            : event.item;
+        this.notifySubscribers({ ...event, item, turnId });
       } else {
         this.notifySubscribers(event);
       }
@@ -5587,29 +5671,33 @@ async function pathExists(target: string): Promise<boolean> {
 async function collectRecentClaudeSessions(
   root: string,
   limit: number,
+  options?: { rootIsProjectDir?: boolean },
 ): Promise<ClaudeSessionCandidate[]> {
-  let projectDirs: string[];
+  let rootEntries: string[];
   try {
-    projectDirs = await fsPromises.readdir(root);
+    rootEntries = await fsPromises.readdir(root);
   } catch {
     return [];
   }
-  const projectFileLists = await Promise.all(
-    projectDirs.map(async (dirName) => {
-      const projectPath = path.join(root, dirName);
-      try {
-        const stats = await fsPromises.stat(projectPath);
-        if (!stats.isDirectory()) return { projectPath, files: [] as string[] };
-        const files = await fsPromises.readdir(projectPath);
-        return { projectPath, files };
-      } catch {
-        return { projectPath, files: [] as string[] };
-      }
-    }),
-  );
-  const fileEntries = projectFileLists.flatMap(({ projectPath, files }) =>
-    files.filter((f) => f.endsWith(".jsonl")).map((f) => path.join(projectPath, f)),
-  );
+  const fileEntries = options?.rootIsProjectDir
+    ? rootEntries.filter((file) => file.endsWith(".jsonl")).map((file) => path.join(root, file))
+    : (
+        await Promise.all(
+          rootEntries.map(async (dirName) => {
+            const projectPath = path.join(root, dirName);
+            try {
+              const stats = await fsPromises.stat(projectPath);
+              if (!stats.isDirectory()) return [] as string[];
+              const files = await fsPromises.readdir(projectPath);
+              return files
+                .filter((file) => file.endsWith(".jsonl"))
+                .map((file) => path.join(projectPath, file));
+            } catch {
+              return [] as string[];
+            }
+          }),
+        )
+      ).flat();
   const statResults = await Promise.all(
     fileEntries.map(async (fullPath) => {
       try {
