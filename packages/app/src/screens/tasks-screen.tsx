@@ -73,6 +73,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
+import { AttachmentLibraryButton } from "@/attachments/attachment-library-button";
 import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { useCheckoutStatusQuery } from "@/git/use-status-query";
 import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
@@ -85,7 +86,7 @@ import {
   useHosts,
 } from "@/runtime/host-runtime";
 import { rememberProjectBranch } from "@/stores/project-branch-selection-store";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -233,6 +234,12 @@ interface ProjectEntry {
   projectId: string;
   displayName: string;
   rootPath: string;
+  /**
+   * A representative workspace id for the project, used to scope the attachment
+   * library (which the daemon keys per-workspace). Prefers the primary checkout
+   * over task-branch worktrees. Empty when the project has no live workspace.
+   */
+  workspaceId: string;
   /** Epoch ms of the most recent agent activity in this project (0 if none). */
   lastActivityAt: number;
 }
@@ -285,6 +292,27 @@ function compareByName(left: ProjectEntry, right: ProjectEntry): number {
   return left.displayName.localeCompare(right.displayName);
 }
 
+// Pick one representative workspace per project to scope the attachment library.
+// The daemon keys the library per-workspace, so the board — which is
+// project-level — points at the primary checkout rather than a throwaway
+// task-branch worktree. First non-worktree wins; otherwise the first seen.
+function pickRepresentativeWorkspaces(
+  workspaces: Iterable<WorkspaceDescriptor>,
+): Map<string, string> {
+  const chosen = new Map<string, string>();
+  const chosenIsWorktree = new Map<string, boolean>();
+  for (const workspace of workspaces) {
+    const isWorktree = workspace.workspaceKind === "worktree";
+    const have = chosen.has(workspace.projectId);
+    const upgrade = have && !isWorktree && chosenIsWorktree.get(workspace.projectId) === true;
+    if (!have || upgrade) {
+      chosen.set(workspace.projectId, workspace.id);
+      chosenIsWorktree.set(workspace.projectId, isWorktree);
+    }
+  }
+  return chosen;
+}
+
 function useProjectEntries(): ProjectEntry[] {
   const hosts = useHosts();
   const sessions = useSessionStore(useShallow((state) => state.sessions));
@@ -314,6 +342,7 @@ function useProjectEntries(): ProjectEntry[] {
           activityByProject.set(projectId, at);
         }
       }
+      const representativeWorkspace = pickRepresentativeWorkspaces(session.workspaces.values());
       for (const workspace of session.workspaces.values()) {
         const key = `${host.serverId}:${workspace.projectId}`;
         if (seen.has(key)) {
@@ -326,6 +355,7 @@ function useProjectEntries(): ProjectEntry[] {
           projectId: workspace.projectId,
           displayName: workspace.projectCustomName ?? workspace.projectDisplayName,
           rootPath: workspace.projectRootPath,
+          workspaceId: representativeWorkspace.get(workspace.projectId) ?? workspace.id,
           lastActivityAt: activityByProject.get(workspace.projectId) ?? 0,
         });
       }
@@ -341,6 +371,7 @@ function useProjectEntries(): ProjectEntry[] {
           projectId: project.projectId,
           displayName: project.projectCustomName ?? project.projectDisplayName,
           rootPath: project.projectRootPath,
+          workspaceId: "",
           lastActivityAt: activityByProject.get(project.projectId) ?? 0,
         });
       }
@@ -1722,6 +1753,28 @@ function TasksDeployButton({ project }: { project: ProjectEntry | null }) {
   return <PaseoDeployButton serverId={project.serverId} projectId={project.projectId} compact />;
 }
 
+/**
+ * "Pièces jointes" button for the task manager header — sits right beside the
+ * deploy rocket. Same gate as the workspace header: only when the host
+ * advertises the `attachmentLibrary` capability and the project has a live
+ * workspace to scope the library to.
+ */
+function TasksAttachmentLibraryButton({ project }: { project: ProjectEntry | null }) {
+  const supported = useSessionStore((s) =>
+    project
+      ? s.sessions[project.serverId]?.serverInfo?.features?.attachmentLibrary === true
+      : false,
+  );
+  if (!project || !supported || project.workspaceId.length === 0) return null;
+  return (
+    <AttachmentLibraryButton
+      serverId={project.serverId}
+      workspaceId={project.workspaceId}
+      compact
+    />
+  );
+}
+
 function TasksHeader({
   title,
   isCompact,
@@ -1744,6 +1797,7 @@ function TasksHeader({
   const rightContent = useMemo(
     () => (
       <View style={styles.headerRightCluster}>
+        <TasksAttachmentLibraryButton project={selectedProject} />
         <TasksDeployButton project={selectedProject} />
         {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
       </View>
