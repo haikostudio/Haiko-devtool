@@ -13,6 +13,23 @@ import type { TaskEstimator } from "./estimator.js";
 
 const logger = pino({ level: "silent" });
 
+// Stands in for the real estimator writing its result: attaches a sample cost
+// estimate and arms the schedule so the pipeline can proceed to launch.
+function withSampleEstimate(current: KanbanTask): KanbanTask {
+  return {
+    ...current,
+    estimate: {
+      tokens: 50_000,
+      quotaPercent: 8,
+      estimatedMinutes: 10,
+      confidence: "medium",
+      model: "claude/haiku",
+      estimatedAt: "2026-07-16T00:00:00.000Z",
+    },
+    schedule: { state: "awaiting_slot", attempts: 0 },
+  };
+}
+
 function fakeProjectRegistry(records: PersistedProjectRecord[]): ProjectRegistry {
   return {
     list: async () => records,
@@ -129,6 +146,7 @@ describe("TaskScheduler", () => {
     runAgent?: () => Promise<{ canceled: boolean; finalText: string; timeline: [] }>;
     quietHours?: QuietHours;
     nowMs?: number;
+    lightAnalyzer?: { refine: ReturnType<typeof vi.fn> };
   }) {
     const createAgent = vi.fn(async () => ({
       snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1", cwd: "/tmp/wt/feat-auth" },
@@ -145,6 +163,7 @@ describe("TaskScheduler", () => {
     const scheduler = new TaskScheduler({
       taskBoardService: service,
       taskEstimator: estimator,
+      ...(options.lightAnalyzer ? { taskLightAnalyzer: options.lightAnalyzer } : {}),
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       agentManager: { runAgent } as never,
       createAgent: createAgent as never,
@@ -157,6 +176,60 @@ describe("TaskScheduler", () => {
     });
     return { scheduler, createAgent, estimator };
   }
+
+  test("backlog cleanup: a stray estimate/schedule on a backlog card is stripped", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Estimated too early",
+    });
+    // Simulate legacy dirty data (Maestria): a backlog card that carries a cost
+    // estimate + armed schedule from before analysis was gated to "Validé".
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 100000,
+        quotaPercent: 20,
+        confidence: "medium",
+        model: "claude/claude-opus-4-8",
+        estimatedAt: new Date(0).toISOString(),
+        estimatedMinutes: 12,
+        summary: "stale",
+      },
+      schedule: { state: "awaiting_slot", attempts: 0 },
+    }));
+
+    const { scheduler } = buildScheduler({ remainingPct: 80 });
+    await scheduler.tick();
+
+    await vi.waitFor(async () => {
+      const cleaned = await findTask(task.id);
+      expect(cleaned?.estimate ?? null).toBeNull();
+      expect(cleaned?.schedule ?? null).toBeNull();
+      expect(cleaned?.column).toBe("backlog");
+    });
+  });
+
+  test("backlog light analysis is re-armed after a restart", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Raw pasted prompt",
+      description: "il faut brancher le paiement",
+    });
+    // The card is a fresh manual backlog prompt awaiting light refinement; after a
+    // restart the in-memory refiner queue is empty, so the sweep must re-arm it.
+    expect(task.refinement).toBe("pending");
+
+    const lightAnalyzer = { refine: vi.fn() };
+    const { scheduler } = buildScheduler({ remainingPct: 80, lightAnalyzer });
+    await scheduler.tick();
+
+    expect(lightAnalyzer.refine).toHaveBeenCalledWith("proj-1", task.id);
+    // Backlog is never sent to the cost estimator.
+    const { estimator } = buildScheduler({ remainingPct: 80 });
+    expect(estimator.requestEstimate).not.toHaveBeenCalled();
+  });
 
   test("launches an awaiting task in an isolated worktree and marks it done", async () => {
     const task = await seedScheduledTask({ quotaPercent: 15 });
@@ -478,22 +551,19 @@ describe("TaskScheduler", () => {
       folderId: folder.id,
       title: "Autopilot me",
     });
-    await service.patchTask("proj-1", task.id, (current) => ({
-      ...current,
-      estimate: {
-        tokens: 50_000,
-        quotaPercent: 8,
-        estimatedMinutes: 10,
-        confidence: "medium" as const,
-        model: "claude/haiku",
-        estimatedAt: "2026-07-16T00:00:00.000Z",
+    const { scheduler, createAgent, estimator } = buildScheduler({ remainingPct: 80 });
+    // Cost estimation is a "Validé"-only step: a backlog card never carries one.
+    // Simulate the real estimator applying the estimate once the task reaches the
+    // pipeline (the autopilot moved it there first).
+    (estimator.requestEstimate as ReturnType<typeof vi.fn>).mockImplementation(
+      (projectId: string, taskId: string) => {
+        void service.patchTask(projectId, taskId, withSampleEstimate);
       },
-    }));
-    const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
+    );
 
     // Autopilot is the folder-level consent: the scheduler moves the backlog task
-    // into "Validé" itself, and from there the pipeline runs to completion. This
-    // takes several ticks (backlog → validated → scheduled → launch → done).
+    // into "Validé" itself, estimates it there, and from there the pipeline runs
+    // to completion (backlog → validated → scheduled → launch → done).
     await vi.waitFor(async () => {
       await scheduler.tick();
       expect((await findTask(task.id))?.column).toBe("done");

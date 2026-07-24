@@ -135,6 +135,7 @@ import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
 import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
+import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
@@ -1288,9 +1289,17 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
+  const taskLightAnalyzer = new TaskLightAnalyzer({
+    agentManager,
+    createAgent,
+    taskBoardService,
+    projectRegistry,
+    logger,
+  });
   const taskScheduler = new TaskScheduler({
     taskBoardService,
     taskEstimator,
+    taskLightAnalyzer,
     projectRegistry,
     agentManager,
     createAgent,
@@ -1300,6 +1309,12 @@ export async function createPaseoDaemon(
   });
   taskBoardService.setOnTaskScheduled((projectId, taskId) => {
     taskEstimator.requestEstimate(projectId, taskId);
+  });
+  // Light analysis (title + tidied prompt) for manual backlog cards — the ONLY
+  // analysis that runs in "À faire". It never produces a cost estimate; the deep
+  // cost/billing/schedule analysis stays gated to "Validé" (onTaskScheduled).
+  taskBoardService.setOnBacklogRefine((projectId, taskId) => {
+    taskLightAnalyzer.refine(projectId, taskId);
   });
   // Auto-move: when a publish goes live, promote the shipped task branches' done
   // cards into the terminal "deployed" column across every project's board.

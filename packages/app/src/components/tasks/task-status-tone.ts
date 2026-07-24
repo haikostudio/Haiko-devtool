@@ -46,6 +46,10 @@ function isRunning(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
   const scheduleState = task.schedule?.state;
   return (
     task.column === "in_progress" ||
+    // Light analysis tidying a fresh backlog card reads as "working" (a spinning
+    // loader) so the pseudo-card visibly turns into a complete one. No cost is
+    // computed here — that stays gated to "Validé".
+    task.refinement === "pending" ||
     scheduleState === "pending_estimate" ||
     scheduleState === "launching" ||
     scheduleState === "running" ||

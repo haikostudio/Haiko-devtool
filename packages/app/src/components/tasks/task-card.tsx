@@ -87,6 +87,12 @@ function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (task.planReadyAt) {
     return { labelKey: "tasks.card.planReady", variant: "success" };
   }
+  // Light analysis running on a backlog card: reuse the "Analyzing…" label. This
+  // is NOT the cost estimate (that only runs from "Validé") — just the cheap
+  // pass tidying the pasted prompt into a clean title + description.
+  if (task.refinement === "pending") {
+    return { labelKey: "tasks.schedule.estimating" };
+  }
   const state = task.schedule?.state;
   if (!state) {
     return null;
