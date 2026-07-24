@@ -179,8 +179,17 @@ export const TaskFolderSchema = z.object({
   name: z.string(),
   // Accent color for the folder card, hex string (e.g. "#f97316").
   color: z.string().optional(),
-  // Autopilot: the scheduler may pick this folder's backlog tasks directly
-  // (quota + quiet-hours gates still apply). Absent = manual (drag to Planned).
+  // Launch policy for the folder's backlog. Tasks now start IMMEDIATELY by
+  // default: the scheduler auto-validates a folder's backlog (quota + quiet-hours
+  // gates still apply) unless the user opts into manual review. Set this true to
+  // hold every task until the user explicitly validates it (drag to "Validé" /
+  // run-now). Absent/false = immediate start (the default).
+  requireValidation: z.boolean().optional(),
+  // Legacy per-folder autopilot flag. Superseded by `requireValidation` (immediate
+  // start is now the default, so an unset folder already auto-launches). Still
+  // parsed for backward-compat with boards written before the inversion; new
+  // clients stop sending it. COMPAT(taskFolderAutopilot): drop once no persisted
+  // board relies on it (target 2027-01-24).
   autopilot: z.boolean().optional(),
   // A folder IS a real git branch: every task in it works and commits on this
   // branch, inside one shared worktree. Absent (legacy folders) = each task

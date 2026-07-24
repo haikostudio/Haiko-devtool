@@ -387,6 +387,9 @@ export const es: TranslationResources = {
       colorField: "Color",
       autopilotField: "Piloto automático",
       autopilotHint: "Las tareas del backlog se lanzan solas — cuota y horas valle gestionadas.",
+      requireValidationField: "Esperar mi validación",
+      requireValidationHint:
+        "Desactivado: las tareas empiezan enseguida. Activado: cada tarea espera tu validación antes de ejecutarse.",
       create: "Crear",
       save: "Guardar",
     },

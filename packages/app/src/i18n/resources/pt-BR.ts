@@ -388,6 +388,9 @@ export const ptBR: TranslationResources = {
       autopilotField: "Piloto automático",
       autopilotHint:
         "As tarefas do backlog são iniciadas sozinhas — cota e horários de baixa demanda gerenciados.",
+      requireValidationField: "Aguardar minha validação",
+      requireValidationHint:
+        "Desativado: as tarefas começam imediatamente. Ativado: cada tarefa aguarda sua validação antes de iniciar.",
       create: "Criar",
       save: "Salvar",
     },

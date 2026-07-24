@@ -24,14 +24,19 @@ export const FOLDER_COLORS = [
 interface FolderCreateModalProps {
   visible: boolean;
   onClose: () => void;
-  onCreate: (input: { name: string; color: string; autopilot?: boolean; branch?: string }) => void;
+  onCreate: (input: {
+    name: string;
+    color: string;
+    requireValidation?: boolean;
+    branch?: string;
+  }) => void;
   /**
    * When provided the dialog opens in edit mode: fields prefill from this
    * folder, the title/submit labels switch, and onCreate carries the edits.
    */
-  initialFolder?: { name: string; color?: string; autopilot?: boolean; branch?: string };
-  // Autopilot toggle is shown only when the daemon supports it.
-  showAutopilot?: boolean;
+  initialFolder?: { name: string; color?: string; requireValidation?: boolean; branch?: string };
+  // The launch-policy toggle is shown only when the daemon supports it.
+  showLaunchPolicy?: boolean;
 }
 
 /**
@@ -44,7 +49,7 @@ export function FolderCreateModal({
   onClose,
   onCreate,
   initialFolder,
-  showAutopilot,
+  showLaunchPolicy,
 }: FolderCreateModalProps) {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -53,7 +58,8 @@ export function FolderCreateModal({
   const [name, setName] = useState("");
   const [branch, setBranch] = useState("");
   const [color, setColor] = useState<string>(FOLDER_COLORS[0]);
-  const [autopilot, setAutopilot] = useState(false);
+  // Immediate start is the default; the user opts into holding tasks for review.
+  const [requireValidation, setRequireValidation] = useState(false);
   // The name input is native-owned (see AdaptiveTextInput); bump the reset key
   // on every open so the field remounts empty instead of replaying old text.
   const [resetKey, setResetKey] = useState(0);
@@ -63,7 +69,7 @@ export function FolderCreateModal({
       setName(initialFolder?.name ?? "");
       setBranch(initialFolder?.branch ?? "");
       setColor(initialFolder?.color ?? FOLDER_COLORS[0]);
-      setAutopilot(initialFolder?.autopilot ?? false);
+      setRequireValidation(initialFolder?.requireValidation ?? false);
       setResetKey((key) => key + 1);
     }
   }, [visible, initialFolder]);
@@ -77,11 +83,11 @@ export function FolderCreateModal({
     onCreate({
       name: trimmed,
       color,
-      ...(showAutopilot ? { autopilot } : {}),
+      ...(showLaunchPolicy ? { requireValidation } : {}),
       ...(trimmedBranch ? { branch: trimmedBranch } : {}),
     });
     onClose();
-  }, [name, branch, color, autopilot, showAutopilot, onCreate, onClose]);
+  }, [name, branch, color, requireValidation, showLaunchPolicy, onCreate, onClose]);
 
   const header = useMemo(
     (): SheetHeader => ({
@@ -158,15 +164,15 @@ export function FolderCreateModal({
           ))}
         </View>
       </Field>
-      {showAutopilot ? (
-        <Field label={t("tasks.folderModal.autopilotField")}>
+      {showLaunchPolicy ? (
+        <Field label={t("tasks.folderModal.requireValidationField")}>
           <View style={styles.autopilotRow}>
-            <Text style={styles.autopilotHint}>{t("tasks.folderModal.autopilotHint")}</Text>
+            <Text style={styles.autopilotHint}>{t("tasks.folderModal.requireValidationHint")}</Text>
             <Switch
-              value={autopilot}
-              onValueChange={setAutopilot}
-              accessibilityLabel={t("tasks.folderModal.autopilotField")}
-              testID="tasks-folder-modal-autopilot"
+              value={requireValidation}
+              onValueChange={setRequireValidation}
+              accessibilityLabel={t("tasks.folderModal.requireValidationField")}
+              testID="tasks-folder-modal-require-validation"
             />
           </View>
         </Field>

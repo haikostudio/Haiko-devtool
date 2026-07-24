@@ -381,6 +381,8 @@ export const ar: TranslationResources = {
       colorField: "اللون",
       autopilotField: "الطيار الآلي",
       autopilotHint: "تنطلق مهام قائمة الانتظار تلقائيًا — تُدار الحصة وساعات الذروة المنخفضة.",
+      requireValidationField: "انتظار موافقتي",
+      requireValidationHint: "معطّل: تبدأ المهام فورًا. مفعّل: تنتظر كل مهمة موافقتك قبل التشغيل.",
       create: "إنشاء",
       save: "حفظ",
     },

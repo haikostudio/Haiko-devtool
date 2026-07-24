@@ -380,6 +380,9 @@ export const en = {
       colorField: "Color",
       autopilotField: "Autopilot",
       autopilotHint: "Backlog tasks launch on their own — quota and off-peak hours are managed.",
+      requireValidationField: "Wait for my validation",
+      requireValidationHint:
+        "Off: tasks start right away. On: each task waits until you validate it before running.",
       create: "Create",
       save: "Save",
     },

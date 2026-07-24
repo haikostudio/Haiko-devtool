@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Clock,
   Folder,
+  Hand,
   LayoutGrid,
   MoreVertical,
   Pencil,
@@ -26,7 +27,6 @@ import {
   Settings2,
   Trash2,
   Wand2,
-  Zap,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -104,7 +104,7 @@ const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
-const ThemedZap = withUnistyles(Zap);
+const ThemedHand = withUnistyles(Hand);
 const ThemedSettings = withUnistyles(Settings2);
 const ThemedWand = withUnistyles(Wand2);
 const ThemedGradientStop = withUnistyles(Stop);
@@ -908,7 +908,7 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
   }, []);
 
   const handleSubmit = useCallback(
-    (input: { name: string; color: string; autopilot?: boolean; branch?: string }) => {
+    (input: { name: string; color: string; requireValidation?: boolean; branch?: string }) => {
       if (mode?.kind === "edit") {
         void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
       } else {
@@ -924,7 +924,7 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
         ? {
             name: mode.folder.name,
             color: mode.folder.color,
-            autopilot: mode.folder.autopilot,
+            requireValidation: mode.folder.requireValidation,
             branch: mode.folder.branch,
           }
         : undefined,
@@ -937,7 +937,7 @@ function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
       onClose={close}
       onCreate={handleSubmit}
       initialFolder={initialFolder}
-      showAutopilot={supportsAutopilot}
+      showLaunchPolicy={supportsAutopilot}
     />
   );
 
@@ -991,7 +991,7 @@ const FolderRailItem = memo(function FolderRailItem({
         <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
       <TaskStatusVoyant tone={tone} />
-      {folder.autopilot ? <AutopilotMark /> : null}
+      {folder.requireValidation ? <ValidationHoldMark /> : null}
       <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
   );
@@ -1007,12 +1007,13 @@ const ProjectColorMark = memo(function ProjectColorMark({ projectKey }: { projec
   return <View style={dotStyle} />;
 });
 
-// Lightning mark on folders whose backlog runs on autopilot.
-const AutopilotMark = memo(function AutopilotMark() {
+// "Hold" mark on folders that wait for the user to validate each task before it
+// runs (the exception — immediate start is the default, so it carries no mark).
+const ValidationHoldMark = memo(function ValidationHoldMark() {
   const { t } = useTranslation();
   return (
-    <View accessibilityLabel={t("tasks.folderModal.autopilotField")}>
-      <ThemedZap size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+    <View accessibilityLabel={t("tasks.folderModal.requireValidationField")}>
+      <ThemedHand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
     </View>
   );
 });
@@ -2176,7 +2177,7 @@ const CompactFolderRow = memo(function CompactFolderRow({
         <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
       </View>
       <TaskStatusVoyant tone={tone} />
-      {folder.autopilot ? <AutopilotMark /> : null}
+      {folder.requireValidation ? <ValidationHoldMark /> : null}
       <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
     </Pressable>
   );
