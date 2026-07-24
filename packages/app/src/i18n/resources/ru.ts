@@ -415,6 +415,12 @@ export const ru: TranslationResources = {
       inProgress: "В работе",
       done: "Готово",
       deployed: "Развёрнуто",
+      notes: "Заметки",
+    },
+    notes: {
+      addNote: "Добавить заметку",
+      placeholder: "Быстрая заметка…",
+      importance: "Важность",
     },
     board: {
       emptyColumn: "Нет задач",

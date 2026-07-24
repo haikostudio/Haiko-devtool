@@ -412,6 +412,12 @@ export const zhCN: TranslationResources = {
       inProgress: "进行中",
       done: "已完成",
       deployed: "已部署",
+      notes: "笔记",
+    },
+    notes: {
+      addNote: "添加笔记",
+      placeholder: "快速笔记…",
+      importance: "重要程度",
     },
     board: {
       emptyColumn: "暂无任务",

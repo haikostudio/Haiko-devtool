@@ -419,6 +419,12 @@ export const fr: TranslationResources = {
       inProgress: "En cours",
       done: "Terminé",
       deployed: "Déployé",
+      notes: "Notes",
+    },
+    notes: {
+      addNote: "Ajouter une note",
+      placeholder: "Note rapide…",
+      importance: "Importance",
     },
     board: {
       emptyColumn: "Aucune tâche",

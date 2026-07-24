@@ -416,6 +416,12 @@ export const ja: TranslationResources = {
       inProgress: "進行中",
       done: "完了",
       deployed: "デプロイ済み",
+      notes: "メモ",
+    },
+    notes: {
+      addNote: "メモを追加",
+      placeholder: "クイックメモ…",
+      importance: "重要度",
     },
     board: {
       emptyColumn: "タスクなし",

@@ -412,6 +412,12 @@ export const ar: TranslationResources = {
       inProgress: "قيد التنفيذ",
       done: "منجزة",
       deployed: "منشورة",
+      notes: "ملاحظات",
+    },
+    notes: {
+      addNote: "إضافة ملاحظة",
+      placeholder: "ملاحظة سريعة…",
+      importance: "الأهمية",
     },
     board: {
       emptyColumn: "لا مهام",

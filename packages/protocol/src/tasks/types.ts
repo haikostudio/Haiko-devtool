@@ -4,12 +4,16 @@ import { AgentAttachmentSchema } from "../attachments.js";
 // Kanban task board — per-project task management.
 // Wire schemas are pure structural declarations (no transforms/defaults on containers).
 
+// "notes": leftmost, pre-"backlog" draft column. Free-form capture — short notes
+// carrying a deadline and an importance (stored as tags), no estimate and no
+// agent. Nothing runs until the user drags a note into "backlog" (the normal
+// cycle). It is NOT a pipeline column, so the scheduler never touches it.
 // "validated": user-validated tasks. This is the consent gate — analysis
 // (estimation) and execution only ever start here, never from "backlog".
 // "deployed": terminal, post-"done" column. A task lands here once the
 // conductor has confirmed its work is actually live (merged + published).
-// Appending it keeps the wire enum backward-compatible: an old daemon simply
-// never emits it, and an old client that receives it is one release away.
+// Appending new values keeps the wire enum backward-compatible: an old daemon
+// simply never emits it, and an old client that receives it is one release away.
 export const TaskColumnSchema = z.enum([
   "backlog",
   "validated",
@@ -17,6 +21,7 @@ export const TaskColumnSchema = z.enum([
   "in_progress",
   "done",
   "deployed",
+  "notes",
 ]);
 export type TaskColumn = z.infer<typeof TaskColumnSchema>;
 

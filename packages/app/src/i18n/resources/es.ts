@@ -418,6 +418,12 @@ export const es: TranslationResources = {
       inProgress: "En curso",
       done: "Hecho",
       deployed: "Desplegado",
+      notes: "Notas",
+    },
+    notes: {
+      addNote: "Añadir nota",
+      placeholder: "Nota rápida…",
+      importance: "Importancia",
     },
     board: {
       emptyColumn: "Sin tareas",

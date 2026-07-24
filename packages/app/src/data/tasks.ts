@@ -45,6 +45,9 @@ export interface TaskBoardHandle {
     // Spawn the task's agent immediately (inline composer send). Omitted =
     // plain draft that only runs once dragged into the pipeline.
     launch?: boolean;
+    // Priority/deadline/thematic tags, pre-serialized. Notes use this to carry
+    // their importance + deadline without any agent involvement.
+    tags?: string[];
   }) => Promise<void>;
   updateTask: (input: {
     taskId: string;
@@ -200,6 +203,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       attachments?: AgentAttachment[];
       column?: TaskColumn;
       launch?: boolean;
+      tags?: string[];
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskCreate({ projectId: project, ...input });
