@@ -158,18 +158,18 @@ describe("AgentTaskSyncService", () => {
     const pending = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Implement the login form",
-      column: "scheduled",
       approval: { state: "pending", requestedBy: "agent-1" },
     });
-    // Dedupe links the emitting agent onto the existing card; the approval
-    // guard must still keep the card parked in "scheduled".
+    // A proposal is born in backlog with its pending marker. Dedupe links the
+    // emitting agent onto the existing card; the approval guard must still keep
+    // the card parked where it is — agent-sync never drags a pending proposal.
     emitTodos([{ text: "Implement the login form", completed: true }]);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const board = await service.getBoard("proj-1");
     const task = board.tasks.find((entry) => entry.id === pending.id);
     expect(board.tasks).toHaveLength(1);
-    expect(task?.column).toBe("scheduled");
+    expect(task?.column).toBe("backlog");
     expect(task?.approval?.state).toBe("pending");
   });
 });

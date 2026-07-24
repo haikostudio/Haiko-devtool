@@ -251,22 +251,26 @@ describe("TaskBoardService", () => {
     expect(refined).toEqual([]);
   });
 
-  test("createTask directly in scheduled arms the schedule and fires the estimate hook", async () => {
+  test("createTask always lands in backlog even when a pipeline column is requested", async () => {
     const scheduled: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
     const folder = await service.createFolder("proj-1", "Auth");
 
+    // Callers may still pass a column, but creation is pinned to backlog — a task
+    // only ever enters the pipeline through an explicit user move, never at birth.
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Proposed by agent",
       column: "scheduled",
     });
 
-    expect(task.schedule?.state).toBe("pending_estimate");
-    expect(scheduled).toEqual([task.id]);
+    expect(task.column).toBe("backlog");
+    // Backlog is inert: no schedule armed, no estimate hook fired at creation.
+    expect(task.schedule ?? null).toBeNull();
+    expect(scheduled).toEqual([]);
   });
 
-  test("createTask with launch arms the schedule in backlog and fires the estimate hook", async () => {
+  test("createTask with launch remains inert in backlog", async () => {
     const scheduled: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
     const folder = await service.createFolder("proj-1", "Auth");
@@ -277,10 +281,10 @@ describe("TaskBoardService", () => {
       launch: true,
     });
 
-    // The card stays in "À faire" but its agent is armed right away.
+    // Creation never enters or arms the execution pipeline.
     expect(task.column).toBe("backlog");
-    expect(task.schedule?.state).toBe("pending_estimate");
-    expect(scheduled).toEqual([task.id]);
+    expect(task.schedule ?? null).toBeNull();
+    expect(scheduled).toEqual([]);
   });
 
   test("createTask without launch leaves a backlog draft inert", async () => {
@@ -321,36 +325,37 @@ describe("TaskBoardService", () => {
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Traiter le mail client",
-      column: "scheduled",
       runConfig: { provider: "claude", model: "claude-opus-4-8", mode: "plan" },
       approval: { state: "pending", requestedBy: "agent-42" },
     });
 
+    // A proposal waits in backlog with its pending marker — inert until the user
+    // validates it (no premature estimation in "À faire").
+    expect(task.column).toBe("backlog");
+    expect(task.schedule ?? null).toBeNull();
     expect(task.approval?.state).toBe("pending");
     expect(task.runConfig?.model).toBe("claude-opus-4-8");
     expect(proposed).toEqual(["proj-1"]);
   });
 
-  test("approveTask stamps approval and arms an unarmed scheduled task", async () => {
+  test("approveTask moves a backlog proposal into validated and arms its schedule", async () => {
     const scheduled: string[] = [];
     const folder = await service.createFolder("proj-1", "Agent");
+    // A proposal is born in backlog; approving is the user's consent to run it.
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Needs approval",
-      column: "scheduled",
       approval: { state: "pending" },
     });
-    // Simulate a legacy/edge state where the schedule is missing.
-    await service.patchTask("proj-1", task.id, (current) => {
-      const { schedule: _schedule, ...rest } = current;
-      return rest as typeof current;
-    });
+    expect(task.column).toBe("backlog");
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
 
     const approved = await service.approveTask("proj-1", task.id);
 
     expect(approved.approval?.state).toBe("approved");
     expect(approved.approval?.approvedAt).toBeTruthy();
+    // Approval lifts it out of backlog into the "Validé" consent gate and arms it.
+    expect(approved.column).toBe("validated");
     expect(approved.schedule?.state).toBe("pending_estimate");
     expect(scheduled).toEqual([task.id]);
   });

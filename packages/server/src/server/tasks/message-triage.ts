@@ -191,7 +191,9 @@ export class MessageTriage {
           title: task.title,
           ...(task.description ? { description: task.description } : {}),
           tags: task.tags,
-          column: "scheduled",
+          // Triage tasks are born in backlog like every other new task; the
+          // pending-approval marker flags them as awaiting the user's validation
+          // (the service pins creation to backlog regardless of column).
           // origin stays within the existing enum; PROPOSED state distinguishes triage tasks.
           origin: "agent_sync",
           ...(runConfig !== undefined ? { runConfig } : {}),

@@ -2880,8 +2880,8 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       {
         title: "Create task",
         description:
-          "Create a kanban task in a project's board. Set runConfig (provider/model, thinkingOptionId, mode) to propose how it should run. " +
-          "With proposeRun=true the task lands in the Scheduled column AWAITING EXPLICIT USER APPROVAL — the scheduler never runs unapproved tasks and you cannot approve them yourself.",
+          "Create a kanban task in a project's board. Every new task lands in the backlog (À faire) — creation never enters the pipeline. Set runConfig (provider/model, thinkingOptionId, mode) to propose how it should run. " +
+          "With proposeRun=true the task is flagged AWAITING EXPLICIT USER VALIDATION: it still waits in backlog, and only the user can move it into the pipeline (Validé/Planifié) — you cannot schedule or approve it yourself.",
         inputSchema: {
           projectId: z.string(),
           folderId: z.string().optional().describe("Target folder id. Preferred when known."),
@@ -2897,7 +2897,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           proposeRun: z
             .boolean()
             .optional()
-            .describe("true: place in Scheduled awaiting user approval. false/absent: backlog."),
+            .describe(
+              "true: flag the (backlog) task as awaiting the user's validation. false/absent: a plain backlog task. Either way it lands in backlog, never scheduled.",
+            ),
         },
         outputSchema: {
           taskId: z.string(),
@@ -2930,10 +2932,11 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
             : {}),
           // The proposing agent is recorded in approval.requestedBy, NOT in
           // links: a linked agent would drag the card through agent-sync
-          // transitions while it is still awaiting user approval.
+          // transitions while it is still awaiting user validation. The task
+          // stays in backlog (the service pins creation there); the pending
+          // marker is what tells the board it needs the user's validation.
           ...(args.proposeRun
             ? {
-                column: "scheduled" as const,
                 approval: {
                   state: "pending" as const,
                   ...(callerAgentId ? { requestedBy: callerAgentId } : {}),

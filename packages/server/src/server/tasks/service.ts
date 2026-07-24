@@ -396,20 +396,15 @@ export class TaskBoardService {
 
   async createTask(projectId: string, input: CreateTaskInput): Promise<KanbanTask> {
     let created: KanbanTask | null = null;
-    const column = input.column ?? "backlog";
-    // A task arms its analysis agent when it lands in a pipeline column (the
-    // existing consent gate) OR when the caller explicitly asks to launch it —
-    // the inline "À faire" composer does, so sending a prompt spawns the agent
-    // in place. A proposal awaiting approval never auto-launches.
-    const shouldLaunch =
-      PIPELINE_COLUMNS.has(column) ||
-      (input.launch === true && input.approval?.state !== "pending");
+    // Every task starts in "À faire". Entering the execution pipeline requires
+    // an explicit user move or approval after creation.
+    const column: TaskColumn = "backlog";
     // A manual backlog card built from a pasted prompt gets a LIGHT analysis
     // (title + tidied description) — never a cost estimate. That's the whole
     // point of the gate: analysis cost only starts at "Validé".
     const needsLightAnalysis =
-      column === "backlog" &&
       (input.origin ?? "manual") === "manual" &&
+      input.approval?.state !== "pending" &&
       (input.description?.trim() ?? "") !== "";
     const board = await this.store.mutate(projectId, (current) => {
       if (!current.folders.some((entry) => entry.id === input.folderId)) {
@@ -437,7 +432,6 @@ export class TaskBoardService {
           ? { schedulePreference: input.schedulePreference }
           : {}),
         ...(input.approval !== undefined ? { approval: input.approval } : {}),
-        ...(shouldLaunch ? { schedule: { state: "pending_estimate" as const, attempts: 0 } } : {}),
         // Mark pending so the refiner (and a restart re-arm) knows to clean it up.
         ...(needsLightAnalysis ? { refinement: "pending" as const } : {}),
         links: input.agentId
@@ -451,9 +445,6 @@ export class TaskBoardService {
     this.broadcast(board);
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
-    }
-    if (shouldLaunch) {
-      this.notifyScheduled(projectId, created);
     }
     if (needsLightAnalysis) {
       this.notifyBacklogRefine(projectId, created);
@@ -521,8 +512,11 @@ export class TaskBoardService {
   }
 
   /**
-   * User approval of an agent-proposed task. If the task sits in "scheduled"
-   * without a schedule yet, arms it so the estimator/scheduler pick it up.
+   * User approval of an agent-proposed task. Proposals are born in "backlog"
+   * (like every other task), so approving one is the user's explicit consent to
+   * run it: it moves out of backlog into the "validated" consent gate and arms
+   * the schedule so the estimator/scheduler pick it up. A proposal already in a
+   * pipeline column (legacy state) keeps its column and just gets armed.
    */
   async approveTask(projectId: string, taskId: string): Promise<KanbanTask> {
     let needsScheduleNotify = false;
@@ -531,11 +525,14 @@ export class TaskBoardService {
         return task;
       }
       const now = new Date().toISOString();
+      const column: TaskColumn = PIPELINE_COLUMNS.has(task.column) ? task.column : "validated";
       const updated: KanbanTask = {
         ...task,
+        column,
         approval: { ...task.approval, state: "approved", approvedAt: now },
       };
-      if (PIPELINE_COLUMNS.has(task.column) && !task.schedule) {
+      // Never re-arm a task that already reached the terminal columns.
+      if (PIPELINE_COLUMNS.has(column) && !task.schedule && task.completedAt == null) {
         updated.schedule = { state: "pending_estimate", attempts: 0 };
         needsScheduleNotify = true;
       }
