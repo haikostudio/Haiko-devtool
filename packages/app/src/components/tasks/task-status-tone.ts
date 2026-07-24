@@ -40,17 +40,25 @@ function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
   );
 }
 
-// Actively working (spinning loader): the scheduler is estimating / launching /
-// running, the card sits in the in-progress column, or the live agent is running.
+// Actively working (spinning loader): reflect the agent's REAL activity, not a
+// stale board flag. The loader lights only when the scheduler is still spinning
+// the run up — estimating or launching, before a live agent exists — or when the
+// task's live agent is genuinely running.
+//
+// It deliberately does NOT trust `task.column === "in_progress"` on its own, nor
+// a leftover `schedule.state === "running"`. Those persist after the run is over:
+// an agent that finished, went idle, was cut by an idle-timeout, or whose process
+// died leaves the card parked in the in-progress column with a "running" schedule
+// flag it can no longer clear. Once the live agent is idle or gone
+// (`agentBucket !== "running"`), the run is over and the loader must stop instead
+// of spinning in the void. In the happy path a truly-running agent reports
+// `agentBucket === "running"`, so nothing is lost.
 function isRunning(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
   const scheduleState = task.schedule?.state;
-  return (
-    task.column === "in_progress" ||
-    scheduleState === "pending_estimate" ||
-    scheduleState === "launching" ||
-    scheduleState === "running" ||
-    agentBucket === "running"
-  );
+  if (scheduleState === "pending_estimate" || scheduleState === "launching") {
+    return true;
+  }
+  return agentBucket === "running";
 }
 
 // Queued/planned but not yet working: validated and parked waiting for its slot
@@ -83,13 +91,23 @@ export function deriveTaskTone(
   if (isRunning(task, agentBucket)) {
     return "running";
   }
-  // "done" and "deployed" are terminal in the board model — a completed or
-  // shipped task with no live agent activity stays a quiet green light.
-  if (task.completedAt || task.column === "done" || task.column === "deployed") {
-    return "done";
-  }
   if (isScheduled(task)) {
     return "scheduled";
+  }
+  // "done" and "deployed" are terminal in the board model — a completed or
+  // shipped task with no live agent activity stays a quiet green light. An
+  // "in_progress" card that reaches here is no longer actually running: the
+  // checks above ruled out live activity, a pending question, and a queued slot,
+  // so its agent finished, went idle, was cut, or died without the server moving
+  // the card. Read it as a quiet green "done" light rather than leaving a stale
+  // spinner (or, worse, no light at all).
+  if (
+    task.completedAt ||
+    task.column === "done" ||
+    task.column === "deployed" ||
+    task.column === "in_progress"
+  ) {
+    return "done";
   }
   return null;
 }
