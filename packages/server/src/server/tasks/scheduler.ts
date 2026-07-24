@@ -377,11 +377,7 @@ export class TaskScheduler {
     projectId: string,
     task: KanbanTask,
   ): Promise<KanbanTask> {
-    if (
-      !task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) ||
-      task.runConfig?.provider !== "claude" ||
-      task.estimate
-    ) {
+    if (!task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) || task.runConfig?.provider !== "claude") {
       return task;
     }
     try {

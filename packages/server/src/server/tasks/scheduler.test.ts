@@ -472,6 +472,31 @@ describe("TaskScheduler", () => {
     expect(planned?.links.prUrl ?? null).toBeNull();
   });
 
+  test("switches automatic deploy repairs to Codex when Claude is exhausted", async () => {
+    const task = await seedScheduledTask({
+      title: "Réparer une branche avant publication",
+      runConfig: { provider: "claude", model: "claude-opus-4-8", mode: "direct" },
+    });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      tags: ["paseo:deploy-conflict"],
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 0 });
+
+    await scheduler.tick();
+    await vi.waitFor(() => {
+      expect(createAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "codex/gpt-5.4" }),
+      );
+    });
+
+    expect((await findTask(task.id))?.runConfig).toMatchObject({
+      provider: "codex",
+      model: "gpt-5.4",
+      mode: "direct",
+    });
+  });
+
   test("autopilot folder: backlog task auto-validates then launches", async () => {
     const folder = await service.createFolder("proj-1", "Auto", undefined, true);
     const task = await service.createTask("proj-1", {

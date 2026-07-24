@@ -141,9 +141,9 @@ function WorktreesSummary({ worktrees }: { worktrees: PaseoDeployWorktreeEntry[]
       </Text>
       <Text style={styles.worktreesSummaryText}>
         {ready > 0
-          ? `${ready} ${ready > 1 ? "peuvent être publiés" : "peut être publié"}`
-          : "Aucun atelier ne peut être publié tel quel"}
-        {blocked > 0 ? ` · ${blocked} à reprendre` : ""}
+          ? `${ready} ${ready > 1 ? "prêts à publier" : "prêt à publier"}`
+          : "Préparation automatique en cours"}
+        {blocked > 0 ? ` · ${blocked} pris en charge automatiquement` : ""}
       </Text>
     </View>
   );
@@ -319,7 +319,7 @@ function deployPhaseLabel(phase: string | null | undefined, triggering: boolean)
     case "done":
       return "En ligne ✅";
     case "error":
-      return "Échec du déploiement";
+      return "Mise en place à reprendre";
     default:
       return triggering ? "Démarrage…" : "Déploiement en cours…";
   }
@@ -427,11 +427,11 @@ function WorktreeUncommittedHint({ count }: { count: number }) {
 }
 
 function WorktreeReadiness({ worktree }: { worktree: PaseoDeployWorktreeEntry }) {
-  let label = "Conflit à reprendre";
+  let label = "Réparation automatique";
   if (worktree.uncommittedCount > 0) {
-    label = "À enregistrer d'abord";
+    label = "Enregistrement automatique";
   } else if (worktree.mergeReason === "unknown") {
-    label = "Vérification indisponible";
+    label = "Vérification automatique";
   }
   if (worktree.mergeable === true && worktree.uncommittedCount === 0) {
     return (
@@ -567,28 +567,18 @@ function WorktreesSection({
   );
 }
 
-/** Red banner for a deploy error (last run failure or trigger error). */
-function DeployErrorBanner({ message }: { message: string | null }) {
-  if (!message) return null;
-  return (
-    <View style={styles.warning}>
-      <Text style={styles.warningText}>{message}</Text>
-    </View>
-  );
-}
-
 function DeployBlockedNotice({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
     <View style={styles.blockedNotice}>
       <Text style={styles.blockedNoticeTitle}>
         {count > 1
-          ? `${count} ateliers ne peuvent pas être publiés tels quels`
-          : "Cet atelier ne peut pas être publié tel quel"}
+          ? `${count} ateliers pris en charge automatiquement`
+          : "Cet atelier est pris en charge automatiquement"}
       </Text>
       <Text style={styles.blockedNoticeText}>
-        Leur historique entre en conflit avec l&apos;application actuelle. Tu peux les sélectionner
-        : le mécanisme ouvrira une tâche pour les réparer, puis relancera la mise en place.
+        Ils restent sélectionnables. Le mécanisme ouvre une tâche de réparation, puis relance la
+        mise en place quand l&apos;atelier est prêt.
       </Text>
     </View>
   );
@@ -616,13 +606,11 @@ function DeployStatusHeader({
  *  simple (and under the complexity budget). */
 function DeployModalBody({
   status,
-  error,
   deselected,
   onToggle,
   busy,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
-  error: string | null;
   deselected: Set<string>;
   onToggle: (branch: string) => void;
   busy: boolean;
@@ -673,9 +661,6 @@ function DeployModalBody({
         onToggle={onToggle}
         busy={busy}
       />
-
-      <DeployErrorBanner message={status?.lastError ?? null} />
-      <DeployErrorBanner message={error} />
     </View>
   );
 }
@@ -689,7 +674,6 @@ function PaseoDeployModal({
   onDeployed,
 }: PaseoDeployModalProps) {
   const client = useHostRuntimeClient(serverId);
-  const [error, setError] = useState<string | null>(null);
   // True during the brief window between clicking "Déployer" and the daemon
   // reporting `deploying: true` on the next status poll.
   const [triggering, setTriggering] = useState(false);
@@ -731,7 +715,6 @@ function PaseoDeployModal({
     if (!client || triggering || deploying) return;
     const trunkPending = unshippedCommits.length > 0;
     if (selectedWorktrees.length === 0 && !trunkPending) return;
-    setError(null);
     setTriggering(true);
     try {
       const result = await client.paseoDeployTrigger({
@@ -739,14 +722,14 @@ function PaseoDeployModal({
         mergeBranches: selectedBranches,
       });
       if (!result.started) {
-        setError(result.error ?? "Le déploiement n'a pas pu démarrer.");
         return;
       }
       // Kick an immediate status refresh so `deploying`/`deployPhase` appear
       // without waiting for the next poll tick.
       onDeployed();
-    } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "Échec du déploiement.");
+    } catch {
+      // The sheet is a status view, not an error console. The next status poll
+      // refreshes the neutral branch labels and leaves the mechanism in charge.
     } finally {
       setTriggering(false);
     }
@@ -812,13 +795,7 @@ function PaseoDeployModal({
       footer={footer}
       testID="paseo-deploy-modal"
     >
-      <DeployModalBody
-        status={status}
-        error={error}
-        deselected={deselected}
-        onToggle={toggle}
-        busy={busy}
-      />
+      <DeployModalBody status={status} deselected={deselected} onToggle={toggle} busy={busy} />
     </AdaptiveModalSheet>
   );
 }
@@ -1131,15 +1108,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     lineHeight: theme.fontSize.sm * 1.4,
     color: theme.colors.palette.amber[200],
-  },
-  warning: {
-    padding: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.palette.red[900],
-  },
-  warningText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.palette.red[200],
   },
   // Stacked (one under the other) on narrow screens, side by side on wide ones.
   // flex:1 lets the group fill the sticky footer's row so the buttons span the
