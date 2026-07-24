@@ -552,11 +552,12 @@ export function AdaptiveModalSheet({
   const bottomSheetStaticContentStyle = useMemo(
     () => [
       styles.bottomSheetStaticContent,
+      contentHorizontalPadding != null ? { paddingHorizontal: contentHorizontalPadding } : null,
       compactSafeAreaPadding.contentPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.contentPaddingBottom],
+    [contentHorizontalPadding, compactSafeAreaPadding.contentPaddingBottom],
   );
   const footerStyle = useMemo(
     () => [

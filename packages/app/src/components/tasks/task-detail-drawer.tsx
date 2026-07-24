@@ -134,6 +134,10 @@ function TaskDetailDrawerInner({
 
 const styles = StyleSheet.create((theme) => ({
   tabs: {
+    // The sheet no longer indents the dock body, so the tabs own their own
+    // horizontal inset (matching the conductor panel) to stay off the edges.
+    paddingTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
   body: {
