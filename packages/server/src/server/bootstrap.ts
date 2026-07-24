@@ -1301,6 +1301,13 @@ export async function createPaseoDaemon(
   taskBoardService.setOnTaskScheduled((projectId, taskId) => {
     taskEstimator.requestEstimate(projectId, taskId);
   });
+  // Manual "+" creation in the backlog: run the analysis agent so the card fills
+  // itself in (title/description/estimate). This is card generation only — the
+  // scheduler never launches a backlog task, so nothing executes until the user
+  // validates it into "Validé".
+  taskBoardService.setOnTaskCardRequested((projectId, taskId) => {
+    taskEstimator.requestEstimate(projectId, taskId);
+  });
   // Auto-move: when a publish goes live, promote the shipped task branches' done
   // cards into the terminal "deployed" column across every project's board.
   setPaseoDeploySuccessListener((event) => {

@@ -167,6 +167,7 @@ export class TaskBoardService {
   private readonly listeners = new Map<string, Set<TaskBoardListener>>();
   private onTaskScheduled: ((projectId: string, taskId: string) => void) | null = null;
   private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
+  private onTaskCardRequested: ((projectId: string, taskId: string) => void) | null = null;
 
   constructor(options: TaskBoardServiceOptions) {
     this.store = options.store;
@@ -180,6 +181,16 @@ export class TaskBoardService {
   /** Fired when a task is created awaiting user approval (agent proposals). */
   setOnTaskProposed(callback: (projectId: string, task: KanbanTask) => void): void {
     this.onTaskProposed = callback;
+  }
+
+  /**
+   * Fired when the user creates a task by hand in the backlog (the "+" button).
+   * The listener runs the analysis agent that turns the raw prompt into a real
+   * card (title/description/estimate) — WITHOUT executing the task's work.
+   * Execution stays gated behind manual validation ("Validé").
+   */
+  setOnTaskCardRequested(callback: (projectId: string, taskId: string) => void): void {
+    this.onTaskCardRequested = callback;
   }
 
   subscribe(projectId: string, listener: TaskBoardListener): () => void {
@@ -409,8 +420,25 @@ export class TaskBoardService {
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
     }
+    const createdTask: KanbanTask = created;
     if (PIPELINE_COLUMNS.has(column)) {
-      this.notifyScheduled(projectId, created);
+      this.notifyScheduled(projectId, createdTask);
+    } else if (
+      // A task the user typed by hand into the backlog ("+" button) self-analyzes
+      // so its real card fills in immediately. This generates the card only — the
+      // scheduler never runs a backlog task, so nothing executes until the user
+      // validates it. Agent proposals (approval pending) and agent-sync imports
+      // are excluded: only the user's own new cards trigger this.
+      column === "backlog" &&
+      (input.origin ?? "manual") === "manual" &&
+      input.approval?.state !== "pending" &&
+      this.onTaskCardRequested
+    ) {
+      try {
+        this.onTaskCardRequested(projectId, createdTask.id);
+      } catch (error) {
+        this.logger.warn({ err: error, title: input.title }, "onTaskCardRequested callback failed");
+      }
     }
     if (input.approval?.state === "pending" && this.onTaskProposed) {
       try {

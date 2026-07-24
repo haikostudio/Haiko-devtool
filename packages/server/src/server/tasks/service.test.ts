@@ -216,6 +216,45 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([task.id]);
   });
 
+  test("manual backlog creation fires card generation but not scheduling", async () => {
+    const cardRequested: string[] = [];
+    const scheduled: string[] = [];
+    service.setOnTaskCardRequested((_projectId, taskId) => cardRequested.push(taskId));
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Type me from the + button",
+    });
+
+    // The card self-analyzes (card generation), but nothing arms execution: the
+    // task stays inert in the backlog until the user validates it.
+    expect(task.column).toBe("backlog");
+    expect(task.schedule ?? null).toBeNull();
+    expect(cardRequested).toEqual([task.id]);
+    expect(scheduled).toEqual([]);
+  });
+
+  test("card generation skips agent proposals and agent-sync imports", async () => {
+    const cardRequested: string[] = [];
+    service.setOnTaskCardRequested((_projectId, taskId) => cardRequested.push(taskId));
+    const folder = await service.createFolder("proj-1", "Auth");
+
+    await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Proposed, awaiting approval",
+      approval: { state: "pending", requestedBy: "agent-7" },
+    });
+    await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Synced from an agent",
+      origin: "agent_sync",
+    });
+
+    expect(cardRequested).toEqual([]);
+  });
+
   test("agent proposals stay pending and fire onTaskProposed", async () => {
     const proposed: string[] = [];
     service.setOnTaskProposed((projectId) => proposed.push(projectId));
