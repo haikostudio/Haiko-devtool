@@ -90,7 +90,7 @@ describe("paseo task board tools", () => {
     ]);
   });
 
-  test("create_task with proposeRun lands in scheduled awaiting approval, unlinked from the caller", async () => {
+  test("create_task with proposeRun lands in backlog awaiting validation, unlinked from the caller", async () => {
     const result = structured(
       await catalog.executeTool("create_task", {
         projectId: "proj-1",
@@ -103,19 +103,23 @@ describe("paseo task board tools", () => {
       }),
     );
 
-    expect(result.column).toBe("scheduled");
+    // Every new task is born in backlog — a proposal never enters the pipeline
+    // at creation. The pending marker is what flags it for the user's validation.
+    expect(result.column).toBe("backlog");
     expect(result.approvalState).toBe("pending");
 
     const board = await service.getBoard("proj-1");
     const task = board.tasks.find((entry) => entry.id === result.taskId);
+    expect(task?.column).toBe("backlog");
     expect(task?.approval?.state).toBe("pending");
     expect(task?.approval?.requestedBy).toBe("agent-42");
     expect(task?.runConfig?.mode).toBe("plan");
     expect(task?.schedulePreference).toBe("off_peak");
     // The proposer must NOT be linked: agent-sync would drag the card around.
     expect(task?.links.agentIds).toEqual([]);
-    // The schedule is armed so the estimator can price the proposal pre-approval.
-    expect(task?.schedule?.state).toBe("pending_estimate");
+    // Backlog tasks are inert: the schedule stays disarmed until the user
+    // validates the proposal (moves it into the pipeline).
+    expect(task?.schedule).toBeUndefined();
     expect(board.folders.some((folder) => folder.name === "Mail client")).toBe(true);
   });
 
@@ -135,11 +139,13 @@ describe("paseo task board tools", () => {
   test("list_tasks filters by column and update_task patches runConfig", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
-    await service.createTask("proj-1", {
+    // Tasks are born in backlog; move the second one into the pipeline so the
+    // column filter has something to distinguish from backlog.
+    const scheduled = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Scheduled one",
-      column: "scheduled",
     });
+    await service.transitionTask("proj-1", scheduled.id, "scheduled");
 
     const backlog = structured(
       await catalog.executeTool("list_tasks", { projectId: "proj-1", column: "backlog" }),

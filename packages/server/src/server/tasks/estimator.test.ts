@@ -44,13 +44,24 @@ describe("TaskEstimator", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  // Tasks are born in backlog; a scheduled task is one the user has moved into
+  // the pipeline. Transition it so the schedule arms (pending_estimate).
+  async function moveToScheduled(taskId: string) {
+    const board = await service.transitionTask("proj-1", taskId, "scheduled");
+    const task = board.tasks.find((entry) => entry.id === taskId);
+    if (!task) {
+      throw new Error(`Task not found after transition: ${taskId}`);
+    }
+    return task;
+  }
+
   async function seedScheduledTask() {
     const folder = await service.createFolder("proj-1", "Auth");
-    const task = await service.createTask("proj-1", {
+    const created = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Implement login flow",
-      column: "scheduled",
     });
+    const task = await moveToScheduled(created.id);
     expect(task.schedule?.state).toBe("pending_estimate");
     return task;
   }
@@ -118,7 +129,8 @@ describe("TaskEstimator", () => {
 
   async function scheduledTaskInFolder(folderName: string, title: string) {
     const folder = await service.createFolder("proj-1", folderName);
-    return service.createTask("proj-1", { folderId: folder.id, title, column: "scheduled" });
+    const created = await service.createTask("proj-1", { folderId: folder.id, title });
+    return moveToScheduled(created.id);
   }
 
   test("applies a structured estimate with estimatedMinutes and advances the schedule", async () => {
@@ -224,16 +236,16 @@ describe("TaskEstimator", () => {
 
   test("serializes tasks that share a branch-folder", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
-    const taskA = await service.createTask("proj-1", {
+    const createdA = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Login flow",
-      column: "scheduled",
     });
-    const taskB = await service.createTask("proj-1", {
+    const createdB = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Logout flow",
-      column: "scheduled",
     });
+    const taskA = await moveToScheduled(createdA.id);
+    const taskB = await moveToScheduled(createdB.id);
     const { estimator, peak } = buildConcurrencyProbe();
 
     estimator.requestEstimate("proj-1", taskA.id);

@@ -367,7 +367,14 @@ export class TaskBoardService {
 
   async createTask(projectId: string, input: CreateTaskInput): Promise<KanbanTask> {
     let created: KanbanTask | null = null;
-    const column = input.column ?? "backlog";
+    // INVARIANT: every task is born in "backlog" ("À faire"), whatever the source
+    // (MCP create_task, message triage, RPC add-card). A task only ever enters a
+    // pipeline column ("validated"/"scheduled") through an explicit user move —
+    // never at creation, and never auto-approved. This is the single chokepoint
+    // that enforces it: callers may still pass input.column, but creation always
+    // lands in backlog. Proposed tasks keep their pending-approval marker; they
+    // simply wait in "À faire" for the user to validate them.
+    const column: TaskColumn = "backlog";
     const board = await this.store.mutate(projectId, (current) => {
       if (!current.folders.some((entry) => entry.id === input.folderId)) {
         throw new TaskBoardServiceError("folder_not_found", `Folder not found: ${input.folderId}`);
@@ -394,9 +401,6 @@ export class TaskBoardService {
           ? { schedulePreference: input.schedulePreference }
           : {}),
         ...(input.approval !== undefined ? { approval: input.approval } : {}),
-        ...(PIPELINE_COLUMNS.has(column)
-          ? { schedule: { state: "pending_estimate" as const, attempts: 0 } }
-          : {}),
         links: input.agentId
           ? { agentIds: [input.agentId], primaryAgentId: input.agentId }
           : { agentIds: [] },
@@ -408,9 +412,6 @@ export class TaskBoardService {
     this.broadcast(board);
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
-    }
-    if (PIPELINE_COLUMNS.has(column)) {
-      this.notifyScheduled(projectId, created);
     }
     if (input.approval?.state === "pending" && this.onTaskProposed) {
       try {
@@ -475,8 +476,11 @@ export class TaskBoardService {
   }
 
   /**
-   * User approval of an agent-proposed task. If the task sits in "scheduled"
-   * without a schedule yet, arms it so the estimator/scheduler pick it up.
+   * User approval of an agent-proposed task. Proposals are born in "backlog"
+   * (like every other task), so approving one is the user's explicit consent to
+   * run it: it moves out of backlog into the "validated" consent gate and arms
+   * the schedule so the estimator/scheduler pick it up. A proposal already in a
+   * pipeline column (legacy state) keeps its column and just gets armed.
    */
   async approveTask(projectId: string, taskId: string): Promise<KanbanTask> {
     let needsScheduleNotify = false;
@@ -485,11 +489,14 @@ export class TaskBoardService {
         return task;
       }
       const now = new Date().toISOString();
+      const column: TaskColumn = PIPELINE_COLUMNS.has(task.column) ? task.column : "validated";
       const updated: KanbanTask = {
         ...task,
+        column,
         approval: { ...task.approval, state: "approved", approvedAt: now },
       };
-      if (PIPELINE_COLUMNS.has(task.column) && !task.schedule) {
+      // Never re-arm a task that already reached the terminal columns.
+      if (PIPELINE_COLUMNS.has(column) && !task.schedule && task.completedAt == null) {
         updated.schedule = { state: "pending_estimate", attempts: 0 };
         needsScheduleNotify = true;
       }

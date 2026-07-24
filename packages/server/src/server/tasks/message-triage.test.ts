@@ -94,7 +94,9 @@ describe("MessageTriage", () => {
     const board = await service.getBoard("proj-1");
     expect(board.folders.some((f) => f.name === "Features")).toBe(true);
     for (const task of board.tasks) {
-      expect(task.column).toBe("scheduled");
+      // Triage tasks are born in backlog like every other new task; the pending
+      // marker (not the column) is what flags them for the user's validation.
+      expect(task.column).toBe("backlog");
       expect(task.approval?.state).toBe("pending");
       expect(task.origin).toBe("agent_sync");
     }
