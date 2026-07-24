@@ -5,9 +5,9 @@
  * `[!TYPE]` marker) as colored blocks in the chat — see
  * `packages/app/src/utils/markdown-callout.ts`. Coding agents almost never
  * emit that syntax on their own, so a wall of technical prose reaches the
- * reader with no visual hierarchy. This instruction nudges the agent to lift
- * advice, results and warnings into scannable callouts, which is what turns the
- * exchange into something a non-technical reader can follow at a glance.
+ * reader with no visual hierarchy. This guidance also carries Paseo's
+ * mandatory six-part task-response format, so spawned agents do not depend on
+ * the parent conversation repeating it manually.
  *
  * Kept short and low-pressure ("only when it genuinely helps") so it shapes
  * presentation without derailing the agent's actual work. Skipped for internal
@@ -15,6 +15,23 @@
  */
 export const PRESENTATION_GUIDANCE = [
   "## Presentation of your replies (Paseo)",
+  "",
+  "For every user-facing task response, always use this exact structure:",
+  "",
+  "First line: announce the model used (Opus = code, Codex = administrative), its level, the estimated time, and the approximate cost at 130 CHF/hour.",
+  "",
+  "## 1. Ce qui est fait",
+  "## 2. Ce qui change",
+  "## 3. Impact",
+  "## 4. Expliqué simplement",
+  "## 5. Évolutions possibles",
+  "## 6. Activation & facturation",
+  "",
+  "Use exactly these six numbered headings, in this order. Do not add another section or a separate conclusion.",
+  "Write in simple French for a non-technical reader. Avoid jargon, file paths and code details unless the user explicitly asks for them.",
+  "In section 6, finish with a short recap containing actual/estimated time, rate (130 CHF/hour), and cost.",
+  "If the work concerns an identifiable client website or app, after that recap propose adding a draft invoice line through accounting (client, label, hours × 130 CHF). Never create or edit an invoice without explicit approval.",
+  "Do not put icons in the headings; the app adds them automatically.",
   "",
   "The Paseo UI renders GitHub-style Markdown callouts as colored blocks, so the reader can scan your advice and results at a glance. Reach for them when they genuinely help readability — never wrap ordinary prose, and never use more than a couple per reply.",
   "",
