@@ -52,16 +52,40 @@ interface TaskCardProps {
   testID?: string;
 }
 
+// Notes carry their importance as a colored left accent so the column reads at a
+// glance — red for high, amber for medium, a quiet hairline otherwise.
+type NoteAccent = "high" | "medium" | "muted";
+
 function cardStyle({
   pressed,
   hovered,
   dimmed,
+  accent,
 }: {
   pressed: boolean;
   hovered?: boolean;
   dimmed?: boolean;
+  accent?: NoteAccent;
 }) {
-  return [styles.card, (hovered || pressed) && styles.cardHovered, dimmed && styles.cardDimmed];
+  return [
+    styles.card,
+    (hovered || pressed) && styles.cardHovered,
+    dimmed && styles.cardDimmed,
+    accent === "high" && styles.noteAccentHigh,
+    accent === "medium" && styles.noteAccentMedium,
+    accent === "muted" && styles.noteAccentMuted,
+  ];
+}
+
+// The importance → accent mapping used only on note (draft) cards.
+function noteAccentFor(level: ParsedPriority["level"] | undefined): NoteAccent {
+  if (level === "high") {
+    return "high";
+  }
+  if (level === "medium") {
+    return "medium";
+  }
+  return "muted";
 }
 
 // A finished card the user has already opened recedes: dim it so unseen finished
@@ -191,9 +215,20 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
   const tone = useTaskTone(task);
 
+  const isNote = task.column === "notes";
+  // A note whose deadline is here (overdue or within two days) nudges itself, the
+  // same attention shake a task waiting for a reply uses — an in-app "the clock is
+  // ticking" alert with no server/push involved.
+  const noteDeadlineUrgent = useMemo(() => {
+    if (!isNote || !deadline?.dueDate) {
+      return false;
+    }
+    return daysUntil(deadline.dueDate, new Date()) <= 2;
+  }, [isNote, deadline]);
+
   // A task that wants a reply nudges itself: a light horizontal shake every ~5s,
   // just enough to catch the eye without being noisy. Honors reduced motion.
-  const shakeStyle = useAttentionShake(tone === "attention");
+  const shakeStyle = useAttentionShake(tone === "attention" || noteDeadlineUrgent);
 
   // Concrete "runs around 01:00" hint for tasks the scheduler parks until the
   // next off-peak window. Formatted in the window's timezone and the UI locale.
@@ -224,10 +259,11 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
 
   const priorityLabel = priority?.label;
   const dimmed = isCardDimmed(task);
+  const accent = isNote ? noteAccentFor(priority?.level) : undefined;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
-      cardStyle({ pressed, hovered, dimmed }),
-    [dimmed],
+      cardStyle({ pressed, hovered, dimmed, accent }),
+    [dimmed, accent],
   );
 
   return (
@@ -424,6 +460,19 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardHovered: {
     backgroundColor: theme.colors.surface1,
+  },
+  // Note (draft) cards: a colored left edge that carries the importance level.
+  noteAccentHigh: {
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.statusDanger,
+  },
+  noteAccentMedium: {
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.statusWarning,
+  },
+  noteAccentMuted: {
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.foregroundMuted,
   },
   // Finished + already-seen: recede to half opacity so unseen finished work leads.
   cardDimmed: {

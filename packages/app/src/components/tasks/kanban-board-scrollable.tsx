@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Plus } from "lucide-react-native";
+import { ChevronsRight, Plus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -20,6 +20,7 @@ import {
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedPlus = withUnistyles(Plus);
+const ThemedChevronsRight = withUnistyles(ChevronsRight);
 
 // Shared by the board row styles and the compact snap interval — keep in sync.
 const COLUMN_WIDTH = 296;
@@ -127,6 +128,13 @@ const BoardColumn = memo(function BoardColumn({
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
+  // "Send all to À faire": promote every draft note into the backlog at once, so
+  // a batch of captured ideas enters the normal cycle in one tap.
+  const handlePromoteAll = useCallback(() => {
+    for (const task of tasks) {
+      onMoveTask({ taskId: task.id, column: "backlog", index: Number.MAX_SAFE_INTEGER });
+    }
+  }, [tasks, onMoveTask]);
   const handleControlsChange = useCallback(
     (next: ColumnControls) => onControlsChange(column, next),
     [onControlsChange, column],
@@ -139,6 +147,19 @@ const BoardColumn = memo(function BoardColumn({
         <Text style={styles.columnTitle}>{label}</Text>
         <Text style={styles.columnCount}>{tasks.length}</Text>
         <View style={styles.columnHeaderSpacer} />
+        {/* Notes-only: promote every draft to "À faire" in one tap. */}
+        {column === "notes" && tasks.length > 0 ? (
+          <Pressable
+            onPress={handlePromoteAll}
+            style={addButtonStyle}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.actions.moveToColumn", { column: labels.backlog })}
+            testID="tasks-notes-promote-all"
+          >
+            <ThemedChevronsRight size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          </Pressable>
+        ) : null}
         {/* Inline add is limited to the two entry columns: "notes" (draft capture)
             and "backlog" ("À faire"). Everything else flows in by drag or pipeline,
             so those columns get no "+". */}
