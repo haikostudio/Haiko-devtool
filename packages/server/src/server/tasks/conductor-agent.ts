@@ -4,7 +4,7 @@ import {
   CONDUCTOR_ROLE_LABEL,
   CONDUCTOR_ROLE_VALUE,
 } from "@getpaseo/protocol/agent-labels";
-import type { AgentStorage } from "../agent/agent-storage.js";
+import type { AgentStorage, StoredAgentRecord } from "../agent/agent-storage.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 
@@ -21,20 +21,32 @@ export interface EnsureConductorResult {
 }
 
 /**
- * Tools the "chef d'orchestre" is HARD-BLOCKED from ever using. The conductor's
- * only job is to manage the kanban board (create/update/move/delete tasks and
- * folders) — it must NEVER act on the code itself. `disallowedTools` is enforced
- * by the Claude Agent SDK before any permission prompt, so listing a tool here
- * makes it impossible to call, even when the agent runs in a permissive mode.
+ * The ONLY paseo MCP tools the "chef d'orchestre" is allowed to use. Its whole
+ * job is to manage the kanban board — everything else is off-limits. This is the
+ * source of truth for the allowlist: any paseo tool NOT named here is hard-blocked
+ * for the conductor (see `CONDUCTOR_DISALLOWED_PASEO_TOOLS`).
  *
- * We block every surface that could edit files, run shell commands (commit,
- * push, build, test, deploy), or fan work out to another agent/terminal. The
- * board's own execution pipeline — not the conductor — is what spawns the agents
- * that actually do the work. Read-only tools (Read/Grep/Glob) stay available so
- * the conductor can inspect context and write good task descriptions.
+ * `list_task_boards` / `list_tasks` are read-only board tools the conductor needs
+ * to locate the right project/folder before creating or editing tasks.
  */
-export const CONDUCTOR_DISALLOWED_TOOLS: readonly string[] = [
-  // Built-in editing / shell / subagent tools.
+export const CONDUCTOR_ALLOWED_PASEO_TOOLS: readonly string[] = [
+  "list_task_boards",
+  "list_tasks",
+  "create_task",
+  "update_task",
+  "move_task",
+  "delete_task",
+  "create_task_folder",
+  "delete_task_folder",
+];
+
+/**
+ * Built-in (non-MCP) tools the conductor is HARD-BLOCKED from ever using: every
+ * surface that could edit files, run shell commands (commit, push, build, test,
+ * deploy), or fan work out to a subagent. Read-only tools (Read/Grep/Glob) stay
+ * available so the conductor can inspect context and write good task descriptions.
+ */
+const CONDUCTOR_DISALLOWED_BUILTIN_TOOLS: readonly string[] = [
   "Bash",
   "BashOutput",
   "KillShell",
@@ -44,17 +56,67 @@ export const CONDUCTOR_DISALLOWED_TOOLS: readonly string[] = [
   "MultiEdit",
   "NotebookEdit",
   "Task",
-  // Paseo MCP tools that execute code or spawn/steer other agents & terminals.
-  "mcp__paseo__create_agent",
-  "mcp__paseo__send_agent_prompt",
-  "mcp__paseo__create_terminal",
-  "mcp__paseo__send_terminal_keys",
-  "mcp__paseo__kill_terminal",
-  "mcp__paseo__capture_terminal",
-  "mcp__paseo__create_worktree",
-  "mcp__paseo__archive_worktree",
-  "mcp__paseo__create_schedule",
-  "mcp__paseo__create_heartbeat",
+];
+
+/**
+ * Every paseo MCP tool the conductor must NOT use — i.e. the full paseo catalog
+ * MINUS `CONDUCTOR_ALLOWED_PASEO_TOOLS`. Kept as an explicit denylist (rather than
+ * a wildcard, which the SDK does not support) so the block is auditable. A
+ * completeness test enumerates the real tool catalog and fails if a newly added
+ * paseo tool is neither allowed nor listed here — so new tools are blocked by
+ * default and must be classified on purpose.
+ *
+ * Beyond code execution, this blocks steering OTHER agents (create/cancel/kill/
+ * update/set_agent_mode/send_agent_prompt), approving their permission prompts
+ * (respond_to_permission), driving terminals, worktrees, schedules, heartbeats,
+ * and workspace renames. None of that is board management.
+ */
+const CONDUCTOR_DISALLOWED_PASEO_TOOLS: readonly string[] = [
+  "archive_agent",
+  "archive_worktree",
+  "cancel_agent",
+  "capture_terminal",
+  "create_agent",
+  "create_heartbeat",
+  "create_schedule",
+  "create_terminal",
+  "create_worktree",
+  "delete_schedule",
+  "get_agent_activity",
+  "get_agent_status",
+  "inspect_provider",
+  "inspect_schedule",
+  "kill_agent",
+  "kill_terminal",
+  "list_agents",
+  "list_models",
+  "list_pending_permissions",
+  "list_providers",
+  "list_schedules",
+  "list_terminals",
+  "list_worktrees",
+  "pause_schedule",
+  "rename_workspace",
+  "respond_to_permission",
+  "resume_schedule",
+  "schedule_logs",
+  "send_agent_prompt",
+  "send_terminal_keys",
+  "set_agent_mode",
+  "speak",
+  "update_agent",
+  "update_schedule",
+].map((name) => `mcp__paseo__${name}`);
+
+/**
+ * Tools the conductor is HARD-BLOCKED from ever using. `disallowedTools` is
+ * enforced by the Claude Agent SDK before any permission prompt, so listing a
+ * tool here makes it impossible to call even when the agent runs in a permissive
+ * mode. Built-in edit/shell/subagent tools + every non-board paseo tool.
+ */
+export const CONDUCTOR_DISALLOWED_TOOLS: readonly string[] = [
+  ...CONDUCTOR_DISALLOWED_BUILTIN_TOOLS,
+  ...CONDUCTOR_DISALLOWED_PASEO_TOOLS,
 ];
 
 /**
@@ -170,6 +232,13 @@ export class ConductorAgentService {
         record.labels[CONDUCTOR_PROJECT_ID_LABEL] === projectId,
     );
     if (found) {
+      // Persistence-by-label reuses the SAME agent across restarts, so a
+      // conductor created before the hard lock existed — or one whose stored
+      // config has since drifted — would keep its old, unrestricted config
+      // forever. Re-apply the lock to its stored config so the daemon rebuilds a
+      // locked session on its next restart. This is why the lock was "deployed
+      // but not active": the existing conductor was simply never re-locked.
+      await this.relockConductorIfStale(found, projectId);
       return { agentId: found.id, workspaceId: found.workspaceId ?? null };
     }
 
@@ -209,4 +278,80 @@ export class ConductorAgentService {
       workspaceId: created.snapshot.workspaceId ?? null,
     };
   }
+
+  /**
+   * Re-apply the hard lock (disallowedTools + system prompt) to an already
+   * persisted conductor whose stored config is missing or out of date. Rewrites
+   * only the `config` field of the stored record — every other field is
+   * preserved — so the daemon rebuilds a locked session from disk on its next
+   * restart. Idempotent: a conductor that is already locked is left untouched,
+   * so this never churns storage or re-creates the agent on the happy path.
+   */
+  private async relockConductorIfStale(
+    record: StoredAgentRecord,
+    projectId: string,
+  ): Promise<void> {
+    const desiredPrompt = conductorSystemPrompt(projectId);
+    const storedDisallowed = readStoredDisallowedTools(record.config?.extra);
+    const alreadyLocked =
+      record.config?.systemPrompt === desiredPrompt &&
+      sameToolSet(storedDisallowed, CONDUCTOR_DISALLOWED_TOOLS);
+    if (alreadyLocked) {
+      return;
+    }
+
+    const existingClaudeExtra = isRecord(record.config?.extra?.claude)
+      ? record.config?.extra?.claude
+      : {};
+    const updated: StoredAgentRecord = {
+      ...record,
+      config: {
+        ...record.config,
+        systemPrompt: desiredPrompt,
+        extra: {
+          ...record.config?.extra,
+          claude: {
+            ...existingClaudeExtra,
+            disallowedTools: [...CONDUCTOR_DISALLOWED_TOOLS],
+          },
+        },
+      },
+    };
+    await this.agentStorage.upsert(updated);
+    this.logger.info(
+      { projectId, agentId: record.id },
+      "Re-locked existing conductor config (disallowedTools + system prompt); takes effect on next daemon restart",
+    );
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Read `extra.claude.disallowedTools` from a stored config, tolerating any shape. */
+function readStoredDisallowedTools(
+  extra: Record<string, unknown> | null | undefined,
+): string[] | undefined {
+  if (!isRecord(extra)) {
+    return undefined;
+  }
+  const claude = extra.claude;
+  if (!isRecord(claude)) {
+    return undefined;
+  }
+  const tools = claude.disallowedTools;
+  if (!Array.isArray(tools)) {
+    return undefined;
+  }
+  return tools.filter((tool): tool is string => typeof tool === "string");
+}
+
+/** True when both lists contain exactly the same tool names, order-independent. */
+function sameToolSet(a: readonly string[] | undefined, b: readonly string[]): boolean {
+  if (!a || a.length !== b.length) {
+    return false;
+  }
+  const wanted = new Set(b);
+  return a.every((tool) => wanted.has(tool));
 }
