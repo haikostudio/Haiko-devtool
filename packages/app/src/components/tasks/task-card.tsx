@@ -23,6 +23,7 @@ import {
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
+import { getScheduleBadge } from "@/components/tasks/task-card-badge";
 import {
   isQuietTime,
   nextQuietHoursStartMs,
@@ -69,45 +70,6 @@ function cardStyle({
 // dim — an in-flight card stays bright regardless of whether it's been opened.
 function isCardDimmed(task: KanbanTask): boolean {
   return Boolean(task.viewedAt) && (task.column === "done" || task.column === "deployed");
-}
-
-type ScheduleBadgeVariant = "success" | "error" | "warning";
-
-interface ScheduleBadgeDescriptor {
-  labelKey: string;
-  variant?: ScheduleBadgeVariant;
-}
-
-// Pure schedule-state → badge mapping. Kept at module scope so its branch count
-// stays out of the TaskCard render-function complexity budget.
-function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
-  if (task.approval?.state === "pending") {
-    return { labelKey: "tasks.approval.pending", variant: "warning" };
-  }
-  if (task.planReadyAt) {
-    return { labelKey: "tasks.card.planReady", variant: "success" };
-  }
-  const state = task.schedule?.state;
-  if (!state) {
-    return null;
-  }
-  if (state === "failed") {
-    return { labelKey: "tasks.schedule.failed", variant: "error" };
-  }
-  if (state === "running" || state === "launching") {
-    return { labelKey: "tasks.schedule.running", variant: "success" };
-  }
-  if (state === "pending_estimate") {
-    return { labelKey: "tasks.schedule.estimating" };
-  }
-  // "Pause au choix": analyzed but held until the user gives the go.
-  if (task.executionHold === true) {
-    return { labelKey: "tasks.schedule.heldForReview", variant: "warning" };
-  }
-  if (task.schedule?.waitingReason === "quiet_hours") {
-    return { labelKey: "tasks.schedule.awaitingWindow" };
-  }
-  return { labelKey: "tasks.schedule.awaiting" };
 }
 
 // When a validated/planned task will actually launch: the scheduler holds
@@ -188,8 +150,8 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   }, [onPress, task]);
 
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
-  const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
   const tone = useTaskTone(task);
+  const scheduleBadge = useMemo(() => getScheduleBadge(task, tone), [task, tone]);
 
   // A task that wants a reply nudges itself: a light horizontal shake every ~5s,
   // just enough to catch the eye without being noisy. Honors reduced motion.
@@ -223,7 +185,9 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const hiddenTagCount = tags.length - visibleTags.length;
 
   const priorityLabel = priority?.label;
-  const dimmed = isCardDimmed(task);
+  // A task waiting on the user re-lights to full opacity even if it had been
+  // opened and dimmed — the amber signal must catch the eye above all else.
+  const dimmed = isCardDimmed(task) && tone !== "attention";
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
       cardStyle({ pressed, hovered, dimmed }),
