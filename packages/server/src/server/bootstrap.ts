@@ -1295,6 +1295,30 @@ export async function createPaseoDaemon(
           task.column !== "deployed",
       );
       if (alreadyQueued) return;
+      const completedRepair = board.tasks.find(
+        (task) =>
+          task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) &&
+          task.tags.includes(branchTag) &&
+          task.column === "done",
+      );
+      if (completedRepair) {
+        await taskBoardService.patchTask(projectId, completedRepair.id, (current) => {
+          const { completedAt: _completedAt, deployedAt: _deployedAt, ...reopened } = current;
+          return {
+            ...reopened,
+            column: "validated",
+            schedule: {
+              state: current.estimate ? ("awaiting_slot" as const) : ("pending_estimate" as const),
+              attempts: 0,
+            },
+          };
+        });
+        logger.info(
+          { projectId, taskId: completedRepair.id, branch },
+          "Reopened existing deploy repair instead of creating a duplicate task",
+        );
+        return;
+      }
       const usage = await providerUsageService.listUsage({ forceRefresh: true });
       const claude = usage.providers.find((provider) => provider.providerId === "claude");
       const useCodex = !claude || isProviderUsageExhausted(claude);
