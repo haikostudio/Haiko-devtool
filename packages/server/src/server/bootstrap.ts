@@ -167,9 +167,13 @@ import type { PushNotificationSender, PushPayload } from "./push/notifications.j
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import {
+  PASEO_DEPLOY_BRANCH_TAG_PREFIX,
+  PASEO_DEPLOY_CONFLICT_TAG,
   getPaseoDeployRoots,
   recordDaemonBootSha,
+  setPaseoDeployConflictTaskCreator,
   setPaseoDeploySuccessListener,
+  triggerPaseoDeploy,
 } from "../utils/paseo-deploy.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@getpaseo/protocol/messages";
@@ -1265,6 +1269,44 @@ export async function createPaseoDaemon(
   quotaResetWatcher.start();
   const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
   const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
+  setPaseoDeployConflictTaskCreator(async ({ projectId, branch, worktreePath, reason }) => {
+    const folderId = await taskBoardService.ensureFolder(projectId, "Réparations de déploiement");
+    const branchTag = `${PASEO_DEPLOY_BRANCH_TAG_PREFIX}${branch}`;
+    const board = await taskBoardService.getBoard(projectId);
+    const alreadyQueued = board.tasks.some(
+      (task) =>
+        task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) &&
+        task.tags.includes(branchTag) &&
+        task.column !== "done" &&
+        task.column !== "deployed",
+    );
+    if (alreadyQueued) {
+      return;
+    }
+    await taskBoardService.createTask(projectId, {
+      folderId,
+      title: `Réparer le conflit avant publication : ${branch}`,
+      description: [
+        "Cette tâche a été ouverte automatiquement par la fenêtre « À déployer ».",
+        `Branche à réparer : ${branch}`,
+        worktreePath
+          ? `Atelier cible : ${worktreePath}`
+          : "L'atelier cible n'a pas pu être retrouvé ; commence par le localiser.",
+        `Constat : ${reason}`,
+        "Travaille sur l'atelier cible, pas sur ton atelier temporaire : synchronise-le avec /root/paseo, résous les conflits, enregistre les changements, puis vérifie que la branche peut être fusionnée.",
+        "Ne publie pas toi-même. Quand la branche est propre et fusionnable, termine la tâche : le mécanisme relancera automatiquement la publication.",
+      ].join("\n"),
+      tags: [PASEO_DEPLOY_CONFLICT_TAG, branchTag],
+      column: "validated",
+      runConfig: {
+        provider: "claude",
+        model: "claude-opus-4-8",
+        mode: "direct",
+      },
+      schedulePreference: "asap",
+      launch: true,
+    });
+  });
   const agentTaskSync = new AgentTaskSyncService({
     agentManager,
     workspaceRegistry,
@@ -1300,6 +1342,24 @@ export async function createPaseoDaemon(
   });
   taskBoardService.setOnTaskScheduled((projectId, taskId) => {
     taskEstimator.requestEstimate(projectId, taskId);
+  });
+  taskBoardService.setOnTaskCompleted(async (projectId, task) => {
+    if (!task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)) {
+      return;
+    }
+    const branch = task.tags
+      .find((tag) => tag.startsWith(PASEO_DEPLOY_BRANCH_TAG_PREFIX))
+      ?.slice(PASEO_DEPLOY_BRANCH_TAG_PREFIX.length);
+    if (!branch) {
+      return;
+    }
+    const result = await triggerPaseoDeploy({ projectId, mergeBranches: [branch] });
+    if (!result.started) {
+      logger.warn(
+        { projectId, branch, error: result.error },
+        "Automatic repaired-branch deploy did not start",
+      );
+    }
   });
   // Auto-move: when a publish goes live, promote the shipped task branches' done
   // cards into the terminal "deployed" column across every project's board.

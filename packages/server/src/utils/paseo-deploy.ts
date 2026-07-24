@@ -145,9 +145,89 @@ export interface PaseoDeployTriggerResult {
   error: string | null;
 }
 
+/** Tag used for tasks opened automatically when a selected branch conflicts. */
+export const PASEO_DEPLOY_CONFLICT_TAG = "paseo:deploy-conflict";
+export const PASEO_DEPLOY_BRANCH_TAG_PREFIX = "paseo:deploy-branch:";
+
+export interface PaseoDeployConflictTaskInput {
+  projectId: string;
+  branch: string;
+  worktreePath: string | null;
+  reason: string;
+}
+
+let createConflictTask: ((input: PaseoDeployConflictTaskInput) => Promise<void>) | null = null;
+
+/** Wire the task board after bootstrap has created it. */
+export function setPaseoDeployConflictTaskCreator(
+  creator: ((input: PaseoDeployConflictTaskInput) => Promise<void>) | null,
+): void {
+  createConflictTask = creator;
+}
+
 export interface PaseoDeployCommitWorktreeResult {
   committed: boolean;
   error: string | null;
+}
+
+async function queueConflictTask(input: {
+  projectId: string | undefined;
+  branch: string;
+  reason: string;
+}): Promise<boolean> {
+  if (!input.projectId || !createConflictTask) {
+    return false;
+  }
+  const worktrees = await listWorktrees();
+  const worktree = worktrees.find((entry) => entry.branch === input.branch);
+  await createConflictTask({
+    projectId: input.projectId,
+    branch: input.branch,
+    worktreePath: worktree?.path ?? null,
+    reason: input.reason,
+  });
+  return true;
+}
+
+async function prepareDeployBranches(input: {
+  projectId: string | undefined;
+  branches: string[];
+}): Promise<{ branchesToMerge: string[]; queuedBranches: string[] }> {
+  if (input.branches.length === 0) {
+    return { branchesToMerge: [], queuedBranches: [] };
+  }
+  const [worktrees, deployHead] = await Promise.all([
+    listWorktrees(),
+    runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT })
+      .then((result) => result.stdout.trim())
+      .catch(() => null),
+  ]);
+  const branchesToMerge: string[] = [];
+  const queuedBranches: string[] = [];
+  for (const branch of input.branches) {
+    const worktree = worktrees.find((entry) => entry.branch === branch);
+    const uncommittedCount = worktree ? await getWorktreeUncommittedCount(worktree.path) : 0;
+    const mergeCheck = worktree
+      ? await checkBranchMerge(deployHead, worktree.head)
+      : { mergeable: false, mergeReason: "unknown" as const };
+    if (worktree && uncommittedCount === 0 && mergeCheck.mergeable) {
+      branchesToMerge.push(branch);
+      continue;
+    }
+    let reason = "La branche n'a pas pu être vérifiée.";
+    if (uncommittedCount > 0) {
+      reason = "Des fichiers ne sont pas encore enregistrés.";
+    } else if (mergeCheck.mergeReason === "conflict") {
+      reason = "La branche entre en conflit avec l'application actuelle.";
+    }
+    const queued = await queueConflictTask({ projectId: input.projectId, branch, reason });
+    if (queued) {
+      queuedBranches.push(branch);
+    } else {
+      branchesToMerge.push(branch);
+    }
+  }
+  return { branchesToMerge, queuedBranches };
 }
 
 async function readDeployedSha(): Promise<string | null> {
@@ -772,28 +852,50 @@ export async function commitWorktreeChanges(input: {
 
 export async function triggerPaseoDeploy(input: {
   noBuild?: boolean;
+  projectId?: string;
   mergeBranches?: string[];
 }): Promise<PaseoDeployTriggerResult> {
   if (deploying) {
     return { started: false, error: "Un déploiement est déjà en cours." };
   }
 
-  // Merge the requested task branches into the deploy branch first. Conflicting
-  // ateliers are skipped (aborted, never left half-merged); we ship whatever
-  // merged. Only if EVERY requested merge failed do we bail without shipping.
+  // Inspect selected ateliers before touching the deploy checkout. A conflict
+  // is work for an agent, not a reason to disable the user's checkbox or make
+  // the whole publication fail silently.
   let skippedNote: string | null = null;
   let mergedBranches: string[] = [];
-  if (input.mergeBranches && input.mergeBranches.length > 0) {
-    const { merged, skipped } = await mergeBranchesIntoDeploy(input.mergeBranches);
+  const prepared = await prepareDeployBranches({
+    projectId: input.projectId,
+    branches: input.mergeBranches ?? [],
+  });
+  const queuedBranches = prepared.queuedBranches;
+  const branchesToMerge = prepared.branchesToMerge;
+  if (branchesToMerge.length > 0) {
+    const { merged, skipped } = await mergeBranchesIntoDeploy(branchesToMerge);
     mergedBranches = merged;
+    for (const branch of skipped) {
+      const queued = await queueConflictTask({
+        projectId: input.projectId,
+        branch,
+        reason: "La fusion a rencontré un conflit pendant la publication.",
+      });
+      if (queued) queuedBranches.push(branch);
+    }
     if (merged.length === 0) {
-      const error = `La fusion a échoué (conflit) : ${skipped.join(", ")}. Rien n'a été publié ; résous les conflits dans l'atelier puis réessaie.`;
+      const error =
+        queuedBranches.length > 0
+          ? `Les conflits ont été confiés à un agent : ${queuedBranches.join(", ")}.`
+          : `La fusion a échoué : ${skipped.join(", ")}.`;
       lastError = error;
       return { started: false, error };
     }
     if (skipped.length > 0) {
-      skippedNote = `Ateliers ignorés (conflit) : ${skipped.join(", ")}. À fusionner à la main.`;
+      skippedNote = `Conflits confiés à un agent : ${skipped.join(", ")}.`;
     }
+  }
+  if (queuedBranches.length > 0 && mergedBranches.length === 0 && !input.noBuild) {
+    lastError = `Réparation automatique en cours : ${queuedBranches.join(", ")}.`;
+    return { started: false, error: lastError };
   }
 
   try {

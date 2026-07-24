@@ -14,6 +14,7 @@ import {
   TASK_AGENT_LABEL,
   withTaskAttachments,
 } from "./agent-launch.js";
+import { PASEO_DEPLOY_CONFLICT_TAG } from "../../utils/paseo-deploy.js";
 
 export { TASK_AGENT_LABEL } from "./agent-launch.js";
 
@@ -283,7 +284,7 @@ export class TaskScheduler {
         board.folders.map((folder) => [folder.id, folder.autopilot === true]),
       );
       this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
-      for (const task of board.tasks) {
+      for (let task of board.tasks) {
         if (task.column === "done" || task.column === "deployed" || task.column === "in_progress") {
           continue;
         }
@@ -296,6 +297,7 @@ export class TaskScheduler {
           }
           continue;
         }
+        task = await this.fallbackDeployConflictProvider(project.projectId, task);
         // "validated" or "scheduled": the analysis + execution pipeline.
         this.maybeSweepEstimate(project.projectId, task);
         if (task.schedule?.state === "pending_estimate") {
@@ -368,6 +370,47 @@ export class TaskScheduler {
     }
     this.estimateRequested.add(key);
     this.taskEstimator.requestEstimate(projectId, task.id);
+  }
+
+  /** Give automatic repair work a second model when Claude's window is full. */
+  private async fallbackDeployConflictProvider(
+    projectId: string,
+    task: KanbanTask,
+  ): Promise<KanbanTask> {
+    if (
+      !task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) ||
+      task.runConfig?.provider !== "claude" ||
+      task.estimate
+    ) {
+      return task;
+    }
+    try {
+      const usage = await this.providerUsageService.listUsage();
+      const claude = usage.providers.find((provider) => provider.providerId === "claude");
+      const window = claude?.windows.find((entry) => entry.id === "five_hour");
+      const remaining = window
+        ? (window.remainingPct ??
+          (window.usedPct !== null && window.usedPct !== undefined ? 100 - window.usedPct : null))
+        : null;
+      if (remaining === null || remaining === undefined || remaining > 0) {
+        return task;
+      }
+      return await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
+        ...current,
+        runConfig: {
+          ...current.runConfig,
+          provider: "codex",
+          model: "gpt-5.4",
+          mode: "direct",
+        },
+      }));
+    } catch (error) {
+      this.logger.warn(
+        { err: error, taskId: task.id },
+        "Automatic deploy-task provider fallback failed",
+      );
+      return task;
+    }
   }
 
   // Quota packing: runNow always first; then during quiet hours spend the

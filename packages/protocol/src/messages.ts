@@ -2182,6 +2182,8 @@ export const PaseoDeployStatusRequestSchema = z.object({
 
 export const PaseoDeployTriggerRequestSchema = z.object({
   type: z.literal("checkout.deploy.trigger.request"),
+  /** Project board used to create an automatic conflict-repair task. */
+  projectId: z.string().optional(),
   /** When true, commit + push only, skip the (costly) web rebuild. */
   noBuild: z.boolean().optional(),
   /**

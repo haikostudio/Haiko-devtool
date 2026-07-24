@@ -13,6 +13,7 @@ import { slugifyBranch } from "./agent-launch.js";
 import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
+export type TaskCompletedListener = (projectId: string, task: KanbanTask) => void | Promise<void>;
 
 // Columns where the scheduler runs analysis + execution. "validated" is the
 // consent gate: dropping a task here starts the automated pipeline. "scheduled"
@@ -174,6 +175,7 @@ export class TaskBoardService {
   private readonly listeners = new Map<string, Set<TaskBoardListener>>();
   private onTaskScheduled: ((projectId: string, taskId: string) => void) | null = null;
   private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
+  private onTaskCompleted: TaskCompletedListener | null = null;
 
   constructor(options: TaskBoardServiceOptions) {
     this.store = options.store;
@@ -187,6 +189,10 @@ export class TaskBoardService {
   /** Fired when a task is created awaiting user approval (agent proposals). */
   setOnTaskProposed(callback: (projectId: string, task: KanbanTask) => void): void {
     this.onTaskProposed = callback;
+  }
+
+  setOnTaskCompleted(callback: TaskCompletedListener | null): void {
+    this.onTaskCompleted = callback;
   }
 
   subscribe(projectId: string, listener: TaskBoardListener): () => void {
@@ -725,7 +731,21 @@ export class TaskBoardService {
     const targetCount = board.tasks.filter(
       (entry) => entry.folderId === task.folderId && entry.column === column && entry.id !== taskId,
     ).length;
-    return this.moveTask(projectId, { taskId, column, index: targetCount, manual: false });
+    const moved = await this.moveTask(projectId, {
+      taskId,
+      column,
+      index: targetCount,
+      manual: false,
+    });
+    if (column === "done" && this.onTaskCompleted) {
+      const completed = moved.tasks.find((entry) => entry.id === taskId);
+      if (completed) {
+        void Promise.resolve(this.onTaskCompleted(projectId, completed)).catch((error) => {
+          this.logger.warn({ err: error, projectId, taskId }, "onTaskCompleted callback failed");
+        });
+      }
+    }
+    return moved;
   }
 
   private notifyScheduled(projectId: string, task: KanbanTask): void {

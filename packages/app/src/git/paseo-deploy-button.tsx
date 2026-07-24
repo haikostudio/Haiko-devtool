@@ -181,9 +181,8 @@ interface PaseoDeployButtonProps {
    */
   compact?: boolean;
   /**
-   * Accepted for call-site compatibility (the tasks board passes its project id),
-   * but no longer used: "Déployer" now triggers the daemon's local build directly
-   * instead of delegating to the board's conductor agent.
+   * Project board used by the daemon when it needs to open an automatic repair
+   * task for a selected branch that cannot be merged yet.
    */
   projectId?: string | null;
 }
@@ -193,7 +192,11 @@ interface PaseoDeployButtonProps {
  * Rendered only for the Paseo repo itself and only when the host advertises
  * the `paseoSelfhostDeploy` capability (gated by the caller).
  */
-export function PaseoDeployButton({ serverId, compact = false }: PaseoDeployButtonProps) {
+export function PaseoDeployButton({
+  serverId,
+  compact = false,
+  projectId = null,
+}: PaseoDeployButtonProps) {
   const [open, setOpen] = useState(false);
   const { status, pendingCount, refetch } = usePaseoDeployStatus({ serverId, enabled: true });
 
@@ -234,6 +237,7 @@ export function PaseoDeployButton({ serverId, compact = false }: PaseoDeployButt
       <PaseoDeployModal
         visible={open}
         serverId={serverId}
+        projectId={projectId}
         status={status}
         onClose={handleClose}
         onDeployed={refetch}
@@ -245,6 +249,7 @@ export function PaseoDeployButton({ serverId, compact = false }: PaseoDeployButt
 interface PaseoDeployModalProps {
   visible: boolean;
   serverId: string;
+  projectId: string | null;
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   onClose: () => void;
   onDeployed: () => void;
@@ -415,8 +420,8 @@ function WorktreeUncommittedHint({ count }: { count: number }) {
   return (
     <Text style={styles.worktreeHint}>
       {count > 1
-        ? `${count} fichiers non enregistrés dans cet atelier (à enregistrer avant publication)`
-        : "1 fichier non enregistré dans cet atelier (à enregistrer avant publication)"}
+        ? `${count} fichiers non enregistrés : l'agent les enregistrera avant publication`
+        : "1 fichier non enregistré : l'agent l'enregistrera avant publication"}
     </Text>
   );
 }
@@ -444,7 +449,7 @@ function WorktreeReadiness({ worktree }: { worktree: PaseoDeployWorktreeEntry })
   );
 }
 
-/** Small square checkbox (filled + check when on). Disabled ateliers show muted. */
+/** Small square checkbox (filled + check when on). Readiness stays informative. */
 function WorktreeCheckbox({ checked, disabled }: { checked: boolean; disabled: boolean }) {
   const boxStyle = useMemo(
     () => [
@@ -466,37 +471,20 @@ function WorktreeCard({
   worktree,
   selected,
   onToggle,
-  onCommit,
-  committing,
   busy,
 }: {
   worktree: PaseoDeployWorktreeEntry;
   selected: boolean;
   onToggle: (branch: string) => void;
-  onCommit: (path: string) => void;
-  committing: boolean;
   busy: boolean;
 }) {
-  const hasUncommitted = worktree.uncommittedCount > 0;
-  const mergeable = worktree.mergeable === true && !hasUncommitted;
   const [expanded, setExpanded] = useState(false);
   const handleToggleExpand = useCallback(() => setExpanded((previous) => !previous), []);
   const handleToggleSelect = useCallback(() => {
-    if (mergeable && !busy) onToggle(worktree.branch);
-  }, [busy, mergeable, onToggle, worktree.branch]);
-  // Stop the tap from also toggling the card's fold underneath the button.
-  const handleCommit = useCallback(
-    (event: { stopPropagation?: () => void }) => {
-      event.stopPropagation?.();
-      onCommit(worktree.path);
-    },
-    [onCommit, worktree.path],
-  );
+    if (!busy) onToggle(worktree.branch);
+  }, [busy, onToggle, worktree.branch]);
   const expandedState = useMemo(() => ({ expanded }), [expanded]);
-  const checkboxState = useMemo(
-    () => ({ checked: selected && mergeable, disabled: !mergeable }),
-    [mergeable, selected],
-  );
+  const checkboxState = useMemo(() => ({ checked: selected, disabled: busy }), [busy, selected]);
   return (
     <View style={styles.worktreeCard}>
       <Pressable
@@ -508,31 +496,18 @@ function WorktreeCard({
       >
         <Pressable
           onPress={handleToggleSelect}
-          disabled={busy || !mergeable}
+          disabled={busy}
           hitSlop={8}
           accessibilityRole="checkbox"
           accessibilityState={checkboxState}
           testID={`paseo-deploy-select-${worktree.branch}`}
         >
-          <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
+          <WorktreeCheckbox checked={selected} disabled={busy} />
         </Pressable>
         <Text style={styles.worktreeBranch} numberOfLines={1}>
           {describeBranch(worktree.branch)}
         </Text>
         <WorktreeReadiness worktree={worktree} />
-        {hasUncommitted ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            style={styles.worktreeCommitButton}
-            textStyle={styles.actionButtonText}
-            onPress={handleCommit}
-            disabled={busy || committing}
-            testID={`paseo-deploy-commit-${worktree.branch}`}
-          >
-            {committing ? "Enregistrement…" : "Enregistrer"}
-          </Button>
-        ) : null}
         {expanded ? (
           <ThemedChevronDown size={16} uniProps={chevronColorMapping} />
         ) : (
@@ -566,15 +541,11 @@ function WorktreesSection({
   worktrees,
   deselected,
   onToggle,
-  onCommit,
-  committingPath,
   busy,
 }: {
   worktrees: PaseoDeployWorktreeEntry[];
   deselected: Set<string>;
   onToggle: (branch: string) => void;
-  onCommit: (path: string) => void;
-  committingPath: string | null;
   busy: boolean;
 }) {
   if (worktrees.length === 0) return null;
@@ -586,14 +557,8 @@ function WorktreesSection({
           <WorktreeCard
             key={worktree.path}
             worktree={worktree}
-            selected={
-              worktree.mergeable === true &&
-              worktree.uncommittedCount === 0 &&
-              !deselected.has(worktree.branch)
-            }
+            selected={!deselected.has(worktree.branch)}
             onToggle={onToggle}
-            onCommit={onCommit}
-            committing={committingPath === worktree.path}
             busy={busy}
           />
         ))}
@@ -622,8 +587,8 @@ function DeployBlockedNotice({ count }: { count: number }) {
           : "Cet atelier ne peut pas être publié tel quel"}
       </Text>
       <Text style={styles.blockedNoticeText}>
-        Leur historique entre en conflit avec l&apos;application actuelle. Ils restent visibles,
-        mais ne peuvent plus être sélectionnés par erreur.
+        Leur historique entre en conflit avec l&apos;application actuelle. Tu peux les sélectionner
+        : le mécanisme ouvrira une tâche pour les réparer, puis relancera la mise en place.
       </Text>
     </View>
   );
@@ -654,16 +619,12 @@ function DeployModalBody({
   error,
   deselected,
   onToggle,
-  onCommit,
-  committingPath,
   busy,
 }: {
   status: ReturnType<typeof usePaseoDeployStatus>["status"];
   error: string | null;
   deselected: Set<string>;
   onToggle: (branch: string) => void;
-  onCommit: (path: string) => void;
-  committingPath: string | null;
   busy: boolean;
 }) {
   const deploying = status?.deploying ?? false;
@@ -710,8 +671,6 @@ function DeployModalBody({
         worktrees={worktrees}
         deselected={deselected}
         onToggle={onToggle}
-        onCommit={onCommit}
-        committingPath={committingPath}
         busy={busy}
       />
 
@@ -724,14 +683,13 @@ function DeployModalBody({
 function PaseoDeployModal({
   visible,
   serverId,
+  projectId,
   status,
   onClose,
   onDeployed,
 }: PaseoDeployModalProps) {
   const client = useHostRuntimeClient(serverId);
   const [error, setError] = useState<string | null>(null);
-  // Worktree path whose "Enregistrer" (commit) action is currently running.
-  const [committingPath, setCommittingPath] = useState<string | null>(null);
   // True during the brief window between clicking "Déployer" and the daemon
   // reporting `deploying: true` on the next status poll.
   const [triggering, setTriggering] = useState(false);
@@ -753,15 +711,10 @@ function PaseoDeployModal({
       return next;
     });
   }, []);
-  // The ticked, shippable ateliers (source of both the branch list and the count).
+  // The ticked ateliers. Readiness is information for the mechanism to handle;
+  // it must not turn the visual selection into a second, hidden approval gate.
   const selectedWorktrees = useMemo(
-    () =>
-      worktrees.filter(
-        (worktree) =>
-          worktree.mergeable === true &&
-          worktree.uncommittedCount === 0 &&
-          !deselected.has(worktree.branch),
-      ),
+    () => worktrees.filter((worktree) => !deselected.has(worktree.branch)),
     [worktrees, deselected],
   );
   const selectedBranches = useMemo(
@@ -781,7 +734,10 @@ function PaseoDeployModal({
     setError(null);
     setTriggering(true);
     try {
-      const result = await client.paseoDeployTrigger({ mergeBranches: selectedBranches });
+      const result = await client.paseoDeployTrigger({
+        projectId: projectId ?? undefined,
+        mergeBranches: selectedBranches,
+      });
       if (!result.started) {
         setError(result.error ?? "Le déploiement n'a pas pu démarrer.");
         return;
@@ -800,31 +756,10 @@ function PaseoDeployModal({
     deploying,
     selectedWorktrees,
     selectedBranches,
+    projectId,
     unshippedCommits.length,
     onDeployed,
   ]);
-
-  // Save (commit) an atelier's pending work so its card becomes selectable —
-  // then refresh the status so the "unsaved files" hint disappears at once.
-  const handleCommitWorktree = useCallback(
-    async (path: string) => {
-      if (!client || committingPath) return;
-      setError(null);
-      setCommittingPath(path);
-      try {
-        const result = await client.paseoDeployCommitWorktree({ worktreePath: path });
-        if (!result.committed && result.error) {
-          setError(result.error);
-        }
-        onDeployed();
-      } catch (err) {
-        setError(err instanceof Error && err.message ? err.message : "Échec de l'enregistrement.");
-      } finally {
-        setCommittingPath(null);
-      }
-    },
-    [client, committingPath, onDeployed],
-  );
 
   // Something to deploy = at least one ticked atelier, or changes already ready
   // on the deploy trunk. No project needed anymore — the daemon builds directly.
@@ -835,8 +770,7 @@ function PaseoDeployModal({
   const blockedCount = worktrees.filter(
     (worktree) => worktree.mergeable !== true || worktree.uncommittedCount > 0,
   ).length;
-  // Lock the atelier cards (checkboxes + "Enregistrer") while a build is running
-  // or the trigger request is in flight.
+  // Lock the atelier checkboxes while a build or trigger request is running.
   const busy = inProgress;
 
   // A single sticky footer action. "Déployer" triggers the local build directly;
@@ -845,11 +779,11 @@ function PaseoDeployModal({
   if (inProgress) {
     deployLabel = deployPhaseLabel(status?.deployPhase, triggering);
   } else if (selectionCount > 0) {
-    deployLabel = `Publier ${selectionCount} ${selectionCount > 1 ? "ateliers" : "atelier"}`;
+    deployLabel = `Mettre en place ${selectionCount} ${selectionCount > 1 ? "ateliers" : "atelier"}`;
   } else if (hasTrunkPending) {
     deployLabel = "Publier les changements du projet";
   } else if (blockedCount > 0) {
-    deployLabel = "Aucune branche publiable";
+    deployLabel = "Lancer la mise en place";
   }
   const footer = useMemo(
     () => (
@@ -883,8 +817,6 @@ function PaseoDeployModal({
         error={error}
         deselected={deselected}
         onToggle={toggle}
-        onCommit={handleCommitWorktree}
-        committingPath={committingPath}
         busy={busy}
       />
     </AdaptiveModalSheet>
@@ -1104,10 +1036,6 @@ const styles = StyleSheet.create((theme) => ({
   worktreeDetails: {
     gap: theme.spacing[1],
     paddingLeft: theme.spacing[6],
-  },
-  // Compact "Enregistrer" action pinned to the right of the atelier's header row.
-  worktreeCommitButton: {
-    paddingHorizontal: theme.spacing[2],
   },
   worktreeBranch: {
     flex: 1,
