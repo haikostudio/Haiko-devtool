@@ -436,6 +436,7 @@ export const zhCN: TranslationResources = {
       pr: "PR #{{number}}",
       openPr: "打开 Pull Request",
       planReady: "计划已就绪",
+      awaitingReply: "等待你的回复",
       duration: "约{{minutes}}分钟",
       deadlineDays: "{{count}} 天",
       deadlineOverdue: "已逾期",

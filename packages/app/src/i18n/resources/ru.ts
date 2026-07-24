@@ -439,6 +439,7 @@ export const ru: TranslationResources = {
       pr: "PR #{{number}}",
       openPr: "Открыть pull request",
       planReady: "План готов",
+      awaitingReply: "Ожидает вашего ответа",
       duration: "~{{minutes}} мин",
       deadlineDays: "{{count}} дн",
       deadlineOverdue: "просрочено",

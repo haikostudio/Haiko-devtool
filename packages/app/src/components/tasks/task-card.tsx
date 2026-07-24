@@ -24,6 +24,7 @@ import {
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
+import { getScheduleBadge } from "@/components/tasks/task-card-badge";
 import {
   isQuietTime,
   nextQuietHoursStartMs,
@@ -101,45 +102,6 @@ function isCardDimmed(task: KanbanTask, tone: TaskTone | null): boolean {
     return false;
   }
   return task.column === "done" || task.column === "deployed" || tone === "attention";
-}
-
-type ScheduleBadgeVariant = "success" | "error" | "warning";
-
-interface ScheduleBadgeDescriptor {
-  labelKey: string;
-  variant?: ScheduleBadgeVariant;
-}
-
-// Pure schedule-state → badge mapping. Kept at module scope so its branch count
-// stays out of the TaskCard render-function complexity budget.
-function getScheduleBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
-  if (task.approval?.state === "pending") {
-    return { labelKey: "tasks.approval.pending", variant: "warning" };
-  }
-  if (task.planReadyAt) {
-    return { labelKey: "tasks.card.planReady", variant: "success" };
-  }
-  const state = task.schedule?.state;
-  if (!state) {
-    return null;
-  }
-  if (state === "failed") {
-    return { labelKey: "tasks.schedule.failed", variant: "error" };
-  }
-  if (state === "running" || state === "launching") {
-    return { labelKey: "tasks.schedule.running", variant: "success" };
-  }
-  if (state === "pending_estimate") {
-    return { labelKey: "tasks.schedule.estimating" };
-  }
-  // "Pause au choix": analyzed but held until the user gives the go.
-  if (task.executionHold === true) {
-    return { labelKey: "tasks.schedule.heldForReview", variant: "warning" };
-  }
-  if (task.schedule?.waitingReason === "quiet_hours") {
-    return { labelKey: "tasks.schedule.awaitingWindow" };
-  }
-  return { labelKey: "tasks.schedule.awaiting" };
 }
 
 // When a validated/planned task will actually launch: the scheduler holds
@@ -220,8 +182,8 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   }, [onPress, task]);
 
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
-  const scheduleBadge = useMemo(() => getScheduleBadge(task), [task]);
   const tone = useTaskTone(task);
+  const scheduleBadge = useMemo(() => getScheduleBadge(task, tone), [task, tone]);
 
   const isNote = task.column === "notes";
   // A note whose deadline is here (overdue or within two days) nudges itself, the
@@ -266,7 +228,9 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const hiddenTagCount = tags.length - visibleTags.length;
 
   const priorityLabel = priority?.label;
-  const dimmed = isCardDimmed(task, tone);
+  // A task waiting on the user re-lights to full opacity even if it had been
+  // opened and dimmed — the amber signal must catch the eye above all else.
+  const dimmed = isCardDimmed(task, tone) && tone !== "attention";
   const accent = isNote ? noteAccentFor(priority?.level) : undefined;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>

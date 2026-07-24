@@ -435,6 +435,7 @@ export const en = {
       pr: "PR #{{number}}",
       openPr: "Open pull request",
       planReady: "Plan ready",
+      awaitingReply: "Waiting for your reply",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}}d",
       deadlineOverdue: "overdue",

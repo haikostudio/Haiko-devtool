@@ -443,6 +443,7 @@ export const ptBR: TranslationResources = {
       pr: "PR #{{number}}",
       openPr: "Abrir pull request",
       planReady: "Plano pronto",
+      awaitingReply: "Aguardando sua resposta",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}} d",
       deadlineOverdue: "atrasada",

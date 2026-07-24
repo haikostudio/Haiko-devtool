@@ -440,6 +440,7 @@ export const ja: TranslationResources = {
       pr: "PR #{{number}}",
       openPr: "プルリクエストを開く",
       planReady: "プラン完成",
+      awaitingReply: "返信をお待ちしています",
       duration: "約{{minutes}}分",
       deadlineDays: "残り{{count}}日",
       deadlineOverdue: "期限切れ",

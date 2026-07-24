@@ -442,6 +442,7 @@ export const es: TranslationResources = {
       pr: "PR #{{number}}",
       openPr: "Abrir pull request",
       planReady: "Plan listo",
+      awaitingReply: "Esperando tu respuesta",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}} d",
       deadlineOverdue: "vencida",

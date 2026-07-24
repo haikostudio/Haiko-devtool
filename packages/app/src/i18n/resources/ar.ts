@@ -436,6 +436,7 @@ export const ar: TranslationResources = {
       pr: "PR ‏#{{number}}",
       openPr: "فتح طلب السحب",
       planReady: "الخطة جاهزة",
+      awaitingReply: "في انتظار ردك",
       duration: "~{{minutes}} دقيقة",
       deadlineDays: "{{count}} ي",
       deadlineOverdue: "متأخرة",
