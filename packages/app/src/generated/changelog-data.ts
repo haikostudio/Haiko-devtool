@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-25",
     markdown:
-      "### Corrections\n\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)",
+      "### Corrections\n\n- Unblock self-host web build\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)",
   },
   {
     version: "0.2.0",
@@ -637,6 +637,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "38e416ca3eb1efbe30aa06d6548262098c465205",
+    shortHash: "38e416ca3",
+    date: "2026-07-25T01:47:41+02:00",
+    author: "haikostudio",
+    subject: "fix(app): unblock self-host web build",
+  },
   {
     hash: "ec6641d2d988d56f3946597c72cfe783399ad344",
     shortHash: "ec6641d2d",
@@ -2755,14 +2762,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "haikostudio",
     subject: "feat(cerveau): date et heure de chaque souvenir dans la pastille de rappel",
   },
-  {
-    hash: "e32b99253f3f9e4bc164dae5303567ad725319d3",
-    shortHash: "e32b99253",
-    date: "2026-07-20T23:16:32+02:00",
-    author: "haikostudio",
-    subject: "feat(toasts): les tâches terminées restent affichées jusqu'à l'ouverture de l'agent",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:05:27+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:47:41+02:00";
