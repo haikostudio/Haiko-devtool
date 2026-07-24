@@ -183,7 +183,7 @@ export function ConductorPanel({
           terminal state survive a hop to Details or Billing and back. */}
       <View style={taskView === "chat" ? styles.tabPane : styles.tabPaneHidden}>
         <TaskAgentChat
-          key={`task:${task.id}:${task.links.primaryAgentId ?? "none"}`}
+          key={`task:${task.id}:${task.links.taskAgentId ?? task.links.primaryAgentId ?? "none"}`}
           serverId={serverId}
           task={task}
           onRunNow={onRunNow}
