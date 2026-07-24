@@ -32,7 +32,13 @@ export interface TaskAgentChatProps {
  */
 export function TaskAgentChat({ serverId, task, onRunNow }: TaskAgentChatProps) {
   const { t } = useTranslation();
-  const agentId = task.links.primaryAgentId ?? null;
+  // Prefer the pipeline agent: analysis AND execution live in that one
+  // conversation, so it holds the live thread the card's "Analyse en cours"
+  // badge refers to. primaryAgentId may point at a proposing/interactive agent
+  // with an empty conversation — binding to it showed a blank chat while the
+  // task was actively working. Fall back to primaryAgentId for legacy tasks
+  // that predate taskAgentId.
+  const agentId = task.links.taskAgentId ?? task.links.primaryAgentId ?? null;
   // Prefer the task's recorded workspace; fall back to the agent's own workspace
   // from the session store so the embedded pane always has a scope.
   const agentWorkspaceId = useSessionStore((state) =>
