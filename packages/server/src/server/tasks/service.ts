@@ -139,6 +139,10 @@ interface CreateTaskInput {
   schedulePreference?: TaskSchedulePreference;
   // "pending" gates the scheduler until the user approves (agent proposals).
   approval?: TaskApproval;
+  // Arm the analysis pipeline on creation even outside a pipeline column, so a
+  // task sent from the inline "À faire" composer spawns its agent right away
+  // while the card stays put. Ignored for tasks awaiting approval (proposals).
+  launch?: boolean;
 }
 
 interface MoveTaskInput {
@@ -368,6 +372,13 @@ export class TaskBoardService {
   async createTask(projectId: string, input: CreateTaskInput): Promise<KanbanTask> {
     let created: KanbanTask | null = null;
     const column = input.column ?? "backlog";
+    // A task arms its analysis agent when it lands in a pipeline column (the
+    // existing consent gate) OR when the caller explicitly asks to launch it —
+    // the inline "À faire" composer does, so sending a prompt spawns the agent
+    // in place. A proposal awaiting approval never auto-launches.
+    const shouldLaunch =
+      PIPELINE_COLUMNS.has(column) ||
+      (input.launch === true && input.approval?.state !== "pending");
     const board = await this.store.mutate(projectId, (current) => {
       if (!current.folders.some((entry) => entry.id === input.folderId)) {
         throw new TaskBoardServiceError("folder_not_found", `Folder not found: ${input.folderId}`);
@@ -394,9 +405,7 @@ export class TaskBoardService {
           ? { schedulePreference: input.schedulePreference }
           : {}),
         ...(input.approval !== undefined ? { approval: input.approval } : {}),
-        ...(PIPELINE_COLUMNS.has(column)
-          ? { schedule: { state: "pending_estimate" as const, attempts: 0 } }
-          : {}),
+        ...(shouldLaunch ? { schedule: { state: "pending_estimate" as const, attempts: 0 } } : {}),
         links: input.agentId
           ? { agentIds: [input.agentId], primaryAgentId: input.agentId }
           : { agentIds: [] },
@@ -409,7 +418,7 @@ export class TaskBoardService {
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
     }
-    if (PIPELINE_COLUMNS.has(column)) {
+    if (shouldLaunch) {
       this.notifyScheduled(projectId, created);
     }
     if (input.approval?.state === "pending" && this.onTaskProposed) {

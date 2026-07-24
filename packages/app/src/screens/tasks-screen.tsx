@@ -1186,12 +1186,17 @@ function BoardContent({
         return;
       }
       setNewTaskColumn(null);
+      // Sending the prompt IS launching the task: spawn its dedicated agent now
+      // (launch: true) instead of leaving an inert draft. The card stays in its
+      // column and fills in live as the agent analyzes; opening it shows the
+      // agent's chat.
       void boardHandle.createTask({
         folderId,
         title,
         description: text,
         ...(attachments.length > 0 ? { attachments } : {}),
         column: targetColumn,
+        launch: true,
       });
     },
     [newTaskColumn, folderId, boardHandle],

@@ -202,6 +202,7 @@ export class TasksSession {
         ...(request.schedulePreference !== undefined
           ? { schedulePreference: request.schedulePreference }
           : {}),
+        ...(request.launch !== undefined ? { launch: request.launch } : {}),
       });
       this.host.emit({
         type: "tasks.task.create.response",
