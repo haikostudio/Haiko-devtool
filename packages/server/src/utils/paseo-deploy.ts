@@ -148,6 +148,12 @@ export interface PaseoDeployTriggerResult {
 /** Tag used for tasks opened automatically when a selected branch conflicts. */
 export const PASEO_DEPLOY_CONFLICT_TAG = "paseo:deploy-conflict";
 export const PASEO_DEPLOY_BRANCH_TAG_PREFIX = "paseo:deploy-branch:";
+/** Branches created internally to repair a deploy conflict are never deploy inputs. */
+export const PASEO_DEPLOY_REPAIR_BRANCH_PREFIX = "task/reparer-le-conflit-avant-publication-";
+
+export function isPaseoDeployRepairBranch(branch: string): boolean {
+  return branch.startsWith(PASEO_DEPLOY_REPAIR_BRANCH_PREFIX);
+}
 
 export interface PaseoDeployConflictTaskInput {
   projectId: string;
@@ -205,6 +211,11 @@ async function prepareDeployBranches(input: {
   const branchesToMerge: string[] = [];
   const queuedBranches: string[] = [];
   for (const branch of input.branches) {
+    // A repair task gets its own temporary worktree. It must never appear as a
+    // new deploy candidate, otherwise the UI can ask for a repair of the repair.
+    if (isPaseoDeployRepairBranch(branch)) {
+      continue;
+    }
     const worktree = worktrees.find((entry) => entry.branch === branch);
     const uncommittedCount = worktree ? await getWorktreeUncommittedCount(worktree.path) : 0;
     const mergeCheck = worktree
@@ -500,7 +511,10 @@ async function getPendingWorktrees(
 ): Promise<PaseoDeployWorktree[]> {
   const results = await Promise.all(
     worktrees
-      .filter((wt) => wt.path !== REPO_ROOT && wt.branch !== null)
+      .filter(
+        (wt) =>
+          wt.path !== REPO_ROOT && wt.branch !== null && !isPaseoDeployRepairBranch(wt.branch),
+      )
       .map(async (wt): Promise<PaseoDeployWorktree | null> => {
         const branch = wt.branch as string;
         const [commits, commitCount, uncommittedCount, mergeCheck] = await Promise.all([

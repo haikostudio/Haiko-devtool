@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { AUTO_RESOLVABLE_CONFLICT_PATHS, classifyMergeConflicts } from "./paseo-deploy.js";
+import {
+  AUTO_RESOLVABLE_CONFLICT_PATHS,
+  classifyMergeConflicts,
+  isPaseoDeployRepairBranch,
+} from "./paseo-deploy.js";
 
 describe("classifyMergeConflicts", () => {
   it("treats the generated changelog snapshot as auto-resolvable", () => {
@@ -33,5 +37,14 @@ describe("classifyMergeConflicts", () => {
     expect(AUTO_RESOLVABLE_CONFLICT_PATHS).toContain(
       "packages/app/src/generated/changelog-data.ts",
     );
+  });
+});
+
+describe("isPaseoDeployRepairBranch", () => {
+  it("hides automatic repair branches from the deploy list", () => {
+    expect(isPaseoDeployRepairBranch("task/reparer-le-conflit-avant-publication-tas-606984")).toBe(
+      true,
+    );
+    expect(isPaseoDeployRepairBranch("task/refonte-modal-a-deployer-0815b3")).toBe(false);
   });
 });
