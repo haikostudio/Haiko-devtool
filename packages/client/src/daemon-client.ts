@@ -94,6 +94,8 @@ import type {
   WorkspaceCreateRequest,
   SidebarOrder,
   WorkspaceUiState,
+  AttachmentLibraryEntry,
+  AttachmentLibraryBlobResponse,
   UsageStatsDay,
   ComptaSummaryRow,
   ComptaMonthlyRevenue,
@@ -4260,6 +4262,33 @@ export class DaemonClient {
         path,
       },
       responseType: "file_download_token_response",
+    });
+  }
+
+  /** All files/images that transited a workspace's agent chats, newest first. */
+  async attachmentLibraryList(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<AttachmentLibraryEntry[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "attachments.library.list.response",
+      AttachmentLibraryEntry[]
+    >({
+      requestId,
+      message: { type: "attachments.library.list.request", workspaceId },
+      selectPayload: (payload) => payload.entries,
+    });
+  }
+
+  /** A single library entry's bytes (base64) + metadata, for preview/download. */
+  async attachmentLibraryBlob(
+    workspaceId: string,
+    entryId: string,
+    requestId?: string,
+  ): Promise<AttachmentLibraryBlobResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"attachments.library.blob.response">({
+      requestId,
+      message: { type: "attachments.library.blob.request", workspaceId, entryId },
     });
   }
 

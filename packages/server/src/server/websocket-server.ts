@@ -10,6 +10,7 @@ import { getCachedPaseoDeployRoots } from "../utils/paseo-deploy.js";
 import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
+import { AttachmentLibraryStore } from "./attachment-library-store.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type pino from "pino";
@@ -453,6 +454,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly sidebarOrderStore: SidebarOrderStore;
   private readonly sessionUiStateStore: SessionUiStateStore;
   private readonly draftAttachmentStore: DraftAttachmentStore;
+  private readonly attachmentLibraryStore: AttachmentLibraryStore;
   private readonly worktreesRoot: string | undefined;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
@@ -638,6 +640,11 @@ export class VoiceAssistantWebSocketServer {
 
     this.draftAttachmentStore = new DraftAttachmentStore(
       join(paseoHome, "draft-attachments"),
+      this.logger,
+    );
+
+    this.attachmentLibraryStore = new AttachmentLibraryStore(
+      join(paseoHome, "attachment-library"),
       this.logger,
     );
 
@@ -1101,6 +1108,7 @@ export class VoiceAssistantWebSocketServer {
       sidebarOrderStore: this.sidebarOrderStore,
       sessionUiStateStore: this.sessionUiStateStore,
       draftAttachmentStore: this.draftAttachmentStore,
+      attachmentLibraryStore: this.attachmentLibraryStore,
       usageStatsStore: this.agentManager.getUsageStatsStore(),
       chatService: this.chatService,
       loopService: this.loopService,
@@ -1408,6 +1416,9 @@ export class VoiceAssistantWebSocketServer {
         turnRecap: true,
         // COMPAT(paseoSelfhostDeploy): added in v0.1.108, custom fork feature (self-host deploy button).
         paseoSelfhostDeploy: true,
+        // COMPAT(attachmentLibrary): added in v0.1.X, custom fork feature.
+        // This daemon indexes chat attachments per workspace (see AttachmentLibraryStore).
+        attachmentLibrary: true,
         // COMPAT(paseoSelfhostDeployRoots): added in v0.1.X, drop the gate when floor >= v0.1.X.
         // Every Paseo checkout (main repo + task worktrees) where the deploy
         // button may appear — cached, refreshed on each deploy-status poll.

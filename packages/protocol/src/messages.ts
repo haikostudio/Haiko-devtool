@@ -8,6 +8,7 @@ import {
   ReviewAttachmentSchema,
   UploadedFileAttachmentSchema,
   AgentAttachmentSchema,
+  AttachmentLibraryEntrySchema,
 } from "./attachments.js";
 import { TerminalActivitySchema } from "./terminal-activity.js";
 import { CLIENT_CAPS } from "./client-capabilities.js";
@@ -1170,6 +1171,7 @@ export {
   ReviewAttachmentSchema,
   UploadedFileAttachmentSchema,
   AgentAttachmentSchema,
+  AttachmentLibraryEntrySchema,
 };
 
 function normalizeAgentAttachments(input: unknown): AgentAttachment[] {
@@ -2201,6 +2203,26 @@ export const PaseoDeployCommitWorktreeRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// COMPAT(attachmentLibrary): added in v0.1.X, custom fork feature (attachment
+// library drawer). List every file/image that transited a workspace's chats.
+export const AttachmentLibraryListRequestSchema = z.object({
+  type: z.literal("attachments.library.list.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
+// Fetch a single library entry's bytes as base64 over the WebSocket — used for
+// both the image preview and the "download / open" action. Goes over the WS (not
+// an HTTP URL) so it works over the encrypted relay, where the daemon's HTTP
+// endpoints aren't reachable. The daemon resolves the on-disk path itself, so no
+// client-supplied path, and caps the size (large files aren't served this way).
+export const AttachmentLibraryBlobRequestSchema = z.object({
+  type: z.literal("attachments.library.blob.request"),
+  workspaceId: z.string(),
+  entryId: z.string(),
+  requestId: z.string(),
+});
+
 export const GitHubSearchItemSchema = z.object({
   kind: z.enum(["issue", "pr"]),
   number: z.number(),
@@ -2745,6 +2767,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   PaseoDeployStatusRequestSchema,
   PaseoDeployTriggerRequestSchema,
   PaseoDeployCommitWorktreeRequestSchema,
+  AttachmentLibraryListRequestSchema,
+  AttachmentLibraryBlobRequestSchema,
   ValidateBranchRequestSchema,
   BranchSuggestionsRequestSchema,
   GitHubSearchRequestSchema,
@@ -3060,6 +3084,10 @@ export const ServerInfoStatusPayloadSchema = z
         turnRecap: z.boolean().optional(),
         // COMPAT(paseoSelfhostDeploy): added in v0.1.108, custom fork feature (self-host deploy button).
         paseoSelfhostDeploy: z.boolean().optional(),
+        // COMPAT(attachmentLibrary): added in v0.1.X, custom fork feature.
+        // Per-workspace library of files/images sent through agent chats, with a
+        // search drawer. Present only on daemons that index attachments.
+        attachmentLibrary: z.boolean().optional(),
         // COMPAT(paseoSelfhostDeployRoots): added in v0.1.X, drop the gate when floor >= v0.1.X.
         // Checkout roots (the Paseo repo + its worktrees) where the deploy button
         // may appear, so task-branch worktrees show it too — not just /root/paseo.
@@ -4784,6 +4812,29 @@ export const ProjectIconResponseSchema = z.object({
   }),
 });
 
+export const AttachmentLibraryListResponseSchema = z.object({
+  type: z.literal("attachments.library.list.response"),
+  payload: z.object({
+    entries: z.array(AttachmentLibraryEntrySchema),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+export const AttachmentLibraryBlobResponseSchema = z.object({
+  type: z.literal("attachments.library.blob.response"),
+  payload: z.object({
+    /** Base64 bytes (no `data:` prefix), null on failure or when too large. */
+    dataBase64: z.string().nullable(),
+    fileName: z.string().nullable(),
+    mimeType: z.string().nullable(),
+    size: z.number().nullable(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const FileDownloadTokenResponseSchema = z.object({
   type: z.literal("file_download_token_response"),
   payload: z.object({
@@ -5244,6 +5295,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   PaseoDeployStatusResponseSchema,
   PaseoDeployTriggerResponseSchema,
   PaseoDeployCommitWorktreeResponseSchema,
+  AttachmentLibraryListResponseSchema,
+  AttachmentLibraryBlobResponseSchema,
   ValidateBranchResponseSchema,
   BranchSuggestionsResponseSchema,
   GitHubSearchResponseSchema,
@@ -5504,6 +5557,7 @@ export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
 export type UploadedFileAttachment = z.infer<typeof UploadedFileAttachmentSchema>;
 export type FirstAgentContext = z.infer<typeof FirstAgentContextSchema>;
 export type ReviewAttachment = z.infer<typeof ReviewAttachmentSchema>;
+export type AttachmentLibraryEntry = z.infer<typeof AttachmentLibraryEntrySchema>;
 export type ListProviderModelsRequestMessage = z.infer<
   typeof ListProviderModelsRequestMessageSchema
 >;
@@ -5584,6 +5638,10 @@ export type PaseoDeployCommitWorktreeResponse = z.infer<
 export type PaseoDeployPendingFile = z.infer<typeof PaseoDeployPendingFileSchema>;
 export type PaseoDeployPendingCommit = z.infer<typeof PaseoDeployPendingCommitSchema>;
 export type PaseoDeployWorktree = z.infer<typeof PaseoDeployWorktreeSchema>;
+export type AttachmentLibraryListRequest = z.infer<typeof AttachmentLibraryListRequestSchema>;
+export type AttachmentLibraryListResponse = z.infer<typeof AttachmentLibraryListResponseSchema>;
+export type AttachmentLibraryBlobRequest = z.infer<typeof AttachmentLibraryBlobRequestSchema>;
+export type AttachmentLibraryBlobResponse = z.infer<typeof AttachmentLibraryBlobResponseSchema>;
 export type CheckoutCommitRequest = z.infer<typeof CheckoutCommitRequestSchema>;
 export type CheckoutCommitResponse = z.infer<typeof CheckoutCommitResponseSchema>;
 export type CheckoutMergeRequest = z.infer<typeof CheckoutMergeRequestSchema>;

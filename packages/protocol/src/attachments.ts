@@ -86,6 +86,27 @@ export const AgentAttachmentSchema = z.discriminatedUnion("type", [
   UploadedFileAttachmentSchema,
 ]);
 
+// One entry in a workspace's attachment library — a file or image that has
+// transited through the chat of one of the workspace's agents. Built server-side
+// from the send-time index (plus a lazy backfill of historical images), and
+// returned to the client for the search drawer. Purely descriptive: the bytes
+// live on disk (uploads or a materialized image blob), fetched on demand.
+export const AttachmentLibraryEntrySchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  size: z.number().int().nonnegative(),
+  /** When it was first seen in the chat (epoch ms). */
+  addedAt: z.number(),
+  kind: z.enum(["image", "file"]),
+  /** Agent whose chat carried this attachment, for grouping in the drawer. */
+  agentId: z.string().optional(),
+  agentTitle: z.string().optional(),
+  /** True when the daemon holds bytes it can preview/serve for this entry. */
+  hasPreview: z.boolean().optional(),
+});
+
 export type AgentAttachment = z.infer<typeof AgentAttachmentSchema>;
 export type UploadedFileAttachment = z.infer<typeof UploadedFileAttachmentSchema>;
 export type ReviewAttachment = z.infer<typeof ReviewAttachmentSchema>;
+export type AttachmentLibraryEntry = z.infer<typeof AttachmentLibraryEntrySchema>;

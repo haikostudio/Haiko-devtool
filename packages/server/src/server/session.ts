@@ -1,6 +1,6 @@
 import equal from "fast-deep-equal";
 import { v4 as uuidv4 } from "uuid";
-import { lstat, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rename, rm, stat } from "node:fs/promises";
 import { basename, join, normalize, resolve, sep } from "path";
 import { homedir } from "node:os";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
@@ -8,6 +8,7 @@ import {
   serializeAgentStreamEvent,
   type AgentSnapshotPayload,
   type AgentAttachment,
+  type AttachmentLibraryEntry,
   type FirstAgentContext,
   type SessionInboundMessage,
   type SessionOutboundMessage,
@@ -142,6 +143,7 @@ import {
 import { SidebarOrderStore } from "./sidebar-order-store.js";
 import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
+import type { AttachmentLibraryStore, NewAttachmentInput } from "./attachment-library-store.js";
 import type { UsageStatsStore } from "./stats/usage-stats-store.js";
 import type { ComptaLinksStore, ComptaProjectLinkRecord } from "./compta/compta-links-store.js";
 import type { ComptaSummaryService } from "./compta/compta-summary-service.js";
@@ -258,6 +260,11 @@ import { CreateAgentLifecycleDispatch } from "./agent/create-agent-lifecycle-dis
 // TODO: Remove once all app store clients are on >=0.1.45 and understand arbitrary provider strings.
 // Clients before 0.1.45 validate providers with z.enum(["claude", "codex", "opencode"]) and reject
 // the entire session message if they encounter an unknown provider.
+// Cap for serving an attachment's bytes inline over the WebSocket (preview /
+// direct download). Base64 inflates ~33%, so keep this well under any frame
+// limit; larger files aren't offered for inline preview/download.
+const ATTACHMENT_LIBRARY_MAX_INLINE_BYTES = 20 * 1024 * 1024;
+
 const LEGACY_PROVIDER_IDS = new Set(["claude", "codex", "opencode"]);
 const MIN_VERSION_ALL_PROVIDERS = "0.1.45";
 function errorToFriendlyMessage(error: unknown): string {
@@ -456,6 +463,7 @@ export interface SessionOptions {
   sidebarOrderStore?: SidebarOrderStore;
   sessionUiStateStore?: SessionUiStateStore;
   draftAttachmentStore?: DraftAttachmentStore;
+  attachmentLibraryStore?: AttachmentLibraryStore;
   usageStatsStore?: UsageStatsStore;
   comptaSummaryService?: ComptaSummaryService;
   comptaLinksStore?: ComptaLinksStore;
@@ -625,6 +633,7 @@ export class Session {
   private readonly sidebarOrderStore: SidebarOrderStore;
   private readonly sessionUiStateStore: SessionUiStateStore;
   private readonly draftAttachmentStore: DraftAttachmentStore;
+  private readonly attachmentLibraryStore: AttachmentLibraryStore | undefined;
   private readonly usageStatsStore: UsageStatsStore | undefined;
   private readonly comptaSummaryService: ComptaSummaryService | undefined;
   private readonly comptaLinksStore: ComptaLinksStore | undefined;
@@ -698,6 +707,7 @@ export class Session {
       sidebarOrderStore,
       sessionUiStateStore,
       draftAttachmentStore,
+      attachmentLibraryStore,
       usageStatsStore,
       comptaSummaryService,
       comptaLinksStore,
@@ -782,6 +792,7 @@ export class Session {
     this.sidebarOrderStore = fallbacks.sidebarOrderStore;
     this.sessionUiStateStore = fallbacks.sessionUiStateStore;
     this.draftAttachmentStore = fallbacks.draftAttachmentStore;
+    this.attachmentLibraryStore = attachmentLibraryStore;
     this.usageStatsStore = usageStatsStore;
     this.comptaSummaryService = comptaSummaryService;
     this.comptaLinksStore = comptaLinksStore;
@@ -1765,6 +1776,10 @@ export class Session {
         return this.checkoutSession.handlePaseoDeployTriggerRequest(msg);
       case "checkout.deploy.commit-worktree.request":
         return this.checkoutSession.handlePaseoDeployCommitWorktreeRequest(msg);
+      case "attachments.library.list.request":
+        return this.handleAttachmentLibraryListRequest(msg);
+      case "attachments.library.blob.request":
+        return this.handleAttachmentLibraryBlobRequest(msg);
       default:
         return undefined;
     }
@@ -3083,6 +3098,208 @@ export class Session {
   /**
    * Handle text message to agent (with optional image attachments)
    */
+  /**
+   * Record a turn's attachments (pasted images + uploaded files) into the
+   * workspace's attachment library so the search drawer lists everything that
+   * transited the project's chats. Best-effort and fire-and-forget: it must never
+   * delay or fail a message send. Resolves the workspace from the agent (the one
+   * choke point where `agentId → workspaceId` is known at send time).
+   */
+  private recordAgentAttachments(
+    agentId: string,
+    images?: Array<{ data: string; mimeType: string }>,
+    attachments?: AgentAttachment[],
+  ): void {
+    const store = this.attachmentLibraryStore;
+    if (!store) {
+      return;
+    }
+    const hasImages = !!images && images.length > 0;
+    const uploads = (attachments ?? []).filter(
+      (attachment): attachment is Extract<AgentAttachment, { type: "uploaded_file" }> =>
+        attachment.type === "uploaded_file",
+    );
+    if (!hasImages && uploads.length === 0) {
+      return;
+    }
+    void (async () => {
+      try {
+        const agent = this.agentManager.getAgent(agentId);
+        const workspaceId =
+          agent?.workspaceId ?? (await this.agentStorage.get(agentId))?.workspaceId ?? null;
+        if (!workspaceId) {
+          return;
+        }
+        const agentTitle = agent?.config.title ?? undefined;
+        const inputs: NewAttachmentInput[] = [];
+        for (const image of images ?? []) {
+          inputs.push({
+            kind: "image",
+            data: image.data,
+            mimeType: image.mimeType,
+            agentId,
+            agentTitle,
+          });
+        }
+        for (const file of uploads) {
+          inputs.push({
+            kind: "file",
+            id: file.id,
+            fileName: file.fileName,
+            mimeType: file.mimeType,
+            size: file.size,
+            path: file.path,
+            agentId,
+            agentTitle,
+          });
+        }
+        await store.add(workspaceId, inputs);
+      } catch (error) {
+        this.sessionLogger.warn({ err: error, agentId }, "Failed to record attachments to library");
+      }
+    })();
+  }
+
+  /**
+   * List every file/image that transited a workspace's chats. Runs a one-time
+   * lazy backfill of historical images before returning, so an existing project
+   * isn't empty the first time it's opened.
+   */
+  private async handleAttachmentLibraryListRequest(
+    msg: Extract<SessionInboundMessage, { type: "attachments.library.list.request" }>,
+  ): Promise<void> {
+    const store = this.attachmentLibraryStore;
+    const respond = (entries: AttachmentLibraryEntry[], error: string | null): void => {
+      this.emit({
+        type: "attachments.library.list.response",
+        payload: { entries, success: error === null, error, requestId: msg.requestId },
+      });
+    };
+    if (!store) {
+      respond([], "La librairie des pièces jointes n'est pas disponible sur cet hôte.");
+      return;
+    }
+    try {
+      await this.backfillAttachmentLibrary(msg.workspaceId, store);
+      const entries = await store.list(msg.workspaceId);
+      respond(entries, null);
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, workspaceId: msg.workspaceId },
+        "Failed to list attachment library",
+      );
+      respond([], error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * One-time backfill: harvest images already sitting in the timelines of this
+   * workspace's agents so files sent before the library existed still show up.
+   * Uploaded files aren't kept in the timeline, so only images are recoverable.
+   */
+  private async backfillAttachmentLibrary(
+    workspaceId: string,
+    store: AttachmentLibraryStore,
+  ): Promise<void> {
+    if (await store.isBackfilled(workspaceId)) {
+      return;
+    }
+    const agents = this.agentManager
+      .listAgents()
+      .filter((agent) => agent.workspaceId === workspaceId);
+    for (const agent of agents) {
+      try {
+        const rows = await this.agentManager.getTimelineRows(agent.id);
+        const inputs: NewAttachmentInput[] = [];
+        for (const row of rows) {
+          const item = row.item;
+          if (item.type !== "user_message" || !item.images) {
+            continue;
+          }
+          const addedAt = Date.parse(row.timestamp);
+          for (const image of item.images) {
+            inputs.push({
+              kind: "image",
+              data: image.data,
+              mimeType: image.mimeType,
+              agentId: agent.id,
+              agentTitle: agent.config.title ?? undefined,
+              addedAt: Number.isNaN(addedAt) ? undefined : addedAt,
+            });
+          }
+        }
+        if (inputs.length > 0) {
+          await store.add(workspaceId, inputs);
+        }
+      } catch (error) {
+        this.sessionLogger.warn(
+          { err: error, agentId: agent.id },
+          "Attachment library backfill: failed to read agent timeline",
+        );
+      }
+    }
+    await store.markBackfilled(workspaceId);
+  }
+
+  /**
+   * Return a library entry's bytes as base64 over the WebSocket — used for both
+   * the image preview and the "download / open" action. Served over the WS (not
+   * an HTTP URL) so it works over the encrypted relay, where the daemon's HTTP
+   * endpoints aren't reachable. Capped so large files aren't shipped inline.
+   */
+  private async handleAttachmentLibraryBlobRequest(
+    msg: Extract<SessionInboundMessage, { type: "attachments.library.blob.request" }>,
+  ): Promise<void> {
+    const store = this.attachmentLibraryStore;
+    const respond = (
+      payload: { dataBase64: string; fileName: string; mimeType: string; size: number } | null,
+      error: string | null,
+    ): void => {
+      this.emit({
+        type: "attachments.library.blob.response",
+        payload: {
+          dataBase64: payload?.dataBase64 ?? null,
+          fileName: payload?.fileName ?? null,
+          mimeType: payload?.mimeType ?? null,
+          size: payload?.size ?? null,
+          error,
+          requestId: msg.requestId,
+        },
+      });
+    };
+    if (!store) {
+      respond(null, "La librairie des pièces jointes n'est pas disponible sur cet hôte.");
+      return;
+    }
+    try {
+      const found = await store.resolve(msg.workspaceId, msg.entryId);
+      if (!found) {
+        respond(null, "Fichier introuvable.");
+        return;
+      }
+      if (found.size > ATTACHMENT_LIBRARY_MAX_INLINE_BYTES) {
+        respond(null, "Fichier trop volumineux pour l'aperçu ou le téléchargement direct.");
+        return;
+      }
+      const bytes = await readFile(found.absolutePath);
+      respond(
+        {
+          dataBase64: bytes.toString("base64"),
+          fileName: found.fileName,
+          mimeType: found.mimeType,
+          size: found.size,
+        },
+        null,
+      );
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, workspaceId: msg.workspaceId, entryId: msg.entryId },
+        "Failed to read attachment bytes",
+      );
+      respond(null, error instanceof Error ? error.message : String(error));
+    }
+  }
+
   private async handleSendAgentMessage(
     agentId: string,
     text: string,
@@ -3107,6 +3324,8 @@ export class Session {
           : ""
       }`,
     );
+
+    this.recordAgentAttachments(agentId, images, attachments);
 
     const promptText = options?.spokenInput ? wrapSpokenInput(text) : text;
     const prompt = buildAgentPrompt(promptText, images, attachments);
@@ -3222,6 +3441,7 @@ export class Session {
         },
       );
       createdAgentId = snapshot.id;
+      this.recordAgentAttachments(snapshot.id, images, attachments);
       await this.agentUpdates.forwardLiveAgent(snapshot);
       if (createdDirectoryWorkspaceForAgent && trimmedPrompt) {
         this.workspaceAutoName.scheduleForDirectory(
@@ -6375,6 +6595,8 @@ export class Session {
       // propose tasks (awaiting approval) or ask clarifying questions in-thread.
       // Strictly fire-and-forget — never blocks or alters the normal agent turn.
       this.messageTriage?.triage({ agentId, text: msg.text });
+
+      this.recordAgentAttachments(agentId, msg.images, msg.attachments);
 
       const prompt = buildAgentPrompt(msg.text, msg.images, msg.attachments);
       this.sessionLogger.trace(

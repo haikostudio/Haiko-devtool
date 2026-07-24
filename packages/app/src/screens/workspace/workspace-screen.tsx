@@ -66,6 +66,7 @@ import { WindowChromeRegion } from "@/utils/desktop-window";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { PaseoDeployButton } from "@/git/paseo-deploy-button";
+import { AttachmentLibraryButton } from "@/attachments/attachment-library-button";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
@@ -1761,6 +1762,13 @@ function WorkspaceScreenContent({
   const showPaseoDeployButton =
     paseoSelfhostDeploySupported &&
     isPaseoDeployCheckout(workspaceDirectory, paseoSelfhostDeployRoots);
+  // Attachment library button: lists every file/image that transited the
+  // project's chats. Personal-fork feature, gated on the daemon capability.
+  const attachmentLibrarySupported = useSessionStore(
+    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.attachmentLibrary === true,
+  );
+  const showAttachmentLibraryButton =
+    attachmentLibrarySupported && normalizedWorkspaceId.length > 0;
   // The deploy sheet delegates to this project's "Chef d'orchestre" agent, so it
   // needs the workspace's project id to reach (or spin up) that agent.
   const paseoDeployProjectId = getPaseoDeployProjectId(workspaceDescriptor);
@@ -3406,11 +3414,14 @@ function WorkspaceScreenContent({
               cwd={workspaceDirectory}
               hideLabels={showCompactButtonLabels}
             />
-            {showPaseoDeployButton ? (
-              <PaseoDeployButton
+            {showAttachmentLibraryButton ? (
+              <AttachmentLibraryButton
                 serverId={normalizedServerId}
-                projectId={paseoDeployProjectId}
+                workspaceId={normalizedWorkspaceId}
               />
+            ) : null}
+            {showPaseoDeployButton ? (
+              <PaseoDeployButton serverId={normalizedServerId} projectId={paseoDeployProjectId} />
             ) : null}
             {isGitCheckout ? (
               <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
@@ -3477,6 +3488,13 @@ function WorkspaceScreenContent({
             }}
           </HeaderToggleButton>
         ) : null}
+        {isMobile && showAttachmentLibraryButton ? (
+          <AttachmentLibraryButton
+            serverId={normalizedServerId}
+            workspaceId={normalizedWorkspaceId}
+            compact
+          />
+        ) : null}
         {isMobile && showPaseoDeployButton ? (
           <PaseoDeployButton
             serverId={normalizedServerId}
@@ -3527,6 +3545,7 @@ function WorkspaceScreenContent({
       handleOpenUrlInBrowserTab,
       showCompactButtonLabels,
       showPaseoDeployButton,
+      showAttachmentLibraryButton,
       paseoDeployProjectId,
       isGitCheckout,
       handleToggleExplorer,
