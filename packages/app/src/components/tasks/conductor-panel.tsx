@@ -32,6 +32,7 @@ type EnsureState =
 
 /** Task-mode tabs, chat first. Details/Billing live here too — no separate drawer. */
 type TaskView = "chat" | "details" | "billing";
+type ConductorProvider = "codex/gpt-5.4" | "claude/sonnet";
 
 export interface ConductorPanelProps {
   serverId: string | null;
@@ -94,6 +95,7 @@ export function ConductorPanel({
   );
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
+  const [conductorProvider, setConductorProvider] = useState<ConductorProvider>("codex/gpt-5.4");
   const inTaskMode = dockTask !== null;
   const dockTaskId = dockTask?.id ?? null;
 
@@ -113,6 +115,13 @@ export function ConductorPanel({
       { value: "billing", label: t("tasks.panel.billing"), testID: "conductor-task-view-billing" },
     ],
     [t],
+  );
+  const conductorProviderOptions = useMemo<SegmentedControlOption<ConductorProvider>[]>(
+    () => [
+      { value: "codex/gpt-5.4", label: "Codex", testID: "conductor-provider-codex" },
+      { value: "claude/sonnet", label: "Claude", testID: "conductor-provider-claude" },
+    ],
+    [],
   );
 
   useEffect(() => {
@@ -136,7 +145,9 @@ export function ConductorPanel({
         return;
       }
       try {
-        const payload = await client.tasksConductorEnsure(projectId);
+        const payload = await client.tasksConductorEnsure(projectId, {
+          provider: conductorProvider,
+        });
         if (cancelled) {
           return;
         }
@@ -165,7 +176,7 @@ export function ConductorPanel({
     return () => {
       cancelled = true;
     };
-  }, [serverId, projectId, t, inTaskMode]);
+  }, [serverId, projectId, t, inTaskMode, conductorProvider]);
 
   const renderTaskBody = (task: KanbanTask) => (
     <>
@@ -277,7 +288,21 @@ export function ConductorPanel({
       onToggleCollapse={handleToggleCollapse}
       testID="conductor-panel"
     >
-      <View style={styles.body}>{renderBody()}</View>
+      <View style={styles.body}>
+        {inTaskMode ? null : (
+          <View style={styles.providerSwitch}>
+            <SegmentedControl
+              options={conductorProviderOptions}
+              value={conductorProvider}
+              onValueChange={setConductorProvider}
+              size="sm"
+              fullWidth
+              testID="conductor-provider-switch"
+            />
+          </View>
+        )}
+        {renderBody()}
+      </View>
     </TaskBottomDock>
   );
 }
@@ -332,6 +357,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingTop: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
+  },
+  providerSwitch: {
+    paddingTop: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingBottom: theme.spacing[1],
   },
   tabPane: {
     flex: 1,

@@ -522,6 +522,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    "hash": "77da5abcc3ba7b3e374986b9d6959f2e2401a117",
+    "shortHash": "77da5abcc",
+    "date": "2026-07-24T20:38:00+02:00",
+    "author": "haikostudio",
+    "subject": "chore: sauvegarde avant build local"
+  },
+  {
     "hash": "c9d68c7b5df45b8cd207da39530eac1b435899da",
     "shortHash": "c9d68c7b5",
     "date": "2026-07-24T20:36:05+02:00",
@@ -2613,15 +2620,8 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     "date": "2026-07-20T19:32:50+02:00",
     "author": "Mohamed Boudra",
     "subject": "fix(app): keep dictation shortcuts responsive (#2268)"
-  },
-  {
-    "hash": "b3b1283d3bb684a969420bde1a4765dcd3e85430",
-    "shortHash": "b3b1283d3",
-    "date": "2026-07-20T19:14:57+02:00",
-    "author": "Mohamed Boudra",
-    "subject": "Show OpenCode follow-ups after background work (#2258)"
   }
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-24T20:36:05+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-24T20:38:00+02:00";

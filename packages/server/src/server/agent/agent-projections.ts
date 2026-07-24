@@ -323,6 +323,18 @@ function buildSerializableConfig(config: AgentSessionConfig): SerializableAgentC
       serializable.featureValues = featureValues;
     }
   }
+  if (config.approvalPolicy) {
+    serializable.approvalPolicy = config.approvalPolicy;
+  }
+  if (config.sandboxMode) {
+    serializable.sandboxMode = config.sandboxMode;
+  }
+  if (typeof config.networkAccess === "boolean") {
+    serializable.networkAccess = config.networkAccess;
+  }
+  if (typeof config.webSearch === "boolean") {
+    serializable.webSearch = config.webSearch;
+  }
   const extra = sanitizeMetadata(config.extra);
   if (extra !== undefined) {
     serializable.extra = extra;

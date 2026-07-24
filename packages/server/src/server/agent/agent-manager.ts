@@ -187,6 +187,18 @@ function buildStoredAgentConfig(record: StoredAgentRecord): AgentSessionConfig {
   if (record.config.featureValues != null) {
     config.featureValues = record.config.featureValues;
   }
+  if (record.config.approvalPolicy != null) {
+    config.approvalPolicy = record.config.approvalPolicy;
+  }
+  if (record.config.sandboxMode != null) {
+    config.sandboxMode = record.config.sandboxMode;
+  }
+  if (record.config.networkAccess != null) {
+    config.networkAccess = record.config.networkAccess;
+  }
+  if (record.config.webSearch != null) {
+    config.webSearch = record.config.webSearch;
+  }
   if (record.config.extra != null) config.extra = record.config.extra;
   if (record.config.systemPrompt != null) {
     config.systemPrompt = record.config.systemPrompt;

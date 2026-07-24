@@ -150,6 +150,7 @@ export const TasksConductorEnsureRequestSchema = z.object({
   type: z.literal("tasks.conductor.ensure.request"),
   requestId: z.string(),
   projectId: z.string(),
+  provider: z.string().optional(),
 });
 
 export const TasksBoardGetResponseSchema = z.object({

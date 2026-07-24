@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import type pino from "pino";
 import {
   CONDUCTOR_PROJECT_ID_LABEL,
+  CONDUCTOR_PROVIDER_LABEL,
   CONDUCTOR_ROLE_LABEL,
   CONDUCTOR_ROLE_VALUE,
 } from "@getpaseo/protocol/agent-labels";
@@ -127,6 +128,66 @@ describe("ConductorAgentService", () => {
     const systemPrompt = input.config?.systemPrompt ?? "";
     expect(systemPrompt).toContain("TU NE TOUCHES JAMAIS AU CODE");
     expect(systemPrompt).toContain("UNE TÂCHE, JAMAIS UNE EXÉCUTION");
+  });
+
+  it("can create a Codex conductor locked to read-only execution", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    });
+
+    await service.ensureConductorAgent("project-1", "codex/gpt-5.4");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.provider).toBe("codex/gpt-5.4");
+    expect(input.config?.approvalPolicy).toBe("on-request");
+    expect(input.config?.sandboxMode).toBe("read-only");
+    expect(input.config?.networkAccess).toBe(false);
+    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("codex/gpt-5.4");
+    expect(input.config?.systemPrompt ?? "").toContain("TU NE TOUCHES JAMAIS AU CODE");
+  });
+
+  it("keeps Claude and Codex conductors separate for the same project", async () => {
+    let created = false;
+    const existingClaude = {
+      id: "existing-claude-conductor",
+      provider: "claude/sonnet",
+      cwd: "/tmp/project",
+      workspaceId: "ws-claude",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
+        [CONDUCTOR_PROJECT_ID_LABEL]: "project-1",
+        [CONDUCTOR_PROVIDER_LABEL]: "claude/sonnet",
+      },
+      lastStatus: "closed",
+      config: {},
+    } as unknown as StoredAgentRecord;
+    const createAgent: BoundCreateAgentCommand = async (input) => {
+      created = true;
+      expect(input.provider).toBe("codex/gpt-5.4");
+      return {
+        snapshot: { id: "new-codex-conductor", workspaceId: "ws-codex" },
+        liveSnapshot: { id: "new-codex-conductor", workspaceId: "ws-codex" },
+        background: true,
+        initialPromptStarted: false,
+        initialPromptError: null,
+      } as unknown as CreateAgentCommandResult;
+    };
+    const service = new ConductorAgentService({
+      createAgent,
+      agentStorage: { list: async () => [existingClaude] } as unknown as AgentStorage,
+      projectRegistry: {
+        get: async () => ({ rootPath: "/tmp/project" }),
+      } as unknown as ProjectRegistry,
+      logger: { info: () => {}, error: () => {}, debug: () => {} } as unknown as pino.Logger,
+    });
+
+    const result = await service.ensureConductorAgent("project-1", "codex");
+
+    expect(created).toBe(true);
+    expect(result.agentId).toBe("new-codex-conductor");
   });
 
   it("allows ONLY board tools — every other paseo tool is hard-blocked (allowlist completeness)", async () => {

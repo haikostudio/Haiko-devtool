@@ -6,6 +6,7 @@ export const PARENT_AGENT_ID_LABEL = "paseo.parent-agent-id";
 export const CONDUCTOR_ROLE_LABEL = "paseo.role";
 export const CONDUCTOR_ROLE_VALUE = "conductor";
 export const CONDUCTOR_PROJECT_ID_LABEL = "paseo.conductor-project-id";
+export const CONDUCTOR_PROVIDER_LABEL = "paseo.conductor-provider";
 
 export interface AgentLabelSource {
   labels?: Record<string, unknown> | null;

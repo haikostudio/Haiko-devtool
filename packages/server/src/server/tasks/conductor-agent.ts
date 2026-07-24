@@ -1,10 +1,12 @@
 import type pino from "pino";
 import {
   CONDUCTOR_PROJECT_ID_LABEL,
+  CONDUCTOR_PROVIDER_LABEL,
   CONDUCTOR_ROLE_LABEL,
   CONDUCTOR_ROLE_VALUE,
 } from "@getpaseo/protocol/agent-labels";
 import type { AgentStorage, StoredAgentRecord } from "../agent/agent-storage.js";
+import type { AgentSessionConfig } from "../agent/agent-sdk-types.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 
@@ -19,6 +21,11 @@ export interface EnsureConductorResult {
   agentId: string;
   workspaceId: string | null;
 }
+
+type ConductorProvider = "claude/sonnet" | "codex/gpt-5.4";
+
+const DEFAULT_CONDUCTOR_PROVIDER: ConductorProvider = "claude/sonnet";
+const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
 
 /**
  * The ONLY paseo MCP tools the "chef d'orchestre" is allowed to use. Its whole
@@ -202,19 +209,27 @@ export class ConductorAgentService {
     this.logger = options.logger;
   }
 
-  async ensureConductorAgent(projectId: string): Promise<EnsureConductorResult> {
-    const existing = this.inflight.get(projectId);
+  async ensureConductorAgent(
+    projectId: string,
+    requestedProvider?: string,
+  ): Promise<EnsureConductorResult> {
+    const provider = resolveConductorProvider(requestedProvider);
+    const inflightKey = `${projectId}:${provider}`;
+    const existing = this.inflight.get(inflightKey);
     if (existing) {
       return existing;
     }
-    const promise = this.ensureConductorAgentInner(projectId).finally(() => {
-      this.inflight.delete(projectId);
+    const promise = this.ensureConductorAgentInner(projectId, provider).finally(() => {
+      this.inflight.delete(inflightKey);
     });
-    this.inflight.set(projectId, promise);
+    this.inflight.set(inflightKey, promise);
     return promise;
   }
 
-  private async ensureConductorAgentInner(projectId: string): Promise<EnsureConductorResult> {
+  private async ensureConductorAgentInner(
+    projectId: string,
+    provider: ConductorProvider,
+  ): Promise<EnsureConductorResult> {
     const project = await this.projectRegistry.get(projectId);
     if (!project?.rootPath) {
       throw new Error(`Cannot resolve project root for conductor: ${projectId}`);
@@ -229,7 +244,8 @@ export class ConductorAgentService {
       (record) =>
         !record.archivedAt &&
         record.labels[CONDUCTOR_ROLE_LABEL] === CONDUCTOR_ROLE_VALUE &&
-        record.labels[CONDUCTOR_PROJECT_ID_LABEL] === projectId,
+        record.labels[CONDUCTOR_PROJECT_ID_LABEL] === projectId &&
+        recordMatchesConductorProvider(record, provider),
     );
     if (found) {
       // Persistence-by-label reuses the SAME agent across restarts, so a
@@ -238,15 +254,16 @@ export class ConductorAgentService {
       // forever. Re-apply the lock to its stored config so the daemon rebuilds a
       // locked session on its next restart. This is why the lock was "deployed
       // but not active": the existing conductor was simply never re-locked.
-      await this.relockConductorIfStale(found, projectId);
+      await this.relockConductorIfStale(found, projectId, provider);
       return { agentId: found.id, workspaceId: found.workspaceId ?? null };
     }
 
+    const providerConfig = buildConductorConfig(projectId, provider);
     const created = await this.createAgent({
       kind: "mcp",
-      provider: "claude/sonnet",
+      provider,
       cwd,
-      title: "Chef d'orchestre",
+      title: provider === CODEX_CONDUCTOR_PROVIDER ? "Chef d'orchestre Codex" : "Chef d'orchestre",
       background: true,
       notifyOnFinish: false,
       unattended: false,
@@ -258,19 +275,13 @@ export class ConductorAgentService {
       labels: {
         [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
         [CONDUCTOR_PROJECT_ID_LABEL]: projectId,
+        [CONDUCTOR_PROVIDER_LABEL]: provider,
       },
-      config: {
-        systemPrompt: conductorSystemPrompt(projectId),
-        // Hard-lock the conductor to board management only: block every editing,
-        // shell, and agent/terminal-spawning tool so it can never write code,
-        // commit, push, or deploy — even under a permissive mode. See
-        // CONDUCTOR_DISALLOWED_TOOLS for the rationale.
-        extra: { claude: { disallowedTools: [...CONDUCTOR_DISALLOWED_TOOLS] } },
-      },
+      config: providerConfig,
     });
 
     this.logger.info(
-      { projectId, agentId: created.snapshot.id },
+      { projectId, provider, agentId: created.snapshot.id },
       "Created persistent conductor agent",
     );
     return {
@@ -290,39 +301,124 @@ export class ConductorAgentService {
   private async relockConductorIfStale(
     record: StoredAgentRecord,
     projectId: string,
+    provider: ConductorProvider,
   ): Promise<void> {
-    const desiredPrompt = conductorSystemPrompt(projectId);
-    const storedDisallowed = readStoredDisallowedTools(record.config?.extra);
-    const alreadyLocked =
-      record.config?.systemPrompt === desiredPrompt &&
-      sameToolSet(storedDisallowed, CONDUCTOR_DISALLOWED_TOOLS);
+    const alreadyLocked = conductorConfigIsCurrent(record.config, projectId, provider);
     if (alreadyLocked) {
       return;
     }
 
-    const existingClaudeExtra = isRecord(record.config?.extra?.claude)
-      ? record.config?.extra?.claude
-      : {};
+    const desiredConfig = buildConductorConfig(projectId, provider, record.config);
     const updated: StoredAgentRecord = {
       ...record,
-      config: {
-        ...record.config,
-        systemPrompt: desiredPrompt,
-        extra: {
-          ...record.config?.extra,
-          claude: {
-            ...existingClaudeExtra,
-            disallowedTools: [...CONDUCTOR_DISALLOWED_TOOLS],
-          },
-        },
+      labels: {
+        ...record.labels,
+        [CONDUCTOR_PROVIDER_LABEL]: provider,
       },
+      config: desiredConfig,
     };
     await this.agentStorage.upsert(updated);
     this.logger.info(
-      { projectId, agentId: record.id },
+      { projectId, provider, agentId: record.id },
       "Re-locked existing conductor config (disallowedTools + system prompt); takes effect on next daemon restart",
     );
   }
+}
+
+function resolveConductorProvider(value: string | undefined): ConductorProvider {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return DEFAULT_CONDUCTOR_PROVIDER;
+  }
+  if (normalized === "claude" || normalized === DEFAULT_CONDUCTOR_PROVIDER) {
+    return DEFAULT_CONDUCTOR_PROVIDER;
+  }
+  if (normalized === "codex" || normalized === CODEX_CONDUCTOR_PROVIDER) {
+    return CODEX_CONDUCTOR_PROVIDER;
+  }
+  throw new Error(`Unsupported conductor provider: ${value}`);
+}
+
+function recordMatchesConductorProvider(
+  record: StoredAgentRecord,
+  provider: ConductorProvider,
+): boolean {
+  const labelProvider =
+    typeof record.labels[CONDUCTOR_PROVIDER_LABEL] === "string"
+      ? record.labels[CONDUCTOR_PROVIDER_LABEL]
+      : undefined;
+  const storedProvider = labelProvider ?? record.provider;
+  return resolveConductorProvider(storedProvider) === provider;
+}
+
+function buildConductorConfig(
+  projectId: string,
+  provider: ConductorProvider,
+  existing?: StoredAgentRecord["config"],
+): Partial<AgentSessionConfig> {
+  const base = {
+    ...toAgentSessionConfigOverrides(existing),
+    systemPrompt: conductorSystemPrompt(projectId),
+  };
+  if (provider === CODEX_CONDUCTOR_PROVIDER) {
+    return {
+      ...base,
+      approvalPolicy: "on-request",
+      sandboxMode: "read-only",
+      networkAccess: false,
+    };
+  }
+
+  const existingClaudeExtra = isRecord(existing?.extra?.claude) ? existing?.extra?.claude : {};
+  return {
+    ...base,
+    extra: {
+      ...existing?.extra,
+      claude: {
+        ...existingClaudeExtra,
+        disallowedTools: [...CONDUCTOR_DISALLOWED_TOOLS],
+      },
+    },
+  };
+}
+
+function conductorConfigIsCurrent(
+  config: StoredAgentRecord["config"] | undefined,
+  projectId: string,
+  provider: ConductorProvider,
+): boolean {
+  if (config?.systemPrompt !== conductorSystemPrompt(projectId)) {
+    return false;
+  }
+  if (provider === CODEX_CONDUCTOR_PROVIDER) {
+    return (
+      config.approvalPolicy === "on-request" &&
+      config.sandboxMode === "read-only" &&
+      config.networkAccess === false
+    );
+  }
+  return sameToolSet(readStoredDisallowedTools(config.extra), CONDUCTOR_DISALLOWED_TOOLS);
+}
+
+function toAgentSessionConfigOverrides(
+  config: StoredAgentRecord["config"] | undefined,
+): Partial<AgentSessionConfig> {
+  const overrides: Partial<AgentSessionConfig> = {};
+  if (!config) {
+    return overrides;
+  }
+  if (config.modeId != null) overrides.modeId = config.modeId;
+  if (config.model != null) overrides.model = config.model;
+  if (config.thinkingOptionId != null) overrides.thinkingOptionId = config.thinkingOptionId;
+  if (config.featureValues != null) overrides.featureValues = config.featureValues;
+  if (config.approvalPolicy != null) overrides.approvalPolicy = config.approvalPolicy;
+  if (config.sandboxMode != null) overrides.sandboxMode = config.sandboxMode;
+  if (config.networkAccess != null) overrides.networkAccess = config.networkAccess;
+  if (config.webSearch != null) overrides.webSearch = config.webSearch;
+  if (config.extra != null) overrides.extra = config.extra;
+  if (config.systemPrompt != null) overrides.systemPrompt = config.systemPrompt;
+  if (config.mcpServers != null) overrides.mcpServers = config.mcpServers;
+  return overrides;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

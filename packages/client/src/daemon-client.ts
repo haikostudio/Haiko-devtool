@@ -4694,10 +4694,21 @@ export class DaemonClient {
     });
   }
 
-  async tasksConductorEnsure(projectId: string, requestId?: string) {
+  async tasksConductorEnsure(
+    projectId: string,
+    optionsOrRequestId?: { provider?: string } | string,
+    requestId?: string,
+  ) {
+    const options = typeof optionsOrRequestId === "string" ? undefined : optionsOrRequestId;
+    const resolvedRequestId =
+      typeof optionsOrRequestId === "string" ? optionsOrRequestId : requestId;
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.conductor.ensure.response">({
-      requestId,
-      message: { type: "tasks.conductor.ensure.request", projectId },
+      requestId: resolvedRequestId,
+      message: {
+        type: "tasks.conductor.ensure.request",
+        projectId,
+        ...(options?.provider ? { provider: options.provider } : {}),
+      },
     });
   }
 
