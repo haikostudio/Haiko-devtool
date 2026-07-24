@@ -169,6 +169,7 @@ import { resolveDaemonVersion } from "./daemon-version.js";
 import {
   PASEO_DEPLOY_BRANCH_TAG_PREFIX,
   PASEO_DEPLOY_CONFLICT_TAG,
+  isPaseoDeployRepairBranch,
   getPaseoDeployRoots,
   recordDaemonBootSha,
   setPaseoDeployConflictTaskCreator,
@@ -1270,54 +1271,67 @@ export async function createPaseoDaemon(
   const providerUsageService = new ProviderUsageService({ logger });
   const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
   const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
+  const conflictTaskCreationInFlight = new Set<string>();
   setPaseoDeployConflictTaskCreator(async ({ projectId, branch, worktreePath, reason }) => {
-    const folderId = await taskBoardService.ensureFolder(projectId, "Réparations de déploiement");
-    const branchTag = `${PASEO_DEPLOY_BRANCH_TAG_PREFIX}${branch}`;
-    const board = await taskBoardService.getBoard(projectId);
-    const alreadyQueued = board.tasks.some(
-      (task) =>
-        task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) &&
-        task.tags.includes(branchTag) &&
-        task.column !== "done" &&
-        task.column !== "deployed",
-    );
-    if (alreadyQueued) {
+    // Automatic repair worktrees are implementation details. They must never
+    // become inputs to another repair cycle.
+    if (isPaseoDeployRepairBranch(branch)) {
       return;
     }
-    const usage = await providerUsageService.listUsage({ forceRefresh: true });
-    const claude = usage.providers.find((provider) => provider.providerId === "claude");
-    const claudeWindow = claude?.windows.find((entry) => entry.id === "five_hour");
-    const claudeRemaining = claudeWindow
-      ? (claudeWindow.remainingPct ??
-        (claudeWindow.usedPct !== null && claudeWindow.usedPct !== undefined
-          ? 100 - claudeWindow.usedPct
-          : null))
-      : null;
-    const useCodex =
-      !claude ||
-      claude.status !== "available" ||
-      (claudeRemaining !== null && claudeRemaining !== undefined && claudeRemaining <= 0);
-    await taskBoardService.createTask(projectId, {
-      folderId,
-      title: `Réparer le conflit avant publication : ${branch}`,
-      description: [
-        "Cette tâche a été ouverte automatiquement par la fenêtre « À déployer ».",
-        `Branche à réparer : ${branch}`,
-        worktreePath
-          ? `Atelier cible : ${worktreePath}`
-          : "L'atelier cible n'a pas pu être retrouvé ; commence par le localiser.",
-        `Constat : ${reason}`,
-        "Travaille sur l'atelier cible, pas sur ton atelier temporaire : synchronise-le avec /root/paseo, résous les conflits, enregistre les changements, puis vérifie que la branche peut être fusionnée.",
-        "Ne publie pas toi-même. Quand la branche est propre et fusionnable, termine la tâche : le mécanisme relancera automatiquement la publication.",
-      ].join("\n"),
-      tags: [PASEO_DEPLOY_CONFLICT_TAG, branchTag],
-      column: "validated",
-      runConfig: useCodex
-        ? { provider: "codex", model: "gpt-5.4", mode: "direct" }
-        : { provider: "claude", model: "claude-opus-4-8", mode: "direct" },
-      schedulePreference: "asap",
-      launch: true,
-    });
+    const branchTag = `${PASEO_DEPLOY_BRANCH_TAG_PREFIX}${branch}`;
+    if (conflictTaskCreationInFlight.has(branch)) return;
+    conflictTaskCreationInFlight.add(branch);
+    try {
+      const folderId = await taskBoardService.ensureFolder(projectId, "Réparations de déploiement");
+      const board = await taskBoardService.getBoard(projectId);
+      const alreadyQueued = board.tasks.some(
+        (task) =>
+          task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG) &&
+          task.tags.includes(branchTag) &&
+          task.column !== "done" &&
+          task.column !== "deployed",
+      );
+      if (alreadyQueued) return;
+      const usage = await providerUsageService.listUsage({ forceRefresh: true });
+      const claude = usage.providers.find((provider) => provider.providerId === "claude");
+      const claudeWindow = claude?.windows.find((entry) => entry.id === "five_hour");
+      const claudeRemaining = claudeWindow
+        ? (claudeWindow.remainingPct ??
+          (claudeWindow.usedPct !== null && claudeWindow.usedPct !== undefined
+            ? 100 - claudeWindow.usedPct
+            : null))
+        : null;
+      const useCodex =
+        !claude ||
+        claude.status !== "available" ||
+        (claudeRemaining !== null && claudeRemaining !== undefined && claudeRemaining <= 0);
+      await taskBoardService.createTask(projectId, {
+        folderId,
+        title: `Réparer le conflit avant publication : ${branch}`,
+        description: [
+          "Cette tâche a été ouverte automatiquement par la fenêtre « À déployer ».",
+          `Branche à réparer : ${branch}`,
+          worktreePath
+            ? `Atelier cible : ${worktreePath}`
+            : "L'atelier cible n'a pas pu être retrouvé ; commence par le localiser.",
+          `Constat : ${reason}`,
+          "Travaille sur l'atelier cible, pas sur ton atelier temporaire : synchronise-le avec /root/paseo, résous les conflits, enregistre les changements, puis vérifie que la branche peut être fusionnée.",
+          "Ne publie pas toi-même. Quand la branche est propre et fusionnable, termine la tâche : le mécanisme relancera automatiquement la publication.",
+        ].join("\n"),
+        tags: [PASEO_DEPLOY_CONFLICT_TAG, branchTag],
+        column: "validated",
+        runConfig: useCodex
+          ? { provider: "codex", model: "gpt-5.4", mode: "direct" }
+          : { provider: "claude", model: "claude-opus-4-8", mode: "direct" },
+        schedulePreference: "asap",
+        // Let the scheduler perform the same fresh quota check before the
+        // first agent is created. Launching here could briefly start Claude
+        // before the fallback switched the task to Codex.
+        launch: false,
+      });
+    } finally {
+      conflictTaskCreationInFlight.delete(branch);
+    }
   });
   const agentTaskSync = new AgentTaskSyncService({
     agentManager,
