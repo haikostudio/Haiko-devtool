@@ -3,7 +3,10 @@ import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
-import type { ProviderUsageService } from "../../services/quota-fetcher/service.js";
+import {
+  isProviderUsageExhausted,
+  type ProviderUsageService,
+} from "../../services/quota-fetcher/service.js";
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
@@ -387,18 +390,10 @@ export class TaskScheduler {
     try {
       const usage = await this.providerUsageService.listUsage({ forceRefresh: true });
       const claude = usage.providers.find((provider) => provider.providerId === "claude");
-      if (!claude || claude.status !== "available") {
+      if (!claude || isProviderUsageExhausted(claude)) {
         return await this.switchDeployConflictToCodex(projectId, task);
       }
-      const window = claude?.windows.find((entry) => entry.id === "five_hour");
-      const remaining = window
-        ? (window.remainingPct ??
-          (window.usedPct !== null && window.usedPct !== undefined ? 100 - window.usedPct : null))
-        : null;
-      if (remaining === null || remaining === undefined || remaining > 0) {
-        return task;
-      }
-      return await this.switchDeployConflictToCodex(projectId, task);
+      return task;
     } catch (error) {
       this.logger.warn(
         { err: error, taskId: task.id },

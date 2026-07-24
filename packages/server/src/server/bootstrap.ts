@@ -127,7 +127,10 @@ import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
 import { QuotaResetWatcher } from "./quota-reset-watcher.js";
 import { ScheduleService } from "./schedule/service.js";
-import { ProviderUsageService } from "../services/quota-fetcher/service.js";
+import {
+  isProviderUsageExhausted,
+  ProviderUsageService,
+} from "../services/quota-fetcher/service.js";
 import { TaskBoardStore } from "./tasks/store.js";
 import { TaskBoardService } from "./tasks/service.js";
 import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
@@ -1294,17 +1297,7 @@ export async function createPaseoDaemon(
       if (alreadyQueued) return;
       const usage = await providerUsageService.listUsage({ forceRefresh: true });
       const claude = usage.providers.find((provider) => provider.providerId === "claude");
-      const claudeWindow = claude?.windows.find((entry) => entry.id === "five_hour");
-      const claudeRemaining = claudeWindow
-        ? (claudeWindow.remainingPct ??
-          (claudeWindow.usedPct !== null && claudeWindow.usedPct !== undefined
-            ? 100 - claudeWindow.usedPct
-            : null))
-        : null;
-      const useCodex =
-        !claude ||
-        claude.status !== "available" ||
-        (claudeRemaining !== null && claudeRemaining !== undefined && claudeRemaining <= 0);
+      const useCodex = !claude || isProviderUsageExhausted(claude);
       await taskBoardService.createTask(projectId, {
         folderId,
         title: `Réparer le conflit avant publication : ${branch}`,

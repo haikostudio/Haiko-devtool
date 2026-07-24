@@ -3597,6 +3597,22 @@ export class CodexAppServerAgentSession implements AgentSession {
         );
         return;
       }
+      if (message.includes("no rollout found for thread id")) {
+        // Codex may discard a rollout while Paseo still has its old thread id
+        // (for example after provider-side cleanup). Keep the Paseo conversation
+        // usable by starting a fresh thread and saving its new id on the next
+        // persistence snapshot instead of leaving the drawer permanently dead.
+        this.logger.warn(
+          { error, threadId },
+          "Persisted Codex rollout is gone; starting a new thread",
+        );
+        this.currentThreadId = null;
+        this.cachedRuntimeInfo = null;
+        this.historyPending = false;
+        this.persistedHistory = [];
+        await this.ensureThread();
+        return;
+      }
       this.logger.warn({ error, threadId }, "Failed to resume persisted Codex thread");
       throw new Error(`Failed to resume Codex thread ${threadId}: ${message}`, { cause: error });
     }

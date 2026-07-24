@@ -17,6 +17,19 @@ export interface ProviderUsageListResult {
   providers: ProviderUsage[];
 }
 
+/** A provider is unusable when any reported quota window is fully consumed. */
+export function isProviderUsageExhausted(provider: ProviderUsage): boolean {
+  if (provider.status !== "available") {
+    return true;
+  }
+  return provider.windows.some((window) => {
+    const remaining =
+      window.remainingPct ??
+      (window.usedPct !== null && window.usedPct !== undefined ? 100 - window.usedPct : null);
+    return remaining !== null && remaining !== undefined && remaining <= 0;
+  });
+}
+
 const DEFAULT_PROVIDER_USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export class ProviderUsageService {
