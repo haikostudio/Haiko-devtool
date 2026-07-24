@@ -285,7 +285,11 @@ export class TaskScheduler {
       );
       this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
       for (let task of board.tasks) {
-        if (task.column === "done" || task.column === "deployed" || task.column === "in_progress") {
+        if (task.column === "done" || task.column === "deployed") {
+          continue;
+        }
+        task = await this.recoverRunningDeployConflict(project.projectId, task);
+        if (task.column === "in_progress") {
           continue;
         }
         if (task.column === "backlog") {
@@ -383,6 +387,9 @@ export class TaskScheduler {
     try {
       const usage = await this.providerUsageService.listUsage();
       const claude = usage.providers.find((provider) => provider.providerId === "claude");
+      if (!claude || claude.status !== "available") {
+        return await this.switchDeployConflictToCodex(projectId, task);
+      }
       const window = claude?.windows.find((entry) => entry.id === "five_hour");
       const remaining = window
         ? (window.remainingPct ??
@@ -391,15 +398,7 @@ export class TaskScheduler {
       if (remaining === null || remaining === undefined || remaining > 0) {
         return task;
       }
-      return await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
-        ...current,
-        runConfig: {
-          ...current.runConfig,
-          provider: "codex",
-          model: "gpt-5.4",
-          mode: "direct",
-        },
-      }));
+      return await this.switchDeployConflictToCodex(projectId, task);
     } catch (error) {
       this.logger.warn(
         { err: error, taskId: task.id },
@@ -407,6 +406,57 @@ export class TaskScheduler {
       );
       return task;
     }
+  }
+
+  private async switchDeployConflictToCodex(
+    projectId: string,
+    task: KanbanTask,
+  ): Promise<KanbanTask> {
+    return await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
+      ...current,
+      runConfig: {
+        ...current.runConfig,
+        provider: "codex",
+        model: "gpt-5.4",
+        mode: "direct",
+      },
+    }));
+  }
+
+  private async recoverRunningDeployConflict(
+    projectId: string,
+    task: KanbanTask,
+  ): Promise<KanbanTask> {
+    if (task.column !== "in_progress" || !task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)) {
+      return task;
+    }
+    const switched = await this.fallbackDeployConflictProvider(projectId, task);
+    return switched.runConfig?.provider === "codex"
+      ? this.requeueSwitchedDeployConflictTask(projectId, switched)
+      : switched;
+  }
+
+  /** Re-open a repair task whose Claude agent was already started before quota was known. */
+  private async requeueSwitchedDeployConflictTask(
+    projectId: string,
+    task: KanbanTask,
+  ): Promise<KanbanTask> {
+    return await this.taskBoardService.patchTask(projectId, task.id, (current) => {
+      if (current.column !== "in_progress" || current.runConfig?.provider !== "codex") {
+        return current;
+      }
+      const {
+        taskAgentId: _taskAgentId,
+        primaryAgentId: _primaryAgentId,
+        ...links
+      } = current.links;
+      return {
+        ...current,
+        column: "scheduled",
+        schedule: { state: "awaiting_slot", attempts: 0 },
+        links,
+      };
+    });
   }
 
   // Quota packing: runNow always first; then during quiet hours spend the

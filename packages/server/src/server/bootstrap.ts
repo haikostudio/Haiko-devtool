@@ -1267,6 +1267,7 @@ export async function createPaseoDaemon(
   logger.info({ elapsed: elapsed() }, "Schedule service initialized");
   const quotaResetWatcher = new QuotaResetWatcher({ agentManager, logger });
   quotaResetWatcher.start();
+  const providerUsageService = new ProviderUsageService({ logger });
   const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
   const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
   setPaseoDeployConflictTaskCreator(async ({ projectId, branch, worktreePath, reason }) => {
@@ -1283,6 +1284,19 @@ export async function createPaseoDaemon(
     if (alreadyQueued) {
       return;
     }
+    const usage = await providerUsageService.listUsage();
+    const claude = usage.providers.find((provider) => provider.providerId === "claude");
+    const claudeWindow = claude?.windows.find((entry) => entry.id === "five_hour");
+    const claudeRemaining = claudeWindow
+      ? (claudeWindow.remainingPct ??
+        (claudeWindow.usedPct !== null && claudeWindow.usedPct !== undefined
+          ? 100 - claudeWindow.usedPct
+          : null))
+      : null;
+    const useCodex =
+      !claude ||
+      claude.status !== "available" ||
+      (claudeRemaining !== null && claudeRemaining !== undefined && claudeRemaining <= 0);
     await taskBoardService.createTask(projectId, {
       folderId,
       title: `Réparer le conflit avant publication : ${branch}`,
@@ -1298,11 +1312,9 @@ export async function createPaseoDaemon(
       ].join("\n"),
       tags: [PASEO_DEPLOY_CONFLICT_TAG, branchTag],
       column: "validated",
-      runConfig: {
-        provider: "claude",
-        model: "claude-opus-4-8",
-        mode: "direct",
-      },
+      runConfig: useCodex
+        ? { provider: "codex", model: "gpt-5.4", mode: "direct" }
+        : { provider: "claude", model: "claude-opus-4-8", mode: "direct" },
       schedulePreference: "asap",
       launch: true,
     });
@@ -1336,7 +1348,7 @@ export async function createPaseoDaemon(
     projectRegistry,
     agentManager,
     createAgent,
-    providerUsageService: new ProviderUsageService({ logger }),
+    providerUsageService,
     logger,
     getQuietHours: () => daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,
   });
