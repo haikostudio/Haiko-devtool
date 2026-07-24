@@ -411,6 +411,12 @@ export const en = {
       inProgress: "In progress",
       done: "Done",
       deployed: "Deployed",
+      notes: "Notes",
+    },
+    notes: {
+      addNote: "Add note",
+      placeholder: "Quick note…",
+      importance: "Importance",
     },
     board: {
       emptyColumn: "No tasks",

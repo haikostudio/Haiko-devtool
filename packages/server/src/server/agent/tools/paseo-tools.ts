@@ -2816,7 +2816,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           projectId: z.string(),
           folderId: z.string().optional(),
           column: z
-            .enum(["backlog", "validated", "scheduled", "in_progress", "done", "deployed"])
+            .enum(["notes", "backlog", "validated", "scheduled", "in_progress", "done", "deployed"])
             .optional(),
         },
         outputSchema: {
@@ -2999,11 +2999,19 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       {
         title: "Move task",
         description:
-          "Move a kanban task to a different column and position. Columns: backlog, validated, scheduled, in_progress, done, deployed. Move a task to 'deployed' once its work is confirmed live (merged + published).",
+          "Move a kanban task to a different column and position. Columns: notes, backlog, validated, scheduled, in_progress, done, deployed. 'notes' is the draft column (no analysis/agent runs there). Move a task to 'deployed' once its work is confirmed live (merged + published).",
         inputSchema: {
           projectId: z.string(),
           taskId: z.string(),
-          column: z.enum(["backlog", "validated", "scheduled", "in_progress", "done", "deployed"]),
+          column: z.enum([
+            "notes",
+            "backlog",
+            "validated",
+            "scheduled",
+            "in_progress",
+            "done",
+            "deployed",
+          ]),
           index: z.number().int().min(0).optional(),
         },
         outputSchema: { success: z.boolean() },

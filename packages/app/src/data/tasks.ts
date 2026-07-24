@@ -42,6 +42,9 @@ export interface TaskBoardHandle {
     description?: string;
     attachments?: AgentAttachment[];
     column?: TaskColumn;
+    // Priority/deadline/thematic tags, pre-serialized. Notes use this to carry
+    // their importance + deadline without any agent involvement.
+    tags?: string[];
   }) => Promise<void>;
   updateTask: (input: {
     taskId: string;
@@ -196,6 +199,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       description?: string;
       attachments?: AgentAttachment[];
       column?: TaskColumn;
+      tags?: string[];
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskCreate({ projectId: project, ...input });

@@ -139,16 +139,18 @@ const BoardColumn = memo(function BoardColumn({
         <Text style={styles.columnTitle}>{label}</Text>
         <Text style={styles.columnCount}>{tasks.length}</Text>
         <View style={styles.columnHeaderSpacer} />
-        {/* Adding a task is a backlog-only action: tasks always start in "À faire"
-            and flow rightward through the pipeline, so the other columns get no
-            "+". */}
-        {column === "backlog" ? (
+        {/* Inline add is limited to the two entry columns: "notes" (draft capture)
+            and "backlog" ("À faire"). Everything else flows in by drag or pipeline,
+            so those columns get no "+". */}
+        {column === "backlog" || column === "notes" ? (
           <Pressable
             onPress={handleAddTask}
             style={addButtonStyle}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={t("tasks.actions.addTask")}
+            accessibilityLabel={t(
+              column === "notes" ? "tasks.notes.addNote" : "tasks.actions.addTask",
+            )}
             testID={`tasks-add-${column}`}
           >
             <ThemedPlus size={ICON_SIZE.sm} uniProps={mutedColorMapping} />

@@ -4575,7 +4575,14 @@ export class DaemonClient {
       title: string;
       description?: string;
       tags?: string[];
-      column?: "backlog" | "validated" | "scheduled" | "in_progress" | "done" | "deployed";
+      column?:
+        | "notes"
+        | "backlog"
+        | "validated"
+        | "scheduled"
+        | "in_progress"
+        | "done"
+        | "deployed";
       runConfig?: TaskRunConfig;
       schedulePreference?: TaskSchedulePreference;
     },
@@ -4610,7 +4617,7 @@ export class DaemonClient {
     input: {
       projectId: string;
       taskId: string;
-      column: "backlog" | "validated" | "scheduled" | "in_progress" | "done" | "deployed";
+      column: "notes" | "backlog" | "validated" | "scheduled" | "in_progress" | "done" | "deployed";
       index: number;
     },
     requestId?: string,

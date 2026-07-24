@@ -47,6 +47,12 @@ import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import { TaskGantt } from "@/components/tasks/task-gantt";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
+import { NewNoteCard, type NewNoteInput } from "@/components/tasks/new-note-card";
+import {
+  deadlineTagFor,
+  PRIORITY_TAG_BY_LEVEL,
+  serializeTaskTags,
+} from "@/components/tasks/task-tags";
 import {
   AgentBucketProvider,
   type LiveProjectBoard,
@@ -1197,24 +1203,56 @@ function BoardContent({
     [newTaskColumn, folderId, boardHandle],
   );
 
-  const columnExtras = useMemo(
-    () =>
-      newTaskColumn && serverId
-        ? {
-            column: newTaskColumn,
-            node: (
-              <NewTaskCard
-                serverId={serverId}
-                cwd=""
-                draftKey={`tasks-new:${folderId}:${newTaskColumn}`}
-                onSubmit={handleCreateTask}
-                onCancel={handleCancelNewTask}
-              />
-            ),
-          }
-        : null,
-    [newTaskColumn, serverId, folderId, handleCreateTask, handleCancelNewTask],
+  // A note is a task in the "notes" column with priority + deadline tags and no
+  // estimate/agent. We reuse the same tag helpers a normal task edit writes, so
+  // the note renders on the standard card and, once dragged to "backlog", enters
+  // the usual cycle with its metadata intact. Passing no `launch`/pipeline column
+  // means the server never arms the scheduler for it.
+  const handleCreateNote = useCallback(
+    ({ text, importance, deadline }: NewNoteInput) => {
+      setNewTaskColumn(null);
+      const title = deriveTaskTitle(text);
+      if (!title) {
+        return;
+      }
+      const tags = serializeTaskTags({
+        priorityTag: PRIORITY_TAG_BY_LEVEL[importance],
+        deadlineTag: deadline ? deadlineTagFor(deadline) : null,
+        tags: [],
+      });
+      void boardHandle.createTask({
+        folderId,
+        title,
+        // Keep the full note as the description only when it says more than the
+        // one-line title, so a short note doesn't render its text twice.
+        ...(text.trim() !== title ? { description: text } : {}),
+        column: "notes",
+        tags,
+      });
+    },
+    [folderId, boardHandle],
   );
+
+  const columnExtras = useMemo(() => {
+    if (!newTaskColumn || !serverId) {
+      return null;
+    }
+    // The Notes column gets the lightweight note composer; every other column
+    // that accepts inline adds (the backlog) gets the standard task composer.
+    const node =
+      newTaskColumn === "notes" ? (
+        <NewNoteCard onSubmit={handleCreateNote} onCancel={handleCancelNewTask} />
+      ) : (
+        <NewTaskCard
+          serverId={serverId}
+          cwd=""
+          draftKey={`tasks-new:${folderId}:${newTaskColumn}`}
+          onSubmit={handleCreateTask}
+          onCancel={handleCancelNewTask}
+        />
+      );
+    return { column: newTaskColumn, node };
+  }, [newTaskColumn, serverId, folderId, handleCreateTask, handleCreateNote, handleCancelNewTask]);
 
   const handleEstimateTask = useCallback(
     (taskId: string) => {

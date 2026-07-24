@@ -10,6 +10,7 @@ import { daysUntil, parseTaskTags, type TaskPriorityLevel } from "./task-tags";
 // arranged by dragging switches to manual order — see ColumnControls.manualOrder.
 
 export const KANBAN_COLUMNS: TaskColumn[] = [
+  "notes",
   "backlog",
   "validated",
   "scheduled",
@@ -54,6 +55,37 @@ function compareByRecency(column: TaskColumn) {
 // stable.
 function compareByManualOrder(left: KanbanTask, right: KanbanTask): number {
   return left.order - right.order || left.createdAt.localeCompare(right.createdAt);
+}
+
+// The "notes" draft column orders by what makes a note actionable: importance
+// first (high → low → none), then the soonest deadline, then most-recent touch.
+// Undated notes sink below dated ones so imminent deadlines lead the column.
+const NOTE_PRIORITY_RANK: Record<TaskPriorityLevel, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+  other: 3,
+};
+const NOTE_PRIORITY_NONE = 4;
+
+function noteSortKeys(task: KanbanTask): { priority: number; deadline: number } {
+  const { priority, deadline } = parseTaskTags(task.tags);
+  return {
+    priority: priority ? NOTE_PRIORITY_RANK[priority.level] : NOTE_PRIORITY_NONE,
+    // Sort by absolute due date (ms); undated notes go last (Infinity).
+    deadline: deadline?.dueDate ? deadline.dueDate.getTime() : Number.POSITIVE_INFINITY,
+  };
+}
+
+function compareNotes(left: KanbanTask, right: KanbanTask): number {
+  const leftKeys = noteSortKeys(left);
+  const rightKeys = noteSortKeys(right);
+  return (
+    leftKeys.priority - rightKeys.priority ||
+    leftKeys.deadline - rightKeys.deadline ||
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
 // Accent- and case-insensitive so "echeance" matches "échéance" and the query
@@ -210,7 +242,15 @@ export function buildColumnModels(
   return KANBAN_COLUMNS.map((column) => {
     const control = controls?.[column] ?? EMPTY_COLUMN_CONTROLS;
     const needle = control.query.trim();
-    const compare = control.manualOrder ? compareByManualOrder : compareByRecency(column);
+    let compare: (left: KanbanTask, right: KanbanTask) => number;
+    if (control.manualOrder) {
+      compare = compareByManualOrder;
+    } else if (column === "notes") {
+      // Draft notes lead by importance + deadline, not raw recency.
+      compare = compareNotes;
+    } else {
+      compare = compareByRecency(column);
+    }
     return {
       column,
       tasks: (board?.tasks ?? [])
@@ -265,6 +305,7 @@ export function useColumnLabels(): Record<TaskColumn, string> {
   const { t } = useTranslation();
   return useMemo(
     () => ({
+      notes: t("tasks.columns.notes"),
       backlog: t("tasks.columns.backlog"),
       validated: t("tasks.columns.validated"),
       scheduled: t("tasks.columns.scheduled"),

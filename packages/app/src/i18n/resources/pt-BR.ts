@@ -419,6 +419,12 @@ export const ptBR: TranslationResources = {
       inProgress: "Em andamento",
       done: "Concluído",
       deployed: "Implantado",
+      notes: "Notas",
+    },
+    notes: {
+      addNote: "Adicionar nota",
+      placeholder: "Nota rápida…",
+      importance: "Importância",
     },
     board: {
       emptyColumn: "Sem tarefas",
