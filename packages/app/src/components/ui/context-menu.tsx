@@ -39,6 +39,7 @@ import {
   useIsolatedBottomSheetVisibility,
 } from "@/components/ui/isolated-bottom-sheet-modal";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { isWeb, isNative } from "@/constants/platform";
 
 // Keep parity with dropdown-menu action statuses.
@@ -860,10 +861,10 @@ const styles = StyleSheet.create((theme) => ({
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
   },
@@ -918,7 +919,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.accentForeground,
   },
   itemDescription: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
   },

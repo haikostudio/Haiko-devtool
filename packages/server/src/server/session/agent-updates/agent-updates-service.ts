@@ -227,6 +227,12 @@ export function createAgentUpdatesService(deps: AgentUpdatesServiceDeps): AgentU
 
   async function emitStoredRecord(record: StoredAgentRecord): Promise<AgentSnapshotPayload> {
     const payload = deps.buildStoredAgentPayload(record);
+    // Internal agents never reach a client (see forwardLiveAgent). Callers still
+    // consume the returned payload for their own bookkeeping/logging, so build it
+    // but stop before touching the subscription.
+    if (record.internal) {
+      return payload;
+    }
     const sub = subscription;
     if (!sub) {
       return payload;
@@ -265,6 +271,15 @@ export function createAgentUpdatesService(deps: AgentUpdatesServiceDeps): AgentU
   }
 
   async function forwardLiveAgent(agent: ManagedAgent): Promise<void> {
+    // Internal agents are the brain's short-lived Haiku curator/librarian runs: a
+    // server implementation detail that must never reach a client. Forwarded, they
+    // surface as a phantom workspace tab for the ~25s the run lives, then vanish
+    // when it archives — the "two similar agents while the brain answers" report.
+    // The global agent-manager subscription and the fetch_agents snapshot already
+    // exclude internal agents; this per-client live forward was the remaining leak.
+    if (agent.internal) {
+      return;
+    }
     try {
       const sub = subscription;
       const payload = await deps.buildAgentPayload(agent);

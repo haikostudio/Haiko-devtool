@@ -95,20 +95,13 @@ describe("workspace source of truth consumption", () => {
     ).toEqual({ kind: "skeleton" });
   });
 
-  it("keeps cached git workspace identity visible while checkout status refreshes", () => {
+  it("keeps git workspace headers skeletoned until checkout status resolves", () => {
     expect(
       resolveWorkspaceHeaderRenderState({
         workspace: createWorkspaceDescriptor({ projectKind: "git" }),
         checkoutState: { kind: "pending" },
       }),
-    ).toEqual({
-      kind: "ready",
-      title: "feat/workspace-sot",
-      subtitle: "getpaseo/paseo",
-      shouldShowSubtitle: true,
-      isGitCheckout: false,
-      currentBranchName: null,
-    });
+    ).toEqual({ kind: "skeleton" });
   });
 
   it("renders known non-git workspace identity while checkout status is pending", () => {

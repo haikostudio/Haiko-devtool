@@ -3,18 +3,20 @@ import type { ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
+import type { TextInputProps } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getOverlayRoot, OVERLAY_Z } from "../lib/overlay-root";
 import {
   BottomSheetBackdrop,
+  BottomSheetFooter,
   BottomSheetScrollView,
   BottomSheetTextInput,
-  useBottomSheetInternal,
+  BottomSheetView,
   type BottomSheetBackgroundProps,
+  type BottomSheetFooterProps,
 } from "@gorhom/bottom-sheet";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { ArrowLeft, Search, X } from "lucide-react-native";
 import {
   IsolatedBottomSheetModal,
@@ -29,7 +31,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // leading icon, search input icon) and any row primitive rendered inside the
 // sheet body. Rows whose leading icon should line up with the header must
 // match this padding.
-export const SHEET_HORIZONTAL_PADDING_SCALE = 6;
+export const SHEET_HORIZONTAL_PADDING_SCALE = 4;
 
 export interface SheetHeaderSearch {
   onChange: (value: string) => void;
@@ -93,6 +95,18 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[6],
     zIndex: OVERLAY_Z.modal,
     pointerEvents: "auto" as const,
+  },
+  // Backdrop-less desktop overlay: no dim, and taps fall through to the app
+  // behind everywhere except the card itself (pointerEvents "box-none"), so the
+  // rest of the screen stays visible and interactive. The user closes via the X.
+  desktopOverlayNoBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: theme.spacing[6],
+    zIndex: OVERLAY_Z.modal,
+    pointerEvents: "box-none" as const,
   },
   desktopCard: {
     width: "100%",
@@ -195,21 +209,15 @@ const styles = StyleSheet.create((theme) => ({
     flexGrow: 1,
   },
   bottomSheetContent: {
-    padding: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-    gap: theme.spacing[4],
+    paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[2],
   },
   bottomSheetStaticContent: {
     flex: 1,
-    padding: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-    gap: theme.spacing[4],
-    minHeight: 0,
-  },
-  bottomSheetVisibleContent: {
-    minHeight: 0,
-    overflow: "hidden",
-  },
-  bottomSheetVisibleScroll: {
-    flex: 1,
+    paddingHorizontal: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+    paddingVertical: theme.spacing[3],
+    gap: theme.spacing[2],
     minHeight: 0,
   },
   desktopStaticContent: {
@@ -228,6 +236,11 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "space-between",
     gap: theme.spacing[2],
   },
+  // The compact footer floats over the scroll content (BottomSheetFooter), so
+  // it needs an opaque sheet-colored background.
+  footerCompact: {
+    backgroundColor: theme.colors.surface0,
+  },
   adaptiveInputOutline: {
     ...createControlGeometry(theme).controlFocusRingColor,
   },
@@ -239,6 +252,7 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
+const SEARCH_INPUT_STYLE = [styles.searchInput, isWeb && { outlineStyle: "none" }];
 const WEB_EXIT_DURATION_MS = 160;
 
 function SheetBackground({ style }: BottomSheetBackgroundProps) {
@@ -255,39 +269,6 @@ function SheetBackground({ style }: BottomSheetBackgroundProps) {
     [style, theme.colors.surface0, theme.borderRadius],
   );
   return <Animated.View pointerEvents="none" style={combinedStyle} />;
-}
-
-function BottomSheetVisibleContent({ children }: { children: ReactNode }) {
-  const { animatedDetentsState, animatedKeyboardState, animatedLayoutState, animatedPosition } =
-    useBottomSheetInternal();
-  const visibleContentStyle = useAnimatedStyle(() => {
-    const { containerHeight, handleHeight } = animatedLayoutState.get();
-    if (containerHeight < 0 || handleHeight < 0) {
-      return { height: 0 };
-    }
-
-    const initialDetentPosition = animatedDetentsState.get().detents?.[0];
-    const contentPosition =
-      initialDetentPosition == null
-        ? animatedPosition.get()
-        : Math.min(animatedPosition.get(), initialDetentPosition);
-
-    return {
-      height: Math.max(
-        0,
-        containerHeight -
-          contentPosition -
-          handleHeight -
-          animatedKeyboardState.get().heightWithinContainer,
-      ),
-    };
-  }, [animatedDetentsState, animatedKeyboardState, animatedLayoutState, animatedPosition]);
-
-  return (
-    <Animated.View style={[styles.bottomSheetVisibleContent, visibleContentStyle]}>
-      {children}
-    </Animated.View>
-  );
 }
 
 export type AdaptiveTextInputProps = TextInputProps & {
@@ -414,7 +395,7 @@ export function SheetHeaderView({
           <Search size={theme.iconSize.md} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
-            style={[styles.searchInput, isWeb && { outlineStyle: "none" }]}
+            style={SEARCH_INPUT_STYLE}
             placeholder={search.placeholder ?? t("common.actions.search")}
             resetKey={search.resetKey}
             onChangeText={handleSearchChange}
@@ -471,7 +452,7 @@ export function InlineHeaderView({ header }: { header: SheetHeader }) {
           <Search size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
           <AdaptiveTextInput
             // @ts-expect-error - outlineStyle is web-only
-            style={[styles.searchInput, isWeb && { outlineStyle: "none" }]}
+            style={SEARCH_INPUT_STYLE}
             placeholder={header.search.placeholder ?? t("common.actions.search")}
             resetKey={header.search.resetKey}
             onChangeText={header.search.onChange}
@@ -494,16 +475,32 @@ export interface AdaptiveModalSheetProps {
   children: ReactNode;
   /** Sticky footer rendered below the scrollable content. */
   footer?: ReactNode;
-  footerContainerStyle?: StyleProp<ViewStyle>;
   snapPoints?: string[];
   testID?: string;
   /** Override the max width of the desktop card. */
   desktopMaxWidth?: number;
+  /**
+   * Desktop only: when false, the centered card renders without the dark
+   * backdrop dim, and clicks fall through to the app behind it (the card stays
+   * interactive; there is no click-outside-to-close — the user closes via the
+   * X). Esc-to-close still works. Defaults to true (dimmed, click-outside).
+   */
+  desktopBackdrop?: boolean;
   scrollable?: boolean;
   presentation?: "push" | "replace";
-  contentContainerStyle?: StyleProp<ViewStyle>;
-  /** Size compact sheet content to the live snap height instead of its largest snap point. */
-  sizeContentToCurrentSnapPoint?: boolean;
+  /**
+   * Compact only: let the sheet grow to fit its content instead of snapping to
+   * fixed points. It starts at content height and is capped at the safe-area
+   * top (via `topInset`), scrolling internally once it hits the ceiling. Use for
+   * short, variable-length lists where a fixed 55%/90% snap wastes space.
+   */
+  dynamicSizing?: boolean;
+  /**
+   * Compact only: horizontal padding token for the bottom-sheet body. Defaults
+   * to the shared header indent (spacing[4]); pass a smaller scale for dense
+   * lists that should sit closer to the edges.
+   */
+  contentPaddingScale?: number;
 }
 
 export function AdaptiveModalSheet({
@@ -513,14 +510,14 @@ export function AdaptiveModalSheet({
   onDismiss,
   children,
   footer,
-  footerContainerStyle,
   snapPoints,
   testID,
   desktopMaxWidth,
+  desktopBackdrop = true,
   scrollable = true,
   presentation,
-  contentContainerStyle,
-  sizeContentToCurrentSnapPoint = false,
+  dynamicSizing = false,
+  contentPaddingScale,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -538,38 +535,59 @@ export function AdaptiveModalSheet({
       }),
     [footer, insets.bottom, isMobile, theme.spacing],
   );
+  const contentHorizontalPadding =
+    contentPaddingScale != null
+      ? theme.spacing[contentPaddingScale as keyof typeof theme.spacing]
+      : null;
   const bottomSheetContentStyle = useMemo(
-    // Gorhom spreads this outer array into StyleSheet.compose, which accepts two arguments on web.
     () => [
       styles.bottomSheetContent,
-      [
-        contentContainerStyle,
-        compactSafeAreaPadding.contentPaddingBottom != null
-          ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
-          : null,
-      ],
-    ],
-    [compactSafeAreaPadding.contentPaddingBottom, contentContainerStyle],
-  );
-  const bottomSheetStaticContentStyle = useMemo(
-    () => [
-      styles.bottomSheetStaticContent,
-      contentContainerStyle,
+      contentHorizontalPadding != null ? { paddingHorizontal: contentHorizontalPadding } : null,
       compactSafeAreaPadding.contentPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.contentPaddingBottom, contentContainerStyle],
+    [contentHorizontalPadding, compactSafeAreaPadding.contentPaddingBottom],
+  );
+  const bottomSheetStaticContentStyle = useMemo(
+    () => [
+      styles.bottomSheetStaticContent,
+      contentHorizontalPadding != null ? { paddingHorizontal: contentHorizontalPadding } : null,
+      compactSafeAreaPadding.contentPaddingBottom != null
+        ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
+        : null,
+    ],
+    [contentHorizontalPadding, compactSafeAreaPadding.contentPaddingBottom],
   );
   const footerStyle = useMemo(
     () => [
       styles.footer,
-      footerContainerStyle,
       compactSafeAreaPadding.footerPaddingBottom != null
         ? { paddingBottom: compactSafeAreaPadding.footerPaddingBottom }
         : null,
     ],
-    [compactSafeAreaPadding.footerPaddingBottom, footerContainerStyle],
+    [compactSafeAreaPadding.footerPaddingBottom],
+  );
+  const compactFooterStyle = useMemo(
+    () => [
+      styles.footer,
+      styles.footerCompact,
+      compactSafeAreaPadding.footerPaddingBottom != null
+        ? { paddingBottom: compactSafeAreaPadding.footerPaddingBottom }
+        : null,
+    ],
+    [compactSafeAreaPadding.footerPaddingBottom],
+  );
+  // Pinned footer for the compact scrollable sheet: BottomSheetFooter tracks
+  // the sheet's animated position (and the keyboard), so the footer stays glued
+  // to the visible bottom edge instead of drifting when the sheet extends.
+  const renderCompactFooter = useCallback(
+    (footerProps: BottomSheetFooterProps) => (
+      <BottomSheetFooter {...footerProps}>
+        <View style={compactFooterStyle}>{footer}</View>
+      </BottomSheetFooter>
+    ),
+    [footer, compactFooterStyle],
   );
   const handleIndicatorStyle = useMemo(
     () => ({ backgroundColor: theme.colors.palette.zinc[600] }),
@@ -608,7 +626,7 @@ export function AdaptiveModalSheet({
   );
   const desktopOverlayStyle = useMemo(
     () => [
-      styles.desktopOverlay,
+      desktopBackdrop ? styles.desktopOverlay : styles.desktopOverlayNoBackdrop,
       isWeb && {
         opacity: isWebClosing ? 0 : 1,
         transitionDuration: `${WEB_EXIT_DURATION_MS}ms`,
@@ -616,7 +634,7 @@ export function AdaptiveModalSheet({
         transitionTimingFunction: "ease",
       },
     ],
-    [isWebClosing],
+    [isWebClosing, desktopBackdrop],
   );
 
   useEffect(() => {
@@ -654,47 +672,56 @@ export function AdaptiveModalSheet({
   }, [visible, isMobile, notifyNativeModalDismiss]);
 
   if (isMobile) {
-    const sheetContent = (
-      <>
-        <SheetHeaderView header={header} onClose={onClose} testID={testID} />
-        {scrollable ? (
-          <BottomSheetScrollView
-            style={sizeContentToCurrentSnapPoint ? styles.bottomSheetVisibleScroll : undefined}
-            contentContainerStyle={bottomSheetContentStyle}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {children}
-          </BottomSheetScrollView>
-        ) : (
-          <View style={bottomSheetStaticContentStyle}>{children}</View>
-        )}
-        {footer ? <View style={footerStyle}>{footer}</View> : null}
-      </>
-    );
-
+    let compactBody: ReactNode;
+    if (dynamicSizing) {
+      // Dynamic sizing must measure the true content height, so the body is a
+      // gorhom BottomSheetView (which reports its natural size) rather than a
+      // scroll view — a BottomSheetScrollView fills the available frame and the
+      // sheet snaps taller than its content. The sheet is capped at `topInset`,
+      // so short lists hug their content instead of wasting vertical space.
+      compactBody = <BottomSheetView style={bottomSheetContentStyle}>{children}</BottomSheetView>;
+    } else if (scrollable) {
+      // Padding lives on an inner View, NOT on contentContainerStyle:
+      // BottomSheetScrollView is not a Unistyles-remapped component, so a
+      // Unistyles style passed to contentContainerStyle is dropped on web
+      // (docs/unistyles.md, "Main Gotcha: contentContainerStyle").
+      compactBody = (
+        <BottomSheetScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          enableFooterMarginAdjustment={Boolean(footer)}
+        >
+          <View style={bottomSheetContentStyle}>{children}</View>
+        </BottomSheetScrollView>
+      );
+    } else {
+      compactBody = <View style={bottomSheetStaticContentStyle}>{children}</View>;
+    }
     return (
       <IsolatedBottomSheetModal
         ref={sheetRef}
-        snapPoints={resolvedSnapPoints}
+        snapPoints={dynamicSizing ? undefined : resolvedSnapPoints}
         index={0}
-        enableDynamicSizing={false}
+        enableDynamicSizing={dynamicSizing}
         onChange={handleSheetChange}
         onDismiss={handleDismiss}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
         backgroundComponent={SheetBackground}
         handleIndicatorStyle={handleIndicatorStyle}
+        // Cap the sheet at the safe-area top so `keyboardBehavior="extend"` stops
+        // below the status bar instead of sliding the header under the notch/clock
+        // when the keyboard opens.
+        topInset={insets.top}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         accessible={false}
         presentation={presentation}
+        footerComponent={footer && scrollable ? renderCompactFooter : undefined}
       >
-        {sizeContentToCurrentSnapPoint ? (
-          <BottomSheetVisibleContent>{sheetContent}</BottomSheetVisibleContent>
-        ) : (
-          sheetContent
-        )}
+        <SheetHeaderView header={header} onClose={onClose} testID={testID} />
+        {compactBody}
+        {footer && !scrollable ? <View style={footerStyle}>{footer}</View> : null}
       </IsolatedBottomSheetModal>
     );
   }
@@ -706,7 +733,7 @@ export function AdaptiveModalSheet({
         <View style={styles.desktopScrollContainer}>
           <ScrollView
             style={styles.desktopScroll}
-            contentContainerStyle={[styles.desktopContent, contentContainerStyle]}
+            contentContainerStyle={styles.desktopContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator
           >
@@ -714,7 +741,7 @@ export function AdaptiveModalSheet({
           </ScrollView>
         </View>
       ) : (
-        <View style={[styles.desktopStaticContent, contentContainerStyle]}>{children}</View>
+        <View style={styles.desktopStaticContent}>{children}</View>
       )}
       {footer ? <View style={footerStyle}>{footer}</View> : null}
     </>
@@ -722,11 +749,13 @@ export function AdaptiveModalSheet({
 
   const desktopContent = (
     <View style={desktopOverlayStyle} testID={testID}>
-      <Pressable
-        accessibilityLabel={t("common.actions.dismiss")}
-        style={ABSOLUTE_FILL_STYLE}
-        onPress={onClose}
-      />
+      {desktopBackdrop ? (
+        <Pressable
+          accessibilityLabel={t("common.actions.dismiss")}
+          style={ABSOLUTE_FILL_STYLE}
+          onPress={onClose}
+        />
+      ) : null}
       <View style={desktopCardStyle}>{cardInner}</View>
     </View>
   );

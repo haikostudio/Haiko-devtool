@@ -8,7 +8,7 @@ category: Schedules
 
 # Schedules from the CLI
 
-`paseo schedule` creates and manages new-agent [schedules](/docs/schedules) from your terminal, useful for headless boxes and scripts. Every run starts a fresh agent.
+`paseo schedule` creates and manages [schedules](/docs/schedules) from your terminal, useful for headless boxes and scripts.
 
 ## Create
 
@@ -62,27 +62,15 @@ paseo schedule create \
   "Review overnight CI failures and summarize anything urgent."
 ```
 
-## Heartbeats
-
-Inside a running Paseo agent, create a heartbeat for that same conversation:
+Heartbeat the current agent:
 
 ```bash
-paseo heartbeat create \
-  --cron "*/20 * * * *" \
+paseo schedule create \
+  --every 20m \
+  --target self \
   --name heartbeat \
   "Check the current task state and continue with the next useful step."
 ```
-
-The heartbeat interface is deliberately small:
-
-```bash
-paseo heartbeat update <id> --cron "*/10 * * * *"
-paseo heartbeat delete <id>
-```
-
-Updating a heartbeat changes only its cron cadence and optional time zone. Its target and prompt stay fixed. Heartbeat commands require `PASEO_AGENT_ID`, which Paseo sets inside agent sessions.
-
-Heartbeats require a raw `--cron` expression. The `--every` presets below are available only for new-agent schedules.
 
 ## Manage
 
@@ -99,10 +87,8 @@ paseo schedule delete <id>
 
 ## Cadence
 
-Use `--cron "<expr>"` for a 5-field cron expression. For common cron-compatible cadences, `--every <duration>` accepts presets such as `5m` or `1h` and compiles them to cron. It does not create a rolling interval anchored to creation time.
+Use `--every <duration>` for intervals and `--cron "<expr>"` for 5-field cron. Cron schedules default to UTC. Pass `--timezone <IANA>` to interpret cron fields in a local wall-clock time zone, for example `--timezone America/New_York`. The persisted `nextRunAt` is still a UTC instant, but it is computed from that local time zone so recurring jobs stay at the same local time across daylight saving time changes.
 
-Schedules default to UTC. Pass `--timezone <IANA>` to interpret cron fields in a local wall-clock time zone, for example `--timezone America/New_York`. The persisted `nextRunAt` is still a UTC instant, but it is computed from that local time zone so recurring jobs stay at the same local time across daylight saving time changes.
-
-Schedules wait for the next matching cron time by default. Pass `--run-now` to start one immediate run on creation.
+Interval schedules run once immediately by default; pass `--no-run-now` to wait for the first interval. Cron schedules wait for the next matching time; pass `--run-now` to fire once immediately.
 
 When targeting a remote daemon with `--host`, pass `--cwd`; your local working directory may not exist on the remote machine.

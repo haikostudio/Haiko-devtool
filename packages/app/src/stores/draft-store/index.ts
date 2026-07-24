@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { AttachmentMetadata, WorkspaceFileComposerAttachment } from "@/attachments/types";
-import { appendWorkspaceFileAttachment } from "@/attachments/workspace-file";
+import type { AttachmentMetadata } from "@/attachments/types";
+import { collectLiveComposerAttachmentIds } from "@/attachments/live-attachment-refs";
 import {
   garbageCollectAttachments,
   persistAttachmentFromDataUrl,
@@ -40,21 +40,16 @@ interface DraftStoreActions {
     draftKey: string;
     lifecycle?: Exclude<DraftLifecycleState, "active">;
   }) => void;
-  attachWorkspaceFile: (input: {
-    draftKey: string;
-    attachment: WorkspaceFileComposerAttachment;
-  }) => Promise<void>;
   getCreateModalDraft: () => DraftInput | null;
   saveCreateModalDraft: (draft: DraftInput | null) => void;
+  beginDraftGeneration: (draftKey: string) => number;
+  isDraftGenerationCurrent: (input: { draftKey: string; generation: number }) => boolean;
   collectActiveAttachmentIds: () => string[];
 }
 
-interface DraftStoreRuntimeState {
-  attachmentFocusRequestByDraftKey: Record<string, number>;
-}
+type DraftStore = DraftStoreState & DraftStoreActions;
 
-type DraftStore = DraftStoreState & DraftStoreRuntimeState & DraftStoreActions;
-
+const draftGenerations = new Map<string, number>();
 let gcScheduled = false;
 const draftPersistStorage = createDraftPersistStorage(
   createJSONStorage<DraftStoreState>(() => AsyncStorage),
@@ -138,6 +133,11 @@ async function runAttachmentGc(): Promise<void> {
   for (const id of useDraftStore.getState().collectActiveAttachmentIds()) {
     referencedIds.add(id);
   }
+
+  // Blobs a live composer is still holding on screen must never be collected,
+  // even if the persisted draft record momentarily disagrees (e.g. a cross-device
+  // tombstone landing empty while the focused composer keeps a just-pasted image).
+  collectLiveComposerAttachmentIds(referencedIds);
 
   const pendingByDraftId = useCreateFlowStore.getState().pendingByDraftId;
   for (const pendingCreate of Object.values(pendingByDraftId)) {
@@ -243,7 +243,6 @@ export const useDraftStore = create<DraftStore>()(
     (set, get) => ({
       drafts: {},
       createModalDraft: null,
-      attachmentFocusRequestByDraftKey: {},
 
       getDraftInput: (draftKey) => {
         const record = get().drafts[draftKey];
@@ -351,32 +350,7 @@ export const useDraftStore = create<DraftStore>()(
           return { drafts: nextDrafts };
         });
 
-        scheduleAttachmentGc();
-      },
-
-      attachWorkspaceFile: async ({ draftKey, attachment }) => {
-        await get().hydrateDraftInput({ draftKey });
-        set((state) => {
-          const existing = state.drafts[draftKey];
-          const draft = toDraftInputIfReady(existing) ?? { text: "", attachments: [] };
-          return {
-            drafts: {
-              ...state.drafts,
-              [draftKey]: createDraftRecord({
-                draft: {
-                  ...draft,
-                  attachments: appendWorkspaceFileAttachment(draft.attachments, attachment),
-                },
-                lifecycle: "active",
-                previousVersion: existing?.version,
-              }),
-            },
-            attachmentFocusRequestByDraftKey: {
-              ...state.attachmentFocusRequestByDraftKey,
-              [draftKey]: (state.attachmentFocusRequestByDraftKey[draftKey] ?? 0) + 1,
-            },
-          };
-        });
+        draftGenerations.delete(draftKey);
         scheduleAttachmentGc();
       },
 
@@ -401,6 +375,16 @@ export const useDraftStore = create<DraftStore>()(
         scheduleAttachmentGc();
       },
 
+      beginDraftGeneration: (draftKey) => {
+        const next = (draftGenerations.get(draftKey) ?? 0) + 1;
+        draftGenerations.set(draftKey, next);
+        return next;
+      },
+
+      isDraftGenerationCurrent: ({ draftKey, generation }) => {
+        return (draftGenerations.get(draftKey) ?? 0) === generation;
+      },
+
       collectActiveAttachmentIds: () => {
         return Array.from(collectReferencedAttachmentIdsFromState(get()).values());
       },
@@ -409,7 +393,6 @@ export const useDraftStore = create<DraftStore>()(
       name: "paseo-drafts",
       version: DRAFT_STORE_VERSION,
       storage: draftPersistStorage,
-      partialize: ({ drafts, createModalDraft }) => ({ drafts, createModalDraft }),
       migrate: (persistedState) => {
         return migratePersistedState(persistedState, {
           migrateLegacyImages,

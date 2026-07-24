@@ -61,7 +61,7 @@ export function ProviderUsageWindowBar({ window }: { window: ProviderUsageWindow
 
 const styles = StyleSheet.create((theme) => ({
   container: {
-    gap: 3,
+    gap: theme.spacing[1],
   },
   labelRow: {
     flexDirection: "row",

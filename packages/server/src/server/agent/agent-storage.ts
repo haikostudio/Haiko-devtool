@@ -1,14 +1,18 @@
-import { promises as fs, type Dirent } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import type { Logger } from "pino";
 
 import { writeJsonFileAtomic } from "../atomic-file.js";
-import { AgentFeatureSchema, AgentStatusSchema } from "../messages.js";
+import {
+  AgentFeatureSchema,
+  AgentStatusSchema,
+  type AgentSynthesis,
+  AgentSynthesisSchema,
+} from "../messages.js";
 import { toStoredAgentRecord } from "./agent-projections.js";
 import type { ManagedAgent } from "./agent-manager.js";
 import type { AgentSessionConfig } from "./agent-sdk-types.js";
-import { AgentOwnerSchema, daemonExecutionKey, type DaemonAgentOwner } from "./agent-owner.js";
 
 const SERIALIZABLE_CONFIG_SCHEMA = z
   .object({
@@ -16,6 +20,10 @@ const SERIALIZABLE_CONFIG_SCHEMA = z
     model: z.string().nullable().optional(),
     thinkingOptionId: z.string().nullable().optional(),
     featureValues: z.record(z.string(), z.unknown()).nullable().optional(),
+    approvalPolicy: z.string().nullable().optional(),
+    sandboxMode: z.string().nullable().optional(),
+    networkAccess: z.boolean().nullable().optional(),
+    webSearch: z.boolean().nullable().optional(),
     extra: z.record(z.string(), z.any()).nullable().optional(),
     systemPrompt: z.string().nullable().optional(),
     mcpServers: z.record(z.string(), z.any()).nullable().optional(),
@@ -43,6 +51,11 @@ const STORED_AGENT_SCHEMA = z.object({
   lastActivityAt: z.string().optional(),
   lastUserMessageAt: z.string().nullable().optional(),
   title: z.string().nullable().optional(),
+  // True once the user has renamed this agent's tab by hand. The per-turn
+  // auto-titler defers to it and never overwrites a hand-picked tab title.
+  titleLockedByUser: z.boolean().optional(),
+  synthesis: AgentSynthesisSchema.nullable().optional(),
+  synthesisHistory: z.array(AgentSynthesisSchema).optional(),
   labels: z.record(z.string(), z.string()).default({}),
   lastStatus: AgentStatusSchema.default("closed"),
   lastModeId: z.string().nullable().optional(),
@@ -65,7 +78,6 @@ const STORED_AGENT_SCHEMA = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   internal: z.boolean().optional(),
   archivedAt: z.string().nullable().optional(),
-  owner: AgentOwnerSchema.optional(),
 });
 
 export type SerializableAgentConfig = Pick<
@@ -74,6 +86,10 @@ export type SerializableAgentConfig = Pick<
   | "model"
   | "thinkingOptionId"
   | "featureValues"
+  | "approvalPolicy"
+  | "sandboxMode"
+  | "networkAccess"
+  | "webSearch"
   | "extra"
   | "systemPrompt"
   | "mcpServers"
@@ -84,14 +100,68 @@ export function parseStoredAgentRecord(value: unknown): StoredAgentRecord {
   return STORED_AGENT_SCHEMA.parse(value);
 }
 
+interface ApplySnapshotOptions {
+  title?: string | null;
+  titleLockedByUser?: boolean;
+  synthesis?: AgentSynthesis | null;
+  synthesisHistory?: AgentSynthesis[] | null;
+  internal?: boolean;
+}
+
+/**
+ * Resolve which persisted fields an applySnapshot call overrides. Fields not
+ * explicitly present in `options` fall back to the existing stored value so a
+ * routine snapshot flush never clobbers title/synthesis/internal.
+ */
+function resolveSnapshotOverrides(
+  agent: ManagedAgent,
+  existing: StoredAgentRecord | null,
+  options?: ApplySnapshotOptions,
+): {
+  title: string | null;
+  titleLockedByUser?: boolean;
+  synthesis: AgentSynthesis | null;
+  synthesisHistory: AgentSynthesis[] | null;
+  createdAt?: string;
+  internal?: boolean;
+} {
+  const has = (key: keyof ApplySnapshotOptions): boolean =>
+    options !== undefined && Object.prototype.hasOwnProperty.call(options, key);
+  return {
+    title: resolveOverrideField(has("title"), options?.title, existing?.title),
+    titleLockedByUser: has("titleLockedByUser")
+      ? options?.titleLockedByUser
+      : existing?.titleLockedByUser,
+    synthesis: resolveOverrideField(has("synthesis"), options?.synthesis, existing?.synthesis),
+    synthesisHistory: resolveOverrideField(
+      has("synthesisHistory"),
+      options?.synthesisHistory,
+      existing?.synthesisHistory,
+    ),
+    createdAt: existing?.createdAt,
+    internal: has("internal") ? options?.internal : (agent.internal ?? existing?.internal),
+  };
+}
+
+// Pick the override value when the caller explicitly provided the key, else fall
+// back to the existing stored value. Keeps resolveSnapshotOverrides flat.
+function resolveOverrideField<T>(
+  present: boolean,
+  optionValue: T | null | undefined,
+  existingValue: T | null | undefined,
+): T | null {
+  if (present) {
+    return optionValue ?? null;
+  }
+  return existingValue ?? null;
+}
+
 export class AgentStorage {
   private cache: Map<string, StoredAgentRecord> = new Map();
   private pathById: Map<string, string> = new Map();
   private pathsById: Map<string, Set<string>> = new Map();
   private pendingWrites: Map<string, Promise<void>> = new Map();
   private deleting: Set<string> = new Set();
-  private daemonAgentIdsByExecution: Map<string, string> = new Map();
-  private daemonExecutionKeysByAgentId: Map<string, string> = new Map();
   private loaded = false;
   private baseDir: string;
   private loadPromise: Promise<StoredAgentRecord[]> | null = null;
@@ -114,12 +184,6 @@ export class AgentStorage {
   async get(agentId: string): Promise<StoredAgentRecord | null> {
     await this.load();
     return this.cache.get(agentId) ?? null;
-  }
-
-  async findByDaemonExecution(owner: DaemonAgentOwner): Promise<StoredAgentRecord | null> {
-    await this.load();
-    const agentId = this.daemonAgentIdsByExecution.get(daemonExecutionKey(owner));
-    return agentId ? (this.cache.get(agentId) ?? null) : null;
   }
 
   async upsert(record: StoredAgentRecord): Promise<void> {
@@ -167,7 +231,6 @@ export class AgentStorage {
     }
 
     this.cache.set(agentId, record);
-    this.indexOwner(record);
     this.pathById.set(agentId, nextPath);
   }
 
@@ -197,27 +260,15 @@ export class AgentStorage {
     );
 
     this.cache.delete(agentId);
-    this.removeOwnerIndex(agentId);
     this.pathById.delete(agentId);
     this.pathsById.delete(agentId);
   }
 
-  async applySnapshot(
-    agent: ManagedAgent,
-    options?: { title?: string | null; internal?: boolean },
-  ): Promise<void> {
+  async applySnapshot(agent: ManagedAgent, options?: ApplySnapshotOptions): Promise<void> {
     await this.load();
     await this.waitForPendingWrite(agent.id);
     const existing = (await this.get(agent.id)) ?? null;
-    const hasTitleOverride =
-      options !== undefined && Object.prototype.hasOwnProperty.call(options, "title");
-    const hasInternalOverride =
-      options !== undefined && Object.prototype.hasOwnProperty.call(options, "internal");
-    const record = toStoredAgentRecord(agent, {
-      title: hasTitleOverride ? (options?.title ?? null) : (existing?.title ?? null),
-      createdAt: existing?.createdAt,
-      internal: hasInternalOverride ? options?.internal : (agent.internal ?? existing?.internal),
-    });
+    const record = toStoredAgentRecord(agent, resolveSnapshotOverrides(agent, existing, options));
 
     // Preserve soft-delete/archive status across snapshot flushes.
     // `archivedAt` is not part of the ManagedAgent snapshot, so a naive projection
@@ -260,8 +311,6 @@ export class AgentStorage {
     this.cache.clear();
     this.pathById.clear();
     this.pathsById.clear();
-    this.daemonAgentIdsByExecution.clear();
-    this.daemonExecutionKeysByAgentId.clear();
 
     try {
       const records = await this.scanDisk();
@@ -280,7 +329,7 @@ export class AgentStorage {
 
   private async scanDisk(): Promise<StoredAgentRecord[]> {
     const records: StoredAgentRecord[] = [];
-    let entries: Dirent[] = [];
+    let entries: Array<import("node:fs").Dirent> = [];
     try {
       entries = await fs.readdir(this.baseDir, { withFileTypes: true });
     } catch (error) {
@@ -324,7 +373,6 @@ export class AgentStorage {
       const { record, filePath } = item;
       records.push(record);
       this.cache.set(record.id, record);
-      this.indexOwner(record);
       this.pathById.set(record.id, filePath);
       this.addIndexedPath(record.id, filePath);
     }
@@ -363,28 +411,6 @@ export class AgentStorage {
     if (paths.size === 0) {
       this.pathsById.delete(agentId);
     }
-  }
-
-  private indexOwner(record: StoredAgentRecord): void {
-    this.removeOwnerIndex(record.id);
-    if (record.owner?.kind === "daemon") {
-      const key = daemonExecutionKey(record.owner);
-      const previousAgentId = this.daemonAgentIdsByExecution.get(key);
-      if (previousAgentId && previousAgentId !== record.id) {
-        this.daemonExecutionKeysByAgentId.delete(previousAgentId);
-      }
-      this.daemonAgentIdsByExecution.set(key, record.id);
-      this.daemonExecutionKeysByAgentId.set(record.id, key);
-    }
-  }
-
-  private removeOwnerIndex(agentId: string): void {
-    const key = this.daemonExecutionKeysByAgentId.get(agentId);
-    if (!key) return;
-    if (this.daemonAgentIdsByExecution.get(key) === agentId) {
-      this.daemonAgentIdsByExecution.delete(key);
-    }
-    this.daemonExecutionKeysByAgentId.delete(agentId);
   }
 
   private async waitForPendingWrite(agentId: string): Promise<void> {

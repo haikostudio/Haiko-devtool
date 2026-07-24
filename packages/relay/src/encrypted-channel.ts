@@ -45,15 +45,38 @@ interface EncryptedChannelOptions {
    * the daemon should re-send `{type:"e2ee_ready"}` without changing keys.
    */
   daemonKeyPair?: KeyPair;
+  /**
+   * Whether the peer advertised support for chunked framing. On the daemon side
+   * this is known from the client's hello at construction time; on the client
+   * side it is learned later from the daemon's ready and set then.
+   */
+  peerSupportsChunking?: boolean;
 }
 
 interface E2EEHelloMessage {
   type: "e2ee_hello";
   key: string;
+  /** Optional capability tokens. Absent on peers predating chunked framing. */
+  caps?: string[];
 }
 
 interface E2EEReadyMessage {
   type: "e2ee_ready";
+  /** Optional capability tokens. Absent on peers predating chunked framing. */
+  caps?: string[];
+}
+
+/**
+ * A slice of an oversized encrypted frame. The `d` fields of all `n` chunks
+ * sharing an `id`, concatenated in `i` order, reproduce the original base64
+ * ciphertext string, which is then decrypted as a whole.
+ */
+interface E2EEChunkMessage {
+  type: "e2ee_chunk";
+  id: string;
+  i: number;
+  n: number;
+  d: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -71,6 +94,67 @@ function isE2EEHelloMessage(value: unknown): value is E2EEHelloMessage {
 
 function isE2EEReadyMessage(value: unknown): value is E2EEReadyMessage {
   return isRecord(value) && value.type === "e2ee_ready";
+}
+
+function isE2EEChunkMessage(value: unknown): value is E2EEChunkMessage {
+  return (
+    isRecord(value) &&
+    value.type === "e2ee_chunk" &&
+    typeof value.id === "string" &&
+    Number.isInteger(value.n) &&
+    (value.n as number) > 0 &&
+    Number.isInteger(value.i) &&
+    (value.i as number) >= 0 &&
+    (value.i as number) < (value.n as number) &&
+    typeof value.d === "string"
+  );
+}
+
+/** Capability advertised by both peers once they support chunked framing. */
+const CHUNK_CAP = "chunk";
+const LOCAL_CAPS: readonly string[] = [CHUNK_CAP];
+
+function peerAdvertisesChunking(parsed: unknown): boolean {
+  if (!isRecord(parsed)) return false;
+  const caps = parsed.caps;
+  return Array.isArray(caps) && caps.includes(CHUNK_CAP);
+}
+
+/**
+ * Cloudflare (which fronts the relay) rejects any single WebSocket message
+ * larger than 1 MiB, closing the socket with code 1009. Keep whole frames
+ * comfortably under that; larger encrypted payloads are split into
+ * {@link E2EEChunkMessage} frames and reassembled by the peer.
+ */
+const MAX_WIRE_FRAME_CHARS = 900_000;
+/** base64 chars carried per chunk frame (well under the 1 MiB wire ceiling). */
+const CHUNK_PAYLOAD_CHARS = 512 * 1024;
+/** Hard cap on a single reassembled message, to bound memory from a hostile relay. */
+const MAX_REASSEMBLED_WIRE_CHARS = 64 * 1024 * 1024;
+
+/**
+ * Thrown by {@link EncryptedChannel.send} when a message exceeds the wire
+ * ceiling and the peer is too old to reassemble chunks. Surfaced to the caller
+ * instead of silently blowing the transport with a 1009.
+ */
+export class EncryptedMessageTooLargeError extends Error {
+  constructor(
+    public readonly wireChars: number,
+    public readonly limitChars: number,
+  ) {
+    super(
+      `Encrypted message too large for relay (${wireChars} > ${limitChars} base64 chars) ` +
+        `and the peer does not support chunked framing`,
+    );
+    this.name = "EncryptedMessageTooLargeError";
+  }
+}
+
+interface ChunkReassembly {
+  total: number;
+  parts: Array<string | undefined>;
+  received: number;
+  chars: number;
 }
 
 function buildInvalidHelloError(rawText: string, parsed?: unknown): Error {
@@ -130,7 +214,11 @@ export async function createClientChannel(
 
   // Send e2ee_hello with our public key
   const ourPublicKeyB64 = exportPublicKey(keyPair.publicKey);
-  const hello: E2EEHelloMessage = { type: "e2ee_hello", key: ourPublicKeyB64 };
+  const hello: E2EEHelloMessage = {
+    type: "e2ee_hello",
+    key: ourPublicKeyB64,
+    caps: [...LOCAL_CAPS],
+  };
   const helloText = JSON.stringify(hello);
 
   let retry: ReturnType<typeof setInterval> | null = null;
@@ -229,8 +317,13 @@ export async function createDaemonChannel(
         const clientPublicKey = importPublicKey(msg.key);
         const sharedKey = deriveSharedKey(daemonKeyPair.secretKey, clientPublicKey);
 
-        const channel = new EncryptedChannel(transport, sharedKey, events, { daemonKeyPair });
-        transport.send(JSON.stringify({ type: "e2ee_ready" } satisfies E2EEReadyMessage));
+        const channel = new EncryptedChannel(transport, sharedKey, events, {
+          daemonKeyPair,
+          peerSupportsChunking: peerAdvertisesChunking(msg),
+        });
+        transport.send(
+          JSON.stringify({ type: "e2ee_ready", caps: [...LOCAL_CAPS] } satisfies E2EEReadyMessage),
+        );
 
         channel.setState("open");
         events.onopen?.();
@@ -270,6 +363,9 @@ export class EncryptedChannel {
   private pendingSends: Array<string | ArrayBuffer> = [];
   private onOpenCallbacks: Array<() => void> = [];
   private onCloseCallbacks: Array<() => void> = [];
+  private peerSupportsChunking: boolean;
+  private chunkSeq = 0;
+  private readonly incomingChunks = new Map<string, ChunkReassembly>();
 
   constructor(
     transport: Transport,
@@ -281,6 +377,7 @@ export class EncryptedChannel {
     this.sharedKey = sharedKey;
     this.events = events;
     this.options = options;
+    this.peerSupportsChunking = options.peerSupportsChunking ?? false;
 
     Object.assign(transport, {
       onmessage: (data: string | ArrayBuffer) => this.handleMessage(data),
@@ -305,6 +402,7 @@ export class EncryptedChannel {
         const text = typeof data === "string" ? data : new TextDecoder().decode(data);
         const parsed: unknown = JSON.parse(text);
         if (isE2EEReadyMessage(parsed)) {
+          this.peerSupportsChunking = peerAdvertisesChunking(parsed);
           this.state = "open";
           this.events.onopen?.();
           for (const cb of this.onOpenCallbacks) cb();
@@ -318,67 +416,100 @@ export class EncryptedChannel {
 
     if (this.state !== "open") return;
 
+    // JSON control traffic (base64 ciphertext never starts with "{").
+    const text = tryDecodeText(data);
+    if (text !== null && text.trim().startsWith("{")) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = undefined;
+      }
+      if (parsed !== undefined) {
+        if (isE2EEHelloMessage(parsed)) {
+          if (this.options.daemonKeyPair) {
+            await this.handleDaemonRehello(parsed.key);
+          }
+          return;
+        }
+        if (isE2EEReadyMessage(parsed)) return;
+        if (isE2EEChunkMessage(parsed)) {
+          await this.handleChunkFrame(parsed);
+          return;
+        }
+        // Any other JSON-looking payload is plaintext app traffic, which
+        // means the peer is not encrypting (or we are out of sync).
+        this.failFatal(new Error("Received plaintext frame on encrypted channel"));
+        return;
+      }
+    }
+
+    await this.decryptAndEmit(data);
+  }
+
+  /** Decode a base64 ciphertext frame, decrypt it, and emit the plaintext. */
+  private async decryptAndEmit(data: string | ArrayBuffer): Promise<void> {
     try {
-      const ciphertext = await (async () => {
-        // Handle (or ignore) any stray plaintext handshake traffic.
-        try {
-          const text = typeof data === "string" ? data : new TextDecoder().decode(data);
-          if (text.trim().startsWith("{")) {
-            const parsed: unknown = JSON.parse(text);
-
-            if (isE2EEHelloMessage(parsed)) {
-              if (this.options.daemonKeyPair) {
-                await this.handleDaemonRehello(parsed.key);
-              }
-              return null;
-            }
-
-            if (isE2EEReadyMessage(parsed)) {
-              return null;
-            }
-
-            // Any other JSON-looking payload is plaintext app traffic, which
-            // means the peer is not encrypting (or we are out of sync).
-            throw new Error("Received plaintext frame on encrypted channel");
-          }
-        } catch (error) {
-          // If we detected plaintext protocol mismatch, fail hard.
-          if (error instanceof Error && error.message.includes("plaintext frame")) {
-            throw error;
-          }
-          // Otherwise ignore JSON parse/TextDecoder failures and fall back to
-          // decoding ciphertext below.
-        }
-
-        if (typeof data === "string") {
-          return base64ToArrayBuffer(data);
-        }
-
+      let ciphertext: ArrayBuffer;
+      if (typeof data === "string") {
+        ciphertext = base64ToArrayBuffer(data);
+      } else {
         // Some WebSocket implementations deliver text frames as ArrayBuffer.
         // Our protocol always transmits ciphertext as base64 text.
         try {
-          const decoded = new TextDecoder().decode(data);
-          return base64ToArrayBuffer(decoded);
+          ciphertext = base64ToArrayBuffer(new TextDecoder().decode(data));
         } catch {
-          return data;
+          ciphertext = data;
         }
-      })();
-
-      if (ciphertext) {
-        const plaintext = decrypt(this.sharedKey, ciphertext);
-        this.events.onmessage?.(plaintext);
       }
+      const plaintext = decrypt(this.sharedKey, ciphertext);
+      this.events.onmessage?.(plaintext);
     } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
+      this.failFatal(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
 
-      // Treat decryption/protocol errors as fatal so the peer can reconnect and
-      // re-handshake. Emitting an error event here can cause higher-level code
-      // to tear down the session without triggering a clean reconnect.
-      try {
-        this.transport.close(1011, err.message);
-      } catch {
-        // ignore
-      }
+  /** Buffer a chunk; once all chunks of its message arrive, decrypt the whole. */
+  private async handleChunkFrame(msg: E2EEChunkMessage): Promise<void> {
+    let entry = this.incomingChunks.get(msg.id);
+    if (!entry) {
+      entry = {
+        total: msg.n,
+        parts: Array.from({ length: msg.n }, () => undefined),
+        received: 0,
+        chars: 0,
+      };
+      this.incomingChunks.set(msg.id, entry);
+    }
+    if (entry.total !== msg.n || msg.i >= entry.total) {
+      this.incomingChunks.delete(msg.id);
+      this.failFatal(new Error("Invalid e2ee_chunk framing"));
+      return;
+    }
+    if (entry.parts[msg.i] !== undefined) return; // duplicate slice, ignore
+    entry.parts[msg.i] = msg.d;
+    entry.received += 1;
+    entry.chars += msg.d.length;
+    if (entry.chars > MAX_REASSEMBLED_WIRE_CHARS) {
+      this.incomingChunks.delete(msg.id);
+      this.failFatal(new Error("e2ee_chunk reassembly exceeds size cap"));
+      return;
+    }
+    if (entry.received < entry.total) return;
+    this.incomingChunks.delete(msg.id);
+    await this.decryptAndEmit(entry.parts.join(""));
+  }
+
+  /**
+   * Treat decryption/protocol errors as fatal so the peer can reconnect and
+   * re-handshake. Emitting an error event here can cause higher-level code to
+   * tear down the session without triggering a clean reconnect.
+   */
+  private failFatal(error: Error): void {
+    try {
+      this.transport.close(1011, error.message);
+    } catch {
+      // ignore
     }
   }
 
@@ -396,8 +527,27 @@ export class EncryptedChannel {
     }
 
     const ciphertext = encrypt(this.sharedKey, data);
-    // Send as base64 for WebSocket text compatibility
-    this.transport.send(arrayBufferToBase64(ciphertext));
+    // Send as base64 for WebSocket text compatibility.
+    const wire = arrayBufferToBase64(ciphertext);
+
+    if (wire.length <= MAX_WIRE_FRAME_CHARS) {
+      this.transport.send(wire);
+      return;
+    }
+
+    // Oversized: the relay's 1 MiB per-message ceiling would otherwise close the
+    // socket with 1009. Split into chunk frames the peer reassembles.
+    if (!this.peerSupportsChunking) {
+      throw new EncryptedMessageTooLargeError(wire.length, MAX_WIRE_FRAME_CHARS);
+    }
+    const id = `${this.chunkSeq++}`;
+    const total = Math.ceil(wire.length / CHUNK_PAYLOAD_CHARS);
+    for (let i = 0; i < total; i += 1) {
+      const d = wire.slice(i * CHUNK_PAYLOAD_CHARS, (i + 1) * CHUNK_PAYLOAD_CHARS);
+      this.transport.send(
+        JSON.stringify({ type: "e2ee_chunk", id, i, n: total, d } satisfies E2EEChunkMessage),
+      );
+    }
   }
 
   private async flushPendingSends(): Promise<void> {
@@ -447,6 +597,16 @@ export class EncryptedChannel {
 
   onClose(cb: () => void): void {
     this.onCloseCallbacks.push(cb);
+  }
+}
+
+/** Best-effort decode of a wire frame to text; returns null if it is not decodable. */
+function tryDecodeText(data: string | ArrayBuffer): string | null {
+  if (typeof data === "string") return data;
+  try {
+    return new TextDecoder().decode(data);
+  } catch {
+    return null;
   }
 }
 

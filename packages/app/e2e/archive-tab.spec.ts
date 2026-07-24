@@ -15,6 +15,7 @@ import {
   expectWorkspaceArchiveOutcome,
   expectWorkspaceTabHidden,
   fetchAgentArchivedAt,
+  expectWorkspaceTabVisible,
   openSessions,
   openWorkspaceWithAgents,
   primeAdditionalPage,
@@ -122,7 +123,7 @@ test.describe("Archive tab reconciliation", () => {
     }
   });
 
-  test("clicking an archived session navigates without unarchiving it", async ({ page }) => {
+  test("clicking an archived session unarchives it and opens the agent", async ({ page }) => {
     const archived = await createIdleAgent(client, {
       cwd: tempRepo.path,
       workspaceId,
@@ -137,17 +138,18 @@ test.describe("Archive tab reconciliation", () => {
     await resetSeededPageState(page);
     await openWorkspaceWithAgents(page, [archived, surviving]);
     await archiveAgentFromDaemon(client, archived.id);
-    const archivedAt = await fetchAgentArchivedAt(client, archived.id);
-    expect(archivedAt).not.toBeNull();
     await openSessions(page);
     await expectSessionRowArchived(page, archived.title);
 
     await clickSessionRow(page, archived.title);
 
-    expect(await fetchAgentArchivedAt(client, archived.id)).toBe(archivedAt);
+    await expect
+      .poll(() => fetchAgentArchivedAt(client, archived.id), { timeout: 30_000 })
+      .toBeNull();
 
     await expect(page).toHaveURL(buildHostWorkspaceRoute(getServerId(), archived.workspaceId), {
       timeout: 30_000,
     });
+    await expectWorkspaceTabVisible(page, archived.id);
   });
 });

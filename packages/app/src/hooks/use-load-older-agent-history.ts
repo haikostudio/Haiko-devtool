@@ -4,7 +4,6 @@ import type { ToastApi } from "@/components/toast-host";
 import { i18n } from "@/i18n/i18next";
 import { useSessionStore, type AgentTimelineCursorState } from "@/stores/session-store";
 import { planTimelineOlderFetch } from "@/timeline/timeline-sync-plan";
-import { getHostRuntimeStore } from "@/runtime/host-runtime";
 
 export interface LoadOlderAgentHistoryClient {
   fetchAgentTimeline: (
@@ -98,12 +97,7 @@ export function useLoadOlderAgentHistory({
   const loadOlder = useCallback(() => {
     const session = useSessionStore.getState().sessions[serverId];
     void loadOlderAgentHistory(agentId, {
-      client: session?.client
-        ? {
-            fetchAgentTimeline: (timelineAgentId, request) =>
-              getHostRuntimeStore().fetchAgentTimeline(serverId, timelineAgentId, request),
-          }
-        : null,
+      client: (session?.client ?? null) as LoadOlderAgentHistoryClient | null,
       cursor: session?.agentTimelineCursor.get(agentId),
       hasOlder: session?.agentTimelineHasOlder.get(agentId) === true,
       isLoadingOlder: session?.agentTimelineOlderFetchInFlight.get(agentId) === true,

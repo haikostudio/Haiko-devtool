@@ -1116,6 +1116,42 @@ describe("turn lifecycle events", () => {
     );
   });
 
+  it("slots a user message ahead of its trailing Cerveau pill (replay/observer order)", () => {
+    // The daemon emits the brain_context pill just BEFORE the user_message it
+    // was recalled for, so replay/observer streams arrive as [pill, message].
+    // The pill belongs UNDER the message, so it must end up after it.
+    const state = hydrateStreamState([
+      {
+        event: {
+          type: "timeline",
+          provider: "claude",
+          item: {
+            type: "brain_context",
+            query: "ajoute un bandeau",
+            portee: "projet",
+            count: 0,
+            memories: [],
+            status: "done",
+          },
+        },
+        timestamp: new Date("2025-01-01T15:03:00Z"),
+      },
+      {
+        event: {
+          type: "timeline",
+          provider: "claude",
+          item: { type: "user_message", text: "ajoute un bandeau" },
+        },
+        timestamp: new Date("2025-01-01T15:03:01Z"),
+      },
+    ]);
+
+    assert.deepStrictEqual(
+      state.map((item) => item.kind),
+      ["user_message", "brain_context"],
+    );
+  });
+
   it.each(["codex", "opencode", "pi"] satisfies AgentProvider[])(
     "replaces an optimistic user message when a live %s provider-owned id echo arrives without text matching",
     (provider) => {
@@ -1242,7 +1278,6 @@ describe("turn lifecycle events", () => {
           type: "user_message",
           text: "server-rendered attachment text",
           messageId: "provider-owned-canonical",
-          clientMessageId: optimistic.id,
         },
       },
       new Date("2025-01-01T15:03:11Z"),
@@ -1456,52 +1491,6 @@ describe("turn lifecycle events", () => {
         ["provider-owned-second", "second typed text", undefined],
       ],
     );
-  });
-
-  it("does not shift later prompts when an earlier optimistic prompt has no canonical echo", () => {
-    const staleTimestamp = new Date("2025-01-01T15:04:00Z");
-    const submittedTimestamp = new Date("2025-01-01T15:04:01Z");
-    const stalePrompt: StreamItem = {
-      kind: "user_message",
-      id: "msg_stale",
-      text: "first prompt without an echo",
-      timestamp: staleTimestamp,
-      optimistic: true,
-    };
-    const submittedPrompt: StreamItem = {
-      kind: "user_message",
-      id: "msg_submitted",
-      text: "later submitted prompt",
-      timestamp: submittedTimestamp,
-      optimistic: true,
-    };
-
-    const state = reduceStreamUpdate(
-      [stalePrompt, submittedPrompt],
-      {
-        type: "timeline",
-        provider: "codex",
-        item: {
-          type: "user_message",
-          text: "canonical rendered prompt",
-          messageId: "provider-owned-submitted",
-          clientMessageId: submittedPrompt.id,
-        },
-      },
-      new Date("2025-01-01T15:04:02Z"),
-      { source: "live" },
-    );
-
-    assert.deepStrictEqual(state, [
-      stalePrompt,
-      {
-        kind: "user_message",
-        id: "provider-owned-submitted",
-        clientMessageId: submittedPrompt.id,
-        text: submittedPrompt.text,
-        timestamp: submittedPrompt.timestamp,
-      },
-    ]);
   });
 
   it("appends a live server user message when no optimistic user message is pending", () => {

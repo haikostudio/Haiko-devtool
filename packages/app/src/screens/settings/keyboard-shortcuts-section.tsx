@@ -264,7 +264,7 @@ export function KeyboardShortcutsSection() {
   if (isNative) {
     return (
       <SettingsSection title={t("settings.sections.shortcuts")}>
-        <View style={[settingsStyles.card, styles.mobileCard]}>
+        <View style={mobileCardStyle}>
           <Text style={styles.mobileText}>{t("settings.shortcuts.unavailableOnMobile")}</Text>
         </View>
       </SettingsSection>
@@ -362,3 +362,5 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
   },
 }));
+
+const mobileCardStyle = [settingsStyles.card, styles.mobileCard];

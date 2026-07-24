@@ -1,6 +1,7 @@
 import type {
   AgentListItemPayload,
   AgentSnapshotPayload,
+  AgentSynthesis,
   RecentProviderSessionDescriptorPayload,
 } from "../messages.js";
 import type { SerializableAgentConfig, StoredAgentRecord } from "./agent-storage.js";
@@ -24,6 +25,9 @@ export type { ManagedAgent };
 
 interface ProjectionOptions {
   title?: string | null;
+  titleLockedByUser?: boolean;
+  synthesis?: AgentSynthesis | null;
+  synthesisHistory?: AgentSynthesis[] | null;
   createdAt?: string;
   internal?: boolean;
 }
@@ -79,6 +83,9 @@ export function toStoredAgentRecord(
     lastActivityAt: agent.updatedAt.toISOString(),
     lastUserMessageAt: agent.lastUserMessageAt ? agent.lastUserMessageAt.toISOString() : null,
     title: options?.title ?? null,
+    titleLockedByUser: options?.titleLockedByUser,
+    synthesis: options?.synthesis ?? null,
+    synthesisHistory: options?.synthesisHistory ?? undefined,
     labels: agent.labels,
     lastStatus: agent.lifecycle,
     lastModeId: agent.currentModeId ?? config?.modeId ?? null,
@@ -93,7 +100,6 @@ export function toStoredAgentRecord(
       ? agent.attention.attentionTimestamp.toISOString()
       : null,
     internal: options?.internal,
-    owner: agent.owner,
   } satisfies StoredAgentRecord;
 }
 
@@ -128,6 +134,8 @@ export function toAgentPayload(
     pendingPermissions: sanitizePendingPermissions(agent.pendingPermissions),
     persistence: sanitizePersistenceHandle(agent.persistence),
     title: options?.title ?? null,
+    synthesis: options?.synthesis ?? null,
+    ...(options?.synthesisHistory ? { synthesisHistory: options.synthesisHistory } : {}),
     labels: agent.labels,
   };
 
@@ -231,6 +239,8 @@ export function buildStoredAgentPayload(
     pendingPermissions: [],
     persistence,
     title: record.title ?? null,
+    synthesis: record.synthesis ?? null,
+    ...(record.synthesisHistory ? { synthesisHistory: record.synthesisHistory } : {}),
     requiresAttention: record.requiresAttention ?? false,
     attentionReason: record.attentionReason ?? null,
     attentionTimestamp: record.attentionTimestamp ?? null,
@@ -312,6 +322,18 @@ function buildSerializableConfig(config: AgentSessionConfig): SerializableAgentC
     if (featureValues !== undefined) {
       serializable.featureValues = featureValues;
     }
+  }
+  if (config.approvalPolicy) {
+    serializable.approvalPolicy = config.approvalPolicy;
+  }
+  if (config.sandboxMode) {
+    serializable.sandboxMode = config.sandboxMode;
+  }
+  if (typeof config.networkAccess === "boolean") {
+    serializable.networkAccess = config.networkAccess;
+  }
+  if (typeof config.webSearch === "boolean") {
+    serializable.webSearch = config.webSearch;
   }
   const extra = sanitizeMetadata(config.extra);
   if (extra !== undefined) {

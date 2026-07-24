@@ -5,7 +5,6 @@
   nodejs_22,
   python3,
   makeWrapper,
-  autoPatchelfHook,
   # node-pty needs libuv headers on Linux
   libuv,
   # Exposed so downstream flakes that follow a different nixpkgs revision
@@ -60,13 +59,10 @@ buildNpmPackage rec {
   nativeBuildInputs = [
     python3 # for node-gyp (node-pty compilation)
     makeWrapper
-  ] ++ lib.optionals stdenv.hostPlatform.isLinux [
-    autoPatchelfHook
   ];
 
   buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
     libuv
-    stdenv.cc.cc.lib # libstdc++ for sherpa-onnx prebuilt binaries
   ];
 
   # Don't use the default npm build hook — we need a custom build sequence
@@ -75,9 +71,10 @@ buildNpmPackage rec {
   buildPhase = ''
     runHook preBuild
 
-    # Rebuild only node-pty (native addon for terminal emulation). The sherpa
-    # speech runtime ships prebuilt platform packages and is copied into the
-    # daemon closure by scripts/trace-daemon.mjs.
+    # Rebuild only node-pty (native addon for terminal emulation).
+    # Speech-related native modules (sherpa-onnx, onnxruntime-node) are
+    # intentionally left unbuilt — they're lazily loaded and gracefully
+    # degrade when unavailable.
     npm rebuild node-pty
 
     # Build all server packages in dependency order (defined in package.json)
@@ -92,7 +89,7 @@ buildNpmPackage rec {
 
     # Compute the daemon's runtime closure by static module-graph tracing
     # (@vercel/nft from supervisor-entrypoint.js, cli/dist/index.js, and the
-    # forked terminal/speech worker processes) plus an explicit list of non-JS
+    # forked terminal-worker-process.js) plus an explicit list of non-JS
     # assets read at runtime. The trace script is the single source of
     # truth for what the daemon needs at $out — auditable in plain JS, no
     # npm hoisting / .bin / workspace-symlink footguns.

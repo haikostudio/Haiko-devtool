@@ -16,7 +16,6 @@ import {
   type AddProjectHost,
 } from "./model";
 import {
-  addProjectMethodEmptyText,
   buildAddProjectMethods,
   buildCloneLocationOptions,
   buildManualGithubRepositoryChoices,
@@ -111,13 +110,6 @@ describe("Add Project navigation", () => {
 });
 
 describe("Add Project options", () => {
-  it("hides every mutating method when the host lacks stable project identity", () => {
-    const outdatedHost = { ...HOST, canAddProject: false };
-
-    expect(buildAddProjectMethods(outdatedHost)).toEqual([]);
-    expect(addProjectMethodEmptyText(outdatedHost)).toBe("Update the host to use Add Project.");
-  });
-
   it("keeps host-upgrade methods discoverable while hiding local-only Browse", () => {
     expect(
       buildAddProjectMethods({

@@ -10,7 +10,6 @@ import {
   rejectInitDeferred,
   refreshInitTimeout,
 } from "@/utils/agent-initialization";
-import { getHostRuntimeStore, type HostRuntimeStore } from "@/runtime/host-runtime";
 import { planInitialAgentTimelineSync, planTimelineTailFetch } from "@/timeline/timeline-sync-plan";
 import { i18n } from "@/i18n/i18next";
 
@@ -38,7 +37,6 @@ export interface EnsureAgentIsInitializedInput {
   serverId: string;
   agentId: string;
   client: Pick<DaemonClient, "fetchAgentTimeline"> | null;
-  runtime: Pick<HostRuntimeStore, "fetchAgentTimeline">;
   setAgentInitializing: SetAgentInitializing;
   hostDisconnectedMessage?: string;
 }
@@ -70,7 +68,7 @@ export function ensureAgentIsInitialized(input: EnsureAgentIsInitializedInput): 
     return deferred.promise;
   }
 
-  input.runtime.fetchAgentTimeline(serverId, agentId, timelineRequest).catch((error) => {
+  client.fetchAgentTimeline(agentId, timelineRequest).catch((error) => {
     setAgentInitializing(agentId, false);
     rejectInitDeferred(key, error instanceof Error ? error : new Error(String(error)));
   });
@@ -79,16 +77,14 @@ export function ensureAgentIsInitialized(input: EnsureAgentIsInitializedInput): 
 }
 
 export interface RefreshAgentInput {
-  serverId: string;
   agentId: string;
-  client: Pick<DaemonClient, "refreshAgent"> | null;
-  runtime: Pick<HostRuntimeStore, "fetchAgentTimeline">;
+  client: Pick<DaemonClient, "refreshAgent" | "fetchAgentTimeline"> | null;
   setAgentInitializing: SetAgentInitializing;
   hostDisconnectedMessage?: string;
 }
 
 export async function refreshAgent(input: RefreshAgentInput): Promise<void> {
-  const { serverId, agentId, client, runtime, setAgentInitializing } = input;
+  const { agentId, client, setAgentInitializing } = input;
   if (!client) {
     throw new Error(input.hostDisconnectedMessage ?? i18n.t("workspace.terminal.hostDisconnected"));
   }
@@ -96,7 +92,7 @@ export async function refreshAgent(input: RefreshAgentInput): Promise<void> {
 
   try {
     await client.refreshAgent(agentId);
-    await runtime.fetchAgentTimeline(serverId, agentId, planTimelineTailFetch());
+    await client.fetchAgentTimeline(agentId, planTimelineTailFetch());
   } catch (error) {
     setAgentInitializing(agentId, false);
     throw error;
@@ -139,7 +135,6 @@ export function useAgentInitialization({
         serverId,
         agentId,
         client,
-        runtime: getHostRuntimeStore(),
         setAgentInitializing,
         hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
       }),
@@ -149,14 +144,12 @@ export function useAgentInitialization({
   const refreshAgentCallback = useCallback(
     (agentId: string): Promise<void> =>
       refreshAgent({
-        serverId,
         agentId,
         client,
-        runtime: getHostRuntimeStore(),
         setAgentInitializing,
         hostDisconnectedMessage: t("workspace.terminal.hostDisconnected"),
       }),
-    [client, serverId, setAgentInitializing, t],
+    [client, setAgentInitializing, t],
   );
 
   return {

@@ -1,12 +1,13 @@
 import path from "node:path";
-import { statSync } from "node:fs";
 
 import type { Logger } from "pino";
 
 import type { StoredAgentRecord } from "./agent/agent-storage.js";
 import type { AgentStorage } from "./agent/agent-storage.js";
-import { classifyDirectoryForProjectMembership } from "./workspace-registry-bootstrap-legacy.js";
-import { generateWorkspaceId } from "./workspace-registry-model.js";
+import {
+  classifyDirectoryForProjectMembership,
+  generateWorkspaceId,
+} from "./workspace-registry-model.js";
 import { backfillWorkspaceIdForLegacyAgents } from "./migrations/backfill-workspace-id.migration.js";
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import {
@@ -71,17 +72,7 @@ export async function bootstrapWorkspaceRegistries(options: {
     ]),
   );
   const records = await options.agentStorage.list();
-  // A legacy agent can outlive its working directory. Reconciliation treats a
-  // missing directory as absent rather than asking Git about it; bootstrap must
-  // do the same before materializing its first workspace record.
-  const activeRecords = records.filter((record) => {
-    if (record.archivedAt) return false;
-    try {
-      return statSync(record.cwd).isDirectory();
-    } catch {
-      return false;
-    }
-  });
+  const activeRecords = records.filter((record) => !record.archivedAt);
   const recordsByDirectoryKey = new Map<
     string,
     {

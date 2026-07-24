@@ -23,6 +23,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { Portal } from "@gorhom/portal";
 import { MAX_CONTENT_WIDTH, useIsCompactFormFactor } from "@/constants/layout";
 import { useMutation } from "@tanstack/react-query";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
@@ -36,10 +37,14 @@ import {
   ToolCall,
   TodoListCard,
   CompactionMarker,
+  BrainContextPill,
+  TaskTriagePill,
   MessageOuterSpacingProvider,
   type InlinePathTarget,
 } from "@/components/message";
 import { PlanCard } from "@/components/plan-card";
+import { TaskProposalTray } from "@/components/tasks/task-proposal-carousel";
+import { TurnRecapCard } from "@/components/turn-recap-card";
 import type { StreamItem } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
 import type {
@@ -67,11 +72,15 @@ import { resolveStreamRenderStrategy } from "./strategy-resolver";
 import { type StreamSegmentRenderers, type StreamViewportHandle } from "./strategy";
 import {
   CompletedTurnFooterRow,
+  PendingPromptBubble,
   TurnFooter,
   type AssistantTurnForkHandler,
   type TurnContentStrategy,
 } from "./turn-footer";
+import { pendingSendKey, usePendingSendStore } from "@/stores/pending-send-store";
 import { layoutStream, type StreamLayoutItem } from "./layout";
+import { StreamMagicScrollbar } from "./magic-scrollbar";
+import type { StreamMagicScrollbarEntry } from "./magic-scrollbar-types";
 import {
   type BottomAnchorLocalRequest,
   type BottomAnchorRouteRequest,
@@ -99,7 +108,7 @@ import {
   useWorkspaceAttachmentsStore,
 } from "@/attachments/workspace-attachments-store";
 import type { WorkspaceComposerAttachment } from "@/attachments/types";
-import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/workspace-tabs/model";
+import type { WorkspaceDraftTabSetup, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import { toErrorMessage } from "@/utils/error-messages";
 import { useWorkspaceDraftSubmissionStore } from "@/stores/workspace-draft-submission-store";
 
@@ -120,6 +129,25 @@ function renderLiveAuxiliaryNode(input: {
       ) : null}
     </>
   );
+}
+
+// The working loader under the last message shows as soon as a send is in
+// flight — an optimistic user message at the end of the stream, or a prompt
+// still finalizing locally (dictation) — instead of waiting for the daemon to
+// report the running status. Feedback lives in the chat, not just the send
+// button spinner.
+export function shouldShowRunningTurnFooter(input: {
+  status: string | null;
+  tail: StreamItem[];
+  head: StreamItem[] | undefined;
+  hasPendingLocalSend: boolean;
+}): boolean {
+  if (input.status === "running" || input.hasPendingLocalSend) {
+    return true;
+  }
+  const items = input.head && input.head.length > 0 ? input.head : input.tail;
+  const last = items[items.length - 1];
+  return last?.kind === "user_message" && last.optimistic === true;
 }
 
 function renderPendingPermissionsNode(input: {
@@ -249,6 +277,14 @@ export interface AgentStreamViewProps {
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
   };
+  // When set, the magic scrollbar renders into this portal host instead of
+  // inline, so it escapes the message pane's clip and spans the full panel
+  // height (down past the composer). Only agent-panel provides one.
+  magicScrollbarPortalHostName?: string;
+  // Space reserved at the visual top of the transcript for the floating
+  // synthesis banner. Lives in the list's own content padding so later messages
+  // can still scroll up under the banner and fade there. Defaults to 0.
+  topContentInset?: number;
 }
 
 const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
@@ -265,6 +301,7 @@ const AGENT_CAPABILITY_FLAG_KEYS: (keyof AgentCapabilityFlags)[] = [
 
 const EMPTY_STREAM_HEAD: StreamItem[] = [];
 const GROUPED_TOOL_CALL_DETAIL_MAX_HEIGHT = 200;
+const MAGIC_SCROLLBAR_IDLE_HIDE_MS = 1400;
 
 function buildChatHistoryAttachment(input: {
   draftId: string;
@@ -332,6 +369,8 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       onOpenWorkspaceFile,
       readOnly = false,
       historyPagination,
+      magicScrollbarPortalHostName,
+      topContentInset,
     },
     ref,
   ) {
@@ -350,6 +389,12 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [isMobile],
     );
     const [isNearBottom, setIsNearBottom] = useState(true);
+    // Magic scrollbar visibility: slides in on scroll activity, hides after a
+    // short idle delay; on desktop it also stays out while the pane is hovered.
+    const [magicScrollbarActive, setMagicScrollbarActive] = useState(false);
+    const [isPaneHovered, setIsPaneHovered] = useState(false);
+    const [activeStreamItemId, setActiveStreamItemId] = useState<string | null>(null);
+    const magicScrollbarIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [expandedInlineToolCallIds, setExpandedInlineToolCallIds] = useState<Set<string>>(
       new Set(),
     );
@@ -407,9 +452,32 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     useEffect(() => {
       setIsNearBottom(true);
+      setMagicScrollbarActive(false);
+      setActiveStreamItemId(null);
       setExpandedInlineToolCallIds(new Set());
       setExpandedToolCallGroupIds(new Set());
     }, [agentId]);
+
+    const handleScrollActivity = useCallback(() => {
+      setMagicScrollbarActive(true);
+      if (magicScrollbarIdleTimerRef.current) {
+        clearTimeout(magicScrollbarIdleTimerRef.current);
+      }
+      magicScrollbarIdleTimerRef.current = setTimeout(() => {
+        setMagicScrollbarActive(false);
+      }, MAGIC_SCROLLBAR_IDLE_HIDE_MS);
+    }, []);
+    useEffect(() => {
+      return () => {
+        if (magicScrollbarIdleTimerRef.current) {
+          clearTimeout(magicScrollbarIdleTimerRef.current);
+        }
+      };
+    }, []);
+    // Non-bubbling pointer events on a plain View (docs/hover.md); they never
+    // fire on native, where the magic scrollbar renders null anyway.
+    const handlePanePointerEnter = useCallback(() => setIsPaneHovered(true), []);
+    const handlePanePointerLeave = useCallback(() => setIsPaneHovered(false), []);
 
     const handleInlinePathPress = useStableEvent(
       (target: InlinePathTarget, disposition: OpenFileDisposition) => {
@@ -470,6 +538,22 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const handleToolCallOpenFile = useStableEvent((filePath: string) => {
       handleInlinePathPress({ raw: filePath, path: filePath }, "main");
+    });
+
+    // Open the workspace "changes" (diff) view from the turn-recap block's
+    // "view all modifications" button. Mirrors the checkout wiring in
+    // handleInlinePathPress but targets the changes tab.
+    const handleOpenChanges = useStableEvent(() => {
+      if (!context.cwd) {
+        return;
+      }
+      const checkout = {
+        serverId: resolvedServerId,
+        cwd: context.cwd,
+        isGit: context.projectPlacement?.checkout?.isGit ?? true,
+      };
+      setExplorerTabForCheckout({ ...checkout, tab: "changes" });
+      openFileExplorerForCheckout({ isCompact: isMobile, checkout });
     });
 
     const handleForkAssistantTurn: AssistantTurnForkHandler = useStableEvent(
@@ -584,6 +668,21 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         isMobileBreakpoint: isMobile,
       });
     }, [context.status, isMobile, projectedToolCalls.head, projectedToolCalls.tail]);
+    // One dot per user message for the magic scrollbar. Web-only affordance
+    // (the native component renders null); on web the segments are already in
+    // visual top-to-bottom order.
+    const magicScrollbarEntries = useMemo<StreamMagicScrollbarEntry[]>(() => {
+      const { historyVirtualized, historyMounted, liveHead } = baseRenderModel.segments;
+      const entries: StreamMagicScrollbarEntry[] = [];
+      for (const items of [historyVirtualized, historyMounted, liveHead]) {
+        for (const item of items) {
+          if (item.kind === "user_message" && item.text.trim().length > 0) {
+            entries.push({ id: item.id, text: item.text });
+          }
+        }
+      }
+      return entries;
+    }, [baseRenderModel.segments]);
     const streamLayout = useMemo(
       () =>
         layoutStream({
@@ -616,6 +715,10 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     const scrollToBottom = useCallback(() => {
       viewportRef.current?.scrollToBottom("jump-to-bottom");
+    }, []);
+
+    const jumpToStreamItem = useCallback((itemId: string) => {
+      viewportRef.current?.scrollToItem?.(itemId);
     }, []);
 
     const setInlineDetailsExpanded = useCallback(
@@ -657,6 +760,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
             messageId={item.id}
             message={item.text}
             images={item.images}
+            remoteImages={item.remoteImages}
             attachments={item.attachments}
             timestamp={item.timestamp.getTime()}
             capabilities={context.capabilities}
@@ -842,11 +946,36 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               />
             );
 
+          case "brain_context":
+            return <BrainContextPill item={item} />;
+
+          case "task_triage":
+            // Historical marker only — the interactive approval tray is pinned
+            // above the composer (same slot as permission/question cards).
+            return <TaskTriagePill item={item} />;
+
+          case "turn_recap":
+            return (
+              <TurnRecapCard
+                item={item}
+                onOpenFile={handleToolCallOpenFile}
+                onOpenChanges={context.cwd ? handleOpenChanges : undefined}
+              />
+            );
+
           default:
             return null;
         }
       },
-      [renderUserMessageItem, renderAssistantMessageItem, renderThoughtItem, renderToolCallItem],
+      [
+        renderUserMessageItem,
+        renderAssistantMessageItem,
+        renderThoughtItem,
+        renderToolCallItem,
+        handleToolCallOpenFile,
+        handleOpenChanges,
+        context.cwd,
+      ],
     );
 
     const bottomTurnFooterHost = streamLayout.auxiliaryTurnFooter;
@@ -876,29 +1005,81 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
       [pendingPermissions, agentId],
     );
 
-    const showRunningTurnFooter = baseRenderModel.turnTiming.isActive;
-    const pendingPermissionsNode = useMemo(
-      () =>
-        renderPendingPermissionsNode({
-          pendingPermissions: pendingPermissionItems,
-          client,
-        }),
-      [client, pendingPermissionItems],
+    // Triage proposals from the timeline, deduped by task id. The tray itself
+    // filters to still-pending tasks against the live board and hides when done.
+    const triageProposals = useMemo(() => {
+      const seen = new Set<string>();
+      const proposals: { taskId: string; title: string }[] = [];
+      let triageProjectId: string | undefined;
+      for (const item of effectiveStreamItems) {
+        if (item.kind !== "task_triage") {
+          continue;
+        }
+        triageProjectId = item.projectId ?? triageProjectId;
+        for (const proposalRef of item.tasks) {
+          if (!seen.has(proposalRef.taskId)) {
+            seen.add(proposalRef.taskId);
+            proposals.push(proposalRef);
+          }
+        }
+      }
+      return { proposals, projectId: triageProjectId };
+    }, [effectiveStreamItems]);
+
+    // A prompt the user already committed to sending but whose text is still
+    // finalizing locally (dictation). Rendered as a pending bubble above the
+    // working loader so the chat reacts instantly, not just the send button.
+    const pendingLocalSend = usePendingSendStore((state) =>
+      state.pendingSends.get(pendingSendKey(resolvedServerId, agentId)),
     );
+
+    const showRunningTurnFooter = shouldShowRunningTurnFooter({
+      status: context.status,
+      tail: effectiveStreamItems,
+      head: effectiveStreamHead,
+      hasPendingLocalSend: pendingLocalSend != null,
+    });
+    const pendingPermissionsNode = useMemo(() => {
+      const permissions = renderPendingPermissionsNode({
+        pendingPermissions: pendingPermissionItems,
+        client,
+      });
+      const tray =
+        !readOnly && triageProposals.proposals.length > 0 ? (
+          <TaskProposalTray
+            serverId={resolvedServerId}
+            projectId={triageProposals.projectId}
+            proposals={triageProposals.proposals}
+          />
+        ) : null;
+      if (!permissions && !tray) {
+        return null;
+      }
+      return (
+        <>
+          {tray}
+          {permissions}
+        </>
+      );
+    }, [client, pendingPermissionItems, readOnly, resolvedServerId, triageProposals]);
     const turnFooterNode = useMemo(
       () =>
         showRunningTurnFooter || bottomTurnFooterHost ? (
-          <TurnFooter
-            isRunning={showRunningTurnFooter}
-            inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
-            host={bottomTurnFooterHost}
-            strategy={streamRenderStrategy}
-            supportsTimelineCursor={supportsAgentForkContextCursor}
-            onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
-          />
+          <>
+            {pendingLocalSend ? <PendingPromptBubble text={pendingLocalSend.text} /> : null}
+            <TurnFooter
+              isRunning={showRunningTurnFooter}
+              inFlightTurnStartedAt={baseRenderModel.turnTiming.runningStartedAt}
+              host={bottomTurnFooterHost}
+              strategy={streamRenderStrategy}
+              supportsTimelineCursor={supportsAgentForkContextCursor}
+              onForkAssistantTurn={readOnly ? undefined : handleForkAssistantTurn}
+            />
+          </>
         ) : null,
       [
         handleForkAssistantTurn,
+        pendingLocalSend,
         readOnly,
         showRunningTurnFooter,
         baseRenderModel.turnTiming.runningStartedAt,
@@ -1012,7 +1193,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
 
     return (
       <ToolCallSheetProvider>
-        <View style={stylesheet.container}>
+        <View
+          style={stylesheet.container}
+          onPointerEnter={handlePanePointerEnter}
+          onPointerLeave={handlePanePointerLeave}
+        >
           <MessageOuterSpacingProvider disableOuterSpacing>
             {streamRenderStrategy.render({
               agentId,
@@ -1027,12 +1212,15 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               isAuthoritativeHistoryReady,
               onNearBottomChange: setIsNearBottom,
               onNearHistoryStart: loadOlder,
+              onScrollActivity: handleScrollActivity,
+              onActiveItemChange: setActiveStreamItemId,
               isLoadingOlderHistory: isLoadingOlder,
               hasOlderHistory: hasOlder,
               scrollEnabled: streamScrollEnabled,
               listStyle: stylesheet.list,
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
+              topContentInset,
             })}
           </MessageOuterSpacingProvider>
           {!isNearBottom && (
@@ -1050,6 +1238,16 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               </Animated.View>
             </View>
           )}
+          {magicScrollbarEntries.length >= 2 ? (
+            <MagicScrollbarPortalBoundary hostName={magicScrollbarPortalHostName}>
+              <StreamMagicScrollbar
+                entries={magicScrollbarEntries}
+                visible={magicScrollbarActive || (!isMobile && isPaneHovered)}
+                activeEntryId={activeStreamItemId}
+                onJumpToEntry={jumpToStreamItem}
+              />
+            </MagicScrollbarPortalBoundary>
+          ) : null}
         </View>
       </ToolCallSheetProvider>
     );
@@ -1167,12 +1365,32 @@ function agentStreamViewPropsEqual(
   if (!historyPaginationPropsEqual(left.historyPagination, right.historyPagination)) {
     reasons.push("historyPagination");
   }
+  if (left.magicScrollbarPortalHostName !== right.magicScrollbarPortalHostName) {
+    reasons.push("magicScrollbarPortalHostName");
+  }
   recordRenderProfileReasons(`AgentStreamView:${right.agentId}`, reasons);
   return reasons.length === 0;
 }
 
 export const AgentStreamView = memo(AgentStreamViewComponent, agentStreamViewPropsEqual);
 AgentStreamView.displayName = "AgentStreamView";
+
+// Portals the magic scrollbar into the panel-level host when one is provided,
+// so the rail can span the full panel height instead of being clipped to the
+// message pane. Without a host it renders inline (the default for panels that
+// don't need the escape, e.g. draft/subagent views).
+function MagicScrollbarPortalBoundary({
+  hostName,
+  children,
+}: {
+  hostName?: string;
+  children: ReactNode;
+}) {
+  if (hostName) {
+    return <Portal hostName={hostName}>{children}</Portal>;
+  }
+  return children;
+}
 
 interface ToolCallSlotProps extends Omit<
   ComponentProps<typeof ToolCall>,
@@ -1234,9 +1452,7 @@ function PermissionActionButton({
   onPress,
 }: PermissionActionButtonProps) {
   const handlePress = useCallback(() => onPress(action), [onPress, action]);
-  const optionTextStyle = isPrimary
-    ? [permissionStyles.optionText, permissionStyles.optionTextPrimary]
-    : permissionStyles.optionText;
+  const optionTextStyle = isPrimary ? optionTextPrimaryStyle : permissionStyles.optionText;
   const colorMapping = isPrimary ? primaryColorMapping : mutedColorMapping;
   return (
     <Pressable testID={testID} style={pressableStyle} onPress={handlePress} disabled={isResponding}>
@@ -1623,6 +1839,8 @@ const permissionStyles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
   },
 }));
+
+const optionTextPrimaryStyle = [permissionStyles.optionText, permissionStyles.optionTextPrimary];
 
 interface StreamItemWrapperProps {
   gapBelow: number;

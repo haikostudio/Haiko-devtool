@@ -1,5 +1,4 @@
 import { Buffer } from "buffer";
-import { buildAgentDeepLinkRoute } from "@getpaseo/protocol/agent-deep-link";
 
 type NullableString = string | null | undefined;
 const BASE64_WORKSPACE_ID_PREFIX = "b64_";
@@ -175,16 +174,11 @@ export function parseWorkspaceOpenIntent(
 export function parseHostWorkspaceOpenIntentFromPathname(
   pathname: string,
 ): WorkspaceOpenIntent | null {
-  return parseWorkspaceOpenIntent(getHostWorkspaceOpenParamFromPathname(pathname));
-}
-
-export function getHostWorkspaceOpenParamFromPathname(pathname: string): string | null {
   const search = extractSearch(pathname);
   if (!search) {
     return null;
   }
-  const open = new URLSearchParams(search).get("open");
-  return parseWorkspaceOpenIntent(open) ? open : null;
+  return parseWorkspaceOpenIntent(new URLSearchParams(search).get("open"));
 }
 
 export function encodeWorkspaceIdForPathSegment(workspaceId: string): string {
@@ -390,10 +384,7 @@ export function buildHostAgentDetailRoute(serverId: string, agentId: string, wor
   if (!normalizedServerId || !normalizedAgentId) {
     return "/" as const;
   }
-  return buildAgentDeepLinkRoute({
-    serverId: normalizedServerId,
-    agentId: normalizedAgentId,
-  });
+  return `${buildHostRootRoute(normalizedServerId)}/agent/${encodeSegment(normalizedAgentId)}` as const;
 }
 
 export function buildHostRootRoute(serverId: string) {
@@ -420,12 +411,39 @@ export function buildHostSessionsRoute(serverId: string) {
   return `${base}/sessions` as const;
 }
 
+export function buildDashboardRoute() {
+  return "/dashboard" as const;
+}
+
 export function buildSessionsRoute() {
   return "/sessions" as const;
 }
 
+export function buildChangelogRoute() {
+  return "/changelog" as const;
+}
+
+export function buildActivityRoute() {
+  return "/activity" as const;
+}
+
 export function buildSchedulesRoute() {
   return "/schedules" as const;
+}
+
+export function buildTasksRoute(params?: { host?: string; project?: string; folder?: string }) {
+  const query = new URLSearchParams();
+  if (params?.host) {
+    query.set("host", params.host);
+  }
+  if (params?.project) {
+    query.set("project", params.project);
+  }
+  if (params?.folder) {
+    query.set("folder", params.folder);
+  }
+  const suffix = query.toString();
+  return suffix ? (`/tasks?${suffix}` as const) : ("/tasks" as const);
 }
 
 export function buildOpenProjectRoute() {
@@ -492,7 +510,6 @@ export function resolveKnownHostRoute(input: {
 export const SETTINGS_SECTION_SLUGS = [
   "general",
   "appearance",
-  "editor",
   "shortcuts",
   "integrations",
   "permissions",

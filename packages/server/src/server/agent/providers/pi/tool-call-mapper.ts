@@ -63,7 +63,6 @@ interface PiToolResultDetails {
   server?: string;
   tool?: string;
   mcpResult?: unknown;
-  xdev?: unknown;
 }
 
 interface PiToolResultTextContent {
@@ -162,13 +161,6 @@ const PiToolResultDetailsSchema = z
     diff: z.string().optional(),
   })
   .passthrough();
-
-const XdevExecuteDetailsSchema = z.object({
-  tool: z.string().trim().min(1),
-  mode: z.literal("execute"),
-  args: z.unknown().optional(),
-  inner: z.unknown().optional(),
-});
 
 const PiToolResultObjectSchema = z
   .object({
@@ -301,13 +293,6 @@ function stripMcpProxyPrefix(toolName: string, serverName: string): string {
 }
 
 export function resolveToolCallName(toolCall: PiTrackedToolCall, result?: PiToolResult): string {
-  if (toolCall.kind === "write" && result && typeof result !== "string") {
-    const xdev = XdevExecuteDetailsSchema.safeParse(result.details?.xdev);
-    if (xdev.success) {
-      return xdev.data.tool;
-    }
-  }
-
   if (toolCall.toolName !== "mcp") {
     return toolCall.toolName;
   }
@@ -372,7 +357,11 @@ export function mapToolDetail(toolCall: PiTrackedToolCall, result?: PiToolResult
       };
     }
     case "write":
-      return mapWriteToolDetail(toolCall.args, parsedResult);
+      return {
+        type: "write",
+        filePath: toolCall.args.path,
+        content: toolCall.args.content,
+      };
     case "find":
       return mapFindToolDetail(toolCall.args, parsedResult);
     case "grep":
@@ -386,34 +375,6 @@ export function mapToolDetail(toolCall: PiTrackedToolCall, result?: PiToolResult
         output: parsedResult,
       };
   }
-}
-
-function mapWriteToolDetail(args: WriteToolInput, result: PiToolResult): ToolCallDetail {
-  if (result && typeof result !== "string" && result.details && "xdev" in result.details) {
-    const xdev = XdevExecuteDetailsSchema.safeParse(result.details.xdev);
-    if (xdev.success) {
-      return {
-        type: "unknown",
-        input: xdev.data.args ?? null,
-        output: {
-          ...result,
-          details: xdev.data.inner ?? null,
-        },
-      };
-    }
-
-    return {
-      type: "unknown",
-      input: args,
-      output: result,
-    };
-  }
-
-  return {
-    type: "write",
-    filePath: args.path,
-    content: args.content,
-  };
 }
 
 function resolveToolCallOutput(result: PiToolResult): ToolCallOutputSummary {

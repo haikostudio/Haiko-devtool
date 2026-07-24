@@ -419,7 +419,6 @@ interface WorkspaceDesktopTabsRowProps {
   onCloseTab: (tabId: string) => Promise<void> | void;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
-  onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
@@ -439,13 +438,11 @@ interface WorkspaceDesktopTabsRowProps {
   activeDragTabId?: string | null;
   tabDropPreviewIndex?: number | null;
   showPaneSplitActions?: boolean;
-  focusModeEnabled: boolean;
-  onExitFocusMode: () => void;
 }
 
 function getFallbackTabLabel(
   tab: WorkspaceTabDescriptor,
-  labels: { newAgent: string; setup: string; terminal: string; agent: string; changes: string },
+  labels: { newAgent: string; setup: string; terminal: string; agent: string },
 ): string {
   if (tab.target.kind === "draft") {
     return labels.newAgent;
@@ -458,9 +455,6 @@ function getFallbackTabLabel(
   }
   if (tab.target.kind === "file") {
     return tab.target.path.split("/").findLast(Boolean) ?? tab.target.path;
-  }
-  if (tab.target.kind === "working_diff") {
-    return labels.changes;
   }
   return labels.agent;
 }
@@ -557,14 +551,12 @@ function TabChip({
   onCloseTab: (tabId: string) => Promise<void> | void;
   dragHandleProps: DraggableListDragHandleProps | undefined;
 }) {
-  const { t } = useTranslation();
   const { closeButtonTestId, contextMenuTestId, menuEntries } = resolvedTab;
   const middleClickRef = useMiddleClickClose(
     useCallback(() => void onCloseTab(tab.tabId), [onCloseTab, tab.tabId]),
   );
   const [hovered, setHovered] = useState(false);
   const isHighlighted = isActive || hovered || isCloseHovered;
-  const showTrailingAffordance = showCloseButton || presentation.modified;
   const closeButtonDragBlockers = isWeb
     ? ({
         onPointerDown: (event: { stopPropagation?: () => void }) => {
@@ -636,19 +628,16 @@ function TabChip({
     [isFocused],
   );
   const tabLabelSkeletonStyle = useMemo(
-    () => [
-      styles.tabLabelSkeleton,
-      showTrailingAffordance && styles.tabLabelSkeletonWithCloseButton,
-    ],
-    [showTrailingAffordance],
+    () => [styles.tabLabelSkeleton, showCloseButton && styles.tabLabelSkeletonWithCloseButton],
+    [showCloseButton],
   );
   const tabLabelStyle = useMemo(
     () => [
       styles.tabLabel,
       isHighlighted && styles.tabLabelActive,
-      showTrailingAffordance && styles.tabLabelWithCloseButton,
+      showCloseButton && styles.tabLabelWithCloseButton,
     ],
-    [isHighlighted, showTrailingAffordance],
+    [isHighlighted, showCloseButton],
   );
 
   return (
@@ -681,7 +670,7 @@ function TabChip({
                 tabLabelStyle={tabLabelStyle}
               />
 
-              {showTrailingAffordance ? (
+              {showCloseButton ? (
                 <Pressable
                   {...(closeButtonDragBlockers as object | undefined)}
                   testID={closeButtonTestId}
@@ -692,43 +681,28 @@ function TabChip({
                   onPress={handleCloseButtonPress}
                   style={closeButtonStyle}
                 >
-                  {({ hovered: closeHovered, pressed }) => {
-                    const highlighted = closeHovered || pressed;
-                    if (isClosingTab) {
-                      return (
-                        <ThemedActivityIndicator
-                          size={12}
-                          uniProps={highlighted ? foregroundColorMapping : mutedColorMapping}
-                        />
-                      );
-                    }
-                    if (highlighted || !presentation.modified) {
-                      return (
-                        <ThemedX
-                          size={12}
-                          uniProps={highlighted ? foregroundColorMapping : mutedColorMapping}
-                        />
-                      );
-                    }
-                    return (
-                      <View
-                        style={styles.tabModifiedDot}
-                        accessibilityLabel={t("workspace.tabs.modified")}
-                        testID={`workspace-tab-modified-${buildDeterministicWorkspaceTabId(tab.target)}`}
+                  {({ hovered: closeHovered, pressed }) =>
+                    isClosingTab ? (
+                      <ThemedActivityIndicator
+                        size={12}
+                        uniProps={
+                          closeHovered || pressed ? foregroundColorMapping : mutedColorMapping
+                        }
                       />
-                    );
-                  }}
+                    ) : (
+                      <ThemedX
+                        size={12}
+                        uniProps={
+                          closeHovered || pressed ? foregroundColorMapping : mutedColorMapping
+                        }
+                      />
+                    )
+                  }
                 </Pressable>
               ) : null}
             </ContextMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent
-            side="bottom"
-            align="center"
-            offset={8}
-            maxWidth={720}
-            testID={`workspace-tab-tooltip-${buildDeterministicWorkspaceTabId(tab.target)}`}
-          >
+          <TooltipContent side="bottom" align="center" offset={8}>
             {tab.target.kind === "agent" ? (
               <View style={styles.tooltipAgentRow}>
                 <Text style={styles.newTabTooltipText}>{tooltipLabel}</Text>
@@ -765,7 +739,6 @@ export function WorkspaceDesktopTabsRow({
   onCloseTab,
   onCopyResumeCommand,
   onCopyAgentId,
-  onCopyTerminalId,
   onCopyFilePath,
   onReloadAgent,
   onRenameTab,
@@ -785,19 +758,15 @@ export function WorkspaceDesktopTabsRow({
   activeDragTabId = null,
   tabDropPreviewIndex = null,
   showPaneSplitActions = true,
-  focusModeEnabled,
-  onExitFocusMode,
 }: WorkspaceDesktopTabsRowProps) {
   const { t } = useTranslation();
   const router = useRouter();
   const newTabKeys = useShortcutKeys("workspace-tab-new");
-  const focusModeKeys = useShortcutKeys("toggle-focus");
   const splitRightKeys = useShortcutKeys("workspace-pane-split-right");
   const splitDownKeys = useShortcutKeys("workspace-pane-split-down");
   const [tabsContainerWidth, setTabsContainerWidth] = useState<number>(0);
   const [tabsActionsWidth, setTabsActionsWidth] = useState<number>(0);
   const [inlineAddButtonWidth, setInlineAddButtonWidth] = useState<number>(0);
-  const [exitFocusModeWidth, setExitFocusModeWidth] = useState<number>(0);
 
   const handleTabsContainerLayout = useCallback((event: LayoutChangeEvent) => {
     updateMeasuredWidth(setTabsContainerWidth, event);
@@ -811,18 +780,12 @@ export function WorkspaceDesktopTabsRow({
     updateMeasuredWidth(setInlineAddButtonWidth, event);
   }, []);
 
-  const handleExitFocusModeLayout = useCallback((event: LayoutChangeEvent) => {
-    updateMeasuredWidth(setExitFocusModeWidth, event);
-  }, []);
-
   const layoutMetrics = useMemo(
     () => ({
       rowHorizontalInset: 0,
       actionsReservedWidth: Math.max(
         0,
-        tabsActionsWidth +
-          (inlineAddButtonWidth || DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH) +
-          (focusModeEnabled ? exitFocusModeWidth : 0),
+        tabsActionsWidth + (inlineAddButtonWidth || DEFAULT_INLINE_ADD_BUTTON_RESERVED_WIDTH),
       ),
       rowPaddingHorizontal: 0,
       tabGap: 0,
@@ -832,7 +795,7 @@ export function WorkspaceDesktopTabsRow({
       estimatedCharWidth: 7,
       closeButtonWidth: 22,
     }),
-    [exitFocusModeWidth, focusModeEnabled, inlineAddButtonWidth, tabsActionsWidth],
+    [inlineAddButtonWidth, tabsActionsWidth],
   );
 
   const fallbackTabLabels = useMemo(
@@ -841,7 +804,6 @@ export function WorkspaceDesktopTabsRow({
       setup: t("workspace.tabs.fallback.setup"),
       terminal: t("workspace.tabs.fallback.terminal"),
       agent: t("workspace.tabs.fallback.agent"),
-      changes: t("panels.diff.changesLabel"),
     }),
     [t],
   );
@@ -849,7 +811,6 @@ export function WorkspaceDesktopTabsRow({
     () => ({
       copyResumeCommand: t("workspace.tabs.menu.copyResumeCommand"),
       copyAgentId: t("workspace.tabs.menu.copyAgentId"),
-      copyTerminalId: t("workspace.tabs.menu.copyTerminalId"),
       copyFilePath: t("workspace.tabs.menu.copyFilePath"),
       rename: t("workspace.tabs.menu.rename"),
       closeAbove: t("workspace.tabs.menu.closeAbove"),
@@ -948,7 +909,6 @@ export function WorkspaceDesktopTabsRow({
           normalizedWorkspaceId={normalizedWorkspaceId}
           onCopyResumeCommand={onCopyResumeCommand}
           onCopyAgentId={onCopyAgentId}
-          onCopyTerminalId={onCopyTerminalId}
           onCopyFilePath={onCopyFilePath}
           onReloadAgent={onReloadAgent}
           onRenameTab={onRenameTab}
@@ -980,7 +940,6 @@ export function WorkspaceDesktopTabsRow({
       onCloseTabsToLeft,
       onCloseTabsToRight,
       onCopyAgentId,
-      onCopyTerminalId,
       onCopyFilePath,
       onCopyResumeCommand,
       onNavigateTab,
@@ -1009,31 +968,6 @@ export function WorkspaceDesktopTabsRow({
       testID="workspace-tabs-row"
       onLayout={handleTabsContainerLayout}
     >
-      {focusModeEnabled ? (
-        <View style={styles.exitFocusModeSlot} onLayout={handleExitFocusModeLayout}>
-          <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-            <TooltipTrigger
-              testID="workspace-exit-focus-mode"
-              onPress={onExitFocusMode}
-              accessibilityRole="button"
-              accessibilityLabel={t("workspace.tabs.actions.exitFocusMode")}
-              style={inlineAddActionButtonStyle}
-            >
-              <ThemedX size={14} uniProps={mutedColorMapping} />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" offset={8}>
-              <View style={styles.newTabTooltipRow}>
-                <Text style={styles.newTabTooltipText}>
-                  {t("workspace.tabs.actions.exitFocusMode")}
-                </Text>
-                {focusModeKeys ? (
-                  <Shortcut chord={focusModeKeys} style={styles.newTabTooltipShortcut} />
-                ) : null}
-              </View>
-            </TooltipContent>
-          </Tooltip>
-        </View>
-      ) : null}
       <ScrollView
         horizontal
         scrollEnabled={layout.requiresHorizontalScrollFallback}
@@ -1102,7 +1036,6 @@ function ResolvedDesktopTabChip({
   normalizedWorkspaceId,
   onCopyResumeCommand,
   onCopyAgentId,
-  onCopyTerminalId,
   onCopyFilePath,
   onReloadAgent,
   onRenameTab,
@@ -1129,7 +1062,6 @@ function ResolvedDesktopTabChip({
   normalizedWorkspaceId: string;
   onCopyResumeCommand: (agentId: string) => Promise<void> | void;
   onCopyAgentId: (agentId: string) => Promise<void> | void;
-  onCopyTerminalId: (terminalId: string) => Promise<void> | void;
   onCopyFilePath: (path: string) => Promise<void> | void;
   onReloadAgent: (agentId: string) => Promise<void> | void;
   onRenameTab: (tab: WorkspaceTabDescriptor) => void;
@@ -1156,7 +1088,6 @@ function ResolvedDesktopTabChip({
         tabCount,
         onCopyResumeCommand,
         onCopyAgentId,
-        onCopyTerminalId,
         onCopyFilePath,
         onReloadAgent,
         onRenameTab,
@@ -1174,7 +1105,6 @@ function ResolvedDesktopTabChip({
       onCloseTabsToLeft,
       onCloseTabsToRight,
       onCopyAgentId,
-      onCopyTerminalId,
       onCopyFilePath,
       onCopyResumeCommand,
       labels,
@@ -1194,13 +1124,11 @@ function ResolvedDesktopTabChip({
         const tooltipLabel =
           presentation.titleState === "loading"
             ? t("workspace.tabs.loadingAgentTitle")
-            : presentation.tooltip;
+            : presentation.label;
 
         return (
           <View style={styles.tabSlot}>
-            {showDropIndicatorBefore ? (
-              <View style={[styles.tabDropIndicator, styles.tabDropIndicatorBefore]} />
-            ) : null}
+            {showDropIndicatorBefore ? <View style={TAB_DROP_INDICATOR_BEFORE_STYLE} /> : null}
             <TabChip
               tab={item.tab}
               isActive={item.isActive}
@@ -1219,9 +1147,7 @@ function ResolvedDesktopTabChip({
               onCloseTab={onCloseTab}
               dragHandleProps={dragHandleProps}
             />
-            {showDropIndicatorAfter ? (
-              <View style={[styles.tabDropIndicator, styles.tabDropIndicatorAfter]} />
-            ) : null}
+            {showDropIndicatorAfter ? <View style={TAB_DROP_INDICATOR_AFTER_STYLE} /> : null}
           </View>
         );
       }}
@@ -1257,14 +1183,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: theme.spacing[2],
-  },
-  exitFocusModeSlot: {
-    alignSelf: "stretch",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: theme.spacing[1],
-    borderRightWidth: 1,
-    borderRightColor: theme.colors.border,
   },
   inlineAddButton: {
     flexDirection: "row",
@@ -1364,12 +1282,6 @@ const styles = StyleSheet.create((theme) => ({
   tabCloseButtonActive: {
     backgroundColor: theme.colors.surface3,
   },
-  tabModifiedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.foregroundMuted,
-  },
   newTabActionButton: {
     width: 22,
     height: 22,
@@ -1418,3 +1330,6 @@ const styles = StyleSheet.create((theme) => ({
     height: 14,
   },
 }));
+
+const TAB_DROP_INDICATOR_BEFORE_STYLE = [styles.tabDropIndicator, styles.tabDropIndicatorBefore];
+const TAB_DROP_INDICATOR_AFTER_STYLE = [styles.tabDropIndicator, styles.tabDropIndicatorAfter];

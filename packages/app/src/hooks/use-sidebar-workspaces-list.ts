@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from "react";
+import { shallow } from "zustand/shallow";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
-import { useHydratedWorkspaceServerIds } from "@/stores/session-store-hooks";
 import { useHostProjects } from "@/projects/host-projects";
 import { fetchAllWorkspaceDescriptors } from "@/projects/workspace-fetching";
 import { getHostRuntimeStore, useHostRegistryLoaded, useHosts } from "@/runtime/host-runtime";
@@ -88,9 +89,13 @@ export function useSidebarWorkspacesList(options?: {
 
   const persistedProjectOrder = useSidebarOrderStore((state) => state.projectOrder ?? EMPTY_ORDER);
 
-  const hydratedServerIds = useHydratedWorkspaceServerIds(serverIds);
+  const hydratedServerIds = useStoreWithEqualityFn(
+    useSessionStore,
+    (state) => serverIds.filter((id) => state.sessions[id]?.hasHydratedWorkspaces ?? false),
+    shallow,
+  );
 
-  const hostProjects = useHostProjects(hydratedServerIds);
+  const hostProjects = useHostProjects(serverIds);
 
   const sidebarModel = useMemo(
     () =>

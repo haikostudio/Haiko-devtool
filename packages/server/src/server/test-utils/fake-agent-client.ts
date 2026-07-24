@@ -57,12 +57,10 @@ interface FakeAgentSessionOptions {
   sessionId?: string;
   memoryMarker?: string | null;
   closeSession?: () => Promise<void>;
-  onStartTurn?: (prompt: AgentPromptInput) => void;
 }
 
 export interface TestAgentClientOptions {
   closeSession?: () => Promise<void>;
-  onStartTurn?: (prompt: AgentPromptInput) => void;
 }
 
 function createDeferred<T>(): Deferred<T> {
@@ -331,7 +329,6 @@ class FakeAgentSession implements AgentSession {
   private activeForegroundTurnId: string | null = null;
 
   private readonly closeSession: (() => Promise<void>) | undefined;
-  private readonly onStartTurn: ((prompt: AgentPromptInput) => void) | undefined;
 
   constructor(options: FakeAgentSessionOptions) {
     this.providerName = options.providerName;
@@ -339,7 +336,6 @@ class FakeAgentSession implements AgentSession {
     this.id = options.sessionId ?? randomUUID();
     this.memoryMarker = options.memoryMarker ?? null;
     this.closeSession = options.closeSession;
-    this.onStartTurn = options.onStartTurn;
     this.historyPath = path.join(
       tmpdir(),
       "paseo-fake-provider-history",
@@ -430,7 +426,6 @@ class FakeAgentSession implements AgentSession {
 
     const turnId = `fake-turn-${this.nextTurnOrdinal++}`;
     this.activeForegroundTurnId = turnId;
-    this.onStartTurn?.(prompt);
 
     void this.emitTurnEvents(prompt);
 
@@ -1185,7 +1180,6 @@ class FakeAgentClient implements AgentClient {
       providerName: this.provider,
       config: { ...config },
       closeSession: this.options.closeSession,
-      onStartTurn: this.options.onStartTurn,
     });
   }
 
@@ -1209,7 +1203,6 @@ class FakeAgentClient implements AgentClient {
       sessionId: handle.sessionId,
       memoryMarker: typeof marker === "string" ? marker : null,
       closeSession: this.options.closeSession,
-      onStartTurn: this.options.onStartTurn,
     });
   }
 

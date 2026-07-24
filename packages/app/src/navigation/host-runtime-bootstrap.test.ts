@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   resolveStartupBlocker,
   resolveStartupNavigationReady,
@@ -7,37 +7,115 @@ import {
   shouldRunStartupGiveUpTimer,
   startHostRuntimeBootstrap,
 } from "./host-runtime-bootstrap";
-import type {
-  DaemonStartCondition,
-  StartDaemonIfEnabledInput,
-} from "@/runtime/daemon-start-service";
+
+function createFakeStore() {
+  return { boot: vi.fn() };
+}
+
+function createFakeDaemonStartService() {
+  return {
+    start: vi.fn(async () => ({ ok: true as const })),
+  };
+}
 
 describe("startHostRuntimeBootstrap", () => {
-  it("boots the host registry and starts the managed-daemon decision as one operation", () => {
+  it("fires boot and daemon-start without awaiting the daemon-start promise", () => {
     const events: string[] = [];
-    const shouldStartDaemon = async () => true;
     const store = {
-      boot: () => {
+      boot: vi.fn(() => {
         events.push("boot");
-      },
+      }),
     };
-    let receivedCondition: DaemonStartCondition | null = null;
     const daemonStartService = {
-      startIfEnabled: async (input: StartDaemonIfEnabledInput) => {
-        receivedCondition = input.shouldStart;
-        events.push("daemon-start-decision");
+      start: vi.fn(async () => {
+        events.push("daemon-start");
         return { ok: true as const };
-      },
+      }),
     };
 
     startHostRuntimeBootstrap({
       store,
       daemonStartService,
-      shouldStartDaemon,
+      shouldStartDaemon: true,
     });
 
-    expect(events).toEqual(["boot", "daemon-start-decision"]);
-    expect(receivedCondition).toBe(shouldStartDaemon);
+    expect(store.boot).toHaveBeenCalledTimes(1);
+    expect(daemonStartService.start).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["boot", "daemon-start"]);
+  });
+
+  it("skips daemon-start when shouldStartDaemon is false", () => {
+    const store = createFakeStore();
+    const daemonStartService = createFakeDaemonStartService();
+
+    startHostRuntimeBootstrap({
+      store,
+      daemonStartService,
+      shouldStartDaemon: false,
+    });
+
+    expect(store.boot).toHaveBeenCalledTimes(1);
+    expect(daemonStartService.start).not.toHaveBeenCalled();
+  });
+
+  it("skips daemon-start when the startup gate resolves false", async () => {
+    const store = createFakeStore();
+    const daemonStartService = createFakeDaemonStartService();
+
+    startHostRuntimeBootstrap({
+      store,
+      daemonStartService,
+      shouldStartDaemon: async () => false,
+    });
+    await Promise.resolve();
+
+    expect(store.boot).toHaveBeenCalledTimes(1);
+    expect(daemonStartService.start).not.toHaveBeenCalled();
+  });
+
+  it("surfaces gate rejection to onGateError without starting the daemon", async () => {
+    const store = createFakeStore();
+    const daemonStartService = createFakeDaemonStartService();
+    const onGateError = vi.fn();
+
+    startHostRuntimeBootstrap({
+      store,
+      daemonStartService,
+      shouldStartDaemon: async () => {
+        throw new Error("settings file unreadable");
+      },
+      onGateError,
+    });
+    await vi.waitFor(() => {
+      expect(onGateError).toHaveBeenCalledTimes(1);
+    });
+
+    expect(daemonStartService.start).not.toHaveBeenCalled();
+    expect(onGateError).toHaveBeenCalledWith(expect.stringContaining("settings file unreadable"));
+  });
+
+  it("does not await the daemon-start promise", () => {
+    const store = createFakeStore();
+    let resolveStart: ((value: { ok: true }) => void) | undefined;
+    const daemonStartService = {
+      start: vi.fn(
+        () =>
+          new Promise<{ ok: true }>((resolve) => {
+            resolveStart = resolve;
+          }),
+      ),
+    };
+
+    startHostRuntimeBootstrap({
+      store,
+      daemonStartService,
+      shouldStartDaemon: true,
+    });
+
+    expect(store.boot).toHaveBeenCalledTimes(1);
+    expect(daemonStartService.start).toHaveBeenCalledTimes(1);
+
+    resolveStart?.({ ok: true });
   });
 });
 
@@ -314,33 +392,33 @@ describe("resolveHostIndexRoute", () => {
     ).toEqual("/h/server-saved/workspace/workspace-a");
   });
 
-  it("opens global project selection when the remembered workspace is proven missing", () => {
+  it("opens the task board when the remembered workspace is proven missing", () => {
     expect(
       resolveHostIndexRoute({
         serverId: "server-saved",
         workspaceSelection: { serverId: "server-saved", workspaceId: "workspace-a" },
         workspaceSelectionStatus: "missing",
       }),
-    ).toEqual("/open-project");
+    ).toEqual("/tasks?host=server-saved");
   });
 
-  it("opens global project selection when the remembered workspace belongs to another host", () => {
+  it("opens the task board when the remembered workspace belongs to another host", () => {
     expect(
       resolveHostIndexRoute({
         serverId: "server-saved",
         workspaceSelection: { serverId: "server-other", workspaceId: "workspace-a" },
         workspaceSelectionStatus: "exists",
       }),
-    ).toEqual("/open-project");
+    ).toEqual("/tasks?host=server-saved");
   });
 
-  it("opens global project selection when no workspace is remembered", () => {
+  it("opens the task board when no workspace is remembered", () => {
     expect(
       resolveHostIndexRoute({
         serverId: "server-saved",
         workspaceSelection: null,
         workspaceSelectionStatus: "unknown",
       }),
-    ).toEqual("/open-project");
+    ).toEqual("/tasks?host=server-saved");
   });
 });

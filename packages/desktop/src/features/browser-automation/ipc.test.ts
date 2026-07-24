@@ -1,8 +1,7 @@
 import type { Rectangle } from "electron";
 import { describe, expect, test, vi } from "vitest";
 import type { TabImage } from "./service.js";
-import { adaptWebContents, HostSnapshotEngineRegistry } from "./ipc.js";
-import type { IsolatedKeyboardInputEvent } from "./trusted-input.js";
+import { adaptWebContents } from "./ipc.js";
 
 class FakeImage implements TabImage {
   public toPNG(): Uint8Array {
@@ -91,7 +90,6 @@ type ConsoleMessageListener = (
 
 class FakeWebContents {
   public readonly debugger = new FakeDebugger();
-  public readonly inputEvents: IsolatedKeyboardInputEvent[] = [];
   public readonly captures: Array<{
     rect: Rectangle | undefined;
     options: { stayHidden?: boolean } | undefined;
@@ -101,14 +99,7 @@ class FakeWebContents {
   private destroyedListener: (() => void) | null = null;
   public destroyed = false;
 
-  public constructor(private readonly webContentsId: number) {}
-
-  public get id(): number {
-    if (this.destroyed) {
-      throw new TypeError("Object has been destroyed");
-    }
-    return this.webContentsId;
-  }
+  public constructor(public readonly id: number) {}
 
   public getURL(): string {
     return "https://example.com";
@@ -158,10 +149,6 @@ class FakeWebContents {
     this.invalidations.push("invalidate");
   }
 
-  public sendInputEvent(event: IsolatedKeyboardInputEvent): void {
-    this.inputEvents.push(event);
-  }
-
   public on(event: "console-message", listener: ConsoleMessageListener): void {
     expect(event).toBe("console-message");
     this.consoleMessageListener = listener;
@@ -191,30 +178,6 @@ class FakeWebContents {
 }
 
 describe("browser automation IPC adapter", () => {
-  test("isolates snapshot refs by host window and releases them on destruction", () => {
-    const registry = new HostSnapshotEngineRegistry();
-    const firstHost = new FakeHostWebContents(1);
-    const secondHost = new FakeHostWebContents(2);
-
-    const firstEngine = registry.get(firstHost);
-    expect(registry.get(firstHost)).toBe(firstEngine);
-    expect(registry.get(secondHost)).not.toBe(firstEngine);
-
-    firstHost.destroy();
-    expect(registry.get(new FakeHostWebContents(1))).not.toBe(firstEngine);
-  });
-
-  test("sends contained keyboard input directly to the guest", () => {
-    const contents = new FakeWebContents(19);
-    const tab = adaptWebContents(contents);
-
-    tab.sendInputEvent({ type: "keyDown", keyCode: "Enter", skipIfUnhandled: true });
-
-    expect(contents.inputEvents).toEqual([
-      { type: "keyDown", keyCode: "Enter", skipIfUnhandled: true },
-    ]);
-  });
-
   test("delegates viewport capture to the guest without a renderer prep bridge", async () => {
     const contents = new FakeWebContents(20);
     const tab = adaptWebContents(contents);
@@ -248,7 +211,7 @@ describe("browser automation IPC adapter", () => {
       },
     ]);
 
-    expect(() => contents.destroy()).not.toThrow();
+    contents.destroy();
 
     expect(tab.getConsoleMessages?.()).toEqual([]);
   });
@@ -572,21 +535,6 @@ describe("browser automation IPC adapter", () => {
     warn.mockRestore();
   });
 });
-
-class FakeHostWebContents {
-  private destroyedListener: (() => void) | null = null;
-
-  public constructor(public readonly id: number) {}
-
-  public once(event: "destroyed", listener: () => void): void {
-    expect(event).toBe("destroyed");
-    this.destroyedListener = listener;
-  }
-
-  public destroy(): void {
-    this.destroyedListener?.();
-  }
-}
 
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();

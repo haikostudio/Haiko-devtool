@@ -1,7 +1,6 @@
 import {
   keepPreviousData,
   skipToken,
-  useQueries,
   useQuery,
   type QueryKey,
   type UseQueryOptions,
@@ -49,12 +48,6 @@ export function useFetchQuery<
   TQueryKey extends QueryKey = QueryKey,
 >(input: FetchQueryInput<TQueryFnData, TError, TData, TQueryKey>): UseQueryResult<TData, TError> {
   return useQuery(fetchQueryOptions(input));
-}
-
-export function useFetchQueries<TData>(
-  inputs: FetchQueryInput<TData, Error, TData, QueryKey>[],
-): UseQueryResult<TData, Error>[] {
-  return useQueries({ queries: inputs.map((input) => fetchQueryOptions(input)) });
 }
 
 function replicaQueryOptions<

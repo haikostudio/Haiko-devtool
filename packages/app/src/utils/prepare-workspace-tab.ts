@@ -1,5 +1,8 @@
 import { generateDraftId } from "@/stores/draft-keys";
-import { buildWorkspaceTabPersistenceKey, type WorkspaceTabTarget } from "@/workspace-tabs/model";
+import {
+  buildWorkspaceTabPersistenceKey,
+  type WorkspaceTabTarget,
+} from "@/stores/workspace-tabs-store";
 
 export interface PrepareWorkspaceTabInput {
   serverId: string;

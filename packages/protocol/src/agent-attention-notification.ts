@@ -5,7 +5,6 @@ export type AgentAttentionReason = "finished" | "error" | "permission";
 export interface AgentAttentionNotificationData {
   [key: string]: unknown;
   serverId: string;
-  workspaceId?: string;
   agentId: string;
   reason: AgentAttentionReason;
 }
@@ -19,8 +18,15 @@ export interface AgentAttentionNotificationPayload {
 interface BuildAgentAttentionNotificationPayloadInput {
   reason: AgentAttentionReason;
   serverId: string;
-  workspaceId: string;
   agentId: string;
+  // The agent's current tab title. When present it becomes the notification
+  // title for a finished agent ("which agent finished"), instead of the generic
+  // "Agent finished".
+  agentTitle?: string | null;
+  // The agent's latest synthesis summary ("what it just did"). Preferred over the
+  // raw last message for the finished-notification body — it's the curated,
+  // two-line read the banner already shows.
+  finishedSummary?: string | null;
   assistantMessage?: string | null;
   permissionRequest?: NotificationPermissionRequest | null;
 }
@@ -169,17 +175,22 @@ export function findLatestPermissionRequest(
   return latest;
 }
 
-function resolveAgentAttentionTitle(reason: AgentAttentionReason): string {
-  if (reason === "permission") return "Agent needs permission";
-  if (reason === "error") return "Agent needs attention";
-  return "Agent finished";
+function resolveAgentAttentionTitle(input: BuildAgentAttentionNotificationPayloadInput): string {
+  if (input.reason === "permission") return "Agent needs permission";
+  if (input.reason === "error") return "Agent needs attention";
+  // Finished: lead with the agent's own title so the notification says which
+  // agent finished, not a generic banner. Fall back when it has no title yet.
+  return input.agentTitle?.trim() || "Agent finished";
 }
 
 function resolveAgentAttentionPreview(
   input: BuildAgentAttentionNotificationPayloadInput,
 ): string | null {
   if (input.reason === "finished") {
-    return buildNotificationPreview(input.assistantMessage);
+    return (
+      buildNotificationPreview(input.finishedSummary) ??
+      buildNotificationPreview(input.assistantMessage)
+    );
   }
   if (input.reason === "permission") {
     return buildNotificationPreview(buildPermissionDetails(input.permissionRequest));
@@ -196,7 +207,7 @@ function resolveAgentAttentionFallbackBody(reason: AgentAttentionReason): string
 export function buildAgentAttentionNotificationPayload(
   input: BuildAgentAttentionNotificationPayloadInput,
 ): AgentAttentionNotificationPayload {
-  const title = resolveAgentAttentionTitle(input.reason);
+  const title = resolveAgentAttentionTitle(input);
   const preview = resolveAgentAttentionPreview(input);
   const body = preview ?? resolveAgentAttentionFallbackBody(input.reason);
 
@@ -205,7 +216,6 @@ export function buildAgentAttentionNotificationPayload(
     body,
     data: {
       serverId: input.serverId,
-      workspaceId: input.workspaceId,
       agentId: input.agentId,
       reason: input.reason,
     },

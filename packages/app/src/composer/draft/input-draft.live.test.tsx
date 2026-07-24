@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDraftStore } from "@/stores/draft-store";
 import type { AttachmentMetadata, ComposerAttachment } from "@/attachments/types";
-import { createWorkspaceFileAttachment } from "@/attachments/workspace-file";
 
 const { asyncStorage } = vi.hoisted(() => ({
   asyncStorage: new Map<string, string>(),
@@ -119,6 +118,76 @@ vi.mock("@/hooks/use-agent-form-state", () => ({
 let useAgentInputDraft: typeof import("./input-draft").useAgentInputDraft;
 type DraftRecordForTest = ReturnType<typeof useDraftStore.getState>["drafts"][string];
 
+// Writes a draft into the store as if a remote cross-device update landed
+// (hydrateWorkspaceUiState does this on a broadcast). Kept at module scope so the
+// store updater is not a function literal nested inside an async act callback.
+function seedRemoteDraft(draftKey: string, text: string, version: number): void {
+  useDraftStore.setState((previous) => ({
+    drafts: {
+      ...previous.drafts,
+      [draftKey]: {
+        input: { text, attachments: [] },
+        lifecycle: "active",
+        updatedAt: version * 100,
+        version,
+      } as unknown as DraftRecordForTest,
+    },
+  }));
+}
+
+// Mirrors a cleared/sent draft arriving from another device: an empty tombstone
+// with a non-active lifecycle, as applyClearDraftRecord produces.
+function sendDraftTombstone(draftKey: string): void {
+  useDraftStore.setState((previous) => {
+    const record = previous.drafts[draftKey];
+    return {
+      drafts: {
+        ...previous.drafts,
+        [draftKey]: {
+          input: { text: "", attachments: [] },
+          lifecycle: "sent",
+          updatedAt: 9999,
+          version: (record?.version ?? 0) + 1,
+        } as unknown as DraftRecordForTest,
+      },
+    };
+  });
+}
+
+// Writes a draft holding a single image attachment, mirroring how a synced draft
+// (and later its locally materialized bytes) looks in the store. Version/updatedAt
+// stay fixed so a metadata swap is not rejected as a stale write.
+function setImageDraft(
+  draftKey: string,
+  input: { text: string; id: string; storageKey: string },
+): void {
+  useDraftStore.setState((previous) => ({
+    drafts: {
+      ...previous.drafts,
+      [draftKey]: {
+        input: {
+          text: input.text,
+          attachments: [
+            {
+              kind: "image",
+              metadata: {
+                id: input.id,
+                mimeType: "image/png",
+                storageType: "web-indexeddb",
+                storageKey: input.storageKey,
+                createdAt: 1,
+              },
+            },
+          ],
+        },
+        lifecycle: "active",
+        updatedAt: 500,
+        version: 3,
+      } as unknown as DraftRecordForTest,
+    },
+  }));
+}
+
 beforeAll(async () => {
   const storage = new Map<string, string>();
 
@@ -160,11 +229,7 @@ describe("useAgentInputDraft live contract", () => {
       configurable: true,
     });
 
-    useDraftStore.setState({
-      drafts: {},
-      createModalDraft: null,
-      attachmentFocusRequestByDraftKey: {},
-    });
+    useDraftStore.setState({ drafts: {}, createModalDraft: null });
   });
 
   it("hydrates persisted text and attachments and returns draft-mode composer state for a caller-provided key", async () => {
@@ -429,39 +494,6 @@ describe("useAgentInputDraft live contract", () => {
     });
   });
 
-  it("attaches to an unmounted legacy draft without losing its input", async () => {
-    const image: AttachmentMetadata = {
-      id: "legacy-image",
-      mimeType: "image/png",
-      storageType: "web-indexeddb",
-      storageKey: "attachments/legacy-image",
-      createdAt: 10,
-    };
-    useDraftStore.setState({
-      drafts: {
-        "draft:legacy-workspace-file": {
-          input: { text: "legacy text", images: [image] },
-          lifecycle: "active",
-          updatedAt: Date.now(),
-          version: 1,
-        } as unknown as DraftRecordForTest,
-      },
-    });
-
-    await useDraftStore.getState().attachWorkspaceFile({
-      draftKey: "draft:legacy-workspace-file",
-      attachment: createWorkspaceFileAttachment({ path: "src/app.ts" }),
-    });
-
-    expect(useDraftStore.getState().getDraftInput("draft:legacy-workspace-file")).toEqual({
-      text: "legacy text",
-      attachments: [
-        { kind: "image", metadata: image },
-        createWorkspaceFileAttachment({ path: "src/app.ts" }),
-      ],
-    });
-  });
-
   it("clear resets text and attachments", async () => {
     let latest: ReturnType<typeof useAgentInputDraft> | null = null;
     const image: AttachmentMetadata = {
@@ -514,6 +546,354 @@ describe("useAgentInputDraft live contract", () => {
       text: "",
       attachments: [],
     });
+  });
+
+  it("adopts a remote draft change in place while the input is not focused", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:remote" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    // Simulate a cross-device update landing in the store from outside this
+    // composer (as hydrateWorkspaceUiState does on a remote broadcast).
+    await act(async () => {
+      seedRemoteDraft("draft:remote", "from another device", 7);
+    });
+
+    expect(getLatest().text).toBe("from another device");
+  });
+
+  it("clears the composer when the draft is sent/cleared on another device", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:clear-sync" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      seedRemoteDraft("draft:clear-sync", "hello from other device", 5);
+    });
+    expect(getLatest().text).toBe("hello from other device");
+
+    // The other device sends the message (or clears the field): a tombstone lands.
+    await act(async () => {
+      sendDraftTombstone("draft:clear-sync");
+    });
+    expect(getLatest().text).toBe("");
+  });
+
+  it("registers held attachment ids as live GC roots so the blob is not collected", async () => {
+    const { collectLiveComposerAttachmentIds } = await import("@/attachments/live-attachment-refs");
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+    const image: AttachmentMetadata = {
+      id: "live-root-image",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "live-root-image",
+      createdAt: 1,
+    };
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:live-root" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      getLatest().setAttachments([{ kind: "image", metadata: image }]);
+    });
+
+    const liveIds = new Set<string>();
+    collectLiveComposerAttachmentIds(liveIds);
+    expect(liveIds.has("live-root-image")).toBe(true);
+
+    // Unmounting releases the root so the blob can later be collected normally.
+    await act(async () => {
+      root.unmount();
+    });
+    const afterUnmount = new Set<string>();
+    collectLiveComposerAttachmentIds(afterUnmount);
+    expect(afterUnmount.has("live-root-image")).toBe(false);
+  });
+
+  it("keeps attachments the user just added while focused when a tombstone arrives", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+    const image: AttachmentMetadata = {
+      id: "paste-guard-image",
+      mimeType: "image/png",
+      storageType: "web-indexeddb",
+      storageKey: "paste-guard-image",
+      createdAt: 1,
+    };
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:paste-guard" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    // The user focuses the input and pastes/attaches an image.
+    await act(async () => {
+      getLatest().notifyInputFocus(true);
+      getLatest().setAttachments([{ kind: "image", metadata: image }]);
+    });
+    expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
+
+    // A stale/echoed tombstone lands while the field is focused — it must NOT
+    // yank the just-added attachment out from under the user.
+    await act(async () => {
+      sendDraftTombstone("draft:paste-guard");
+    });
+    expect(getLatest().attachments).toEqual([{ kind: "image", metadata: image }]);
+  });
+
+  it("adopts a materialized image attachment (storageKey swap) into an open composer", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:image" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    // A remote image draft lands with the SENDER's storageKey (not resolvable
+    // locally yet).
+    await act(async () => {
+      setImageDraft("draft:image", { text: "look at this", id: "img-1", storageKey: "remote-key" });
+    });
+
+    expect(
+      (getLatest().attachments[0] as { metadata: { storageKey: string } }).metadata.storageKey,
+    ).toBe("remote-key");
+
+    // materializeDraftImageBytes persists the bytes locally and rewrites the
+    // attachment metadata to the local storageKey, preserving version/updatedAt.
+    await act(async () => {
+      setImageDraft("draft:image", { text: "look at this", id: "img-1", storageKey: "img-1" });
+    });
+
+    expect(
+      (getLatest().attachments[0] as { metadata: { storageKey: string } }).metadata.storageKey,
+    ).toBe("img-1");
+  });
+
+  it("adopts a materialized image attachment even while the input is focused (text stays deferred)", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:image-focused" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      setImageDraft("draft:image-focused", {
+        text: "caption",
+        id: "img-2",
+        storageKey: "remote-key",
+      });
+    });
+
+    // Focus the input, then a remote text change AND the image materialization
+    // arrive together.
+    await act(async () => {
+      getLatest().notifyInputFocus(true);
+    });
+
+    await act(async () => {
+      setImageDraft("draft:image-focused", {
+        text: "remote caption while typing",
+        id: "img-2",
+        storageKey: "img-2",
+      });
+    });
+
+    // The attachment (storageKey) is adopted even while focused, but the text is
+    // NOT yanked out from under the typing user.
+    expect(
+      (getLatest().attachments[0] as { metadata: { storageKey: string } }).metadata.storageKey,
+    ).toBe("img-2");
+    expect(getLatest().text).toBe("caption");
+  });
+
+  it("defers a remote draft change while the input is focused, then adopts it on blur", async () => {
+    let latest: ReturnType<typeof useAgentInputDraft> | null = null;
+
+    function getLatest(): ReturnType<typeof useAgentInputDraft> {
+      if (!latest) {
+        throw new Error("Expected hook result");
+      }
+      return latest;
+    }
+
+    function Probe() {
+      latest = useAgentInputDraft({ draftKey: "draft:focused" });
+      return null;
+    }
+
+    const queryClient = new QueryClient();
+    const container = document.getElementById("root");
+    if (!container) {
+      throw new Error("Missing root container");
+    }
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      getLatest().notifyInputFocus(true);
+    });
+
+    await act(async () => {
+      seedRemoteDraft("draft:focused", "remote while typing", 9);
+    });
+
+    // Focused: the remote value must not yank the input out from under typing.
+    expect(getLatest().text).toBe("");
+
+    await act(async () => {
+      getLatest().notifyInputFocus(false);
+    });
+
+    // On blur we catch up to the deferred remote value.
+    expect(getLatest().text).toBe("remote while typing");
   });
 
   it("clears drafts with sent and abandoned lifecycle tombstones", async () => {

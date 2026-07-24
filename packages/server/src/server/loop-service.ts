@@ -241,7 +241,6 @@ type LoopAgentManager = Pick<
   | "archiveAgent"
   | "cancelAgentRun"
   | "closeAgent"
-  | "deleteAgentState"
   | "getAgent"
   | "runAgent"
   | "subscribe"
@@ -571,19 +570,11 @@ export class LoopService {
         await this.options.agentManager.archiveAgent(agentId);
         return;
       }
-      await this.closeInternalAgent(agentId);
+      await this.options.agentManager.closeAgent(agentId);
     } catch (error) {
       if (!isUnknownLoopAgentError(error, agentId)) {
         throw error;
       }
-    }
-  }
-
-  private async closeInternalAgent(agentId: string): Promise<void> {
-    try {
-      await this.options.agentManager.closeAgent(agentId);
-    } finally {
-      await this.options.agentManager.deleteAgentState(agentId);
     }
   }
 
@@ -784,7 +775,7 @@ export class LoopService {
         if (loop.archive) {
           await this.options.agentManager.archiveAgent(agent.id);
         } else {
-          await this.closeInternalAgent(agent.id);
+          await this.options.agentManager.closeAgent(agent.id);
         }
       } catch {
         // Ignore cleanup errors for internal loop workers.
@@ -926,7 +917,7 @@ export class LoopService {
         if (loop.archive) {
           await this.options.agentManager.archiveAgent(verifierAgent.id);
         } else {
-          await this.closeInternalAgent(verifierAgent.id);
+          await this.options.agentManager.closeAgent(verifierAgent.id);
         }
       } catch {
         // Ignore cleanup errors for internal loop verifiers.

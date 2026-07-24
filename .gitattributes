@@ -1,0 +1,7 @@
+# The changelog snapshot is regenerated on every commit from `git log --all`
+# (see the `changelog` job in lefthook.yml), so it diverges between the deploy
+# branch and every task worktree and would otherwise conflict on every deploy
+# merge. The deploy branch's copy already reflects every branch's entries, so
+# keep our side and let the next commit regenerate it. Runtime safety net:
+# AUTO_RESOLVABLE_CONFLICT_PATHS in packages/server/src/utils/paseo-deploy.ts.
+packages/app/src/generated/changelog-data.ts merge=ours

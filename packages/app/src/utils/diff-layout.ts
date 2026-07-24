@@ -1,5 +1,4 @@
-import type { ParsedDiffFile } from "@getpaseo/protocol/messages";
-import type { DiffLine } from "@/git/use-diff-query";
+import type { DiffLine, ParsedDiffFile } from "@/git/use-diff-query";
 
 type ReviewSide = "old" | "new";
 type ReviewableLineType = "add" | "remove" | "context";

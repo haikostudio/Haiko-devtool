@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Terminal } from "lucide-react-native";
 import { Text, View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import invariant from "tiny-invariant";
 import type { ListTerminalsResponse } from "@getpaseo/protocol/messages";
 import { deriveTerminalActivityStatusBucket } from "@getpaseo/protocol/terminal-activity";
@@ -18,12 +19,6 @@ import { useWorkspaceDirectory, useWorkspaceFields } from "@/stores/session-stor
 type ListTerminalsPayload = ListTerminalsResponse["payload"];
 
 const FLEX_FILL_STYLE = { flex: 1 } as const;
-const CENTERED_PADDED_STYLE = {
-  flex: 1,
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 16,
-} as const;
 
 function trimNonEmpty(value: string | null | undefined): string | null {
   if (typeof value !== "string") {
@@ -62,14 +57,12 @@ function useTerminalPanelDescriptor(
   );
   const terminal =
     terminalsQuery.data?.terminals.find((entry) => entry.id === target.terminalId) ?? null;
-  const label =
-    trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ??
-    t("workspace.tabs.fallback.terminal");
 
   return {
-    label,
+    label:
+      trimNonEmpty(terminal?.title ?? terminal?.name ?? null) ??
+      t("workspace.tabs.fallback.terminal"),
     subtitle: t("workspace.tabs.fallback.terminal"),
-    tooltip: label,
     titleState: "ready",
     icon: Terminal,
     statusBucket: deriveTerminalActivityStatusBucket(terminal?.activity),
@@ -103,7 +96,7 @@ function TerminalPanel() {
 
   if (!workspaceDirectory) {
     return (
-      <View style={CENTERED_PADDED_STYLE}>
+      <View style={styles.centeredPadded}>
         <Text>Workspace directory not found.</Text>
       </View>
     );
@@ -127,3 +120,12 @@ export const terminalPanelRegistration: PanelRegistration<"terminal"> = {
   component: TerminalPanel,
   useDescriptor: useTerminalPanelDescriptor,
 };
+
+const styles = StyleSheet.create((theme) => ({
+  centeredPadded: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: theme.spacing[4],
+  },
+}));

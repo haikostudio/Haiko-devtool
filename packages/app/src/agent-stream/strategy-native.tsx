@@ -11,7 +11,6 @@ import {
   FlatList,
   ActivityIndicator,
   Keyboard,
-  Platform,
   View,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
@@ -75,9 +74,16 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     scrollEnabled,
     listStyle,
     baseListContentContainerStyle,
+    topContentInset = 0,
     strategy,
   } = props;
   const { renderHistoryMountedRow, renderLiveHeadRow, renderLiveAuxiliary } = renderers;
+  // The list is inverted, so its visual top is paddingBottom. Reserve room there
+  // for the floating synthesis banner; later messages still scroll up under it.
+  const listContentContainerStyle = useMemo(
+    () => [baseListContentContainerStyle, { paddingBottom: topContentInset }],
+    [baseListContentContainerStyle, topContentInset],
+  );
   const flatListRef = useRef<FlatList<StreamItem>>(null);
   const streamViewportMetricsRef = useRef({
     containerKey: "native-virtualized",
@@ -89,8 +95,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     contentMeasuredForKey: null as string | null,
   });
   const scrollOffsetYRef = useRef(0);
-  const isUserScrollActiveRef = useRef(false);
-  const userScrollEndFrameIdRef = useRef<number | null>(null);
   const programmaticScrollEventBudgetRef = useRef(0);
   const [isNativeViewportSettling, setIsNativeViewportSettling] = useState(false);
   const nativeViewportSettlingFrameIdRef = useRef<number | null>(null);
@@ -128,13 +132,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     if (nativeViewportSettlingFrameIdRef.current !== null) {
       cancelAnimationFrame(nativeViewportSettlingFrameIdRef.current);
       nativeViewportSettlingFrameIdRef.current = null;
-    }
-  }, []);
-
-  const clearPendingUserScrollEnd = useCallback(() => {
-    if (userScrollEndFrameIdRef.current !== null) {
-      cancelAnimationFrame(userScrollEndFrameIdRef.current);
-      userScrollEndFrameIdRef.current = null;
     }
   }, []);
 
@@ -199,12 +196,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     },
     scrollToBottom,
   });
-  // Android's maintainVisibleContentPosition ignores the list inversion transform and
-  // fights the controller's offset-zero correction while the live header grows.
-  const maintainVisibleContentPosition =
-    Platform.OS === "android" && bottomAnchorController.mode === "sticky-bottom"
-      ? undefined
-      : DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION;
 
   useEffect(() => {
     streamViewportMetricsRef.current = {
@@ -217,8 +208,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       contentMeasuredForKey: null,
     };
     scrollOffsetYRef.current = 0;
-    isUserScrollActiveRef.current = false;
-    clearPendingUserScrollEnd();
     clearNativeViewportSettling();
     setIsNativeViewportSettling(false);
     historyStartReadyRef.current = false;
@@ -227,9 +216,8 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     });
     return () => {
       cancelAnimationFrame(frame);
-      clearPendingUserScrollEnd();
     };
-  }, [agentId, clearNativeViewportSettling, clearPendingUserScrollEnd]);
+  }, [agentId, clearNativeViewportSettling]);
 
   useEffect(() => {
     const keyboardEvents = [
@@ -278,19 +266,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
     };
   }, [agentId, bottomAnchorController, markNativeViewportSettling, viewportRef]);
 
-  const isScrollEventNearBottom = useStableEvent(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-      return isNearBottomForStreamRenderStrategy({
-        strategy,
-        offsetY: contentOffset.y,
-        threshold: 32,
-        contentHeight: contentSize.height,
-        viewportHeight: layoutMeasurement.height,
-      });
-    },
-  );
-
   const handleScroll = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const previousOffsetY = scrollOffsetYRef.current;
@@ -305,7 +280,13 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       contentMeasuredForKey: "native-virtualized",
     };
 
-    const nearBottom = isScrollEventNearBottom(event);
+    const nearBottom = isNearBottomForStreamRenderStrategy({
+      strategy,
+      offsetY: contentOffset.y,
+      threshold: 32,
+      contentHeight: streamViewportMetricsRef.current.contentHeight,
+      viewportHeight: streamViewportMetricsRef.current.viewportHeight,
+    });
     onNearBottomChange(nearBottom);
 
     const distanceFromOldestEdge =
@@ -320,11 +301,7 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       onNearHistoryStart();
     }
 
-    if (
-      !isUserScrollActiveRef.current &&
-      programmaticScrollEventBudgetRef.current > 0 &&
-      contentOffset.y <= 8
-    ) {
+    if (programmaticScrollEventBudgetRef.current > 0 && contentOffset.y <= 8) {
       programmaticScrollEventBudgetRef.current -= 1;
     } else {
       programmaticScrollEventBudgetRef.current = 0;
@@ -334,37 +311,6 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       });
     }
   });
-
-  const handleScrollBeginDrag = useStableEvent(() => {
-    clearPendingUserScrollEnd();
-    isUserScrollActiveRef.current = true;
-    bottomAnchorController.beginUserScroll();
-  });
-
-  // Defer drag end so momentum can take ownership, but capture the terminal
-  // gesture position now because layout may move the viewport in the meantime.
-  const handleScrollEndDrag = useStableEvent((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const isNearBottom = isScrollEventNearBottom(event);
-    clearPendingUserScrollEnd();
-    userScrollEndFrameIdRef.current = requestAnimationFrame(() => {
-      userScrollEndFrameIdRef.current = null;
-      isUserScrollActiveRef.current = false;
-      bottomAnchorController.endUserScroll({ isNearBottom });
-    });
-  });
-
-  const handleMomentumScrollBegin = useStableEvent(() => {
-    clearPendingUserScrollEnd();
-  });
-
-  const handleMomentumScrollEnd = useStableEvent(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const isNearBottom = isScrollEventNearBottom(event);
-      clearPendingUserScrollEnd();
-      isUserScrollActiveRef.current = false;
-      bottomAnchorController.endUserScroll({ isNearBottom });
-    },
-  );
 
   const handleListLayout = useStableEvent((event: LayoutChangeEvent) => {
     const previousViewportWidth = streamViewportMetricsRef.current.viewportWidth;
@@ -469,17 +415,13 @@ function NativeStreamViewport(props: StreamRenderInput & { strategy: StreamStrat
       nativeID="agent-chat-scroll-native-virtualized"
       ListHeaderComponent={liveHeaderContent ?? undefined}
       ListFooterComponent={historyFooterContent ?? undefined}
-      contentContainerStyle={baseListContentContainerStyle}
+      contentContainerStyle={listContentContainerStyle}
       style={listStyle}
       onLayout={handleListLayout}
       onScroll={handleScroll}
-      onScrollBeginDrag={handleScrollBeginDrag}
-      onScrollEndDrag={handleScrollEndDrag}
-      onMomentumScrollBegin={handleMomentumScrollBegin}
-      onMomentumScrollEnd={handleMomentumScrollEnd}
       scrollEventThrottle={16}
       onContentSizeChange={handleContentSizeChange}
-      maintainVisibleContentPosition={maintainVisibleContentPosition}
+      maintainVisibleContentPosition={DEFAULT_MAINTAIN_VISIBLE_CONTENT_POSITION}
       initialNumToRender={40}
       maxToRenderPerBatch={40}
       updateCellsBatchingPeriod={0}

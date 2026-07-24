@@ -1,24 +1,19 @@
 import { useSyncExternalStore } from "react";
 import { AppState } from "react-native";
-import { getIsAppActivelyVisible, getIsAppVisible } from "@/utils/app-visibility";
+import { getIsAppActivelyVisible } from "@/utils/app-visibility";
 import { isWeb } from "@/constants/platform";
 
-let visible = getIsAppVisible();
-let activelyVisible = getIsAppActivelyVisible();
-const visibilityListeners = new Set<() => void>();
-const activeVisibilityListeners = new Set<() => void>();
+let current = getIsAppActivelyVisible();
+const listeners = new Set<() => void>();
 
 function notify(): void {
-  const nextVisible = getIsAppVisible();
-  if (nextVisible !== visible) {
-    visible = nextVisible;
-    for (const listener of visibilityListeners) listener();
+  const next = getIsAppActivelyVisible();
+  if (next === current) {
+    return;
   }
-
-  const nextActivelyVisible = getIsAppActivelyVisible();
-  if (nextActivelyVisible !== activelyVisible) {
-    activelyVisible = nextActivelyVisible;
-    for (const listener of activeVisibilityListeners) listener();
+  current = next;
+  for (const listener of listeners) {
+    listener();
   }
 }
 
@@ -34,32 +29,15 @@ if (isWeb && typeof document !== "undefined") {
   window.addEventListener("blur", notify);
 }
 
-function subscribeToVisibility(listener: () => void): () => void {
-  visibilityListeners.add(listener);
-  return () => visibilityListeners.delete(listener);
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
-function subscribeToActiveVisibility(listener: () => void): () => void {
-  activeVisibilityListeners.add(listener);
-  return () => activeVisibilityListeners.delete(listener);
-}
-
-function getVisibilitySnapshot(): boolean {
-  return visible;
-}
-
-function getActiveVisibilitySnapshot(): boolean {
-  return activelyVisible;
+function getSnapshot(): boolean {
+  return current;
 }
 
 export function useAppVisible(): boolean {
-  return useSyncExternalStore(subscribeToVisibility, getVisibilitySnapshot, getVisibilitySnapshot);
-}
-
-export function useAppActivelyVisible(): boolean {
-  return useSyncExternalStore(
-    subscribeToActiveVisibility,
-    getActiveVisibilitySnapshot,
-    getActiveVisibilitySnapshot,
-  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

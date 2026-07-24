@@ -13,7 +13,7 @@ import invariant from "tiny-invariant";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { usePaneContext } from "@/panels/pane-context";
 import type { PanelDescriptor, PanelRegistration } from "@/panels/panel-registry";
-import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
+import { buildWorkspaceTabPersistenceKey } from "@/stores/workspace-tabs-store";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import type { Theme } from "@/styles/theme";
 import {
@@ -37,7 +37,6 @@ function useSetupPanelDescriptor(
     return {
       label: t("workspace.setup.descriptor.label"),
       subtitle: t("workspace.setup.descriptor.completed"),
-      tooltip: t("workspace.setup.descriptor.completed"),
       titleState: "ready",
       icon: CheckCircle2,
       statusBucket: null,
@@ -48,7 +47,6 @@ function useSetupPanelDescriptor(
     return {
       label: t("workspace.setup.descriptor.label"),
       subtitle: t("workspace.setup.descriptor.failed"),
-      tooltip: t("workspace.setup.descriptor.failed"),
       titleState: "ready",
       icon: CircleAlert,
       statusBucket: null,
@@ -58,7 +56,6 @@ function useSetupPanelDescriptor(
   return {
     label: t("workspace.setup.descriptor.label"),
     subtitle: t("workspace.setup.descriptor.workspace"),
-    tooltip: t("workspace.setup.descriptor.workspace"),
     titleState: "ready",
     icon: SquareTerminal,
     statusBucket: snapshot?.status === "running" ? "running" : null,

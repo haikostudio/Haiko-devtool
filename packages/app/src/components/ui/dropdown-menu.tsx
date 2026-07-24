@@ -11,7 +11,6 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -31,10 +30,10 @@ import { Keyframe, runOnJS } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Check, CheckCircle } from "lucide-react-native";
 import { FloatingScrollView, FloatingSurface } from "@/components/ui/floating";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isWeb } from "@/constants/platform";
 import { useDismissKeyboardOnOpen } from "@/components/ui/keyboard-dismiss";
-import { getOverlayRoot, OVERLAY_Z } from "@/lib/overlay-root";
 
 // Action status for menu items with loading/success feedback
 export type ActionStatus = "idle" | "pending" | "success";
@@ -218,16 +217,12 @@ function renderDropdownSurface(input: {
       style={surfaceStyle}
       frameStyle={frameStyle}
       entering={contentEntering}
-      exiting={
-        isWeb
-          ? undefined
-          : contentExiting.withCallback((finished) => {
-              "worklet";
-              if (finished) {
-                runOnJS(onExited)();
-              }
-            })
-      }
+      exiting={contentExiting.withCallback((finished) => {
+        "worklet";
+        if (finished) {
+          runOnJS(onExited)();
+        }
+      })}
     >
       {body}
     </FloatingSurface>
@@ -502,17 +497,6 @@ export function DropdownMenuContent({
     setOpen(false);
   }, [setOpen]);
 
-  useEffect(() => {
-    if (!isWeb || !modalVisible || typeof window === "undefined") return undefined;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      handleClose();
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [handleClose, modalVisible]);
-
   // Measure trigger when opening
   useEffect(() => {
     if (!open || !triggerRef.current) {
@@ -630,34 +614,6 @@ export function DropdownMenuContent({
     </View>
   );
 
-  const overlay = (
-    <View style={[styles.overlay, isWeb ? styles.overlayWeb : null]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("menu.backdrop")}
-        style={styles.backdrop}
-        onPress={handleClose}
-        testID={testID ? `${testID}-backdrop` : undefined}
-      />
-      {!closing
-        ? renderDropdownSurface({
-            frameStyle,
-            testID,
-            surfaceStyle,
-            scrollable,
-            scrollViewportStyle,
-            content,
-            surfaceNativeID,
-            onExited: () => setModalVisible(false),
-          })
-        : null}
-    </View>
-  );
-
-  if (isWeb && typeof document !== "undefined") {
-    return createPortal(overlay, getOverlayRoot());
-  }
-
   return (
     <Modal
       visible={modalVisible}
@@ -667,7 +623,27 @@ export function DropdownMenuContent({
       onDismiss={flushPendingSelect}
       onRequestClose={handleClose}
     >
-      {overlay}
+      <View style={styles.overlay}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("menu.backdrop")}
+          style={styles.backdrop}
+          onPress={handleClose}
+          testID={testID ? `${testID}-backdrop` : undefined}
+        />
+        {!closing
+          ? renderDropdownSurface({
+              frameStyle,
+              testID,
+              surfaceStyle,
+              scrollable,
+              scrollViewportStyle,
+              content,
+              surfaceNativeID,
+              onExited: () => setModalVisible(false),
+            })
+          : null}
+      </View>
     </Modal>
   );
 }
@@ -903,11 +879,6 @@ const styles = StyleSheet.create((theme) => ({
   overlay: {
     flex: 1,
   },
-  overlayWeb: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: OVERLAY_Z.modal,
-    pointerEvents: "auto" as const,
-  },
   backdrop: {
     position: "absolute",
     top: 0,
@@ -951,10 +922,10 @@ const styles = StyleSheet.create((theme) => ({
   item: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     gap: theme.spacing[2],
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
+    paddingVertical: theme.spacing[1],
     borderWidth: theme.borderWidth[1],
     borderColor: "transparent",
   },
@@ -997,7 +968,7 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.accentForeground,
   },
   itemDescription: {
-    marginTop: 2,
+    marginTop: theme.spacing[1],
     fontSize: theme.fontSize.xs,
     color: theme.colors.foregroundMuted,
   },

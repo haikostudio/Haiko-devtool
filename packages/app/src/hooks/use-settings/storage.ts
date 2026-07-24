@@ -43,7 +43,6 @@ export interface AppSettings {
   workspaceTitleSource: WorkspaceTitleSource;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
-  vimKeybindings: boolean;
 }
 
 export interface Settings extends AppSettings {
@@ -56,7 +55,10 @@ type StoredAppSettings = Partial<AppSettings> & { compactToolCalls?: unknown };
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: "auto",
   language: "system",
-  sendBehavior: "interrupt",
+  // Default to queueing when the agent is busy: pressing Enter parks the prompt
+  // in a card above the composer instead of cutting off the running turn. Users
+  // who prefer barge-in can still switch to "interrupt" in settings.
+  sendBehavior: "queue",
   serviceUrlBehavior: "ask",
   terminalScrollbackLines: DEFAULT_TERMINAL_SCROLLBACK_LINES,
   uiFontFamily: "",
@@ -67,7 +69,6 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   workspaceTitleSource: "title",
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
-  vimKeybindings: false,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -234,9 +235,6 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   }
   if (typeof stored.syntaxTheme === "string" && isSyntaxThemeId(stored.syntaxTheme)) {
     result.syntaxTheme = stored.syntaxTheme;
-  }
-  if (typeof stored.vimKeybindings === "boolean") {
-    result.vimKeybindings = stored.vimKeybindings;
   }
   if (
     typeof stored.workspaceTitleSource === "string" &&

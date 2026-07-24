@@ -7,8 +7,7 @@ import type { ProviderUsage, ProviderUsageBalance } from "../../../server/messag
 import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
   ApiNumberSchema,
-  toneFromUsedPct,
-  usedPctOf,
+  balanceToneFromRemaining,
   fetchProviderApi,
   unavailableUsage,
 } from "../usage.js";
@@ -90,7 +89,7 @@ export class GrokQuotaProvider implements ProviderUsageFetcher {
         remaining,
         limit: monthlyLimit,
         unit: "credits",
-        tone: toneFromUsedPct(usedPctOf(creditUsage, monthlyLimit)),
+        tone: balanceToneFromRemaining(remaining),
       });
     }
 

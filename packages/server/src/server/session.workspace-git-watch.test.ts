@@ -63,7 +63,7 @@ function createWorkspaceRuntimeSnapshot(
   cwd: string,
   overrides?: {
     git?: Partial<WorkspaceGitRuntimeSnapshot["git"]>;
-    forge?: Partial<WorkspaceGitRuntimeSnapshot["forge"]>;
+    github?: Partial<WorkspaceGitRuntimeSnapshot["github"]>;
   },
 ): WorkspaceGitRuntimeSnapshot {
   const base: WorkspaceGitRuntimeSnapshot = {
@@ -83,8 +83,7 @@ function createWorkspaceRuntimeSnapshot(
       hasRemote: true,
       diffStat: { additions: 1, deletions: 0 },
     },
-    forge: {
-      forge: "github",
+    github: {
       featuresEnabled: true,
       pullRequest: null,
       error: null,
@@ -97,17 +96,17 @@ function createWorkspaceRuntimeSnapshot(
       ...base.git,
       ...overrides?.git,
     },
-    forge: {
-      ...base.forge,
-      ...overrides?.forge,
+    github: {
+      ...base.github,
+      ...overrides?.github,
       pullRequest:
-        overrides?.forge && "pullRequest" in overrides.forge
-          ? (overrides.forge.pullRequest ?? null)
-          : base.forge.pullRequest,
+        overrides?.github && "pullRequest" in overrides.github
+          ? (overrides.github.pullRequest ?? null)
+          : base.github.pullRequest,
       error:
-        overrides?.forge && "error" in overrides.forge
-          ? (overrides.forge.error ?? null)
-          : base.forge.error,
+        overrides?.github && "error" in overrides.github
+          ? (overrides.github.error ?? null)
+          : base.github.error,
     },
   };
 }
@@ -182,7 +181,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
 
   const session = new Session({
     clientId: "test-client",
-    scopes: ["*"],
     onMessage: (message) => emitted.push(message as { type: string; payload: unknown }),
     logger: createStub<pino.Logger>(logger),
     downloadTokenStore: createStub<SessionOptions["downloadTokenStore"]>({}),
@@ -198,7 +196,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       get: async () => null,
     }),
     projectRegistry: createStub<SessionOptions["projectRegistry"]>({
-      subscribeToMutations: () => () => {},
       initialize: async () => {},
       existsOnDisk: async () => true,
       list: async () => Array.from(projects.values()),
@@ -216,7 +213,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       },
     }),
     workspaceRegistry: createStub<SessionOptions["workspaceRegistry"]>({
-      subscribeToMutations: () => () => {},
       initialize: async () => {},
       existsOnDisk: async () => true,
       list: async () => Array.from(workspaces.values()),
@@ -240,7 +236,6 @@ function createSessionForWorkspaceGitWatchTests(options?: {
       }),
       scheduleRefreshForCwd: () => {},
       onWorkspaceStateMayHaveChanged: () => {},
-      invalidateForge: () => {},
       getMetrics: () => ({
         checkoutDiffTargetCount: 0,
         checkoutDiffSubscriptionCount: 0,
@@ -475,6 +470,7 @@ describe("workspace git watch targets", () => {
         onBranchChanged: handleBranchChange,
       },
     );
+    const sessionAny = session as unknown as SessionInternals;
     seedGitWorkspace({
       projects,
       workspaces,
@@ -484,7 +480,7 @@ describe("workspace git watch targets", () => {
       name: "old-branch",
     });
 
-    await session.syncWorkspaceGitObserversForExternalWorkspaceIds(["ws-10"]);
+    syncGitObserver(session, "/tmp/repo", "ws-10");
 
     subscriptions[0]?.listener(
       createWorkspaceRuntimeSnapshot("/tmp/repo", {
@@ -500,6 +496,16 @@ describe("workspace git watch targets", () => {
         scriptName: "app",
       }),
     ]);
+    expect(sessionAny.buildWorkspaceScriptPayloadSnapshot("ws-10", "/tmp/repo")).toEqual([
+      expect.objectContaining({
+        scriptName: "app",
+        hostname: "app--new-branch--paseo.localhost",
+        localProxyUrl: "http://app--new-branch--paseo.localhost:6767",
+        publicProxyUrl: null,
+        proxyUrl: "http://app--new-branch--paseo.localhost:6767",
+      }),
+    ]);
+
     await session.cleanup();
   });
 
@@ -588,7 +594,7 @@ describe("workspace git watch targets", () => {
 
     subscriptions[0]?.listener(
       createWorkspaceRuntimeSnapshot(REPO_CWD, {
-        forge: {
+        github: {
           featuresEnabled: true,
           pullRequest: {
             number: 456,
@@ -607,8 +613,7 @@ describe("workspace git watch targets", () => {
             ],
             checksStatus: "success",
             reviewDecision: "approved",
-            forgeSpecific: {
-              forge: "github",
+            github: {
               mergeStateStatus: "CLEAN",
               autoMergeRequest: null,
               viewerCanEnableAutoMerge: true,
@@ -637,7 +642,6 @@ describe("workspace git watch targets", () => {
     expect(statusUpdate?.payload.prStatus).toEqual({
       cwd: REPO_CWD,
       status: {
-        forge: "github",
         number: 456,
         url: "https://github.com/acme/repo/pull/456",
         title: "Runtime centralization",
@@ -658,24 +662,6 @@ describe("workspace git watch targets", () => {
         ],
         checksStatus: "success",
         reviewDecision: "approved",
-        forgeSpecific: {
-          forge: "github",
-          mergeStateStatus: "CLEAN",
-          autoMergeRequest: null,
-          viewerCanEnableAutoMerge: true,
-          viewerCanDisableAutoMerge: false,
-          viewerCanMergeAsAdmin: false,
-          viewerCanUpdateBranch: true,
-          repository: {
-            autoMergeAllowed: true,
-            mergeCommitAllowed: true,
-            squashMergeAllowed: true,
-            rebaseMergeAllowed: false,
-            viewerDefaultMergeMethod: "SQUASH",
-          },
-          isMergeQueueEnabled: false,
-          isInMergeQueue: false,
-        },
         github: {
           mergeStateStatus: "CLEAN",
           autoMergeRequest: null,
@@ -694,8 +680,6 @@ describe("workspace git watch targets", () => {
           isInMergeQueue: false,
         },
       },
-      forge: "github",
-      authState: undefined,
       githubFeaturesEnabled: true,
       error: null,
       requestId: REPO_SUBSCRIPTION_REQUEST_ID,
@@ -709,7 +693,7 @@ describe("workspace git watch targets", () => {
 
     workspaceGitService.getSnapshot.mockResolvedValue(
       createWorkspaceRuntimeSnapshot(REPO_CWD, {
-        forge: {
+        github: {
           featuresEnabled: true,
           pullRequest: {
             url: "https://github.com/acme/repo/pull/456",
@@ -735,7 +719,6 @@ describe("workspace git watch targets", () => {
     ).toEqual({
       cwd: REPO_CWD,
       status: {
-        forge: "github",
         number: undefined,
         url: "https://github.com/acme/repo/pull/456",
         title: "Runtime centralization",
@@ -751,8 +734,6 @@ describe("workspace git watch targets", () => {
         checksStatus: undefined,
         reviewDecision: undefined,
       },
-      forge: "github",
-      authState: undefined,
       githubFeaturesEnabled: true,
       error: null,
       requestId: "req-pr-status",

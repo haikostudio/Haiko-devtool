@@ -4,8 +4,7 @@ import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
+  PointerSensor,
   type Modifier,
   useSensor,
   useSensors,
@@ -18,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { DraggableListProps, DraggableRenderItemInfo } from "./draggable-list.types";
-import { getDragActivationConstraints, useDragReorderState } from "./drag-reorder";
+import { getPointerActivationConstraint, useDragReorderState } from "./drag-reorder";
 
 export type { DraggableListProps, DraggableRenderItemInfo };
 
@@ -28,10 +27,10 @@ const restrictToVerticalAxis: Modifier = ({ transform }) => ({
 });
 
 const DND_MODIFIERS = [restrictToVerticalAxis];
-const DRAG_ACTIVATION_CONFIG = {
-  movementDistance: 6,
-  touchHoldDelayMs: 180,
-  touchHoldTolerance: 8,
+const POINTER_ACTIVATION_CONFIG = {
+  defaultDistance: 6,
+  holdDelayMs: 250,
+  holdTolerance: 8,
 };
 
 interface SortableItemProps<T> {
@@ -146,14 +145,14 @@ export function DraggableList<T>({
     onDragEnd,
     onDragBegin,
   });
-  const activationConstraints = getDragActivationConstraints(useDragHandle, DRAG_ACTIVATION_CONFIG);
+  const pointerActivationConstraint = getPointerActivationConstraint(
+    useDragHandle,
+    POINTER_ACTIVATION_CONFIG,
+  );
 
   const sensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: activationConstraints.mouse,
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: activationConstraints.touch,
+    useSensor(PointerSensor, {
+      activationConstraint: pointerActivationConstraint,
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,

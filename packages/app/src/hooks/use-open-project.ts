@@ -16,8 +16,7 @@ export function useOpenProject(
   const isConnected = useHostRuntimeIsConnected(normalizedServerId);
   const canAddProject = useSessionStore((state) =>
     normalizedServerId
-      ? state.sessions[normalizedServerId]?.serverInfo?.features?.projectAdd === true &&
-        state.sessions[normalizedServerId]?.serverInfo?.features?.stableProjectIdentity === true
+      ? state.sessions[normalizedServerId]?.serverInfo?.features?.projectAdd === true
       : false,
   );
   const addEmptyProject = useSessionStore((state) => state.addEmptyProject);

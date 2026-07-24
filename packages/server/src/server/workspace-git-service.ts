@@ -1,11 +1,10 @@
 import { watch, type FSWatcher } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { LRUCache } from "lru-cache";
 import pLimit from "p-limit";
 import type pino from "pino";
 import type { ProjectCheckoutLitePayload } from "@getpaseo/protocol/messages";
-import { parseGitRemoteLocation } from "@getpaseo/protocol/git-remote";
 import type { CheckoutContext } from "../utils/checkout-git.js";
 import {
   type BranchCheckoutResolution,
@@ -18,38 +17,32 @@ import {
   getCheckoutShortstat,
   getCheckoutStatus,
   getPullRequestStatus,
-  forgeAuthStateFromError,
   hasOriginRemote,
   listBranchSuggestions,
   resolveRepositoryDefaultBranch,
   resolveBranchCheckout,
   resolveAbsoluteGitDir,
 } from "../utils/checkout-git.js";
-import type {
-  ForgeAuthState,
-  ForgeService,
-  ForgeSpecificStatusFacts,
-  PullRequestMergeable,
-} from "../services/forge-service.js";
-import { createForgeService } from "../services/forge-registry.js";
 import {
-  createForgeResolver,
-  type ForgeResolution,
-  type ForgeResolver,
-} from "../services/forge-resolver.js";
+  createGitHubService,
+  type GitHubPullRequestStatusFacts,
+  type GitHubService,
+  type PullRequestMergeable,
+} from "../services/github-service.js";
 import { parseGitRevParsePath } from "../utils/git-rev-parse-path.js";
 import { runGitCommand } from "../utils/run-git-command.js";
+import { resolveGitHubRemote, type GitHubRemoteIdentity } from "../utils/github-remote.js";
 import { listPaseoWorktrees, type PaseoWorktreeInfo } from "../utils/worktree.js";
 import { READ_ONLY_GIT_ENV } from "./checkout-git-utils.js";
-import { deriveProjectSlug } from "./workspace-git-metadata.js";
+import {
+  buildWorkspaceGitMetadataFromSnapshot,
+  type WorkspaceGitMetadata,
+} from "./workspace-git-metadata.js";
 import { checkoutLiteFromGitSnapshot } from "./workspace-registry-model.js";
 
 const WORKSPACE_GIT_WATCH_DEBOUNCE_MS = 1_000;
 const BACKGROUND_GIT_FETCH_INTERVAL_MS = 180_000;
 export const WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS = 60_000;
-const FORGE_PR_STATUS_POLL_FAST_INTERVAL_MS = 20_000;
-const FORGE_PR_STATUS_POLL_SLOW_INTERVAL_MS = 120_000;
-const FORGE_PR_STATUS_POLL_ERROR_BACKOFF_CAP_MS = 300_000;
 const WORKING_TREE_WATCH_FALLBACK_REFRESH_MS = 5_000;
 // Auxiliary reads may reuse cached values within this window; snapshots do not expire on read.
 const WORKSPACE_GIT_AUXILIARY_READ_TTL_MS = 15_000;
@@ -85,20 +78,12 @@ export interface WorkspaceGitRuntimeSnapshot {
     hasRemote: boolean;
     diffStat: { additions: number; deletions: number } | null;
   };
-  forge: {
+  github: {
     featuresEnabled: boolean;
-    authState: ForgeAuthState;
-    /**
-     * Forge resolved for this workspace from its remote — including the per-host
-     * probe, so self-managed GitLab hosts (no "gitlab" in the name) are labeled
-     * correctly. The wire projection prefers this over the bare name heuristic.
-     */
-    forge?: string;
     pullRequest: {
       number?: number;
       repoOwner?: string;
       repoName?: string;
-      projectPath?: string;
       url: string;
       title: string;
       state: string;
@@ -116,7 +101,7 @@ export interface WorkspaceGitRuntimeSnapshot {
       }>;
       checksStatus?: "none" | "pending" | "success" | "failure";
       reviewDecision?: "approved" | "changes_requested" | "pending" | null;
-      forgeSpecific?: ForgeSpecificStatusFacts;
+      github?: GitHubPullRequestStatusFacts;
     } | null;
     error: { message: string } | null;
   };
@@ -135,7 +120,6 @@ export interface WorkspaceGitService {
     cwd: string,
     options?: WorkspaceGitSnapshotOptions,
   ): Promise<WorkspaceGitRuntimeSnapshot>;
-  resolveForge(cwd: string): Promise<ForgeResolution | null>;
   getCheckoutDiff(
     cwd: string,
     options: CheckoutDiffCompare,
@@ -161,7 +145,10 @@ export interface WorkspaceGitService {
     cwdOrRepoRoot: string,
     options?: WorkspaceGitReadOptions,
   ): Promise<WorkspaceGitWorktreeInfo[]>;
-  getProjectSlug(cwd: string, options?: WorkspaceGitReadOptions): Promise<string>;
+  getWorkspaceGitMetadata(
+    cwd: string,
+    options?: WorkspaceGitReadOptions & { directoryName?: string },
+  ): Promise<WorkspaceGitMetadata>;
   resolveRepoRoot(cwd: string, options?: WorkspaceGitReadOptions): Promise<string>;
   resolveDefaultBranch(cwdOrRepoRoot: string, options?: WorkspaceGitReadOptions): Promise<string>;
   resolveRepoRemoteUrl(cwd: string, options?: WorkspaceGitReadOptions): Promise<string | null>;
@@ -172,24 +159,7 @@ export interface WorkspaceGitService {
   ): Promise<{ repoRoot: string | null; unsubscribe: () => void }>;
   scheduleRefreshForCwd(cwd: string): void;
   onWorkspaceStateMayHaveChanged(cwd: string): void;
-  invalidateForge(cwd: string): void;
-  getMetrics(): WorkspaceGitServiceMetrics;
   dispose(): void;
-}
-
-export interface WorkspaceGitServiceMetrics {
-  workspaceTargetCount: number;
-  workspaceListenerCount: number;
-  repositoryTargetCount: number;
-  repositoryWorkspaceLinkCount: number;
-  workingTreeWatchTargetCount: number;
-  workingTreeWatchListenerCount: number;
-  workspaceObservationSetupInFlightCount: number;
-  workingTreeWatchSetupInFlightCount: number;
-  workspaceRefreshInFlightCount: number;
-  workspaceRefreshQueuedCount: number;
-  fetchInFlightCount: number;
-  snapshotUpdatedListenerCount: number;
 }
 
 export type WorkspaceGitListener = (snapshot: WorkspaceGitRuntimeSnapshot) => void;
@@ -232,25 +202,25 @@ export type WorkspaceGitWorktreeInfo = PaseoWorktreeInfo;
 export type WorkspaceGitSnapshotOptions =
   | {
       force?: false;
-      includeForge?: boolean;
+      includeGitHub?: boolean;
       reason?: string;
     }
   | {
       force: true;
-      includeForge?: boolean;
+      includeGitHub?: boolean;
       reason: string;
     };
 
 interface WorkspaceGitRefreshRequest {
   force: boolean;
-  includeForge: boolean;
+  includeGitHub: boolean;
   reason: string;
   notify: boolean;
 }
 
 interface ScheduledWorkspaceGitRefreshOptions {
   force?: boolean;
-  includeForge?: boolean;
+  includeGitHub?: boolean;
   reason?: string;
 }
 
@@ -262,7 +232,7 @@ type WorkspaceGitRefreshState =
       status: "in-flight";
       promise: Promise<WorkspaceGitRuntimeSnapshot>;
       force: boolean;
-      includeForge: boolean;
+      includeGitHub: boolean;
       queued: WorkspaceGitRefreshRequest | null;
     };
 
@@ -278,12 +248,7 @@ interface WorkspaceGitServiceDependencies {
   resolveRepositoryDefaultBranch: typeof resolveRepositoryDefaultBranch;
   listBranchSuggestions: typeof listBranchSuggestions;
   listPaseoWorktrees: typeof listPaseoWorktrees;
-  /**
-   * Adapter instances to bind by forge id instead of building from the registry
-   * — the injection seam for the daemon's shared GitHub adapter and for test
-   * fakes. Any forge not listed here is built (and cached once) by the registry.
-   */
-  forgeOverrides?: Record<string, ForgeService>;
+  github: GitHubService;
   resolveAbsoluteGitDir: (cwd: string) => Promise<string | null>;
   hasOriginRemote: (cwd: string) => Promise<boolean>;
   runGitFetch: (cwd: string) => Promise<void>;
@@ -305,13 +270,13 @@ interface WorkspaceGitTarget {
   debounceTimer: NodeJS.Timeout | null;
   pendingDebounceRequest: WorkspaceGitRefreshRequest | null;
   selfHealTimer: NodeJS.Timeout | null;
-  forgePrStatusPollSubscription: { unsubscribe: () => void } | null;
-  forgePrStatusPollKey: string | null;
+  githubPollSubscription: { unsubscribe: () => void } | null;
+  githubPollKey: string | null;
   refreshState: WorkspaceGitRefreshState;
   latestGit: WorkspaceGitRuntimeSnapshot["git"] | null;
   latestGitLoadedAtMs: number | null;
-  latestForge: WorkspaceGitRuntimeSnapshot["forge"] | null;
-  latestForgeLoadedAtMs: number | null;
+  latestGithub: WorkspaceGitRuntimeSnapshot["github"] | null;
+  latestGithubLoadedAtMs: number | null;
   latestSnapshot: WorkspaceGitRuntimeSnapshot | null;
   latestSnapshotLoadedAtMs: number | null;
   latestFacts: CheckoutSnapshotFacts | null;
@@ -320,6 +285,7 @@ interface WorkspaceGitTarget {
   latestFingerprint: string | null;
   lastShellOutAtMs: number | null;
   repoGitRoot: string | null;
+  cachedGitHubRemote: { remoteUrl: string; identity: GitHubRemoteIdentity | null } | null;
   observationSetupPromise: Promise<void> | null;
   observationSetupComplete: boolean;
   closed: boolean;
@@ -352,9 +318,8 @@ interface WorkspaceGitAuxiliaryReadCacheEntry<T> {
   inFlight: Promise<T> | null;
 }
 
-interface WorkspaceForgePrStatusPollTarget {
+interface WorkspaceGitHubPollTarget {
   headRef: string;
-  headSha?: string;
   headRepositoryOwner?: string;
 }
 
@@ -371,6 +336,7 @@ function buildDefaultWorkspaceGitServiceDeps(): WorkspaceGitServiceDependencies 
     resolveRepositoryDefaultBranch,
     listBranchSuggestions,
     listPaseoWorktrees,
+    github: createGitHubService(),
     resolveAbsoluteGitDir,
     hasOriginRemote,
     runGitFetch,
@@ -390,7 +356,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   private readonly paseoHome: string;
   private readonly worktreesRoot: string | undefined;
   private readonly deps: WorkspaceGitServiceDependencies;
-  private readonly forgeResolver: ForgeResolver;
   private readonly snapshotUpdatedListeners = new Set<WorkspaceGitSnapshotUpdatedListener>();
   private readonly workspaceTargets = new Map<string, WorkspaceGitTarget>();
   private readonly repoTargets = new Map<string, RepoGitTarget>();
@@ -430,13 +395,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     this.paseoHome = options.paseoHome;
     this.worktreesRoot = options.worktreesRoot;
     this.deps = resolveWorkspaceGitServiceDeps(options.deps);
-    this.forgeResolver = createForgeResolver({
-      createService: (forge) => this.deps.forgeOverrides?.[forge] ?? createForgeService(forge),
-    });
-  }
-
-  resolveForge(cwd: string): Promise<ForgeResolution | null> {
-    return this.forgeResolver.resolve(resolve(cwd));
   }
 
   registerWorkspace(
@@ -470,53 +428,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     };
   }
 
-  getMetrics(): WorkspaceGitServiceMetrics {
-    let workspaceListenerCount = 0;
-    let repositoryWorkspaceLinkCount = 0;
-    let workingTreeWatchListenerCount = 0;
-    let workspaceRefreshInFlightCount = 0;
-    let workspaceRefreshQueuedCount = 0;
-    let workspaceObservationSetupInFlightCount = 0;
-    let fetchInFlightCount = 0;
-
-    for (const target of this.workspaceTargets.values()) {
-      workspaceListenerCount += target.listeners.size;
-      if (target.observationSetupPromise) {
-        workspaceObservationSetupInFlightCount += 1;
-      }
-      if (target.refreshState.status === "in-flight") {
-        workspaceRefreshInFlightCount += 1;
-        if (target.refreshState.queued) {
-          workspaceRefreshQueuedCount += 1;
-        }
-      }
-    }
-    for (const target of this.repoTargets.values()) {
-      repositoryWorkspaceLinkCount += target.workspaceKeys.size;
-      if (target.fetchInFlight) {
-        fetchInFlightCount += 1;
-      }
-    }
-    for (const target of this.workingTreeWatchTargets.values()) {
-      workingTreeWatchListenerCount += target.listeners.size;
-    }
-
-    return {
-      workspaceTargetCount: this.workspaceTargets.size,
-      workspaceListenerCount,
-      repositoryTargetCount: this.repoTargets.size,
-      repositoryWorkspaceLinkCount,
-      workingTreeWatchTargetCount: this.workingTreeWatchTargets.size,
-      workingTreeWatchListenerCount,
-      workspaceObservationSetupInFlightCount,
-      workingTreeWatchSetupInFlightCount: this.workingTreeWatchSetups.size,
-      workspaceRefreshInFlightCount,
-      workspaceRefreshQueuedCount,
-      fetchInFlightCount,
-      snapshotUpdatedListenerCount: this.snapshotUpdatedListeners.size,
-    };
-  }
-
   async getSnapshot(
     cwd: string,
     options?: WorkspaceGitSnapshotOptions,
@@ -533,12 +444,31 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
   async getCheckout(cwd: string): Promise<ProjectCheckoutLitePayload> {
     const normalizedCwd = resolve(cwd);
-    const status = await this.deps.getCheckoutStatus(normalizedCwd, {
-      paseoHome: this.paseoHome,
-      worktreesRoot: this.worktreesRoot,
-      logger: this.logger,
-    });
-    if (!status.isGit) {
+    try {
+      const status = await this.deps.getCheckoutStatus(normalizedCwd, {
+        paseoHome: this.paseoHome,
+        worktreesRoot: this.worktreesRoot,
+        logger: this.logger,
+      });
+      if (!status.isGit) {
+        return checkoutLiteFromGitSnapshot(normalizedCwd, {
+          isGit: false,
+          currentBranch: null,
+          remoteUrl: null,
+          repoRoot: null,
+          isPaseoOwnedWorktree: false,
+          mainRepoRoot: null,
+        });
+      }
+      return checkoutLiteFromGitSnapshot(normalizedCwd, {
+        isGit: true,
+        currentBranch: status.currentBranch,
+        remoteUrl: status.remoteUrl,
+        repoRoot: status.repoRoot,
+        isPaseoOwnedWorktree: status.isPaseoOwnedWorktree,
+        mainRepoRoot: status.mainRepoRoot,
+      });
+    } catch {
       return checkoutLiteFromGitSnapshot(normalizedCwd, {
         isGit: false,
         currentBranch: null,
@@ -548,14 +478,6 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         mainRepoRoot: null,
       });
     }
-    return checkoutLiteFromGitSnapshot(normalizedCwd, {
-      isGit: true,
-      currentBranch: status.currentBranch,
-      remoteUrl: status.remoteUrl,
-      repoRoot: status.repoRoot,
-      isPaseoOwnedWorktree: status.isPaseoOwnedWorktree,
-      mainRepoRoot: status.mainRepoRoot,
-    });
   }
 
   peekSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot | null {
@@ -703,9 +625,21 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     });
   }
 
-  async getProjectSlug(cwd: string, options?: WorkspaceGitReadOptions): Promise<string> {
+  async getWorkspaceGitMetadata(
+    cwd: string,
+    options?: WorkspaceGitReadOptions & { directoryName?: string },
+  ): Promise<WorkspaceGitMetadata> {
     const snapshot = await this.getSnapshot(cwd, options);
-    return deriveProjectSlug(resolve(cwd), snapshot.git.isGit ? snapshot.git.remoteUrl : null);
+    const directoryName = options?.directoryName ?? basename(cwd) ?? cwd;
+    return buildWorkspaceGitMetadataFromSnapshot({
+      cwd: resolve(cwd),
+      directoryName,
+      isGit: snapshot.git.isGit,
+      repoRoot: snapshot.git.repoRoot,
+      mainRepoRoot: snapshot.git.mainRepoRoot,
+      currentBranch: snapshot.git.currentBranch,
+      remoteUrl: snapshot.git.remoteUrl,
+    });
   }
 
   async resolveRepoRemoteUrl(
@@ -721,7 +655,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const target = this.ensureWorkspaceTarget(cwd);
     await this.refreshWorkspaceTarget(target, {
       force: false,
-      includeForge: false,
+      includeGitHub: false,
       reason: "refresh",
       notify: true,
     });
@@ -758,21 +692,12 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     if (!target || target.closed) {
       return;
     }
-    this.invalidateForge(normalizedCwd);
+    this.deps.github.invalidate({ cwd: normalizedCwd });
     this.scheduleWorkspaceRefresh(target, {
       force: true,
-      includeForge: true,
+      includeGitHub: true,
       reason: "external-state-change",
     });
-  }
-
-  /**
-   * Drop the resolved forge adapter's cached state for a cwd. Goes through the
-   * resolver so it targets the same adapter instance the poller reads — used by
-   * git mutations to force a fresh forge status on the next refresh.
-   */
-  invalidateForge(cwd: string): void {
-    this.forgeResolver.invalidate(resolve(cwd));
   }
 
   dispose(): void {
@@ -890,13 +815,13 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       debounceTimer: null,
       pendingDebounceRequest: null,
       selfHealTimer: null,
-      forgePrStatusPollSubscription: null,
-      forgePrStatusPollKey: null,
+      githubPollSubscription: null,
+      githubPollKey: null,
       refreshState: { status: "idle" },
       latestGit: null,
       latestGitLoadedAtMs: null,
-      latestForge: null,
-      latestForgeLoadedAtMs: null,
+      latestGithub: null,
+      latestGithubLoadedAtMs: null,
       latestSnapshot: null,
       latestSnapshotLoadedAtMs: null,
       latestFacts: null,
@@ -905,6 +830,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       latestFingerprint: null,
       lastShellOutAtMs: null,
       repoGitRoot: null,
+      cachedGitHubRemote: null,
       observationSetupPromise: null,
       observationSetupComplete: false,
       closed: false,
@@ -921,7 +847,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       }
       void this.refreshWorkspaceTarget(target, {
         force: false,
-        includeForge: true,
+        includeGitHub: true,
         reason: "initial",
         notify: true,
       });
@@ -1228,7 +1154,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
         this.scheduleWorkspaceObservationSetup(target);
         this.refreshWorkspaceTarget(target, {
           force: false,
-          includeForge: false,
+          includeGitHub: false,
           reason: "self-heal-git",
           notify: true,
         }).catch((error) => {
@@ -1240,180 +1166,67 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       }, WORKSPACE_GIT_SELF_HEAL_INTERVAL_MS);
     }
 
-    this.updateForgePrStatusPollForTarget(target);
+    this.updateGitHubPollForTarget(target);
   }
 
-  private updateForgePrStatusPollForTarget(target: WorkspaceGitTarget): void {
+  private updateGitHubPollForTarget(target: WorkspaceGitTarget): void {
     if (target.listeners.size === 0) {
-      this.stopForgePrStatusPollForTarget(target);
+      this.stopGitHubPollForTarget(target);
       return;
     }
 
     const git = target.latestGit;
-    if (!git?.remoteUrl) {
-      this.stopForgePrStatusPollForTarget(target);
+    if (!git || !this.deps.github.retainCurrentPullRequestStatusPoll) {
+      this.stopGitHubPollForTarget(target);
       return;
     }
 
-    const resolution = this.forgeResolver.resolveFromRemoteUrl(git.remoteUrl);
-    if (!resolution) {
-      this.stopForgePrStatusPollForTarget(target);
-      return;
-    }
-
-    const pollTarget = this.resolveForgePrStatusPollTarget(target);
+    const pollTarget = this.resolveGitHubPollTarget(target);
     const remoteUrl = git.remoteUrl;
-    if (!pollTarget) {
-      this.stopForgePrStatusPollForTarget(target);
+    const hasGitHubRemote =
+      target.cachedGitHubRemote?.remoteUrl === remoteUrl &&
+      target.cachedGitHubRemote.identity !== null;
+    if (!pollTarget || remoteUrl === null || !hasGitHubRemote) {
+      this.stopGitHubPollForTarget(target);
       return;
     }
-    const pollKey = buildWorkspaceForgePrStatusPollKey({
-      forge: resolution.forge,
-      remoteUrl,
-      target: pollTarget,
-    });
-    const previousPollKey = target.forgePrStatusPollKey;
-    if (target.forgePrStatusPollKey === pollKey && target.forgePrStatusPollSubscription) {
-      return;
-    }
-    const pollImmediately = previousPollKey !== null && previousPollKey !== pollKey;
-
-    this.stopForgePrStatusPollForTarget(target);
-    target.forgePrStatusPollKey = pollKey;
-    if (resolution.service.retainCurrentPullRequestStatusPoll) {
-      target.forgePrStatusPollSubscription = resolution.service.retainCurrentPullRequestStatusPoll({
-        cwd: target.cwd,
-        headRef: pollTarget.headRef,
-        ...(pollTarget.headSha ? { headSha: pollTarget.headSha } : {}),
-        ...(pollTarget.headRepositoryOwner
-          ? { headRepositoryOwner: pollTarget.headRepositoryOwner }
-          : {}),
-        onStatus: (status) => {
-          if (!this.isActiveObservedWorkspaceTarget(target)) {
-            return;
-          }
-          this.rememberForgePrStatusSnapshot(
-            target,
-            buildForgeSnapshotFromStatus(status, resolution.forge),
-            {
-              notify: true,
-            },
-          );
-        },
-        onError: (error) => {
-          this.logger.warn(
-            {
-              err: error,
-              cwd: target.cwd,
-              forge: resolution.forge,
-              headRef: pollTarget.headRef,
-              headRepositoryOwner: pollTarget.headRepositoryOwner,
-              reason: "self-heal-forge-pr-status",
-            },
-            "Failed to run forge PR status self-heal refresh",
-          );
-        },
-      });
+    const pollKey = buildWorkspaceGitHubPollKey(remoteUrl, pollTarget);
+    if (target.githubPollKey === pollKey && target.githubPollSubscription) {
       return;
     }
 
-    target.forgePrStatusPollSubscription = this.retainGenericForgePrStatusPoll({
-      target,
-      forge: resolution.forge,
-      service: resolution.service,
-      pollTarget,
-      pollImmediately,
-    });
-  }
-
-  private retainGenericForgePrStatusPoll({
-    target,
-    forge,
-    service,
-    pollTarget,
-    pollImmediately,
-  }: {
-    target: WorkspaceGitTarget;
-    forge: string;
-    service: ForgeService;
-    pollTarget: WorkspaceForgePrStatusPollTarget;
-    pollImmediately: boolean;
-  }): { unsubscribe: () => void } {
-    let closed = false;
-    let timer: NodeJS.Timeout | null = null;
-    let latestStatus: WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"] =
-      target.latestForge?.pullRequest ?? null;
-    let consecutiveErrors = 0;
-
-    const schedule = (delayMs: number) => {
-      if (closed) {
-        return;
-      }
-      timer = setTimeout(() => {
-        timer = null;
-        void poll();
-      }, delayMs);
-    };
-
-    const poll = async () => {
-      if (closed || !this.isActiveObservedWorkspaceTarget(target)) {
-        return;
-      }
-      try {
-        const status = await service.getCurrentPullRequestStatus({
-          cwd: target.cwd,
-          headRef: pollTarget.headRef,
-          ...(pollTarget.headSha ? { headSha: pollTarget.headSha } : {}),
-          ...(pollTarget.headRepositoryOwner
-            ? { headRepositoryOwner: pollTarget.headRepositoryOwner }
-            : {}),
-          reason: "self-heal-forge-pr-status",
-        });
-        if (!closed && this.isActiveObservedWorkspaceTarget(target)) {
-          latestStatus = status;
-          consecutiveErrors = 0;
-          this.rememberForgePrStatusSnapshot(target, buildForgeSnapshotFromStatus(status, forge), {
-            notify: true,
-          });
+    this.stopGitHubPollForTarget(target);
+    target.githubPollKey = pollKey;
+    target.githubPollSubscription = this.deps.github.retainCurrentPullRequestStatusPoll({
+      cwd: target.cwd,
+      headRef: pollTarget.headRef,
+      ...(pollTarget.headRepositoryOwner
+        ? { headRepositoryOwner: pollTarget.headRepositoryOwner }
+        : {}),
+      onStatus: (status) => {
+        if (!this.isActiveObservedWorkspaceTarget(target)) {
+          return;
         }
-      } catch (error) {
-        consecutiveErrors += 1;
+        this.rememberGitHubSnapshot(target, buildGitHubSnapshotFromStatus(status), {
+          notify: true,
+        });
+      },
+      onError: (error) => {
         this.logger.warn(
           {
             err: error,
             cwd: target.cwd,
-            forge,
             headRef: pollTarget.headRef,
             headRepositoryOwner: pollTarget.headRepositoryOwner,
-            reason: "self-heal-forge-pr-status",
+            reason: "self-heal-github",
           },
-          "Failed to run forge PR status self-heal refresh",
+          "Failed to run GitHub self-heal refresh",
         );
-      } finally {
-        schedule(computeGenericForgeNextInterval(latestStatus, consecutiveErrors));
-      }
-    };
-
-    // A git-only refresh clears forge state when the commit-aware poll identity
-    // changes. Revalidate that new identity immediately instead of leaving the
-    // PR panel empty for the full stable polling interval.
-    schedule(
-      pollImmediately ? 0 : computeGenericForgeNextInterval(latestStatus, consecutiveErrors),
-    );
-    return {
-      unsubscribe: () => {
-        closed = true;
-        if (timer) {
-          clearTimeout(timer);
-          timer = null;
-        }
       },
-    };
+    });
   }
 
-  private resolveForgePrStatusPollTarget(
-    target: WorkspaceGitTarget,
-  ): WorkspaceForgePrStatusPollTarget | null {
+  private resolveGitHubPollTarget(target: WorkspaceGitTarget): WorkspaceGitHubPollTarget | null {
     const git = target.latestGit;
     if (!git?.currentBranch) {
       return null;
@@ -1430,10 +1243,10 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     return { headRef: git.currentBranch };
   }
 
-  private stopForgePrStatusPollForTarget(target: WorkspaceGitTarget): void {
-    target.forgePrStatusPollSubscription?.unsubscribe();
-    target.forgePrStatusPollSubscription = null;
-    target.forgePrStatusPollKey = null;
+  private stopGitHubPollForTarget(target: WorkspaceGitTarget): void {
+    target.githubPollSubscription?.unsubscribe();
+    target.githubPollSubscription = null;
+    target.githubPollKey = null;
   }
 
   private addWorkingTreeWatcher(
@@ -1665,7 +1478,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     if (target.refreshState.status === "in-flight") {
       const needsForcedRefresh = request.force && !target.refreshState.force;
       const needsGitHubRefresh =
-        request.force && request.includeForge && !target.refreshState.includeForge;
+        request.force && request.includeGitHub && !target.refreshState.includeGitHub;
       if (needsForcedRefresh || needsGitHubRefresh) {
         target.refreshState.queued = this.mergeRefreshRequests(target.refreshState.queued, request);
       }
@@ -1686,7 +1499,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       status: "in-flight",
       promise,
       force: request.force,
-      includeForge: request.includeForge,
+      includeGitHub: request.includeGitHub,
       queued: null,
     };
 
@@ -1705,10 +1518,26 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     const force = options?.force === true;
     return {
       force,
-      includeForge: options?.includeForge ?? true,
+      includeGitHub: options?.includeGitHub ?? true,
       reason: options?.reason ?? defaultReason,
       notify,
     };
+  }
+
+  private async resolveGitHubRemoteForTarget(
+    target: WorkspaceGitTarget,
+    remoteUrl: string | null,
+  ): Promise<GitHubRemoteIdentity | null> {
+    if (!remoteUrl) {
+      target.cachedGitHubRemote = null;
+      return null;
+    }
+    if (target.cachedGitHubRemote?.remoteUrl === remoteUrl) {
+      return target.cachedGitHubRemote.identity;
+    }
+    const identity = await resolveGitHubRemote({ remoteUrl });
+    target.cachedGitHubRemote = { remoteUrl, identity };
+    return identity;
   }
 
   private shouldThrottleNonForcedRefresh(
@@ -1728,7 +1557,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   ): WorkspaceGitRefreshRequest {
     return {
       force: options?.force === true,
-      includeForge: options?.includeForge ?? false,
+      includeGitHub: options?.includeGitHub ?? false,
       reason: options?.reason ?? "watch",
       notify: true,
     };
@@ -1744,11 +1573,11 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
 
     const force = pending.force || request.force;
     const upgradesForce = request.force && !pending.force;
-    const upgradesForge = request.includeForge && !pending.includeForge;
+    const upgradesGitHub = request.includeGitHub && !pending.includeGitHub;
     return {
       force,
-      includeForge: pending.includeForge || request.includeForge,
-      reason: upgradesForce || upgradesForge ? request.reason : pending.reason,
+      includeGitHub: pending.includeGitHub || request.includeGitHub,
+      reason: upgradesForce || upgradesGitHub ? request.reason : pending.reason,
       notify: pending.notify || request.notify,
     };
   }
@@ -1775,7 +1604,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       request = state.queued;
       state.queued = null;
       state.force = request.force;
-      state.includeForge = request.includeForge;
+      state.includeGitHub = request.includeGitHub;
     }
 
     return snapshot;
@@ -1786,8 +1615,8 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     request: WorkspaceGitRefreshRequest,
   ): Promise<WorkspaceGitRuntimeSnapshot> {
     const facts = await this.refreshGitSnapshot(target, request);
-    if (request.includeForge) {
-      await this.refreshForgeSnapshot(target, request, facts);
+    if (request.includeGitHub) {
+      await this.refreshGitHubSnapshot(target, request, facts);
     }
 
     const snapshot = this.combineSnapshot(target);
@@ -1803,7 +1632,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     target.lastShellOutAtMs = now.getTime();
 
     const cwd = target.cwd;
-    const previousForgePrStatusPollKey = this.getForgePrStatusPollKey(target);
+    const previousGitHubPollKey = this.getGitHubPollKey(target);
     const baseContext: CheckoutContext = {
       paseoHome: this.paseoHome,
       worktreesRoot: this.worktreesRoot,
@@ -1818,11 +1647,13 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     if (!checkoutStatus.isGit) {
       target.latestGit = buildNotGitSnapshot(cwd).git;
       target.latestGitLoadedAtMs = this.deps.now().getTime();
-      target.latestForge = buildForgeUnavailableSnapshot();
-      target.latestForgeLoadedAtMs = target.latestGitLoadedAtMs;
+      target.cachedGitHubRemote = null;
+      target.latestGithub = buildGitHubUnavailableSnapshot();
+      target.latestGithubLoadedAtMs = target.latestGitLoadedAtMs;
       return facts;
     }
 
+    await this.resolveGitHubRemoteForTarget(target, checkoutStatus.remoteUrl);
     const diffStat = await this.deps
       .getCheckoutShortstat(cwd, context, { force: request.force })
       .catch(() => null);
@@ -1844,48 +1675,34 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     };
     target.latestGitLoadedAtMs = this.deps.now().getTime();
 
-    if (previousForgePrStatusPollKey !== this.getForgePrStatusPollKey(target)) {
-      target.latestForge = buildForgeUnavailableSnapshot();
-      target.latestForgeLoadedAtMs = target.latestGitLoadedAtMs;
+    if (previousGitHubPollKey !== this.getGitHubPollKey(target)) {
+      target.latestGithub = buildGitHubUnavailableSnapshot();
+      target.latestGithubLoadedAtMs = target.latestGitLoadedAtMs;
     }
     return facts;
   }
 
-  private async refreshForgeSnapshot(
+  private async refreshGitHubSnapshot(
     target: WorkspaceGitTarget,
     request: WorkspaceGitRefreshRequest,
     facts: CheckoutSnapshotFacts,
   ): Promise<void> {
-    const remoteUrl = target.latestGit?.remoteUrl ?? null;
-    const resolution = await this.forgeResolver.resolveFromRemoteUrlAsync(remoteUrl);
-    // Every forge gates on the resolver alone: a cloud host matches synchronously
-    // and a self-hosted/Enterprise host is recognized by the adapter probe (which
-    // this async resolution populates), so GitHub Enterprise is no longer gated
-    // out by a cloud-only identity check.
-    if (!resolution) {
-      target.latestForge = buildUnresolvedRemoteForgeSnapshot(remoteUrl);
-      target.latestForgeLoadedAtMs = this.deps.now().getTime();
-      return;
-    }
-    const forgeService: ForgeService = resolution.service;
-    const forceForge = request.force && request.includeForge;
-    if (forceForge) {
-      forgeService.invalidate({ cwd: target.cwd });
+    const githubRemote = target.cachedGitHubRemote?.identity ?? null;
+    const forceGitHub = request.force && request.includeGitHub;
+    if (forceGitHub) {
+      this.deps.github.invalidate({ cwd: target.cwd });
     }
 
-    const forgeSnapshot = await loadForgeSnapshot({
+    target.latestGithub = await loadGitHubSnapshot({
       cwd: target.cwd,
-      forgeService,
+      githubRemote,
       now: this.deps.now(),
       deps: this.deps,
-      force: forceForge,
+      force: forceGitHub,
       reason: request.reason,
       facts,
     });
-    // Carry the resolved forge (probe-aware) so the wire projection labels
-    // self-managed GitLab hosts correctly instead of falling back to "github".
-    target.latestForge = { ...forgeSnapshot, forge: resolution.forge };
-    target.latestForgeLoadedAtMs = this.deps.now().getTime();
+    target.latestGithubLoadedAtMs = this.deps.now().getTime();
   }
 
   private combineSnapshot(target: WorkspaceGitTarget): WorkspaceGitRuntimeSnapshot {
@@ -1896,44 +1713,40 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     return {
       cwd: target.cwd,
       git: target.latestGit,
-      forge: target.latestForge ?? buildForgeUnavailableSnapshot(),
+      github: target.latestGithub ?? buildGitHubUnavailableSnapshot(),
     };
   }
 
-  private getForgePrStatusPollKey(target: WorkspaceGitTarget): string | null {
+  private getGitHubPollKey(target: WorkspaceGitTarget): string | null {
     const git = target.latestGit;
     if (!git?.currentBranch || !git.remoteUrl) {
       return null;
     }
 
-    const resolution = this.forgeResolver.resolveFromRemoteUrl(git.remoteUrl);
-    if (!resolution) {
+    const githubRemote = target.cachedGitHubRemote;
+    if (!githubRemote || githubRemote.remoteUrl !== git.remoteUrl || !githubRemote.identity) {
       return null;
     }
 
-    const pollTarget = this.resolveForgePrStatusPollTarget(target);
+    const pollTarget = this.resolveGitHubPollTarget(target);
     if (!pollTarget) {
       return null;
     }
 
-    return buildWorkspaceForgePrStatusPollKey({
-      forge: resolution.forge,
-      remoteUrl: git.remoteUrl,
-      target: pollTarget,
-    });
+    return buildWorkspaceGitHubPollKey(git.remoteUrl, pollTarget);
   }
 
-  private rememberForgePrStatusSnapshot(
+  private rememberGitHubSnapshot(
     target: WorkspaceGitTarget,
-    github: WorkspaceGitRuntimeSnapshot["forge"],
+    github: WorkspaceGitRuntimeSnapshot["github"],
     options?: { notify?: boolean },
   ): void {
     if (target.closed || this.workspaceTargets.get(target.cwd) !== target) {
       return;
     }
 
-    target.latestForge = github;
-    target.latestForgeLoadedAtMs = this.deps.now().getTime();
+    target.latestGithub = github;
+    target.latestGithubLoadedAtMs = this.deps.now().getTime();
     this.rememberSnapshot(target, this.combineSnapshot(target), {
       notify: options?.notify,
       forceEmit: false,
@@ -1947,7 +1760,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   ): void {
     target.latestSnapshot = snapshot;
     if (target.listeners.size > 0) {
-      this.updateForgePrStatusPollForTarget(target);
+      this.updateGitHubPollForTarget(target);
     }
     const fingerprint = JSON.stringify(snapshot);
     const fingerprintMatches = target.latestFingerprint === fingerprint;
@@ -2001,7 +1814,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
           }
           await this.refreshWorkspaceTarget(workspaceTarget, {
             force: false,
-            includeForge: false,
+            includeGitHub: false,
             reason: "repo-fetch",
             notify: true,
           });
@@ -2063,7 +1876,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       clearInterval(target.selfHealTimer);
       target.selfHealTimer = null;
     }
-    this.stopForgePrStatusPollForTarget(target);
+    this.stopGitHubPollForTarget(target);
 
     for (const watcher of target.watchers) {
       watcher.close();
@@ -2098,63 +1911,57 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   }
 }
 
-async function loadForgeSnapshot(options: {
+async function loadGitHubSnapshot(options: {
   cwd: string;
-  forgeService: ForgeService | null;
+  githubRemote: GitHubRemoteIdentity | null;
   now: Date;
-  deps: Pick<WorkspaceGitServiceDependencies, "getPullRequestStatus">;
+  deps: Pick<WorkspaceGitServiceDependencies, "getPullRequestStatus" | "github">;
   force?: boolean;
   reason?: string;
   facts?: CheckoutSnapshotFacts;
-}): Promise<WorkspaceGitRuntimeSnapshot["forge"]> {
-  const forgeService = options.forgeService;
-  if (!forgeService) {
-    return buildForgeSnapshot("no_remote", null, null);
+}): Promise<WorkspaceGitRuntimeSnapshot["github"]> {
+  if (!options.githubRemote) {
+    return {
+      featuresEnabled: false,
+      pullRequest: null,
+      error: null,
+    };
   }
 
-  // GitHub's isAuthenticated throws the precise CLI-missing / auth error; GitLab's
-  // and Gitea's return false without throwing (the precise kind surfaces from
-  // the PR-status lookup below instead), so probing them here can't change the
-  // outcome and would just be a wasted CLI spawn on every refresh.
-  if (forgeService.authProbeCanThrow) {
-    try {
-      await forgeService.isAuthenticated({ cwd: options.cwd });
-    } catch (error) {
-      return buildForgeSnapshot(forgeAuthStateFromError(error), null, null);
-    }
+  try {
+    await options.deps.github.isAuthenticated({ cwd: options.cwd });
+  } catch {
+    return {
+      featuresEnabled: false,
+      pullRequest: null,
+      error: null,
+    };
   }
 
   try {
     const result = await options.deps.getPullRequestStatus(
       options.cwd,
-      forgeService,
+      options.deps.github,
       {
         force: options.force,
         reason: options.reason,
       },
       { facts: options.facts },
     );
-    return buildForgeSnapshot(result.authState, result.status, null);
+    return {
+      featuresEnabled: true,
+      pullRequest: result.status,
+      error: null,
+    };
   } catch (error) {
-    // The auth probe succeeded, so a failure here is a command error, not an
-    // auth problem — surface it as an error while keeping features enabled.
-    return buildForgeSnapshot("authenticated", null, {
-      message: error instanceof Error ? error.message : String(error),
-    });
+    return {
+      featuresEnabled: true,
+      pullRequest: null,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
   }
-}
-
-function buildForgeSnapshot(
-  authState: ForgeAuthState,
-  pullRequest: WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"],
-  error: WorkspaceGitRuntimeSnapshot["forge"]["error"],
-): WorkspaceGitRuntimeSnapshot["forge"] {
-  return {
-    featuresEnabled: authState === "authenticated",
-    authState,
-    pullRequest,
-    error,
-  };
 }
 
 function parseWorkspaceGitStashList(
@@ -2211,76 +2018,30 @@ function buildNotGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
       hasRemote: false,
       diffStat: null,
     },
-    forge: buildForgeUnavailableSnapshot(),
+    github: buildGitHubUnavailableSnapshot(),
   };
 }
 
-function buildForgeUnavailableSnapshot(): WorkspaceGitRuntimeSnapshot["forge"] {
-  return buildForgeSnapshot("no_remote", null, null);
+function buildGitHubUnavailableSnapshot(): WorkspaceGitRuntimeSnapshot["github"] {
+  return {
+    featuresEnabled: false,
+    pullRequest: null,
+    error: null,
+  };
 }
 
-/**
- * Snapshot for a remote whose host matched no registered forge and no
- * CLI-authenticated host. Deliberate choice: expose the hostname as the open
- * `forge` id with `authState: "unauthenticated"`, because a self-hosted
- * GitLab/Gitea becomes resolvable the moment its CLI is authenticated for
- * that host — so "authenticate" is the actionable next step. The trade-off:
- * a genuinely unsupported host (e.g. Bitbucket) also reads as a login
- * problem; clients that want to distinguish can check the id against the
- * forge registry.
- */
-function buildUnresolvedRemoteForgeSnapshot(
-  remoteUrl: string | null,
-): WorkspaceGitRuntimeSnapshot["forge"] {
-  const host = remoteUrl ? parseGitRemoteLocation(remoteUrl)?.host : null;
-  if (!host) {
-    return buildForgeUnavailableSnapshot();
-  }
-  return { ...buildForgeSnapshot("unauthenticated", null, null), forge: host };
+function buildGitHubSnapshotFromStatus(
+  status: WorkspaceGitRuntimeSnapshot["github"]["pullRequest"],
+): WorkspaceGitRuntimeSnapshot["github"] {
+  return {
+    featuresEnabled: true,
+    pullRequest: status,
+    error: null,
+  };
 }
 
-function buildForgeSnapshotFromStatus(
-  status: WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"],
-  forge: string,
-): WorkspaceGitRuntimeSnapshot["forge"] {
-  return { ...buildForgeSnapshot("authenticated", status, null), forge };
-}
-
-function buildWorkspaceForgePrStatusPollKey({
-  forge,
-  remoteUrl,
-  target,
-}: {
-  forge: string;
-  remoteUrl: string;
-  target: WorkspaceForgePrStatusPollTarget;
-}): string {
-  return JSON.stringify([
-    forge,
-    remoteUrl,
-    target.headRef,
-    target.headSha ?? null,
-    target.headRepositoryOwner ?? null,
-  ]);
-}
-
-function computeGenericForgeNextInterval(
-  status: WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"],
-  consecutiveErrors: number,
-): number {
-  const isPending =
-    status?.checksStatus === "pending" ||
-    status?.checks?.some((check) => check.status === "pending") === true;
-  const baseInterval = isPending
-    ? FORGE_PR_STATUS_POLL_FAST_INTERVAL_MS
-    : FORGE_PR_STATUS_POLL_SLOW_INTERVAL_MS;
-  if (consecutiveErrors <= 1) {
-    return baseInterval;
-  }
-  return Math.min(
-    baseInterval * 2 ** (consecutiveErrors - 1),
-    FORGE_PR_STATUS_POLL_ERROR_BACKOFF_CAP_MS,
-  );
+function buildWorkspaceGitHubPollKey(remoteUrl: string, target: WorkspaceGitHubPollTarget): string {
+  return JSON.stringify([remoteUrl, target.headRef, target.headRepositoryOwner ?? null]);
 }
 
 async function runGitFetch(cwd: string): Promise<void> {

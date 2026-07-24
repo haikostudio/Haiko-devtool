@@ -132,19 +132,15 @@ export interface SeedDaemonClient {
     timeout?: number,
   ): Promise<{ status: string; final?: { lastError?: string | null } | null }>;
   archiveAgent(agentId: string): Promise<{ archivedAt: string }>;
-  refreshAgent(agentId: string): Promise<unknown>;
   fetchAgent(options: {
     agentId: string;
   }): Promise<{ agent: { id: string; archivedAt?: string | null } } | null>;
   getLastServerInfoMessage(): {
-    features?: {
-      projectAdd?: boolean;
-      workspaceRecovery?: boolean;
-    } | null;
+    features?: { projectAdd?: boolean; worktreeRestore?: boolean } | null;
   } | null;
   fetchAgentHistory(options?: {
     page?: { limit: number };
-  }): Promise<{ entries: Array<{ agent: { id: string } }> }>;
+  }): Promise<{ entries: Array<{ id: string }> }>;
   subscribeTerminal(
     terminalId: string,
   ): Promise<{ terminalId: string; slot: number; error: null } | { error: string }>;
@@ -158,11 +154,10 @@ export interface SeedDaemonClient {
   killTerminal(terminalId: string): Promise<{ error: string | null }>;
 }
 
-export async function connectSeedClient(options?: { port?: number }): Promise<SeedDaemonClient> {
+export async function connectSeedClient(): Promise<SeedDaemonClient> {
   return connectDaemonClient<SeedDaemonClient>({
     clientIdPrefix: "seed",
     appVersion: loadAppVersion(),
-    port: options?.port,
   });
 }
 

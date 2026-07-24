@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown from "react-markdown";
 import changelogMarkdown from "../../../../CHANGELOG.md?raw";
 import { SiteShell } from "~/components/site-shell";
 import { pageMeta } from "~/meta";
@@ -10,13 +10,7 @@ interface ChangelogRelease {
   markdown: string;
 }
 
-interface ChangelogReleaseGroup {
-  version: string;
-  releases: ChangelogRelease[];
-}
-
 const releaseHeadingPattern = /^## (.+?) - (\d{4}-\d{2}-\d{2})$/;
-const patchMarkdownComponents: Components = { h3: "h4" };
 
 export const Route = createFileRoute("/changelog")({
   head: () =>
@@ -70,76 +64,28 @@ function parseChangelog(markdown: string): ChangelogRelease[] {
 
 const changelogReleases = parseChangelog(changelogMarkdown);
 
-function minorVersion(version: string): string {
-  return version.split(".").slice(0, 2).join(".");
-}
-
-function groupChangelogReleases(releases: ChangelogRelease[]): ChangelogReleaseGroup[] {
-  const groups: ChangelogReleaseGroup[] = [];
-
-  for (const release of releases) {
-    const version = minorVersion(release.version);
-    const currentGroup = groups.at(-1);
-    if (currentGroup?.version === version) {
-      currentGroup.releases.push(release);
-    } else {
-      groups.push({ version, releases: [release] });
-    }
-  }
-
-  return groups;
-}
-
-const changelogReleaseGroups = groupChangelogReleases(changelogReleases);
-
-function HeadingAnchor({ version }: { version: string }) {
-  const anchor = `release-${version}`;
-
-  return (
-    <a
-      href={`#${anchor}`}
-      className="changelog-heading-anchor"
-      aria-label={`Link to Paseo ${version}`}
-    >
-      <span aria-hidden="true">#</span>
-    </a>
-  );
-}
-
-function PatchRelease({ release }: { release: ChangelogRelease }) {
+function Release({ release }: { release: ChangelogRelease }) {
   const anchor = `release-${release.version}`;
 
   return (
-    <section className="changelog-patch">
-      <div id={anchor} className="changelog-patch-heading">
-        <HeadingAnchor version={release.version} />
-        <h3 className="changelog-patch-title">{release.version}</h3>
-        <time dateTime={release.date} className="changelog-release-date">
-          {formatDate(release.date)}
-        </time>
-      </div>
-      <div className="changelog-release-notes">
-        <ReactMarkdown components={patchMarkdownComponents}>{release.markdown}</ReactMarkdown>
-      </div>
-    </section>
-  );
-}
-
-function Release({ group }: { group: ChangelogReleaseGroup }) {
-  const anchor = `release-${group.version}`;
-
-  return (
     <article className="changelog-release">
+      <time dateTime={release.date} className="changelog-release-date">
+        {formatDate(release.date)}
+      </time>
       <div id={anchor} className="changelog-release-heading">
-        <HeadingAnchor version={group.version} />
+        <a
+          href={`#${anchor}`}
+          className="changelog-heading-anchor"
+          aria-label={`Link to Paseo ${release.version}`}
+        >
+          <span aria-hidden="true">#</span>
+        </a>
         <h2 className="changelog-release-title">
-          Paseo <span>{group.version}</span>
+          Paseo <span>{release.version}</span>
         </h2>
       </div>
-      <div className="changelog-patches">
-        {group.releases.map((release) => (
-          <PatchRelease key={release.version} release={release} />
-        ))}
+      <div className="changelog-release-notes">
+        <ReactMarkdown>{release.markdown}</ReactMarkdown>
       </div>
     </article>
   );
@@ -150,8 +96,8 @@ function Changelog() {
     <SiteShell width="default">
       <div className="max-w-2xl">
         <h1 className="mb-12 text-3xl font-medium tracking-tight">Changelog</h1>
-        {changelogReleaseGroups.map((group) => (
-          <Release key={group.version} group={group} />
+        {changelogReleases.map((release) => (
+          <Release key={release.version} release={release} />
         ))}
       </div>
     </SiteShell>

@@ -15,26 +15,37 @@ import {
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import * as Clipboard from "expo-clipboard";
-import { ChevronDown, Eye, EyeOff, RotateCw } from "lucide-react-native";
-import { MaterialFileIcon } from "@/components/material-file-icon";
+import { SvgXml } from "react-native-svg";
 import {
-  TreeChevron,
-  TreeIndentGuides,
-  treeRowPaddingLeft,
-  WORKSPACE_FILE_ROW_VERTICAL_PADDING,
-} from "@/components/tree-primitives";
+  ChevronDown,
+  Copy,
+  Download,
+  Eye,
+  EyeOff,
+  MoreVertical,
+  RotateCw,
+} from "lucide-react-native";
+import { getFileIconSvg } from "@/components/material-file-icons";
+import { TreeChevron, TreeIndentGuides, TREE_INDENT_PER_LEVEL } from "@/components/tree-primitives";
+import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import type { AgentFileExplorerState, ExplorerEntry } from "@/stores/session-store";
+import { useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { FileActionsMenu } from "@/components/file-actions-menu";
-import { useFileDownload } from "@/hooks/use-file-download";
+import { useDownloadStore } from "@/stores/download-store";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useFileExplorerActions } from "@/hooks/use-file-explorer-actions";
 import { buildWorkspaceExplorerStateKey } from "@/hooks/use-file-explorer-actions";
 import { usePanelStore, type SortOption } from "@/stores/panel-store";
 import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { filterVisibleExplorerEntries, isHiddenExplorerPath } from "@/file-explorer/visibility";
-import { useWorkspaceFileDragSource } from "@/attachments/use-workspace-file-drag-source";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -53,8 +64,6 @@ function formatFileSize({ size }: { size: number }): string {
 }
 
 interface TreeRowItemProps {
-  serverId: string;
-  workspaceId?: string | null;
   entry: ExplorerEntry;
   depth: number;
   isExpanded: boolean;
@@ -63,8 +72,21 @@ interface TreeRowItemProps {
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void;
   onDownloadEntry: (entry: ExplorerEntry) => void;
-  onAddToChat?: (path: string) => void;
-  testID?: string;
+}
+
+function stopPressInPropagation(event: { stopPropagation?: () => void }) {
+  event.stopPropagation?.();
+}
+
+function menuButtonStyle({
+  hovered,
+  pressed,
+  open,
+}: PressableStateCallbackType & { hovered?: boolean; open?: boolean }) {
+  return [
+    styles.menuButton,
+    (Boolean(hovered) || pressed || Boolean(open)) && styles.menuButtonActive,
+  ];
 }
 
 function sortTriggerStyle({
@@ -83,8 +105,6 @@ function treeRowKeyExtractor(row: TreeRow) {
 }
 
 function TreeRowItem({
-  serverId,
-  workspaceId,
   entry,
   depth,
   isExpanded,
@@ -93,17 +113,10 @@ function TreeRowItem({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
-  onAddToChat,
-  testID,
 }: TreeRowItemProps) {
+  const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isDirectory = entry.kind === "directory";
-  const dragSourceRef = useWorkspaceFileDragSource({
-    enabled: !isDirectory,
-    serverId,
-    workspaceId,
-    path: entry.path,
-  });
 
   const handlePress = useCallback(() => {
     onEntryPress(entry);
@@ -112,10 +125,10 @@ function TreeRowItem({
   const pressableStyle = useCallback(
     ({ hovered, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
       styles.entryRow,
-      { paddingLeft: treeRowPaddingLeft(depth) },
+      { paddingLeft: theme.spacing[2] + depth * TREE_INDENT_PER_LEVEL },
       (Boolean(hovered) || pressed || isSelected) && styles.entryRowActive,
     ],
-    [depth, isSelected],
+    [depth, isSelected, theme.spacing],
   );
 
   const handleCopy = useCallback(() => {
@@ -126,42 +139,23 @@ function TreeRowItem({
     onDownloadEntry(entry);
   }, [onDownloadEntry, entry]);
 
-  const handleAddToChat = useCallback(() => {
-    onAddToChat?.(entry.path);
-  }, [onAddToChat, entry.path]);
-
-  const metaHeader = useMemo(
-    () => (
-      <View style={styles.contextMetaBlock}>
-        <View style={styles.contextMetaRow}>
-          <Text style={styles.contextMetaLabel} numberOfLines={1}>
-            {t("workspace.fileExplorer.context.size")}
-          </Text>
-          <Text style={styles.contextMetaValue} numberOfLines={1} ellipsizeMode="tail">
-            {formatFileSize({ size: entry.size })}
-          </Text>
-        </View>
-        <View style={styles.contextMetaRow}>
-          <Text style={styles.contextMetaLabel} numberOfLines={1}>
-            {t("workspace.fileExplorer.context.modified")}
-          </Text>
-          <Text style={styles.contextMetaValue} numberOfLines={1} ellipsizeMode="tail">
-            {formatTimeAgo(new Date(entry.modifiedAt))}
-          </Text>
-        </View>
-      </View>
-    ),
-    [entry.modifiedAt, entry.size, t],
+  const copyLeading = useMemo(
+    () => <Copy size={14} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted],
+  );
+  const downloadLeading = useMemo(
+    () => <Download size={14} color={theme.colors.foregroundMuted} />,
+    [theme.colors.foregroundMuted],
   );
 
   return (
-    <Pressable onPress={handlePress} style={pressableStyle} testID={testID}>
+    <Pressable onPress={handlePress} style={pressableStyle}>
       <TreeIndentGuides depth={depth} />
-      <View ref={dragSourceRef} style={styles.entryInfo}>
+      <View style={styles.entryInfo}>
         <View style={styles.entryIcon}>
           {(() => {
             if (!isDirectory) {
-              return <MaterialFileIcon fileName={entry.name} size={16} />;
+              return <SvgXml xml={getFileIconSvg(entry.name)} width={16} height={16} />;
             }
             if (loading) return <ActivityIndicator size="small" />;
             return <TreeChevron expanded={isExpanded} />;
@@ -171,15 +165,40 @@ function TreeRowItem({
           {entry.name}
         </Text>
       </View>
-      <FileActionsMenu
-        fileKind={entry.kind}
-        onCopyPath={handleCopy}
-        onDownload={handleDownload}
-        onAddToChat={onAddToChat ? handleAddToChat : undefined}
-        header={metaHeader}
-        accessibilityLabel={t("workspace.fileActions.moreActions")}
-        testIDPrefix={testID}
-      />
+      <DropdownMenu>
+        <DropdownMenuTrigger hitSlop={8} onPressIn={stopPressInPropagation} style={menuButtonStyle}>
+          <MoreVertical size={16} color={theme.colors.foregroundMuted} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" width={220}>
+          <View style={styles.contextMetaBlock}>
+            <View style={styles.contextMetaRow}>
+              <Text style={styles.contextMetaLabel} numberOfLines={1}>
+                {t("workspace.fileExplorer.context.size")}
+              </Text>
+              <Text style={styles.contextMetaValue} numberOfLines={1} ellipsizeMode="tail">
+                {formatFileSize({ size: entry.size })}
+              </Text>
+            </View>
+            <View style={styles.contextMetaRow}>
+              <Text style={styles.contextMetaLabel} numberOfLines={1}>
+                {t("workspace.fileExplorer.context.modified")}
+              </Text>
+              <Text style={styles.contextMetaValue} numberOfLines={1} ellipsizeMode="tail">
+                {formatTimeAgo(new Date(entry.modifiedAt))}
+              </Text>
+            </View>
+          </View>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem leading={copyLeading} onSelect={handleCopy}>
+            {t("workspace.fileExplorer.context.copyPath")}
+          </DropdownMenuItem>
+          {entry.kind === "file" ? (
+            <DropdownMenuItem leading={downloadLeading} onSelect={handleDownload}>
+              {t("workspace.fileExplorer.context.download")}
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </Pressable>
   );
 }
@@ -189,7 +208,6 @@ interface FileExplorerPaneProps {
   workspaceId?: string | null;
   workspaceRoot: string;
   onOpenFile?: (filePath: string) => void;
-  onAddToChat?: (path: string) => void;
 }
 
 interface TreeRow {
@@ -202,10 +220,14 @@ export function FileExplorerPane({
   workspaceId,
   workspaceRoot,
   onOpenFile,
-  onAddToChat,
 }: FileExplorerPaneProps) {
   const { t } = useTranslation();
 
+  const daemons = useHosts();
+  const daemonProfile = useMemo(
+    () => daemons.find((daemon) => daemon.serverId === serverId),
+    [daemons, serverId],
+  );
   const normalizedWorkspaceRoot = useMemo(() => workspaceRoot.trim(), [workspaceRoot]);
   const workspaceStateKey = useMemo(
     () =>
@@ -215,6 +237,10 @@ export function FileExplorerPane({
       }),
     [normalizedWorkspaceRoot, workspaceId],
   );
+  const workspaceScopeId = useMemo(
+    () => workspaceId?.trim() || normalizedWorkspaceRoot,
+    [normalizedWorkspaceRoot, workspaceId],
+  );
   const hasWorkspaceScope = Boolean(workspaceStateKey && normalizedWorkspaceRoot);
   const explorerState = useSessionStore((state) =>
     workspaceStateKey && state.sessions[serverId]
@@ -222,16 +248,12 @@ export function FileExplorerPane({
       : undefined,
   );
 
-  const { requestDirectoryListing, selectExplorerEntry } = useFileExplorerActions({
-    serverId,
-    workspaceId,
-    workspaceRoot: normalizedWorkspaceRoot,
-  });
-  const downloadFile = useFileDownload({
-    serverId,
-    workspaceId,
-    workspaceRoot: normalizedWorkspaceRoot,
-  });
+  const { requestDirectoryListing, requestFileDownloadToken, selectExplorerEntry } =
+    useFileExplorerActions({
+      serverId,
+      workspaceId,
+      workspaceRoot: normalizedWorkspaceRoot,
+    });
   const sortOption = usePanelStore((state) => state.explorerSortOption);
   const showHiddenFiles = usePanelStore((state) => state.explorerShowHiddenFiles);
   const setSortOption = usePanelStore((state) => state.setExplorerSortOption);
@@ -326,14 +348,18 @@ export function FileExplorerPane({
     [normalizedWorkspaceRoot],
   );
 
+  const startDownload = useDownloadStore((state) => state.startDownload);
   const handleDownloadEntry = useCallback(
-    (entry: ExplorerEntry) => {
-      if (entry.kind !== "file") {
-        return;
-      }
-      downloadFile({ fileName: entry.name, path: entry.path });
-    },
-    [downloadFile],
+    (entry: ExplorerEntry) =>
+      downloadExplorerEntry({
+        entry,
+        workspaceScopeId,
+        serverId,
+        daemonProfile,
+        startDownload,
+        requestFileDownloadToken,
+      }),
+    [daemonProfile, requestFileDownloadToken, serverId, startDownload, workspaceScopeId],
   );
 
   const handleSortCycle = useCallback(() => {
@@ -395,8 +421,6 @@ export function FileExplorerPane({
   const renderTreeRow = useCallback(
     (info: ListRenderItemInfo<TreeRow>) => (
       <TreeRowDispatcher
-        serverId={serverId}
-        workspaceId={workspaceId}
         info={info}
         expandedPaths={expandedPaths}
         selectedEntryPath={selectedEntryPath}
@@ -404,7 +428,6 @@ export function FileExplorerPane({
         onEntryPress={handleEntryPress}
         onCopyPath={handleCopyPath}
         onDownloadEntry={handleDownloadEntry}
-        onAddToChat={onAddToChat}
       />
     ),
     [
@@ -414,9 +437,6 @@ export function FileExplorerPane({
       handleDownloadEntry,
       isDirectoryLoading,
       selectedEntryPath,
-      onAddToChat,
-      serverId,
-      workspaceId,
     ],
   );
 
@@ -534,13 +554,13 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
         <Text style={styles.errorText}>{error}</Text>
         <View style={styles.errorActions}>
           {showBackFromError ? (
-            <Pressable style={styles.retryButton} onPress={handleBackFromError}>
-              <Text style={styles.retryButtonText}>{t("workspace.fileExplorer.actions.back")}</Text>
-            </Pressable>
+            <Button variant="outline" size="sm" onPress={handleBackFromError}>
+              {t("workspace.fileExplorer.actions.back")}
+            </Button>
           ) : null}
-          <Pressable style={styles.retryButton} onPress={handleRetry}>
-            <Text style={styles.retryButtonText}>{t("workspace.fileExplorer.actions.retry")}</Text>
-          </Pressable>
+          <Button variant="outline" size="sm" onPress={handleRetry}>
+            {t("workspace.fileExplorer.actions.retry")}
+          </Button>
         </View>
       </View>
     );
@@ -556,16 +576,10 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
   }
 
   return (
-    <View style={[styles.treePane, styles.treePaneFill]}>
+    <View style={TREE_PANE_CONTAINER_STYLE}>
       <View style={styles.paneHeader} testID="files-pane-header">
-        <Pressable
-          onPress={handleSortCycle}
-          style={sortTriggerStyleProp}
-          testID="files-sort-trigger"
-        >
-          <Text style={styles.sortTriggerText} testID="files-sort-label">
-            {currentSortLabel}
-          </Text>
+        <Pressable onPress={handleSortCycle} style={sortTriggerStyleProp}>
+          <Text style={styles.sortTriggerText}>{currentSortLabel}</Text>
           <ChevronDown size={12} color={theme.colors.foregroundMuted} />
         </Pressable>
         <View style={styles.headerActions}>
@@ -576,7 +590,6 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
             accessibilityRole="button"
             accessibilityLabel={hiddenFilesToggleAccessibilityLabel}
             accessibilityState={hiddenFilesToggleAccessibilityState}
-            testID="files-hidden-toggle"
           >
             {showHiddenFiles ? (
               <Eye size={theme.iconSize.sm} color={theme.colors.foregroundMuted} />
@@ -595,7 +608,6 @@ function FileExplorerPaneContent(props: FileExplorerPaneContentProps) {
                 ? t("workspace.fileExplorer.actions.refreshing")
                 : t("workspace.fileExplorer.actions.refresh")
             }
-            testID="files-refresh"
           >
             <View style={styles.refreshIcon}>
               {isRefreshFetching ? (
@@ -768,6 +780,39 @@ function resolveTreeRows({
   });
 }
 
+type StartDownloadFn = ReturnType<typeof useDownloadStore.getState>["startDownload"];
+type StartDownloadParams = Parameters<StartDownloadFn>[0];
+
+function downloadExplorerEntry({
+  entry,
+  workspaceScopeId,
+  serverId,
+  daemonProfile,
+  startDownload,
+  requestFileDownloadToken,
+}: {
+  entry: ExplorerEntry;
+  workspaceScopeId: string | undefined;
+  serverId: string;
+  daemonProfile: StartDownloadParams["daemonProfile"];
+  startDownload: StartDownloadFn;
+  requestFileDownloadToken: (
+    targetPath: string,
+  ) => ReturnType<StartDownloadParams["requestFileDownloadToken"]>;
+}): void {
+  if (!workspaceScopeId || entry.kind !== "file") {
+    return;
+  }
+  startDownload({
+    serverId,
+    scopeId: workspaceScopeId,
+    fileName: entry.name,
+    path: entry.path,
+    daemonProfile,
+    requestFileDownloadToken: (targetPath) => requestFileDownloadToken(targetPath),
+  });
+}
+
 function toggleDirectory({
   entry,
   workspaceStateKey,
@@ -807,8 +852,6 @@ function toggleDirectory({
 }
 
 function TreeRowDispatcher({
-  serverId,
-  workspaceId,
   info,
   expandedPaths,
   selectedEntryPath,
@@ -816,10 +859,7 @@ function TreeRowDispatcher({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
-  onAddToChat,
 }: {
-  serverId: string;
-  workspaceId?: string | null;
   info: ListRenderItemInfo<TreeRow>;
   expandedPaths: Set<string>;
   selectedEntryPath: string | null;
@@ -827,7 +867,6 @@ function TreeRowDispatcher({
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void | Promise<void>;
   onDownloadEntry: (entry: ExplorerEntry) => void;
-  onAddToChat?: (path: string) => void;
 }) {
   const entry = info.item.entry;
   const depth = info.item.depth;
@@ -838,8 +877,6 @@ function TreeRowDispatcher({
 
   return (
     <TreeRowItem
-      serverId={serverId}
-      workspaceId={workspaceId}
       entry={entry}
       depth={depth}
       isExpanded={isExpanded}
@@ -848,8 +885,6 @@ function TreeRowDispatcher({
       onEntryPress={onEntryPress}
       onCopyPath={onCopyPath}
       onDownloadEntry={onDownloadEntry}
-      onAddToChat={onAddToChat}
-      testID={`file-explorer-row-${info.index}`}
     />
   );
 }
@@ -1028,6 +1063,7 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 0,
   },
   entriesContent: {
+    paddingHorizontal: theme.spacing[2],
     paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[4],
   },
@@ -1047,18 +1083,6 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.base,
     textAlign: "center",
   },
-  retryButton: {
-    borderRadius: theme.borderRadius.full,
-    borderWidth: theme.borderWidth[1],
-    borderColor: theme.colors.border,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[1],
-  },
-  retryButtonText: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-  },
   errorActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -1077,8 +1101,9 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: WORKSPACE_FILE_ROW_VERTICAL_PADDING,
-    paddingRight: theme.spacing[3],
+    paddingVertical: theme.spacing[1],
+    paddingRight: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
   },
   entryRowActive: {
     backgroundColor: theme.colors.surfaceSidebarHover,
@@ -1097,6 +1122,16 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
+  },
+  menuButton: {
+    width: 30,
+    height: 30,
+    borderRadius: theme.borderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuButtonActive: {
+    backgroundColor: theme.colors.surface2,
   },
   contextMetaBlock: {
     paddingVertical: theme.spacing[1],
@@ -1207,3 +1242,5 @@ const styles = StyleSheet.create((theme) => ({
     padding: theme.spacing[4],
   },
 }));
+
+const TREE_PANE_CONTAINER_STYLE = [styles.treePane, styles.treePaneFill];

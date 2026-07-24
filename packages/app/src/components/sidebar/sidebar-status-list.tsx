@@ -7,6 +7,7 @@ import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspac
 import { type SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import type { StatusGroup } from "@/hooks/sidebar-status-view-model";
 import { isWeb as platformIsWeb, isNative as platformIsNative } from "@/constants/platform";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { StyleSheet } from "react-native-unistyles";
 import type { Theme } from "@/styles/theme";
 import { withUnistyles } from "react-native-unistyles";
@@ -39,11 +40,10 @@ import {
   SidebarWorkspaceTrailingActionOverlay,
   SidebarWorkspaceTrailingActionSlot,
 } from "@/components/sidebar/sidebar-workspace-row-content";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
 import { useSidebarCollapsedSectionsStore } from "@/stores/sidebar-collapsed-sections-store";
 import { SidebarWorkspaceMenu } from "@/components/sidebar/sidebar-workspace-menu";
 import { PinnedSectionHeader } from "@/components/sidebar/pinned-section-header";
-import { SidebarGroupToggleRow } from "@/components/sidebar/sidebar-group-toggle-row";
-import { useLimitedSidebarGroup } from "@/components/sidebar/use-limited-sidebar-group";
 import type { ToggleSidebarWorkspacePin } from "@/hooks/use-sidebar-workspace-pin";
 
 // Themed icon wrappers
@@ -95,12 +95,6 @@ export function SidebarStatusWorkspaceList({
   const togglePinnedCollapsed = useSidebarCollapsedSectionsStore(
     (state) => state.togglePinnedCollapsed,
   );
-  const {
-    visibleItems: visiblePinnedWorkspaces,
-    expanded: pinnedWorkspacesExpanded,
-    canToggle: canTogglePinnedWorkspaces,
-    toggleExpanded: togglePinnedWorkspacesExpanded,
-  } = useLimitedSidebarGroup(pinnedWorkspaces);
 
   const statusShortcutIndex = showShortcutBadges ? shortcutIndexByWorkspaceKey : new Map();
   const content = (
@@ -108,9 +102,9 @@ export function SidebarStatusWorkspaceList({
       {pinnedWorkspaces.length > 0 ? (
         <View style={styles.pinnedSection} testID="sidebar-pinned-section">
           <PinnedSectionHeader collapsed={pinnedCollapsed} onToggle={togglePinnedCollapsed} />
-          {pinnedCollapsed ? null : (
-            <>
-              {visiblePinnedWorkspaces.map((workspace) => (
+          {pinnedCollapsed
+            ? null
+            : pinnedWorkspaces.map((workspace) => (
                 <StatusWorkspaceRow
                   key={workspace.workspaceKey}
                   workspace={workspace}
@@ -124,18 +118,10 @@ export function SidebarStatusWorkspaceList({
                   showShortcutBadge={showShortcutBadges}
                   canPin={supportsPinningByServerId.get(workspace.serverId) === true}
                   onToggleWorkspacePin={onToggleWorkspacePin}
+                  reserveIdleStatusIndicatorSpace={false}
                   onWorkspacePress={onWorkspacePress}
                 />
               ))}
-              {canTogglePinnedWorkspaces ? (
-                <SidebarGroupToggleRow
-                  expanded={pinnedWorkspacesExpanded}
-                  onPress={togglePinnedWorkspacesExpanded}
-                  testID="sidebar-pinned-show-more"
-                />
-              ) : null}
-            </>
-          )}
         </View>
       ) : null}
       {listHeaderComponent}
@@ -205,89 +191,35 @@ function StatusGroupList({
   return (
     <>
       {groups.map((group) => (
-        <StatusGroupRows
-          key={group.bucket}
-          group={group}
-          collapsed={collapsedStatusGroupKeys.has(group.bucket)}
-          projectNamesByKey={projectNamesByKey}
-          shortcutIndex={shortcutIndex}
-          showShortcutBadges={showShortcutBadges}
-          onWorkspacePress={onWorkspacePress}
-          hostLabelByServerId={hostLabelByServerId}
-          showHostLabels={showHostLabels}
-          supportsPinningByServerId={supportsPinningByServerId}
-          onToggleWorkspacePin={onToggleWorkspacePin}
-        />
-      ))}
-    </>
-  );
-}
-
-function StatusGroupRows({
-  group,
-  collapsed,
-  projectNamesByKey,
-  shortcutIndex,
-  showShortcutBadges,
-  onWorkspacePress,
-  hostLabelByServerId,
-  showHostLabels,
-  supportsPinningByServerId,
-  onToggleWorkspacePin,
-}: {
-  group: StatusGroup;
-  collapsed: boolean;
-  projectNamesByKey: Map<string, string>;
-  shortcutIndex: Map<string, number>;
-  showShortcutBadges: boolean;
-  onWorkspacePress?: () => void;
-  hostLabelByServerId: ReadonlyMap<string, string>;
-  showHostLabels: boolean;
-  supportsPinningByServerId: ReadonlyMap<string, boolean>;
-  onToggleWorkspacePin: ToggleSidebarWorkspacePin;
-}) {
-  const {
-    visibleItems: visibleWorkspaces,
-    expanded: workspacesExpanded,
-    canToggle: canToggleWorkspaces,
-    toggleExpanded: toggleWorkspacesExpanded,
-  } = useLimitedSidebarGroup(group.rows);
-
-  return (
-    <View style={styles.statusGroupBlock}>
-      <StatusGroupHeader group={group} collapsed={collapsed} />
-      {!collapsed ? (
-        <View
-          style={styles.statusWorkspaceListContainer}
-          testID={`sidebar-status-group-rows-${group.bucket}`}
-        >
-          {visibleWorkspaces.map((workspace) => (
-            <StatusWorkspaceRow
-              key={workspace.workspaceKey}
-              workspace={workspace}
-              subtitle={buildStatusRowSubtitle({
-                projectName: projectNamesByKey.get(workspace.projectKey) ?? "",
-                hostLabel: showHostLabels
-                  ? (hostLabelByServerId.get(workspace.serverId) ?? workspace.serverId)
-                  : null,
-              })}
-              shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
-              showShortcutBadge={showShortcutBadges}
-              canPin={supportsPinningByServerId.get(workspace.serverId) === true}
-              onToggleWorkspacePin={onToggleWorkspacePin}
-              onWorkspacePress={onWorkspacePress}
-            />
-          ))}
-          {canToggleWorkspaces ? (
-            <SidebarGroupToggleRow
-              expanded={workspacesExpanded}
-              onPress={toggleWorkspacesExpanded}
-              testID={`sidebar-status-show-more-${group.bucket}`}
-            />
+        <View key={group.bucket} style={styles.statusGroupBlock}>
+          <StatusGroupHeader group={group} collapsed={collapsedStatusGroupKeys.has(group.bucket)} />
+          {!collapsedStatusGroupKeys.has(group.bucket) ? (
+            <View
+              style={styles.statusWorkspaceListContainer}
+              testID={`sidebar-status-group-rows-${group.bucket}`}
+            >
+              {group.rows.map((workspace) => (
+                <StatusWorkspaceRow
+                  key={workspace.workspaceKey}
+                  workspace={workspace}
+                  subtitle={buildStatusRowSubtitle({
+                    projectName: projectNamesByKey.get(workspace.projectKey) ?? "",
+                    hostLabel: showHostLabels
+                      ? (hostLabelByServerId.get(workspace.serverId) ?? workspace.serverId)
+                      : null,
+                  })}
+                  shortcutNumber={shortcutIndex.get(workspace.workspaceKey) ?? null}
+                  showShortcutBadge={showShortcutBadges}
+                  canPin={supportsPinningByServerId.get(workspace.serverId) === true}
+                  onToggleWorkspacePin={onToggleWorkspacePin}
+                  onWorkspacePress={onWorkspacePress}
+                />
+              ))}
+            </View>
           ) : null}
         </View>
-      ) : null}
-    </View>
+      ))}
+    </>
   );
 }
 
@@ -549,6 +481,17 @@ function StatusWorkspaceRowWithMenu({
     },
   });
 
+  useKeyboardActionHandler({
+    handlerId: `workspace-pin-${workspace.workspaceKey}`,
+    actions: ["workspace.pin"],
+    enabled: selected && canPin,
+    priority: 0,
+    handle: () => {
+      onTogglePin?.();
+      return true;
+    },
+  });
+
   return (
     <>
       <StatusWorkspaceRowInner
@@ -628,6 +571,9 @@ function StatusWorkspaceRowInner({
   reserveIdleStatusIndicatorSpace?: boolean;
 }) {
   const isTouchPlatform = platformIsNative;
+  // Web PWA on a phone reports isNative === false, so hover-to-reveal never fires
+  // on touch. Treat the compact layout as always-visible for trailing controls.
+  const isCompact = useIsCompactFormFactor();
 
   const isDesktop = !isTouchPlatform;
   const showScriptsIcon = isDesktop && workspace.hasRunningScripts;
@@ -645,7 +591,7 @@ function StatusWorkspaceRowInner({
     <SidebarWorkspaceRowFrame workspace={workspace}>
       {({ isHovered, hoverHandlers }) => {
         const showShortcut = showShortcutBadge && shortcutNumber !== null;
-        const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform));
+        const showKebab = Boolean(onArchive && (isHovered || isTouchPlatform || isCompact));
         const showKebabInSlot = showKebab && !showShortcut;
         const shouldRenderActionSlot = Boolean(onArchive || workspace.diffStat);
         const workspaceRowStyle = getStatusWorkspaceRowStyle({ selected, isHovered });
@@ -782,8 +728,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   listContent: {
     paddingHorizontal: theme.spacing[2],
-    // Keep status mode's Pinned/Workspaces boundary identical to project mode.
-    paddingTop: 2,
+    paddingTop: theme.spacing[2],
     paddingBottom: theme.spacing[4],
   },
   pinnedSection: {
@@ -794,7 +739,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   statusWorkspaceListContainer: {},
   statusGroupRow: {
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
@@ -844,7 +789,7 @@ const styles = StyleSheet.create((theme) => ({
     position: "relative",
   },
   workspaceRow: {
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     marginBottom: theme.spacing[1],
     paddingVertical: theme.spacing[2],
     paddingLeft: theme.spacing[2],

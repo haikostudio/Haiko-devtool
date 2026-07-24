@@ -18,11 +18,7 @@ import {
   type AppUpdateCheckIntent,
   type AppReleaseChannel,
 } from "../features/auto-updater.js";
-import {
-  getBundledCliShimPath,
-  getCliInstallStatus,
-  installCli,
-} from "../integrations/cli-install/index.js";
+import { getCliInstallStatus, installCli } from "../integrations/cli-install/index.js";
 import {
   getSkillsStatus,
   installSkills,
@@ -417,11 +413,7 @@ async function startDaemon(): Promise<DesktopDaemonStatus> {
     detached: true,
     envMode: "internal",
     env: invocation.env,
-    envOverlay: {
-      PASEO_DESKTOP_MANAGED: "1",
-      PASEO_CLI: getBundledCliShimPath(),
-      PASEO_WEB_UI_ENABLED: "false",
-    },
+    envOverlay: { PASEO_DESKTOP_MANAGED: "1", PASEO_WEB_UI_ENABLED: "false" },
     stdio: ["ignore", "ignore", "ignore"],
   });
 

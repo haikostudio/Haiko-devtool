@@ -204,9 +204,7 @@ type ScheduleAgentManager = Pick<
   | "hydrateTimelineFromProvider"
   | "resumeAgentFromPersistence"
   | "runAgent"
-  | "touchAgentActivity"
   | "waitForAgentEvent"
-  | "waitForAgentClose"
 >;
 
 interface ScheduleWorkspaceCreateInput {
@@ -220,13 +218,13 @@ export interface ScheduleServiceOptions {
   agentManager: ScheduleAgentManager;
   agentStorage: AgentStorage;
   createAgent: BoundCreateAgentCommand;
-  createDirectoryWorkspace: (
+  createLocalCheckoutWorkspace: (
     input: ScheduleWorkspaceCreateInput,
   ) => Promise<PersistedWorkspaceRecord>;
   createPaseoWorktreeWorkspace: (
     input: ScheduleWorkspaceCreateInput,
   ) => Promise<CreatePaseoWorktreeWorkflowResult>;
-  archiveWorkspace: (workspaceId: string) => Promise<void>;
+  archiveWorkspace: (workspaceId: string, repoRoot: string) => Promise<void>;
   now?: () => Date;
   runner?: (schedule: StoredSchedule, runId: string) => Promise<ScheduleExecutionResult>;
 }
@@ -237,13 +235,13 @@ export class ScheduleService {
   private readonly agentManager: ScheduleAgentManager;
   private readonly agentStorage: AgentStorage;
   private readonly createAgent: BoundCreateAgentCommand;
-  private readonly createDirectoryWorkspace: (
+  private readonly createLocalCheckoutWorkspace: (
     input: ScheduleWorkspaceCreateInput,
   ) => Promise<PersistedWorkspaceRecord>;
   private readonly createPaseoWorktreeWorkspace: (
     input: ScheduleWorkspaceCreateInput,
   ) => Promise<CreatePaseoWorktreeWorkflowResult>;
-  private readonly archiveWorkspace: (workspaceId: string) => Promise<void>;
+  private readonly archiveWorkspace: (workspaceId: string, repoRoot: string) => Promise<void>;
   private readonly now: () => Date;
   private readonly runner: (
     schedule: StoredSchedule,
@@ -258,7 +256,7 @@ export class ScheduleService {
     this.agentManager = options.agentManager;
     this.agentStorage = options.agentStorage;
     this.createAgent = options.createAgent;
-    this.createDirectoryWorkspace = options.createDirectoryWorkspace;
+    this.createLocalCheckoutWorkspace = options.createLocalCheckoutWorkspace;
     this.createPaseoWorktreeWorkspace = options.createPaseoWorktreeWorkspace;
     this.archiveWorkspace = options.archiveWorkspace;
     this.now = options.now ?? (() => new Date());
@@ -368,17 +366,6 @@ export class ScheduleService {
 
   async list(): Promise<StoredSchedule[]> {
     return this.store.list();
-  }
-
-  async listActiveAgentTargetIds(): Promise<Set<string>> {
-    const schedules = await this.store.list();
-    const agentIds = new Set<string>();
-    for (const schedule of schedules) {
-      if (schedule.status === "active" && schedule.target.type === "agent") {
-        agentIds.add(schedule.target.agentId);
-      }
-    }
-    return agentIds;
   }
 
   async inspect(id: string): Promise<StoredSchedule> {
@@ -592,6 +579,7 @@ export class ScheduleService {
   private async recoverInterruptedSchedule(scheduleId: string, now: Date): Promise<void> {
     const interruptedWorkspaces: Array<{
       workspaceId: string;
+      repoRoot: string;
       agentId: string | null;
       runId: string;
     }> = [];
@@ -613,6 +601,7 @@ export class ScheduleService {
         ) {
           interruptedWorkspaces.push({
             workspaceId: runningRun.workspaceId,
+            repoRoot: updated.target.config.cwd,
             agentId: runningRun.agentId,
             runId: runningRun.id,
           });
@@ -650,7 +639,7 @@ export class ScheduleService {
       return;
     }
     try {
-      await this.archiveWorkspace(interruptedWorkspace.workspaceId);
+      await this.archiveWorkspace(interruptedWorkspace.workspaceId, interruptedWorkspace.repoRoot);
     } catch (error) {
       this.logger.warn(
         {
@@ -941,7 +930,7 @@ export class ScheduleService {
         shouldArchiveScheduleRunWorkspace({ agentId, archiveOnFinish: config.archiveOnFinish })
       ) {
         try {
-          await this.archiveWorkspace(workspace.workspaceId);
+          await this.archiveWorkspace(workspace.workspaceId, config.cwd);
         } catch (error) {
           this.logger.warn(
             {
@@ -965,7 +954,7 @@ export class ScheduleService {
     const firstAgentContext = { prompt };
     switch (config.isolation ?? "local") {
       case "local":
-        return this.createDirectoryWorkspace({ cwd: config.cwd, firstAgentContext });
+        return this.createLocalCheckoutWorkspace({ cwd: config.cwd, firstAgentContext });
       case "worktree":
         return (await this.createPaseoWorktreeWorkspace({ cwd: config.cwd, firstAgentContext }))
           .workspace;

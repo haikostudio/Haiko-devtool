@@ -76,7 +76,7 @@ function createMockTransport() {
   return {
     transport,
     sent,
-    triggerOpen: (options?: { preserveSent?: boolean; features?: Record<string, boolean> }) => {
+    triggerOpen: (options?: { preserveSent?: boolean }) => {
       onOpen();
       if (!options?.preserveSent) {
         // Ignore HELLO handshake payloads in assertions.
@@ -92,7 +92,6 @@ function createMockTransport() {
               serverId: `srv_test_${serverInfoOrdinal++}`,
               hostname: null,
               version: null,
-              ...(options?.features ? { features: options.features } : {}),
             },
           },
         }),
@@ -186,7 +185,6 @@ test("does not infer browser automation capabilities from Electron runtime", asy
     })
     .parse(JSON.parse(assertStr(mock.sent[0])));
   expect(hello.capabilities[CLIENT_CAPS.browserHost]).toBeUndefined();
-  expect(hello.capabilities[CLIENT_CAPS.selectiveAgentTimeline]).toBeUndefined();
 });
 
 test("advertises consumer-provided browser automation capabilities", async () => {
@@ -219,114 +217,6 @@ test("advertises consumer-provided browser automation capabilities", async () =>
     supportedCommands: [...BROWSER_AUTOMATION_COMMAND_NAMES],
     hostKind: "desktop app",
   });
-});
-
-test("Hub management requires daemon support before dispatching requests", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "hub_feature_gate_unit_test",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connecting = client.connect();
-  mock.triggerOpen();
-  await connecting;
-
-  await expect(client.getHubStatus()).rejects.toThrow(
-    "Update the host to use Hub relationship management.",
-  );
-  expect(mock.sent).toEqual([]);
-});
-
-test("sets the complete viewed timeline subscription only when the daemon supports it", async () => {
-  const supportedTransport = createMockTransport();
-  const supportedClient = new DaemonClient({
-    url: "ws://test",
-    clientId: "timeline_supported",
-    transportFactory: () => supportedTransport.transport,
-    reconnect: { enabled: false },
-  });
-  const legacyTransport = createMockTransport();
-  const legacyClient = new DaemonClient({
-    url: "ws://test",
-    clientId: "timeline_legacy",
-    transportFactory: () => legacyTransport.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(supportedClient, legacyClient);
-
-  const supportedConnect = supportedClient.connect();
-  supportedTransport.triggerOpen({ features: { selectiveAgentTimeline: true } });
-  await supportedConnect;
-  const legacyConnect = legacyClient.connect();
-  legacyTransport.triggerOpen();
-  await legacyConnect;
-
-  expect(supportedClient.getLastServerInfoMessage()?.features).toEqual({
-    selectiveAgentTimeline: true,
-  });
-
-  const setPromise = supportedClient.setAgentTimelineSubscription(["agent-b", "agent-a"]);
-  await Promise.resolve();
-  const request = parseSentFrame(supportedTransport.sent[0]);
-  supportedTransport.triggerMessage(
-    wrapSessionMessage({
-      type: "agent.timeline.set_subscription.response",
-      payload: {
-        requestId: request.requestId,
-        agentIds: ["agent-a", "agent-b"],
-      },
-    }),
-  );
-  await setPromise;
-  await legacyClient.setAgentTimelineSubscription(["agent-a"]);
-
-  expect({ request, legacyFrames: legacyTransport.sent }).toEqual({
-    request: {
-      type: "agent.timeline.set_subscription.request",
-      requestId: expect.any(String),
-      agentIds: ["agent-a", "agent-b"],
-    },
-    legacyFrames: [],
-  });
-});
-
-test("normalizes legacy and dedicated agent attention notifications", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "attention_normalization",
-    transportFactory: () => mock.transport,
-    reconnect: { enabled: false },
-  });
-  clients.push(client);
-  const connect = client.connect();
-  mock.triggerOpen();
-  await connect;
-  const notifications: unknown[] = [];
-  client.onAgentAttentionRequired((notification) => notifications.push(notification));
-  const payload = {
-    agentId: "agent-a",
-    reason: "finished",
-    timestamp: "2026-07-12T00:00:00.000Z",
-    shouldNotify: true,
-  } as const;
-
-  mock.triggerMessage(
-    wrapSessionMessage({
-      type: "agent_stream",
-      payload: {
-        agentId: payload.agentId,
-        timestamp: payload.timestamp,
-        event: { type: "attention_required", provider: "codex", ...payload },
-      },
-    }),
-  );
-  mock.triggerMessage(wrapSessionMessage({ type: "agent_attention_required", payload }));
-
-  expect(notifications).toEqual([payload, payload]);
 });
 
 const noopLogger: Logger = {
@@ -665,7 +555,6 @@ test("advertises client capabilities in hello", async () => {
     protocolVersion: 1,
     capabilities: {
       custom_mode_icons: true,
-      project_updates: true,
       provider_subagents: true,
       reasoning_merge_enum: true,
       terminal_reflowable_snapshot: true,
@@ -675,32 +564,6 @@ test("advertises client capabilities in hello", async () => {
       },
     },
   });
-});
-
-test("allows callers to disable default client capabilities", async () => {
-  const mock = createMockTransport();
-  const client = new DaemonClient({
-    url: "ws://test",
-    clientId: "clsk_capability_override_test",
-    reconnect: { enabled: false },
-    transportFactory: () => mock.transport,
-    capabilities: {
-      [CLIENT_CAPS.projectUpdates]: false,
-    },
-  });
-  clients.push(client);
-
-  const connectPromise = client.connect();
-  mock.triggerOpen({ preserveSent: true });
-  await connectPromise;
-
-  const hello = z
-    .object({
-      type: z.literal("hello"),
-      capabilities: z.record(z.unknown()),
-    })
-    .parse(JSON.parse(assertStr(mock.sent[0])));
-  expect(hello.capabilities[CLIENT_CAPS.projectUpdates]).toBe(false);
 });
 
 test("sends new-agent run options when creating schedules", async () => {
@@ -723,7 +586,7 @@ test("sends new-agent run options when creating schedules", async () => {
   const createPromise = client.scheduleCreate({
     requestId: "request-1",
     prompt: "Run the task",
-    cadence: { type: "cron", expression: "* * * * *" },
+    cadence: { type: "every", everyMs: 60_000 },
     target: {
       type: "new-agent",
       config: {
@@ -741,7 +604,7 @@ test("sends new-agent run options when creating schedules", async () => {
     type: "schedule/create",
     requestId: "request-1",
     prompt: "Run the task",
-    cadence: { type: "cron", expression: "* * * * *" },
+    cadence: { type: "every", everyMs: 60_000 },
     target: {
       type: "new-agent",
       config: {
@@ -1811,6 +1674,81 @@ test("readFile resolves from binary file frames when the daemon supports them", 
   expect(new TextDecoder().decode(result.bytes)).toBe("hello");
 });
 
+test("readFile falls back to an inline read when binary bytes never arrive", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const responsePromise = client.readFile("/tmp/project", "README.md", "req-binary");
+
+  // Binary transfer is acknowledged but no frames arrive (dropped over the relay).
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: "/tmp/project",
+        path: "README.md",
+        mode: "file",
+        directory: null,
+        file: null,
+        error: null,
+        requestId: "req-binary",
+      },
+    }),
+  );
+
+  // The client retries with a non-binary (inline) read using a fresh requestId.
+  await vi.waitFor(() => expect(mock.sent.length).toBeGreaterThan(1));
+  const inlineRequest = JSON.parse(assertStr(mock.sent[1]));
+  expect(inlineRequest.message).toMatchObject({
+    type: "file_explorer_request",
+    cwd: "/tmp/project",
+    path: "README.md",
+    mode: "file",
+  });
+  expect(inlineRequest.message.acceptBinary).toBeUndefined();
+  const inlineRequestId = inlineRequest.message.requestId as string;
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "file_explorer_response",
+      payload: {
+        cwd: "/tmp/project",
+        path: "README.md",
+        mode: "file",
+        directory: null,
+        file: {
+          path: "README.md",
+          kind: "text",
+          encoding: "utf-8",
+          content: "# Hello",
+          mimeType: "text/markdown",
+          size: 7,
+          modifiedAt: "2026-05-02T00:00:00.000Z",
+        },
+        error: null,
+        requestId: inlineRequestId,
+      },
+    }),
+  );
+
+  const result = await responsePromise;
+  expect(result).toMatchObject({ mime: "text/markdown", kind: "text", path: "README.md" });
+  expect(new TextDecoder().decode(result.bytes)).toBe("# Hello");
+});
+
 test("uploadFile sends metadata request and file bytes as binary chunks", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
@@ -1991,7 +1929,7 @@ test("normalizes workspace_setup_progress into a workspace-scoped daemon event",
   });
 });
 
-test("sends create_agent_request with workspace and caller identity", async () => {
+test("sends create_agent_request with string workspace ids", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();
 
@@ -2012,7 +1950,6 @@ test("sends create_agent_request with workspace and caller identity", async () =
     provider: "codex",
     cwd: "/tmp/project/.paseo/worktrees/feature-a",
     workspaceId: "ws-feature-a",
-    callerAgentId: "parent-agent",
     title: "Compat agent",
     modeId: "default",
   });
@@ -2023,7 +1960,6 @@ test("sends create_agent_request with workspace and caller identity", async () =
     expect.objectContaining({
       type: "create_agent_request",
       workspaceId: "ws-feature-a",
-      callerAgentId: "parent-agent",
     }),
   );
 

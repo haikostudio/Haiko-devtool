@@ -2,7 +2,6 @@ import type { NavigationAction, NavigationContainerRefWithCurrent } from "@react
 import { router, type Href } from "expo-router";
 import {
   encodeWorkspaceIdForPathSegment,
-  getHostWorkspaceOpenParamFromPathname,
   parseHostWorkspaceRouteFromPathname,
 } from "@/utils/host-routes";
 
@@ -83,7 +82,6 @@ function dispatchHostWorkspacePopTo(route: string): boolean {
   if (!target) {
     return false;
   }
-  const open = getHostWorkspaceOpenParamFromPathname(route);
 
   const action: NavigationAction = {
     type: "POP_TO",
@@ -96,7 +94,6 @@ function dispatchHostWorkspacePopTo(route: string): boolean {
         params: {
           serverId: selection.serverId,
           workspaceId: encodeWorkspaceIdForPathSegment(selection.workspaceId),
-          ...(open ? { open } : {}),
         },
         // React Navigation consumes this nested hint when resolving the host child screen.
         // The browser-route canonicalizer strips the resulting ?pop=true URL artifact.

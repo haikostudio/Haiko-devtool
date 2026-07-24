@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { X } from "lucide-react-native";
 import { isNative } from "@/constants/platform";
@@ -131,14 +132,33 @@ export function AttachmentLabel({ icon, title, subtitle }: AttachmentLabelProps)
   );
 }
 
-/** Square image preview pill body. */
-export function AttachmentThumbnail({ metadata }: { metadata: AttachmentMetadata }) {
-  const uri = useAttachmentPreviewUrl(metadata);
+// expo-image is NOT a unistyles-aware component, so a react-native-unistyles
+// StyleSheet style does not resolve on it — its width/height were dropped and the
+// image collapsed to ~1px. Give it a PLAIN style object with explicit dimensions.
+const THUMBNAIL_IMAGE_STYLE = {
+  width: ATTACHMENT_CONTENT_HEIGHT,
+  height: ATTACHMENT_CONTENT_HEIGHT,
+} as const;
+
+/** Square image preview pill body. Uses expo-image (like the lightbox): the
+ * react-native Image did not reliably render the IndexedDB blob: URLs that back
+ * a materialized attachment on web, leaving a blank placeholder even though the
+ * full-size open worked. */
+export function AttachmentThumbnail({
+  metadata,
+  uri: directUri,
+}: {
+  metadata?: AttachmentMetadata | null;
+  /** Render this URI directly (e.g. a remote image's data URI) instead of resolving from the store. */
+  uri?: string;
+}) {
+  const resolvedUri = useAttachmentPreviewUrl(metadata ?? null);
+  const uri = directUri ?? resolvedUri;
   const source = useMemo(() => ({ uri: uri ?? "" }), [uri]);
   if (!uri) {
     return <View style={styles.thumbnailPlaceholder} />;
   }
-  return <Image source={source} style={styles.thumbnail} />;
+  return <ExpoImage source={source} style={THUMBNAIL_IMAGE_STYLE} contentFit="cover" />;
 }
 
 const ThemedX = withUnistyles(X);
@@ -179,10 +199,6 @@ const styles = StyleSheet.create((theme) => ({
   labelSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-  },
-  thumbnail: {
-    width: ATTACHMENT_CONTENT_HEIGHT,
-    height: ATTACHMENT_CONTENT_HEIGHT,
   },
   thumbnailPlaceholder: {
     width: ATTACHMENT_CONTENT_HEIGHT,

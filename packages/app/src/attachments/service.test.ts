@@ -1,7 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AttachmentMetadata, AttachmentStore, SaveAttachmentInput } from "@/attachments/types";
+import {
+  AttachmentTooLargeError,
+  IMAGE_COMPRESS_TRIGGER_BASE64_CHARS,
+  MAX_TOTAL_ATTACHMENT_BASE64_CHARS,
+} from "./image-compression";
 import { __setAttachmentStoreForTests } from "./store";
-import { encodeAttachmentsForSend, persistAttachmentFromBytes } from "./service";
+import {
+  __setImageCompressorForTests,
+  encodeAttachmentsForSend,
+  persistAttachmentFromBytes,
+} from "./service";
 
 function createAttachment(input: Partial<AttachmentMetadata> = {}): AttachmentMetadata {
   return {
@@ -52,6 +61,7 @@ function createRecordingStore(): AttachmentStore & {
 describe("attachment service", () => {
   afterEach(() => {
     __setAttachmentStoreForTests(null);
+    __setImageCompressorForTests(null);
   });
 
   it("persists raw bytes without requiring a base64 wrapper", async () => {
@@ -93,5 +103,42 @@ describe("attachment service", () => {
     await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
       { data: "att_send:base64", mimeType: "image/jpeg" },
     ]);
+  });
+
+  it("compresses oversized images through the injected compressor", async () => {
+    const store = createRecordingStore();
+    const big = "x".repeat(IMAGE_COMPRESS_TRIGGER_BASE64_CHARS + 10);
+    store.encodeBase64 = async () => big;
+    __setAttachmentStoreForTests(store);
+
+    const compress = vi.fn(async () => ({ data: "compressed", mimeType: "image/jpeg" }));
+    __setImageCompressorForTests(compress);
+
+    const attachment = createAttachment({ id: "att_big", mimeType: "image/png" });
+    await expect(encodeAttachmentsForSend([attachment])).resolves.toEqual([
+      { data: "compressed", mimeType: "image/jpeg" },
+    ]);
+    expect(compress).toHaveBeenCalledOnce();
+    // Compresses from the base64 we already hold (as a data URL); no object-URL
+    // round-trip through the store, so nothing to release.
+    expect(compress).toHaveBeenCalledWith({
+      url: `data:image/png;base64,${big}`,
+      mimeType: "image/png",
+      targetBytes: expect.any(Number),
+    });
+    expect(store.releasedUrls).toEqual([]);
+  });
+
+  it("throws AttachmentTooLargeError when an image stays over budget", async () => {
+    const store = createRecordingStore();
+    // Over the total budget and un-shrinkable (compressor returns null).
+    store.encodeBase64 = async () => "x".repeat(MAX_TOTAL_ATTACHMENT_BASE64_CHARS + 100_000);
+    __setAttachmentStoreForTests(store);
+    __setImageCompressorForTests(async () => null);
+
+    const attachment = createAttachment({ id: "att_huge", mimeType: "image/png" });
+    await expect(encodeAttachmentsForSend([attachment])).rejects.toBeInstanceOf(
+      AttachmentTooLargeError,
+    );
   });
 });

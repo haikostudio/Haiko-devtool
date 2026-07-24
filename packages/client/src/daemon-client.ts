@@ -1,6 +1,5 @@
 import type { z } from "zod";
 import { CLIENT_CAPS, type ClientCapability } from "@getpaseo/protocol/client-capabilities";
-import type { AgentAttentionNotificationPayload } from "@getpaseo/protocol/agent-attention-notification";
 import {
   AgentCreateFailedStatusPayloadSchema,
   AgentCreatedStatusPayloadSchema,
@@ -26,26 +25,23 @@ import type {
   FileDownloadTokenResponse,
   FileUploadResponse,
   FileExplorerResponse,
-  FileVersion,
-  FileWriteResult,
   FetchAgentTimelineResponseMessage,
   AgentForkContextResponseMessage,
   GitSetupOptions,
   CheckoutStatusResponse,
-  CheckoutCommit,
-  ParsedDiffFile,
   CheckoutCommitResponse,
   CheckoutMergeResponse,
   CheckoutMergeFromBaseResponse,
   CheckoutPullResponse,
   CheckoutPushResponse,
   CheckoutRefreshResponse,
+  PaseoDeployStatusResponse,
+  PaseoDeployTriggerResponse,
+  PaseoDeployCommitWorktreeResponse,
   CheckoutPrCreateResponse,
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
-  CheckoutForgeSetAutoMergeResponse,
   CheckoutGithubSetAutoMergeResponse,
-  CheckoutForgeGetCheckDetailsResponse,
   CheckoutGithubGetCheckDetailsResponse,
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
@@ -55,8 +51,6 @@ import type {
   StashListResponse,
   ValidateBranchResponse,
   BranchSuggestionsResponse,
-  ForgeSearchResponse,
-  ForgeSearchRequest,
   GitHubSearchResponse,
   GitHubSearchRequest,
   DirectorySuggestionsResponse,
@@ -98,7 +92,16 @@ import type {
   PaseoConfigRaw,
   PaseoConfigRevision,
   WorkspaceCreateRequest,
-  WorkspaceRecoveryState,
+  SidebarOrder,
+  WorkspaceUiState,
+  AttachmentLibraryEntry,
+  AttachmentLibraryBlobResponse,
+  UsageStatsDay,
+  ComptaSummaryRow,
+  ComptaMonthlyRevenue,
+  ComptaClient,
+  ComptaProjectLink,
+  ComptaDocumentRef,
 } from "@getpaseo/protocol/messages";
 import type {
   AgentPermissionRequest,
@@ -109,6 +112,11 @@ import type {
   AgentSessionConfig,
 } from "@getpaseo/protocol/agent-types";
 import type { MutableDaemonConfig, MutableDaemonConfigPatch } from "@getpaseo/protocol/messages";
+import type {
+  TaskBilling,
+  TaskRunConfig,
+  TaskSchedulePreference,
+} from "@getpaseo/protocol/tasks/types";
 import { isRelayClientWebSocketUrl } from "@getpaseo/protocol/daemon-endpoints";
 import { terminalSubscriptionKey } from "@getpaseo/protocol/terminal-subscription-key";
 import {
@@ -166,7 +174,6 @@ const PROJECT_GITHUB_CLONE_TIMEOUT_MS = 5 * 60 * 1000;
 
 interface ImportAgentInputBase {
   cwd?: string;
-  workspaceId?: string;
   labels?: Record<string, string>;
 }
 
@@ -252,10 +259,6 @@ export type DaemonEvent =
       payload: Extract<SessionOutboundMessage, { type: "workspace_update" }>["payload"];
     }
   | {
-      type: "project.update";
-      payload: Extract<SessionOutboundMessage, { type: "project.update" }>["payload"];
-    }
-  | {
       type: "workspace_setup_progress";
       workspaceId: string;
       payload: Extract<SessionOutboundMessage, { type: "workspace_setup_progress" }>["payload"];
@@ -324,12 +327,10 @@ export interface SendMessageOptions {
   attachments?: SendAgentMessageRequest["attachments"];
 }
 
-export interface AgentAttentionRequiredNotification {
-  agentId: string;
-  reason: "finished" | "error" | "permission";
-  timestamp: string;
-  shouldNotify: boolean;
-  notification?: AgentAttentionNotificationPayload;
+export interface ComptaSummaryData {
+  month: string;
+  rows: ComptaSummaryRow[];
+  monthly: ComptaMonthlyRevenue | null;
 }
 
 type AgentConfigOverrides = Partial<Omit<AgentSessionConfig, "provider" | "cwd">>;
@@ -340,7 +341,6 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   cwd?: string;
   env?: CreateAgentRequestMessage["env"];
   workspaceId?: string;
-  callerAgentId?: string;
   initialPrompt?: string;
   clientMessageId?: string;
   outputSchema?: Record<string, unknown>;
@@ -349,8 +349,6 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   git?: GitSetupOptions;
   worktree?: CreateAgentRequestMessage["worktree"];
   autoArchive?: CreateAgentRequestMessage["autoArchive"];
-  // COMPAT(createAgentWorktree): low-level old callers may still send the
-  // create-agent worktree field. Added in v0.2.0; remove after 2027-01-17.
   worktreeName?: string;
   requestId?: string;
   labels?: Record<string, string>;
@@ -364,7 +362,6 @@ export interface CreatePaseoWorktreeInput extends Pick<
   | "firstAgentContext"
   | "refName"
   | "action"
-  | "checkoutSource"
   | "githubPrNumber"
 > {}
 
@@ -380,11 +377,12 @@ type CheckoutMergeFromBasePayload = CheckoutMergeFromBaseResponse["payload"];
 type CheckoutPullPayload = CheckoutPullResponse["payload"];
 type CheckoutPushPayload = CheckoutPushResponse["payload"];
 type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
+type PaseoDeployStatusPayload = PaseoDeployStatusResponse["payload"];
+type PaseoDeployTriggerPayload = PaseoDeployTriggerResponse["payload"];
+type PaseoDeployCommitWorktreePayload = PaseoDeployCommitWorktreeResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
-type CheckoutForgeSetAutoMergePayload = CheckoutForgeSetAutoMergeResponse["payload"];
 type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
-type CheckoutForgeGetCheckDetailsPayload = CheckoutForgeGetCheckDetailsResponse["payload"];
 type CheckoutGithubGetCheckDetailsPayload = CheckoutGithubGetCheckDetailsResponse["payload"];
 type CheckoutPrStatusPayload = CheckoutPrStatusResponse["payload"];
 type PullRequestTimelinePayload = PullRequestTimelineResponse["payload"];
@@ -395,7 +393,6 @@ type StashPopPayload = StashPopResponse["payload"];
 type StashListPayload = StashListResponse["payload"];
 type ValidateBranchPayload = ValidateBranchResponse["payload"];
 type BranchSuggestionsPayload = BranchSuggestionsResponse["payload"];
-type ForgeSearchPayload = ForgeSearchResponse["payload"];
 type GitHubSearchPayload = GitHubSearchResponse["payload"];
 type DirectorySuggestionsPayload = DirectorySuggestionsResponse["payload"];
 type PaseoWorktreeListPayload = PaseoWorktreeListResponse["payload"];
@@ -418,7 +415,6 @@ export interface FileReadResult {
   path: string;
   kind: LegacyFileExplorerFilePayload["kind"];
   modifiedAt: string;
-  revision?: string;
 }
 export interface FileUploadInput {
   fileName: string;
@@ -745,11 +741,16 @@ export interface StopLoopOptions {
 export interface CreateScheduleOptions {
   prompt: string;
   name?: string | null;
-  cadence: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
+  cadence:
+    | {
+        type: "every";
+        everyMs: number;
+      }
+    | {
+        type: "cron";
+        expression: string;
+        timezone?: string;
+      };
   target:
     | {
         type: "self";
@@ -801,11 +802,16 @@ export interface UpdateScheduleOptions {
   id: string;
   name?: string | null;
   prompt?: string;
-  cadence?: {
-    type: "cron";
-    expression: string;
-    timezone?: string;
-  };
+  cadence?:
+    | {
+        type: "every";
+        everyMs: number;
+      }
+    | {
+        type: "cron";
+        expression: string;
+        timezone?: string;
+      };
   newAgentConfig?: UpdateScheduleNewAgentConfig;
   maxRuns?: number | null;
   expiresAt?: string | null;
@@ -878,7 +884,6 @@ interface BinaryFileTransferState extends PendingBinaryFileRead {
     { opcode: typeof FileTransferOpcode.FileBegin }
   >["metadata"]["encoding"];
   modifiedAt: string;
-  revision?: string;
   chunks: Uint8Array[];
 }
 
@@ -950,6 +955,10 @@ const DEFAULT_RECONNECT_BASE_DELAY_MS = 1500;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30000;
 const DEFAULT_SESSION_RPC_TIMEOUT_MS = 60_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 15_000;
+// Binary file transfers can stall or drop frames over a loaded relay. Bound the wait so a
+// stalled transfer falls back to an inline (non-binary) read instead of hanging the full RPC
+// timeout and surfacing "no preview available" for a file that is perfectly readable.
+const FILE_BINARY_READ_TIMEOUT_MS = 15_000;
 const DEFAULT_LIVENESS_TIMEOUT_MS = 5000;
 const LIVENESS_HEARTBEAT_INTERVAL_MS = 10_000;
 const LIVENESS_HEARTBEAT_TIMEOUT_MS = 15_000;
@@ -999,7 +1008,6 @@ function legacyExplorerFileToBytes(file: LegacyFileExplorerFilePayload): FileRea
     path: file.path,
     kind: file.kind,
     modifiedAt: file.modifiedAt,
-    revision: file.revision,
   };
 }
 
@@ -1103,10 +1111,13 @@ export class DaemonClient {
     }
   >();
   private terminalDirectorySubscriptions = new Map<string, { cwd: string; workspaceId?: string }>();
-  private fileSubscriptions = new Map<
-    string,
-    { cwd: string; path: string; onUpdate: (version: FileVersion) => void }
-  >();
+  // Live kanban board subscriptions, keyed by subscriptionId. Re-armed on
+  // reconnect: the daemon drops all task subscriptions when the socket closes,
+  // and the React board hook does not re-run on a transparent reconnect (the
+  // client instance is stable), so without this the board would go silently
+  // stale — new tasks (e.g. created by the conductor) only appear after a manual
+  // page refresh.
+  private tasksBoardSubscriptions = new Map<string, { projectId: string }>();
   private readonly terminalStreams = new TerminalStreamRouter();
   private pendingBinaryFileReads = new Map<string, PendingBinaryFileRead>();
   private activeBinaryFileTransfers = new Map<string, BinaryFileTransferState>();
@@ -1387,7 +1398,6 @@ export class DaemonClient {
     this.rejectPendingSendQueue(new Error("Daemon client closed"));
     this.rejectPingProbe(new Error("Daemon client closed"));
     this.terminalStreams.clearSlots();
-    this.fileSubscriptions.clear();
     this.lastServerInfoMessage = null;
     if (this.runtimeMetricsInterval) {
       clearInterval(this.runtimeMetricsInterval);
@@ -1491,31 +1501,6 @@ export class DaemonClient {
       if (handlers.size === 0) {
         this.messageHandlers.delete(type);
       }
-    };
-  }
-
-  onAgentAttentionRequired(
-    handler: (notification: AgentAttentionRequiredNotification) => void,
-  ): () => void {
-    const unsubscribeLegacy = this.on("agent_stream", (message) => {
-      if (message.payload.event.type !== "attention_required") {
-        return;
-      }
-      const event = message.payload.event;
-      handler({
-        agentId: message.payload.agentId,
-        reason: event.reason,
-        timestamp: event.timestamp,
-        shouldNotify: event.shouldNotify,
-        ...(event.notification ? { notification: event.notification } : {}),
-      });
-    });
-    const unsubscribeDedicated = this.on("agent_attention_required", (message) => {
-      handler(message.payload);
-    });
-    return () => {
-      unsubscribeLegacy();
-      unsubscribeDedicated();
     };
   }
 
@@ -2103,6 +2088,207 @@ export class DaemonClient {
     });
   }
 
+  async getSidebarOrder(requestId?: string): Promise<SidebarOrder> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "settings.sidebarOrder.get.response",
+      SidebarOrder
+    >({
+      requestId,
+      message: { type: "settings.sidebarOrder.get.request" },
+      selectPayload: (payload) => payload.order,
+    });
+  }
+
+  async setSidebarOrder(order: SidebarOrder, requestId?: string): Promise<void> {
+    await this.sendNamespacedCorrelatedSessionRequest<"settings.sidebarOrder.set.response">({
+      requestId,
+      message: { type: "settings.sidebarOrder.set.request", order },
+    });
+  }
+
+  async getWorkspaceUiStates(requestId?: string): Promise<Record<string, WorkspaceUiState>> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "session.uiState.get.response",
+      Record<string, WorkspaceUiState>
+    >({
+      requestId,
+      message: { type: "session.uiState.get.request" },
+      selectPayload: (payload) => payload.states,
+    });
+  }
+
+  async setWorkspaceUiState(
+    workspaceId: string,
+    state: WorkspaceUiState,
+    requestId?: string,
+  ): Promise<void> {
+    await this.sendNamespacedCorrelatedSessionRequest<"session.uiState.set.response">({
+      requestId,
+      message: { type: "session.uiState.set.request", workspaceId, state },
+    });
+  }
+
+  async putDraftAttachment(
+    input: { id: string; mimeType: string; fileName?: string | null; dataBase64: string },
+    requestId?: string,
+  ): Promise<void> {
+    await this.sendNamespacedCorrelatedSessionRequest<"session.draftAttachment.put.response">({
+      requestId,
+      message: {
+        type: "session.draftAttachment.put.request",
+        id: input.id,
+        mimeType: input.mimeType,
+        fileName: input.fileName ?? null,
+        dataBase64: input.dataBase64,
+      },
+    });
+  }
+
+  async getDraftAttachment(
+    id: string,
+    requestId?: string,
+  ): Promise<{ mimeType: string; fileName: string | null; dataBase64: string } | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "session.draftAttachment.get.response",
+      { mimeType: string; fileName: string | null; dataBase64: string } | null
+    >({
+      requestId,
+      message: { type: "session.draftAttachment.get.request", id },
+      selectPayload: (payload) =>
+        payload.found && payload.dataBase64 !== null && payload.mimeType !== null
+          ? {
+              mimeType: payload.mimeType,
+              fileName: payload.fileName ?? null,
+              dataBase64: payload.dataBase64,
+            }
+          : null,
+    });
+  }
+
+  async fetchUsageStats(days?: number, requestId?: string): Promise<UsageStatsDay[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "stats.usage.fetch.response",
+      UsageStatsDay[]
+    >({
+      requestId,
+      message: { type: "stats.usage.fetch.request", days },
+      selectPayload: (payload) => payload.days,
+    });
+  }
+
+  async fetchComptaSummary(requestId?: string): Promise<ComptaSummaryData> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.summary.fetch.response",
+      ComptaSummaryData
+    >({
+      requestId,
+      message: { type: "compta.summary.fetch.request" },
+      selectPayload: (payload) => ({
+        month: payload.month,
+        rows: payload.rows,
+        monthly: payload.monthly ?? null,
+      }),
+    });
+  }
+
+  async listComptaClients(requestId?: string): Promise<ComptaClient[]> {
+    // Surface the host-side reason (e.g. "Compta API clients returned HTTP 401")
+    // instead of silently resolving to an empty list, so a failing request is
+    // diagnosable in the UI rather than looking like "no clients".
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"compta.clients.list.response">({
+        requestId,
+        message: { type: "compta.clients.list.request" },
+      });
+    if (!payload.success) {
+      throw new Error(payload.error ?? "Failed to list billing clients");
+    }
+    return payload.clients;
+  }
+
+  async getComptaProjectLink(
+    projectId: string,
+    requestId?: string,
+  ): Promise<ComptaProjectLink | null> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"compta.project.link.get.response">({
+        requestId,
+        message: { type: "compta.project.link.get.request", projectId },
+      });
+    if (!payload.success) {
+      throw new Error(payload.error ?? "Failed to load billing link");
+    }
+    return payload.link ?? null;
+  }
+
+  async setComptaProjectLink(
+    input: {
+      projectId: string;
+      clientId: string | null;
+      // undefined = leave stored rate untouched; null = reset to default.
+      hourlyRateChf?: number | null;
+      // undefined = leave untouched; null = clear the default document.
+      defaultDocument?: { kind: "quote" | "invoice"; id: string } | null;
+    },
+    requestId?: string,
+  ): Promise<ComptaProjectLink | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.project.link.set.response",
+      ComptaProjectLink | null
+    >({
+      requestId,
+      message: {
+        type: "compta.project.link.set.request",
+        projectId: input.projectId,
+        clientId: input.clientId,
+        ...(input.hourlyRateChf !== undefined ? { hourlyRateChf: input.hourlyRateChf } : {}),
+        ...(input.defaultDocument !== undefined ? { defaultDocument: input.defaultDocument } : {}),
+      },
+      selectPayload: (payload) => payload.link ?? null,
+    });
+  }
+
+  async listComptaDraftDocuments(
+    clientId: string,
+    requestId?: string,
+  ): Promise<ComptaDocumentRef[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.documents.list.response",
+      ComptaDocumentRef[]
+    >({
+      requestId,
+      message: { type: "compta.documents.list.request", clientId },
+      selectPayload: (payload) => payload.documents,
+    });
+  }
+
+  async addTaskToComptaDocument(
+    input: {
+      kind: "quote" | "invoice";
+      clientId: string;
+      documentId: string | null;
+      documentTitle?: string;
+      line: { title: string; description?: string; hours: number; unitPrice: number };
+    },
+    requestId?: string,
+  ): Promise<ComptaDocumentRef | null> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "compta.task.add.response",
+      ComptaDocumentRef | null
+    >({
+      requestId,
+      message: {
+        type: "compta.task.add.request",
+        kind: input.kind,
+        clientId: input.clientId,
+        documentId: input.documentId,
+        documentTitle: input.documentTitle,
+        line: input.line,
+      },
+      selectPayload: (payload) => payload.document ?? null,
+    });
+  }
+
   async addProject(cwd: string, requestId?: string): Promise<ProjectAddPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -2176,47 +2362,6 @@ export class DaemonClient {
         scriptName,
       },
       responseType: "start_workspace_script_response",
-    });
-  }
-
-  async listWorkspaceScripts(
-    workspaceId: string,
-    requestId?: string,
-  ): Promise<
-    Extract<SessionOutboundMessage, { type: "workspace.script.list.response" }>["payload"]
-  > {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "workspace.script.list.request", workspaceId },
-      responseType: "workspace.script.list.response",
-    });
-  }
-
-  async startWorkspaceScriptWithStatus(
-    workspaceId: string,
-    scriptName: string,
-    requestId?: string,
-  ): Promise<
-    Extract<SessionOutboundMessage, { type: "workspace.script.start.response" }>["payload"]
-  > {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "workspace.script.start.request", workspaceId, scriptName },
-      responseType: "workspace.script.start.response",
-    });
-  }
-
-  async stopWorkspaceScript(
-    workspaceId: string,
-    scriptName: string,
-    requestId?: string,
-  ): Promise<
-    Extract<SessionOutboundMessage, { type: "workspace.script.stop.response" }>["payload"]
-  > {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "workspace.script.stop.request", workspaceId, scriptName },
-      responseType: "workspace.script.stop.response",
     });
   }
 
@@ -2320,19 +2465,20 @@ export class DaemonClient {
     }
   }
 
-  private resubscribeFileSubscriptions(): void {
-    for (const [subscriptionId, subscription] of this.fileSubscriptions) {
-      void this.sendCorrelatedSessionRequest({
-        message: {
-          type: "fs.file.subscribe.request",
-          cwd: subscription.cwd,
-          path: subscription.path,
-          subscriptionId,
-        },
-        responseType: "fs.file.subscribe.response",
-      })
-        .then((payload) => subscription.onUpdate(payload.initial))
-        .catch(() => undefined);
+  private resubscribeTasksBoardSubscriptions(): void {
+    if (this.tasksBoardSubscriptions.size === 0) {
+      return;
+    }
+    for (const [subscriptionId, subscription] of this.tasksBoardSubscriptions) {
+      // Fire-and-forget re-subscribe. The daemon answers with a fresh board on
+      // the push channel (tasks.board.update), which the board hook applies, so
+      // any task created while the socket was down shows up without a refresh.
+      this.sendSessionMessage({
+        type: "tasks.board.subscribe.request",
+        projectId: subscription.projectId,
+        subscriptionId,
+        requestId: this.createRequestId(),
+      });
     }
   }
 
@@ -2350,7 +2496,6 @@ export class DaemonClient {
       config,
       ...(options.env ? { env: options.env } : {}),
       ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
-      ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
       ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
       ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),
@@ -2562,36 +2707,6 @@ export class DaemonClient {
     return { pinnedAt: payload.pinnedAt };
   }
 
-  async inspectWorkspaceRecovery(
-    workspaceId: string,
-    requestId?: string,
-  ): Promise<WorkspaceRecoveryState> {
-    const payload =
-      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.inspect.response">({
-        requestId,
-        message: {
-          type: "workspace.recovery.inspect.request",
-          workspaceId,
-        },
-      });
-    return payload.state;
-  }
-
-  async restoreWorkspace(workspaceId: string, requestId?: string): Promise<void> {
-    const payload =
-      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.restore.response">({
-        requestId,
-        message: {
-          type: "workspace.recovery.restore.request",
-          workspaceId,
-        },
-        timeout: 150_000,
-      });
-    if (!payload.accepted) {
-      throw new Error(payload.error ?? "Workspace recovery was rejected by the host");
-    }
-  }
-
   async resumeAgent(
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
@@ -2632,7 +2747,6 @@ export class DaemonClient {
         ? { providerId: input.providerId, providerHandleId: input.providerHandleId }
         : { provider: input.provider, sessionId: input.sessionId }),
       ...(input.cwd ? { cwd: input.cwd } : {}),
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.labels && Object.keys(input.labels).length > 0 ? { labels: input.labels } : {}),
     });
 
@@ -2784,35 +2898,6 @@ export class DaemonClient {
       throw new Error(payload.error);
     }
     return payload;
-  }
-
-  async setAgentTimelineSubscription(agentIds: string[]): Promise<void> {
-    // COMPAT(selectiveAgentTimeline): added in v0.1.106. Old daemons keep their
-    // legacy global stream and do not understand this RPC. Remove after
-    // 2027-01-12 once the supported daemon floor is >= v0.1.106.
-    if (!this.lastServerInfoMessage?.features?.selectiveAgentTimeline) {
-      return;
-    }
-
-    const requestId = this.createRequestId();
-    const normalizedAgentIds = [...new Set(agentIds)].sort();
-    const message = SessionInboundMessageSchema.parse({
-      type: "agent.timeline.set_subscription.request",
-      agentIds: normalizedAgentIds,
-      requestId,
-    });
-
-    await this.sendRequest({
-      requestId,
-      message,
-      options: { skipQueue: true },
-      select: (response) => {
-        if (response.type !== "agent.timeline.set_subscription.response") {
-          return null;
-        }
-        return response.payload.requestId === requestId ? response.payload : null;
-      },
-    });
   }
 
   async buildAgentForkContext(
@@ -3639,46 +3724,44 @@ export class DaemonClient {
     });
   }
 
-  async listCheckoutCommits(
-    cwd: string,
-    requestId?: string,
-  ): Promise<{ baseRef: string | null; commits: CheckoutCommit[] }> {
-    const payload =
-      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.list.response">({
-        requestId,
-        message: {
-          type: "checkout.commits.list.request",
-          cwd,
-        },
-        timeout: 60000,
-      });
-    if (payload.error) {
-      throw new Error(payload.error.message);
-    }
-    return { baseRef: payload.baseRef, commits: payload.commits };
+  async paseoDeployStatus(requestId?: string): Promise<PaseoDeployStatusPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.status.request",
+      },
+      responseType: "checkout.deploy.status.response",
+    });
   }
 
-  async getCommitFileDiff(
-    cwd: string,
-    sha: string,
-    path: string,
+  async paseoDeployTrigger(
+    input?: { noBuild?: boolean; projectId?: string; mergeBranches?: string[] },
     requestId?: string,
-  ): Promise<{ file: ParsedDiffFile | null }> {
-    const payload =
-      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.file_diff.response">({
-        requestId,
-        message: {
-          type: "checkout.commits.file_diff.request",
-          cwd,
-          sha,
-          path,
-        },
-        timeout: 60000,
-      });
-    if (payload.error) {
-      throw new Error(payload.error.message);
-    }
-    return { file: payload.file };
+  ): Promise<PaseoDeployTriggerPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.trigger.request",
+        noBuild: input?.noBuild,
+        projectId: input?.projectId,
+        mergeBranches: input?.mergeBranches,
+      },
+      responseType: "checkout.deploy.trigger.response",
+    });
+  }
+
+  async paseoDeployCommitWorktree(
+    input: { worktreePath: string },
+    requestId?: string,
+  ): Promise<PaseoDeployCommitWorktreePayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.commit-worktree.request",
+        worktreePath: input.worktreePath,
+      },
+      responseType: "checkout.deploy.commit-worktree.response",
+    });
   }
 
   async checkoutPrCreate(
@@ -3715,23 +3798,6 @@ export class DaemonClient {
     });
   }
 
-  async checkoutForgeSetAutoMerge(
-    cwd: string,
-    input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
-    requestId?: string,
-  ): Promise<CheckoutForgeSetAutoMergePayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.set_auto_merge.response">({
-      requestId,
-      message: {
-        type: "checkout.forge.set_auto_merge.request",
-        cwd,
-        enabled: input.enabled,
-        ...(input.enabled ? { mergeMethod: input.method } : {}),
-      },
-      timeout: 60000,
-    });
-  }
-
   async checkoutGithubSetAutoMerge(
     cwd: string,
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
@@ -3748,40 +3814,12 @@ export class DaemonClient {
     });
   }
 
-  async checkoutForgeGetCheckDetails(
-    input: {
-      cwd: string;
-      repoOwner?: string;
-      repoName?: string;
-      checkRunId?: number;
-      workflowRunId?: number;
-      changeRequestNumber?: number;
-    },
-    requestId?: string,
-  ): Promise<CheckoutForgeGetCheckDetailsPayload> {
-    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.get_check_details.response">(
-      {
-        requestId,
-        message: {
-          type: "checkout.forge.get_check_details.request",
-          cwd: input.cwd,
-          repoOwner: input.repoOwner,
-          repoName: input.repoName,
-          checkRunId: input.checkRunId,
-          workflowRunId: input.workflowRunId,
-          changeRequestNumber: input.changeRequestNumber,
-        },
-        timeout: 60000,
-      },
-    );
-  }
-
   async checkoutGithubGetCheckDetails(
     input: {
       cwd: string;
-      repoOwner?: string;
-      repoName?: string;
-      checkRunId?: number;
+      repoOwner: string;
+      repoName: string;
+      checkRunId: number;
       workflowRunId?: number;
     },
     requestId?: string,
@@ -3956,7 +3994,6 @@ export class DaemonClient {
           : {}),
         ...(input.refName !== undefined ? { refName: input.refName } : {}),
         ...(input.action !== undefined ? { action: input.action } : {}),
-        ...(input.checkoutSource !== undefined ? { checkoutSource: input.checkoutSource } : {}),
         ...(input.githubPrNumber !== undefined ? { githubPrNumber: input.githubPrNumber } : {}),
       },
       responseType: "create_paseo_worktree_response",
@@ -4016,24 +4053,6 @@ export class DaemonClient {
     });
   }
 
-  async searchForge(
-    options: { cwd: string; query: string; limit?: number; kinds?: ForgeSearchRequest["kinds"] },
-    requestId?: string,
-  ): Promise<ForgeSearchPayload> {
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: {
-        type: "forge.search.request",
-        cwd: options.cwd,
-        query: options.query,
-        limit: options.limit,
-        kinds: options.kinds,
-      },
-      responseType: "forge.search.response",
-      timeout: 15000,
-    });
-  }
-
   async searchGitHub(
     options: { cwd: string; query: string; limit?: number; kinds?: GitHubSearchRequest["kinds"] },
     requestId?: string,
@@ -4089,6 +4108,7 @@ export class DaemonClient {
     mode: "list" | "file",
     requestId?: string,
     acceptBinary = false,
+    timeout?: number,
   ): Promise<FileExplorerPayload> {
     return this.sendCorrelatedSessionRequest({
       requestId,
@@ -4100,6 +4120,7 @@ export class DaemonClient {
         ...(acceptBinary ? { acceptBinary: true } : {}),
       },
       responseType: "file_explorer_response",
+      timeout,
     });
   }
 
@@ -4122,7 +4143,14 @@ export class DaemonClient {
     const resolvedRequestId = this.createRequestId(requestId);
     this.pendingBinaryFileReads.set(resolvedRequestId, { cwd, path });
     try {
-      const payload = await this.requestFileExplorer(cwd, path, "file", resolvedRequestId, true);
+      const payload = await this.requestFileExplorer(
+        cwd,
+        path,
+        "file",
+        resolvedRequestId,
+        true,
+        FILE_BINARY_READ_TIMEOUT_MS,
+      );
       if (payload.error) {
         throw new Error(payload.error);
       }
@@ -4131,60 +4159,39 @@ export class DaemonClient {
         this.completedBinaryFileReads.delete(resolvedRequestId);
         return binaryResult;
       }
-      if (!payload.file) {
-        throw new Error("File unavailable.");
+      if (payload.file) {
+        return legacyExplorerFileToBytes(payload.file);
       }
-      return legacyExplorerFileToBytes(payload.file);
+      // Binary channel acknowledged the request but no bytes arrived (dropped/stalled frames
+      // over a loaded relay). Fall through to a non-binary inline read below.
+    } catch (error) {
+      // Binary transfer stalled or errored — retry inline rather than surfacing "no preview".
+      this.logger.debug(
+        { err: error, path },
+        "Binary file read failed; retrying with inline (non-binary) read",
+      );
     } finally {
       this.pendingBinaryFileReads.delete(resolvedRequestId);
       this.activeBinaryFileTransfers.delete(resolvedRequestId);
     }
+    return this.readFileInline(cwd, path);
   }
 
-  async subscribeFile(
-    input: { cwd: string; path: string },
-    onUpdate: (version: FileVersion) => void,
-  ): Promise<{ initial: FileVersion; unsubscribe: () => void }> {
-    const subscriptionId = this.createRequestId();
-    this.fileSubscriptions.set(subscriptionId, { ...input, onUpdate });
-    try {
-      const payload = await this.sendCorrelatedSessionRequest({
-        message: {
-          type: "fs.file.subscribe.request",
-          cwd: input.cwd,
-          path: input.path,
-          subscriptionId,
-        },
-        responseType: "fs.file.subscribe.response",
-      });
-      return {
-        initial: payload.initial,
-        unsubscribe: () => {
-          if (!this.fileSubscriptions.delete(subscriptionId)) return;
-          void this.sendCorrelatedSessionRequest({
-            message: { type: "fs.file.unsubscribe.request", subscriptionId },
-            responseType: "fs.file.unsubscribe.response",
-          }).catch(() => undefined);
-        },
-      };
-    } catch (error) {
-      this.fileSubscriptions.delete(subscriptionId);
-      throw error;
+  private async readFileInline(cwd: string, path: string): Promise<FileReadResult> {
+    const payload = await this.requestFileExplorer(
+      cwd,
+      path,
+      "file",
+      this.createRequestId(),
+      false,
+    );
+    if (payload.error) {
+      throw new Error(payload.error);
     }
-  }
-
-  async writeFile(input: {
-    cwd: string;
-    path: string;
-    content: string;
-    expectedModifiedAt: string;
-    expectedRevision?: string;
-  }): Promise<FileWriteResult> {
-    const payload = await this.sendCorrelatedSessionRequest({
-      message: { type: "fs.file.write.request", ...input },
-      responseType: "fs.file.write.response",
-    });
-    return payload.result;
+    if (!payload.file) {
+      throw new Error("File unavailable.");
+    }
+    return legacyExplorerFileToBytes(payload.file);
   }
 
   async uploadFile(input: FileUploadInput): Promise<FileUploadResult> {
@@ -4256,6 +4263,33 @@ export class DaemonClient {
         path,
       },
       responseType: "file_download_token_response",
+    });
+  }
+
+  /** All files/images that transited a workspace's agent chats, newest first. */
+  async attachmentLibraryList(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<AttachmentLibraryEntry[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "attachments.library.list.response",
+      AttachmentLibraryEntry[]
+    >({
+      requestId,
+      message: { type: "attachments.library.list.request", workspaceId },
+      selectPayload: (payload) => payload.entries,
+    });
+  }
+
+  /** A single library entry's bytes (base64) + metadata, for preview/download. */
+  async attachmentLibraryBlob(
+    workspaceId: string,
+    entryId: string,
+    requestId?: string,
+  ): Promise<AttachmentLibraryBlobResponse["payload"]> {
+    return this.sendNamespacedCorrelatedSessionRequest<"attachments.library.blob.response">({
+      requestId,
+      message: { type: "attachments.library.blob.request", workspaceId, entryId },
     });
   }
 
@@ -4376,33 +4410,6 @@ export class DaemonClient {
     });
   }
 
-  async connectHub(hubUrl: string, token: string, requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.connect.request", hubUrl, token },
-      responseType: "hub.management.daemon.connect.response",
-    });
-  }
-
-  async getHubStatus(requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.get_status.request" },
-      responseType: "hub.management.daemon.get_status.response",
-    });
-  }
-
-  async disconnectHub(force = false, requestId?: string) {
-    this.requireHubRelationshipSupport();
-    return this.sendCorrelatedSessionRequest({
-      requestId,
-      message: { type: "hub.management.daemon.disconnect.request", force },
-      responseType: "hub.management.daemon.disconnect.response",
-    });
-  }
-
   async getDaemonPairingOffer(
     options?: DaemonPairingOfferOptions,
   ): Promise<DaemonPairingOfferPayload> {
@@ -4504,6 +4511,204 @@ export class DaemonClient {
       requestId: options?.requestId,
       message: {
         type: "provider.usage.list.request",
+      },
+    });
+  }
+
+  // ============================================================================
+  // Tasks board (per-project kanban)
+  // ============================================================================
+
+  async activityLogGet(requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"activity.log.get.response">({
+      requestId,
+      message: { type: "activity.log.get.request" },
+    });
+  }
+
+  async activityLogSubscribe(subscriptionId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"activity.log.subscribe.response">({
+      requestId,
+      message: { type: "activity.log.subscribe.request", subscriptionId },
+    });
+  }
+
+  async activityLogUnsubscribe(subscriptionId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"activity.log.unsubscribe.response">({
+      requestId,
+      message: { type: "activity.log.unsubscribe.request", subscriptionId },
+    });
+  }
+
+  async tasksBoardGet(projectId: string, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.get.response">({
+      requestId,
+      message: { type: "tasks.board.get.request", projectId },
+    });
+  }
+
+  async tasksBoardSubscribe(projectId: string, subscriptionId: string, requestId?: string) {
+    // Remember the subscription so it can be re-armed after a reconnect.
+    this.tasksBoardSubscriptions.set(subscriptionId, { projectId });
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.subscribe.response">({
+      requestId,
+      message: { type: "tasks.board.subscribe.request", projectId, subscriptionId },
+    });
+  }
+
+  async tasksBoardUnsubscribe(subscriptionId: string, requestId?: string) {
+    this.tasksBoardSubscriptions.delete(subscriptionId);
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.unsubscribe.response">({
+      requestId,
+      message: { type: "tasks.board.unsubscribe.request", subscriptionId },
+    });
+  }
+
+  async tasksFolderCreate(
+    input: { projectId: string; name: string; color?: string; autopilot?: boolean },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.create.response">({
+      requestId,
+      message: { type: "tasks.folder.create.request", ...input },
+    });
+  }
+
+  async tasksFolderUpdate(
+    input: {
+      projectId: string;
+      folderId: string;
+      name?: string;
+      color?: string;
+      autopilot?: boolean;
+      order?: number;
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.update.response">({
+      requestId,
+      message: { type: "tasks.folder.update.request", ...input },
+    });
+  }
+
+  async tasksFolderDelete(input: { projectId: string; folderId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.folder.delete.response">({
+      requestId,
+      message: { type: "tasks.folder.delete.request", ...input },
+    });
+  }
+
+  async tasksTaskCreate(
+    input: {
+      projectId: string;
+      folderId: string;
+      title: string;
+      description?: string;
+      tags?: string[];
+      column?:
+        | "notes"
+        | "backlog"
+        | "validated"
+        | "scheduled"
+        | "in_progress"
+        | "done"
+        | "deployed";
+      runConfig?: TaskRunConfig;
+      schedulePreference?: TaskSchedulePreference;
+      // Spawn the task's dedicated agent immediately (inline composer send).
+      launch?: boolean;
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.create.response">({
+      requestId,
+      message: { type: "tasks.task.create.request", ...input },
+    });
+  }
+
+  async tasksTaskUpdate(
+    input: {
+      projectId: string;
+      taskId: string;
+      title?: string;
+      description?: string | null;
+      tags?: string[];
+      runConfig?: TaskRunConfig | null;
+      schedulePreference?: TaskSchedulePreference | null;
+      billing?: TaskBilling | null;
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.update.response">({
+      requestId,
+      message: { type: "tasks.task.update.request", ...input },
+    });
+  }
+
+  async tasksTaskMove(
+    input: {
+      projectId: string;
+      taskId: string;
+      column: "notes" | "backlog" | "validated" | "scheduled" | "in_progress" | "done" | "deployed";
+      index: number;
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.move.response">({
+      requestId,
+      message: { type: "tasks.task.move.request", ...input },
+    });
+  }
+
+  async tasksTaskMarkViewed(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.mark_viewed.response">({
+      requestId,
+      message: { type: "tasks.task.mark_viewed.request", ...input },
+    });
+  }
+
+  async tasksTaskDelete(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.delete.response">({
+      requestId,
+      message: { type: "tasks.task.delete.request", ...input },
+    });
+  }
+
+  async tasksTaskEstimate(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.estimate.response">({
+      requestId,
+      message: { type: "tasks.task.estimate.request", ...input },
+    });
+  }
+
+  async tasksTaskRunNow(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.run_now.response">({
+      requestId,
+      message: { type: "tasks.task.run_now.request", ...input },
+    });
+  }
+
+  async tasksTaskApprove(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.approve.response">({
+      requestId,
+      message: { type: "tasks.task.approve.request", ...input },
+    });
+  }
+
+  async tasksConductorEnsure(
+    projectId: string,
+    optionsOrRequestId?: { provider?: string } | string,
+    requestId?: string,
+  ) {
+    const options = typeof optionsOrRequestId === "string" ? undefined : optionsOrRequestId;
+    const resolvedRequestId =
+      typeof optionsOrRequestId === "string" ? optionsOrRequestId : requestId;
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.conductor.ensure.response">({
+      requestId: resolvedRequestId,
+      message: {
+        type: "tasks.conductor.ensure.request",
+        projectId,
+        ...(options?.provider ? { provider: options.provider } : {}),
       },
     });
   }
@@ -5223,13 +5428,6 @@ export class DaemonClient {
     return this.lastServerInfoMessage;
   }
 
-  private requireHubRelationshipSupport(): void {
-    // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
-    if (this.lastServerInfoMessage?.features?.hubRelationship !== true) {
-      throw new Error("Update the host to use Hub relationship management.");
-    }
-  }
-
   private resolveTransportUrlForAttempt(): string {
     return this.config.url;
   }
@@ -5256,7 +5454,6 @@ export class DaemonClient {
             [CLIENT_CAPS.reasoningMergeEnum]: true,
             [CLIENT_CAPS.terminalReflowableSnapshot]: true,
             [CLIENT_CAPS.providerSubagents]: true,
-            [CLIENT_CAPS.projectUpdates]: true,
             ...this.config.capabilities,
           },
           ...(this.config.appVersion ? { appVersion: this.config.appVersion } : {}),
@@ -5433,7 +5630,6 @@ export class DaemonClient {
         size: frame.metadata.size,
         encoding: frame.metadata.encoding,
         modifiedAt: frame.metadata.modifiedAt,
-        revision: frame.metadata.revision,
         chunks: [],
       });
       return;
@@ -5458,7 +5654,6 @@ export class DaemonClient {
       path: transfer.path,
       kind: binaryFileKind(transfer.mime, transfer.encoding),
       modifiedAt: transfer.modifiedAt,
-      revision: transfer.revision,
     });
     this.handleSessionMessage({
       type: "file_explorer_response",
@@ -5638,7 +5833,7 @@ export class DaemonClient {
           this.startLivenessHeartbeat();
           this.resubscribeCheckoutDiffSubscriptions();
           this.resubscribeTerminalDirectorySubscriptions();
-          this.resubscribeFileSubscriptions();
+          this.resubscribeTasksBoardSubscriptions();
           this.flushPendingSendQueue();
           this.resolveConnect();
         }
@@ -5647,12 +5842,6 @@ export class DaemonClient {
 
     if (consumerMessage.type === "terminal_stream_exit") {
       this.terminalStreams.removeTerminal(consumerMessage.payload.terminalId);
-    }
-
-    if (consumerMessage.type === "fs.file.update") {
-      this.fileSubscriptions
-        .get(consumerMessage.payload.subscriptionId)
-        ?.onUpdate(consumerMessage.payload.version);
     }
 
     if (this.rawMessageListeners.size > 0) {
@@ -5736,8 +5925,6 @@ export class DaemonClient {
           workspaceId: msg.payload.kind === "upsert" ? msg.payload.workspace.id : msg.payload.id,
           payload: msg.payload,
         };
-      case "project.update":
-        return { type: "project.update", payload: msg.payload };
       case "workspace_setup_progress":
         return {
           type: "workspace_setup_progress",

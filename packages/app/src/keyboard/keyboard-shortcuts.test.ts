@@ -7,11 +7,10 @@ import {
   resolveKeyboardShortcut,
   type ChordState,
   type KeyboardShortcutContext,
-  type KeyboardShortcutInput,
   type ParsedShortcutBinding,
 } from "./keyboard-shortcuts";
 
-function keyboardInput(overrides: Partial<KeyboardShortcutInput>): KeyboardShortcutInput {
+function keyboardEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
   return {
     key: "",
     code: "",
@@ -21,7 +20,7 @@ function keyboardInput(overrides: Partial<KeyboardShortcutInput>): KeyboardShort
     shiftKey: false,
     repeat: false,
     ...overrides,
-  };
+  } as KeyboardEvent;
 }
 
 function shortcutContext(
@@ -45,14 +44,14 @@ function initialChordState(): ChordState {
 }
 
 function resolveShortcut(input: {
-  event: Partial<KeyboardShortcutInput>;
+  event: Partial<KeyboardEvent>;
   context?: Partial<KeyboardShortcutContext>;
   chordState?: ChordState;
   onChordReset?: () => void;
   bindings?: readonly ParsedShortcutBinding[];
 }) {
   return resolveKeyboardShortcut({
-    event: keyboardInput(input.event),
+    event: keyboardEvent(input.event),
     context: shortcutContext(input.context),
     chordState: input.chordState ?? initialChordState(),
     onChordReset: input.onChordReset ?? (() => undefined),
@@ -61,7 +60,7 @@ function resolveShortcut(input: {
 }
 
 function expectShortcutResolution(input: {
-  event: Partial<KeyboardShortcutInput>;
+  event: Partial<KeyboardEvent>;
   context?: Partial<KeyboardShortcutContext>;
   action: string;
   payload?: unknown;
@@ -84,7 +83,7 @@ function expectShortcutResolution(input: {
 }
 
 function expectNoShortcutResolution(input: {
-  event: Partial<KeyboardShortcutInput>;
+  event: Partial<KeyboardEvent>;
   context?: Partial<KeyboardShortcutContext>;
 }) {
   const result = resolveShortcut({
@@ -99,7 +98,7 @@ function expectNoShortcutResolution(input: {
 
 interface MatchingShortcutCase {
   name: string;
-  event: Partial<KeyboardShortcutInput>;
+  event: Partial<KeyboardEvent>;
   context?: Partial<KeyboardShortcutContext>;
   action: string;
   payload?: unknown;
@@ -109,7 +108,7 @@ interface MatchingShortcutCase {
 
 interface NonMatchingShortcutCase {
   name: string;
-  event: Partial<KeyboardShortcutInput>;
+  event: Partial<KeyboardEvent>;
   context?: Partial<KeyboardShortcutContext>;
 }
 
@@ -547,14 +546,6 @@ describe("keyboard-shortcuts", () => {
     expect(secondResult.match?.stopPropagation).toBe(true);
     expect(secondResult.preventDefault).toBe(false);
     expect(secondResult.nextChordState).toEqual(initialChordState());
-  });
-
-  it("resolves a browser-origin shortcut with browser focus instead of host focus", () => {
-    expectShortcutResolution({
-      event: { key: "t", code: "KeyT", ctrlKey: true },
-      context: { isDesktop: true, focusScope: "browser" },
-      action: "workspace.tab.new",
-    });
   });
 
   it("schedules a chord reset timeout for advancing candidates", () => {

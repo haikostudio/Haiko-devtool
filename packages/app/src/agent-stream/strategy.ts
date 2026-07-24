@@ -42,6 +42,8 @@ export interface StreamEdgeSlotProps {
 export interface StreamViewportHandle {
   scrollToBottom: (reason?: BottomAnchorLocalRequest["reason"]) => void;
   prepareForViewportChange: () => void;
+  /** Scroll the viewport so the given stream item lands near the top. Web-only for now. */
+  scrollToItem?: (itemId: string) => void;
 }
 
 export interface StreamSegmentRenderers {
@@ -70,12 +72,27 @@ export interface StreamRenderInput {
   isAuthoritativeHistoryReady: boolean;
   onNearBottomChange: (value: boolean) => void;
   onNearHistoryStart: () => void;
+  /** Fired on every viewport scroll event; drives transient chrome like the magic scrollbar. */
+  onScrollActivity?: () => void;
+  /**
+   * Reports the user message currently at the top of the viewport (the turn
+   * being read). Web-only for now; feeds the magic scrollbar's active dot.
+   */
+  onActiveItemChange?: (itemId: string | null) => void;
   isLoadingOlderHistory: boolean;
   hasOlderHistory: boolean;
   scrollEnabled: boolean;
   listStyle: StyleProp<ViewStyle>;
   baseListContentContainerStyle: StyleProp<ViewStyle>;
   forwardListContentContainerStyle: StyleProp<ViewStyle>;
+  /**
+   * Extra space, in px, reserved at the visual top of the transcript so the
+   * first message clears the floating synthesis banner. Unlike the old wrapper
+   * padding, this lives in the list's own content so later messages can still
+   * scroll up *under* the banner and fade out there. Web adds it to paddingTop;
+   * the inverted native list adds it to paddingBottom (its visual top).
+   */
+  topContentInset?: number;
 }
 
 export interface ResolveStreamRenderStrategyInput {

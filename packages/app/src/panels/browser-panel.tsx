@@ -42,12 +42,10 @@ function useBrowserPanelDescriptor(target: {
   const browser = useBrowserStore((state) => state.browsersById[target.browserId] ?? null);
   const url = browser?.url ?? "https://example.com";
   const icon = createBrowserTabIcon(browser?.faviconUrl ?? null);
-  const label = getBrowserLabel({ title: browser?.title ?? "", url });
 
   return {
-    label,
+    label: getBrowserLabel({ title: browser?.title ?? "", url }),
     subtitle: url,
-    tooltip: url || label,
     titleState: "ready",
     icon,
     statusBucket: browser?.isLoading ? "running" : null,

@@ -6,10 +6,9 @@ import { clickSettingsBackToWorkspace } from "./helpers/settings";
 
 interface EditorOpenRecord {
   editorId: string;
-  workspacePath: string;
-  filePath?: string;
-  line?: number;
-  column?: number;
+  path: string;
+  cwd?: string;
+  mode?: "open" | "reveal";
 }
 
 function requireE2EEnv(name: string): string {
@@ -56,9 +55,7 @@ async function expectEditorOpened(input: {
         const records = await readEditorOpenRecords(input.recordPath);
         return records
           .slice(input.afterCount)
-          .some(
-            (record) => record.editorId === input.editorId && record.workspacePath === input.path,
-          );
+          .some((record) => record.editorId === input.editorId && record.path === input.path);
       },
       { timeout: 30_000 },
     )
@@ -78,18 +75,8 @@ test.describe("Workspace open in editor", () => {
     await injectDesktopBridge(page, {
       serverId,
       editorTargets: [
-        {
-          id: "cursor",
-          label: "Cursor",
-          kind: "editor",
-          icon: { kind: "symbol", name: "terminal" },
-        },
-        {
-          id: "vscode",
-          label: "VS Code",
-          kind: "editor",
-          icon: { kind: "symbol", name: "terminal" },
-        },
+        { id: "cursor", label: "Cursor", kind: "editor" },
+        { id: "vscode", label: "VS Code", kind: "editor" },
       ],
       editorRecordPath: recordPath,
     });

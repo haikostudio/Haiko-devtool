@@ -34,6 +34,9 @@ import MaskedView from "@react-native-masked-view/masked-view";
 import {
   Circle,
   Info,
+  Lightbulb,
+  Megaphone,
+  ShieldAlert,
   CheckCircle,
   XCircle,
   FileText,
@@ -46,9 +49,14 @@ import {
   Scissors,
   MicVocal,
   FileSymlink,
+  BrainCircuit,
+  ListChecks,
+  ClipboardList,
+  CircleDot,
+  ListPlus,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import Animated, {
   Easing,
@@ -62,7 +70,14 @@ import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "reac
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 import { MarkdownRenderer, type MarkdownStyles } from "@/components/markdown/renderer";
-import type { TodoEntry, UserMessageImageAttachment } from "@/types/stream";
+import { resolveSectionIcon, SECTION_ICON_COLOR } from "@/components/markdown/section-icons";
+import type {
+  BrainContextItem,
+  RemoteUserMessageImage,
+  TaskTriageItem,
+  TodoEntry,
+  UserMessageImageAttachment,
+} from "@/types/stream";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
@@ -71,7 +86,10 @@ import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-
 import { markdownNodeContainsType } from "@/utils/markdown-ast";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
+import { TaskAnalysisCard } from "@/components/tasks/task-analysis-card";
+import { parseTaskAnalysisEstimateBlock } from "@/components/tasks/task-analysis-estimate";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
+import { parseCalloutBlock, type CalloutType, type ParsedCallout } from "@/utils/markdown-callout";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
 import { getDefaultMarkdownClipboardEnvironment } from "@/utils/rich-clipboard-default-environment";
@@ -101,6 +119,8 @@ import {
   useAssistantFileLinkActions,
   useAssistantLinkPress,
 } from "@/assistant-file-links";
+import { useToast } from "@/contexts/toast-context";
+import { useEvolutionTaskCreator } from "@/contexts/evolution-task-context";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
@@ -126,6 +146,7 @@ interface UserMessageProps {
   messageId?: string;
   message: string;
   images?: UserMessageImageAttachment[];
+  remoteImages?: RemoteUserMessageImage[];
   attachments?: AgentAttachment[];
   timestamp: number;
   capabilities?: AgentCapabilityFlags;
@@ -168,6 +189,7 @@ const MARKDOWN_ALLOWED_IMAGE_HANDLERS = [
 const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
 
 const ThemedMicVocal = withUnistyles(MicVocal);
+const ThemedListPlusIcon = withUnistyles(ListPlus);
 const ThemedTodoCheckIcon = withUnistyles(Check);
 const ThemedFileSymlinkIcon = withUnistyles(FileSymlink);
 const ThemedTriangleAlertIcon = withUnistyles(TriangleAlertIcon);
@@ -184,6 +206,7 @@ const primaryForegroundColorMapping = (theme: Theme) => ({
   color: theme.colors.primaryForeground,
 });
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
+const successColorMapping = (theme: Theme) => ({ color: theme.colors.success });
 const WEB_TOOLCALL_SHIMMER_KEYFRAME_CSS = `
   @keyframes ${WEB_TOOLCALL_SHIMMER_ANIMATION_NAME} {
     0% {
@@ -388,6 +411,11 @@ const userMessageStylesheet = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     marginTop: theme.spacing[2],
   },
+  trailingActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
   trailingRowHidden: {
     opacity: 0,
   },
@@ -417,12 +445,38 @@ function UserMessageImagePill({ image, onOpen, accessibilityLabel }: UserMessage
   );
 }
 
+interface UserMessageRemoteImagePillProps {
+  image: RemoteUserMessageImage;
+  onOpen: (image: RemoteUserMessageImage) => void;
+  accessibilityLabel: string;
+}
+
+function UserMessageRemoteImagePill({
+  image,
+  onOpen,
+  accessibilityLabel,
+}: UserMessageRemoteImagePillProps) {
+  const handlePress = useCallback(() => {
+    onOpen(image);
+  }, [onOpen, image]);
+  return (
+    <AttachmentFrame onPress={handlePress} accessibilityLabel={accessibilityLabel}>
+      <AttachmentThumbnail uri={image.dataUrl} />
+    </AttachmentFrame>
+  );
+}
+
+type UserMessageLightboxTarget =
+  | { kind: "local"; metadata: UserMessageImageAttachment }
+  | { kind: "remote"; image: RemoteUserMessageImage };
+
 export const UserMessage = memo(function UserMessage({
   serverId,
   agentId,
   messageId,
   message,
   images = [],
+  remoteImages = [],
   attachments = [],
   timestamp,
   capabilities,
@@ -431,24 +485,35 @@ export const UserMessage = memo(function UserMessage({
   isLastInGroup = true,
   disableOuterSpacing,
 }: UserMessageProps) {
-  const isCompact = useIsCompactFormFactor();
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  // Web-only hover reveal for the row's actions; native/compact always show them
+  // (see showTrailingActions). onPointerEnter/Leave only fire on web.
   const [isHovered, setIsHovered] = useState(false);
-  const [lightboxMetadata, setLightboxMetadata] = useState<UserMessageImageAttachment | null>(null);
-  const handleLightboxClose = useCallback(() => setLightboxMetadata(null), []);
+  const handleHoverEnter = useCallback(() => setIsHovered(true), []);
+  const handleHoverLeave = useCallback(() => setIsHovered(false), []);
+  const [lightboxTarget, setLightboxTarget] = useState<UserMessageLightboxTarget | null>(null);
+  const openLocalLightbox = useCallback(
+    (metadata: UserMessageImageAttachment) => setLightboxTarget({ kind: "local", metadata }),
+    [],
+  );
+  const openRemoteLightbox = useCallback(
+    (image: RemoteUserMessageImage) => setLightboxTarget({ kind: "remote", image }),
+    [],
+  );
+  const handleLightboxClose = useCallback(() => setLightboxTarget(null), []);
   const resolvedDisableOuterSpacing = useDisableOuterSpacing(disableOuterSpacing);
   const hasText = message.trim().length > 0;
   const hasImages = images.length > 0;
+  const hasRemoteImages = remoteImages.length > 0;
   const hasAttachments = attachments.length > 0;
-  const showTrailingRow = hasText && (isCompact || isNative || isHovered);
+  const showTrailingActions = hasText && (isCompact || isNative || isHovered);
   const formattedTimestamp = useMemo(
     () => formatMessageTimestamp(new Date(timestamp)),
     [timestamp],
   );
   const rewindMutation = useRewindAgentMutation({ serverId, agentId, client, messageId });
 
-  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
-  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   const getMessageContent = useCallback(() => message, [message]);
   const handleRewind = useCallback(
     (input: { mode: RewindMode; rewoundText: string }) => {
@@ -482,23 +547,24 @@ export const UserMessage = memo(function UserMessage({
     ],
     [hasText],
   );
-  const trailingRowStyle = useMemo(
+  const trailingActionsStyle = useMemo(
     () => [
-      userMessageStylesheet.trailingRow,
-      showTrailingRow
+      userMessageStylesheet.trailingActions,
+      showTrailingActions
         ? userMessageStylesheet.trailingRowVisible
         : userMessageStylesheet.trailingRowHidden,
     ],
-    [showTrailingRow],
+    [showTrailingActions],
   );
 
   return (
-    <View style={containerStyle} testID="user-message">
-      <View
-        style={userMessageStylesheet.content}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      >
+    <View
+      style={containerStyle}
+      testID="user-message"
+      onPointerEnter={handleHoverEnter}
+      onPointerLeave={handleHoverLeave}
+    >
+      <View style={userMessageStylesheet.content}>
         <View style={userMessageStylesheet.bubble}>
           {hasImages ? (
             <View style={imagePreviewContainerStyle}>
@@ -506,7 +572,19 @@ export const UserMessage = memo(function UserMessage({
                 <UserMessageImagePill
                   key={image.id}
                   image={image}
-                  onOpen={setLightboxMetadata}
+                  onOpen={openLocalLightbox}
+                  accessibilityLabel={t("composer.attachments.openImage")}
+                />
+              ))}
+            </View>
+          ) : null}
+          {hasRemoteImages ? (
+            <View style={imagePreviewContainerStyle}>
+              {remoteImages.map((image) => (
+                <UserMessageRemoteImagePill
+                  key={image.id}
+                  image={image}
+                  onOpen={openRemoteLightbox}
                   accessibilityLabel={t("composer.attachments.openImage")}
                 />
               ))}
@@ -537,25 +615,34 @@ export const UserMessage = memo(function UserMessage({
           ) : null}
         </View>
         {hasText ? (
-          <View style={trailingRowStyle} pointerEvents={showTrailingRow ? "auto" : "none"}>
+          <View style={userMessageStylesheet.trailingRow}>
             <Text style={userMessageStylesheet.timestampText}>{formattedTimestamp}</Text>
-            {capabilities ? (
-              <RewindMenu
-                capabilities={capabilities}
-                isPending={rewindMutation.isPending}
-                rewoundText={message}
-                onRewind={handleRewind}
+            <View
+              style={trailingActionsStyle}
+              pointerEvents={showTrailingActions ? "auto" : "none"}
+            >
+              {capabilities ? (
+                <RewindMenu
+                  capabilities={capabilities}
+                  isPending={rewindMutation.isPending}
+                  rewoundText={message}
+                  onRewind={handleRewind}
+                />
+              ) : null}
+              <TurnCopyButton
+                getContent={getMessageContent}
+                containerStyle={userMessageStylesheet.copyButton}
+                accessibilityLabel={t("message.actions.copyMessage")}
               />
-            ) : null}
-            <TurnCopyButton
-              getContent={getMessageContent}
-              containerStyle={userMessageStylesheet.copyButton}
-              accessibilityLabel={t("message.actions.copyMessage")}
-            />
+            </View>
           </View>
         ) : null}
       </View>
-      <AttachmentLightbox metadata={lightboxMetadata} onClose={handleLightboxClose} />
+      <AttachmentLightbox
+        metadata={lightboxTarget?.kind === "local" ? lightboxTarget.metadata : null}
+        uri={lightboxTarget?.kind === "remote" ? lightboxTarget.image.dataUrl : null}
+        onClose={handleLightboxClose}
+      />
     </View>
   );
 });
@@ -580,30 +667,17 @@ const assistantTurnFooterStylesheet = StyleSheet.create((theme) => ({
     marginTop: 0,
     marginLeft: -theme.spacing[1],
   },
-  labelWrapper: {
-    position: "relative",
-  },
-  labelSizer: {
-    color: theme.colors.foregroundMuted,
-    fontSize: STREAM_METADATA_FONT_SIZE,
-    opacity: 0,
-  },
-  labelOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
+  label: {
     color: theme.colors.foregroundMuted,
     fontSize: STREAM_METADATA_FONT_SIZE,
   },
 }));
 
-const TIMESTAMP_REVEAL_MS = 3000;
-
 /**
  * Footer rendered next to the copy button at the end of an assistant turn.
- * Always shows the turn duration; swaps to the end timestamp on hover (web)
- * or tap (native). The hidden sizer keeps the label width stable while the
- * visible text swaps.
+ * Shows the turn duration and the completion timestamp side by side, both
+ * always visible so the conversation carries a persistent record of when each
+ * turn was exchanged.
  */
 export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   getContent,
@@ -611,19 +685,6 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
   durationMs,
   onFork,
 }: AssistantTurnFooterProps) {
-  const [hovered, setHovered] = useState(false);
-  const [pressedReveal, setPressedReveal] = useState(false);
-  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (revealTimerRef.current) {
-        clearTimeout(revealTimerRef.current);
-        revealTimerRef.current = null;
-      }
-    };
-  }, []);
-
   const durationLabel = useMemo(
     () => (durationMs !== undefined ? `Worked for ${formatDuration(durationMs)}` : ""),
     [durationMs],
@@ -632,23 +693,11 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
     () => (completedAt ? formatMessageTimestamp(completedAt) : ""),
     [completedAt],
   );
+  const combinedLabel = useMemo(() => {
+    if (durationLabel && timestampLabel) return `${durationLabel} · ${timestampLabel}`;
+    return durationLabel || timestampLabel;
+  }, [durationLabel, timestampLabel]);
 
-  const canSwap = Boolean(timestampLabel);
-  const showTimestamp = canSwap && (isWeb ? hovered : pressedReveal);
-
-  const handleHoverIn = useCallback(() => setHovered(true), []);
-  const handleHoverOut = useCallback(() => setHovered(false), []);
-  const handlePress = useCallback(() => {
-    if (isWeb || !canSwap) return;
-    if (revealTimerRef.current) {
-      clearTimeout(revealTimerRef.current);
-    }
-    setPressedReveal((prev) => !prev);
-    revealTimerRef.current = setTimeout(() => {
-      setPressedReveal(false);
-      revealTimerRef.current = null;
-    }, TIMESTAMP_REVEAL_MS);
-  }, [canSwap]);
   const handleFork = useCallback(
     (target: AssistantForkTarget) => {
       return onFork?.(target);
@@ -664,25 +713,8 @@ export const AssistantTurnFooter = memo(function AssistantTurnFooter({
         containerStyle={assistantTurnFooterStylesheet.copyButton}
       />
       {canFork ? <AssistantForkMenu onFork={handleFork} /> : null}
-      {durationLabel ? (
-        <Pressable
-          onPress={handlePress}
-          onHoverIn={handleHoverIn}
-          onHoverOut={handleHoverOut}
-          accessibilityRole={canSwap ? "button" : undefined}
-          accessibilityLabel={canSwap ? `${durationLabel}, ended ${timestampLabel}` : durationLabel}
-        >
-          <View style={assistantTurnFooterStylesheet.labelWrapper}>
-            {/* Sizer reserves space for whichever label is longer so the
-                container width is stable across hover transitions. */}
-            <Text style={assistantTurnFooterStylesheet.labelSizer} aria-hidden>
-              {durationLabel.length >= timestampLabel.length ? durationLabel : timestampLabel}
-            </Text>
-            <Text style={assistantTurnFooterStylesheet.labelOverlay}>
-              {showTimestamp ? timestampLabel : durationLabel}
-            </Text>
-          </View>
-        </Pressable>
+      {combinedLabel ? (
+        <Text style={assistantTurnFooterStylesheet.label}>{combinedLabel}</Text>
       ) : null}
     </View>
   );
@@ -914,7 +946,7 @@ function AssistantMarkdownImage({
   const dataImage = useMemo(() => parseImageDataUrl(source), [source]);
   const containerStyle = useMemo<StyleProp<ViewStyle>>(
     () => ({
-      marginTop: hasLeadingContent ? 16 : 0,
+      marginTop: hasLeadingContent ? SPACING[4] : 0,
       marginBottom: 0,
     }),
     [hasLeadingContent],
@@ -1198,7 +1230,7 @@ export const TurnCopyButton = memo(function TurnCopyButton({
 
 const expandableBadgeStylesheet = StyleSheet.create((theme) => ({
   container: {
-    marginHorizontal: -13,
+    marginHorizontal: -theme.spacing[3],
   },
   containerSpacing: {
     marginBottom: theme.spacing[1],
@@ -1485,6 +1517,123 @@ function AssistantMessageBlockContainer({
   );
 }
 
+/**
+ * Per-type accent for callouts. Hard-coded tints (like BRAIN_COLOR) so the
+ * accent reads the same on every light/dark theme without threading tokens
+ * through each theme variant. `icon` is a lucide component.
+ */
+type CalloutIcon = ComponentType<{ size?: number; color?: string }>;
+
+const CALLOUT_PALETTE: Record<
+  Exclude<CalloutType, "neutral">,
+  { color: string; background: string; icon: CalloutIcon }
+> = {
+  tip: { color: "#a855f7", background: "rgba(168, 85, 247, 0.13)", icon: Lightbulb },
+  note: { color: "#60a5fa", background: "rgba(96, 165, 250, 0.13)", icon: Info },
+  important: { color: "#818cf8", background: "rgba(129, 140, 248, 0.13)", icon: Megaphone },
+  warning: { color: "#f59e0b", background: "rgba(245, 158, 11, 0.13)", icon: TriangleAlertIcon },
+  caution: { color: "#f87171", background: "rgba(248, 113, 113, 0.13)", icon: ShieldAlert },
+};
+
+// Neutral (grey) callouts carry no colored accent. Their icon is resolved from
+// the shared section map (same glyphs as the `## N. …` heading rule) so a
+// `> **Title**` block and a numbered heading stay visually in sync; anything
+// unmatched falls back to a plain dot.
+function resolveNeutralIcon(heading: string | null): CalloutIcon {
+  return resolveSectionIcon(heading) ?? CircleDot;
+}
+
+const calloutStylesheet = StyleSheet.create((theme) => ({
+  container: {
+    borderRadius: theme.borderRadius.md,
+    borderWidth: theme.borderWidth[1],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    overflow: "hidden",
+  },
+  // Grey card for plain / bold-heading blockquotes — surface tint, subtle
+  // uniform border, no colored accent (matches the turn-recap card).
+  neutralContainer: {
+    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.border,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  headerText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    letterSpacing: 0.3,
+  },
+  neutralHeaderText: {
+    color: theme.colors.foreground,
+  },
+}));
+
+interface MarkdownCalloutProps {
+  callout: ParsedCallout;
+  rules: RenderRules;
+  parser: MarkdownIt;
+  onLinkPress: (url: string) => boolean;
+}
+
+/**
+ * Renders a markdown blockquote as a card so advice, notes and warnings
+ * visually separate from the surrounding prose. Plain / bold-heading
+ * blockquotes render as a neutral grey card (icon + title, no colored accent);
+ * `[!TYPE]` alerts keep a typed color plus a labelled header. Neither draws a
+ * left border — both use a uniform card border.
+ */
+const MarkdownCallout = memo(function MarkdownCallout({
+  callout,
+  rules,
+  parser,
+  onLinkPress,
+}: MarkdownCalloutProps) {
+  const palette = callout.type === "neutral" ? null : CALLOUT_PALETTE[callout.type];
+  const HeaderIcon = palette ? palette.icon : resolveNeutralIcon(callout.heading);
+  const iconColor = palette ? palette.color : SECTION_ICON_COLOR;
+  const containerStyle = useMemo(
+    () =>
+      palette
+        ? [
+            calloutStylesheet.container,
+            { borderColor: palette.color, backgroundColor: palette.background },
+          ]
+        : [calloutStylesheet.container, calloutStylesheet.neutralContainer],
+    [palette],
+  );
+  const headerTextStyle = useMemo(
+    () =>
+      palette
+        ? [calloutStylesheet.headerText, { color: palette.color }]
+        : [calloutStylesheet.headerText, calloutStylesheet.neutralHeaderText],
+    [palette],
+  );
+
+  return (
+    <View style={containerStyle}>
+      {callout.heading !== null && (
+        <View style={calloutStylesheet.header}>
+          <HeaderIcon size={15} color={iconColor} />
+          <Text style={headerTextStyle} selectable={false}>
+            {callout.heading}
+          </Text>
+        </View>
+      )}
+      <MemoizedMarkdownBlock
+        text={callout.body}
+        rules={rules}
+        parser={parser}
+        onLinkPress={onLinkPress}
+      />
+    </View>
+  );
+});
+
 interface MemoizedMarkdownBlockProps {
   text: string;
   rules: RenderRules;
@@ -1569,6 +1718,113 @@ interface MarkdownListViewProps {
 function MarkdownListView({ baseStyle, spacing, children }: MarkdownListViewProps) {
   const style = useMemo(() => [baseStyle, spacing], [baseStyle, spacing]);
   return <View style={style}>{children}</View>;
+}
+
+// Section-5 ("## N. Évolutions possibles") heading detector. Matches with or
+// without the accent so a model that drops it still triggers the affordance.
+const EVOLUTION_HEADING_PATTERN = /évolu|evolu/i;
+
+// Flatten an AST node to its plain text — used to seed the task title from a
+// bullet without dragging along inline markdown markup.
+function extractAstNodeText(node: ASTNode): string {
+  if (typeof node.content === "string" && node.content.length > 0) {
+    return node.content;
+  }
+  const children = (node as ASTNode & { children?: ASTNode[] }).children;
+  if (Array.isArray(children)) {
+    return children.map(extractAstNodeText).join("");
+  }
+  return "";
+}
+
+const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
+  button: {
+    marginLeft: theme.spacing[2],
+    marginTop: theme.spacing[1],
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonBusy: {
+    opacity: 0.5,
+  },
+}));
+
+interface EvolutionListItemProps {
+  listItemStyle: ViewStyle;
+  markerStyle: TextStyle;
+  contentStyle: ViewStyle;
+  marker: string;
+  title: string;
+  children: ReactNode;
+}
+
+/**
+ * A bullet inside the "Évolutions possibles" section, with a trailing button
+ * that turns the proposal into a backlog task on the current project's board.
+ * The button only appears when an EvolutionTaskProvider is in scope (i.e. the
+ * chat is embedded in a task drawer) and the bullet has text.
+ */
+function EvolutionListItem({
+  listItemStyle,
+  markerStyle,
+  contentStyle,
+  marker,
+  title,
+  children,
+}: EvolutionListItemProps) {
+  const creator = useEvolutionTaskCreator();
+  const toast = useToast();
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<"idle" | "creating" | "done">("idle");
+
+  const handleCreate = useStableEvent(async () => {
+    if (!creator || status !== "idle" || title.length === 0) {
+      return;
+    }
+    setStatus("creating");
+    try {
+      await creator.createTask({ title });
+      setStatus("done");
+      toast.show(t("tasks.panel.evolutionTaskCreated"), { variant: "success" });
+    } catch (error: unknown) {
+      setStatus("idle");
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const buttonStyle = useMemo(
+    () => [
+      evolutionTaskButtonStyles.button,
+      status !== "idle" ? evolutionTaskButtonStyles.buttonBusy : null,
+    ],
+    [status],
+  );
+
+  return (
+    <View style={listItemStyle}>
+      <Text style={markerStyle}>{marker}</Text>
+      <MarkdownListItemContent contentStyle={contentStyle}>{children}</MarkdownListItemContent>
+      {creator && title.length > 0 ? (
+        <Pressable
+          onPress={handleCreate}
+          disabled={status !== "idle"}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.evolutionCreateTask")}
+          hitSlop={8}
+          style={buttonStyle}
+          testID="evolution-create-task"
+        >
+          {status === "done" ? (
+            <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
+          ) : (
+            <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
+          )}
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 export const AssistantMessage = memo(function AssistantMessage({
@@ -1689,59 +1945,55 @@ export const AssistantMessage = memo(function AssistantMessage({
       // plain <Text> is not hoisted into a UITextViewChild and is dropped (same
       // root cause as strong/em/s) — so on iOS a hard line break vanished, and
       // a softbreak between words jammed them together ("one\ntwo" -> "onetwo").
-      // Emit the break through MarkdownTextSpan so it composes on iOS. Keep
-      // the resolved break styles: hardbreak is a full-width flex-row child on
-      // Android, and dropping that width joins the surrounding text spans.
-      hardbreak: (
-        node: ASTNode,
-        _children: ReactNode[],
-        _parent: ASTNode[],
-        styles: MarkdownStyles,
-      ) => (
-        <MarkdownTextSpan key={node.key} style={styles.hardbreak}>
-          {"\n"}
-        </MarkdownTextSpan>
-      ),
-      softbreak: (
-        node: ASTNode,
-        _children: ReactNode[],
-        _parent: ASTNode[],
-        styles: MarkdownStyles,
-      ) => (
-        <MarkdownTextSpan key={node.key} style={styles.softbreak}>
-          {"\n"}
-        </MarkdownTextSpan>
-      ),
+      // Emit the break through MarkdownTextSpan so it composes on iOS; web and
+      // Android keep the same "\n" they rendered before.
+      hardbreak: (node: ASTNode) => <MarkdownTextSpan key={node.key}>{"\n"}</MarkdownTextSpan>,
+      softbreak: (node: ASTNode) => <MarkdownTextSpan key={node.key}>{"\n"}</MarkdownTextSpan>,
       code_block: (
         node: ASTNode,
         _children: ReactNode[],
         _parent: ASTNode[],
         styles: MarkdownStyles,
         inheritedStyles: TextStyle = {},
-      ) => (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={null}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.code_block}
-        />
-      ),
+      ) => {
+        const estimate = parseTaskAnalysisEstimateBlock(node.content);
+        if (estimate) {
+          return <TaskAnalysisCard key={node.key} estimate={estimate} />;
+        }
+        return (
+          <HighlightedCodeBlock
+            key={node.key}
+            code={node.content}
+            language={null}
+            inheritedStyles={inheritedStyles}
+            textStyle={styles.code_block}
+          />
+        );
+      },
       fence: (
         node: ASTNode,
         _children: ReactNode[],
         _parent: ASTNode[],
         styles: MarkdownStyles,
         inheritedStyles: TextStyle = {},
-      ) => (
-        <HighlightedCodeBlock
-          key={node.key}
-          code={node.content}
-          language={node.sourceInfo}
-          inheritedStyles={inheritedStyles}
-          textStyle={styles.fence}
-        />
-      ),
+      ) => {
+        // The task-analysis agent ends its message with a ```json estimate
+        // block. Render it as a readable card (summary + numbers table) instead
+        // of raw JSON; every other fenced block keeps the normal code rendering.
+        const estimate = parseTaskAnalysisEstimateBlock(node.content);
+        if (estimate) {
+          return <TaskAnalysisCard key={node.key} estimate={estimate} />;
+        }
+        return (
+          <HighlightedCodeBlock
+            key={node.key}
+            code={node.content}
+            language={node.sourceInfo}
+            inheritedStyles={inheritedStyles}
+            textStyle={styles.fence}
+          />
+        );
+      },
       code_inline: (
         node: ASTNode,
         _children: ReactNode[],
@@ -1917,11 +2169,57 @@ export const AssistantMessage = memo(function AssistantMessage({
     };
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
 
-  const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
-  const keyedBlocks = useMemo(
-    () => blocks.map((block, index) => ({ key: `${index}:${block.slice(0, 32)}`, block })),
-    [blocks],
+  // Variant used only for the "Évolutions possibles" section: same rules, but
+  // each bullet gets a trailing "create task" button.
+  const evolutionMarkdownRules = useMemo<RenderRules>(
+    () => ({
+      ...markdownRules,
+      list_item: (
+        node: ASTNode,
+        children: ReactNode[],
+        parent: ASTNode[],
+        styles: MarkdownStyles,
+      ) => {
+        const { isOrdered, marker } = getMarkdownListMarker(node, parent);
+        const iconStyle = isOrdered ? styles.ordered_list_icon : styles.bullet_list_icon;
+        const contentStyle = isOrdered ? styles.ordered_list_content : styles.bullet_list_content;
+        return (
+          <EvolutionListItem
+            key={node.key}
+            listItemStyle={styles.list_item}
+            markerStyle={iconStyle}
+            contentStyle={contentStyle}
+            marker={marker}
+            title={extractAstNodeText(node).replace(/\s+/g, " ").trim()}
+          >
+            {children}
+          </EvolutionListItem>
+        );
+      },
+    }),
+    [markdownRules],
   );
+
+  const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
+  const keyedBlocks = useMemo(() => {
+    // Blocks are split on blank lines, so the section heading and its bullet
+    // list are separate blocks. Track the active section as we walk them and
+    // flag every block under "Évolutions possibles".
+    let sectionIsEvolutions = false;
+    return blocks.map((block, index) => {
+      const firstLine = block.trimStart().split("\n", 1)[0] ?? "";
+      const headingMatch = /^#{1,6}\s+(.+)$/.exec(firstLine);
+      if (headingMatch) {
+        sectionIsEvolutions = EVOLUTION_HEADING_PATTERN.test(headingMatch[1]);
+      }
+      return {
+        key: `${index}:${block.slice(0, 32)}`,
+        block,
+        callout: parseCalloutBlock(block),
+        evolutions: sectionIsEvolutions,
+      };
+    });
+  }, [blocks]);
 
   const assistantContainerStyle = useMemo(
     () => [
@@ -1936,18 +2234,27 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block }, index) => (
+      {keyedBlocks.map(({ key, block, callout, evolutions }, index) => (
         <AssistantMessageBlockContainer
           key={key}
           block={block}
-          marginBottom={index < keyedBlocks.length - 1 ? 12 : 0}
+          marginBottom={index < keyedBlocks.length - 1 ? SPACING[3] : 0}
         >
-          <MemoizedMarkdownBlock
-            text={block}
-            rules={markdownRules}
-            parser={markdownParser}
-            onLinkPress={handleMarkdownLinkPress}
-          />
+          {callout ? (
+            <MarkdownCallout
+              callout={callout}
+              rules={markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          ) : (
+            <MemoizedMarkdownBlock
+              text={block}
+              rules={evolutions ? evolutionMarkdownRules : markdownRules}
+              parser={markdownParser}
+              onLinkPress={handleMarkdownLinkPress}
+            />
+          )}
         </AssistantMessageBlockContainer>
       ))}
     </View>
@@ -2051,7 +2358,7 @@ const activityLogStylesheet = StyleSheet.create((theme) => ({
   },
   content: {
     paddingHorizontal: theme.spacing[3],
-    paddingVertical: 10,
+    paddingVertical: theme.spacing[2],
   },
   row: {
     flexDirection: "row",
@@ -2251,6 +2558,412 @@ export const CompactionMarker = memo(function CompactionMarker({
         <Text style={compactionStylesheet.text}>{label}</Text>
       </View>
       <View style={compactionStylesheet.line} />
+    </View>
+  );
+});
+
+interface BrainContextPillProps {
+  item: BrainContextItem;
+}
+
+const BRAIN_COLOR = "#fbbf24";
+
+const BRAIN_PORTEE_LABELS: Record<BrainContextItem["portee"], string> = {
+  projet: "projet",
+  global: "cerveau global",
+  apercu: "aperçu global",
+};
+
+const brainContextStylesheet = StyleSheet.create((theme) => ({
+  pressable: {
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
+    marginBottom: theme.spacing[1],
+    backgroundColor: "rgba(251, 191, 36, 0.15)",
+  },
+  content: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
+  },
+  iconContainer: {
+    flexShrink: 0,
+    height: 20,
+    justifyContent: "center",
+  },
+  textContainer: {
+    flex: 1,
+  },
+  headerText: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    color: BRAIN_COLOR,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  metaText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  memoriesContainer: {
+    marginTop: theme.spacing[2],
+    gap: theme.spacing[1],
+  },
+  sectionHeader: {
+    color: BRAIN_COLOR,
+    fontSize: theme.fontSize.xs,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  memoryRow: {
+    flexDirection: "row",
+    gap: theme.spacing[1],
+    alignItems: "flex-start",
+  },
+  memoryBullet: {
+    color: BRAIN_COLOR,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  memoryTextColumn: {
+    flex: 1,
+  },
+  memoryText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  memoryTextRejected: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  memoryMotif: {
+    color: theme.colors.foregroundMuted,
+    fontStyle: "italic",
+  },
+  memoryDate: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 14,
+    marginTop: theme.spacing[1],
+  },
+}));
+
+type BrainMemory = BrainContextItem["memories"][number];
+type BrainMemoryKind = "fiche" | "fait" | "procedure" | "rejete";
+
+/** Bucket a recalled memory by the emoji prefix the daemon emits (📁 fiche,
+ * 📋 procédure), its rejected flag, or plain fact — so the pill can group them
+ * into readable sections instead of one flat blob. */
+function categorizeBrainMemory(memory: BrainMemory): BrainMemoryKind {
+  if (memory.rejete) {
+    return "rejete";
+  }
+  const text = memory.texte.trimStart();
+  if (text.startsWith("📁")) {
+    return "fiche";
+  }
+  if (text.startsWith("📋")) {
+    return "procedure";
+  }
+  return "fait";
+}
+
+/** Strip the leading category emoji — the section header already conveys it. */
+function stripBrainPrefix(texte: string): string {
+  return texte.replace(/^\s*(?:📁|📋)\s*/u, "").trim();
+}
+
+const BRAIN_DATE_FORMATTER = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** "18 juil. 2026 à 14:32" from the memory's ISO date, or null if unparseable. */
+function formatBrainMemoryDate(iso: string | undefined): string | null {
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return BRAIN_DATE_FORMATTER.format(date).replace(",", " à");
+}
+
+const BRAIN_SECTIONS: { kind: BrainMemoryKind; label: string }[] = [
+  { kind: "fiche", label: "Fiche projet" },
+  { kind: "fait", label: "Souvenirs & décisions" },
+  { kind: "procedure", label: "Procédures" },
+  { kind: "rejete", label: "Pistes écartées" },
+];
+
+/** Short one-line breakdown for the collapsed pill, e.g. "3 souvenirs · 1 procédure". */
+function summarizeBrainMemories(memories: BrainMemory[]): string {
+  const counts: Record<BrainMemoryKind, number> = { fiche: 0, fait: 0, procedure: 0, rejete: 0 };
+  for (const memory of memories) {
+    counts[categorizeBrainMemory(memory)] += 1;
+  }
+  const parts: string[] = [];
+  if (counts.fiche > 0) {
+    parts.push("fiche projet");
+  }
+  if (counts.fait > 0) {
+    parts.push(`${counts.fait} souvenir${counts.fait > 1 ? "s" : ""}`);
+  }
+  if (counts.procedure > 0) {
+    parts.push(`${counts.procedure} procédure${counts.procedure > 1 ? "s" : ""}`);
+  }
+  if (counts.rejete > 0) {
+    parts.push(`${counts.rejete} écartée${counts.rejete > 1 ? "s" : ""}`);
+  }
+  return parts.join(" · ");
+}
+
+function BrainMemoryRow({ kind, memory }: { kind: BrainMemoryKind; memory: BrainMemory }) {
+  const dateLabel = formatBrainMemoryDate(memory.date);
+  return (
+    <View style={brainContextStylesheet.memoryRow}>
+      <Text style={brainContextStylesheet.memoryBullet} selectable={false}>
+        {kind === "rejete" ? "⛔" : "•"}
+      </Text>
+      <View style={brainContextStylesheet.memoryTextColumn}>
+        <Text
+          style={
+            kind === "rejete"
+              ? brainContextStylesheet.memoryTextRejected
+              : brainContextStylesheet.memoryText
+          }
+          selectable
+        >
+          {kind === "rejete" && memory.motif ? (
+            <Text style={brainContextStylesheet.memoryMotif}>{`(${memory.motif}) `}</Text>
+          ) : null}
+          {stripBrainPrefix(memory.texte)}
+        </Text>
+        {dateLabel ? (
+          <Text style={brainContextStylesheet.memoryDate} selectable={false}>
+            {dateLabel}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function BrainMemorySection({
+  id,
+  kind,
+  label,
+  entries,
+}: {
+  id: string | undefined;
+  kind: BrainMemoryKind;
+  label: string;
+  entries: BrainMemory[];
+}) {
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <View>
+      <Text style={brainContextStylesheet.sectionHeader} selectable={false}>
+        {label}
+      </Text>
+      {entries.map((memory) => (
+        <BrainMemoryRow key={`${id}:${kind}:${memory.texte}`} kind={kind} memory={memory} />
+      ))}
+    </View>
+  );
+}
+
+export const BrainContextPill = memo(function BrainContextPill({ item }: BrainContextPillProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const hasMemories = item.memories.length > 0;
+  const handlePress = useCallback(() => {
+    if (hasMemories) {
+      setIsExpanded((prev) => !prev);
+    }
+  }, [hasMemories]);
+  const portee = BRAIN_PORTEE_LABELS[item.portee] ?? item.portee;
+  const grouped = useMemo(() => {
+    const buckets: Record<BrainMemoryKind, BrainMemory[]> = {
+      fiche: [],
+      fait: [],
+      procedure: [],
+      rejete: [],
+    };
+    for (const memory of item.memories) {
+      buckets[categorizeBrainMemory(memory)].push(memory);
+    }
+    return buckets;
+  }, [item.memories]);
+  const summary = useMemo(() => summarizeBrainMemories(item.memories), [item.memories]);
+  let chevron: ReactNode = null;
+  if (hasMemories) {
+    chevron = isExpanded ? (
+      <ChevronDown size={12} color="#71717a" />
+    ) : (
+      <ChevronRight size={12} color="#71717a" />
+    );
+  }
+  return (
+    <Pressable
+      onPress={handlePress}
+      disabled={!hasMemories}
+      style={brainContextStylesheet.pressable}
+    >
+      <View style={brainContextStylesheet.content}>
+        <View style={brainContextStylesheet.row}>
+          <View style={brainContextStylesheet.iconContainer}>
+            {item.status === "loading" ? (
+              <ActivityIndicator size="small" color={BRAIN_COLOR} />
+            ) : (
+              <BrainCircuit size={16} color={BRAIN_COLOR} />
+            )}
+          </View>
+          <View style={brainContextStylesheet.textContainer}>
+            <Text style={brainContextStylesheet.headerText} selectable>
+              Cerveau · {item.query}
+            </Text>
+            <View style={brainContextStylesheet.detailsRow}>
+              <Text style={brainContextStylesheet.metaText}>
+                {item.count === 0 ? "aucune info complémentaire" : `${summary} (${portee})`}
+              </Text>
+              {chevron}
+            </View>
+            {isExpanded && hasMemories && (
+              <View style={brainContextStylesheet.memoriesContainer}>
+                {BRAIN_SECTIONS.map((section) => (
+                  <BrainMemorySection
+                    key={section.kind}
+                    id={item.id}
+                    kind={section.kind}
+                    label={section.label}
+                    entries={grouped[section.kind]}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
+interface TaskTriagePillProps {
+  item: TaskTriageItem;
+}
+
+const TRIAGE_COLOR = "#34d399";
+
+const taskTriageStylesheet = StyleSheet.create((theme) => ({
+  pressable: {
+    borderRadius: theme.borderRadius.md,
+    overflow: "hidden",
+    marginBottom: theme.spacing[1],
+    backgroundColor: "rgba(52, 211, 153, 0.15)",
+  },
+  content: {
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[2],
+  },
+  iconContainer: {
+    flexShrink: 0,
+    height: 20,
+    justifyContent: "center",
+  },
+  textContainer: {
+    flex: 1,
+  },
+  headerText: {
+    fontSize: theme.fontSize.sm,
+    lineHeight: 20,
+    color: TRIAGE_COLOR,
+  },
+  questionsContainer: {
+    marginTop: theme.spacing[1],
+    gap: theme.spacing[1],
+  },
+  questionText: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: 18,
+  },
+  hintText: {
+    marginTop: theme.spacing[1],
+    color: theme.colors.mutedForeground,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 16,
+  },
+}));
+
+export const TaskTriagePill = memo(function TaskTriagePill({ item }: TaskTriagePillProps) {
+  const isQuestions = item.status === "questions";
+  const header = isQuestions
+    ? "Tri de tâches · précisions demandées"
+    : `Tri de tâches · ${item.proposedCount} tâche${item.proposedCount > 1 ? "s" : ""} proposée${
+        item.proposedCount > 1 ? "s" : ""
+      } · à confirmer`;
+  return (
+    <View style={taskTriageStylesheet.pressable}>
+      <View style={taskTriageStylesheet.content}>
+        <View style={taskTriageStylesheet.row}>
+          <View style={taskTriageStylesheet.iconContainer}>
+            {isQuestions ? (
+              <ClipboardList size={16} color={TRIAGE_COLOR} />
+            ) : (
+              <ListChecks size={16} color={TRIAGE_COLOR} />
+            )}
+          </View>
+          <View style={taskTriageStylesheet.textContainer}>
+            <Text style={taskTriageStylesheet.headerText} selectable>
+              {header}
+            </Text>
+            {isQuestions && item.questions.length > 0 && (
+              <View style={taskTriageStylesheet.questionsContainer}>
+                {item.questions.map((question) => (
+                  <Text
+                    key={`${item.id}:${question}`}
+                    style={taskTriageStylesheet.questionText}
+                    selectable
+                  >
+                    • {question}
+                  </Text>
+                ))}
+              </View>
+            )}
+            {isQuestions && (
+              <Text style={taskTriageStylesheet.hintText}>
+                Répondez dans le chat pour préciser (avec une intention claire, ex. « crée une tâche
+                pour… »), ou ignorez ce message — rien à valider ici.
+              </Text>
+            )}
+          </View>
+        </View>
+      </View>
     </View>
   );
 });
@@ -2657,9 +3370,7 @@ function computeShimmerMetrics(input: {
     Math.min(120, input.labelRowWidth > 0 ? input.labelRowWidth * 0.28 : 0),
   );
   const isWebShimmer = input.isLoading && isWeb;
-  // React Native Web only observes a node when onLayout exists at mount. Keep
-  // measuring while idle so a retained badge has dimensions when it starts loading.
-  const shouldMeasureWebShimmer = isWeb;
+  const shouldMeasureWebShimmer = isWebShimmer;
   const shouldMeasureNativeShimmer = input.isLoading && isNative;
   const isNativeShimmer =
     shouldMeasureNativeShimmer && input.labelRowWidth > 0 && input.labelRowHeight > 0;

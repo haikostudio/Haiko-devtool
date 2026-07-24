@@ -96,7 +96,7 @@ export function listPaseoBrowserProfileGuests(
   return input.webContents.filter(
     (contents) =>
       !contents.isDestroyed() &&
-      (contents.getType() === "webview" || contents.getType() === "window") &&
+      contents.getType() === "webview" &&
       contents.session === input.profileSession,
   );
 }

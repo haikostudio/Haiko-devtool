@@ -3,7 +3,6 @@ export type KeyboardFocusScope =
   | "message-input"
   | "command-center"
   | "editable"
-  | "browser"
   | "other";
 
 export type MessageInputKeyboardActionKind =

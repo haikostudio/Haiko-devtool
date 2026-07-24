@@ -4,7 +4,6 @@ import { StyleSheet } from "react-native-unistyles";
 interface DiffStatProps {
   additions: number;
   deletions: number;
-  testID?: string;
 }
 
 const compactFormatter = new Intl.NumberFormat("en-US", {
@@ -16,9 +15,9 @@ export function formatDiffCount(value: number): string {
   return compactFormatter.format(value).toLowerCase();
 }
 
-export function DiffStat({ additions, deletions, testID }: DiffStatProps) {
+export function DiffStat({ additions, deletions }: DiffStatProps) {
   return (
-    <View style={styles.row} testID={testID}>
+    <View style={styles.row}>
       <Text style={styles.additions}>+{formatDiffCount(additions)}</Text>
       <Text style={styles.deletions}>-{formatDiffCount(deletions)}</Text>
     </View>
@@ -30,7 +29,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     height: 20,
-    gap: 4,
+    gap: theme.spacing[1],
     flexShrink: 0,
   },
   additions: {

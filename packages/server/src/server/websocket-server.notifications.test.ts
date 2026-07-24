@@ -14,8 +14,6 @@ import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js
 import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 
-const WORKSPACE_ID = "workspace-1";
-
 const wsModuleMock = vi.hoisted(() => {
   class MockWebSocketServer {
     readonly handlers = new Map<string, (...args: unknown[]) => void>();
@@ -88,8 +86,9 @@ function createServer(agentManagerOverrides?: Record<string, unknown>) {
   const agentManager = {
     subscribe: vi.fn(() => () => {}),
     setAgentAttentionCallback: vi.fn(),
-    getAgent: vi.fn(() => ({ workspaceId: WORKSPACE_ID, pendingPermissions: new Map() })),
+    getAgent: vi.fn(() => null),
     getLastAssistantMessage: vi.fn(async () => null),
+    getAgentNotificationContext: vi.fn(async () => ({ title: null, synthesisSummary: null })),
     getMetricsSnapshot: vi.fn(() => ({
       total: 0,
       byLifecycle: {},
@@ -175,8 +174,6 @@ function createSessionWithActivity(
 ) {
   return {
     getClientActivity: vi.fn(() => activity),
-    supports: () => false,
-    supportsForSource: () => false,
   };
 }
 
@@ -192,7 +189,6 @@ function connectClient(
 ) {
   const ws = createOpenSocket();
   asInternals<WebSocketServerInternals>(server).sessions.set(ws, {
-    kind: "trusted",
     session: createSessionWithActivity(activity),
     clientId: "client-test",
     appVersion: null,
@@ -227,7 +223,6 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
       getAgent: vi.fn(() => ({
         config: { title: null },
         cwd: "/tmp/worktree",
-        workspaceId: WORKSPACE_ID,
         pendingPermissions: new Map(),
       })),
       getLastAssistantMessage,
@@ -245,7 +240,6 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
         body: "Done. Updated README.md and link.",
         data: {
           serverId: "srv-test",
-          workspaceId: WORKSPACE_ID,
           agentId: "agent-1",
           reason: "finished",
         },
@@ -254,13 +248,45 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
     expect(getLastAssistantMessage).toHaveBeenCalledWith("agent-1");
   });
 
+  it("titles finished pushes with the agent title and bodies them with the synthesis summary", async () => {
+    const { server, pushNotifications } = createServer({
+      getAgent: vi.fn(() => ({
+        config: { title: "Refonte notifications" },
+        cwd: "/tmp/worktree",
+        pendingPermissions: new Map(),
+      })),
+      getLastAssistantMessage: vi.fn(async () => "Rambling last message we skip."),
+      getAgentNotificationContext: vi.fn(async () => ({
+        title: "Refonte notifications",
+        synthesisSummary: "Reworked completion notifications to show title and summary.",
+      })),
+    });
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-1",
+      provider: "claude",
+      reason: "finished",
+    });
+
+    expect(pushNotifications.sent).toEqual([
+      {
+        title: "Refonte notifications",
+        body: "Reworked completion notifications to show title and summary.",
+        data: {
+          serverId: "srv-test",
+          agentId: "agent-1",
+          reason: "finished",
+        },
+      },
+    ]);
+  });
+
   it("sends push notifications regardless of UI label presence", async () => {
     const getLastAssistantMessage = vi.fn(async () => "Done.");
     const { server, pushNotifications } = createServer({
       getAgent: vi.fn(() => ({
         config: { title: null },
         cwd: "/tmp/worktree",
-        workspaceId: WORKSPACE_ID,
         labels: {},
         pendingPermissions: new Map(),
       })),

@@ -33,7 +33,6 @@ import {
   Plus,
   FolderGit2,
   SquareTerminal,
-  Code2,
 } from "lucide-react-native";
 import { DropdownTrigger } from "@/components/ui/dropdown-trigger";
 import { ComboboxTrigger } from "@/components/ui/combobox-trigger";
@@ -56,11 +55,7 @@ import {
 } from "@/hooks/use-settings";
 import { useHostRuntimeIsConnected, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import {
-  orderHostsLocalFirst,
-  resolveActiveHostServerId,
-  type HostProfile,
-} from "@/types/host-connection";
+import { orderHostsLocalFirst, type HostProfile } from "@/types/host-connection";
 import { TitlebarDragRegion } from "@/components/desktop/titlebar-drag-region";
 import { WindowChromeRegion, WindowChromeSafeArea } from "@/utils/desktop-window";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -70,8 +65,15 @@ import { AddHostMethodModal } from "@/components/add-host-method-modal";
 import { AddHostModal } from "@/components/add-host-modal";
 import { PairLinkModal } from "@/components/pair-link-modal";
 import { KeyboardShortcutsSection } from "@/screens/settings/keyboard-shortcuts-section";
-import { EditorSection } from "@/screens/settings/editor-section";
 import { Button } from "@/components/ui/button";
+import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
+import { isWeb } from "@/constants/platform";
+import {
+  enableWebPush,
+  getWebPushState,
+  syncWebPushState,
+  type WebPushState,
+} from "@/utils/web-push";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -141,7 +143,6 @@ interface SidebarSectionItem {
 const SIDEBAR_SECTION_ITEMS: SidebarSectionItem[] = [
   { id: "general", labelKey: "settings.sections.general", icon: Settings },
   { id: "appearance", labelKey: "settings.sections.appearance", icon: Palette },
-  { id: "editor", labelKey: "settings.sections.editor", icon: Code2 },
   { id: "shortcuts", labelKey: "settings.sections.shortcuts", icon: Keyboard, desktopOnly: true },
   {
     id: "integrations",
@@ -216,6 +217,8 @@ function selectedSidebarItemStyle({ hovered }: PressableStateCallbackType & { ho
     sidebarStyles.itemSelected,
   ];
 }
+
+const ROW_WITH_BORDER_STYLE = [settingsStyles.row, settingsStyles.rowBorder];
 
 function getSendBehaviorOptions(t: TFunction) {
   return [
@@ -300,6 +303,61 @@ function LanguageMenuItem({ value, activeLocale, selected, onChange }: LanguageM
   );
 }
 
+function WebPushRow() {
+  const { t } = useTranslation();
+  const [state, setState] = useState<WebPushState>(() => getWebPushState());
+  const [busy, setBusy] = useState(false);
+
+  // A granted browser permission is not proof of an active subscription — check
+  // the real push subscription on mount so the button never lies about "enabled".
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      const next = await syncWebPushState();
+      if (active) setState(next);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleEnable = useCallback(async () => {
+    setBusy(true);
+    try {
+      setState(await enableWebPush());
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  if (state === "unsupported") return null;
+
+  let actionLabel = t("settings.general.webPush.enable");
+  if (state === "enabled") {
+    actionLabel = t("settings.general.webPush.enabled");
+  } else if (state === "denied") {
+    actionLabel = t("settings.general.webPush.blocked");
+  }
+
+  return (
+    <View style={ROW_WITH_BORDER_STYLE}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.general.webPush.label")}</Text>
+        <Text style={settingsStyles.rowHint}>{t("settings.general.webPush.description")}</Text>
+      </View>
+      <Button
+        size="sm"
+        variant={state === "enabled" ? "outline" : "default"}
+        onPress={handleEnable}
+        loading={busy}
+        disabled={state === "enabled" || state === "denied"}
+      >
+        {actionLabel}
+      </Button>
+    </View>
+  );
+}
+
 function GeneralSection({
   settings,
   isDesktopApp,
@@ -365,7 +423,7 @@ function GeneralSection({
             options={sendBehaviorOptions}
           />
         </View>
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={ROW_WITH_BORDER_STYLE}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>{t("settings.general.language.label")}</Text>
             <Text style={settingsStyles.rowHint}>{t("settings.general.language.description")}</Text>
@@ -391,8 +449,9 @@ function GeneralSection({
             </DropdownMenuContent>
           </DropdownMenu>
         </View>
+        {isWeb ? <WebPushRow /> : null}
         {isDesktopApp ? (
-          <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+          <View style={ROW_WITH_BORDER_STYLE}>
             <View style={settingsStyles.rowContent}>
               <Text style={settingsStyles.rowTitle}>{t("settings.general.serviceUrls.label")}</Text>
               <Text style={settingsStyles.rowHint}>
@@ -419,7 +478,7 @@ function GeneralSection({
             </DropdownMenu>
           </View>
         ) : null}
-        <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={ROW_WITH_BORDER_STYLE}>
           <View style={settingsStyles.rowContent}>
             <Text style={settingsStyles.rowTitle}>
               {t("settings.general.terminalScrollback.label")}
@@ -705,7 +764,7 @@ function DesktopAppUpdateRow() {
 
   return (
     <>
-      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.about.releaseChannel.label")}</Text>
           <Text style={settingsStyles.rowHint}>
@@ -719,7 +778,7 @@ function DesktopAppUpdateRow() {
           options={releaseChannelOptions}
         />
       </View>
-      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <View style={ROW_WITH_BORDER_STYLE}>
         <View style={settingsStyles.rowContent}>
           <Text style={settingsStyles.rowTitle}>{t("settings.about.updates.label")}</Text>
           <Text style={settingsStyles.rowHint}>{statusText}</Text>
@@ -1086,12 +1145,7 @@ function SettingsSidebar({
   );
 
   return (
-    <View
-      accessibilityLabel={t("settings.title")}
-      role="navigation"
-      style={outerContainerStyle}
-      testID="settings-sidebar"
-    >
+    <View style={outerContainerStyle} testID="settings-sidebar">
       {isDesktop ? (
         <View style={innerContainerStyle}>
           <View style={sidebarStyles.sidebarDragArea}>
@@ -1148,6 +1202,15 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   const [selectedSettingsHostServerId, setSelectedSettingsHostServerId] = useState<string | null>(
     view.kind === "host" ? view.serverId : null,
   );
+  const knownSelectedSettingsHostServerId = useMemo(() => {
+    if (!selectedSettingsHostServerId) {
+      return null;
+    }
+    return hosts.some((host) => host.serverId === selectedSettingsHostServerId)
+      ? selectedSettingsHostServerId
+      : null;
+  }, [hosts, selectedSettingsHostServerId]);
+
   useEffect(() => {
     if (view.kind === "host") {
       setSelectedSettingsHostServerId(view.serverId);
@@ -1155,16 +1218,11 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
   }, [view]);
 
   // The host the four sections scope to: the host on the active view, otherwise
-  // the picker choice, otherwise the connected local daemon, otherwise the first host.
+  // the picker choice, otherwise the local daemon, otherwise the first host.
   const activeHostServerId = useMemo(() => {
     if (view.kind === "host") return view.serverId;
-    return resolveActiveHostServerId({
-      selectedServerId: selectedSettingsHostServerId,
-      localServerId,
-      hosts,
-      orderedHosts: sortedHosts,
-    });
-  }, [view, selectedSettingsHostServerId, localServerId, hosts, sortedHosts]);
+    return knownSelectedSettingsHostServerId ?? localServerId ?? sortedHosts[0]?.serverId ?? null;
+  }, [view, knownSelectedSettingsHostServerId, localServerId, sortedHosts]);
 
   const handleSendBehaviorChange = useCallback(
     (behavior: SendBehavior) => {
@@ -1406,8 +1464,6 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
           );
         case "appearance":
           return <AppearanceSection />;
-        case "editor":
-          return <EditorSection />;
         case "shortcuts":
           return isDesktopApp ? <KeyboardShortcutsSection /> : null;
         case "integrations":
@@ -1501,11 +1557,10 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
     );
   }
 
-  // Mobile detail: full-screen content with a back header. Project detail uses
-  // an app-level back (out of settings, to the workspace) since the in-body
-  // "Back to projects" ghost button handles list-level back; other detail views
-  // step back to the settings root.
-  const detailBackHandler = view.kind === "project" ? handleBackToWorkspace : handleBackToRoot;
+  // Mobile detail: full-screen content with a back header. Every detail view —
+  // including project config — steps back to where it was pushed from (the
+  // projects list for project detail, the settings root otherwise).
+  const detailBackHandler = handleBackToRoot;
   if (isCompactLayout) {
     return (
       <View style={styles.container}>
@@ -1693,7 +1748,7 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,
@@ -1714,7 +1769,7 @@ const sidebarStyles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    minHeight: 36,
+    minHeight: LIST_ROW_HEIGHT,
     paddingVertical: theme.spacing[2],
     paddingHorizontal: theme.spacing[2],
     borderRadius: theme.borderRadius.lg,

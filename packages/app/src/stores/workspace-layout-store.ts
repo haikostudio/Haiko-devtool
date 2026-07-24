@@ -2,7 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { WorkspaceTab, WorkspaceTabTarget } from "@/workspace-tabs/model";
+import {
+  buildWorkspaceTabPersistenceKey,
+  type WorkspaceTab,
+  type WorkspaceTabTarget,
+} from "@/stores/workspace-tabs-store";
 import {
   defaultWorkspaceLayoutIds,
   type WorkspaceLayoutIdSource,
@@ -33,7 +37,6 @@ import {
   retargetTabInLayout,
   splitPaneEmptyInLayout,
   splitPaneInLayout,
-  stripEphemeralTabsFromLayout,
   type SplitGroup,
   type SplitNode,
   type SplitPane,
@@ -42,7 +45,15 @@ import {
   type WorkspaceLayout,
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
+import { clearTabCloseTombstone, recordTabClose } from "@/session-ui-state/close-tombstones";
+import {
+  clearTabOpenMarker,
+  recordLocalTabOpen,
+  seedTabOpenMarker,
+} from "@/session-ui-state/open-markers";
+import { recordLocalFocusIntent } from "@/session-ui-state/focus-intent";
 
+export { buildWorkspaceTabPersistenceKey };
 export {
   collectAllPanes,
   collectAllTabs,
@@ -55,7 +66,6 @@ export {
   normalizeLayout,
   removePaneFromTree,
   removeTabFromTree,
-  stripEphemeralTabsFromLayout,
 };
 export type {
   SplitGroup,
@@ -70,7 +80,6 @@ interface WorkspaceLayoutStore {
   layoutByWorkspace: Record<string, WorkspaceLayout>;
   splitSizesByWorkspace: Record<string, Record<string, number[]>>;
   pinnedAgentIdsByWorkspace: Record<string, Set<string>>;
-  pendingAgentIdsByWorkspace: Record<string, Set<string>>;
   hiddenAgentIdsByWorkspace: Record<string, Set<string>>;
   focusRestorationByWorkspace: Record<string, WorkspaceFocusRestorationState>;
   openTabFocused: (workspaceKey: string, target: WorkspaceTabTarget) => string | null;
@@ -85,7 +94,6 @@ interface WorkspaceLayoutStore {
   retargetTab: (workspaceKey: string, tabId: string, target: WorkspaceTabTarget) => string | null;
   convertDraftToAgent: (workspaceKey: string, tabId: string, agentId: string) => string | null;
   reconcileTabs: (workspaceKey: string, snapshot: WorkspaceTabSnapshot) => void;
-  resolvePendingAgent: (workspaceKey: string, agentId: string) => void;
   reorderTabs: (workspaceKey: string, tabIds: string[]) => void;
   getWorkspaceTabs: (workspaceKey: string) => WorkspaceTab[];
   splitPane: (
@@ -226,7 +234,6 @@ export function createWorkspaceLayoutStore(
         layoutByWorkspace: {},
         splitSizesByWorkspace: {},
         pinnedAgentIdsByWorkspace: {},
-        pendingAgentIdsByWorkspace: {},
         hiddenAgentIdsByWorkspace: {},
         focusRestorationByWorkspace: {},
         openTabFocused: (workspaceKey, target) => {
@@ -258,6 +265,8 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         openChildTabFocused: (workspaceKey, target, parentTabId) => {
@@ -297,6 +306,13 @@ export function createWorkspaceLayoutStore(
             };
           });
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          // A freshly opened draft tab the host hasn't heard about yet must not be
+          // closed by adoption of a snapshot that predates it (see open-markers).
+          if (normalizedTarget.kind === "draft") {
+            recordLocalTabOpen(normalizedWorkspaceKey, result.tabId);
+          }
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         openTabInBackground: (workspaceKey, target) => {
@@ -327,6 +343,10 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          if (normalizedTarget.kind === "draft") {
+            recordLocalTabOpen(normalizedWorkspaceKey, result.tabId);
+          }
           return result.tabId;
         },
         closeTab: (workspaceKey, tabId) => {
@@ -336,6 +356,7 @@ export function createWorkspaceLayoutStore(
             return;
           }
 
+          let closed = false;
           set((state) => {
             const nextLayout = closeTabInLayout({
               layout: getWorkspaceLayout(state.layoutByWorkspace, normalizedWorkspaceKey),
@@ -344,6 +365,7 @@ export function createWorkspaceLayoutStore(
             if (!nextLayout) {
               return state;
             }
+            closed = true;
 
             return {
               ...withoutFocusRestoration(state, normalizedWorkspaceKey),
@@ -353,6 +375,17 @@ export function createWorkspaceLayoutStore(
               },
             };
           });
+          if (closed) {
+            // Tombstone the close so host-state adoption never resurrects the
+            // tab from a snapshot captured before this moment (see
+            // session-ui-state/close-tombstones).
+            recordTabClose(normalizedWorkspaceKey, normalizedTabId);
+            // A locally-closed tab is no longer an unacknowledged local open.
+            clearTabOpenMarker(normalizedWorkspaceKey, normalizedTabId);
+            // Closing auto-focuses a neighbor: record it as local focus intent so
+            // a stale broadcast can't steal focus back to the closed/previous tab.
+            recordLocalFocusIntent(normalizedWorkspaceKey);
+          }
         },
         focusTab: (workspaceKey, tabId) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
@@ -378,6 +411,7 @@ export function createWorkspaceLayoutStore(
               },
             };
           });
+          recordLocalFocusIntent(normalizedWorkspaceKey);
         },
         retargetTab: (workspaceKey, tabId, target) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
@@ -414,6 +448,14 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          // Retargeting the current tab (e.g. draft -> agent when the first
+          // prompt is sent) keeps focus on this tab in place. Record local focus
+          // intent so a stale host broadcast that lands during the brain-recall
+          // window cannot yank focus back to the previous tab. No-op under
+          // suppressLocalFocusIntent, so the hydrate-driven retarget at
+          // hydrate.ts stays exempt.
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         convertDraftToAgent: (workspaceKey, tabId, agentId) => {
@@ -448,6 +490,11 @@ export function createWorkspaceLayoutStore(
             },
           }));
 
+          clearTabCloseTombstone(normalizedWorkspaceKey, result.tabId);
+          // The draft became an agent tab; drop the draft's unacknowledged-open
+          // marker so it can't preserve a tab that no longer exists as a draft.
+          clearTabOpenMarker(normalizedWorkspaceKey, normalizedTabId);
+          recordLocalFocusIntent(normalizedWorkspaceKey);
           return result.tabId;
         },
         reconcileTabs: (workspaceKey, snapshot) => {
@@ -465,7 +512,6 @@ export function createWorkspaceLayoutStore(
               {
                 layout: currentLayout,
                 pinnedAgentIds: state.pinnedAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null,
-                pendingAgentIds: state.pendingAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null,
                 hiddenAgentIds: state.hiddenAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null,
               },
               snapshot,
@@ -480,25 +526,6 @@ export function createWorkspaceLayoutStore(
                 [normalizedWorkspaceKey]: nextState.layout,
               },
             };
-          });
-        },
-        resolvePendingAgent: (workspaceKey, agentId) => {
-          const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);
-          const normalizedAgentId = trimNonEmpty(agentId);
-          if (!normalizedWorkspaceKey || !normalizedAgentId) {
-            return;
-          }
-
-          set((state) => {
-            const pendingAgentIdsByWorkspace = removeAgentIdFromWorkspaceSet(
-              state.pendingAgentIdsByWorkspace,
-              normalizedWorkspaceKey,
-              normalizedAgentId,
-            );
-            if (pendingAgentIdsByWorkspace === state.pendingAgentIdsByWorkspace) {
-              return state;
-            }
-            return { pendingAgentIdsByWorkspace };
           });
         },
         reorderTabs: (workspaceKey, tabIds) => {
@@ -780,12 +807,7 @@ export function createWorkspaceLayoutStore(
           set((state) => {
             const currentPinnedAgentIds =
               state.pinnedAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null;
-            const currentPendingAgentIds =
-              state.pendingAgentIdsByWorkspace[normalizedWorkspaceKey] ?? null;
-            if (
-              currentPinnedAgentIds?.has(normalizedAgentId) &&
-              currentPendingAgentIds?.has(normalizedAgentId)
-            ) {
+            if (currentPinnedAgentIds?.has(normalizedAgentId)) {
               return state;
             }
 
@@ -802,11 +824,6 @@ export function createWorkspaceLayoutStore(
                 ...state.pinnedAgentIdsByWorkspace,
                 [normalizedWorkspaceKey]: nextPinnedAgentIds,
               },
-              pendingAgentIdsByWorkspace: addAgentIdToWorkspaceSet(
-                state.pendingAgentIdsByWorkspace,
-                normalizedWorkspaceKey,
-                normalizedAgentId,
-              ),
             };
           });
         },
@@ -831,11 +848,6 @@ export function createWorkspaceLayoutStore(
               delete nextPinnedAgentIdsByWorkspace[normalizedWorkspaceKey];
               return {
                 pinnedAgentIdsByWorkspace: nextPinnedAgentIdsByWorkspace,
-                pendingAgentIdsByWorkspace: removeAgentIdFromWorkspaceSet(
-                  state.pendingAgentIdsByWorkspace,
-                  normalizedWorkspaceKey,
-                  normalizedAgentId,
-                ),
               };
             }
 
@@ -847,11 +859,6 @@ export function createWorkspaceLayoutStore(
                 ...state.pinnedAgentIdsByWorkspace,
                 [normalizedWorkspaceKey]: nextPinnedAgentIds,
               },
-              pendingAgentIdsByWorkspace: removeAgentIdFromWorkspaceSet(
-                state.pendingAgentIdsByWorkspace,
-                normalizedWorkspaceKey,
-                normalizedAgentId,
-              ),
             };
           });
         },
@@ -910,7 +917,6 @@ export function createWorkspaceLayoutStore(
               normalizedWorkspaceKey in state.layoutByWorkspace ||
               normalizedWorkspaceKey in state.splitSizesByWorkspace ||
               normalizedWorkspaceKey in state.pinnedAgentIdsByWorkspace ||
-              normalizedWorkspaceKey in state.pendingAgentIdsByWorkspace ||
               normalizedWorkspaceKey in state.hiddenAgentIdsByWorkspace ||
               normalizedWorkspaceKey in state.focusRestorationByWorkspace;
             if (!hasAny) {
@@ -922,8 +928,6 @@ export function createWorkspaceLayoutStore(
               state.splitSizesByWorkspace;
             const { [normalizedWorkspaceKey]: _pinned, ...pinnedAgentIdsByWorkspace } =
               state.pinnedAgentIdsByWorkspace;
-            const { [normalizedWorkspaceKey]: _pending, ...pendingAgentIdsByWorkspace } =
-              state.pendingAgentIdsByWorkspace;
             const { [normalizedWorkspaceKey]: _hidden, ...hiddenAgentIdsByWorkspace } =
               state.hiddenAgentIdsByWorkspace;
             const { [normalizedWorkspaceKey]: _restoration, ...focusRestorationByWorkspace } =
@@ -932,7 +936,6 @@ export function createWorkspaceLayoutStore(
               layoutByWorkspace,
               splitSizesByWorkspace,
               pinnedAgentIdsByWorkspace,
-              pendingAgentIdsByWorkspace,
               hiddenAgentIdsByWorkspace,
               focusRestorationByWorkspace,
             };
@@ -946,16 +949,30 @@ export function createWorkspaceLayoutStore(
         partialize: (state) => {
           const layoutByWorkspace: Record<string, WorkspaceLayout> = {};
           for (const key in state.layoutByWorkspace) {
-            // Strip ephemeral (commit diff) tabs before persisting so they are
-            // dropped on reload rather than restored pointing at a rebased SHA.
-            layoutByWorkspace[key] = stripEphemeralTabsFromLayout(
-              normalizeLayout(state.layoutByWorkspace[key]),
-            );
+            layoutByWorkspace[key] = normalizeLayout(state.layoutByWorkspace[key]);
           }
           return {
             layoutByWorkspace,
             splitSizesByWorkspace: state.splitSizesByWorkspace,
           };
+        },
+        // After a reload the in-memory open markers are gone, so a freshly opened
+        // draft tab rehydrated from disk would be closeable again by an adoption
+        // that predates it. Reseed a marker for each persisted draft tab (bounded
+        // by its own age inside seedTabOpenMarker) so the "new agent closes
+        // itself" protection survives the reload too.
+        onRehydrateStorage: () => (state) => {
+          if (!state) {
+            return;
+          }
+          for (const workspaceKey in state.layoutByWorkspace) {
+            const layout = state.layoutByWorkspace[workspaceKey];
+            for (const tab of collectAllTabs(layout.root)) {
+              if (tab.target.kind === "draft") {
+                seedTabOpenMarker(workspaceKey, tab.tabId, tab.createdAt);
+              }
+            }
+          }
         },
       },
     ),

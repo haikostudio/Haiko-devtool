@@ -14,7 +14,6 @@ import type {
   ProviderCatalog,
   ResolveAgentCreateConfigInput,
   ResolveAgentCreateConfigResult,
-  ResolveAgentDefaultModeInput,
 } from "./agent-sdk-types.js";
 import {
   isDefaultAgentCreateConfigUnattended,
@@ -36,8 +35,6 @@ import { CursorACPAgentClient } from "./providers/cursor-acp-agent.js";
 import { GenericACPAgentClient } from "./providers/generic-acp-agent.js";
 import { KiroACPAgentClient } from "./providers/kiro-acp-agent.js";
 import { OpenCodeAgentClient } from "./providers/opencode-agent.js";
-import { OmpAgentClient } from "./providers/omp/agent.js";
-import type { OmpRuntime } from "./providers/omp/runtime.js";
 import { PiRpcAgentClient } from "./providers/pi/agent.js";
 import { TraeACPAgentClient } from "./providers/trae-acp-agent.js";
 import { MockLoadTestAgentClient } from "./providers/mock-load-test-agent.js";
@@ -82,12 +79,11 @@ export interface BuildProviderRegistryOptions {
   workspaceGitService?: Pick<WorkspaceGitService, "resolveRepoRoot">;
   managedProcesses?: ManagedProcessRegistry;
   isDev?: boolean;
-  ompRuntime?: OmpRuntime;
 }
 
 interface ProviderClientFactoryOptions extends Pick<
   BuildProviderRegistryOptions,
-  "workspaceGitService" | "managedProcesses" | "ompRuntime"
+  "workspaceGitService" | "managedProcesses"
 > {
   providerParams?: unknown;
   customProvider?: {
@@ -148,11 +144,21 @@ const PROVIDER_CLIENT_FACTORIES: Record<string, ProviderClientFactory> = {
       providerParams: options?.providerParams,
     }),
   omp: (logger, runtimeSettings, options) =>
-    new OmpAgentClient({
+    new PiRpcAgentClient({
       logger,
-      runtimeSettings,
-      providerParams: options?.providerParams,
-      runtime: options?.ompRuntime,
+      runtimeSettings: mergeRuntimeSettings(
+        {
+          command: {
+            mode: "replace",
+            argv: ["omp"],
+          },
+        },
+        runtimeSettings,
+      ),
+      providerParams: options?.providerParams ?? {
+        sessionDir: "~/.omp/agent/sessions",
+      },
+      commandsRpcType: "get_available_commands",
     }),
   mock: (logger) => new MockLoadTestAgentClient(logger),
   "mock-slow": () => new MockSlowProviderClient(),
@@ -408,7 +414,7 @@ function wrapClientProvider(
           launchContext,
         ),
       ),
-    resumeSession: async (handle, overrides, launchContext, options) =>
+    resumeSession: async (handle, overrides, launchContext) =>
       wrapSessionProvider(
         provider,
         await inner.resumeSession(
@@ -423,26 +429,17 @@ function wrapClientProvider(
               }
             : undefined,
           launchContext,
-          options,
         ),
       ),
     fetchCatalog: async (options) => {
       const catalog = await inner.fetchCatalog(options);
       return {
-        ...catalog,
         models: mergeModels(provider, profileModels, additionalModels, catalog.models, {
           profileModelsAreAdditive,
         }),
         modes: catalog.modes,
       };
     },
-    resolveDefaultModeId: inner.resolveDefaultModeId
-      ? async ({ config, env }: ResolveAgentDefaultModeInput) =>
-          await inner.resolveDefaultModeId?.({
-            config: { ...config, provider: inner.provider },
-            env,
-          })
-      : undefined,
     resolveCreateConfig: inner.resolveCreateConfig?.bind(inner),
     isCreateConfigUnattended: inner.isCreateConfigUnattended?.bind(inner),
     listFeatures: listFeatures
@@ -526,25 +523,17 @@ function createRegistryEntry(
         // the single catalog API; otherwise use static/empty modes with no runtime.
         const models = mergeModelAdditions(provider, replacementModels, resolved.additionalModels);
         if (hasStaticModes) {
-          const defaultModeId = await catalogClient.resolveDefaultModeId?.({
-            config: {
-              provider,
-              cwd: options.scope === "workspace" ? options.cwd : process.cwd(),
-            },
-          });
           return {
             models,
             modes: decorateModes(resolved.definition.modes),
-            defaultModeId,
           };
         }
         const catalog = await catalogClient.fetchCatalog(options);
-        return { ...catalog, models, modes: decorateModes(catalog.modes) };
+        return { models, modes: decorateModes(catalog.modes) };
       }
 
       const catalog = await catalogClient.fetchCatalog(options);
       return {
-        ...catalog,
         models: mergeModels(
           provider,
           resolved.profileModels,
@@ -583,10 +572,7 @@ function createResolvedProviderClient(
 function buildResolvedBuiltinProviders(
   providerOverrides: Record<string, ProviderOverride>,
   runtimeSettings: AgentProviderRuntimeSettingsMap | undefined,
-  options: Pick<
-    BuildProviderRegistryOptions,
-    "workspaceGitService" | "managedProcesses" | "ompRuntime"
-  >,
+  options: Pick<BuildProviderRegistryOptions, "workspaceGitService" | "managedProcesses">,
   isDev: boolean,
 ): Map<string, ResolvedProvider> {
   const resolvedProviders = new Map<string, ResolvedProvider>();
@@ -616,7 +602,6 @@ function buildResolvedBuiltinProviders(
         factory(logger, mergedRuntimeSettings, {
           workspaceGitService: options.workspaceGitService,
           managedProcesses: options.managedProcesses,
-          ompRuntime: options.ompRuntime,
           providerParams: override?.params,
         }),
     });
@@ -740,7 +725,6 @@ export function buildProviderRegistry(
     {
       workspaceGitService: options?.workspaceGitService,
       managedProcesses: options?.managedProcesses,
-      ompRuntime: options?.ompRuntime,
     },
     options?.isDev === true,
   );

@@ -12,7 +12,6 @@ import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
   ApiNumberSchema,
   balanceToneFromRemaining,
-  toneFromUsedPct,
   fetchProviderApi,
   unavailableUsage,
   windowFromUsedPct,
@@ -144,7 +143,7 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
           label: "Session",
           utilizationPct: session.usedPct,
           resetsAt: session.resetsAt,
-          tone: toneFromUsedPct(session.usedPct),
+          tone: "ok",
         }),
       );
     }
@@ -155,7 +154,7 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
           label: "Weekly",
           utilizationPct: weekly.usedPct,
           resetsAt: weekly.resetsAt,
-          tone: toneFromUsedPct(weekly.usedPct),
+          tone: weekly.usedPct >= 70 ? "warning" : "ok",
         }),
       );
     }
@@ -166,7 +165,7 @@ export class CodexQuotaProvider implements ProviderUsageFetcher {
           label: "Code review",
           utilizationPct: codeReview.usedPct,
           resetsAt: codeReview.resetsAt,
-          tone: toneFromUsedPct(codeReview.usedPct),
+          tone: codeReview.usedPct >= 70 ? "warning" : "ok",
         }),
       );
     }

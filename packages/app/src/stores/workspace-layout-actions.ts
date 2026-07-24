@@ -1,5 +1,5 @@
 import invariant from "tiny-invariant";
-import type { WorkspaceTab, WorkspaceTabTarget } from "@/workspace-tabs/model";
+import type { WorkspaceTab, WorkspaceTabTarget } from "@/stores/workspace-tabs-store";
 import { MIN_SPLIT_SIZE } from "@/stores/workspace-layout-constants";
 import { defaultWorkspaceLayoutIds } from "@/stores/workspace-layout-ids";
 import type { WorkspaceLayoutNodeIdPrefix } from "@/stores/workspace-layout-ids";
@@ -194,7 +194,6 @@ interface ReorderPaneTabsInLayoutInput {
 export interface WorkspaceTabReconcileState {
   layout: WorkspaceLayout;
   pinnedAgentIds?: ReadonlySet<string> | null;
-  pendingAgentIds?: ReadonlySet<string> | null;
   hiddenAgentIds?: ReadonlySet<string> | null;
 }
 
@@ -285,14 +284,9 @@ function normalizeWorkspaceTab(value: unknown): WorkspaceTab | null {
 
   const tab = value as WorkspaceTab;
   const target = normalizeWorkspaceTabTarget(tab.target);
-  if (!target) {
-    return null;
-  }
   const tabId =
-    target.kind === "working_diff"
-      ? buildDeterministicWorkspaceTabId(target)
-      : (trimNonEmpty(tab.tabId) ?? buildDeterministicWorkspaceTabId(target));
-  if (!tabId) {
+    trimNonEmpty(tab.tabId) ?? (target ? buildDeterministicWorkspaceTabId(target) : null);
+  if (!target || !tabId) {
     return null;
   }
 
@@ -977,52 +971,6 @@ export function collectAllPanes(root: SplitNode): SplitPane[] {
   return internalRoot.group.children.flatMap((child) => collectAllPanes(child));
 }
 
-function isEphemeralTab(tab: WorkspaceTab): boolean {
-  // Commit diff tabs are ephemeral: their SHA may be rebased away before the next
-  // load, so a restored tab could point at a dead commit.
-  return tab.target.kind === "commit_diff";
-}
-
-function stripEphemeralTabsFromNode(node: SplitNodeInternal): SplitNodeInternal {
-  if (node.kind === "pane") {
-    const nextTabs = node.pane.tabs.filter((tab) => !isEphemeralTab(tab));
-    if (nextTabs.length === node.pane.tabs.length) {
-      return node;
-    }
-    // createPaneNode repoints focusedTabId to a surviving tab (or null) when the
-    // previously focused tab was an ephemeral one that we just removed.
-    return createPaneNode({
-      id: node.pane.id,
-      tabs: nextTabs,
-      focusedTabId: node.pane.focusedTabId,
-    });
-  }
-  return createGroupNode({
-    id: node.group.id,
-    direction: node.group.direction,
-    children: node.group.children.map((child) => stripEphemeralTabsFromNode(child)),
-    sizes: node.group.sizes,
-  });
-}
-
-/**
- * Returns a copy of `layout` with every ephemeral tab (commit diff tabs) removed
- * from each pane. Applied in the layout store's `partialize` so commit diff tabs
- * are never written to storage — they're dropped on the next reload rather than
- * restored pointing at a possibly-rebased SHA. Working diff tabs and all other
- * tab kinds are left intact. Panes (and their ids/structure) are preserved even
- * when emptied; the parent-tab map is renormalized against the surviving tabs.
- */
-export function stripEphemeralTabsFromLayout(layout: WorkspaceLayout): WorkspaceLayout {
-  const internalLayout = asInternalLayout(layout);
-  const nextRoot = stripEphemeralTabsFromNode(internalLayout.root);
-  return withNormalizedParentTabMap({
-    root: nextRoot,
-    focusedPaneId: internalLayout.focusedPaneId,
-    parentTabIdByTabId: layout.parentTabIdByTabId,
-  });
-}
-
 export function getFocusedBrowserId(layout: WorkspaceLayout | null | undefined): string | null {
   if (!layout) {
     return null;
@@ -1659,14 +1607,13 @@ interface EntityTabGroup {
 function applyPinnedAndHidden(input: {
   baseAgentIds: Set<string>;
   pinnedAgentIds: Set<string>;
-  pendingAgentIds: Set<string>;
   hiddenAgentIds: Set<string>;
   knownAgentIds: Set<string>;
 }): Set<string> {
-  const { baseAgentIds, pinnedAgentIds, pendingAgentIds, hiddenAgentIds, knownAgentIds } = input;
+  const { baseAgentIds, pinnedAgentIds, hiddenAgentIds, knownAgentIds } = input;
   const result = new Set(baseAgentIds);
   for (const agentId of pinnedAgentIds) {
-    if (knownAgentIds.has(agentId) || pendingAgentIds.has(agentId)) {
+    if (knownAgentIds.has(agentId)) {
       result.add(agentId);
     }
   }
@@ -1791,7 +1738,6 @@ export function reconcileWorkspaceTabs(
     findPaneById(nextLayout.root, nextLayout.focusedPaneId)?.focusedTabId ?? null;
   let reconciledFocusedTabId = originalFocusedTabId;
   const pinnedAgentIds = new Set(state.pinnedAgentIds ?? []);
-  const pendingAgentIds = new Set(state.pendingAgentIds ?? []);
   const hiddenAgentIds = new Set(state.hiddenAgentIds ?? []);
   const activeAgentIds = normalizeStringSet(snapshot.activeAgentIds);
   const autoOpenAgentIds = normalizeStringSet(snapshot.autoOpenAgentIds);
@@ -1803,14 +1749,12 @@ export function reconcileWorkspaceTabs(
   const visibleAgentIds = applyPinnedAndHidden({
     baseAgentIds: activeAgentIds,
     pinnedAgentIds,
-    pendingAgentIds,
     hiddenAgentIds,
     knownAgentIds,
   });
   const autoOpenSet = applyPinnedAndHidden({
     baseAgentIds: autoOpenAgentIds,
     pinnedAgentIds,
-    pendingAgentIds,
     hiddenAgentIds,
     knownAgentIds,
   });

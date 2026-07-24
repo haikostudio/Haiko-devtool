@@ -17,11 +17,18 @@
     <title>%WEB_TITLE%</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
-      /* Keep the app shell fixed to the viewport. */
+      /* Keep the app shell fixed to the viewport.
+         height uses --app-height (set by the boot script below to
+         window.screen.height on installed iOS PWAs) because in standalone
+         black-translucent mode iOS underestimates the layout-viewport height
+         at cold start (~59px short), which otherwise leaves a white band at
+         the bottom. Non-iOS-PWA contexts fall back to 100dvh / 100%. */
       html,
       body {
         width: 100%;
         height: 100%;
+        height: 100dvh;
+        height: var(--app-height, 100dvh);
         margin: 0;
         padding: 0;
         overflow: hidden;
@@ -44,12 +51,38 @@
         display: flex;
         width: 100%;
         height: 100%;
+        height: 100dvh;
+        height: var(--app-height, 100dvh);
         flex: 1;
         min-width: 0;
         min-height: 0;
         overflow: hidden;
       }
     </style>
+    <script>
+      /* iOS installed-PWA height fix. In standalone black-translucent mode iOS
+         reports a layout-viewport height that is ~59px shorter than the real
+         screen at cold start, leaving a white band at the bottom. Only there,
+         we pin the shell to window.screen.height (stable, true screen height).
+         Gated on navigator.standalone (iOS home-screen PWA only) so desktop
+         Electron / normal browser tabs keep the 100dvh CSS fallback. */
+      (function () {
+        function applyAppHeight() {
+          var isIosPwa = window.navigator.standalone === true;
+          if (isIosPwa) {
+            document.documentElement.style.setProperty("--app-height", window.screen.height + "px");
+          } else {
+            document.documentElement.style.removeProperty("--app-height");
+          }
+        }
+        applyAppHeight();
+        window.addEventListener("resize", applyAppHeight);
+        window.addEventListener("orientationchange", function () {
+          // screen.height needs a tick to settle after an orientation swap.
+          window.setTimeout(applyAppHeight, 100);
+        });
+      })();
+    </script>
     <style>
       button,
       a,

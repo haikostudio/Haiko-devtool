@@ -3,7 +3,7 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
-export type SegmentedControlSize = "xs" | "sm" | "md";
+export type SegmentedControlSize = "sm" | "md";
 export type ControlInteractionPhase = "rest" | "hover" | "active";
 
 export interface ControlInteractionState {
@@ -22,10 +22,10 @@ export interface ControlInteractionStyleMap {
   controlDisabled?: StyleProp<ViewStyle>;
 }
 
-const TIGHT_CONTROL_HEIGHT = 28;
 const COMPACT_CONTROL_HEIGHT = 32;
 const FIELD_CONTROL_HEIGHT = 44;
-const SEGMENTED_TIGHT_INSET = 2;
+/** Single source of truth for selectable list/menu/picker row minHeight (ComboboxItem, DropdownMenuItem, ContextMenu item, AutocompleteItem, and bespoke picker/nav rows). */
+export const LIST_ROW_HEIGHT = 36;
 const SEGMENTED_COMPACT_INSET = 2;
 const SEGMENTED_FIELD_INSET = 3;
 const SWITCH_TRACK_WIDTH = 34;
@@ -37,7 +37,6 @@ const CONTROL_CENTER_JUSTIFY_CONTENT = "center";
 const FIELD_TEXT_LINE_HEIGHT_RATIO = 1.4;
 
 const controlHeights = {
-  tight: TIGHT_CONTROL_HEIGHT,
   compact: COMPACT_CONTROL_HEIGHT,
   field: FIELD_CONTROL_HEIGHT,
 };
@@ -50,7 +49,6 @@ export const buttonIconSize: Record<ButtonControlSize, number> = {
 };
 
 export const segmentedIconSize: Record<SegmentedControlSize, number> = {
-  xs: ICON_SIZE.xs,
   sm: ICON_SIZE.sm,
   md: ICON_SIZE.md,
 };
@@ -61,6 +59,10 @@ export const switchGeometry = {
   thumbSize: SWITCH_THUMB_SIZE,
   thumbTravel: SWITCH_TRACK_WIDTH - SWITCH_THUMB_SIZE - (SWITCH_TRACK_HEIGHT - SWITCH_THUMB_SIZE),
 };
+
+function nestedRadius(containerRadius: number, inset: number): number {
+  return Math.max(0, containerRadius - inset);
+}
 
 function fieldLineHeight(fontSize: number): number {
   return Math.round(fontSize * FIELD_TEXT_LINE_HEIGHT_RATIO);
@@ -121,6 +123,8 @@ export function createControlGeometry(theme: Theme) {
     fontSize: theme.fontSize.base,
     lineHeight: fieldTextMdLineHeight,
   };
+  const segmentedContainerSmRadius = theme.borderRadius.md;
+  const segmentedContainerMdRadius = theme.borderRadius.lg;
   const switchControl = {
     minHeight: controlHeights.compact,
     justifyContent: CONTROL_CENTER_JUSTIFY_CONTENT,
@@ -128,7 +132,7 @@ export function createControlGeometry(theme: Theme) {
 
   return {
     buttonXs: {
-      minHeight: controlHeights.tight,
+      minHeight: controlHeights.compact,
       paddingHorizontal: theme.spacing[3],
       borderRadius: theme.borderRadius.md,
     },
@@ -192,41 +196,31 @@ export function createControlGeometry(theme: Theme) {
       opacity: theme.opacity[50],
     },
     switchControl,
-    segmentedContainerXs: {
-      minHeight: controlHeights.tight,
-      padding: 0,
-    },
     segmentedContainerSm: {
       minHeight: controlHeights.compact,
-      padding: 0,
+      padding: SEGMENTED_COMPACT_INSET,
+      borderRadius: segmentedContainerSmRadius,
     },
     segmentedContainerMd: {
       minHeight: controlHeights.field,
-      padding: 0,
-    },
-    segmentedSegmentXs: {
-      minHeight: controlHeights.tight - SEGMENTED_TIGHT_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.full,
+      padding: SEGMENTED_FIELD_INSET,
+      borderRadius: segmentedContainerMdRadius,
     },
     segmentedSegmentSm: {
       minHeight: controlHeights.compact - SEGMENTED_COMPACT_INSET * 2,
-      paddingHorizontal: theme.spacing[3],
-      borderRadius: theme.borderRadius.full,
+      paddingHorizontal: theme.spacing[4],
+      borderRadius: nestedRadius(segmentedContainerSmRadius, SEGMENTED_COMPACT_INSET),
     },
     segmentedSegmentMd: {
       minHeight: controlHeights.field - SEGMENTED_FIELD_INSET * 2,
-      paddingHorizontal: theme.spacing[4],
-      borderRadius: theme.borderRadius.full,
-    },
-    segmentedLabelXs: {
-      fontSize: theme.fontSize.xs,
+      paddingHorizontal: theme.spacing[6],
+      borderRadius: nestedRadius(segmentedContainerMdRadius, SEGMENTED_FIELD_INSET),
     },
     segmentedLabelSm: {
       fontSize: theme.fontSize.sm,
     },
     segmentedLabelMd: {
-      fontSize: theme.fontSize.sm,
+      fontSize: theme.fontSize.base,
     },
   };
 }

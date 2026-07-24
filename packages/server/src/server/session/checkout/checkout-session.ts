@@ -1,15 +1,14 @@
 import type pino from "pino";
-import { isAbsolute } from "node:path";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
-import { getForgeDefinitionOrNeutral } from "@getpaseo/protocol/forge-manifest";
 import { validateBranchSlug } from "@getpaseo/protocol/branch-slug";
 import type {
   BranchSuggestionsRequest,
-  CheckoutCommitsListRequest,
-  CheckoutCommitFileDiffRequest,
   CheckoutRefreshRequest,
   CheckoutRenameBranchRequest,
   CheckoutStatusRequest,
+  PaseoDeployCommitWorktreeRequest,
+  PaseoDeployStatusRequest,
+  PaseoDeployTriggerRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
   SubscribeCheckoutDiffRequest,
@@ -17,9 +16,8 @@ import type {
   ValidateBranchRequest,
 } from "../../messages.js";
 import type {
+  CheckoutDiffCompareInput,
   CheckoutDiffSnapshotPayload,
-  CheckoutDiffSubscription,
-  CheckoutDiffSubscriptionRequest,
 } from "../../checkout-diff-manager.js";
 import { toCheckoutError } from "../../checkout-git-utils.js";
 import {
@@ -33,26 +31,27 @@ import type {
 } from "../../workspace-git-service.js";
 import { assertSafeGitRef } from "../../worktree-session.js";
 import type { GitMutationService } from "../git-mutation/git-mutation-service.js";
-import type {
-  ForgeAuthState,
-  ForgeService,
-  PullRequestTimelineItem,
-  SearchResult,
-} from "../../../services/forge-service.js";
+import {
+  assertPullRequestAutoMergeDisableReady,
+  assertPullRequestAutoMergeEnableReady,
+  type GitHubService,
+  type PullRequestTimelineItem,
+} from "../../../services/github-service.js";
 import {
   commitChanges,
   createPullRequest,
-  forgeAuthStateFromError,
-  isForgeAuthError,
   mergeFromBase,
   mergeToBase,
   pullCurrentBranch,
   pushCurrentBranch,
-  listCheckoutCommits,
-  getCommitFileDiff,
 } from "../../../utils/checkout-git.js";
 import { execCommand } from "../../../utils/spawn.js";
 import { expandTilde } from "../../../utils/path.js";
+import {
+  commitWorktreeChanges,
+  getPaseoDeployStatus,
+  triggerPaseoDeploy,
+} from "../../../utils/paseo-deploy.js";
 import type { GitMetadataGenerator } from "./git-metadata-generator.js";
 
 /**
@@ -75,31 +74,10 @@ export interface CheckoutSessionHost {
 }
 
 type CurrentWorkspacePullRequest = NonNullable<
-  WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"]
+  WorkspaceGitRuntimeSnapshot["github"]["pullRequest"]
 > & {
   number: number;
 };
-
-class NoResolvedForgeServiceError extends Error {
-  readonly authState = "no_remote" satisfies ForgeAuthState;
-
-  constructor(cwd: string) {
-    super(`No supported forge remote is configured for ${cwd}`);
-    this.name = "NoResolvedForgeServiceError";
-  }
-}
-
-type ForgeSearchResultItem = SearchResult["items"][number];
-type LegacyGithubSearchResultItem = Omit<ForgeSearchResultItem, "kind"> & { kind: "issue" | "pr" };
-
-function toLegacyGithubSearchItems(items: ForgeSearchResultItem[]): LegacyGithubSearchResultItem[] {
-  return items.map((item) => {
-    if (item.kind === "change_request") {
-      return { ...item, kind: "pr" };
-    }
-    return { ...item, kind: "issue" };
-  });
-}
 
 /**
  * The slice of CheckoutDiffManager that CheckoutSession needs: open a live diff
@@ -108,9 +86,9 @@ function toLegacyGithubSearchItems(items: ForgeSearchResultItem[]): LegacyGithub
  */
 export interface CheckoutDiffSubscriber {
   subscribe(
-    params: CheckoutDiffSubscriptionRequest,
+    params: { cwd: string; compare: CheckoutDiffCompareInput },
     listener: (snapshot: CheckoutDiffSnapshotPayload) => void,
-  ): Promise<CheckoutDiffSubscription>;
+  ): Promise<{ initial: CheckoutDiffSnapshotPayload; unsubscribe: () => void }>;
   scheduleRefreshForCwd(cwd: string): void;
 }
 
@@ -118,7 +96,7 @@ export interface CheckoutSessionOptions {
   host: CheckoutSessionHost;
   gitMutation: Pick<GitMutationService, "checkoutExistingBranch" | "notifyGitMutation">;
   workspaceGitService: WorkspaceGitService;
-  github: ForgeService;
+  github: GitHubService;
   checkoutDiffManager: CheckoutDiffSubscriber;
   gitMetadataGenerator: GitMetadataGenerator;
   paseoHome: string;
@@ -145,7 +123,7 @@ export class CheckoutSession {
     "checkoutExistingBranch" | "notifyGitMutation"
   >;
   private readonly workspaceGitService: WorkspaceGitService;
-  private readonly github: ForgeService;
+  private readonly github: GitHubService;
   private readonly checkoutDiffManager: CheckoutDiffSubscriber;
   private readonly gitMetadataGenerator: GitMetadataGenerator;
   private readonly paseoHome: string;
@@ -163,69 +141,6 @@ export class CheckoutSession {
     this.paseoHome = options.paseoHome;
     this.worktreesRoot = options.worktreesRoot;
     this.logger = options.logger;
-  }
-
-  private async resolveForgeService(
-    cwd: string,
-  ): Promise<{ forge: string; service: ForgeService } | null> {
-    const resolution = await this.workspaceGitService.resolveForge(cwd);
-    if (!resolution) {
-      return null;
-    }
-    return { forge: resolution.forge, service: resolution.service };
-  }
-
-  private async requireForgeService(
-    cwd: string,
-  ): Promise<{ forge: string; service: ForgeService }> {
-    const resolution = await this.resolveForgeService(cwd);
-    if (!resolution) {
-      throw new NoResolvedForgeServiceError(cwd);
-    }
-    return resolution;
-  }
-
-  private async resolveForgeIdForError(cwd: string): Promise<string> {
-    try {
-      return (await this.workspaceGitService.resolveForge(cwd))?.forge ?? "github";
-    } catch {
-      return "github";
-    }
-  }
-
-  private async resolveAuthStateForError(cwd: string, error: unknown): Promise<ForgeAuthState> {
-    if (error instanceof NoResolvedForgeServiceError) {
-      return error.authState;
-    }
-    try {
-      return (await this.workspaceGitService.resolveForge(cwd)) ? "error" : "no_remote";
-    } catch {
-      return "error";
-    }
-  }
-
-  /**
-   * Combines resolveForgeIdForError + resolveAuthStateForError into a single
-   * resolveForge(cwd) call for the (common) case where the failure isn't a
-   * NoResolvedForgeServiceError — both helpers otherwise resolve the same cwd
-   * independently in the same error path.
-   */
-  private async resolveForgeContextForError(
-    cwd: string,
-    error: unknown,
-  ): Promise<{ forge: string; authState: ForgeAuthState }> {
-    if (error instanceof NoResolvedForgeServiceError) {
-      return { forge: await this.resolveForgeIdForError(cwd), authState: error.authState };
-    }
-    try {
-      const resolution = await this.workspaceGitService.resolveForge(cwd);
-      return {
-        forge: resolution?.forge ?? "github",
-        authState: resolution ? "error" : "no_remote",
-      };
-    } catch {
-      return { forge: "github", authState: "error" };
-    }
   }
 
   async handleStatusRequest(msg: CheckoutStatusRequest): Promise<void> {
@@ -261,44 +176,6 @@ export class CheckoutSession {
           error: toCheckoutError(error),
           requestId,
         },
-      });
-    }
-  }
-
-  async handleCommitsListRequest(msg: CheckoutCommitsListRequest): Promise<void> {
-    const { cwd, requestId } = msg;
-
-    try {
-      const { baseRef, commits } = await listCheckoutCommits({ cwd: expandTilde(cwd) });
-      this.host.emit({
-        type: "checkout.commits.list.response",
-        payload: { cwd, baseRef, commits, error: null, requestId },
-      });
-    } catch (error) {
-      this.host.emit({
-        type: "checkout.commits.list.response",
-        payload: { cwd, baseRef: null, commits: [], error: toCheckoutError(error), requestId },
-      });
-    }
-  }
-
-  async handleCommitFileDiffRequest(msg: CheckoutCommitFileDiffRequest): Promise<void> {
-    const { cwd, sha, path, requestId } = msg;
-
-    try {
-      assertSafeGitRef(sha, "commit");
-      if (path.length === 0 || isAbsolute(path) || path.split(/[\\/]/).includes("..")) {
-        throw new Error(`Invalid path: ${path}`);
-      }
-      const file = await getCommitFileDiff({ cwd: expandTilde(cwd), sha, path });
-      this.host.emit({
-        type: "checkout.commits.file_diff.response",
-        payload: { cwd, sha, path, file, error: null, requestId },
-      });
-    } catch (error) {
-      this.host.emit({
-        type: "checkout.commits.file_diff.response",
-        payload: { cwd, sha, path, file: null, error: toCheckoutError(error), requestId },
       });
     }
   }
@@ -401,45 +278,77 @@ export class CheckoutSession {
   async handleSubscribeDiffRequest(msg: SubscribeCheckoutDiffRequest): Promise<void> {
     const cwd = expandTilde(msg.cwd);
     this.diffSubscriptions.get(msg.subscriptionId)?.();
-    const abort = new AbortController();
-    const unsubscribe = () => abort.abort();
-    this.diffSubscriptions.set(msg.subscriptionId, unsubscribe);
+    this.diffSubscriptions.delete(msg.subscriptionId);
+    const subscription = await this.checkoutDiffManager.subscribe(
+      { cwd, compare: msg.compare },
+      (snapshot) => {
+        this.host.emit({
+          type: "checkout_diff_update",
+          payload: {
+            subscriptionId: msg.subscriptionId,
+            ...snapshot,
+          },
+        });
+      },
+    );
+    this.diffSubscriptions.set(msg.subscriptionId, subscription.unsubscribe);
 
-    try {
-      const subscription = await this.checkoutDiffManager.subscribe(
-        { cwd, compare: msg.compare, signal: abort.signal },
-        (snapshot) => {
-          this.host.emit({
-            type: "checkout_diff_update",
-            payload: {
-              subscriptionId: msg.subscriptionId,
-              ...snapshot,
-            },
-          });
-        },
-      );
-
-      this.host.emit({
-        type: "subscribe_checkout_diff_response",
-        payload: {
-          subscriptionId: msg.subscriptionId,
-          ...subscription.initial,
-          requestId: msg.requestId,
-        },
-      });
-    } catch (error) {
-      if (this.diffSubscriptions.get(msg.subscriptionId) === unsubscribe) {
-        this.diffSubscriptions.delete(msg.subscriptionId);
-      }
-      unsubscribe();
-      throw error;
-    }
+    this.host.emit({
+      type: "subscribe_checkout_diff_response",
+      payload: {
+        subscriptionId: msg.subscriptionId,
+        ...subscription.initial,
+        requestId: msg.requestId,
+      },
+    });
   }
 
   handleUnsubscribeDiffRequest(msg: UnsubscribeCheckoutDiffRequest): void {
-    const unsubscribe = this.diffSubscriptions.get(msg.subscriptionId);
+    this.diffSubscriptions.get(msg.subscriptionId)?.();
     this.diffSubscriptions.delete(msg.subscriptionId);
-    unsubscribe?.();
+  }
+
+  async handlePaseoDeployStatusRequest(msg: PaseoDeployStatusRequest): Promise<void> {
+    const status = await getPaseoDeployStatus();
+    this.host.emit({
+      type: "checkout.deploy.status.response",
+      payload: {
+        ...status,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployTriggerRequest(msg: PaseoDeployTriggerRequest): Promise<void> {
+    const { started, error } = await triggerPaseoDeploy({
+      noBuild: msg.noBuild,
+      projectId: msg.projectId,
+      mergeBranches: msg.mergeBranches,
+    });
+    this.host.emit({
+      type: "checkout.deploy.trigger.response",
+      payload: {
+        started,
+        error,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployCommitWorktreeRequest(
+    msg: PaseoDeployCommitWorktreeRequest,
+  ): Promise<void> {
+    const { committed, error } = await commitWorktreeChanges({
+      worktreePath: msg.worktreePath,
+    });
+    this.host.emit({
+      type: "checkout.deploy.commit-worktree.response",
+      payload: {
+        committed,
+        error,
+        requestId: msg.requestId,
+      },
+    });
   }
 
   async handleRefreshRequest(msg: CheckoutRefreshRequest): Promise<void> {
@@ -447,10 +356,10 @@ export class CheckoutSession {
     const resolvedCwd = expandTilde(cwd);
 
     try {
-      (await this.resolveForgeService(resolvedCwd))?.service.invalidate({ cwd: resolvedCwd });
+      this.github.invalidate({ cwd: resolvedCwd });
       await this.workspaceGitService.getSnapshot(resolvedCwd, {
         force: true,
-        includeForge: true,
+        includeGitHub: true,
         reason: "manual-refresh",
       });
       this.checkoutDiffManager.scheduleRefreshForCwd(resolvedCwd);
@@ -569,7 +478,7 @@ export class CheckoutSession {
 
     try {
       const result = await this.host.renameCurrentBranch(cwd, branch);
-      await this.gitMutation.notifyGitMutation(cwd, "rename-branch", { invalidateForge: true });
+      await this.gitMutation.notifyGitMutation(cwd, "rename-branch", { invalidateGithub: true });
       this.scheduleDiffRefresh(cwd);
       this.host.handleWorkspaceGitBranchSnapshot(cwd, result.currentBranch);
 
@@ -751,7 +660,7 @@ export class CheckoutSession {
         { paseoHome: this.paseoHome, worktreesRoot: this.worktreesRoot },
       );
       await Promise.all([
-        this.gitMutation.notifyGitMutation(mutatedCwd, "merge-to-base", { invalidateForge: true }),
+        this.gitMutation.notifyGitMutation(mutatedCwd, "merge-to-base", { invalidateGithub: true }),
         ...(mutatedCwd !== cwd ? [this.gitMutation.notifyGitMutation(cwd, "merge-to-base")] : []),
       ]);
       this.scheduleDiffRefresh(cwd);
@@ -795,7 +704,7 @@ export class CheckoutSession {
         baseRef: msg.baseRef,
         requireCleanTarget: msg.requireCleanTarget ?? true,
       });
-      await this.gitMutation.notifyGitMutation(cwd, "merge-from-base", { invalidateForge: true });
+      await this.gitMutation.notifyGitMutation(cwd, "merge-from-base", { invalidateGithub: true });
       this.scheduleDiffRefresh(cwd);
 
       this.host.emit({
@@ -827,7 +736,7 @@ export class CheckoutSession {
 
     try {
       await pullCurrentBranch(cwd);
-      await this.gitMutation.notifyGitMutation(cwd, "pull", { invalidateForge: true });
+      await this.gitMutation.notifyGitMutation(cwd, "pull", { invalidateGithub: true });
       this.scheduleDiffRefresh(cwd);
 
       this.host.emit({
@@ -859,7 +768,7 @@ export class CheckoutSession {
 
     try {
       await pushCurrentBranch(cwd);
-      await this.gitMutation.notifyGitMutation(cwd, "push", { invalidateForge: true });
+      await this.gitMutation.notifyGitMutation(cwd, "push", { invalidateGithub: true });
       this.host.emit({
         type: "checkout_push_response",
         payload: {
@@ -897,7 +806,6 @@ export class CheckoutSession {
         if (!body) body = generated.body;
       }
 
-      const { service } = await this.requireForgeService(cwd);
       const result = await createPullRequest(
         cwd,
         {
@@ -905,9 +813,9 @@ export class CheckoutSession {
           body,
           base: msg.baseRef,
         },
-        service,
+        this.github,
       );
-      await this.gitMutation.notifyGitMutation(cwd, "create-pr", { invalidateForge: true });
+      await this.gitMutation.notifyGitMutation(cwd, "create-pr", { invalidateGithub: true });
 
       this.host.emit({
         type: "checkout_pr_create_response",
@@ -941,17 +849,17 @@ export class CheckoutSession {
     try {
       const pullRequest = await this.resolveCurrentPullRequest(cwd, "merge", {
         force: true,
-        includeForge: true,
+        includeGitHub: true,
         reason: "merge-pr-validation",
       });
-      const { service } = await this.requireForgeService(cwd);
-      await service.mergePullRequest({
+      this.assertCurrentPullRequestHasGithubMergeFacts(pullRequest);
+      await this.github.mergePullRequest({
         cwd,
         prNumber: pullRequest.number,
         mergeMethod: msg.mergeMethod,
         status: pullRequest,
       });
-      await this.gitMutation.notifyGitMutation(cwd, "merge-pr", { invalidateForge: true });
+      await this.gitMutation.notifyGitMutation(cwd, "merge-pr", { invalidateGithub: true });
 
       this.host.emit({
         type: "checkout_pr_merge_response",
@@ -975,33 +883,35 @@ export class CheckoutSession {
     }
   }
 
-  async handleCheckoutForgeSetAutoMergeRequest(
-    msg: Extract<
-      SessionInboundMessage,
-      {
-        type: "checkout.forge.set_auto_merge.request" | "checkout.github.set_auto_merge.request";
-      }
-    >,
+  private assertCurrentPullRequestHasGithubMergeFacts(
+    pullRequest: CurrentWorkspacePullRequest,
+  ): void {
+    if (!pullRequest.github) {
+      throw new Error("GitHub merge facts are unavailable for this pull request");
+    }
+  }
+
+  async handleCheckoutGithubSetAutoMergeRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.github.set_auto_merge.request" }>,
   ): Promise<void> {
     const { cwd, requestId } = msg;
-    const responseType =
-      msg.type === "checkout.forge.set_auto_merge.request"
-        ? "checkout.forge.set_auto_merge.response"
-        : "checkout.github.set_auto_merge.response";
 
     try {
       const pullRequest = await this.resolveCurrentPullRequest(cwd, "auto-merge", {
         force: true,
-        includeForge: true,
+        includeGitHub: true,
         reason: "auto-merge-validation",
       });
-      const { service } = await this.requireForgeService(cwd);
       if (msg.enabled) {
         const mergeMethod = msg.mergeMethod;
         if (!mergeMethod) {
           throw new Error("mergeMethod is required when enabling auto-merge");
         }
-        await service.enablePullRequestAutoMerge({
+        assertPullRequestAutoMergeEnableReady({
+          mergeMethod,
+          status: pullRequest,
+        });
+        await this.github.enablePullRequestAutoMerge({
           cwd,
           prNumber: pullRequest.number,
           mergeMethod,
@@ -1011,7 +921,8 @@ export class CheckoutSession {
         if (msg.mergeMethod) {
           throw new Error("mergeMethod is not allowed when disabling auto-merge");
         }
-        await service.disablePullRequestAutoMerge({
+        assertPullRequestAutoMergeDisableReady({ status: pullRequest });
+        await this.github.disablePullRequestAutoMerge({
           cwd,
           prNumber: pullRequest.number,
           status: pullRequest,
@@ -1021,12 +932,12 @@ export class CheckoutSession {
         cwd,
         msg.enabled ? "enable-pr-auto-merge" : "disable-pr-auto-merge",
         {
-          invalidateForge: true,
+          invalidateGithub: true,
         },
       );
 
       this.host.emit({
-        type: responseType,
+        type: "checkout.github.set_auto_merge.response",
         payload: {
           cwd,
           enabled: msg.enabled,
@@ -1037,7 +948,7 @@ export class CheckoutSession {
       });
     } catch (error) {
       this.host.emit({
-        type: responseType,
+        type: "checkout.github.set_auto_merge.response",
         payload: {
           cwd,
           enabled: msg.enabled,
@@ -1055,9 +966,9 @@ export class CheckoutSession {
     options?: WorkspaceGitSnapshotOptions,
   ): Promise<CurrentWorkspacePullRequest> {
     const snapshot = await this.workspaceGitService.getSnapshot(cwd, options);
-    const pullRequest = snapshot.forge.pullRequest;
+    const pullRequest = snapshot.github.pullRequest;
     if (!pullRequest || typeof pullRequest.number !== "number") {
-      throw new Error(`Unable to determine current change request number for ${operation}`);
+      throw new Error(`Unable to determine GitHub pull request number for ${operation}`);
     }
     return { ...pullRequest, number: pullRequest.number };
   }
@@ -1078,15 +989,12 @@ export class CheckoutSession {
         }),
       });
     } catch (error) {
-      const { forge, authState } = await this.resolveForgeContextForError(cwd, error);
       this.host.emit({
         type: "checkout_pr_status_response",
         payload: {
           cwd,
           status: null,
-          githubFeaturesEnabled: authState === "authenticated" || authState === "error",
-          authState,
-          forge,
+          githubFeaturesEnabled: true,
           error: toCheckoutError(error),
           requestId,
         },
@@ -1118,8 +1026,8 @@ export class CheckoutSession {
       return;
     }
 
-    const resolvedForge = await this.resolveForgeService(cwd);
-    if (!resolvedForge) {
+    const githubFeaturesEnabled = await this.github.isAuthenticated({ cwd });
+    if (!githubFeaturesEnabled) {
       this.host.emit({
         type: "pull_request_timeline_response",
         payload: {
@@ -1129,50 +1037,17 @@ export class CheckoutSession {
           truncated: false,
           error: {
             kind: "unknown",
-            message: "No supported forge remote is configured for this workspace",
+            message: "GitHub CLI is unavailable or not authenticated",
           },
           requestId,
           githubFeaturesEnabled: false,
-          authState: "no_remote",
-        },
-      });
-      return;
-    }
-    const { forge, service } = resolvedForge;
-
-    // A throwing auth probe (authProbeCanThrow) yields the precise kind; a
-    // false return can't distinguish cli_missing from unauthenticated, so
-    // authState is omitted rather than guessed.
-    let featuresEnabled: boolean;
-    let probeAuthState: ForgeAuthState | undefined;
-    try {
-      featuresEnabled = await service.isAuthenticated({ cwd });
-    } catch (error) {
-      featuresEnabled = false;
-      probeAuthState = forgeAuthStateFromError(error);
-    }
-    if (!featuresEnabled) {
-      this.host.emit({
-        type: "pull_request_timeline_response",
-        payload: {
-          cwd,
-          prNumber,
-          items: [],
-          truncated: false,
-          error: {
-            kind: "unknown",
-            message: `${getForgeDefinitionOrNeutral(forge).displayName} CLI is unavailable or not authenticated`,
-          },
-          requestId,
-          githubFeaturesEnabled: false,
-          ...(probeAuthState ? { authState: probeAuthState } : {}),
         },
       });
       return;
     }
 
     try {
-      const timeline = await service.getPullRequestTimeline({
+      const timeline = await this.github.getPullRequestTimeline({
         cwd,
         prNumber,
         repoOwner,
@@ -1203,57 +1078,27 @@ export class CheckoutSession {
             message: error instanceof Error ? error.message : String(error),
           },
           requestId,
-          // A non-auth failure (timeout, API error) must keep reading as
-          // "features enabled" for old clients that only understand the
-          // boolean, or they render an auth blank instead of this error.
-          githubFeaturesEnabled: !isForgeAuthError(error),
-          authState: isForgeAuthError(error) ? forgeAuthStateFromError(error) : "error",
+          githubFeaturesEnabled: true,
         },
       });
     }
   }
 
-  async handleCheckoutForgeGetCheckDetailsRequest(
-    msg: Extract<
-      SessionInboundMessage,
-      {
-        type:
-          | "checkout.forge.get_check_details.request"
-          | "checkout.github.get_check_details.request";
-      }
-    >,
+  async handleCheckoutGithubGetCheckDetailsRequest(
+    msg: Extract<SessionInboundMessage, { type: "checkout.github.get_check_details.request" }>,
   ): Promise<void> {
-    const { cwd, repoOwner, repoName, checkRunId, workflowRunId, changeRequestNumber, requestId } =
-      msg;
-    const responseType =
-      msg.type === "checkout.forge.get_check_details.request"
-        ? "checkout.forge.get_check_details.response"
-        : "checkout.github.get_check_details.response";
+    const { cwd, repoOwner, repoName, checkRunId, workflowRunId, requestId } = msg;
 
     try {
-      // The payload schema keeps checkRunId and workflowRunId optional (a Gitea
-      // Actions run has no check-run id; forge adapters may also route by
-      // changeRequestNumber),
-      // but a request that addresses no check at all is not actionable — reject
-      // it here with a clear message instead of failing deep in an adapter. The
-      // schema itself cannot enforce this: it is a discriminated-union member, so
-      // a refine would turn it into a ZodEffects and break the union.
-      if (checkRunId === undefined && workflowRunId === undefined) {
-        throw new Error(
-          "Check details request must address a check by checkRunId or workflowRunId",
-        );
-      }
-      const { service } = await this.requireForgeService(cwd);
-      const details = await service.getCheckDetails({
+      const details = await this.github.getGitHubCheckDetails({
         cwd,
         repoOwner,
         repoName,
         checkRunId,
         workflowRunId,
-        changeRequestNumber,
       });
       this.host.emit({
-        type: responseType,
+        type: "checkout.github.get_check_details.response",
         payload: {
           cwd,
           success: true,
@@ -1264,7 +1109,7 @@ export class CheckoutSession {
       });
     } catch (error) {
       this.host.emit({
-        type: responseType,
+        type: "checkout.github.get_check_details.response",
         payload: {
           cwd,
           success: false,
@@ -1279,104 +1124,34 @@ export class CheckoutSession {
     }
   }
 
-  async handleForgeSearchRequest(
-    msg: Extract<SessionInboundMessage, { type: "forge.search.request" | "github_search_request" }>,
+  async handleGitHubSearchRequest(
+    msg: Extract<SessionInboundMessage, { type: "github_search_request" }>,
   ): Promise<void> {
     const { cwd, query, limit, kinds, requestId } = msg;
 
     try {
       const resolvedCwd = expandTilde(cwd);
-      // COMPAT(githubSearchRpc): added in v0.1.106, remove after 2026-12-28 —
-      // the legacy github_search RPC is GitHub by definition; the modern
-      // forge.search RPC resolves the cwd's forge.
-      const resolvedForge =
-        msg.type === "github_search_request"
-          ? { forge: "github", service: this.github }
-          : await this.resolveForgeService(resolvedCwd);
-      if (!resolvedForge) {
-        if (msg.type === "github_search_request") {
-          this.host.emit({
-            type: "github_search_response",
-            payload: {
-              items: [],
-              featuresEnabled: false,
-              authState: "no_remote",
-              githubFeaturesEnabled: false,
-              error: null,
-              requestId,
-            },
-          });
-          return;
-        }
-        this.host.emit({
-          type: "forge.search.response",
-          payload: {
-            items: [],
-            authState: "no_remote",
-            error: null,
-            requestId,
-          },
-        });
-        return;
-      }
-      const { forge, service } = resolvedForge;
-      const result = await service.searchIssuesAndPrs({
+      const result = await this.github.searchIssuesAndPrs({
         cwd: resolvedCwd,
         query,
         limit,
         kinds,
       });
-      const items = result.items.map((item) =>
-        Object.assign({}, item, { forge: item.forge ?? forge }),
-      );
-      if (msg.type === "github_search_request") {
-        const featuresEnabled = result.featuresEnabled ?? result.githubFeaturesEnabled ?? true;
-        const authState =
-          result.authState ?? (featuresEnabled ? "authenticated" : "unauthenticated");
-        this.host.emit({
-          type: "github_search_response",
-          payload: {
-            items: toLegacyGithubSearchItems(items),
-            featuresEnabled,
-            authState,
-            githubFeaturesEnabled: featuresEnabled,
-            error: null,
-            requestId,
-          },
-        });
-        return;
-      }
       this.host.emit({
-        type: "forge.search.response",
+        type: "github_search_response",
         payload: {
-          items,
-          authState: result.authState,
+          items: result.items,
+          githubFeaturesEnabled: result.githubFeaturesEnabled,
           error: null,
           requestId,
         },
       });
     } catch (error) {
-      const resolvedCwd = expandTilde(cwd);
-      const authState = await this.resolveAuthStateForError(resolvedCwd, error);
-      if (msg.type === "github_search_request") {
-        this.host.emit({
-          type: "github_search_response",
-          payload: {
-            items: [],
-            featuresEnabled: false,
-            authState,
-            githubFeaturesEnabled: false,
-            error: error instanceof Error ? error.message : String(error),
-            requestId,
-          },
-        });
-        return;
-      }
       this.host.emit({
-        type: "forge.search.response",
+        type: "github_search_response",
         payload: {
           items: [],
-          authState,
+          githubFeaturesEnabled: true,
           error: error instanceof Error ? error.message : String(error),
           requestId,
         },

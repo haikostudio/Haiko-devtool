@@ -7,12 +7,8 @@ import { createPermitCommand } from "./commands/permit/index.js";
 import { createProviderCommand } from "./commands/provider/index.js";
 import { createScheduleCommand } from "./commands/schedule/index.js";
 import { createSpeechCommand } from "./commands/speech/index.js";
-import { createScriptCommand } from "./commands/script/index.js";
 import { createTerminalCommand } from "./commands/terminal/index.js";
 import { createWorktreeCommand } from "./commands/worktree/index.js";
-import { createWorkspaceCommand } from "./commands/workspace/index.js";
-import { createHeartbeatCommand } from "./commands/heartbeat/index.js";
-import { createHubCommand } from "./commands/hub/index.js";
 import { createHooksCommand } from "./commands/hooks.js";
 import { startCommand as daemonStartCommand } from "./commands/daemon/start.js";
 import { runStatusCommand as runDaemonStatusCommand } from "./commands/daemon/status.js";
@@ -164,7 +160,6 @@ export function createCli(): Command {
 
   // Daemon commands
   program.addCommand(createDaemonCommand());
-  program.addCommand(createHubCommand());
 
   // Chat commands
   program.addCommand(createChatCommand());
@@ -172,15 +167,11 @@ export function createCli(): Command {
   // Terminal commands
   program.addCommand(createTerminalCommand());
 
-  // Workspace script commands
-  program.addCommand(createScriptCommand());
-
   // Loop commands
   program.addCommand(createLoopCommand());
 
   // Schedule commands
   program.addCommand(createScheduleCommand());
-  program.addCommand(createHeartbeatCommand());
 
   // Permission commands
   program.addCommand(createPermitCommand());
@@ -191,11 +182,8 @@ export function createCli(): Command {
   // Speech model commands
   program.addCommand(createSpeechCommand());
 
-  // Workspace commands
-  program.addCommand(createWorkspaceCommand());
-  // COMPAT(worktreeCli): legacy command alias added before workspace was the product unit.
-  // Added in v0.2.0; remove after 2027-01-17.
-  program.addCommand(createWorktreeCommand(), { hidden: true });
+  // Worktree commands
+  program.addCommand(createWorktreeCommand());
 
   return program;
 }

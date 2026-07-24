@@ -2,10 +2,6 @@ import { existsSync } from "node:fs";
 import pLimit from "p-limit";
 import type { Logger } from "pino";
 import type { ProcessEnvRecord } from "../server/paseo-env.js";
-import {
-  GitCommandRuntimeMetricsWindow,
-  type GitCommandRuntimeMetricsSnapshot,
-} from "./git-command-runtime-metrics.js";
 import { spawnProcess } from "./spawn.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -14,7 +10,6 @@ const DEFAULT_STDERR_LIMIT = 2048;
 
 const gitConcurrency = parseInt(process.env.PASEO_GIT_CONCURRENCY ?? "8", 10) || 8;
 const gitLimit = pLimit(gitConcurrency);
-const gitRuntimeMetrics = new GitCommandRuntimeMetricsWindow(gitConcurrency);
 
 export interface GitCommandOptions {
   cwd: string;
@@ -86,13 +81,6 @@ export function stopGitCommandMetrics(): GitCommandMetricsSnapshot {
   };
 }
 
-export function snapshotGitCommandRuntimeMetrics(): GitCommandRuntimeMetricsSnapshot {
-  return gitRuntimeMetrics.snapshotAndReset({
-    active: gitLimit.activeCount,
-    pending: gitLimit.pendingCount,
-  });
-}
-
 function beginGitCommandMetric(): GitCommandMetricsState | null {
   const state = gitCommandMetricsState;
   if (!state) {
@@ -135,11 +123,9 @@ export function runGitCommand(
   args: string[],
   options: GitCommandOptions,
 ): Promise<GitCommandResult> {
-  const runtimeMetric = gitRuntimeMetrics.submit(getGitOperation(args));
-  const promise = gitLimit(
+  return gitLimit(
     () =>
       new Promise<GitCommandResult>((resolve, reject) => {
-        gitRuntimeMetrics.start(runtimeMetric);
         const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
         const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
         const acceptExitCodes = options.acceptExitCodes ?? [0];
@@ -189,28 +175,24 @@ export function runGitCommand(
           callback();
         };
 
-        const finishMetricOnce = (metric: GitCommandMetric, timedOut = false) => {
+        const finishMetricOnce = (metric: GitCommandMetric) => {
           if (metricFinished) return;
           metricFinished = true;
           finishGitCommandMetric(metricsState, metric);
-          gitRuntimeMetrics.finish(runtimeMetric, { success: metric.success, timedOut });
         };
 
         const timer = setTimeout(() => {
           const error = new Error(`Git command timed out after ${timeout}ms: ${command}`);
           child.kill("SIGKILL");
-          finishMetricOnce(
-            {
-              args,
-              cwd: options.cwd,
-              startedAtMs: startedAt,
-              durationMs: Date.now() - startedAt,
-              exitCode: null,
-              signal: "SIGKILL",
-              success: false,
-            },
-            true,
-          );
+          finishMetricOnce({
+            args,
+            cwd: options.cwd,
+            startedAtMs: startedAt,
+            durationMs: Date.now() - startedAt,
+            exitCode: null,
+            signal: "SIGKILL",
+            success: false,
+          });
           settle(() => reject(error));
         }, timeout);
 
@@ -336,14 +318,8 @@ export function runGitCommand(
         });
       }),
   );
-  gitRuntimeMetrics.observeLimiter(gitLimit.activeCount, gitLimit.pendingCount);
-  return promise;
 }
 
 function formatGitCommand(args: string[]): string {
   return ["git", ...args].join(" ");
-}
-
-function getGitOperation(args: string[]): string {
-  return args[0] === "-c" ? (args[2] ?? "unknown") : (args[0] ?? "unknown");
 }

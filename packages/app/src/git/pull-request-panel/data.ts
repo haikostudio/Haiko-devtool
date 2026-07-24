@@ -2,24 +2,20 @@ import type {
   CheckoutPrStatusResponse,
   PullRequestTimelineResponse,
 } from "@getpaseo/protocol/messages";
-import { type Forge, getForgePresentation } from "@/git/forge";
-import { parseClientForgeFacts } from "@/git/forges";
-import type { ForgeSpecificStatusFacts } from "@/git/merge-capability";
-import { type CheckStatus, mapCheckStatus } from "./check-status";
-import { getNativeFallbackChecks } from "./native-data";
-
-export type { CheckStatus } from "./check-status";
 
 export type PrState = "open" | "draft" | "merged" | "closed";
+export type CheckStatus = "success" | "failure" | "pending" | "skipped";
 export type ReviewState = "approved" | "changes_requested" | "commented";
 export type ActivityKind = "review" | "comment";
-export type PullRequestProvider = Forge;
+export type PullRequestProvider = "github";
 
 export interface PullRequestProviderMetadata {
   id: PullRequestProvider;
   label: string;
   url?: string | null;
 }
+
+const GITHUB_PROVIDER: PullRequestProviderMetadata = { id: "github", label: "GitHub" };
 
 export interface PrPaneCheck {
   provider: PullRequestProvider;
@@ -28,12 +24,7 @@ export interface PrPaneCheck {
   status: CheckStatus;
   duration?: string;
   url: string;
-  /**
-   * Forge-neutral reference for fetching this check's detail/logs on demand. Any
-   * forge that exposes a check-run id populates it; the daemon resolves the logs
-   * through the neutral check-details RPC.
-   */
-  detailRef?: {
+  github?: {
     checkRunId?: number;
     workflowRunId?: number;
   };
@@ -53,16 +44,6 @@ export interface PrPaneActivity {
   url: string;
   /** For inline review comments: the review this comment was submitted with. */
   reviewId?: string;
-  /**
-   * Forge-neutral discussion id, independent of a file position. Groups general
-   * (non-file) reply chains into one thread; file threads also carry it.
-   */
-  threadId?: string;
-  /**
-   * Resolution state for a thread with no file position (e.g. a GitLab general
-   * discussion). File threads carry resolution under `location.isResolved`.
-   */
-  threadIsResolved?: boolean;
   location?: {
     path: string;
     line?: number;
@@ -75,25 +56,15 @@ export interface PrPaneActivity {
 
 export interface PrPaneData {
   provider: PullRequestProviderMetadata;
-  /** The forge hosting this change request. */
-  forge: Forge;
   number: number;
   repoOwner?: string;
   repoName?: string;
-  /** Neutral project identity (GitLab namespaces nest beyond owner/name). */
-  projectPath?: string;
   title: string;
   state: PrState;
   url: string;
   reviewDecision: "approved" | "changes_requested" | "pending";
   awaitingReviewers: string[];
   checks: PrPaneCheck[];
-  /**
-   * The forge's already-validated native facts, passed through so pane native
-   * contributions (e.g. GitLab pipeline/approvals) derive their surfaces without
-   * the neutral data type carrying forge-specific fields.
-   */
-  forgeSpecific?: ForgeSpecificStatusFacts;
   activity: PrPaneActivity[];
 }
 
@@ -116,7 +87,6 @@ export function mapPrPaneData(
   status: CheckoutPrStatus,
   timeline: PullRequestTimeline | null | undefined,
   nowMs = Date.now(),
-  forge: Forge = "github",
 ): PrPaneData | null {
   if (!status) {
     return null;
@@ -128,32 +98,23 @@ export function mapPrPaneData(
   }
 
   const timelineMatchesStatus = timeline?.prNumber === number;
-  const provider = toProviderMetadata(forge);
-  const forgeSpecific = parseClientForgeFacts(status.forgeSpecific);
 
   return {
-    provider,
-    forge,
+    provider: GITHUB_PROVIDER,
     number,
     repoOwner: status.repoOwner,
     repoName: status.repoName,
-    projectPath: status.projectPath,
     title: status.title,
     state: derivePrState(status),
     url: status.url,
     reviewDecision: mapReviewDecision(status.reviewDecision),
     // Requested reviewers are intentionally unwired until the server exposes them.
     awaitingReviewers: [],
-    checks: mapChecks(status, forge),
-    ...(forgeSpecific ? { forgeSpecific } : {}),
+    checks: (status.checks ?? []).flatMap(mapCheck),
     activity: timelineMatchesStatus
-      ? timeline.items.flatMap((item) => mapActivity(item, nowMs, forge))
+      ? timeline.items.flatMap((item) => mapActivity(item, nowMs))
       : [],
   };
-}
-
-function toProviderMetadata(forge: Forge): PullRequestProviderMetadata {
-  return { id: forge, label: getForgePresentation(forge).brandLabel };
 }
 
 export function deriveAvatarColor(login: string): string {
@@ -203,25 +164,14 @@ function derivePrState(status: NonNullable<CheckoutPrStatus>): PrState {
   return "open";
 }
 
-function mapChecks(status: NonNullable<CheckoutPrStatus>, forge: Forge): PrPaneCheck[] {
-  const checks = (status.checks ?? []).flatMap((check) => mapCheck(check, forge));
-  if (checks.length > 0) {
-    return checks;
-  }
-  return getNativeFallbackChecks(status, forge);
-}
-
-function mapCheck(
-  check: NonNullable<CheckoutPrStatus>["checks"][number],
-  forge: Forge,
-): PrPaneCheck[] {
+function mapCheck(check: NonNullable<CheckoutPrStatus>["checks"][number]): PrPaneCheck[] {
   if (check.url === null) {
     return [];
   }
 
   return [
     {
-      provider: forge,
+      provider: "github",
       name: check.name,
       status: mapCheckStatus(check.status),
       url: check.url,
@@ -229,7 +179,7 @@ function mapCheck(
       ...(check.duration ? { duration: check.duration } : {}),
       ...(check.checkRunId !== undefined || check.workflowRunId !== undefined
         ? {
-            detailRef: {
+            github: {
               ...(check.checkRunId !== undefined ? { checkRunId: check.checkRunId } : {}),
               ...(check.workflowRunId !== undefined ? { workflowRunId: check.workflowRunId } : {}),
             },
@@ -239,7 +189,22 @@ function mapCheck(
   ];
 }
 
-function mapActivity(item: PullRequestTimelineItem, nowMs: number, forge: Forge): PrPaneActivity[] {
+function mapCheckStatus(status: string): CheckStatus {
+  if (
+    status === "success" ||
+    status === "failure" ||
+    status === "pending" ||
+    status === "skipped"
+  ) {
+    return status;
+  }
+  if (status === "cancelled") {
+    return "skipped";
+  }
+  return "pending";
+}
+
+function mapActivity(item: PullRequestTimelineItem, nowMs: number): PrPaneActivity[] {
   if (item.kind === "comment") {
     if (item.body.trim() === "") {
       return [];
@@ -247,7 +212,7 @@ function mapActivity(item: PullRequestTimelineItem, nowMs: number, forge: Forge)
     return [
       {
         id: item.id,
-        provider: forge,
+        provider: "github",
         kind: "comment",
         author: item.author,
         authorUrl: item.authorUrl,
@@ -257,8 +222,6 @@ function mapActivity(item: PullRequestTimelineItem, nowMs: number, forge: Forge)
         age: formatAge(item.createdAt, nowMs),
         url: item.url,
         reviewId: item.reviewId,
-        threadId: item.threadId,
-        threadIsResolved: item.threadIsResolved,
         location: item.location,
       },
     ];
@@ -271,7 +234,7 @@ function mapActivity(item: PullRequestTimelineItem, nowMs: number, forge: Forge)
   return [
     {
       id: item.id,
-      provider: forge,
+      provider: "github",
       kind: "review",
       author: item.author,
       authorUrl: item.authorUrl,

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
+import type { GitHubSearchItem } from "@getpaseo/protocol/messages";
 import { pickerItemToCheckoutRequest, type PickerItem } from "./new-workspace-picker-item";
 
-const prItem: ForgeSearchItem = {
-  kind: "change_request",
+const prItem: GitHubSearchItem = {
+  kind: "pr",
   number: 42,
   title: "Add picker",
   url: "https://example.com/pull/42",
@@ -35,7 +35,6 @@ describe("pickerItemToCheckoutRequest", () => {
     expect(pickerItemToCheckoutRequest(item)).toEqual({
       action: "checkout",
       refName: "feature/picker",
-      checkoutSource: { kind: "change_request", forge: "github", number: 42 },
       githubPrNumber: 42,
     });
   });
@@ -54,31 +53,7 @@ describe("pickerItemToCheckoutRequest", () => {
     expect(pickerItemToCheckoutRequest(item)).toEqual({
       action: "checkout",
       refName: "orphan",
-      checkoutSource: { kind: "change_request", forge: "github", number: 7 },
       githubPrNumber: 7,
-    });
-  });
-
-  it("does not send the legacy githubPrNumber for non-GitHub change requests", () => {
-    const item: PickerItem = {
-      kind: "github-pr",
-      item: {
-        ...prItem,
-        forge: "gitlab",
-        number: 21,
-        projectPath: "acme/repo",
-        url: "https://gitlab.example.com/acme/repo/-/merge_requests/21",
-      },
-    };
-    expect(pickerItemToCheckoutRequest(item)).toEqual({
-      action: "checkout",
-      refName: "feature/picker",
-      checkoutSource: {
-        kind: "change_request",
-        forge: "gitlab",
-        number: 21,
-        projectPath: "acme/repo",
-      },
     });
   });
 });

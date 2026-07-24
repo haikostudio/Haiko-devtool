@@ -9,8 +9,7 @@ import type { ProviderUsage, ProviderUsageBalance } from "../../../server/messag
 import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
   ApiNullableNumberSchema,
-  toneFromUsedPct,
-  usedPctOf,
+  balanceToneFromRemaining,
   fetchProviderApi,
   toIsoStringOrNull,
   unavailableUsage,
@@ -161,7 +160,7 @@ export class CursorQuotaProvider implements ProviderUsageFetcher {
         limit,
         unit: "usd",
         resetsAt: billingCycleEnd,
-        tone: toneFromUsedPct(usedPctOf(totalSpend, limit)),
+        tone: balanceToneFromRemaining(remaining),
       });
     }
 

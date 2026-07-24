@@ -10,7 +10,11 @@ import {
 } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
+  ChevronDown,
+  ChevronRight,
   CircleCheck,
+  CircleDot,
+  CircleSlash,
   CircleX,
   Copy,
   ExternalLink,
@@ -46,9 +50,6 @@ import { useCheckoutGitActionsStore } from "@/git/actions-store";
 import { isNative } from "@/constants/platform";
 import { useIsCompactFormFactor, WORKSPACE_SECONDARY_HEADER_HEIGHT } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { getForgePresentation } from "@/git/forge";
-import { CLIENT_FORGE_VIEW_MODULES } from "@/git/forges/view";
-import type { PaneNativeContribution } from "@/git/client-forge-module";
 import { PrActivitySkeleton } from "./activity-skeleton";
 import {
   collapseActivity,
@@ -67,28 +68,19 @@ import {
   canAddPullRequestCheckLogsToChat,
 } from "./context-attachment";
 import { getActivityVerb, getStateLabel } from "./data";
-import type { PrPaneActivity, PrPaneCheck, PrPaneData, PrState } from "./data";
-import type { ForgeSpecificStatusFacts } from "@/git/merge-capability";
+import type { CheckStatus, PrPaneActivity, PrPaneCheck, PrPaneData, PrState } from "./data";
 import {
   buildPrTimeline,
   type PrReviewEntry,
   type PrThreadEntry,
   type PrTimelineEntry,
 } from "./timeline";
-import {
-  CheckStatusIcon,
-  Section,
-  SUMMARY_DANGER_ICON,
-  SUMMARY_SUCCESS_ICON,
-  SUMMARY_WARNING_ICON,
-  SummaryPill,
-  dangerColorMapping,
-  foregroundMutedColorMapping,
-  sectionKitStyles,
-  successColorMapping,
-} from "./section-kit";
 
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedCircleCheck = withUnistyles(CircleCheck);
+const ThemedCircleDot = withUnistyles(CircleDot);
+const ThemedCircleSlash = withUnistyles(CircleSlash);
 const ThemedCircleX = withUnistyles(CircleX);
 const ThemedCopy = withUnistyles(Copy);
 const ThemedExternalLink = withUnistyles(ExternalLink);
@@ -103,19 +95,11 @@ const ThemedRotateCw = withUnistyles(RotateCw);
 const ThemedLoadingSpinner = withUnistyles(LoadingSpinner);
 
 const foregroundColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const foregroundMutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
+const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
+const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const mergedColorMapping = (theme: Theme) => ({ color: theme.colors.statusMerged });
-
-const CLIENT_PANE_CONTRIBUTIONS: readonly PaneNativeContribution[] =
-  CLIENT_FORGE_VIEW_MODULES.flatMap((module) => module.paneContributions ?? []);
-
-function resolvePaneContribution(
-  facts: ForgeSpecificStatusFacts | undefined,
-): PaneNativeContribution | null {
-  if (!facts) {
-    return null;
-  }
-  return CLIENT_PANE_CONTRIBUTIONS.find((contribution) => contribution.guard(facts)) ?? null;
-}
 
 type IconColorMapping = typeof foregroundColorMapping;
 
@@ -131,6 +115,9 @@ const PR_STATE_PRESENTATION: Record<PrState, PrStatePresentation> = {
   closed: { Icon: ThemedGitPullRequestClosed, iconColor: dangerColorMapping },
 };
 
+const SUMMARY_SUCCESS_ICON = <ThemedCircleCheck size={12} uniProps={successColorMapping} />;
+const SUMMARY_DANGER_ICON = <ThemedCircleX size={12} uniProps={dangerColorMapping} />;
+const SUMMARY_WARNING_ICON = <ThemedCircleDot size={12} uniProps={warningColorMapping} />;
 const SUMMARY_COMMENT_ICON = (
   <ThemedMessageSquare size={11} uniProps={foregroundMutedColorMapping} />
 );
@@ -146,7 +133,7 @@ function handleMarkdownLinkPress(url: string): boolean {
 }
 
 function rowPressableStyle({ hovered }: { hovered?: boolean }) {
-  return [sectionKitStyles.checkRow, Boolean(hovered) && styles.hoverable];
+  return [styles.checkRow, Boolean(hovered) && styles.hoverable];
 }
 
 function entryHeaderPressableStyle({ hovered }: { hovered?: boolean }) {
@@ -176,11 +163,8 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
 }
 
 function getCheckIdentity(check: PrPaneCheck): string {
-  if (check.detailRef?.checkRunId !== undefined) {
-    return `${check.provider}:check-run:${check.detailRef.checkRunId}`;
-  }
-  if (check.detailRef?.workflowRunId !== undefined) {
-    return `${check.provider}:workflow-run:${check.detailRef.workflowRunId}`;
+  if (check.github?.checkRunId !== undefined) {
+    return `${check.provider}:check-run:${check.github.checkRunId}`;
   }
   return `${check.provider}:${check.name}:${check.url}`;
 }
@@ -219,16 +203,8 @@ export function PullRequestPane({
   const { t } = useTranslation();
   const toast = useToast();
   const daemonClient = useHostRuntimeClient(serverId);
-  // COMPAT(githubCheckDetailsRpc): added in v0.1.106, remove after 2026-12-28 once
-  // all supported clients use checkout.forge.get_check_details.*.
   const canFetchGitHubCheckDetails = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.githubCheckDetails === true,
-  );
-  const canFetchForgeCheckDetails = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.forgeCheckDetails === true,
-  );
-  const forgeProvidersEnabled = useSessionStore(
-    (state) => state.sessions[serverId]?.serverInfo?.features?.forgeProviders === true,
   );
   const addWorkspaceAttachment = useWorkspaceAttachmentsStore(
     (state) => state.addWorkspaceAttachment,
@@ -305,7 +281,6 @@ export function PullRequestPane({
       }
       const input = {
         provider: data.provider,
-        forge: data.forge,
         pullRequest: { number: data.number, title: data.title, url: data.url },
         activity,
       };
@@ -323,7 +298,6 @@ export function PullRequestPane({
     },
     [
       addWorkspaceAttachment,
-      data.forge,
       data.number,
       data.provider,
       data.title,
@@ -339,7 +313,6 @@ export function PullRequestPane({
       }
       const attachment = buildPullRequestThreadContextAttachment({
         provider: data.provider,
-        forge: data.forge,
         pullRequest: { number: data.number, title: data.title, url: data.url },
         thread,
       });
@@ -353,7 +326,6 @@ export function PullRequestPane({
     },
     [
       addWorkspaceAttachment,
-      data.forge,
       data.number,
       data.provider,
       data.title,
@@ -373,7 +345,7 @@ export function PullRequestPane({
       }
       const threads = entry.kind === "thread" ? [entry] : entry.threads;
       for (const thread of threads) {
-        if (thread.isResolved === true) {
+        if (thread.location.isResolved === true) {
           continue;
         }
         handleAddThreadToChat(thread);
@@ -391,33 +363,23 @@ export function PullRequestPane({
 
       let details = null;
       try {
-        const ref = check.detailRef;
-        // The neutral forge RPC fetches detail for any forge; fall back to the
-        // legacy github-only RPC only for GitHub against a daemon that predates
-        // it. A non-GitHub forge therefore needs the neutral capability present.
-        const canFetchDetail =
-          canFetchForgeCheckDetails || (check.provider === "github" && canFetchGitHubCheckDetails);
+        const ref = check.github;
         if (
-          canFetchDetail &&
+          canFetchGitHubCheckDetails &&
           daemonClient &&
-          (ref?.checkRunId !== undefined || ref?.workflowRunId !== undefined) &&
+          check.provider === "github" &&
+          ref?.checkRunId !== undefined &&
           data.repoOwner &&
           data.repoName
         ) {
           try {
-            const request = {
+            const payload = await daemonClient.checkoutGithubGetCheckDetails({
               cwd,
               repoOwner: data.repoOwner,
               repoName: data.repoName,
               checkRunId: ref.checkRunId,
               workflowRunId: ref.workflowRunId,
-              changeRequestNumber: data.number,
-            };
-            // COMPAT(githubCheckDetailsRpc): added in v0.1.106, remove after 2026-12-28 once
-            // all supported clients use checkout.forge.get_check_details.*.
-            const payload = canFetchForgeCheckDetails
-              ? await daemonClient.checkoutForgeGetCheckDetails(request)
-              : await daemonClient.checkoutGithubGetCheckDetails(request);
+            });
             details = payload.success ? payload.details : null;
           } catch {
             details = null;
@@ -425,7 +387,6 @@ export function PullRequestPane({
         }
         const attachment = buildPullRequestCheckContextAttachment({
           provider: data.provider,
-          forge: data.forge,
           pullRequest: { number: data.number, title: data.title, url: data.url },
           check,
           githubDetails: details,
@@ -442,11 +403,9 @@ export function PullRequestPane({
     },
     [
       addWorkspaceAttachment,
-      canFetchForgeCheckDetails,
       canFetchGitHubCheckDetails,
       cwd,
       daemonClient,
-      data.forge,
       data.number,
       data.provider,
       data.repoName,
@@ -469,28 +428,6 @@ export function PullRequestPane({
 
   const statePresentation = PR_STATE_PRESENTATION[data.state];
   const StateIcon = statePresentation.Icon;
-  const forgePresentation = getForgePresentation(data.forge);
-  const repoIdentity =
-    data.projectPath ??
-    (data.repoOwner && data.repoName ? `${data.repoOwner}/${data.repoName}` : null);
-
-  // Native forge surfaces (e.g. GitLab approvals/pipeline) come from a registry
-  // keyed by the facts-family, so the central render has no per-forge branch.
-  const nativeContribution = resolvePaneContribution(data.forgeSpecific);
-  const nativeHeaderMeta = data.forgeSpecific
-    ? nativeContribution?.renderHeaderMeta(data.forgeSpecific)
-    : null;
-  const nativeChecksSection = data.forgeSpecific
-    ? nativeContribution?.renderChecksSection(data.forgeSpecific, {
-        serverId,
-        cwd,
-        changeRequestNumber: data.number,
-        open: checksOpen,
-        onToggle: handleToggleChecks,
-        enabled: forgeProvidersEnabled,
-        canFetchCheckDetails: canFetchForgeCheckDetails,
-      })
-    : null;
 
   return (
     <View style={styles.root} testID="pr-pane">
@@ -514,7 +451,7 @@ export function PullRequestPane({
               accessibilityLabel={
                 isRefreshing
                   ? t("workspace.git.diff.refreshing")
-                  : t("workspace.git.diff.refreshState", { brand: forgePresentation.brandLabel })
+                  : t("workspace.git.diff.refreshState")
               }
               testID="pr-pane-refresh"
               style={refreshButtonStyle}
@@ -541,21 +478,16 @@ export function PullRequestPane({
             <>
               <Text style={styles.title} testID="pr-pane-title">
                 {data.title}
-                <Text style={styles.titleNumber}>
-                  {" "}
-                  {forgePresentation.numberPrefix}
-                  {data.number}
-                </Text>
+                <Text style={styles.titleNumber}> #{data.number}</Text>
               </Text>
               <View style={styles.metaLine}>
                 <StateIcon size={14} uniProps={statePresentation.iconColor} />
                 <Text style={stateLabelStyle(data.state)} testID="pr-pane-state">
                   {getStateLabel(data.state)}
                 </Text>
-                {nativeHeaderMeta}
-                {repoIdentity ? (
+                {data.repoOwner && data.repoName ? (
                   <Text style={styles.repoRef} numberOfLines={1}>
-                    {repoIdentity}
+                    {data.repoOwner}/{data.repoName}
                   </Text>
                 ) : null}
                 <View style={hovered ? styles.headerLinkIcon : styles.headerLinkIconHidden}>
@@ -566,52 +498,50 @@ export function PullRequestPane({
           )}
         </Pressable>
 
-        {nativeChecksSection ?? (
-          <Section
-            title="Checks"
-            open={checksOpen}
-            onToggle={handleToggleChecks}
-            summary={
-              <>
-                <SummaryPill
-                  count={passed}
-                  icon={SUMMARY_SUCCESS_ICON}
-                  variant="success"
-                  testID="pr-pane-check-passed"
+        <Section
+          title="Checks"
+          open={checksOpen}
+          onToggle={handleToggleChecks}
+          summary={
+            <>
+              <SummaryPill
+                count={passed}
+                icon={SUMMARY_SUCCESS_ICON}
+                variant="success"
+                testID="pr-pane-check-passed"
+              />
+              <SummaryPill
+                count={failed}
+                icon={SUMMARY_DANGER_ICON}
+                variant="danger"
+                testID="pr-pane-check-failed"
+              />
+              <SummaryPill
+                count={pending}
+                icon={SUMMARY_WARNING_ICON}
+                variant="warning"
+                testID="pr-pane-check-pending"
+              />
+            </>
+          }
+        >
+          {data.checks.length === 0 ? (
+            <Text style={styles.emptyText}>No checks</Text>
+          ) : (
+            data.checks.map((check) => {
+              const checkKey = getCheckIdentity(check);
+              return (
+                <CheckRow
+                  key={checkKey}
+                  check={check}
+                  attachEnabled={attachEnabled}
+                  isAddingLogsToChat={loadingCheckKeys.has(checkKey)}
+                  onAddLogsToChat={handleAddCheckLogsToChat}
                 />
-                <SummaryPill
-                  count={failed}
-                  icon={SUMMARY_DANGER_ICON}
-                  variant="danger"
-                  testID="pr-pane-check-failed"
-                />
-                <SummaryPill
-                  count={pending}
-                  icon={SUMMARY_WARNING_ICON}
-                  variant="warning"
-                  testID="pr-pane-check-pending"
-                />
-              </>
-            }
-          >
-            {data.checks.length === 0 ? (
-              <Text style={sectionKitStyles.emptyText}>No checks</Text>
-            ) : (
-              data.checks.map((check) => {
-                const checkKey = getCheckIdentity(check);
-                return (
-                  <CheckRow
-                    key={checkKey}
-                    check={check}
-                    attachEnabled={attachEnabled}
-                    isAddingLogsToChat={loadingCheckKeys.has(checkKey)}
-                    onAddLogsToChat={handleAddCheckLogsToChat}
-                  />
-                );
-              })
-            )}
-          </Section>
-        )}
+              );
+            })
+          )}
+        </Section>
 
         <View style={styles.divider} />
 
@@ -642,7 +572,7 @@ export function PullRequestPane({
           ) : null}
           {activityLoading ? <PrActivitySkeleton /> : null}
           {!activityLoading && visibleEntries.length === 0 ? (
-            <Text style={sectionKitStyles.emptyText}>No activity yet</Text>
+            <Text style={styles.emptyText}>No activity yet</Text>
           ) : null}
           {!activityLoading
             ? visibleEntries.map(({ entry, collapsed }) => (
@@ -652,7 +582,6 @@ export function PullRequestPane({
                   collapsed={collapsed}
                   collapsedEntryIds={collapsedEntryIds}
                   attachEnabled={attachEnabled}
-                  brandLabel={forgePresentation.brandLabel}
                   onAddToChat={handleAddActivityToChat}
                   onAddThreadToChat={handleAddThreadToChat}
                   onToggleCollapsed={handleToggleEntryCollapsed}
@@ -670,6 +599,58 @@ function stateLabelStyle(state: PrState) {
   if (state === "draft") return styles.stateLabelDraft;
   if (state === "merged") return styles.stateLabelMerged;
   return styles.stateLabelClosed;
+}
+
+interface SectionProps {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  summary: React.ReactNode;
+  children: React.ReactNode;
+}
+
+function Section({ title, open, onToggle, summary, children }: SectionProps) {
+  return (
+    <View>
+      <Pressable style={styles.sectionHeader} onPress={onToggle}>
+        {open ? (
+          <ThemedChevronDown size={14} uniProps={foregroundMutedColorMapping} />
+        ) : (
+          <ThemedChevronRight size={14} uniProps={foregroundMutedColorMapping} />
+        )}
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <View style={styles.summaryWrap}>{summary}</View>
+      </Pressable>
+      {open ? <View style={styles.sectionBody}>{children}</View> : null}
+    </View>
+  );
+}
+
+function SummaryPill({
+  count,
+  icon,
+  variant,
+  testID,
+}: {
+  count: number;
+  icon: React.ReactNode;
+  variant: "success" | "danger" | "warning" | "muted";
+  testID?: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <View style={styles.summaryPill} testID={testID}>
+      {icon}
+      <Text style={summaryPillTextStyle(variant)}>{count}</Text>
+    </View>
+  );
+}
+
+function summaryPillTextStyle(variant: "success" | "danger" | "warning" | "muted") {
+  if (variant === "success") return styles.summaryPillSuccessText;
+  if (variant === "danger") return styles.summaryPillDangerText;
+  if (variant === "warning") return styles.summaryPillWarningText;
+  return styles.summaryPillMutedText;
 }
 
 function CheckRow({
@@ -696,15 +677,15 @@ function CheckRow({
   return (
     <Pressable onPress={handlePress} style={rowPressableStyle}>
       <CheckStatusIcon status={check.status} />
-      <Text style={sectionKitStyles.checkName} numberOfLines={1}>
+      <Text style={styles.checkName} numberOfLines={1}>
         {check.name}
       </Text>
       {check.workflow && (
-        <Text style={sectionKitStyles.checkWorkflow} numberOfLines={1}>
+        <Text style={styles.checkWorkflow} numberOfLines={1}>
           {check.workflow}
         </Text>
       )}
-      <View style={sectionKitStyles.checkTrailing}>
+      <View style={styles.checkTrailing}>
         {attachEnabled && canAddPullRequestCheckLogsToChat(check) ? (
           <Button
             variant="ghost"
@@ -717,15 +698,21 @@ function CheckRow({
             {isAddingLogsToChat ? "Adding..." : "Add to chat"}
           </Button>
         ) : null}
-        {check.duration && <Text style={sectionKitStyles.checkDuration}>{check.duration}</Text>}
+        {check.duration && <Text style={styles.checkDuration}>{check.duration}</Text>}
       </View>
     </Pressable>
   );
 }
 
+function CheckStatusIcon({ status }: { status: CheckStatus }) {
+  if (status === "success") return <ThemedCircleCheck size={14} uniProps={successColorMapping} />;
+  if (status === "failure") return <ThemedCircleX size={14} uniProps={dangerColorMapping} />;
+  if (status === "pending") return <ThemedCircleDot size={14} uniProps={warningColorMapping} />;
+  return <ThemedCircleSlash size={14} uniProps={foregroundMutedColorMapping} />;
+}
+
 interface TimelineEntryCallbacks {
   attachEnabled: boolean;
-  brandLabel: string;
   onAddToChat: (activity: PrPaneActivity) => void;
   onAddThreadToChat: (thread: PrThreadEntry) => void;
   onToggleCollapsed: (entryId: string, collapsed: boolean) => void;
@@ -771,18 +758,15 @@ function ActivityKebab({
   activity,
   visible,
   attachEnabled,
-  brandLabel,
   onMenuOpenChange,
   onAddToChat,
 }: {
   activity: PrPaneActivity;
   visible: boolean;
   attachEnabled: boolean;
-  brandLabel: string;
   onMenuOpenChange: (open: boolean) => void;
   onAddToChat: (activity: PrPaneActivity) => void;
 }) {
-  const { t } = useTranslation();
   const handleAddToChat = useCallback(() => onAddToChat(activity), [activity, onAddToChat]);
   const handleCopy = useCallback(() => {
     void writeMarkdownToRichClipboard(activity.body, getDefaultMarkdownClipboardEnvironment());
@@ -813,7 +797,7 @@ function ActivityKebab({
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem leading={OPEN_MENU_ICON} onSelect={handleOpen}>
-            {t("workspace.git.pr.actions.openOn", { brand: brandLabel })}
+            Open on GitHub
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -903,7 +887,6 @@ function SingleActivityCard({
   entry,
   collapsed,
   attachEnabled,
-  brandLabel,
   onAddToChat,
   onToggleCollapsed,
 }: TimelineEntryCallbacks & {
@@ -937,7 +920,6 @@ function SingleActivityCard({
               activity={activity}
               visible={actionsVisible}
               attachEnabled={attachEnabled}
-              brandLabel={brandLabel}
               onMenuOpenChange={setMenuOpen}
               onAddToChat={onAddToChat}
             />
@@ -960,7 +942,6 @@ function SingleActivityCard({
             activity={activity}
             visible={actionsVisible}
             attachEnabled={attachEnabled}
-            brandLabel={brandLabel}
             onMenuOpenChange={setMenuOpen}
             onAddToChat={onAddToChat}
           />
@@ -993,7 +974,6 @@ function ThreadCard({
   entry,
   collapsed,
   attachEnabled,
-  brandLabel,
   onAddToChat,
   onAddThreadToChat,
   onToggleCollapsed,
@@ -1007,7 +987,6 @@ function ThreadCard({
         thread={entry}
         collapsed={collapsed}
         attachEnabled={attachEnabled}
-        brandLabel={brandLabel}
         onAddToChat={onAddToChat}
         onAddThreadToChat={onAddThreadToChat}
         onToggleCollapsed={onToggleCollapsed}
@@ -1021,7 +1000,6 @@ function ReviewCard({
   collapsed,
   collapsedEntryIds,
   attachEnabled,
-  brandLabel,
   onAddToChat,
   onAddThreadToChat,
   onToggleCollapsed,
@@ -1069,7 +1047,6 @@ function ReviewCard({
             activity={review}
             visible={actionsVisible}
             attachEnabled={attachEnabled}
-            brandLabel={brandLabel}
             onMenuOpenChange={setMenuOpen}
             onAddToChat={onAddToChat}
           />
@@ -1102,7 +1079,6 @@ function ReviewCard({
                     thread={thread}
                     collapsed={collapsedEntryIds.has(thread.id)}
                     attachEnabled={attachEnabled}
-                    brandLabel={brandLabel}
                     onAddToChat={onAddToChat}
                     onAddThreadToChat={onAddThreadToChat}
                     onToggleCollapsed={onToggleCollapsed}
@@ -1121,7 +1097,6 @@ function ThreadBlock({
   thread,
   collapsed,
   attachEnabled,
-  brandLabel,
   onAddToChat,
   onAddThreadToChat,
   onToggleCollapsed,
@@ -1129,12 +1104,10 @@ function ThreadBlock({
   thread: PrThreadEntry;
   collapsed: boolean;
   attachEnabled: boolean;
-  brandLabel: string;
   onAddToChat: (activity: PrPaneActivity) => void;
   onAddThreadToChat: (thread: PrThreadEntry) => void;
   onToggleCollapsed: (entryId: string, collapsed: boolean) => void;
 }) {
-  const { t } = useTranslation();
   const { actionsVisible, handlePointerEnter, handlePointerLeave, setMenuOpen } =
     useRevealOnHover();
   const handleHeaderPress = useCallback(() => {
@@ -1154,12 +1127,10 @@ function ThreadBlock({
     <View onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
       <Pressable onPress={handleHeaderPress} style={threadHeaderPressableStyle}>
         <Text style={styles.threadPath} numberOfLines={1}>
-          {thread.location
-            ? formatPullRequestThreadPath(thread.location)
-            : t("workspace.git.pr.thread.discussion")}
+          {formatPullRequestThreadPath(thread.location)}
         </Text>
-        {thread.isResolved ? <StatusBadge label="Resolved" variant="success" /> : null}
-        {thread.location?.isOutdated ? <StatusBadge label="Outdated" /> : null}
+        {thread.location.isResolved ? <StatusBadge label="Resolved" variant="success" /> : null}
+        {thread.location.isOutdated ? <StatusBadge label="Outdated" /> : null}
         <View style={styles.headerTrailing}>
           {collapsed ? (
             <View style={styles.threadCount}>
@@ -1181,7 +1152,7 @@ function ThreadBlock({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" width={200}>
                 <DropdownMenuItem leading={OPEN_MENU_ICON} onSelect={handleOpenThread}>
-                  {t("workspace.git.pr.actions.openOn", { brand: brandLabel })}
+                  Open on GitHub
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1190,12 +1161,7 @@ function ThreadBlock({
       </Pressable>
       {collapsed ? null : (
         <>
-          <ThreadComment
-            comment={root}
-            attachEnabled={attachEnabled}
-            brandLabel={brandLabel}
-            onAddToChat={onAddToChat}
-          />
+          <ThreadComment comment={root} attachEnabled={attachEnabled} onAddToChat={onAddToChat} />
           {replies.length > 0 ? (
             <View style={styles.replyRail}>
               {replies.map((reply) => (
@@ -1203,7 +1169,6 @@ function ThreadBlock({
                   <ThreadComment
                     comment={reply}
                     attachEnabled={attachEnabled}
-                    brandLabel={brandLabel}
                     onAddToChat={onAddToChat}
                     contentStyle={styles.replyThreadComment}
                   />
@@ -1240,13 +1205,11 @@ function threadCommentStyle(contentStyle?: ViewStyle) {
 function ThreadComment({
   comment,
   attachEnabled,
-  brandLabel,
   onAddToChat,
   contentStyle,
 }: {
   comment: PrPaneActivity;
   attachEnabled: boolean;
-  brandLabel: string;
   onAddToChat: (activity: PrPaneActivity) => void;
   contentStyle?: ViewStyle;
 }) {
@@ -1264,7 +1227,6 @@ function ThreadComment({
             activity={comment}
             visible={actionsVisible}
             attachEnabled={attachEnabled}
-            brandLabel={brandLabel}
             onMenuOpenChange={setMenuOpen}
             onAddToChat={onAddToChat}
           />
@@ -1395,6 +1357,87 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  sectionTitle: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.foregroundMuted,
+  },
+  sectionBody: {
+    paddingBottom: theme.spacing[3],
+  },
+  summaryWrap: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  summaryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  summaryPillSuccessText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.statusSuccess,
+  },
+  summaryPillDangerText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.statusDanger,
+  },
+  summaryPillWarningText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.statusWarning,
+  },
+  summaryPillMutedText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.foregroundMuted,
+  },
+  emptyText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[2],
+    minHeight: 32,
+  },
+  checkName: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.normal,
+    color: theme.colors.foreground,
+    flexShrink: 1,
+  },
+  checkWorkflow: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    flexShrink: 1,
+  },
+  checkTrailing: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  checkDuration: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
   checkAddButton: {
     paddingVertical: 0,
   },
@@ -1483,8 +1526,8 @@ const styles = StyleSheet.create((theme) => ({
     opacity: 0,
   },
   kebabButton: {
-    padding: 2,
-    borderRadius: 4,
+    padding: theme.spacing[1],
+    borderRadius: theme.borderRadius.base,
   },
   kebabButtonHovered: {
     backgroundColor: theme.colors.surface2,
@@ -1530,7 +1573,7 @@ const styles = StyleSheet.create((theme) => ({
   threadCount: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: theme.spacing[1],
   },
   threadComment: {
     borderTopWidth: 1,

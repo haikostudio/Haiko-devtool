@@ -218,37 +218,6 @@ test("rejects auto mode when Claude Code uses Bedrock", async () => {
   }
 });
 
-test.each([
-  { env: {}, expected: "auto" },
-  { env: { CLAUDE_CODE_USE_BEDROCK: "1" }, expected: "default" },
-  { env: { CLAUDE_CODE_USE_VERTEX: "true" }, expected: "default" },
-])("defaults to $expected for transport environment $env", async ({ env, expected }) => {
-  const client = new ClaudeAgentClient({
-    logger: createTestLogger(),
-    runtimeSettings: { env },
-  });
-
-  await expect(
-    client.resolveDefaultModeId({
-      config: { provider: "claude", cwd: process.cwd() },
-    }),
-  ).resolves.toBe(expected);
-});
-
-test("launch environment participates in the Claude default mode", async () => {
-  const client = new ClaudeAgentClient({
-    logger: createTestLogger(),
-    runtimeSettings: { env: {} },
-  });
-
-  await expect(
-    client.resolveDefaultModeId({
-      config: { provider: "claude", cwd: process.cwd() },
-      env: { CLAUDE_CODE_USE_BEDROCK: "1" },
-    }),
-  ).resolves.toBe("default");
-});
-
 test("allows launch env to disable inherited Bedrock transport for auto mode", async () => {
   const previousBedrock = process.env.CLAUDE_CODE_USE_BEDROCK;
   process.env.CLAUDE_CODE_USE_BEDROCK = "1";
@@ -972,7 +941,9 @@ test("captures Claude stderr in the turn failure diagnostic when stderr arrives 
     expect(capturedOptions?.effort).toBe("max");
     expect(failure).toMatchObject({
       type: "turn_failed",
-      error: "Claude Code process exited with code 1",
+      // Raw SDK message is rewritten into a readable French sentence; the exit
+      // code and stderr diagnostic are still preserved for debugging.
+      error: "Claude n'a pas pu démarrer — réessaie, et vérifie qu'il est bien installé.",
       code: "1",
       diagnostic: stderrMessage,
     });

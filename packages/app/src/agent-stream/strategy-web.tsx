@@ -1,5 +1,4 @@
 import React, {
-  Fragment,
   type CSSProperties,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import React, {
 } from "react";
 import { ActivityIndicator } from "react-native";
 import { measureElement as measureVirtualElement, useVirtualizer } from "@tanstack/react-virtual";
+import { SPACING } from "@/styles/theme";
 import { estimateStreamItemHeight } from "./web-virtualization";
 import type { StreamRenderInput, StreamStrategy, StreamViewportHandle } from "./strategy";
 import { createStreamStrategy } from "./strategy";
@@ -21,19 +21,25 @@ interface CreateWebStreamStrategyInput {
 type ScrollBehaviorLike = "auto" | "smooth";
 
 const WEB_BOTTOM_SETTLE_TIMEOUT_MS = 200;
+const SCROLL_TO_ITEM_TOP_MARGIN_PX = 12;
+const SCROLL_TO_ITEM_SETTLE_MS = 180;
+const ACTIVE_ITEM_MAX_OFFSET_PX = 160;
 const USER_SCROLL_DELTA_EPSILON = 1;
-const BOTTOM_OVERSCROLL_TOLERANCE_PX = 2;
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 64;
 const AUTO_SCROLL_RESUME_THRESHOLD_PX = 1;
 const HISTORY_START_THRESHOLD_PX = 96;
+
+// display:contents keeps the row's children as direct flex items of the content
+// column while still giving scrollToItem a stable per-item DOM anchor.
+const streamRowIdentityStyle: CSSProperties = { display: "contents" };
 
 const historyStartSlotStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   minHeight: 32,
-  paddingTop: 4,
-  paddingBottom: 8,
+  paddingTop: SPACING[1],
+  paddingBottom: SPACING[2],
 };
 
 function isScrollContainerNearBottom(
@@ -89,8 +95,7 @@ function getScrollContainerDistanceFromBottom(
 function isScrollContainerOverscrolledPastBottom(
   scrollContainer: Pick<HTMLElement, "scrollTop" | "clientHeight" | "scrollHeight">,
 ): boolean {
-  // Browser zoom can leave scrollTop fractional while the height metrics remain integer-valued.
-  return getScrollContainerDistanceFromBottom(scrollContainer) < -BOTTOM_OVERSCROLL_TOLERANCE_PX;
+  return getScrollContainerDistanceFromBottom(scrollContainer) < 0;
 }
 
 function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: boolean }) {
@@ -105,10 +110,13 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     isAuthoritativeHistoryReady,
     onNearBottomChange,
     onNearHistoryStart,
+    onScrollActivity,
+    onActiveItemChange,
     isLoadingOlderHistory,
     hasOlderHistory,
     scrollEnabled,
     isMobileBreakpoint,
+    topContentInset = 0,
   } = props;
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -267,11 +275,96 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     syncNearBottom(scrollContainer, onNearBottomChange);
   }, [onNearBottomChange]);
 
+  const lastActiveItemIdRef = useRef<string | null | undefined>(undefined);
+
+  // The active turn is the last user message whose top has crossed the upper
+  // part of the viewport. Mounted rows are measured through their DOM anchors;
+  // unmounted virtualized rows sit entirely outside the mounted window, so
+  // being before that window means "above the viewport".
+  const computeActiveUserItem = useCallback(() => {
+    if (!onActiveItemChange) {
+      return;
+    }
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer) {
+      return;
+    }
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const activationY =
+      containerRect.top + Math.min(ACTIVE_ITEM_MAX_OFFSET_PX, scrollContainer.clientHeight * 0.3);
+
+    const anchorTops = new Map<string, number>();
+    scrollContainer.querySelectorAll("[data-stream-item-id]").forEach((node) => {
+      if (!(node instanceof HTMLElement)) {
+        return;
+      }
+      const id = node.getAttribute("data-stream-item-id");
+      if (!id) {
+        return;
+      }
+      let rect = node.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0 && node.firstElementChild) {
+        rect = node.firstElementChild.getBoundingClientRect();
+      }
+      anchorTops.set(id, rect.top);
+    });
+
+    const firstMountedVirtualIndex = rowVirtualizer.getVirtualItems()[0]?.index ?? null;
+    let activeId: string | null = null;
+    let firstUserId: string | null = null;
+    const considerReached = (id: string, reached: boolean) => {
+      if (firstUserId === null) {
+        firstUserId = id;
+      }
+      if (reached) {
+        activeId = id;
+      }
+    };
+
+    segments.historyVirtualized.forEach((item, index) => {
+      if (item.kind !== "user_message") {
+        return;
+      }
+      const top = anchorTops.get(item.id);
+      if (top !== undefined) {
+        considerReached(item.id, top <= activationY);
+        return;
+      }
+      considerReached(
+        item.id,
+        firstMountedVirtualIndex !== null && index < firstMountedVirtualIndex,
+      );
+    });
+    for (const segment of [segments.historyMounted, segments.liveHead]) {
+      for (const item of segment) {
+        if (item.kind !== "user_message") {
+          continue;
+        }
+        const top = anchorTops.get(item.id);
+        considerReached(item.id, top !== undefined && top <= activationY);
+      }
+    }
+
+    const nextActiveId = activeId ?? firstUserId;
+    if (lastActiveItemIdRef.current !== nextActiveId) {
+      lastActiveItemIdRef.current = nextActiveId;
+      onActiveItemChange(nextActiveId);
+    }
+  }, [
+    onActiveItemChange,
+    rowVirtualizer,
+    segments.historyMounted,
+    segments.historyVirtualized,
+    segments.liveHead,
+  ]);
+
   const handleDomScroll = useCallback(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) {
       return;
     }
+
+    onScrollActivity?.();
 
     const currentScrollTop = scrollContainer.scrollTop;
     const isAtBottom = isScrollContainerAtBottom(scrollContainer);
@@ -297,6 +390,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
     lastKnownScrollTopRef.current = currentScrollTop;
     updateScrollMetrics();
+    computeActiveUserItem();
     if (
       historyStartReadyRef.current &&
       hasOlderHistory &&
@@ -304,7 +398,64 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     ) {
       onNearHistoryStart();
     }
-  }, [cancelPendingStickToBottom, hasOlderHistory, onNearHistoryStart, updateScrollMetrics]);
+  }, [
+    cancelPendingStickToBottom,
+    computeActiveUserItem,
+    hasOlderHistory,
+    onNearHistoryStart,
+    onScrollActivity,
+    updateScrollMetrics,
+  ]);
+
+  const scrollContentToItemTop = useCallback(
+    (itemId: string): boolean => {
+      const scrollContainer = scrollContainerRef.current;
+      const contentNode = contentRef.current;
+      if (!scrollContainer || !contentNode) {
+        return true;
+      }
+      const rowNode = scrollContainer.querySelector(
+        `[data-stream-item-id="${CSS.escape(itemId)}"]`,
+      );
+      if (rowNode instanceof HTMLElement) {
+        // display:contents identity wrappers have an empty rect; measure the row inside.
+        let rect = rowNode.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0 && rowNode.firstElementChild) {
+          rect = rowNode.firstElementChild.getBoundingClientRect();
+        }
+        const contentTop = rect.top - contentNode.getBoundingClientRect().top;
+        scrollContainer.scrollTo({
+          top: Math.max(0, contentTop - SCROLL_TO_ITEM_TOP_MARGIN_PX),
+        });
+        lastKnownScrollTopRef.current = scrollContainer.scrollTop;
+        syncNearBottom(scrollContainer, onNearBottomChange);
+        return true;
+      }
+      const virtualIndex = segments.historyVirtualized.findIndex((item) => item.id === itemId);
+      if (virtualIndex >= 0) {
+        // Unmounted virtualized row: approximate landing; the settle pass corrects
+        // against the mounted row's real DOM position.
+        rowVirtualizer.scrollToIndex(virtualIndex, { align: "start" });
+        return false;
+      }
+      return true;
+    },
+    [onNearBottomChange, rowVirtualizer, segments.historyVirtualized],
+  );
+
+  const scrollToItem = useCallback(
+    (itemId: string) => {
+      setFollowOutput(false);
+      cancelPendingStickToBottom();
+      scrollContentToItemTop(itemId);
+      // Virtualized rows measure lazily, so the first landing can be off until the
+      // target row mounts and reports its real size.
+      window.setTimeout(() => {
+        scrollContentToItemTop(itemId);
+      }, SCROLL_TO_ITEM_SETTLE_MS);
+    },
+    [cancelPendingStickToBottom, scrollContentToItemTop],
+  );
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -370,7 +521,9 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
 
   useEffect(() => {
     updateScrollMetrics();
+    computeActiveUserItem();
   }, [
+    computeActiveUserItem,
     segments.historyMounted.length,
     segments.historyVirtualized.length,
     segments.liveHead.length,
@@ -479,6 +632,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
         }
         scheduleStickToBottom();
       },
+      scrollToItem,
     };
     viewportRef.current = handle;
     return () => {
@@ -487,20 +641,28 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       }
       cancelPendingStickToBottom();
     };
-  }, [cancelPendingStickToBottom, forceStickToBottom, scheduleStickToBottom, viewportRef]);
+  }, [
+    cancelPendingStickToBottom,
+    forceStickToBottom,
+    scheduleStickToBottom,
+    scrollToItem,
+    viewportRef,
+  ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
     return {
       display: "flex",
       flexDirection: "column",
       minHeight: "100%",
-      paddingTop: 16,
-      paddingBottom: 16,
-      paddingLeft: isMobileBreakpoint ? 8 : 16,
-      paddingRight: isMobileBreakpoint ? 8 : 16,
+      // Reserve room for the floating synthesis banner at the top; later messages
+      // still scroll up under it (the scroll container is full-height behind it).
+      paddingTop: SPACING[4] + topContentInset,
+      paddingBottom: SPACING[4],
+      paddingLeft: isMobileBreakpoint ? SPACING[2] : SPACING[4],
+      paddingRight: isMobileBreakpoint ? SPACING[2] : SPACING[4],
       boxSizing: "border-box",
     };
-  }, [isMobileBreakpoint]);
+  }, [isMobileBreakpoint, topContentInset]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     return {
       flex: 1,
@@ -531,15 +693,17 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   );
   const mountedHistoryRows = useMemo(() => {
     return segments.historyMounted.map((item, index) => (
-      <Fragment key={item.id}>
+      <div key={item.id} style={streamRowIdentityStyle} data-stream-item-id={item.id}>
         {renderHistoryMountedRow(item, index, segments.historyMounted)}
-      </Fragment>
+      </div>
     ));
   }, [renderHistoryMountedRow, segments.historyMounted]);
   const liveHeadRows = useMemo(() => {
     void liveHeadRowRevision;
     return segments.liveHead.map((item, index) => (
-      <Fragment key={item.id}>{renderLiveHeadRow(item, index, segments.liveHead)}</Fragment>
+      <div key={item.id} style={streamRowIdentityStyle} data-stream-item-id={item.id}>
+        {renderLiveHeadRow(item, index, segments.liveHead)}
+      </div>
     ));
   }, [liveHeadRowRevision, renderLiveHeadRow, segments.liveHead]);
   const liveAuxiliary = useMemo(() => {
@@ -581,6 +745,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
                 <div
                   key={virtualRow.key}
                   data-index={virtualRow.index}
+                  data-stream-item-id={item.id}
                   ref={measureVirtualizedRowElement}
                   style={renderVirtualRowStyle(virtualRow.start)}
                 >

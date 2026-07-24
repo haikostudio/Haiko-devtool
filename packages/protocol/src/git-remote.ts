@@ -1,6 +1,4 @@
-import { getForgeDefinition } from "./forge-manifest.js";
-
-const GITHUB_HOSTS = new Set(getForgeDefinition("github")?.cloudHosts ?? []);
+const GITHUB_HOSTS = new Set(["github.com", "ssh.github.com"]);
 
 const TRANSPORT_BY_PROTOCOL: Record<string, GitRemoteLocation["transport"]> = {
   "https:": "https",

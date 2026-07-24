@@ -1,5 +1,9 @@
+import { basename } from "node:path";
 import type { CheckoutDiffResult } from "../../utils/checkout-git.js";
-import { deriveProjectSlug } from "../workspace-git-metadata.js";
+import {
+  buildWorkspaceGitMetadataFromSnapshot,
+  type WorkspaceGitMetadata,
+} from "../workspace-git-metadata.js";
 import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "../workspace-git-service.js";
 
 export function createNoGitWorkspaceRuntimeSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
@@ -20,7 +24,7 @@ export function createNoGitWorkspaceRuntimeSnapshot(cwd: string): WorkspaceGitRu
       hasRemote: false,
       diffStat: null,
     },
-    forge: {
+    github: {
       featuresEnabled: false,
       pullRequest: null,
       error: null,
@@ -33,9 +37,6 @@ export function createNoopWorkspaceGitService(
 ): WorkspaceGitService {
   const service: WorkspaceGitService = {
     registerWorkspace: () => ({
-      unsubscribe: () => {},
-    }),
-    onSnapshotUpdated: () => ({
       unsubscribe: () => {},
     }),
     peekSnapshot: () => null,
@@ -55,11 +56,18 @@ export function createNoopWorkspaceGitService(
     suggestBranchesForCwd: async () => [],
     listStashes: async () => [],
     listWorktrees: async () => [],
-    getProjectSlug: async (cwd: string) => {
+    getWorkspaceGitMetadata: async (cwd: string, options): Promise<WorkspaceGitMetadata> => {
       const snapshot = createNoGitWorkspaceRuntimeSnapshot(cwd);
-      return deriveProjectSlug(cwd, snapshot.git.isGit ? snapshot.git.remoteUrl : null);
+      return buildWorkspaceGitMetadataFromSnapshot({
+        cwd,
+        directoryName: options?.directoryName ?? basename(cwd),
+        isGit: snapshot.git.isGit,
+        repoRoot: snapshot.git.repoRoot,
+        mainRepoRoot: snapshot.git.mainRepoRoot,
+        currentBranch: snapshot.git.currentBranch,
+        remoteUrl: snapshot.git.remoteUrl,
+      });
     },
-    resolveForge: async () => null,
     resolveRepoRoot: async (cwd: string) => cwd,
     resolveDefaultBranch: async () => "main",
     resolveRepoRemoteUrl: async () => null,
@@ -70,21 +78,6 @@ export function createNoopWorkspaceGitService(
     }),
     scheduleRefreshForCwd: () => {},
     onWorkspaceStateMayHaveChanged: () => {},
-    invalidateForge: () => {},
-    getMetrics: () => ({
-      workspaceTargetCount: 0,
-      workspaceListenerCount: 0,
-      repositoryTargetCount: 0,
-      repositoryWorkspaceLinkCount: 0,
-      workingTreeWatchTargetCount: 0,
-      workingTreeWatchListenerCount: 0,
-      workspaceObservationSetupInFlightCount: 0,
-      workingTreeWatchSetupInFlightCount: 0,
-      workspaceRefreshInFlightCount: 0,
-      workspaceRefreshQueuedCount: 0,
-      fetchInFlightCount: 0,
-      snapshotUpdatedListenerCount: 0,
-    }),
     dispose: () => {},
     ...overrides,
   };

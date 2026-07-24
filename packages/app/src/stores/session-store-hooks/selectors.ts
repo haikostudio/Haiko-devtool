@@ -131,13 +131,6 @@ export function selectHasHydratedWorkspaces(
   return serverId ? (state.sessions[serverId]?.hasHydratedWorkspaces ?? false) : false;
 }
 
-export function selectHydratedWorkspaceServerIds(
-  state: SessionsSnapshot,
-  serverIds: readonly string[],
-): string[] {
-  return serverIds.filter((serverId) => state.sessions[serverId]?.hasHydratedWorkspaces === true);
-}
-
 export function selectWorkspaceStructureProjects(
   state: SessionsSnapshot,
   serverIds: readonly string[],

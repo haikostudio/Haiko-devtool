@@ -1,33 +1,22 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/contexts/toast-context";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 
-// Everything the pin toggle actually needs. Kept narrower than SidebarWorkspaceEntry so the
-// global keyboard handler can build one from the active route selection without a sidebar row.
-export type PinnableWorkspace = Pick<
-  SidebarWorkspaceEntry,
-  "serverId" | "workspaceId" | "workspaceKey" | "pinnedAt"
->;
-
-export type ToggleSidebarWorkspacePin = (workspace: PinnableWorkspace) => void;
-
-// Module scope, not a per-hook ref: the sidebar row menus and the global keyboard shortcut each
-// hold their own controller instance, and a per-instance guard would let a keypress and a menu
-// click fire two concurrent, opposite setWorkspacePinned calls for the same workspace.
-const pendingWorkspaceKeys = new Set<string>();
+export type ToggleSidebarWorkspacePin = (workspace: SidebarWorkspaceEntry) => void;
 
 export function useSidebarWorkspacePinController(): ToggleSidebarWorkspacePin {
   const { t } = useTranslation();
   const toast = useToast();
+  const pendingWorkspaceKeysRef = useRef(new Set<string>());
   const mutation = useMutation({
     mutationFn: async ({
       workspace,
       pinned,
     }: {
-      workspace: PinnableWorkspace;
+      workspace: SidebarWorkspaceEntry;
       pinned: boolean;
     }) => {
       const client = getHostRuntimeStore().getClient(workspace.serverId);
@@ -42,17 +31,17 @@ export function useSidebarWorkspacePinController(): ToggleSidebarWorkspacePin {
       );
     },
     onSettled: (_data, _error, { workspace }) => {
-      pendingWorkspaceKeys.delete(workspace.workspaceKey);
+      pendingWorkspaceKeysRef.current.delete(workspace.workspaceKey);
     },
   });
   const mutate = mutation.mutate;
 
   return useCallback(
-    (workspace: PinnableWorkspace) => {
-      if (pendingWorkspaceKeys.has(workspace.workspaceKey)) {
+    (workspace: SidebarWorkspaceEntry) => {
+      if (pendingWorkspaceKeysRef.current.has(workspace.workspaceKey)) {
         return;
       }
-      pendingWorkspaceKeys.add(workspace.workspaceKey);
+      pendingWorkspaceKeysRef.current.add(workspace.workspaceKey);
       mutate({ workspace, pinned: workspace.pinnedAt == null });
     },
     [mutate],

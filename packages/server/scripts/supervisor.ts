@@ -121,8 +121,23 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
   let shuttingDown = false;
   let exiting = false;
   const logStream = createSupervisorLogStream(options.logFile);
+  let logStreamFailed = false;
+
+  // A rotation failure (e.g. a stale history entry pointing at an unreadable path)
+  // surfaces as an 'error' event on the stream; without a handler it is an unhandled
+  // 'error' that takes down the supervisor — and the whole daemon — mid-flight.
+  logStream?.on("error", (error) => {
+    logStreamFailed = true;
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `[${options.name}] daemon.log write/rotation failed; durable file logging disabled: ${message}\n`,
+    );
+  });
 
   const writeDurableChunk = (chunk: string | Buffer): void => {
+    if (logStreamFailed) {
+      return;
+    }
     logStream?.write(chunk);
   };
 
@@ -146,7 +161,7 @@ export function runSupervisor(options: SupervisorOptions): SupervisorController 
 
   const closeLogStream = (): Promise<void> =>
     new Promise((resolve) => {
-      if (!logStream) {
+      if (!logStream || logStreamFailed) {
         resolve();
         return;
       }

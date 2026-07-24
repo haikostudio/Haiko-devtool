@@ -13,7 +13,7 @@ import type {
   WorkspaceGitRuntimeSnapshot,
   WorkspaceGitServiceImpl,
 } from "../workspace-git-service.js";
-import type { ForgeService } from "../../services/forge-service.js";
+import type { GitHubService } from "../../services/github-service.js";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
 import { isPaseoOwnedWorktreeCwd } from "../../utils/worktree.js";
 
@@ -22,7 +22,7 @@ export interface AutoArchiveArchiveOptions {
   paseoWorktreesBaseRoot?: string;
   daemonConfigStore: DaemonConfigStore;
   workspaceGitService: WorkspaceGitServiceImpl;
-  github: ForgeService;
+  github: GitHubService;
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   terminalManager: TerminalManager;
@@ -50,7 +50,7 @@ const defaultDependencies: ArchiveIfSafeDependencies = {
 
 export async function archiveIfSafe(input: {
   cwd: string;
-  pullRequest: WorkspaceGitRuntimeSnapshot["forge"]["pullRequest"];
+  pullRequest: WorkspaceGitRuntimeSnapshot["github"]["pullRequest"];
   inFlight: Set<string>;
   options: AutoArchiveArchiveOptions;
   log: Logger;
@@ -138,6 +138,8 @@ export async function archiveIfSafe(input: {
         },
         {
           scope: { kind: "workspace", workspaceId },
+          repoRoot: ownership.repoRoot ?? null,
+          paseoWorktreesBaseRoot: options.paseoWorktreesBaseRoot,
           requestId: "auto-archive-on-merge",
         },
       );
