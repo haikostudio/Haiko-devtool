@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Check, Rocket } from "lucide-react-native";
+import { Check, ChevronDown, ChevronRight, Rocket } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -21,6 +21,8 @@ const EMPTY_WORKTREES: PaseoDeployWorktreeEntry[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedCheck = withUnistyles(Check);
+const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const checkColorMapping = (theme: Theme) => ({
   color: theme.colors.primaryForeground,
@@ -31,6 +33,12 @@ const rocketColorMapping = (theme: Theme) => ({
 });
 const spinnerColorMapping = (theme: Theme) => ({
   color: theme.colors.palette.white,
+});
+const progressSpinnerColorMapping = (theme: Theme) => ({
+  color: theme.colors.primary,
+});
+const chevronColorMapping = (theme: Theme) => ({
+  color: theme.colors.foregroundMuted,
 });
 // Compact (mobile header) uses the header's monochrome look instead of the
 // black pill, so the rocket matches the neighbouring play / source-control icons.
@@ -287,6 +295,95 @@ function deployPhaseLabel(phase: string | null | undefined, triggering: boolean)
   }
 }
 
+const DEPLOY_PHASES = [
+  { key: "save", label: "Sauvegarde", fraction: 0.2 },
+  { key: "build", label: "Construction", fraction: 0.5 },
+  { key: "publish", label: "Publication", fraction: 0.8 },
+  { key: "done", label: "En ligne", fraction: 1 },
+] as const;
+
+/** Real coarse progress from the daemon; never estimates time inside a phase. */
+function DeployPhaseProgress({
+  deploying,
+  phase,
+}: {
+  deploying: boolean;
+  phase: string | null | undefined;
+}) {
+  const currentIndex = DEPLOY_PHASES.findIndex((entry) => entry.key === phase);
+  const activeIndex = currentIndex < 0 ? 0 : currentIndex;
+  const fraction = phase === "error" ? 0 : (DEPLOY_PHASES[activeIndex]?.fraction ?? 0);
+  const fillStyle = useMemo(
+    () => [styles.progressFill, { width: `${Math.round(fraction * 100)}%` as const }],
+    [fraction],
+  );
+  if (!deploying && phase !== "done" && phase !== "error") return null;
+  return (
+    <View style={styles.progress} testID="paseo-deploy-progress">
+      <View style={styles.progressHeader}>
+        <Text style={styles.progressTitle}>
+          {phase === "error" ? "Déploiement interrompu" : deployPhaseLabel(phase, true)}
+        </Text>
+        <Text style={styles.progressPercent}>{Math.round(fraction * 100)} %</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View style={fillStyle} />
+      </View>
+      <View style={styles.progressSteps}>
+        {DEPLOY_PHASES.map((entry, index) => {
+          const done = phase === "done" || (currentIndex >= 0 && index < currentIndex);
+          const active = phase !== "error" && index === activeIndex;
+          return (
+            <DeployProgressStep
+              key={entry.key}
+              label={entry.label}
+              done={done}
+              active={active}
+              deploying={deploying}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function DeployProgressStep({
+  label,
+  done,
+  active,
+  deploying,
+}: {
+  label: string;
+  done: boolean;
+  active: boolean;
+  deploying: boolean;
+}) {
+  const dotStyle = useMemo(
+    () => [
+      styles.progressDot,
+      done ? styles.progressDotDone : null,
+      active ? styles.progressDotActive : null,
+    ],
+    [active, done],
+  );
+  const labelStyle = useMemo(
+    () => [styles.progressStepLabel, active ? styles.progressStepLabelActive : null],
+    [active],
+  );
+  return (
+    <View style={styles.progressStep}>
+      <View style={dotStyle}>
+        {done ? <ThemedCheck size={10} uniProps={checkColorMapping} /> : null}
+        {active && deploying ? (
+          <ThemedActivityIndicator size="small" uniProps={progressSpinnerColorMapping} />
+        ) : null}
+      </View>
+      <Text style={labelStyle}>{label}</Text>
+    </View>
+  );
+}
+
 /** Uncommitted-files hint for an atelier card (info only; shipping needs a commit). */
 function WorktreeUncommittedHint({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -316,7 +413,7 @@ function WorktreeCheckbox({ checked, disabled }: { checked: boolean; disabled: b
   );
 }
 
-/** One atelier card — a checkbox to include it in the batch, plus its commits. */
+/** One atelier card — compact header with expandable commit details. */
 function WorktreeCard({
   worktree,
   selected,
@@ -334,8 +431,12 @@ function WorktreeCard({
 }) {
   const mergeable = worktree.ahead > 0;
   const hasUncommitted = worktree.uncommittedCount > 0;
-  const handlePress = useCallback(() => onToggle(worktree.branch), [onToggle, worktree.branch]);
-  // Stop the tap from also toggling the card's selection underneath the button.
+  const [expanded, setExpanded] = useState(false);
+  const handleToggleExpand = useCallback(() => setExpanded((previous) => !previous), []);
+  const handleToggleSelect = useCallback(() => {
+    if (mergeable && !busy) onToggle(worktree.branch);
+  }, [busy, mergeable, onToggle, worktree.branch]);
+  // Stop the tap from also toggling the card's fold underneath the button.
   const handleCommit = useCallback(
     (event: { stopPropagation?: () => void }) => {
       event.stopPropagation?.();
@@ -343,16 +444,38 @@ function WorktreeCard({
     },
     [onCommit, worktree.path],
   );
+  const expandedState = useMemo(() => ({ expanded }), [expanded]);
+  const checkboxState = useMemo(
+    () => ({ checked: selected && mergeable, disabled: !mergeable }),
+    [mergeable, selected],
+  );
   return (
-    <Pressable
-      style={styles.worktreeCard}
-      onPress={handlePress}
-      disabled={busy || !mergeable}
-      testID={`paseo-deploy-worktree-${worktree.branch}`}
-    >
-      <View style={styles.worktreeHeader}>
-        <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
-        <Text style={styles.worktreeBranch}>{describeBranch(worktree.branch)}</Text>
+    <View style={styles.worktreeCard}>
+      <Pressable
+        style={styles.worktreeHeader}
+        onPress={handleToggleExpand}
+        accessibilityRole="button"
+        accessibilityState={expandedState}
+        testID={`paseo-deploy-worktree-${worktree.branch}`}
+      >
+        <Pressable
+          onPress={handleToggleSelect}
+          disabled={busy || !mergeable}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={checkboxState}
+          testID={`paseo-deploy-select-${worktree.branch}`}
+        >
+          <WorktreeCheckbox checked={selected && mergeable} disabled={!mergeable} />
+        </Pressable>
+        <Text style={styles.worktreeBranch} numberOfLines={1}>
+          {describeBranch(worktree.branch)}
+        </Text>
+        {mergeable && !expanded ? (
+          <Text style={styles.worktreeCount}>
+            {worktree.ahead > 1 ? `${worktree.ahead} changements` : "1 changement"}
+          </Text>
+        ) : null}
         {hasUncommitted ? (
           <Button
             variant="secondary"
@@ -366,15 +489,24 @@ function WorktreeCard({
             {committing ? "Enregistrement…" : "Enregistrer"}
           </Button>
         ) : null}
-      </View>
-      {worktree.commits.map((commit) => (
-        <View key={commit.sha} style={styles.itemRow}>
-          <Text style={styles.bullet}>•</Text>
-          <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
+        {expanded ? (
+          <ThemedChevronDown size={16} uniProps={chevronColorMapping} />
+        ) : (
+          <ThemedChevronRight size={16} uniProps={chevronColorMapping} />
+        )}
+      </Pressable>
+      {expanded ? (
+        <View style={styles.worktreeDetails}>
+          {worktree.commits.map((commit) => (
+            <View key={commit.sha} style={styles.itemRow}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
+            </View>
+          ))}
+          <WorktreeUncommittedHint count={worktree.uncommittedCount} />
         </View>
-      ))}
-      <WorktreeUncommittedHint count={worktree.uncommittedCount} />
-    </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -488,6 +620,7 @@ function DeployModalBody({
         daemonBehindCount={daemonBehindCount}
         changesCount={changesCount}
       />
+      <DeployPhaseProgress deploying={deploying} phase={status?.deployPhase} />
       <WorktreesSummary worktrees={worktrees} />
 
       <PendingFilesSection files={uncommittedFiles} />
@@ -500,10 +633,6 @@ function DeployModalBody({
         committingPath={committingPath}
         busy={busy}
       />
-
-      {deploying ? (
-        <Text style={styles.infoText}>{deployPhaseLabel(status?.deployPhase, false)}</Text>
-      ) : null}
 
       <DeployErrorBanner message={status?.lastError ?? null} />
       <DeployErrorBanner message={error} />
@@ -786,6 +915,78 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
   },
+  progress: {
+    gap: theme.spacing[2],
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: theme.spacing[2],
+  },
+  progressTitle: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "700",
+    color: theme.colors.foreground,
+  },
+  progressPercent: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: "700",
+    color: theme.colors.foregroundMuted,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface0,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary,
+  },
+  progressSteps: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: theme.spacing[1],
+  },
+  progressStep: {
+    flex: 1,
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  progressDot: {
+    width: theme.spacing[4],
+    height: theme.spacing[4],
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  progressDotDone: {
+    backgroundColor: theme.colors.palette.green[400],
+    borderColor: theme.colors.palette.green[400],
+  },
+  progressDotActive: {
+    borderColor: theme.colors.primary,
+  },
+  progressStepLabel: {
+    fontSize: Math.round(theme.fontSize.xs * 0.92),
+    textAlign: "center",
+    color: theme.colors.foregroundMuted,
+  },
+  progressStepLabelActive: {
+    fontWeight: "700",
+    color: theme.colors.foreground,
+  },
   // Per-atelier cards, each with its own merge-and-publish action.
   worktreeList: {
     gap: theme.spacing[2],
@@ -803,6 +1004,10 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing[2],
   },
+  worktreeDetails: {
+    gap: theme.spacing[1],
+    paddingLeft: theme.spacing[6],
+  },
   // Compact "Enregistrer" action pinned to the right of the atelier's header row.
   worktreeCommitButton: {
     paddingHorizontal: theme.spacing[2],
@@ -812,6 +1017,10 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     fontWeight: "700",
     color: theme.colors.foreground,
+  },
+  worktreeCount: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   checkbox: {
     width: theme.spacing[4],
