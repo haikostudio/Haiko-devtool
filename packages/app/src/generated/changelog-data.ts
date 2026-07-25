@@ -21,7 +21,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
   {
     "version": "Unreleased",
     "date": "2026-07-25",
-    "markdown": "### Corrections\n\n- Point file panel at current pane\n- Restore github search query bridge\n- Unblock self-host web build\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)"
+    "markdown": "### Corrections\n\n- Use current workspace tab model\n- Point file panel at current pane\n- Restore github search query bridge\n- Unblock self-host web build\n- Enforce Paseo response structure\n- Sync changelog snapshot before publication\n- Retry hub test temp cleanup on Linux ENOTEMPTY (#2233)"
   },
   {
     "version": "0.2.0",
@@ -536,6 +536,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    "hash": "be8dd227b87a869c53cb578b83795d7631624509",
+    "shortHash": "be8dd227b",
+    "date": "2026-07-25T01:58:04+02:00",
+    "author": "haikostudio",
+    "subject": "fix(app): use current workspace tab model"
+  },
   {
     "hash": "fa2747475a4c32478a1f59adc8066ceab8b5c725",
     "shortHash": "fa2747475",
@@ -2628,15 +2635,8 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     "date": "2026-07-20T23:43:05+02:00",
     "author": "Alberto De Agostini",
     "subject": "Fix renaming projects before their first workspace (#2252)"
-  },
-  {
-    "hash": "ddb6d97bf090e825a6ec6a9afa9e0c9516d9072e",
-    "shortHash": "ddb6d97bf",
-    "date": "2026-07-21T05:39:46+08:00",
-    "author": "True Byte",
-    "subject": "feat(pi): add 'max' thinking level support (#2267)"
   }
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:54:57+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-25T01:58:04+02:00";
