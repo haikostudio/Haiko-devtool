@@ -13,6 +13,7 @@ function useFilePanelDescriptor(target: { kind: "file"; path: string }) {
   return {
     label: fileName,
     subtitle: target.path,
+    tooltip: target.path,
     titleState: "ready" as const,
     icon: FileText,
     statusBucket: null,
@@ -31,7 +32,14 @@ function FilePanel() {
       </View>
     );
   }
-  return <FilePane serverId={serverId} workspaceRoot={workspaceDirectory} location={target} />;
+  return (
+    <FilePane
+      serverId={serverId}
+      workspaceRoot={workspaceDirectory}
+      location={target}
+      navigationRevision={0}
+    />
+  );
 }
 
 export const filePanelRegistration: PanelRegistration<"file"> = {
