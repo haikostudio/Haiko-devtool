@@ -428,9 +428,16 @@ export const ru: TranslationResources = {
       deadlineNone: "Без срока",
     },
     quota: {
-      rolling: "Скользящее окно",
+      title: "Остаток квоты",
+      buttonLabel: "Остаток квоты",
+      rolling: "Сессия (5 ч)",
       weekly: "Недельная квота",
       unavailable: "Данные о расходе недоступны",
+      remaining: "Осталось {{percent}} %",
+      noData: "—",
+      resetsInMinutes: "Сброс через {{count}} мин",
+      resetsInHours: "Сброс через {{count}} ч",
+      resetsInDays: "Сброс через {{count}} дн",
     },
     explorer: {
       title: "Проводник",

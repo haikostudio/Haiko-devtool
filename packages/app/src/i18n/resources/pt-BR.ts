@@ -432,9 +432,16 @@ export const ptBR: TranslationResources = {
       deadlineNone: "Sem prazo",
     },
     quota: {
-      rolling: "Janela deslizante",
+      title: "Cota restante",
+      buttonLabel: "Cota restante",
+      rolling: "Sessão (5 h)",
       weekly: "Cota semanal",
       unavailable: "Consumo indisponível",
+      remaining: "{{percent}}% restante",
+      noData: "—",
+      resetsInMinutes: "Reinicia em {{count}} min",
+      resetsInHours: "Reinicia em {{count}} h",
+      resetsInDays: "Reinicia em {{count}} d",
     },
     explorer: {
       title: "Explorador",

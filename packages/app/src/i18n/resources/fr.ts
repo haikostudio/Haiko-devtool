@@ -433,9 +433,16 @@ export const fr: TranslationResources = {
       deadlineNone: "Sans échéance",
     },
     quota: {
-      rolling: "Fenêtre glissante",
+      title: "Quotas restants",
+      buttonLabel: "Quotas restants",
+      rolling: "Session (5 h)",
       weekly: "Quota hebdomadaire",
       unavailable: "Consommation indisponible",
+      remaining: "{{percent}} % restants",
+      noData: "—",
+      resetsInMinutes: "Réinitialisation dans {{count}} min",
+      resetsInHours: "Réinitialisation dans {{count}} h",
+      resetsInDays: "Réinitialisation dans {{count}} j",
     },
     explorer: {
       title: "Explorateur",

@@ -422,9 +422,16 @@ export const zhCN: TranslationResources = {
       deadlineNone: "无截止日期",
     },
     quota: {
-      rolling: "滚动窗口",
+      title: "剩余配额",
+      buttonLabel: "剩余配额",
+      rolling: "会话（5 小时）",
       weekly: "每周配额",
       unavailable: "无法获取用量",
+      remaining: "剩余 {{percent}}%",
+      noData: "—",
+      resetsInMinutes: "{{count}} 分钟后重置",
+      resetsInHours: "{{count}} 小时后重置",
+      resetsInDays: "{{count}} 天后重置",
     },
     explorer: {
       title: "文件浏览器",

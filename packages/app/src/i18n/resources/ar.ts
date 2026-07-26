@@ -423,9 +423,16 @@ export const ar: TranslationResources = {
       deadlineNone: "بدون موعد نهائي",
     },
     quota: {
-      rolling: "النافذة المتحركة",
+      title: "الحصة المتبقية",
+      buttonLabel: "الحصة المتبقية",
+      rolling: "الجلسة (5 ساعات)",
       weekly: "الحصة الأسبوعية",
       unavailable: "الاستهلاك غير متاح",
+      remaining: "متبقٍ {{percent}}٪",
+      noData: "—",
+      resetsInMinutes: "تُعاد التهيئة خلال {{count}} دقيقة",
+      resetsInHours: "تُعاد التهيئة خلال {{count}} ساعة",
+      resetsInDays: "تُعاد التهيئة خلال {{count}} يوم",
     },
     explorer: {
       title: "المستكشف",

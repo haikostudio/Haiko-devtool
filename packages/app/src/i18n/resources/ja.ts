@@ -429,9 +429,16 @@ export const ja: TranslationResources = {
       deadlineNone: "期限なし",
     },
     quota: {
-      rolling: "ローリング枠",
+      title: "残りの上限",
+      buttonLabel: "残りの上限",
+      rolling: "セッション（5時間）",
       weekly: "週次上限",
       unavailable: "使用状況を取得できません",
+      remaining: "残り {{percent}}%",
+      noData: "—",
+      resetsInMinutes: "{{count}}分後にリセット",
+      resetsInHours: "{{count}}時間後にリセット",
+      resetsInDays: "{{count}}日後にリセット",
     },
     explorer: {
       title: "エクスプローラー",

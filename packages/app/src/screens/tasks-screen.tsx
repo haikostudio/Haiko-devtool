@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
+import { TaskQuotaMenuButton } from "@/components/tasks/task-quota-menu";
 import { TaskTimelineArea } from "@/components/tasks/task-timeline-area";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { NewNoteCard, type NewNoteInput } from "@/components/tasks/new-note-card";
@@ -1122,12 +1123,9 @@ function BoardContent({
         </View>
       ) : null}
       <FolderBillingTotal serverId={serverId} projectId={projectId} tasks={folderTasks} />
-      {/* Always on screen: even an empty schedule has to show how much quota is
-          left. Only the bars underneath come and go. */}
       {showTimeline ? (
         <TaskTimelineArea
           board={boardHandle.board}
-          serverId={serverId}
           onPressTask={handlePressTimelineTask}
           height={timelineHeight}
           onResize={setTimelineHeight}
@@ -1646,6 +1644,7 @@ function TasksHeader({
   const rightContent = useMemo(
     () => (
       <View style={styles.headerRightCluster}>
+        <TaskQuotaMenuButton serverId={selectedProject?.serverId ?? null} />
         <TasksExplorerButton project={selectedProject} />
         <TasksAttachmentLibraryButton project={selectedProject} />
         <TasksDeployButton project={selectedProject} />

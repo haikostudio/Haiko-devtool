@@ -424,9 +424,16 @@ export const en = {
       deadlineNone: "No deadline",
     },
     quota: {
-      rolling: "Rolling window",
+      title: "Remaining quota",
+      buttonLabel: "Remaining quota",
+      rolling: "Session (5h)",
       weekly: "Weekly allowance",
       unavailable: "Usage unavailable",
+      remaining: "{{percent}}% left",
+      noData: "—",
+      resetsInMinutes: "Resets in {{count}} min",
+      resetsInHours: "Resets in {{count}} h",
+      resetsInDays: "Resets in {{count}} d",
     },
     explorer: {
       title: "Explorer",
