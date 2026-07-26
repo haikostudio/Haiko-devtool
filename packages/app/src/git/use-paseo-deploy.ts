@@ -54,6 +54,12 @@ export interface PaseoDeployStatus {
    * the failure reason). Optional — older daemons omit it.
    */
   deployOutcome?: "success" | "failed" | null;
+  /**
+   * Agent carrying out the running (or last finished) publication. Lets the
+   * sheet offer "voir l'agent", so the reader watches the real work instead of a
+   * progress number. Optional — older daemons omit it.
+   */
+  deployAgentId?: string | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployFileEntry[];
   unshippedCommits: PaseoDeployCommitEntry[];

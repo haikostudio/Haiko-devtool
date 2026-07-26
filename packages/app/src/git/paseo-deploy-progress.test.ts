@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEPLOY_PHASES,
-  easedPhaseFraction,
   formatDeployDuration,
+  resolveDeployActionLabel,
   resolveDeployProgress,
 } from "./paseo-deploy-progress.js";
 
@@ -13,7 +13,6 @@ const BASE = {
   startedAt: 1_000_000,
   finishedAt: null,
   now: 1_000_000,
-  phaseStartedAt: 1_000_000,
 };
 
 describe("formatDeployDuration", () => {
@@ -32,42 +31,30 @@ describe("formatDeployDuration", () => {
   });
 });
 
-describe("easedPhaseFraction", () => {
-  it("starts a phase at its own lower bound", () => {
-    expect(easedPhaseFraction(1, 0)).toBeCloseTo(0.12, 5);
-  });
-
-  it("keeps advancing while the phase lasts — the fix for the frozen bar", () => {
-    const early = easedPhaseFraction(1, 30_000);
-    const later = easedPhaseFraction(1, 120_000);
-    expect(early).toBeGreaterThan(0.12);
-    expect(later).toBeGreaterThan(early);
-  });
-
-  it("never crosses into the next phase's slice, however long it takes", () => {
-    expect(easedPhaseFraction(1, 60 * 60_000)).toBeLessThan(0.85);
-  });
-
-  it("treats an unknown index as no progress", () => {
-    expect(easedPhaseFraction(99, 10_000)).toBe(0);
-  });
-});
-
 describe("resolveDeployProgress", () => {
   it("hides the block when no run is happening and none just finished", () => {
     const view = resolveDeployProgress({ ...BASE, deploying: false, phase: null });
     expect(view.visible).toBe(false);
   });
 
-  it("shows a running build with its phase, elapsed time and a moving bar", () => {
+  it("shows a running build with its phase, elapsed time and its step position", () => {
     const view = resolveDeployProgress({ ...BASE, now: BASE.startedAt + 125_000 });
     expect(view.visible).toBe(true);
     expect(view.title).toBe("Construction du site…");
     expect(view.elapsedLabel).toBe("2 min 05 s");
-    expect(view.percent).toBeGreaterThan(12);
-    expect(view.percent).toBeLessThan(85);
+    expect(view.stepLabel).toBe("Étape 2 sur 3");
     expect(view.failed).toBe(false);
     expect(view.succeeded).toBe(false);
+  });
+
+  it("reports the same thing whatever the reader does with the sheet", () => {
+    // The regression that made the sheet untrustworthy: progress was eased from a
+    // client-side "first seen" timestamp, so closing and reopening the sheet
+    // restarted the creep and the number went DOWN. Progress now depends only on
+    // daemon-reported values, so a remount cannot change what is displayed.
+    const first = resolveDeployProgress({ ...BASE, now: BASE.startedAt + 125_000 });
+    const afterReopen = resolveDeployProgress({ ...BASE, now: BASE.startedAt + 125_000 });
+    expect(afterReopen).toEqual(first);
   });
 
   it("keeps reporting a finished success after the build stops", () => {
@@ -80,8 +67,8 @@ describe("resolveDeployProgress", () => {
     });
     expect(view.visible).toBe(true);
     expect(view.succeeded).toBe(true);
-    expect(view.percent).toBe(100);
     expect(view.elapsedLabel).toBe("4 min 00 s");
+    expect(view.stepLabel).toBeNull();
     expect(view.activeIndex).toBe(-1);
   });
 
@@ -96,7 +83,7 @@ describe("resolveDeployProgress", () => {
     expect(view.visible).toBe(true);
     expect(view.failed).toBe(true);
     expect(view.title).toBe("Déploiement interrompu");
-    expect(view.percent).toBe(0);
+    expect(view.stepLabel).toBeNull();
   });
 
   it("freezes elapsed time once the run has finished", () => {
@@ -124,22 +111,62 @@ describe("resolveDeployProgress", () => {
     const view = resolveDeployProgress({ ...BASE, phase: "publish" });
     expect(view.reportedIndex).toBe(2);
     expect(view.activeIndex).toBe(2);
+    expect(view.stepLabel).toBe("Étape 3 sur 3");
   });
 
-  it("falls back to the first step for a phase it doesn't know", () => {
+  it("falls back to the first step for a phase it doesn't know, without claiming one", () => {
     const view = resolveDeployProgress({ ...BASE, phase: "start" });
     expect(view.title).toBe("Démarrage…");
     expect(view.reportedIndex).toBe(-1);
     expect(view.activeIndex).toBe(0);
+    expect(view.stepLabel).toBeNull();
   });
 
-  it("keeps the phase slices contiguous and ordered", () => {
-    let previousTo = 0;
-    for (const phase of DEPLOY_PHASES) {
-      expect(phase.from).toBeGreaterThanOrEqual(previousTo === 0 ? 0 : previousTo);
-      expect(phase.to).toBeGreaterThanOrEqual(phase.from);
-      previousTo = phase.to;
-    }
-    expect(DEPLOY_PHASES[DEPLOY_PHASES.length - 1]?.to).toBe(1);
+  it("ends on the finish line", () => {
+    expect(DEPLOY_PHASES[DEPLOY_PHASES.length - 1]?.key).toBe("done");
+  });
+});
+
+describe("resolveDeployActionLabel", () => {
+  const BUTTON = {
+    inProgress: false,
+    triggering: false,
+    phase: null as string | null,
+    outcome: null,
+    canDeploy: true,
+    selectionCount: 0,
+    hasTrunkPending: false,
+    blockedCount: 0,
+  };
+
+  it("follows the running step so the button never lies about what is happening", () => {
+    expect(resolveDeployActionLabel({ ...BUTTON, inProgress: true, phase: "publish" })).toBe(
+      "Publication en ligne…",
+    );
+  });
+
+  it("offers a retry after a failed publication", () => {
+    expect(resolveDeployActionLabel({ ...BUTTON, outcome: "failed", hasTrunkPending: true })).toBe(
+      "Réessayer la publication",
+    );
+  });
+
+  it("counts the ticked ateliers, singular and plural", () => {
+    expect(resolveDeployActionLabel({ ...BUTTON, selectionCount: 1 })).toBe(
+      "Mettre en place 1 atelier",
+    );
+    expect(resolveDeployActionLabel({ ...BUTTON, selectionCount: 3 })).toBe(
+      "Mettre en place 3 ateliers",
+    );
+  });
+
+  it("falls back to the trunk, then to preparation, then to nothing to do", () => {
+    expect(resolveDeployActionLabel({ ...BUTTON, hasTrunkPending: true })).toBe(
+      "Publier les changements du projet",
+    );
+    expect(resolveDeployActionLabel({ ...BUTTON, blockedCount: 2 })).toBe(
+      "Lancer la mise en place",
+    );
+    expect(resolveDeployActionLabel(BUTTON)).toBe("Rien à publier");
   });
 });

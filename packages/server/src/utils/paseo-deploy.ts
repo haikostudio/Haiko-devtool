@@ -82,6 +82,8 @@ interface DeployRun {
   phase: string | null;
   /** `--no-build` runs save without publishing — no "live" claim to make. */
   noBuild: boolean;
+  /** Agent carrying out this publication, when one was launched for it. */
+  agentId: string | null;
 }
 let currentRun: DeployRun | null = null;
 /** Error from the last finished deploy run, if it failed. */
@@ -108,6 +110,42 @@ export function setPaseoDeploySuccessListener(
   listener: ((event: PaseoDeploySuccess) => void) | null,
 ): void {
   onDeploySuccess = listener;
+}
+
+/** Everything the deploy agent needs to know about the run it is carrying out. */
+export interface PaseoDeployAgentLaunchInput {
+  /** Deploy checkout to work in. */
+  repoRoot: string;
+  /** Build + publish script the agent must run (never reinvent it). */
+  shipScript: string;
+  /** File the script appends its output to. */
+  logFile: string;
+  /** File the script writes its coarse phase to. */
+  phaseFile: string;
+  /** Task branches merged into the deploy branch just before this run. */
+  mergedBranches: string[];
+}
+
+export interface PaseoDeployAgentRun {
+  agentId: string;
+  /** Resolves with the agent's closing words once its run ends. */
+  done: Promise<string | null>;
+}
+
+/**
+ * Launches the agent that carries out a publication. Registered at bootstrap
+ * (the deploy module must not depend on the agent stack). When none is
+ * registered — tests, or a `--no-build` save — the build script is spawned
+ * directly instead.
+ */
+export type PaseoDeployAgentLauncher = (
+  input: PaseoDeployAgentLaunchInput,
+) => Promise<PaseoDeployAgentRun>;
+
+let launchDeployAgent: PaseoDeployAgentLauncher | null = null;
+
+export function setPaseoDeployAgentLauncher(launcher: PaseoDeployAgentLauncher | null): void {
+  launchDeployAgent = launcher;
 }
 /**
  * HEAD at the moment the daemon booted — captured once so we can tell, later,
@@ -168,6 +206,8 @@ export interface PaseoDeployStatus {
    * still read as a failure and not as "still working".
    */
   deployOutcome: PaseoDeployOutcome | null;
+  /** Agent carrying out the running (or last finished) publication, if any. */
+  deployAgentId: string | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployPendingFile[];
   unshippedCommits: PaseoDeployPendingCommit[];
@@ -741,6 +781,7 @@ interface DeployRunFields {
   deployStartedAt: number | null;
   deployFinishedAt: number | null;
   deployOutcome: PaseoDeployOutcome | null;
+  deployAgentId: string | null;
 }
 
 function describeDeployRun(run: DeployRun | null): DeployRunFields {
@@ -750,6 +791,7 @@ function describeDeployRun(run: DeployRun | null): DeployRunFields {
     deployStartedAt: run?.startedAt ?? null,
     deployFinishedAt: run?.finishedAt ?? null,
     deployOutcome: run?.outcome ?? null,
+    deployAgentId: run?.agentId ?? null,
   };
 }
 
@@ -1072,6 +1114,80 @@ export async function commitWorktreeChanges(input: {
   }
 }
 
+/**
+ * Did the publication really reach the live site? Asked of the filesystem, never
+ * of the agent: an agent that believes it succeeded is not evidence, whereas the
+ * marker the publish step writes next to the served files is. Same rule as the
+ * sheet's own "verdict = `.deployed-sha` vs HEAD".
+ */
+async function isPublicationLive(): Promise<boolean> {
+  const [deployedSha, headSha] = await Promise.all([
+    readDeployedSha(),
+    runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT })
+      .then((result) => result.stdout.trim() || null)
+      .catch(() => null),
+  ]);
+  return deployedSha !== null && headSha !== null && deployedSha === headSha;
+}
+
+/** Longest agent explanation kept as a failure reason (it lands in an alert). */
+const AGENT_FAILURE_REASON_MAX_LENGTH = 300;
+
+/**
+ * Why nothing went live, in the most concrete words available: the build
+ * script's own fatal line first, then the agent's closing words, then a generic
+ * sentence. Never silence — a publication that stops without a reason is exactly
+ * the "j'ai cliqué et il ne s'est rien passé" report.
+ */
+async function describeAgentFailure(summary: string | null): Promise<string> {
+  try {
+    const reason = extractShipFailureReason(await readShipLogTail());
+    if (reason !== null) {
+      return reason;
+    }
+  } catch {
+    // Log unreadable — fall back to what the agent said.
+  }
+  const trimmed = summary?.trim() ?? "";
+  if (trimmed.length > 0) {
+    return trimmed.length > AGENT_FAILURE_REASON_MAX_LENGTH
+      ? `${trimmed.slice(0, AGENT_FAILURE_REASON_MAX_LENGTH)}…`
+      : trimmed;
+  }
+  return "La publication s'est arrêtée sans mettre la nouvelle version en ligne.";
+}
+
+/** Close a run carried out by an agent, on the evidence rather than its word. */
+async function finishAgentRun(
+  run: DeployRun,
+  input: { summary: string | null; mergedBranches: string[] },
+): Promise<void> {
+  // A superseded or already-closed run must not clobber a newer one.
+  if (currentRun !== run || run.finishedAt !== null) {
+    return;
+  }
+  const live = await isPublicationLive();
+  if (currentRun !== run || run.finishedAt !== null) {
+    return;
+  }
+  run.finishedAt = Date.now();
+  if (!live) {
+    run.outcome = "failed";
+    run.phase = "error";
+    lastError = await describeAgentFailure(input.summary);
+    return;
+  }
+  run.outcome = "success";
+  run.phase = "done";
+  if (onDeploySuccess) {
+    try {
+      onDeploySuccess({ mergedBranches: input.mergedBranches });
+    } catch {
+      // A listener failure must never break the deploy flow.
+    }
+  }
+}
+
 export async function triggerPaseoDeploy(input: {
   noBuild?: boolean;
   projectId?: string;
@@ -1130,10 +1246,32 @@ export async function triggerPaseoDeploy(input: {
       outcome: null,
       phase: null,
       noBuild: input.noBuild === true,
+      agentId: null,
     };
     currentRun = run;
     // Keep the skip note visible after a partial merge; otherwise clear.
     lastError = skippedNote;
+
+    // A real publication is handed to an agent: it runs the build script, keeps
+    // an eye on it, and — unlike a bare `spawn` — can actually deal with what
+    // goes wrong (a stale dependency, a full disk, a half-finished copy) instead
+    // of leaving a dead progress bar behind. A save-only run stays a plain
+    // script call: there is nothing to supervise.
+    if (!run.noBuild && launchDeployAgent !== null) {
+      const launched = await launchDeployAgent({
+        repoRoot: REPO_ROOT,
+        shipScript: SHIP_SCRIPT,
+        logFile: SHIP_LOG_FILE,
+        phaseFile: PHASE_FILE,
+        mergedBranches,
+      });
+      run.agentId = launched.agentId;
+      void launched.done.then(
+        (summary) => finishAgentRun(run, { summary, mergedBranches }),
+        (error) => finishAgentRun(run, { summary: getErrorMessage(error), mergedBranches }),
+      );
+      return { started: true, error: null };
+    }
 
     const logFd = openSync(SHIP_LOG_FILE, "a");
     const child = spawn(SHIP_SCRIPT, input.noBuild ? ["--no-build"] : [], {

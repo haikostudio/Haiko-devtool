@@ -13,6 +13,7 @@ import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-moda
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
   type PaseoDeployCommitEntry,
   type PaseoDeployFileEntry,
@@ -21,8 +22,8 @@ import {
 } from "@/git/use-paseo-deploy";
 import {
   DEPLOY_PHASES,
-  deployPhaseLabel,
   type PaseoDeployOutcome,
+  resolveDeployActionLabel,
   resolveDeployProgress,
 } from "@/git/paseo-deploy-progress";
 import type { Theme } from "@/styles/theme";
@@ -316,8 +317,8 @@ function describeBranch(branch: string): string {
  * covers the brief gap before the first status poll reports a phase.
  */
 /**
- * Ticks once a second while a deploy runs, so elapsed time and the easing bar
- * keep moving between the daemon's status polls. Stops as soon as the run ends.
+ * Ticks once a second while a deploy runs, so the elapsed time keeps moving
+ * between the daemon's status polls. Stops as soon as the run ends.
  */
 function useDeployClock(running: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -330,33 +331,30 @@ function useDeployClock(running: boolean): number {
   return now;
 }
 
-/** Records when the reported phase last changed, to ease inside that phase. */
-function usePhaseStartedAt(phase: string | null | undefined): number {
-  const [startedAt, setStartedAt] = useState(() => Date.now());
-  useEffect(() => {
-    setStartedAt(Date.now());
-  }, [phase]);
-  return startedAt;
-}
-
 interface DeployPhaseProgressProps {
   deploying: boolean;
   phase: string | null | undefined;
   outcome: PaseoDeployOutcome | null | undefined;
   startedAt: number | null | undefined;
   finishedAt: number | null | undefined;
+  onOpenAgent: (() => void) | null;
 }
 
-/** Coarse phase from the daemon, eased over time so the bar never looks stuck. */
+/**
+ * What the publication is doing right now — the real step, the real elapsed
+ * time, and a way into the agent doing the work. No percentage: the mechanism
+ * only knows which step is running, and an invented number that walked backwards
+ * every time the sheet was reopened was worse than saying nothing.
+ */
 function DeployPhaseProgress({
   deploying,
   phase,
   outcome,
   startedAt,
   finishedAt,
+  onOpenAgent,
 }: DeployPhaseProgressProps) {
   const now = useDeployClock(deploying);
-  const phaseStartedAt = usePhaseStartedAt(phase);
   const view = resolveDeployProgress({
     deploying,
     phase,
@@ -364,12 +362,7 @@ function DeployPhaseProgress({
     startedAt,
     finishedAt,
     now,
-    phaseStartedAt,
   });
-  const fillStyle = useMemo(
-    () => [styles.progressFill, { width: `${view.percent}%` as const }],
-    [view.percent],
-  );
 
   if (!view.visible) return null;
 
@@ -377,11 +370,8 @@ function DeployPhaseProgress({
     <View style={styles.progress} testID="paseo-deploy-progress">
       <View style={styles.progressHeader}>
         <Text style={styles.progressTitle}>{view.title}</Text>
+        {view.stepLabel ? <Text style={styles.progressStepCount}>{view.stepLabel}</Text> : null}
         {view.elapsedLabel ? <Text style={styles.progressElapsed}>{view.elapsedLabel}</Text> : null}
-        <Text style={styles.progressPercent}>{view.percent} %</Text>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={fillStyle} />
       </View>
       <View style={styles.progressSteps}>
         {DEPLOY_PHASES.map((entry, index) => (
@@ -394,6 +384,18 @@ function DeployPhaseProgress({
           />
         ))}
       </View>
+      {onOpenAgent ? (
+        <Pressable
+          onPress={onOpenAgent}
+          accessibilityRole="button"
+          testID="paseo-deploy-open-agent"
+          style={styles.agentLink}
+        >
+          <Text style={styles.agentLinkText}>
+            {deploying ? "Voir l'agent qui publie" : "Voir le compte rendu de l'agent"}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -716,11 +718,13 @@ function DeployModalBody({
   deselected,
   onToggle,
   busy,
+  onOpenAgent,
 }: {
   status: DeployStatusSnapshot;
   deselected: Set<string>;
   onToggle: (branch: string) => void;
   busy: boolean;
+  onOpenAgent: (() => void) | null;
 }) {
   const view = useMemo(() => deriveDeployBodyView(status), [status]);
 
@@ -738,6 +742,7 @@ function DeployModalBody({
         outcome={status?.deployOutcome}
         startedAt={status?.deployStartedAt}
         finishedAt={status?.deployFinishedAt}
+        onOpenAgent={onOpenAgent}
       />
       <DeployOutcomeNotice
         deploying={view.deploying}
@@ -800,11 +805,19 @@ function PaseoDeployModal({
     [selectedWorktrees],
   );
 
-  // The single "Déployer" action: trigger the daemon's LOCAL build directly —
-  // no agent in the middle. The daemon merges the ticked branches into the
-  // deploy checkout, then runs the local build+publish script; the sheet stays
-  // open and polls the status so the user watches "Construction → Publication →
-  // En ligne" live via `deployPhase`.
+  // The publication is carried out by an agent: opening it is how the reader
+  // sees what is really happening, rather than trusting a summary line.
+  const deployAgentId = status?.deployAgentId ?? null;
+  const handleOpenAgent = useCallback(() => {
+    if (!deployAgentId) return;
+    onClose();
+    navigateToAgent({ serverId, agentId: deployAgentId, pin: false });
+  }, [deployAgentId, onClose, serverId]);
+
+  // The single "Déployer" action: ask the daemon to publish. It merges the
+  // ticked branches into the deploy checkout, then hands the build+publish to an
+  // agent; the sheet stays open and polls the status so the user follows
+  // "Sauvegarde → Construction → Publication → En ligne" via `deployPhase`.
   const handleDeploy = useCallback(async () => {
     if (!client || triggering || deploying) return;
     const trunkPending = unshippedCommits.length > 0;
@@ -850,20 +863,18 @@ function PaseoDeployModal({
   // Lock the atelier checkboxes while a build or trigger request is running.
   const busy = inProgress;
 
-  // A single sticky footer action. "Déployer" triggers the local build directly;
-  // while it runs, the label follows the phase (Construction → Publication → OK).
-  let deployLabel = "Rien à publier";
-  if (inProgress) {
-    deployLabel = deployPhaseLabel(status?.deployPhase, triggering);
-  } else if (status?.deployOutcome === "failed" && canDeploy) {
-    deployLabel = "Réessayer la publication";
-  } else if (selectionCount > 0) {
-    deployLabel = `Mettre en place ${selectionCount} ${selectionCount > 1 ? "ateliers" : "atelier"}`;
-  } else if (hasTrunkPending) {
-    deployLabel = "Publier les changements du projet";
-  } else if (blockedCount > 0) {
-    deployLabel = "Lancer la mise en place";
-  }
+  // A single sticky footer action. While the publication runs, the label follows
+  // the real phase (Sauvegarde → Construction → Publication → En ligne).
+  const deployLabel = resolveDeployActionLabel({
+    inProgress,
+    triggering,
+    phase: status?.deployPhase,
+    outcome: status?.deployOutcome,
+    canDeploy,
+    selectionCount,
+    hasTrunkPending,
+    blockedCount,
+  });
   const footer = useMemo(
     () => (
       <View style={styles.actions}>
@@ -891,7 +902,13 @@ function PaseoDeployModal({
       footer={footer}
       testID="paseo-deploy-modal"
     >
-      <DeployModalBody status={status} deselected={deselected} onToggle={toggle} busy={busy} />
+      <DeployModalBody
+        status={status}
+        deselected={deselected}
+        onToggle={toggle}
+        busy={busy}
+        onOpenAgent={deployAgentId ? handleOpenAgent : null}
+      />
     </AdaptiveModalSheet>
   );
 }
@@ -1037,28 +1054,29 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: "700",
     color: theme.colors.foreground,
   },
-  progressPercent: {
+  // "Étape 2 sur 3" — the position the mechanism actually knows, in place of the
+  // percentage it never knew.
+  progressStepCount: {
     fontSize: theme.fontSize.xs,
     fontWeight: "700",
     color: theme.colors.foregroundMuted,
   },
-  // Elapsed time next to the percentage — the honest signal that a long
-  // "Construction" phase is working rather than hung.
+  // Elapsed time — the honest signal that a long "Construction" step is working
+  // rather than hung.
   progressElapsed: {
     fontSize: theme.fontSize.xs,
     fontVariant: ["tabular-nums"],
     color: theme.colors.foregroundMuted,
   },
-  progressTrack: {
-    height: 6,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface0,
-    overflow: "hidden",
+  // Way into the agent doing the publication: the real, readable version of
+  // "where is it at?".
+  agentLink: {
+    alignSelf: "flex-start",
   },
-  progressFill: {
-    height: "100%",
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.primary,
+  agentLinkText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: "700",
+    color: theme.colors.primary,
   },
   progressSteps: {
     flexDirection: "row",

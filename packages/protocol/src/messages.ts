@@ -5008,6 +5008,13 @@ export const PaseoDeployStatusResponseSchema = z.object({
      * `build` while still being a failure. Optional for older daemons.
      */
     deployOutcome: z.enum(["success", "failed"]).nullable().optional(),
+    /**
+     * Agent carrying out the running (or last finished) publication, so the sheet
+     * can offer "voir l'agent" and the reader can watch the real work instead of
+     * a progress number. Null when the publication ran without an agent (e.g. a
+     * save-only run). Optional so older daemons still parse.
+     */
+    deployAgentId: z.string().nullable().optional(),
     /** True when the live app differs from the current code (something to ship). */
     hasPending: z.boolean(),
     uncommittedFiles: z.array(PaseoDeployPendingFileSchema),

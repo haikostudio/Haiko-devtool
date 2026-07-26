@@ -1,14 +1,21 @@
 /**
  * Progress model for the Paseo self-host deploy sheet ("À déployer").
  *
- * The daemon can only report a coarse phase (`save` → `build` → `publish` →
- * `done`, or `error`). Rendering that as one fixed percentage per phase made the
- * bar sit at exactly 50 % for the whole `build` step — several minutes on this
- * host — which reads as a hang, not as work. So the bar eases across each
- * phase's own slice while the phase lasts, and the elapsed time is spelled out.
+ * There is deliberately NO percentage here. The daemon only knows a coarse phase
+ * (`save` → `build` → `publish` → `done`, or `error`); an earlier version turned
+ * that into an eased percentage that crept inside each phase's slice. It read as
+ * precision the mechanism does not have, and — because the easing was anchored on
+ * a client-side "when did I first see this phase" timestamp — closing and
+ * reopening the sheet restarted the creep, so the number went BACKWARDS. A
+ * progress number that moves down is worse than no number at all.
  *
- * Kept separate from the component and pure, so the arithmetic is unit-tested
- * without a renderer.
+ * What is shown instead is only what is actually known: which step is running,
+ * which steps are done, and how long the run has been going. All of it derived
+ * from daemon-reported values, so it is identical on every device and survives a
+ * reload.
+ *
+ * Kept separate from the component and pure, so it is unit-tested without a
+ * renderer.
  */
 
 /** How the last finished run ended, as reported by the daemon. */
@@ -17,23 +24,17 @@ export type PaseoDeployOutcome = "success" | "failed";
 export interface DeployPhaseSpec {
   key: string;
   label: string;
-  /** Slice of the bar this phase owns, as fractions of the total. */
-  from: number;
-  to: number;
-  /**
-   * Rough duration on this host. Only sets the easing speed — the bar never
-   * crosses into the next phase's slice before the daemon says so, so a slow
-   * phase keeps creeping and a fast one is never overtaken by the estimate.
-   */
-  expectedMs: number;
 }
 
 export const DEPLOY_PHASES: readonly DeployPhaseSpec[] = [
-  { key: "save", label: "Sauvegarde", from: 0.02, to: 0.12, expectedMs: 20_000 },
-  { key: "build", label: "Construction", from: 0.12, to: 0.85, expectedMs: 300_000 },
-  { key: "publish", label: "Publication", from: 0.85, to: 0.97, expectedMs: 25_000 },
-  { key: "done", label: "En ligne", from: 1, to: 1, expectedMs: 0 },
+  { key: "save", label: "Sauvegarde" },
+  { key: "build", label: "Construction" },
+  { key: "publish", label: "Publication" },
+  { key: "done", label: "En ligne" },
 ];
+
+/** Steps that represent work in progress (the last one is the finish line). */
+const WORKING_STEP_COUNT = DEPLOY_PHASES.length - 1;
 
 /** Human label for a phase; `triggering` covers the gap before the first poll. */
 export function deployPhaseLabel(phase: string | null | undefined, triggering: boolean): string {
@@ -62,16 +63,42 @@ export function formatDeployDuration(ms: number): string {
   return `${minutes} min ${seconds.toString().padStart(2, "0")} s`;
 }
 
-/**
- * Position inside a phase's slice: eases toward the next mark without ever
- * reaching it, so the bar always has somewhere to go.
- */
-export function easedPhaseFraction(index: number, elapsedInPhaseMs: number): number {
-  const entry = DEPLOY_PHASES[index];
-  if (!entry) return 0;
-  if (entry.expectedMs <= 0) return entry.to;
-  const ratio = 1 - Math.exp(-Math.max(0, elapsedInPhaseMs) / entry.expectedMs);
-  return entry.from + (entry.to - entry.from) * ratio;
+export interface DeployActionLabelInput {
+  /** A run is happening, or the click hasn't been acknowledged yet. */
+  inProgress: boolean;
+  /** Between the click and the daemon's first status poll. */
+  triggering: boolean;
+  phase: string | null | undefined;
+  outcome: PaseoDeployOutcome | null | undefined;
+  /** There is something to publish and nothing is running. */
+  canDeploy: boolean;
+  /** Ticked ateliers to fold into this publication. */
+  selectionCount: number;
+  /** Work already sitting on the deploy trunk. */
+  hasTrunkPending: boolean;
+  /** Ateliers the mechanism has to prepare before they can ship. */
+  blockedCount: number;
+}
+
+/** Wording of the sheet's single action, so the button always says what it does. */
+export function resolveDeployActionLabel(input: DeployActionLabelInput): string {
+  if (input.inProgress) {
+    return deployPhaseLabel(input.phase, input.triggering);
+  }
+  if (input.outcome === "failed" && input.canDeploy) {
+    return "Réessayer la publication";
+  }
+  if (input.selectionCount > 0) {
+    const noun = input.selectionCount > 1 ? "ateliers" : "atelier";
+    return `Mettre en place ${input.selectionCount} ${noun}`;
+  }
+  if (input.hasTrunkPending) {
+    return "Publier les changements du projet";
+  }
+  if (input.blockedCount > 0) {
+    return "Lancer la mise en place";
+  }
+  return "Rien à publier";
 }
 
 export interface DeployProgressInput {
@@ -82,17 +109,16 @@ export interface DeployProgressInput {
   startedAt: number | null | undefined;
   finishedAt: number | null | undefined;
   now: number;
-  /** When the client last observed the reported phase change. */
-  phaseStartedAt: number;
 }
 
 export interface DeployProgressView {
   /** False when there is nothing to report (no run, no outcome to show). */
   visible: boolean;
   title: string;
-  percent: number;
   /** Elapsed time to display, or null when it isn't known yet. */
   elapsedLabel: string | null;
+  /** "Étape 2 sur 3" — the honest position, or null when it isn't known. */
+  stepLabel: string | null;
   failed: boolean;
   succeeded: boolean;
   /** Index of the step to highlight; -1 when no step is active. */
@@ -107,13 +133,6 @@ export function resolveDeployProgress(input: DeployProgressInput): DeployProgres
   const reportedIndex = DEPLOY_PHASES.findIndex((entry) => entry.key === input.phase);
   const activeIndex = reportedIndex < 0 ? 0 : reportedIndex;
 
-  let fraction = 0;
-  if (succeeded) {
-    fraction = 1;
-  } else if (!failed) {
-    fraction = easedPhaseFraction(activeIndex, input.now - input.phaseStartedAt);
-  }
-
   // A finished run freezes its elapsed time; a running one keeps counting. With
   // no start timestamp (older daemon) we simply say nothing rather than guess.
   let elapsedLabel: string | null = null;
@@ -123,6 +142,13 @@ export function resolveDeployProgress(input: DeployProgressInput): DeployProgres
     if (elapsedMs > 0) elapsedLabel = formatDeployDuration(elapsedMs);
   }
 
+  // Only claimed while a working step is actually reported — never for the
+  // "start" placeholder, a failure, or the finish line.
+  const stepLabel =
+    !failed && !succeeded && reportedIndex >= 0 && reportedIndex < WORKING_STEP_COUNT
+      ? `Étape ${reportedIndex + 1} sur ${WORKING_STEP_COUNT}`
+      : null;
+
   let title = deployPhaseLabel(input.phase, true);
   if (failed) title = "Déploiement interrompu";
   else if (succeeded) title = "En ligne ✅";
@@ -130,8 +156,8 @@ export function resolveDeployProgress(input: DeployProgressInput): DeployProgres
   return {
     visible: input.deploying || succeeded || failed,
     title,
-    percent: Math.round(fraction * 100),
     elapsedLabel,
+    stepLabel,
     failed,
     succeeded,
     activeIndex: failed || succeeded ? -1 : activeIndex,
