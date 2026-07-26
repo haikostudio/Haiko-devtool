@@ -189,7 +189,6 @@ import {
 } from "./session/git-mutation/git-mutation-service.js";
 import {
   createWorkspaceProvisioningService,
-  WorkspaceProvisioningError,
   type WorkspaceProvisioningService,
 } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import { DiskFullError } from "../utils/worktree.js";
@@ -7297,8 +7296,12 @@ function resolveWorkspaceCreateErrorCode(error: unknown): string | undefined {
   if (error instanceof DiskFullError) {
     return "disk_full";
   }
-  if (error instanceof WorkspaceProvisioningError) {
-    return error.code;
+  if (
+    error instanceof Error &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+  ) {
+    return (error as { code: string }).code;
   }
   return undefined;
 }
