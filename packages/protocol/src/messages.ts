@@ -4987,6 +4987,20 @@ export const PaseoDeployStatusResponseSchema = z.object({
      * don't send it still parse.
      */
     deployPhase: z.string().nullable().optional(),
+    /**
+     * Epoch ms the running (or last finished) deploy started. Lets the sheet show
+     * elapsed time so a long build phase does not look frozen. Optional so older
+     * daemons that don't send it still parse.
+     */
+    deployStartedAt: z.number().nullable().optional(),
+    /** Epoch ms the last deploy ended; null while one is running. Optional. */
+    deployFinishedAt: z.number().nullable().optional(),
+    /**
+     * How the last finished deploy ended. Sent explicitly rather than inferred
+     * from the phase, because a build killed mid-flight leaves the phase at
+     * `build` while still being a failure. Optional for older daemons.
+     */
+    deployOutcome: z.enum(["success", "failed"]).nullable().optional(),
     /** True when the live app differs from the current code (something to ship). */
     hasPending: z.boolean(),
     uncommittedFiles: z.array(PaseoDeployPendingFileSchema),

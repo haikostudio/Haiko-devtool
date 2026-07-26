@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -10,6 +10,7 @@ import {
   Rocket,
 } from "lucide-react-native";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
@@ -18,6 +19,12 @@ import {
   type PaseoDeployWorktreeEntry,
   usePaseoDeployStatus,
 } from "@/git/use-paseo-deploy";
+import {
+  DEPLOY_PHASES,
+  deployPhaseLabel,
+  type PaseoDeployOutcome,
+  resolveDeployProgress,
+} from "@/git/paseo-deploy-progress";
 import type { Theme } from "@/styles/theme";
 
 // Stable empty arrays so the list props keep a constant identity when the status
@@ -308,73 +315,123 @@ function describeBranch(branch: string): string {
  * so the user follows "Construction → Publication → En ligne". `triggering`
  * covers the brief gap before the first status poll reports a phase.
  */
-function deployPhaseLabel(phase: string | null | undefined, triggering: boolean): string {
-  switch (phase) {
-    case "save":
-      return "Sauvegarde…";
-    case "build":
-      return "Construction du site…";
-    case "publish":
-      return "Publication en ligne…";
-    case "done":
-      return "En ligne ✅";
-    case "error":
-      return "Mise en place à reprendre";
-    default:
-      return triggering ? "Démarrage…" : "Déploiement en cours…";
-  }
+/**
+ * Ticks once a second while a deploy runs, so elapsed time and the easing bar
+ * keep moving between the daemon's status polls. Stops as soon as the run ends.
+ */
+function useDeployClock(running: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, [running]);
+  return now;
 }
 
-const DEPLOY_PHASES = [
-  { key: "save", label: "Sauvegarde", fraction: 0.2 },
-  { key: "build", label: "Construction", fraction: 0.5 },
-  { key: "publish", label: "Publication", fraction: 0.8 },
-  { key: "done", label: "En ligne", fraction: 1 },
-] as const;
+/** Records when the reported phase last changed, to ease inside that phase. */
+function usePhaseStartedAt(phase: string | null | undefined): number {
+  const [startedAt, setStartedAt] = useState(() => Date.now());
+  useEffect(() => {
+    setStartedAt(Date.now());
+  }, [phase]);
+  return startedAt;
+}
 
-/** Real coarse progress from the daemon; never estimates time inside a phase. */
+interface DeployPhaseProgressProps {
+  deploying: boolean;
+  phase: string | null | undefined;
+  outcome: PaseoDeployOutcome | null | undefined;
+  startedAt: number | null | undefined;
+  finishedAt: number | null | undefined;
+}
+
+/** Coarse phase from the daemon, eased over time so the bar never looks stuck. */
 function DeployPhaseProgress({
   deploying,
   phase,
-}: {
-  deploying: boolean;
-  phase: string | null | undefined;
-}) {
-  const currentIndex = DEPLOY_PHASES.findIndex((entry) => entry.key === phase);
-  const activeIndex = currentIndex < 0 ? 0 : currentIndex;
-  const fraction = phase === "error" ? 0 : (DEPLOY_PHASES[activeIndex]?.fraction ?? 0);
+  outcome,
+  startedAt,
+  finishedAt,
+}: DeployPhaseProgressProps) {
+  const now = useDeployClock(deploying);
+  const phaseStartedAt = usePhaseStartedAt(phase);
+  const view = resolveDeployProgress({
+    deploying,
+    phase,
+    outcome,
+    startedAt,
+    finishedAt,
+    now,
+    phaseStartedAt,
+  });
   const fillStyle = useMemo(
-    () => [styles.progressFill, { width: `${Math.round(fraction * 100)}%` as const }],
-    [fraction],
+    () => [styles.progressFill, { width: `${view.percent}%` as const }],
+    [view.percent],
   );
-  if (!deploying && phase !== "done" && phase !== "error") return null;
+
+  if (!view.visible) return null;
+
   return (
     <View style={styles.progress} testID="paseo-deploy-progress">
       <View style={styles.progressHeader}>
-        <Text style={styles.progressTitle}>
-          {phase === "error" ? "Déploiement interrompu" : deployPhaseLabel(phase, true)}
-        </Text>
-        <Text style={styles.progressPercent}>{Math.round(fraction * 100)} %</Text>
+        <Text style={styles.progressTitle}>{view.title}</Text>
+        {view.elapsedLabel ? <Text style={styles.progressElapsed}>{view.elapsedLabel}</Text> : null}
+        <Text style={styles.progressPercent}>{view.percent} %</Text>
       </View>
       <View style={styles.progressTrack}>
         <View style={fillStyle} />
       </View>
       <View style={styles.progressSteps}>
-        {DEPLOY_PHASES.map((entry, index) => {
-          const done = phase === "done" || (currentIndex >= 0 && index < currentIndex);
-          const active = phase !== "error" && index === activeIndex;
-          return (
-            <DeployProgressStep
-              key={entry.key}
-              label={entry.label}
-              done={done}
-              active={active}
-              deploying={deploying}
-            />
-          );
-        })}
+        {DEPLOY_PHASES.map((entry, index) => (
+          <DeployProgressStep
+            key={entry.key}
+            label={entry.label}
+            done={view.succeeded || (view.reportedIndex >= 0 && index < view.reportedIndex)}
+            active={index === view.activeIndex}
+            deploying={deploying}
+          />
+        ))}
       </View>
     </View>
+  );
+}
+
+/**
+ * The outcome of the last finished run, spelled out. Before this, a build that
+ * failed simply made the progress block disappear — the user clicked Déployer,
+ * watched it spin, and then got no verdict at all, which is exactly the "ça ne
+ * marche pas du tout" report. Success is stated too, so a publish that worked
+ * stops looking like nothing happened.
+ */
+function DeployOutcomeNotice({
+  deploying,
+  outcome,
+  reason,
+}: {
+  deploying: boolean;
+  outcome: PaseoDeployOutcome | null | undefined;
+  reason: string | null;
+}) {
+  if (deploying || !outcome) return null;
+  if (outcome === "failed") {
+    return (
+      <Alert
+        variant="error"
+        title="Rien n'a été publié"
+        description={reason ?? "La mise en ligne s'est arrêtée avant la fin."}
+        testID="paseo-deploy-outcome-failed"
+      />
+    );
+  }
+  return (
+    <Alert
+      variant="success"
+      title="Publié en ligne"
+      description="La nouvelle version est servie. Recharge la page pour la voir."
+      testID="paseo-deploy-outcome-success"
+    />
   );
 }
 
@@ -602,6 +659,56 @@ function DeployStatusHeader({
   return <DeployChangesSummary count={changesCount} />;
 }
 
+type DeployStatusSnapshot = ReturnType<typeof usePaseoDeployStatus>["status"];
+
+interface DeployBodyView {
+  deploying: boolean;
+  visibleUncommittedFiles: PaseoDeployFileEntry[];
+  unshippedCommits: PaseoDeployCommitEntry[];
+  worktrees: PaseoDeployWorktreeEntry[];
+  isClean: boolean;
+  changesCount: number;
+  daemonBehindCount: number;
+  blockedWorktrees: number;
+}
+
+/** Everything the sheet body reads off a status snapshot, derived in one pass. */
+function deriveDeployBodyView(status: DeployStatusSnapshot): DeployBodyView {
+  const deploying = status?.deploying ?? false;
+  const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
+  const visibleUncommittedFiles = uncommittedFiles.filter(
+    (file) => !isGeneratedDeployFile(file.path),
+  );
+  const unshippedCommits = status?.unshippedCommits ?? EMPTY_COMMITS;
+  const worktrees = status?.worktrees ?? EMPTY_WORKTREES;
+  // Real number of changes to ship — honest even after work is grouped into a
+  // few commits (older daemons that don't send it fall back to the list sum).
+  const generatedFileCount = uncommittedFiles.length - visibleUncommittedFiles.length;
+  return {
+    deploying,
+    visibleUncommittedFiles,
+    unshippedCommits,
+    worktrees,
+    // A just-finished run states its own outcome below, so the generic
+    // "Tout est déjà en ligne" line would only repeat it.
+    isClean:
+      !deploying &&
+      (status?.deployOutcome ?? null) === null &&
+      visibleUncommittedFiles.length === 0 &&
+      unshippedCommits.length === 0 &&
+      worktrees.length === 0,
+    changesCount: Math.max(
+      0,
+      (status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length) -
+        generatedFileCount,
+    ),
+    daemonBehindCount: status?.daemonBehindCount ?? 0,
+    blockedWorktrees: worktrees.filter(
+      (worktree) => worktree.mergeable !== true || worktree.uncommittedCount > 0,
+    ).length,
+  };
+}
+
 /** Scrollable contents of the deploy sheet — split out so the modal shell stays
  *  simple (and under the complexity budget). */
 function DeployModalBody({
@@ -610,53 +717,40 @@ function DeployModalBody({
   onToggle,
   busy,
 }: {
-  status: ReturnType<typeof usePaseoDeployStatus>["status"];
+  status: DeployStatusSnapshot;
   deselected: Set<string>;
   onToggle: (branch: string) => void;
   busy: boolean;
 }) {
-  const deploying = status?.deploying ?? false;
-  const uncommittedFiles = status?.uncommittedFiles ?? EMPTY_FILES;
-  const visibleUncommittedFiles = useMemo(
-    () => uncommittedFiles.filter((file) => !isGeneratedDeployFile(file.path)),
-    [uncommittedFiles],
-  );
-  const unshippedCommits = status?.unshippedCommits ?? EMPTY_COMMITS;
-  const worktrees = status?.worktrees ?? EMPTY_WORKTREES;
-  const isClean =
-    !deploying &&
-    visibleUncommittedFiles.length === 0 &&
-    unshippedCommits.length === 0 &&
-    worktrees.length === 0;
-  // Real number of changes to ship — honest even after work is grouped into a
-  // few commits (older daemons that don't send it fall back to the list sum).
-  const generatedFileCount = uncommittedFiles.length - visibleUncommittedFiles.length;
-  const changesCount = Math.max(
-    0,
-    (status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length) -
-      generatedFileCount,
-  );
-  const daemonBehindCount = status?.daemonBehindCount ?? 0;
-  const blockedWorktrees = worktrees.filter(
-    (worktree) => worktree.mergeable !== true || worktree.uncommittedCount > 0,
-  ).length;
+  const view = useMemo(() => deriveDeployBodyView(status), [status]);
 
   return (
     <View style={styles.body}>
-      <DaemonBehindNotice count={daemonBehindCount} />
+      <DaemonBehindNotice count={view.daemonBehindCount} />
       <DeployStatusHeader
-        isClean={isClean}
-        daemonBehindCount={daemonBehindCount}
-        changesCount={changesCount}
+        isClean={view.isClean}
+        daemonBehindCount={view.daemonBehindCount}
+        changesCount={view.changesCount}
       />
-      <DeployPhaseProgress deploying={deploying} phase={status?.deployPhase} />
-      <WorktreesSummary worktrees={worktrees} />
-      <DeployBlockedNotice count={blockedWorktrees} />
+      <DeployPhaseProgress
+        deploying={view.deploying}
+        phase={status?.deployPhase}
+        outcome={status?.deployOutcome}
+        startedAt={status?.deployStartedAt}
+        finishedAt={status?.deployFinishedAt}
+      />
+      <DeployOutcomeNotice
+        deploying={view.deploying}
+        outcome={status?.deployOutcome}
+        reason={status?.lastError ?? null}
+      />
+      <WorktreesSummary worktrees={view.worktrees} />
+      <DeployBlockedNotice count={view.blockedWorktrees} />
 
-      <PendingFilesSection files={visibleUncommittedFiles} />
-      <PendingCommitsSection commits={unshippedCommits} />
+      <PendingFilesSection files={view.visibleUncommittedFiles} />
+      <PendingCommitsSection commits={view.unshippedCommits} />
       <WorktreesSection
-        worktrees={worktrees}
+        worktrees={view.worktrees}
         deselected={deselected}
         onToggle={onToggle}
         busy={busy}
@@ -761,6 +855,8 @@ function PaseoDeployModal({
   let deployLabel = "Rien à publier";
   if (inProgress) {
     deployLabel = deployPhaseLabel(status?.deployPhase, triggering);
+  } else if (status?.deployOutcome === "failed" && canDeploy) {
+    deployLabel = "Réessayer la publication";
   } else if (selectionCount > 0) {
     deployLabel = `Mettre en place ${selectionCount} ${selectionCount > 1 ? "ateliers" : "atelier"}`;
   } else if (hasTrunkPending) {
@@ -944,6 +1040,13 @@ const styles = StyleSheet.create((theme) => ({
   progressPercent: {
     fontSize: theme.fontSize.xs,
     fontWeight: "700",
+    color: theme.colors.foregroundMuted,
+  },
+  // Elapsed time next to the percentage — the honest signal that a long
+  // "Construction" phase is working rather than hung.
+  progressElapsed: {
+    fontSize: theme.fontSize.xs,
+    fontVariant: ["tabular-nums"],
     color: theme.colors.foregroundMuted,
   },
   progressTrack: {

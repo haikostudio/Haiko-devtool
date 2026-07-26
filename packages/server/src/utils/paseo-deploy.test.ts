@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUTO_RESOLVABLE_CONFLICT_PATHS,
   classifyMergeConflicts,
+  extractShipFailureReason,
   isPaseoDeployRepairBranch,
   parseWorktreeList,
 } from "./paseo-deploy.js";
@@ -47,6 +48,36 @@ describe("isPaseoDeployRepairBranch", () => {
       true,
     );
     expect(isPaseoDeployRepairBranch("task/refonte-modal-a-deployer-0815b3")).toBe(false);
+  });
+});
+
+describe("extractShipFailureReason", () => {
+  it("reports the build script's own reason instead of an exit code", () => {
+    const log = [
+      "==> Construction du site (expo export)…",
+      "npm error code 1",
+      "!! La construction a échoué — rien n'est publié.",
+      "",
+    ].join("\n");
+    expect(extractShipFailureReason(log)).toBe("La construction a échoué — rien n'est publié.");
+  });
+
+  it("keeps the last failure when the log holds several runs", () => {
+    const log = [
+      "!! La copie vers /var/www/paseo-app a échoué.",
+      "==> Build local — branche main",
+      "!! /root/paseo introuvable",
+    ].join("\n");
+    expect(extractShipFailureReason(log)).toBe("/root/paseo introuvable");
+  });
+
+  it("returns null for a log that never failed", () => {
+    expect(extractShipFailureReason("==> Terminé. 62 fichiers en ligne.\n")).toBeNull();
+  });
+
+  it("returns null for an empty log rather than an empty message", () => {
+    expect(extractShipFailureReason("")).toBeNull();
+    expect(extractShipFailureReason("!!   \n")).toBeNull();
   });
 });
 

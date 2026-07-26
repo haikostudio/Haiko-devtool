@@ -41,6 +41,19 @@ export interface PaseoDeployStatus {
    * the button's "Construction → Publication → En ligne" progress.
    */
   deployPhase?: string | null;
+  /**
+   * Epoch ms the running (or last finished) deploy started. Used to show elapsed
+   * time and to creep the bar inside a long phase, so "Construction" no longer
+   * looks frozen at 50 % for minutes. Optional — older daemons omit it.
+   */
+  deployStartedAt?: number | null;
+  /** Epoch ms the last deploy ended; null while one runs. Optional. */
+  deployFinishedAt?: number | null;
+  /**
+   * How the last finished deploy ended. Drives the result banner ("En ligne" or
+   * the failure reason). Optional — older daemons omit it.
+   */
+  deployOutcome?: "success" | "failed" | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployFileEntry[];
   unshippedCommits: PaseoDeployCommitEntry[];

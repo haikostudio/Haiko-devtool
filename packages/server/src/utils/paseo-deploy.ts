@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { openSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { open, readFile, stat, writeFile } from "node:fs/promises";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import type {
   PaseoDeployPendingCommit,
@@ -27,6 +27,23 @@ const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
  * running so the button can show "Construction → Publication → En ligne".
  */
 const PHASE_FILE = "/home/paseo/paseo-build-local.phase";
+/**
+ * How long a finished run's outcome stays visible in the status after it ends.
+ * Without this the progress block vanished the instant the build stopped, so a
+ * publish that went live — or one that failed — left no trace at all and the
+ * sheet snapped back to "N changements à publier". That is the "j'ai cliqué et
+ * il ne s'est rien passé" report.
+ */
+const DEPLOY_OUTCOME_RETENTION_MS = 15 * 60 * 1000;
+/**
+ * Safety valve for a run whose child process died without ever firing `exit`
+ * (daemon suspended, OOM-killed script, …). Without it `deploying` stayed true
+ * forever and the Déployer button was permanently disabled — a stuck spinner
+ * with no way out but a daemon restart.
+ */
+const DEPLOY_MAX_RUNTIME_MS = 30 * 60 * 1000;
+/** Bytes of the ship log read to recover a human-readable failure reason. */
+const SHIP_LOG_TAIL_BYTES = 32 * 1024;
 
 /**
  * Repo paths whose changes only take effect once the daemon is restarted —
@@ -42,10 +59,37 @@ const DAEMON_CODE_PATHS = [
   "packages/highlight",
 ];
 
-/** A ship (commit/push/build/deploy) is currently running. */
-let deploying = false;
+/** Outcome of a finished run — what the sheet reports once the build stops. */
+export type PaseoDeployOutcome = "success" | "failed";
+
+/**
+ * The deploy run this process knows about. Kept after it finishes (with
+ * `finishedAt` and `outcome` set) so the sheet can show "En ligne ✅" or the
+ * failure reason instead of the progress block disappearing. A daemon restart
+ * clears it, which is also what stops a crashed build from leaving a spinner
+ * that never resolves.
+ */
+interface DeployRun {
+  startedAt: number;
+  finishedAt: number | null;
+  outcome: PaseoDeployOutcome | null;
+  /**
+   * Last phase observed for THIS run. Never inherited from an earlier run: the
+   * phase file is reset before the script starts, and stale files are ignored
+   * by mtime, because reading a previous run's `done` made the sheet jump to
+   * "En ligne ✅ 100 %" one second after the click.
+   */
+  phase: string | null;
+  /** `--no-build` runs save without publishing — no "live" claim to make. */
+  noBuild: boolean;
+}
+let currentRun: DeployRun | null = null;
 /** Error from the last finished deploy run, if it failed. */
 let lastError: string | null = null;
+
+function isDeployRunning(): boolean {
+  return currentRun !== null && currentRun.finishedAt === null;
+}
 
 /** Details of a publish that just went live. */
 export interface PaseoDeploySuccess {
@@ -114,6 +158,16 @@ export interface PaseoDeployStatus {
    * "Construction → Publication → En ligne" progress.
    */
   deployPhase: string | null;
+  /** Epoch ms the running (or last finished) run started; null before any run. */
+  deployStartedAt: number | null;
+  /** Epoch ms the last run ended; null while one is still running. */
+  deployFinishedAt: number | null;
+  /**
+   * How the last finished run ended. Explicit rather than derived from the
+   * phase: a script killed mid-build leaves the phase at `build`, which must
+   * still read as a failure and not as "still working".
+   */
+  deployOutcome: PaseoDeployOutcome | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployPendingFile[];
   unshippedCommits: PaseoDeployPendingCommit[];
@@ -252,18 +306,117 @@ async function readDeployedSha(): Promise<string | null> {
 }
 
 /**
- * Current coarse phase of a running local build, read from {@link PHASE_FILE}.
- * Only meaningful while `deploying` is true; returns null when unknown so the
- * client just shows a generic "in progress" state.
+ * Coarse phase of `run`, read from {@link PHASE_FILE}. A file older than the
+ * run is ignored: the script writes its first phase a moment after spawning, and
+ * reading the *previous* run's value in that window is what made the sheet flash
+ * a finished state (or an old `error`) right after the user clicked Déployer.
  */
-async function readDeployPhase(): Promise<string | null> {
+async function readDeployPhase(run: DeployRun): Promise<string | null> {
   try {
-    const raw = await readFile(PHASE_FILE, "utf8");
+    const [info, raw] = await Promise.all([stat(PHASE_FILE), readFile(PHASE_FILE, "utf8")]);
+    // 2s of slack: the reset write and the run's own start timestamp are taken
+    // a few milliseconds apart, and file mtimes have coarser resolution.
+    if (info.mtimeMs + 2_000 < run.startedAt) {
+      return null;
+    }
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Clear the phase marker before a run starts, so the first status poll cannot
+ * pick up the previous run's phase. Best effort — {@link readDeployPhase} also
+ * guards on mtime.
+ */
+async function resetDeployPhase(): Promise<void> {
+  try {
+    await writeFile(PHASE_FILE, "start\n", "utf8");
+  } catch {
+    // Best effort — the mtime guard still keeps a stale phase out.
+  }
+}
+
+/**
+ * Tail of the ship log. Read bounded from the end because the log is appended to
+ * on every deploy and grows without limit.
+ */
+async function readShipLogTail(): Promise<string> {
+  const handle = await open(SHIP_LOG_FILE, "r");
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(SHIP_LOG_TAIL_BYTES, size);
+    if (length === 0) {
+      return "";
+    }
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, size - length);
+    return buffer.toString("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Why the last build refused to publish, in the script's own words. The build
+ * script prints every fatal reason as `!! <raison>` before giving up, so the last
+ * such line is the honest cause — infinitely more useful than "code 1", which
+ * was all the sheet could say before (and it did not even show that).
+ */
+export function extractShipFailureReason(logTail: string): string | null {
+  const lines = logTail.split("\n");
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]?.trim() ?? "";
+    if (line.startsWith("!! ")) {
+      return line.slice(3).trim() || null;
+    }
+  }
+  return null;
+}
+
+/** Store the failure reason for the sheet, once the log has been consulted. */
+async function recordShipFailure(exitCode: number | null): Promise<void> {
+  lastError = await describeShipFailure(exitCode);
+}
+
+async function describeShipFailure(exitCode: number | null): Promise<string> {
+  try {
+    const reason = extractShipFailureReason(await readShipLogTail());
+    if (reason !== null) {
+      return reason;
+    }
+  } catch {
+    // Log unreadable — fall back to the exit code below.
+  }
+  return `Le déploiement s'est arrêté sans finir (code ${exitCode ?? "inconnu"}).`;
+}
+
+/**
+ * Resolve the current run's live state for a status poll: apply the runtime
+ * safety valve, refresh the phase, and drop a finished run once its outcome has
+ * been on screen long enough.
+ */
+async function resolveDeployRun(now: number): Promise<DeployRun | null> {
+  const run = currentRun;
+  if (run === null) {
+    return null;
+  }
+  if (run.finishedAt === null) {
+    run.phase = await readDeployPhase(run);
+    if (now - run.startedAt > DEPLOY_MAX_RUNTIME_MS) {
+      run.finishedAt = now;
+      run.outcome = "failed";
+      lastError = "Le déploiement a dépassé 30 minutes sans se terminer.";
+    }
+    return run;
+  }
+  if (now - run.finishedAt > DEPLOY_OUTCOME_RETENTION_MS) {
+    currentRun = null;
+    return null;
+  }
+  return run;
 }
 
 function parseUncommittedFiles(porcelain: string): PaseoDeployPendingFile[] {
@@ -581,6 +734,25 @@ async function getPendingWorktrees(
   return results.filter((entry): entry is PaseoDeployWorktree => entry !== null);
 }
 
+/** The five run-derived status fields, in one place for both status branches. */
+interface DeployRunFields {
+  deploying: boolean;
+  deployPhase: string | null;
+  deployStartedAt: number | null;
+  deployFinishedAt: number | null;
+  deployOutcome: PaseoDeployOutcome | null;
+}
+
+function describeDeployRun(run: DeployRun | null): DeployRunFields {
+  return {
+    deploying: run !== null && run.finishedAt === null,
+    deployPhase: run?.phase ?? null,
+    deployStartedAt: run?.startedAt ?? null,
+    deployFinishedAt: run?.finishedAt ?? null,
+    deployOutcome: run?.outcome ?? null,
+  };
+}
+
 export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
   try {
     const [statusResult, headResult, branchResult, deployedSha] = await Promise.all([
@@ -593,9 +765,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const uncommittedFiles = parseUncommittedFiles(statusResult.stdout);
     const headSha = headResult.stdout.trim() || null;
     const branch = branchResult.stdout.trim() || null;
-    // Only surface a phase while a build is actually running; a stale file from a
-    // finished run must not read as "still building".
-    const deployPhase = deploying ? await readDeployPhase() : null;
+    const run = await resolveDeployRun(Date.now());
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
     const changesCount = await getChangedFileCount(deployedSha, uncommittedFiles);
     const daemonBehindCount = await getDaemonBehindCount(headSha);
@@ -613,8 +783,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       (deployedSha !== null && deployedSha !== headSha);
 
     return {
-      deploying,
-      deployPhase,
+      ...describeDeployRun(run),
       hasPending,
       uncommittedFiles,
       unshippedCommits,
@@ -630,8 +799,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     };
   } catch (error) {
     return {
-      deploying,
-      deployPhase: null,
+      ...describeDeployRun(currentRun),
       hasPending: false,
       uncommittedFiles: [],
       unshippedCommits: [],
@@ -909,7 +1077,7 @@ export async function triggerPaseoDeploy(input: {
   projectId?: string;
   mergeBranches?: string[];
 }): Promise<PaseoDeployTriggerResult> {
-  if (deploying) {
+  if (isDeployRunning()) {
     return { started: false, error: "Un déploiement est déjà en cours." };
   }
 
@@ -953,7 +1121,17 @@ export async function triggerPaseoDeploy(input: {
   }
 
   try {
-    deploying = true;
+    // Clear the previous run's phase BEFORE starting, so the first status poll
+    // cannot report a finished/failed state that belongs to an earlier build.
+    await resetDeployPhase();
+    const run: DeployRun = {
+      startedAt: Date.now(),
+      finishedAt: null,
+      outcome: null,
+      phase: null,
+      noBuild: input.noBuild === true,
+    };
+    currentRun = run;
     // Keep the skip note visible after a partial merge; otherwise clear.
     lastError = skippedNote;
 
@@ -964,11 +1142,19 @@ export async function triggerPaseoDeploy(input: {
     });
 
     child.on("exit", (code) => {
-      deploying = false;
-      if (code !== 0) {
-        lastError = `Le déploiement a échoué (code ${code}). Voir ${SHIP_LOG_FILE}`;
+      // Guard against a late exit from a superseded run clobbering a newer one.
+      if (currentRun !== run || run.finishedAt !== null) {
         return;
       }
+      run.finishedAt = Date.now();
+      if (code !== 0) {
+        run.outcome = "failed";
+        run.phase = "error";
+        void recordShipFailure(code);
+        return;
+      }
+      run.outcome = "success";
+      run.phase = "done";
       // Full publish succeeded: let listeners (task board) react to what shipped.
       // A --no-build run commits without publishing, so nothing went live — skip.
       if (!input.noBuild && onDeploySuccess) {
@@ -980,14 +1166,19 @@ export async function triggerPaseoDeploy(input: {
       }
     });
     child.on("error", (err) => {
-      deploying = false;
+      if (currentRun !== run || run.finishedAt !== null) {
+        return;
+      }
+      run.finishedAt = Date.now();
+      run.outcome = "failed";
+      run.phase = "error";
       lastError = err.message;
     });
 
     child.unref();
     return { started: true, error: null };
   } catch (error) {
-    deploying = false;
+    currentRun = null;
     return { started: false, error: getErrorMessage(error) };
   }
 }
