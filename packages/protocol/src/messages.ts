@@ -2674,7 +2674,39 @@ export const CaptureTerminalRequestSchema = z.object({
   requestId: z.string(),
 });
 
+export const HubExecutionAgentCreateRequestSchema = z.object({
+  type: z.literal("hub.execution.agent.create.request"),
+  requestId: z.string(),
+  executionId: z.string(),
+  provider: z.string(),
+  cwd: z.string(),
+  prompt: z.string(),
+  workspaceId: z.string().optional(),
+  model: z.string().optional(),
+  modeId: z.string().optional(),
+  thinkingOptionId: z.string().optional(),
+  featureValues: z.record(z.string(), z.unknown()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  worktree: CreateAgentWorktreeTargetSchema.optional(),
+});
+
+export type HubExecutionAgentCreateRequest = z.infer<typeof HubExecutionAgentCreateRequestSchema>;
+
+export const HubExecutionControlActionSchema = z.enum(["interrupt", "archive"]);
+export type HubExecutionControlAction = z.infer<typeof HubExecutionControlActionSchema>;
+
+export const HubExecutionControlRequestSchema = z.object({
+  type: z.literal("hub.execution.control.request"),
+  requestId: z.string(),
+  executionId: z.string(),
+  action: HubExecutionControlActionSchema,
+});
+
+export type HubExecutionControlRequest = z.infer<typeof HubExecutionControlRequestSchema>;
+
 export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+  HubExecutionAgentCreateRequestSchema,
+  HubExecutionControlRequestSchema,
   BrowserAutomationExecuteResponseSchema,
   VoiceAudioChunkMessageSchema,
   AbortRequestMessageSchema,
@@ -5199,9 +5231,90 @@ export const DaemonUpdateProgressMessageSchema = z.object({
   }),
 });
 
+export const HubExecutionAgentCreateResponseSchema = z.object({
+  type: z.literal("hub.execution.agent.create.response"),
+  payload: z.object({
+    requestId: z.string(),
+    executionId: z.string(),
+    agentId: z.string().nullable(),
+    agent: AgentSnapshotPayloadSchema.nullable(),
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const HubExecutionControlResponseSchema = z.object({
+  type: z.literal("hub.execution.control.response"),
+  payload: z.object({
+    requestId: z.string(),
+    executionId: z.string(),
+    action: HubExecutionControlActionSchema,
+    success: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const HubExecutionAgentUpdateSchema = z.object({
+  type: z.literal("hub.execution.agent.update"),
+  payload: z.object({
+    executionId: z.string(),
+    agentId: z.string(),
+    agent: AgentSnapshotPayloadSchema,
+  }),
+});
+
+export const HubExecutionAgentStreamSchema = z.object({
+  type: z.literal("hub.execution.agent.stream"),
+  payload: z.object({
+    executionId: z.string(),
+    agentId: z.string(),
+    event: AgentStreamEventPayloadSchema,
+  }),
+});
+
+export type HubExecutionAgentCreateResponse = z.infer<typeof HubExecutionAgentCreateResponseSchema>;
+export type HubExecutionControlResponse = z.infer<typeof HubExecutionControlResponseSchema>;
+export type HubExecutionAgentUpdate = z.infer<typeof HubExecutionAgentUpdateSchema>;
+export type HubExecutionAgentStream = z.infer<typeof HubExecutionAgentStreamSchema>;
+
+export const HubExecutionOutboundMessageSchema = z.discriminatedUnion("type", [
+  HubExecutionAgentCreateResponseSchema,
+  HubExecutionControlResponseSchema,
+  HubExecutionAgentUpdateSchema,
+  HubExecutionAgentStreamSchema,
+]);
+
+export type HubExecutionOutboundMessage = z.infer<typeof HubExecutionOutboundMessageSchema>;
+
+export class HubMessageCorrelationError extends Error {
+  constructor(messageType: HubExecutionOutboundMessage["type"]) {
+    super(`Hub message ${messageType} has mismatched agent correlation`);
+    this.name = "HubMessageCorrelationError";
+  }
+}
+
+export function parseHubExecutionOutboundMessage(value: unknown): HubExecutionOutboundMessage {
+  const message = HubExecutionOutboundMessageSchema.parse(value);
+  const payload = message.payload;
+  if (
+    "agent" in payload &&
+    payload.agent !== null &&
+    "agentId" in payload &&
+    payload.agentId !== null &&
+    payload.agent.id !== payload.agentId
+  ) {
+    throw new HubMessageCorrelationError(message.type);
+  }
+  return message;
+}
+
 export type DaemonUpdateProgressMessage = z.infer<typeof DaemonUpdateProgressMessageSchema>;
 
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
+  HubExecutionAgentCreateResponseSchema,
+  HubExecutionControlResponseSchema,
+  HubExecutionAgentUpdateSchema,
+  HubExecutionAgentStreamSchema,
   BrowserAutomationExecuteRequestSchema,
   ActivityLogMessageSchema,
   AssistantChunkMessageSchema,

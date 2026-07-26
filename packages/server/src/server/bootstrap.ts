@@ -1141,7 +1141,6 @@ export async function createPaseoDaemon(
   };
   const createAgent = (input: Parameters<typeof createAgentCommand>[1]) =>
     createAgentCommand(createAgentCommandDependencies, input);
-
   const loopService = new LoopService({
     paseoHome: config.paseoHome,
     logger,
