@@ -3,7 +3,7 @@ import type { ReactNode, Ref } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import type { TextInputProps } from "react-native";
+import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { getOverlayRoot, OVERLAY_Z } from "../lib/overlay-root";
@@ -495,6 +495,16 @@ export interface AdaptiveModalSheetProps {
    * short, variable-length lists where a fixed 55%/90% snap wastes space.
    */
   dynamicSizing?: boolean;
+  /**
+   * Compact only: size the content to the snap point currently in use rather
+   * than to the tallest one, so a sheet opened at 55 % doesn't reserve the room
+   * of the 90 % point. Ignored on desktop, where the sheet is a fixed panel.
+   */
+  sizeContentToCurrentSnapPoint?: boolean;
+  /** Style applied to the sticky footer container. */
+  footerContainerStyle?: StyleProp<ViewStyle>;
+  /** Style applied to the sheet body that wraps the children. */
+  contentContainerStyle?: StyleProp<ViewStyle>;
   /**
    * Compact only: horizontal padding token for the bottom-sheet body. Defaults
    * to the shared header indent (spacing[4]); pass a smaller scale for dense

@@ -253,6 +253,7 @@ export const useDraftStore = create<DraftStore>()(
     (set, get) => ({
       drafts: {},
       createModalDraft: null,
+      attachmentFocusRequestByDraftKey: {},
 
       getDraftInput: (draftKey) => {
         const record = get().drafts[draftKey];

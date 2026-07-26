@@ -39,6 +39,12 @@ export interface DraftRecord {
 export interface DraftStoreState {
   drafts: Record<string, DraftRecord>;
   createModalDraft: DraftRecord | null;
+  /**
+   * Per-draft "open the attachment tray" request, keyed by draft. Set when
+   * something outside the composer attaches a file and wants the tray revealed;
+   * the composer clears its entry once it has honoured it.
+   */
+  attachmentFocusRequestByDraftKey: Record<string, number>;
 }
 
 export function isAttachmentMetadata(value: unknown): value is AttachmentMetadata {

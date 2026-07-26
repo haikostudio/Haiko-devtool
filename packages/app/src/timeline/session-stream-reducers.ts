@@ -1415,7 +1415,14 @@ export interface CreateSessionAgentStreamReducerQueueInput {
     state: (prev: Map<string, TimelineCursor>) => Map<string, TimelineCursor>,
   ) => void;
   setAgents: (serverId: string, state: (prev: Map<string, Agent>) => Map<string, Agent>) => void;
-  recoverTimelineGap: (agentId: string, cursor: { epoch: string; endSeq: number }) => void;
+  /**
+   * Demande au serveur de renvoyer les lignes manquantes du fil. Les deux noms
+   * coexistent : « recoverTimelineGap » est le nom historique,
+   * « requestCanonicalCatchUp » celui qu'emploient les appelants récents. Au
+   * moins l'un des deux doit être fourni.
+   */
+  recoverTimelineGap?: (agentId: string, cursor: { epoch: string; endSeq: number }) => void;
+  requestCanonicalCatchUp?: (agentId: string, cursor: { epoch: string; endSeq: number }) => void;
 }
 
 function scheduleAgentStreamReducerFlush(callback: () => void): number {
@@ -1429,8 +1436,9 @@ function cancelAgentStreamReducerFlush(id: number) {
 export function createSessionAgentStreamReducerQueue(
   input: CreateSessionAgentStreamReducerQueueInput,
 ): AgentStreamReducerQueue {
-  const { serverId, setAgentStreamState, setAgentTimelineCursor, setAgents, recoverTimelineGap } =
-    input;
+  const { serverId, setAgentStreamState, setAgentTimelineCursor, setAgents } = input;
+  // Whichever of the two names the caller supplied.
+  const requestCatchUp = input.recoverTimelineGap ?? input.requestCanonicalCatchUp;
 
   return createAgentStreamReducerQueue({
     getSnapshot: (agentId) => {
@@ -1508,7 +1516,7 @@ export function createSessionAgentStreamReducerQueue(
     handleSideEffects: (agentId, sideEffects) => {
       for (const effect of sideEffects) {
         if (effect.type === "catch_up") {
-          recoverTimelineGap(agentId, effect.cursor);
+          requestCatchUp?.(agentId, effect.cursor);
         }
       }
     },

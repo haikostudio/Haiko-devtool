@@ -8,7 +8,10 @@ import {
   isWorkspaceAttachment,
   userAttachmentsOnly,
 } from "@/attachments/workspace-attachment-utils";
-import { splitComposerAttachmentsForSubmit } from "@/composer/attachments/submit";
+import {
+  splitComposerAttachmentsForSubmit,
+  type ComposerAttachmentSubmitFormat,
+} from "@/composer/attachments/submit";
 import {
   appendOptimisticUserMessageToStream,
   buildOptimisticUserMessage,
@@ -166,12 +169,20 @@ export interface DispatchComposerAgentMessageInput {
     images: AttachmentMetadata[],
   ) => Promise<Array<{ data: string; mimeType: string }> | undefined>;
   stream: AgentStreamWriter;
+  /**
+   * Which shape the forge attachments go out in. Absent = the default the split
+   * helper picks; callers that know what the host supports pass it explicitly.
+   */
+  attachmentSubmitFormat?: ComposerAttachmentSubmitFormat;
 }
 
 export async function dispatchComposerAgentMessage(
   input: DispatchComposerAgentMessageInput,
 ): Promise<void> {
-  const wirePayload = splitComposerAttachmentsForSubmit(input.attachments);
+  const wirePayload = splitComposerAttachmentsForSubmit(
+    input.attachments,
+    input.attachmentSubmitFormat ? { format: input.attachmentSubmitFormat } : {},
+  );
   const messageId = generateMessageId();
   // Encode/compress attachments before showing the optimistic message so an
   // oversized-attachment rejection surfaces as a send error instead of leaving

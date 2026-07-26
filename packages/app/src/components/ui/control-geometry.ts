@@ -3,7 +3,9 @@ import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 export type ButtonControlSize = "xs" | "sm" | "md" | "lg";
 export type FieldControlSize = "sm" | "md";
-export type SegmentedControlSize = "sm" | "md";
+// "xs" is the dense variant used inside toolbars (the file pane's view mode
+// switch). It mirrors the "sm" geometry with a tighter label.
+export type SegmentedControlSize = "xs" | "sm" | "md";
 export type ControlInteractionPhase = "rest" | "hover" | "active";
 
 export interface ControlInteractionState {
@@ -49,6 +51,7 @@ export const buttonIconSize: Record<ButtonControlSize, number> = {
 };
 
 export const segmentedIconSize: Record<SegmentedControlSize, number> = {
+  xs: ICON_SIZE.xs,
   sm: ICON_SIZE.sm,
   md: ICON_SIZE.md,
 };
@@ -196,6 +199,11 @@ export function createControlGeometry(theme: Theme) {
       opacity: theme.opacity[50],
     },
     switchControl,
+    segmentedContainerXs: {
+      minHeight: controlHeights.compact,
+      padding: SEGMENTED_COMPACT_INSET,
+      borderRadius: segmentedContainerSmRadius,
+    },
     segmentedContainerSm: {
       minHeight: controlHeights.compact,
       padding: SEGMENTED_COMPACT_INSET,
@@ -206,6 +214,11 @@ export function createControlGeometry(theme: Theme) {
       padding: SEGMENTED_FIELD_INSET,
       borderRadius: segmentedContainerMdRadius,
     },
+    segmentedSegmentXs: {
+      minHeight: controlHeights.compact - SEGMENTED_COMPACT_INSET * 2,
+      paddingHorizontal: theme.spacing[3],
+      borderRadius: nestedRadius(segmentedContainerSmRadius, SEGMENTED_COMPACT_INSET),
+    },
     segmentedSegmentSm: {
       minHeight: controlHeights.compact - SEGMENTED_COMPACT_INSET * 2,
       paddingHorizontal: theme.spacing[4],
@@ -215,6 +228,9 @@ export function createControlGeometry(theme: Theme) {
       minHeight: controlHeights.field - SEGMENTED_FIELD_INSET * 2,
       paddingHorizontal: theme.spacing[6],
       borderRadius: nestedRadius(segmentedContainerMdRadius, SEGMENTED_FIELD_INSET),
+    },
+    segmentedLabelXs: {
+      fontSize: theme.fontSize.xs,
     },
     segmentedLabelSm: {
       fontSize: theme.fontSize.sm,

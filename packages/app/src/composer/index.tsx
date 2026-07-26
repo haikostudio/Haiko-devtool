@@ -370,7 +370,9 @@ interface RenderComposerAttachmentPillArgs {
   labels: RenderAttachmentTrayArgs["labels"];
 }
 
-function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): ReactElement {
+// Returns null for attachments that have no pill of their own (a workspace file
+// is rendered by the workspace pill renderer above).
+function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): ReactElement | null {
   const { attachment, index, disabled, onOpen, onRemove, labels } = args;
   if (attachment.kind === "image") {
     return (
@@ -758,6 +760,19 @@ interface ComposerProps {
   isPaneFocused: boolean;
   onSubmitMessage?: (payload: MessagePayload) => Promise<void>;
   onClientSlashCommand?: (command: ClientSlashCommand) => Promise<void>;
+  /**
+   * When true, a submit waits for the pending auto-attachment (the change
+   * request detected on the current branch) to land before sending, so the
+   * message never leaves without the context the user is about to see attached.
+   */
+  waitForGithubAutoAttachOnSubmit?: boolean;
+  /**
+   * Fired when a change request is detected for the current branch, and again
+   * once it has actually been attached. The new-workspace screen uses both to
+   * keep its picker in step with what the composer just decided on its own.
+   */
+  onGithubPrDetected?: () => void;
+  onGithubPrAutoAttach?: (item: ForgeSearchItem) => void;
   /** When true, the submit button is enabled even without text or images (e.g. external attachment selected). */
   hasExternalContent?: boolean;
   /** When true, the composer can submit even with no text or attachments. */
@@ -993,6 +1008,8 @@ export function Composer({
   attachmentScopeKeys = EMPTY_ATTACHMENT_SCOPE_KEYS,
   onOpenWorkspaceAttachment,
   onChangeAttachments,
+  onGithubPrDetected,
+  onGithubPrAutoAttach,
   cwd,
   clearDraft,
   autoFocus = false,
@@ -1071,6 +1088,8 @@ export function Composer({
     serverId,
     cwd,
     setAttachments: setSelectedAttachments,
+    onPullRequestDetected: onGithubPrDetected,
+    onPullRequestAdded: onGithubPrAutoAttach,
   });
   const [cursorIndex, setCursorIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);

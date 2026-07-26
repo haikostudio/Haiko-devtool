@@ -87,6 +87,23 @@ export function planTimelineOlderFetch(cursor: TimelineSyncCursor) {
   } as const;
 }
 
+/**
+ * What to fetch NEXT once a catch-up page has landed: another "after" page while
+ * newer rows remain, nothing once we're up to date. Returns null when the
+ * catch-up is complete or the page errored — the caller then stops asking.
+ */
+export function planTimelineCatchUpFollowUp(input: {
+  direction: "tail" | "before" | "after";
+  hasNewer: boolean;
+  endCursor: TimelineSyncCursor | null | undefined;
+  error: string | null;
+}) {
+  if (isTimelineCatchUpComplete(input) || !input.endCursor) {
+    return null;
+  }
+  return planTimelineCatchUpAfter(input.endCursor);
+}
+
 export function isTimelineCatchUpComplete(input: {
   direction: "tail" | "before" | "after";
   hasNewer: boolean;

@@ -173,5 +173,8 @@ export async function migratePersistedState(
     // COMPAT(newWorkspaceDraftSingleton): migrated in v0.1.108; remove after 2027-01-13.
     drafts: migrateNewWorkspaceDraftKeys(nextDrafts),
     createModalDraft,
+    // Never restored from disk: a tray-focus request only makes sense for the
+    // session that asked for it.
+    attachmentFocusRequestByDraftKey: {},
   };
 }
