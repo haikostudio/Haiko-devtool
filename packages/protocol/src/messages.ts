@@ -231,6 +231,8 @@ export const MutableDaemonConfigPatchSchema = z
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),
+    // Restauré : liste des fournisseurs à retirer de la configuration.
+    removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
@@ -2437,6 +2439,9 @@ export const CreatePaseoWorktreeRequestSchema = z.object({
   firstAgentContext: FirstAgentContextSchema.optional(),
   refName: z.string().min(1).optional(),
   action: z.enum(["branch-off", "checkout"]).optional(),
+  checkoutSource: ChangeRequestCheckoutSourceSchema.optional(),
+  // COMPAT(githubPrNumber): added in v0.1.106, remove after 2026-12-28 once
+  // clients send checkoutSource: { kind: "change_request", forge, number }.
   githubPrNumber: z.number().int().positive().optional(),
   requestId: z.string(),
 });
@@ -4199,7 +4204,22 @@ const CheckoutPrGithubStatusSchema = z
   })
   .optional();
 
+// The open facts envelope for forge-specific PR facts. Permanent — non-GitHub
+// forges deliver their native facts through it. The transitional piece is the
+// `github` mirror above, which stays populated for clients predating this
+// envelope; see COMPAT(forgeSpecific) in status-projection.ts for the shim.
+//
+// NOTE: `forgeSpecific.forge` is a FACTS-FAMILY tag, not the workspace brand id.
+// The whole Gitea family (gitea, forgejo, codeberg) emits `forge: "gitea"` here
+// because they share one facts shape, while the top-level `forge` above carries
+// the specific brand. Validation of family-specific payloads happens at runtime
+// in the consumer that knows that forge family.
+const CheckoutPrForgeSpecificSchema = z.unknown().optional();
+
 export const CheckoutPrStatusSchema = z.object({
+  // COMPAT(forge): added in v0.1.106, remove the default after 2026-12-27 once daemon floor >= v0.1.106.
+  forge: z.string().optional().default("github"),
+  projectPath: z.string().optional(),
   number: z.number().optional(),
   url: z.string(),
   title: z.string(),
@@ -4232,6 +4252,7 @@ export const CheckoutPrStatusSchema = z.object({
   repoOwner: z.string().optional(),
   repoName: z.string().optional(),
   github: CheckoutPrGithubStatusSchema,
+  forgeSpecific: CheckoutPrForgeSpecificSchema,
 });
 
 export const CheckoutForgeGetCheckDetailsRequestSchema =

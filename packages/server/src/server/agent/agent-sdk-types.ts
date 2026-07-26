@@ -654,6 +654,14 @@ export interface AgentLaunchContext {
   paseoTools?: PaseoToolCatalog;
 }
 
+/**
+ * Restauré : intention d'exécution pour la reprise d'une session enregistrée.
+ * Jamais persistée — le chargement d'historique peut être en lecture seule.
+ */
+export interface AgentResumeSessionOptions {
+  purpose?: "interactive" | "history";
+}
+
 export interface AgentCreateSessionOptions {
   /**
    * Whether the provider should leave a durable native session behind.
@@ -748,6 +756,7 @@ export interface AgentClient {
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
     launchContext?: AgentLaunchContext,
+    options?: AgentResumeSessionOptions,
   ): Promise<AgentSession>;
   /**
    * Discover models and modes together. Implementations may use one upstream
