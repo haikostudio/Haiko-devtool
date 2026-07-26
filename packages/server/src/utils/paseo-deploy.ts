@@ -338,6 +338,14 @@ interface GitWorktree {
   path: string;
   branch: string | null;
   head: string | null;
+  /**
+   * Git reported this registration as stale (`prunable <reason>`) — the working
+   * directory is gone but `git worktree prune` has not run yet. Such an entry
+   * must never reach the deploy list: its SHA still resolves, so every readiness
+   * check answers "conflict"/"unknown" and the modal shows a ghost atelier that
+   * can never be repaired.
+   */
+  prunable: boolean;
 }
 
 /**
@@ -345,14 +353,21 @@ interface GitWorktree {
  * worktrees (no branch) come back with `branch: null` and are skipped by
  * callers that need a mergeable branch name.
  */
-function parseWorktreeList(porcelain: string): GitWorktree[] {
+export function parseWorktreeList(porcelain: string): GitWorktree[] {
   const worktrees: GitWorktree[] = [];
   let current: GitWorktree | null = null;
   for (const rawLine of porcelain.split("\n")) {
     const line = rawLine.trimEnd();
     if (line.startsWith("worktree ")) {
       if (current) worktrees.push(current);
-      current = { path: line.slice("worktree ".length), branch: null, head: null };
+      current = {
+        path: line.slice("worktree ".length),
+        branch: null,
+        head: null,
+        prunable: false,
+      };
+    } else if ((line === "prunable" || line.startsWith("prunable ")) && current) {
+      current.prunable = true;
     } else if (line.startsWith("HEAD ") && current) {
       current.head = line.slice("HEAD ".length).trim() || null;
     } else if (line.startsWith("branch ") && current) {
@@ -469,6 +484,23 @@ async function getBranchCommitCount(
   }
 }
 
+/**
+ * Does `refs/heads/<branch>` still resolve? A branch that was merged and then
+ * deleted (archive flow) can outlive its ref inside a stale worktree
+ * registration. Merging it later fails with "Branche introuvable", so it is
+ * filtered out of the deploy list instead of being offered as pending work.
+ */
+async function branchRefExists(branch: string): Promise<boolean> {
+  try {
+    await runGitCommand(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], {
+      cwd: REPO_ROOT,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 interface BranchMergeCheck {
   mergeable: boolean;
   mergeReason: "ready" | "conflict" | "unknown";
@@ -513,10 +545,18 @@ async function getPendingWorktrees(
     worktrees
       .filter(
         (wt) =>
-          wt.path !== REPO_ROOT && wt.branch !== null && !isPaseoDeployRepairBranch(wt.branch),
+          wt.path !== REPO_ROOT &&
+          wt.branch !== null &&
+          !wt.prunable &&
+          !isPaseoDeployRepairBranch(wt.branch),
       )
       .map(async (wt): Promise<PaseoDeployWorktree | null> => {
         const branch = wt.branch as string;
+        // A deleted branch cannot be merged, so it is not pending work — drop it
+        // before the readiness checks turn it into an unrepairable "conflict".
+        if (!(await branchRefExists(branch))) {
+          return null;
+        }
         const [commits, commitCount, uncommittedCount, mergeCheck] = await Promise.all([
           getBranchAheadCommits(deployHeadSha, wt.head),
           getBranchCommitCount(deployHeadSha, wt.head),
