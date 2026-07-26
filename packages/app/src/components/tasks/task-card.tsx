@@ -54,40 +54,19 @@ interface TaskCardProps {
   testID?: string;
 }
 
-// Notes carry their importance as a colored left accent so the column reads at a
-// glance — red for high, amber for medium, a quiet hairline otherwise.
-type NoteAccent = "high" | "medium" | "muted";
-
+// Cards carry no colored left edge: the user rejected that accent bar outright,
+// so importance is signalled by the corner pip / inline dot only. Do not
+// reintroduce a borderLeft here in a future restyle.
 function cardStyle({
   pressed,
   hovered,
   dimmed,
-  accent,
 }: {
   pressed: boolean;
   hovered?: boolean;
   dimmed?: boolean;
-  accent?: NoteAccent;
 }) {
-  return [
-    styles.card,
-    (hovered || pressed) && styles.cardHovered,
-    dimmed && styles.cardDimmed,
-    accent === "high" && styles.noteAccentHigh,
-    accent === "medium" && styles.noteAccentMedium,
-    accent === "muted" && styles.noteAccentMuted,
-  ];
-}
-
-// The importance → accent mapping used only on note (draft) cards.
-function noteAccentFor(level: ParsedPriority["level"] | undefined): NoteAccent {
-  if (level === "high") {
-    return "high";
-  }
-  if (level === "medium") {
-    return "medium";
-  }
-  return "muted";
+  return [styles.card, (hovered || pressed) && styles.cardHovered, dimmed && styles.cardDimmed];
 }
 
 // A card the user has already opened recedes to half opacity so unseen work
@@ -238,11 +217,10 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   // that comes back to life (running loader / amber attention) is never dimmed,
   // so its voyant re-lights and un-dims the card — the relaunch stays visible.
   const showVoyant = !dimmed;
-  const accent = isNote ? noteAccentFor(priority?.level) : undefined;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
-      cardStyle({ pressed, hovered, dimmed, accent }),
-    [dimmed, accent],
+      cardStyle({ pressed, hovered, dimmed }),
+    [dimmed],
   );
 
   return (
@@ -254,9 +232,17 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
         accessibilityRole="button"
         accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
       >
-        {showVoyant ? <TaskStatusVoyant tone={tone} variant="pip" /> : null}
+        <CardCornerPip
+          isNote={isNote}
+          showVoyant={showVoyant}
+          tone={tone}
+          level={priority?.level}
+          label={priorityLabel}
+        />
         <View style={styles.titleRow}>
-          {priority ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
+          {priority && !isNote ? (
+            <PriorityDot level={priority.level} label={priorityLabel} />
+          ) : null}
           <Text style={styles.title} numberOfLines={3}>
             {task.title}
           </Text>
@@ -335,6 +321,59 @@ const CardMetaRow = memo(function CardMetaRow({
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
     </View>
   );
+});
+
+/**
+ * The light straddling a card's top-left corner. Two different meanings by
+ * column, deliberately:
+ *   - Notes are drafts, not runs. Their corner carries the *importance* level
+ *     (red / amber / muted) — a note briefly flagged `refinement: "pending"`
+ *     used to spin a "working" loader there, which read as progress on a card
+ *     that isn't progressing. Every note gets a pip, muted when no priority tag
+ *     was authored, so the column keeps one consistent anchor.
+ *   - Every other column keeps the live status voyant (loader / amber / blue /
+ *     green), which is what actually matters once a task is in flight.
+ */
+const CardCornerPip = memo(function CardCornerPip({
+  isNote,
+  showVoyant,
+  tone,
+  level,
+  label,
+}: {
+  isNote: boolean;
+  showVoyant: boolean;
+  tone: TaskTone | null;
+  level: ParsedPriority["level"] | undefined;
+  label?: string;
+}) {
+  if (isNote) {
+    return <PriorityPip level={level} label={label} />;
+  }
+  if (!showVoyant) {
+    return null;
+  }
+  return <TaskStatusVoyant tone={tone} variant="pip" />;
+});
+
+// Importance as a corner pip, geometrically identical to the status voyant's pip
+// so notes and tasks anchor their light in exactly the same spot.
+const PriorityPip = memo(function PriorityPip({
+  level,
+  label,
+}: {
+  level: ParsedPriority["level"] | undefined;
+  label?: string;
+}) {
+  const pipStyle = useMemo(
+    () => [
+      styles.priorityPip,
+      level === "high" && styles.priorityPipHigh,
+      level === "medium" && styles.priorityPipMedium,
+    ],
+    [level],
+  );
+  return <View style={pipStyle} accessibilityLabel={label} />;
 });
 
 // The priority "badge": a small colored dot the user reads at a glance — danger
@@ -440,19 +479,6 @@ const styles = StyleSheet.create((theme) => ({
   cardHovered: {
     backgroundColor: theme.colors.surface1,
   },
-  // Note (draft) cards: a colored left edge that carries the importance level.
-  noteAccentHigh: {
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.statusDanger,
-  },
-  noteAccentMedium: {
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.statusWarning,
-  },
-  noteAccentMuted: {
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.foregroundMuted,
-  },
   // Finished + already-seen: recede to half opacity so unseen finished work leads.
   cardDimmed: {
     opacity: 0.5,
@@ -501,6 +527,26 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.statusDanger,
   },
   priorityDotMedium: {
+    backgroundColor: theme.colors.statusWarning,
+  },
+  // Mirrors the status voyant's `pip`: same size, offsets, ring and stacking, so
+  // a note's importance light lands exactly where a task's status light would.
+  priorityPip: {
+    position: "absolute",
+    top: -5,
+    left: -5,
+    width: 12,
+    height: 12,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 2,
+    borderColor: theme.colors.surface0,
+    backgroundColor: theme.colors.foregroundMuted,
+    zIndex: 2,
+  },
+  priorityPipHigh: {
+    backgroundColor: theme.colors.statusDanger,
+  },
+  priorityPipMedium: {
     backgroundColor: theme.colors.statusWarning,
   },
   deadlineRow: {
