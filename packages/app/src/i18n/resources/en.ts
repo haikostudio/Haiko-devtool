@@ -468,6 +468,12 @@ export const en = {
     board: {
       emptyColumn: "No tasks",
     },
+    analysis: {
+      failedRetrying: "Analysis failed — retrying",
+      failedExhausted: "Analysis failed",
+      retry: "Analyse again",
+      reason: "Reason: {{reason}}",
+    },
     schedule: {
       failed: "Failed",
       running: "Running",

@@ -471,6 +471,12 @@ export const ru: TranslationResources = {
     board: {
       emptyColumn: "Нет задач",
     },
+    analysis: {
+      failedRetrying: "Анализ не удался — повтор",
+      failedExhausted: "Анализ невозможен",
+      retry: "Проанализировать снова",
+      reason: "Причина: {{reason}}",
+    },
     schedule: {
       failed: "Ошибка",
       running: "Выполняется",

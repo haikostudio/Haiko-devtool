@@ -467,6 +467,12 @@ export const ar: TranslationResources = {
     board: {
       emptyColumn: "لا مهام",
     },
+    analysis: {
+      failedRetrying: "فشل التحليل — إعادة المحاولة",
+      failedExhausted: "تعذّر التحليل",
+      retry: "تحليل من جديد",
+      reason: "السبب: {{reason}}",
+    },
     schedule: {
       failed: "فشلت",
       running: "قيد التشغيل",

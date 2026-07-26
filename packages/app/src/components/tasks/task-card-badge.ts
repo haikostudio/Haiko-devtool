@@ -24,6 +24,18 @@ export function getScheduleBadge(
   if (task.planReadyAt) {
     return { labelKey: "tasks.card.planReady", variant: "success" };
   }
+  // A failed analysis is the loudest thing a card can say: it produced no
+  // estimate, no billing data, and it will not move on its own. It used to be
+  // completely silent — the card simply sat in "Validé" forever wearing a
+  // made-up estimate — so it wins over every softer status below.
+  if (task.analysis?.state === "failed") {
+    return {
+      labelKey: task.analysis.exhausted
+        ? "tasks.analysis.failedExhausted"
+        : "tasks.analysis.failedRetrying",
+      variant: "error",
+    };
+  }
   if (task.refinement === "pending") {
     return { labelKey: "tasks.schedule.estimating" };
   }

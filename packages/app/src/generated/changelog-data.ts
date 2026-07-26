@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-27",
     markdown:
-      "### Ajouts\n\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,41 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "df119ce4d926228870e7e69670288c5358c7f7ec",
+    shortHash: "df119ce4d",
+    date: "2026-07-27T00:30:25+02:00",
+    author: "haikostudio",
+    subject: "chore: sauvegarde avant build local",
+  },
+  {
+    hash: "d84317fdaf3d54087ecd2da350f23a21e1a3dd3c",
+    shortHash: "d84317fda",
+    date: "2026-07-27T00:29:12+02:00",
+    author: "haikostudio",
+    subject: "fix(tâches): une carte ne part plus en exécution sans validation manuelle",
+  },
+  {
+    hash: "be28649ca958924ef16b6d5ef4e842e60e20a6f6",
+    shortHash: "be28649ca",
+    date: "2026-07-27T00:29:03+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): le contrôle final se fait dans la discussion, par l'agent de la tâche",
+  },
+  {
+    hash: "1a1ff8828f002fce08e239bae3d46aff75e22f52",
+    shortHash: "1a1ff8828",
+    date: "2026-07-27T00:20:39+02:00",
+    author: "Mohamed Boudra",
+    subject: "feat(editor): wrap long Markdown lines (#2459)",
+  },
+  {
+    hash: "358c5679e1eb9126a00a05d101512d6edb56d7e2",
+    shortHash: "358c5679e",
+    date: "2026-07-27T00:18:22+02:00",
+    author: "haikostudio",
+    subject: "feat(quotas): barres et anneau colorés selon le niveau restant",
+  },
   {
     hash: "9c2de9df68dae070d164c06d1d01ea7ef5090fa2",
     shortHash: "9c2de9df6",
@@ -2733,44 +2768,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "haikostudio",
     subject: "feat(facturation): ligne éditable, marqueur « déjà facturé » et total par dossier",
   },
-  {
-    hash: "20187ae9b04a9fd7965bd46e51156fdcde73877a",
-    shortHash: "20187ae9b",
-    date: "2026-07-22T09:31:32+02:00",
-    author: "haikostudio",
-    subject: "feat(déploiement): bouton et fenêtre « À déployer » dans tous les ateliers Paseo",
-  },
-  {
-    hash: "aefb50d273a19b89a9142f80d8ffb336cd9d38da",
-    shortHash: "aefb50d27",
-    date: "2026-07-22T09:18:22+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(tâches): chef d'orchestre — colonne par défaut mémorisée, mode proposition sur mot-clé, récap de lot",
-  },
-  {
-    hash: "ed7f6c7a3839c2db1fca9e084bae3e6db4c1ed7e",
-    shortHash: "ed7f6c7a3",
-    date: "2026-07-22T09:16:35+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(tâches): centrer le kanban + chef d'orchestre au centre fenêtre + animation proximité",
-  },
-  {
-    hash: "68fbc30b7d99aace0c002fe514243a8a2208f982",
-    shortHash: "68fbc30b7",
-    date: "2026-07-22T09:15:02+02:00",
-    author: "haikostudio",
-    subject: "feat(tâches): le chef d'orchestre crée les tâches directement dans la liste",
-  },
-  {
-    hash: "4553c08d314001eb73b488e2d9027ddea414edf1",
-    shortHash: "4553c08d3",
-    date: "2026-07-22T01:12:25+02:00",
-    author: "haikostudio",
-    subject: "fix(facturation): supprime la bande blanche et rattache la tâche à la facture",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T00:04:38+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T00:30:25+02:00";

@@ -102,6 +102,7 @@ import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
 import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
+import { FileAgentTimelineStore } from "./agent/file-agent-timeline-store.js";
 import { AgentStorage } from "./agent/agent-storage.js";
 import { UsageStatsStore } from "./stats/usage-stats-store.js";
 import { ComptaLinksStore } from "./compta/compta-links-store.js";
@@ -138,6 +139,7 @@ import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
 import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
+import { TaskAgentProvisioner } from "./tasks/agent-provisioner.js";
 import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
@@ -921,11 +923,21 @@ export async function createPaseoDaemon(
     path.join(config.paseoHome, "stats", "usage"),
     logger,
   );
+  // Paseo's own permanent copy of every conversation. Without it the daemon
+  // would keep timelines in memory only and replay the provider's private
+  // transcripts after each restart — history we neither own nor control the
+  // retention of (Claude Code prunes its own after 30 days). Task cards must stay
+  // readable forever, including once they reach "deployed".
+  const agentTimelineArchive = new FileAgentTimelineStore({
+    directory: path.join(config.paseoHome, "timelines"),
+    logger,
+  });
   const agentManager = new AgentManager({
     clients: initialAgentManagerState.clients,
     providerDefinitions: initialAgentManagerState.providerDefinitions,
     registry: agentStorage,
     usageStatsStore,
+    durableTimelineStore: agentTimelineArchive,
     appendSystemPrompt: config.appendSystemPrompt,
     onWorkspaceStateMayHaveChanged: ({ cwd }) => {
       workspaceGitService.onWorkspaceStateMayHaveChanged(cwd);
@@ -1442,9 +1454,16 @@ export async function createPaseoDaemon(
     logger,
   });
   activityLogService.start();
+  // One agent per card, attached at birth and shared by every later phase.
+  const taskAgentProvisioner = new TaskAgentProvisioner({
+    createAgent,
+    taskBoardService,
+    projectRegistry,
+    logger,
+  });
   const taskEstimator = new TaskEstimator({
     agentManager,
-    createAgent,
+    agentProvisioner: taskAgentProvisioner,
     taskBoardService,
     projectRegistry,
     logger,
@@ -1461,9 +1480,8 @@ export async function createPaseoDaemon(
   });
   const taskLightAnalyzer = new TaskLightAnalyzer({
     agentManager,
-    createAgent,
+    agentProvisioner: taskAgentProvisioner,
     taskBoardService,
-    projectRegistry,
     logger,
   });
   const taskScheduler = new TaskScheduler({
@@ -1479,6 +1497,11 @@ export async function createPaseoDaemon(
   });
   taskBoardService.setOnTaskScheduled((projectId, taskId) => {
     taskEstimator.requestEstimate(projectId, taskId);
+  });
+  // A card gets its agent the moment it exists, so its conversation starts at
+  // second zero and holds every later prompt, reply and check.
+  taskBoardService.setOnTaskCreated((projectId, task) => {
+    taskAgentProvisioner.ensureInBackground(projectId, task.id);
   });
   taskBoardService.setOnTaskCompleted(async (projectId, task) => {
     if (!task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)) {

@@ -586,6 +586,55 @@ export class TaskScheduler {
       });
   }
 
+  /**
+   * Puts a task back in the queue for a transient reason, WITHOUT counting an
+   * attempt against MAX_ATTEMPTS. `lastError` still carries a plain-language
+   * reason so the card can say why it is waiting instead of looking stuck.
+   */
+  private async requeueWithoutPenalty(
+    projectId: string,
+    taskId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.taskBoardService
+      .patchTask(projectId, taskId, (current) => ({
+        ...current,
+        column: "scheduled",
+        schedule: {
+          state: "awaiting_slot" as const,
+          attempts: Math.max(0, (current.schedule?.attempts ?? 1) - 1),
+          ...(current.schedule?.cancelRequeues
+            ? { cancelRequeues: current.schedule.cancelRequeues }
+            : {}),
+          lastError: reason,
+          lastAttemptAt: new Date().toISOString(),
+        },
+      }))
+      .catch((error) => {
+        this.logger.warn({ err: error, taskId }, "Failed to re-queue task");
+      });
+  }
+
+  /** Forget an agent that no longer exists so a fresh one can be provisioned. */
+  private async detachLostAgent(projectId: string, taskId: string): Promise<void> {
+    await this.taskBoardService
+      .patchTask(projectId, taskId, (current) => {
+        const { taskAgentId, primaryAgentId, ...links } = current.links;
+        return {
+          ...current,
+          links: {
+            ...links,
+            agentIds: current.links.agentIds.filter(
+              (id) => id !== taskAgentId && id !== primaryAgentId,
+            ),
+          },
+        };
+      })
+      .catch((error) => {
+        this.logger.warn({ err: error, taskId }, "Failed to detach the lost task agent");
+      });
+  }
+
   private async hasQuotaFor(task: KanbanTask): Promise<boolean> {
     const estimatePct = task.estimate?.quotaPercent;
     if (estimatePct === undefined) {
@@ -774,28 +823,71 @@ export class TaskScheduler {
         "Task run finished, awaiting user validation",
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await this.taskBoardService
-        .patchTask(projectId, task.id, (current) => {
-          const attempts = current.schedule?.attempts ?? 1;
-          return {
-            ...current,
-            column: "scheduled",
-            schedule: {
-              state: attempts >= MAX_ATTEMPTS ? ("failed" as const) : ("awaiting_slot" as const),
-              attempts,
-              lastError: message,
-              lastAttemptAt: new Date().toISOString(),
-            },
-          };
-        })
-        .catch((patchError) => {
-          this.logger.error(
-            { err: patchError, taskId: task.id },
-            "Failed to record task launch failure",
-          );
-        });
-      throw error;
+      await this.handleLaunchError(projectId, task.id, error);
     }
   }
+
+  /**
+   * Turns a launch error into the right board state. Two failure modes are
+   * TRANSIENT and must not burn an attempt — three ticks 30s apart would
+   * otherwise be enough to mark a perfectly healthy task "failed":
+   * - the card's single agent is still busy finishing its analysis turn;
+   * - the linked agent no longer exists, so retrying that id can never work and
+   *   the link has to be dropped for a fresh agent to be provisioned.
+   * Anything else is a real failure and counts against MAX_ATTEMPTS.
+   */
+  private async handleLaunchError(
+    projectId: string,
+    taskId: string,
+    error: unknown,
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isAgentBusyError(message)) {
+      await this.requeueWithoutPenalty(projectId, taskId, "agent occupé par son analyse");
+      this.logger.info({ taskId }, "Task agent still busy; re-queued for next slot");
+      return;
+    }
+    if (isUnknownAgentError(message)) {
+      await this.detachLostAgent(projectId, taskId);
+      await this.requeueWithoutPenalty(
+        projectId,
+        taskId,
+        "agent introuvable, un nouveau va être ouvert",
+      );
+      this.logger.warn({ taskId }, "Task agent was lost; detached and re-queued");
+      return;
+    }
+    await this.taskBoardService
+      .patchTask(projectId, taskId, (current) => {
+        const attempts = current.schedule?.attempts ?? 1;
+        return {
+          ...current,
+          column: "scheduled",
+          schedule: {
+            state: attempts >= MAX_ATTEMPTS ? ("failed" as const) : ("awaiting_slot" as const),
+            attempts,
+            lastError: message,
+            lastAttemptAt: new Date().toISOString(),
+          },
+        };
+      })
+      .catch((patchError) => {
+        this.logger.error({ err: patchError, taskId }, "Failed to record task launch failure");
+      });
+    throw error;
+  }
+}
+
+/**
+ * "Agent X already has an active run" — the card's single agent is still busy
+ * (usually finishing the analysis turn execution wants to continue). Transient
+ * by definition: the very next tick may succeed.
+ */
+function isAgentBusyError(message: string): boolean {
+  return message.includes("already has an active run");
+}
+
+/** The linked agent id no longer resolves — retrying it can never succeed. */
+function isUnknownAgentError(message: string): boolean {
+  return message.includes("Unknown agent");
 }

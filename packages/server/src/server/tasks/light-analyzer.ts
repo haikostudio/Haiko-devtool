@@ -1,16 +1,13 @@
 import { z } from "zod";
 import type pino from "pino";
 import type { AgentManager } from "../agent/agent-manager.js";
-import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import {
   buildStructuredAgentResponsePrompt,
   getStructuredAgentResponse,
 } from "../agent/agent-response-loop.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
-import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
-
-const DEFAULT_REFINE_PROVIDER_MODEL = "claude/haiku";
+import type { TaskAgentProvisioner } from "./agent-provisioner.js";
 
 // Same concurrency bound as the deep estimator: cheap calls, but there's no
 // reason to fan out unboundedly if a batch of prompts lands at once.
@@ -28,11 +25,9 @@ const RefinementResultSchema = z.object({
 type RefinementResult = z.infer<typeof RefinementResultSchema>;
 
 interface TaskLightAnalyzerOptions {
-  agentManager: Pick<AgentManager, "runAgent" | "archiveAgent">;
-  createAgent: BoundCreateAgentCommand;
+  agentManager: Pick<AgentManager, "runAgent">;
+  agentProvisioner: TaskAgentProvisioner;
   taskBoardService: TaskBoardService;
-  projectRegistry: ProjectRegistry;
-  providerModel?: string;
   maxConcurrent?: number;
   logger: pino.Logger;
 }
@@ -54,11 +49,9 @@ interface TaskLightAnalyzerOptions {
  * (still marked done, so it never loops) and is never surfaced to the user.
  */
 export class TaskLightAnalyzer {
-  private readonly agentManager: Pick<AgentManager, "runAgent" | "archiveAgent">;
-  private readonly createAgent: BoundCreateAgentCommand;
+  private readonly agentManager: Pick<AgentManager, "runAgent">;
+  private readonly agentProvisioner: TaskAgentProvisioner;
   private readonly taskBoardService: TaskBoardService;
-  private readonly projectRegistry: ProjectRegistry;
-  private readonly providerModel: string;
   private readonly maxConcurrent: number;
   private readonly logger: pino.Logger;
   // Keyed by `${projectId}:${taskId}` so a restart re-arm can't double-queue a
@@ -69,10 +62,8 @@ export class TaskLightAnalyzer {
 
   constructor(options: TaskLightAnalyzerOptions) {
     this.agentManager = options.agentManager;
-    this.createAgent = options.createAgent;
+    this.agentProvisioner = options.agentProvisioner;
     this.taskBoardService = options.taskBoardService;
-    this.projectRegistry = options.projectRegistry;
-    this.providerModel = options.providerModel ?? DEFAULT_REFINE_PROVIDER_MODEL;
     this.maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
     this.logger = options.logger.child({ module: "task-light-analyzer" });
   }
@@ -119,14 +110,17 @@ export class TaskLightAnalyzer {
       await this.markDone(projectId, taskId);
       return;
     }
-    const project = await this.projectRegistry.get(projectId);
-    const cwd = project?.rootPath ?? null;
-    if (!cwd) {
+    // Run this in the CARD'S OWN agent, not a throwaway one. The tidy-up is the
+    // first thing that ever happens to a task, so it belongs in the task's
+    // conversation like everything after it — otherwise the journal starts in
+    // the middle of the story.
+    const provisioned = await this.agentProvisioner.ensure(projectId, taskId);
+    if (!provisioned) {
       await this.markDone(projectId, taskId);
       return;
     }
 
-    const result = await this.runRefineAgent({ cwd, prompt: raw });
+    const result = await this.runRefineAgent({ agentId: provisioned.agentId, prompt: raw });
     if (!result) {
       // The refiner couldn't produce a clean version — keep the raw title/prompt
       // as-is but stop pending so the scheduler never re-arms it forever.
@@ -161,7 +155,7 @@ export class TaskLightAnalyzer {
   }
 
   private async runRefineAgent(input: {
-    cwd: string;
+    agentId: string;
     prompt: string;
   }): Promise<RefinementResult | null> {
     const basePrompt = [
@@ -180,23 +174,8 @@ export class TaskLightAnalyzer {
       "- description : le prompt reformulé au propre, clair et complet, prêt à être exécuté plus tard par un agent. Conserve TOUT le contexte utile du texte brut ; n'invente aucun périmètre supplémentaire ; n'ajoute ni coût ni durée.",
     ].join("\n");
 
-    let agentId: string | null = null;
+    const agentId = input.agentId;
     try {
-      const created = await this.createAgent({
-        kind: "mcp",
-        provider: this.providerModel,
-        cwd: input.cwd,
-        title: "Analyse légère",
-        unattended: true,
-        promptFailure: "return-error",
-        background: true,
-        notifyOnFinish: false,
-        internal: true,
-      });
-      agentId = created.snapshot.id;
-      if (created.initialPromptError) {
-        throw created.initialPromptError;
-      }
       const initialPrompt = buildStructuredAgentResponsePrompt({
         prompt: basePrompt,
         schema: RefinementResultSchema,
@@ -207,9 +186,6 @@ export class TaskLightAnalyzer {
         caller: async (nextPrompt) => {
           const prompt = first ? initialPrompt : nextPrompt;
           first = false;
-          if (!agentId) {
-            throw new Error("Refine agent missing");
-          }
           const run = await this.agentManager.runAgent(agentId, prompt);
           return resolveFinalText(run.timeline, run.finalText);
         },
@@ -219,17 +195,11 @@ export class TaskLightAnalyzer {
         schemaName: "RefinementResult",
       });
     } catch (error) {
-      this.logger.debug({ err: error }, "Refine agent failed");
+      this.logger.debug({ err: error, agentId }, "Refine turn failed");
       return null;
-    } finally {
-      if (agentId) {
-        try {
-          await this.agentManager.archiveAgent(agentId);
-        } catch {
-          // Ignore cleanup errors for internal refine agents.
-        }
-      }
     }
+    // The agent is NEVER archived here: it belongs to the card and carries its
+    // whole history from this first exchange onward.
   }
 }
 

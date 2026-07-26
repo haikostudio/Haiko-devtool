@@ -393,6 +393,28 @@ export class TasksSession {
     }
   }
 
+  /**
+   * "Analyser à nouveau" on a card whose analysis failed. Clears the failure and
+   * its attempt counter, then queues a fresh analysis — the only way out once the
+   * automatic retries are spent.
+   */
+  async handleTaskRetryAnalysisRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.retry_analysis.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.taskEstimator) {
+        throw new TaskBoardServiceError("estimator_unavailable", "Task estimator is not available");
+      }
+      await this.taskEstimator.retry(request.projectId, request.taskId);
+      this.host.emit({
+        type: "tasks.task.retry_analysis.response",
+        payload: { requestId: request.requestId, error: null },
+      });
+    } catch (error) {
+      this.emitRpcError(request, error);
+    }
+  }
+
   async handleTaskRunNowRequest(
     request: Extract<SessionInboundMessage, { type: "tasks.task.run_now.request" }>,
   ): Promise<void> {

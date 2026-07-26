@@ -466,6 +466,12 @@ export const zhCN: TranslationResources = {
     board: {
       emptyColumn: "暂无任务",
     },
+    analysis: {
+      failedRetrying: "分析失败 — 正在重试",
+      failedExhausted: "无法分析",
+      retry: "重新分析",
+      reason: "原因：{{reason}}",
+    },
     schedule: {
       failed: "失败",
       running: "运行中",

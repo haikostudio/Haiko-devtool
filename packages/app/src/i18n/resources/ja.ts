@@ -472,6 +472,12 @@ export const ja: TranslationResources = {
     board: {
       emptyColumn: "タスクなし",
     },
+    analysis: {
+      failedRetrying: "分析に失敗 — 再試行中",
+      failedExhausted: "分析できません",
+      retry: "もう一度分析",
+      reason: "理由: {{reason}}",
+    },
     schedule: {
       failed: "失敗",
       running: "実行中",

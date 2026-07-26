@@ -1125,7 +1125,13 @@ export class AgentManager {
   async getTimelineRows(id: string): Promise<AgentTimelineRow[]> {
     this.requireAgent(id);
     if (this.durableTimelineStore) {
-      return await this.durableTimelineStore.getCommittedRows(id);
+      const rows = await this.durableTimelineStore.getCommittedRows(id);
+      // An empty archive means this agent predates it (or was primed from the
+      // provider this lifetime and not yet flushed) — fall back to the live
+      // rows rather than reporting an empty conversation.
+      if (rows.length > 0) {
+        return rows;
+      }
     }
     return this.timelineStore.getRows(id);
   }
@@ -3161,8 +3167,16 @@ export class AgentManager {
       return { timestamp: now.toISOString() };
     }
 
+    // Seed the live timeline with the ARCHIVED rows, not just the next seq. The
+    // in-memory store is what every read path (fetchTimeline/getTimeline) serves
+    // to clients, so handing back a bare counter would register the agent with a
+    // correct sequence and an empty conversation — a blank chat on a card whose
+    // history we actually hold. This is also what makes the archive the source
+    // of truth after a restart instead of the provider's own transcripts.
+    const rows = await this.durableTimelineStore.getCommittedRows(agentId);
     return {
-      nextSeq: (await this.durableTimelineStore.getLatestCommittedSeq(agentId)) + 1,
+      rows,
+      nextSeq: (rows.at(-1)?.seq ?? 0) + 1,
       timestamp: now.toISOString(),
     };
   }

@@ -16,6 +16,7 @@ import {
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type { PersistedWorkspaceRecord, WorkspaceRegistry } from "./workspace-registry.js";
 import { createRealpathAwarePathMatcher } from "../utils/path.js";
+import { TASK_AGENT_LABEL } from "./tasks/agent-launch.js";
 
 export type ActiveWorkspaceRef = Pick<
   PersistedWorkspaceRecord,
@@ -409,9 +410,23 @@ export type ArchiveWorkspaceContentsDependencies = Pick<
   "agentManager" | "agentStorage" | "killTerminalsForWorkspace" | "sessionLogger"
 >;
 
+/**
+ * A task's agent is PINNED: it holds that card's entire conversation — the
+ * analysis, every automatically injected prompt, every reply, the final check —
+ * and the card must stay readable forever, including once it reaches "deployed".
+ * Archiving one drops it out of the live list, so the card's chat would have to
+ * round-trip through a reload to show anything. Tearing down a workspace must
+ * therefore leave task agents alone; the worktree can go, the conversation
+ * cannot.
+ */
+function isPinnedTaskAgent(labels: Record<string, string> | undefined): boolean {
+  return labels?.[TASK_AGENT_LABEL] !== undefined;
+}
+
 // Tears down everything OWNED by a single workspace record: its live agents,
-// its persisted-but-not-running agent snapshots, and its terminals. Scoped by
-// workspaceId so a sibling workspace sharing the same directory is untouched.
+// its persisted-but-not-running agent snapshots, and its terminals — EXCEPT
+// pinned task agents, which outlive their workspace. Scoped by workspaceId so a
+// sibling workspace sharing the same directory is untouched.
 // Returns the set of archived agent ids.
 export async function archiveWorkspaceContents(
   dependencies: ArchiveWorkspaceContentsDependencies,
@@ -421,7 +436,7 @@ export async function archiveWorkspaceContents(
 
   const liveAgents = dependencies.agentManager
     .listAgents()
-    .filter((agent) => agent.workspaceId === workspaceId);
+    .filter((agent) => agent.workspaceId === workspaceId && !isPinnedTaskAgent(agent.labels));
   for (const agent of liveAgents) {
     archivedAgents.add(agent.id);
   }
@@ -437,7 +452,7 @@ export async function archiveWorkspaceContents(
   }
   const liveAgentIds = new Set(liveAgents.map((agent) => agent.id));
   const matchingStoredRecords = storedRecords.filter(
-    (record) => record.workspaceId === workspaceId,
+    (record) => record.workspaceId === workspaceId && !isPinnedTaskAgent(record.labels),
   );
   for (const record of matchingStoredRecords) {
     archivedAgents.add(record.id);

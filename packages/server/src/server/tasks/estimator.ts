@@ -1,18 +1,14 @@
 import type pino from "pino";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
-import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
-import type { TaskFolder } from "@getpaseo/protocol/tasks/types";
+import type { TaskAgentProvisioner } from "./agent-provisioner.js";
 import {
-  ANALYSIS_FALLBACK_ESTIMATE,
   buildTaskAnalysisPrompt,
   parseTaskAnalysisEstimate,
   resolveTaskLaunch,
-  resolveTaskWorktreePlan,
-  TASK_AGENT_LABEL,
   withBillingDefaults,
   withTaskAttachments,
   type TaskAnalysisEstimate,
@@ -20,7 +16,7 @@ import {
 
 interface TaskEstimatorOptions {
   agentManager: Pick<AgentManager, "runAgent">;
-  createAgent: BoundCreateAgentCommand;
+  agentProvisioner: TaskAgentProvisioner;
   taskBoardService: TaskBoardService;
   projectRegistry: ProjectRegistry;
   logger: pino.Logger;
@@ -33,6 +29,11 @@ interface TaskEstimatorOptions {
 }
 
 const DEFAULT_MAX_CONCURRENT = 4;
+
+// Automatic retries before a failed analysis stops and waits for the user. Low
+// on purpose: an analysis that fails three times is a real problem (no disk, no
+// quota, a broken checkout), not a hiccup, and looping on it burns quota.
+const MAX_ANALYSIS_ATTEMPTS = 3;
 
 /**
  * Analysis phase of the task pipeline. When a task enters "Validé"/"Planifié",
@@ -53,7 +54,7 @@ const DEFAULT_MAX_CONCURRENT = 4;
  */
 export class TaskEstimator {
   private readonly agentManager: Pick<AgentManager, "runAgent">;
-  private readonly createAgent: BoundCreateAgentCommand;
+  private readonly agentProvisioner: TaskAgentProvisioner;
   private readonly taskBoardService: TaskBoardService;
   private readonly projectRegistry: ProjectRegistry;
   private readonly logger: pino.Logger;
@@ -70,7 +71,7 @@ export class TaskEstimator {
 
   constructor(options: TaskEstimatorOptions) {
     this.agentManager = options.agentManager;
-    this.createAgent = options.createAgent;
+    this.agentProvisioner = options.agentProvisioner;
     this.taskBoardService = options.taskBoardService;
     this.projectRegistry = options.projectRegistry;
     this.logger = options.logger.child({ module: "task-estimator" });
@@ -166,36 +167,86 @@ export class TaskEstimator {
     if (task.completedAt != null || task.column === "done" || task.estimate) {
       return;
     }
+    // A card whose automatic retries are spent waits for the user to ask again
+    // (see recordFailure) instead of re-running on every sweep.
+    if (task.analysis?.exhausted === true) {
+      return;
+    }
     const project = await this.projectRegistry.get(projectId);
     if (!project) {
       this.logger.warn({ projectId, taskId }, "Cannot analyze task: project not found");
       return;
     }
 
-    const folder = board.folders.find((entry) => entry.id === task.folderId);
-    let estimate = ANALYSIS_FALLBACK_ESTIMATE;
+    let estimate: TaskAnalysisEstimate;
     try {
-      estimate = await this.analyze(projectId, task, project.rootPath, folder);
+      estimate = await this.analyze(projectId, task);
     } catch (error) {
-      this.logger.warn(
-        { err: error, projectId, taskId, title: task.title },
-        "Task analysis agent failed, using fallback estimate",
-      );
+      await this.recordFailure(projectId, taskId, error);
+      return;
     }
 
-    await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
-      ...current,
-      estimate: {
-        // Backfill the Facturation fields from the task so the tab is never
-        // blank, even if the agent omitted them or the fallback was used.
-        ...withBillingDefaults(estimate, current),
-        model: resolveTaskLaunch(current).provider,
-        estimatedAt: new Date().toISOString(),
-      },
-      ...(current.schedule?.state === "pending_estimate"
-        ? { schedule: { ...current.schedule, state: "awaiting_slot" as const } }
-        : {}),
-    }));
+    await this.taskBoardService.patchTask(projectId, taskId, (current) => {
+      const next = { ...current };
+      // A previous failure is history now.
+      delete next.analysis;
+      return {
+        ...next,
+        estimate: {
+          // Backfill the Facturation fields from the task so the tab is never
+          // blank, even if the agent omitted some of them.
+          ...withBillingDefaults(estimate, current),
+          model: resolveTaskLaunch(current).provider,
+          estimatedAt: new Date().toISOString(),
+        },
+        ...(current.schedule?.state === "pending_estimate"
+          ? { schedule: { ...current.schedule, state: "awaiting_slot" as const } }
+          : {}),
+      };
+    });
+  }
+
+  /**
+   * A failed analysis writes a FAILURE, never a placeholder estimate.
+   *
+   * The old behaviour stamped {@link ANALYSIS_FALLBACK_ESTIMATE} on the card so
+   * the pipeline could keep moving. It also made the card unrepairable: this
+   * method returns early on any task that already has an estimate, so the very
+   * act of papering over the crash locked the card out of ever being analyzed
+   * again — with an invented cost and invented billing hours on it. The card now
+   * says it failed, retries a bounded number of times on its own, and then waits
+   * for the user.
+   */
+  private async recordFailure(projectId: string, taskId: string, error: unknown): Promise<void> {
+    const reason = error instanceof Error ? error.message : String(error);
+    this.logger.warn({ err: error, projectId, taskId }, "Task analysis failed");
+    await this.taskBoardService.patchTask(projectId, taskId, (current) => {
+      const attempts = (current.analysis?.attempts ?? 0) + 1;
+      const exhausted = attempts >= MAX_ANALYSIS_ATTEMPTS;
+      return {
+        ...current,
+        analysis: {
+          state: "failed" as const,
+          attempts,
+          reason,
+          failedAt: new Date().toISOString(),
+          ...(exhausted ? { exhausted: true } : {}),
+        },
+      };
+    });
+  }
+
+  /**
+   * User-initiated "analyser à nouveau": wipes the failure (and its attempt
+   * counter) so the sweep picks the card up again from scratch.
+   */
+  async retry(projectId: string, taskId: string): Promise<void> {
+    await this.taskBoardService.patchTask(projectId, taskId, (current) => {
+      const next = { ...current };
+      delete next.analysis;
+      return next;
+    });
+    this.requestEstimate(projectId, taskId);
   }
 
   /**
@@ -203,74 +254,29 @@ export class TaskEstimator {
    * linking it on first analysis), then runs the read-only analysis turn and
    * returns the parsed estimate (or the fallback when none is parseable).
    */
-  private async analyze(
-    projectId: string,
-    task: KanbanTask,
-    cwd: string,
-    folder: TaskFolder | undefined,
-  ): Promise<TaskAnalysisEstimate> {
-    const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-    const plan = resolveTaskWorktreePlan({ task, folder, planMode });
-    let agentId = task.links.taskAgentId ?? null;
-    let branch = task.links.branch ?? plan.branch;
-
-    if (!agentId) {
-      // A branch-folder reuses its shared worktree (run inside its cwd); the
-      // first task of the folder (or a legacy task) cuts a fresh worktree.
-      const created = await this.createAgent({
-        kind: "mcp",
-        provider,
-        cwd: plan.kind === "reuse" ? plan.cwd : cwd,
-        title: `Tâche : ${task.title}`,
-        labels: { [TASK_AGENT_LABEL]: task.id },
-        unattended: true,
-        promptFailure: "return-error",
-        background: true,
-        notifyOnFinish: false,
-        ...(task.runConfig?.thinkingOptionId ? { thinking: task.runConfig.thinkingOptionId } : {}),
-        mode: launchMode,
-        ...(plan.kind === "reuse" ? { workspaceId: plan.workspaceId } : {}),
-        ...(plan.kind === "create"
-          ? { worktree: { action: "branch-off" as const, branchName: plan.branchName } }
-          : {}),
-      });
-      if (created.initialPromptError) {
-        throw created.initialPromptError;
-      }
-      const newAgentId = created.snapshot.id;
-      const workspaceId = created.snapshot.workspaceId ?? null;
-      agentId = newAgentId;
-      branch = plan.branch;
-      // First task of a branch-folder: remember the shared worktree so the
-      // folder's other tasks land on the same branch.
-      if (plan.kind === "create" && plan.recordFolderId && workspaceId) {
-        await this.taskBoardService.setFolderWorkspace(projectId, plan.recordFolderId, {
-          branch: plan.branch,
-          workspaceId,
-          worktreeCwd: created.snapshot.cwd,
-        });
-      }
-      // Link the agent to the task immediately so the task chat mirrors it live
-      // as it analyzes — the analysis IS the starting point of the task.
-      await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
-        ...current,
-        links: {
-          ...current.links,
-          taskAgentId: newAgentId,
-          primaryAgentId: newAgentId,
-          agentIds: current.links.agentIds.includes(newAgentId)
-            ? current.links.agentIds
-            : [...current.links.agentIds, newAgentId],
-          ...(workspaceId ? { workspaceId } : {}),
-          ...(branch ? { branch } : {}),
-        },
-      }));
+  private async analyze(projectId: string, task: KanbanTask): Promise<TaskAnalysisEstimate> {
+    const { planMode } = resolveTaskLaunch(task);
+    // The card already owns an agent (attached at creation); this only creates
+    // one for legacy cards born before that rule.
+    const provisioned = await this.agentProvisioner.ensure(projectId, task.id);
+    if (!provisioned) {
+      throw new Error(`Cannot analyze task ${task.id}: no agent could be attached`);
     }
+    const { agentId } = provisioned;
+    const branch = provisioned.branch ?? task.links.branch ?? null;
 
     const prompt = withTaskAttachments(buildTaskAnalysisPrompt({ task, planMode, branch }), task);
     const run = await this.agentManager.runAgent(agentId, prompt);
     const text = resolveFinalText(run.timeline, run.finalText);
-    return parseTaskAnalysisEstimate(text) ?? ANALYSIS_FALLBACK_ESTIMATE;
+    const estimate = parseTaskAnalysisEstimate(text);
+    if (!estimate) {
+      // The agent ran but produced no readable estimate. Treat it as a failure
+      // (retriable) rather than inventing one: a made-up cost drives the quota
+      // gate, the scheduling window AND the Facturation tab, so a wrong number
+      // is worse than no number.
+      throw new Error("L'agent n'a pas produit d'estimation lisible.");
+    }
+    return estimate;
   }
 }
 

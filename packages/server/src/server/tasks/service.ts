@@ -146,9 +146,11 @@ interface CreateTaskInput {
   schedulePreference?: TaskSchedulePreference;
   // "pending" gates the scheduler until the user approves (agent proposals).
   approval?: TaskApproval;
-  // Arm the analysis pipeline on creation even outside a pipeline column, so a
-  // task sent from the inline "À faire" composer spawns its agent right away
-  // while the card stays put. Ignored for tasks awaiting approval (proposals).
+  // Historically meant "spawn this task's agent right away". Superseded: EVERY
+  // card now gets its agent at creation, so the flag is accepted (old clients
+  // still send it) and no longer changes anything. It deliberately does NOT arm
+  // the execution pipeline — reaching "Validé" is the user's act alone.
+  // COMPAT(taskCreateLaunch): accepted since v0.2.2, drop once no client sends it.
   launch?: boolean;
 }
 
@@ -180,6 +182,7 @@ export class TaskBoardService {
   private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
   private onTaskCompleted: TaskCompletedListener | null = null;
   private onBacklogRefine: ((projectId: string, taskId: string) => void) | null = null;
+  private onTaskCreated: ((projectId: string, task: KanbanTask) => void) | null = null;
 
   constructor(options: TaskBoardServiceOptions) {
     this.store = options.store;
@@ -206,6 +209,17 @@ export class TaskBoardService {
    */
   setOnBacklogRefine(callback: (projectId: string, taskId: string) => void): void {
     this.onBacklogRefine = callback;
+  }
+
+  /**
+   * Fired the moment a card is born, so its agent is attached before anything
+   * else happens to it. Wired to the agent provisioner at bootstrap. Attaching
+   * an agent costs nothing on its own — it opens a conversation, it does not
+   * spend quota — so this does NOT breach the "backlog is inert" rule: no
+   * estimate, no billing, no execution.
+   */
+  setOnTaskCreated(callback: (projectId: string, task: KanbanTask) => void): void {
+    this.onTaskCreated = callback;
   }
 
   subscribe(projectId: string, listener: TaskBoardListener): () => void {
@@ -438,9 +452,14 @@ export class TaskBoardService {
     const folderId = board.folders.some((entry) => entry.id === input.folderId)
       ? input.folderId
       : await this.ensureDefaultFolder(projectId);
-    // Every task starts in "À faire". Entering the execution pipeline requires
-    // an explicit user move or approval after creation.
-    const column: TaskColumn = "backlog";
+    // Default to "À faire"; a caller may explicitly ask for another INERT column
+    // ("Notes"). The pipeline columns are never an entry point here: reaching
+    // them is the user's consent act (a drag, or an approval), never a side
+    // effect of creating a card. Silently forcing every creation into "backlog"
+    // was also why a card created from "Notes" appeared to jump columns on its
+    // own.
+    const requested = input.column ?? "backlog";
+    const column: TaskColumn = requested === "notes" ? "notes" : "backlog";
     // A manual backlog card built from a pasted prompt gets a LIGHT analysis
     // (title + tidied description) — never a cost estimate. That's the whole
     // point of the gate: analysis cost only starts at "Validé".
@@ -482,6 +501,14 @@ export class TaskBoardService {
     this.broadcast(nextBoard);
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
+    }
+    // A card owns ONE agent, from its very first second. Everything the task ever
+    // does — the title tidy-up, the analysis, the execution, the final check —
+    // happens in that single conversation, so opening the card months later shows
+    // the whole story in order. A proposal awaiting approval gets no agent yet:
+    // the user has not accepted the work.
+    if (input.approval?.state !== "pending") {
+      this.notifyTaskCreated(projectId, created);
     }
     if (needsLightAnalysis) {
       this.notifyBacklogRefine(projectId, created);
@@ -816,6 +843,16 @@ export class TaskBoardService {
         this.onTaskScheduled(projectId, task.id);
       } catch (error) {
         this.logger.warn({ err: error, taskId: task.id }, "onTaskScheduled callback failed");
+      }
+    }
+  }
+
+  private notifyTaskCreated(projectId: string, task: KanbanTask): void {
+    if (this.onTaskCreated) {
+      try {
+        this.onTaskCreated(projectId, task);
+      } catch (error) {
+        this.logger.warn({ err: error, taskId: task.id }, "onTaskCreated callback failed");
       }
     }
   }

@@ -66,6 +66,8 @@ export interface TaskBoardHandle {
   deleteTask: (taskId: string) => Promise<void>;
   estimateTask: (taskId: string) => Promise<void>;
   runTaskNow: (taskId: string) => Promise<void>;
+  /** Clear a failed analysis and queue a fresh one. */
+  retryTaskAnalysis: (taskId: string) => Promise<void>;
   approveTask: (taskId: string) => Promise<void>;
   /**
    * Runs the final check and, only if it passes, completes the task. Resolves
@@ -309,6 +311,17 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext],
   );
 
+  const retryTaskAnalysis = useCallback(
+    async (taskId: string) => {
+      const { client, projectId: project } = requireContext();
+      const payload = await client.tasksTaskRetryAnalysis({ projectId: project, taskId });
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+    },
+    [requireContext],
+  );
+
   const approveTask = useCallback(
     async (taskId: string) => {
       const { client, projectId: project } = requireContext();
@@ -348,6 +361,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       deleteTask,
       estimateTask,
       runTaskNow,
+      retryTaskAnalysis,
       approveTask,
       validateTask,
     }),
@@ -366,6 +380,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       deleteTask,
       estimateTask,
       runTaskNow,
+      retryTaskAnalysis,
       approveTask,
       validateTask,
     ],

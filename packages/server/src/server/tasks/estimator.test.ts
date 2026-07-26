@@ -7,6 +7,7 @@ import type { PersistedProjectRecord, ProjectRegistry } from "../workspace-regis
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
 import { TaskEstimator } from "./estimator.js";
+import { TaskAgentProvisioner } from "./agent-provisioner.js";
 
 const logger = pino({ level: "silent" });
 
@@ -79,7 +80,12 @@ describe("TaskEstimator", () => {
     }));
     const estimator = new TaskEstimator({
       agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
-      createAgent: createAgent as never,
+      agentProvisioner: new TaskAgentProvisioner({
+        createAgent: createAgent as never,
+        taskBoardService: service,
+        projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
+        logger,
+      }),
       taskBoardService: service,
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       logger,
@@ -118,7 +124,12 @@ describe("TaskEstimator", () => {
     });
     const estimator = new TaskEstimator({
       agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
-      createAgent: createAgent as never,
+      agentProvisioner: new TaskAgentProvisioner({
+        createAgent: createAgent as never,
+        taskBoardService: service,
+        projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
+        logger,
+      }),
       taskBoardService: service,
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       logger,
@@ -200,7 +211,11 @@ describe("TaskEstimator", () => {
     expect(createCall).not.toHaveProperty("worktree");
   });
 
-  test("falls back to a conservative estimate (with minutes) when the agent fails", async () => {
+  // A failed analysis used to be papered over with a default estimate. That was
+  // a permanent dead end: `estimate()` skips any task that already has an
+  // estimate, so the very act of hiding the crash locked the card out of ever
+  // being analyzed again — carrying an invented cost and invented billing hours.
+  test("records a failure instead of inventing an estimate when the agent fails", async () => {
     const task = await seedScheduledTask();
     const { estimator } = buildEstimator({ finalText: new Error("agent exploded") });
 
@@ -208,16 +223,50 @@ describe("TaskEstimator", () => {
 
     await vi.waitFor(async () => {
       const board = await service.getBoard("proj-1");
-      expect(board.tasks[0]?.estimate).toBeTruthy();
+      expect(board.tasks[0]?.analysis?.state).toBe("failed");
     });
     const board = await service.getBoard("proj-1");
-    const estimated = board.tasks[0];
-    expect(estimated?.estimate?.confidence).toBe("low");
-    // The fallback is the agent's own (short, realistic) runtime, not a flat
-    // human-scale hour: unknown work reads as "light" and is governed by the
-    // quota gate rather than blindly parked until quiet hours.
-    expect(estimated?.estimate?.estimatedMinutes).toBe(15);
-    expect(estimated?.schedule?.state).toBe("awaiting_slot");
+    const failed = board.tasks[0];
+    expect(failed?.estimate).toBeUndefined();
+    expect(failed?.analysis?.attempts).toBe(1);
+    expect(failed?.analysis?.reason).toContain("agent exploded");
+    // Still queued: no estimate means nothing may launch.
+    expect(failed?.schedule?.state).toBe("pending_estimate");
+  });
+
+  test("an agent reply with no parseable estimate is a failure, not a made-up cost", async () => {
+    const task = await seedScheduledTask();
+    const { estimator } = buildEstimator({ finalText: "J'ai regardé, ça a l'air faisable." });
+
+    estimator.requestEstimate("proj-1", task.id);
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.analysis?.state).toBe("failed");
+    });
+    expect((await service.getBoard("proj-1")).tasks[0]?.estimate).toBeUndefined();
+  });
+
+  test("retry clears the failure so the card can be analyzed again", async () => {
+    const task = await seedScheduledTask();
+    const { estimator } = buildEstimator({ finalText: new Error("agent exploded") });
+
+    estimator.requestEstimate("proj-1", task.id);
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.analysis?.state).toBe("failed");
+    });
+
+    const { estimator: healthy } = buildEstimator({ finalText: okEstimate });
+    await healthy.retry("proj-1", task.id);
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.estimate).toBeTruthy();
+    });
+    const recovered = (await service.getBoard("proj-1")).tasks[0];
+    expect(recovered?.analysis).toBeUndefined();
+    expect(recovered?.schedule?.state).toBe("awaiting_slot");
   });
 
   test("analyzes tasks from different folders in parallel", async () => {

@@ -476,6 +476,12 @@ export const ptBR: TranslationResources = {
     board: {
       emptyColumn: "Sem tarefas",
     },
+    analysis: {
+      failedRetrying: "Análise falhou — tentando de novo",
+      failedExhausted: "Análise impossível",
+      retry: "Analisar novamente",
+      reason: "Motivo: {{reason}}",
+    },
     schedule: {
       failed: "Falhou",
       running: "Executando",

@@ -475,6 +475,12 @@ export const es: TranslationResources = {
     board: {
       emptyColumn: "Sin tareas",
     },
+    analysis: {
+      failedRetrying: "Análisis fallido — reintentando",
+      failedExhausted: "Análisis imposible",
+      retry: "Analizar de nuevo",
+      reason: "Motivo: {{reason}}",
+    },
     schedule: {
       failed: "Fallido",
       running: "En ejecución",

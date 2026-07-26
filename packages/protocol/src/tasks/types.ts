@@ -101,6 +101,27 @@ export const TaskScheduleStateSchema = z.object({
 });
 export type TaskScheduleState = z.infer<typeof TaskScheduleStateSchema>;
 
+/**
+ * A deep analysis that did NOT produce a usable estimate.
+ *
+ * Recording the failure is the whole point. Writing a default estimate instead
+ * looked harmless but was a permanent dead end: the estimator skips any task
+ * that already has an estimate, so a card whose analysis crashed once could
+ * never be analyzed again — it kept a made-up cost, fake billing data, and no
+ * agent, forever, across restarts. A failure state keeps the door open.
+ */
+export const TaskAnalysisStateSchema = z.object({
+  state: z.literal("failed"),
+  attempts: z.number().int().nonnegative(),
+  // Plain-language reason, shown on the card. Not a stack trace.
+  reason: z.string().nullable().optional(),
+  failedAt: z.string(),
+  // True once the automatic retries are spent: the card then waits for the user
+  // to ask for another attempt rather than looping on its own.
+  exhausted: z.boolean().optional(),
+});
+export type TaskAnalysisState = z.infer<typeof TaskAnalysisStateSchema>;
+
 export const TaskLinksSchema = z.object({
   agentIds: z.array(z.string()),
   primaryAgentId: z.string().nullable().optional(),
@@ -154,6 +175,12 @@ export const KanbanTaskSchema = z.object({
   // a cost/billing/schedule — that is the deep analysis that only fires at
   // "Validé". Additive + optional: old boards/clients simply omit it.
   refinement: z.enum(["pending", "done"]).nullable().optional(),
+  // Outcome of the DEEP analysis (the "Validé" pass that produces the estimate
+  // and the billing data). Only ever set on failure: it is what stops a failed
+  // analysis from being silently papered over with a default estimate — the card
+  // says so, and the user can ask for another attempt.
+  // Additive + optional: old boards/clients simply omit it.
+  analysis: TaskAnalysisStateSchema.nullable().optional(),
   estimate: TaskEstimateSchema.nullable().optional(),
   schedule: TaskScheduleStateSchema.nullable().optional(),
   runConfig: TaskRunConfigSchema.nullable().optional(),

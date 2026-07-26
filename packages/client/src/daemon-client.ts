@@ -4998,6 +4998,14 @@ export class DaemonClient {
     });
   }
 
+  // "Analyser à nouveau": clears a failed analysis and queues a fresh one.
+  async tasksTaskRetryAnalysis(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.retry_analysis.response">({
+      requestId,
+      message: { type: "tasks.task.retry_analysis.request", ...input },
+    });
+  }
+
   async tasksTaskApprove(input: { projectId: string; taskId: string }, requestId?: string) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.approve.response">({
       requestId,

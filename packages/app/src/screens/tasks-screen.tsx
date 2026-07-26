@@ -1075,7 +1075,10 @@ function BoardContent({
   const handleEstimateTask = useCallback(
     (taskId: string) => {
       toast.show(t("tasks.toast.reanalyzing"));
-      boardHandle.estimateTask(taskId).catch((error) => {
+      // retryTaskAnalysis, not estimateTask: it also clears a recorded analysis
+      // failure. Without that, a card whose automatic attempts are spent would
+      // ignore the request — "Analyser à nouveau" has to be the way out.
+      boardHandle.retryTaskAnalysis(taskId).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error));
       });
     },
@@ -1179,7 +1182,10 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
   const handleEstimate = useCallback(
     (taskId: string) => {
       toast.show(t("tasks.toast.reanalyzing"));
-      boardHandle.estimateTask(taskId).catch((error) => {
+      // retryTaskAnalysis, not estimateTask: it also clears a recorded analysis
+      // failure. Without that, a card whose automatic attempts are spent would
+      // ignore the request — "Analyser à nouveau" has to be the way out.
+      boardHandle.retryTaskAnalysis(taskId).catch((error) => {
         toast.error(error instanceof Error ? error.message : String(error));
       });
     },

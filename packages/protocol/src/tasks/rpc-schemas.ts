@@ -143,6 +143,16 @@ export const TasksTaskRunNowRequestSchema = z.object({
   taskId: z.string(),
 });
 
+// "Analyser à nouveau": clears a failed analysis so the card is re-analyzed from
+// scratch. The only way out of an exhausted analysis — deliberately a user act,
+// because three failures in a row usually means something real is broken.
+export const TasksTaskRetryAnalysisRequestSchema = z.object({
+  type: z.literal("tasks.task.retry_analysis.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
 export const TasksTaskApproveRequestSchema = z.object({
   type: z.literal("tasks.task.approve.request"),
   requestId: z.string(),
@@ -280,6 +290,14 @@ export const TasksTaskEstimateResponseSchema = z.object({
 
 export const TasksTaskRunNowResponseSchema = z.object({
   type: z.literal("tasks.task.run_now.response"),
+  payload: z.object({
+    requestId: z.string(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskRetryAnalysisResponseSchema = z.object({
+  type: z.literal("tasks.task.retry_analysis.response"),
   payload: z.object({
     requestId: z.string(),
     error: z.string().nullable(),
