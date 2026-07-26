@@ -47,8 +47,9 @@ const SPARKLINE_SIZE = { width: 240, height: 26 };
 const NO_SAMPLES: QuotaSample[] = [];
 
 // The track has to be readable on its own: when the host reports no number it is
-// the ONLY thing drawn, and a surface-on-surface circle simply cannot be seen.
-const trackColorMapping = (theme: Theme) => ({ stroke: theme.colors.border });
+// the ONLY thing drawn, and a border-on-surface circle was too faint to spot at
+// all. A muted-foreground ring is always a visible circle behind the arc.
+const trackColorMapping = (theme: Theme) => ({ stroke: theme.colors.foregroundMuted });
 const sparklineColorMapping = (theme: Theme) => ({ stroke: theme.colors.foregroundMuted });
 
 function ringColorMapping(tone: QuotaTone) {
@@ -58,9 +59,11 @@ function ringColorMapping(tone: QuotaTone) {
 function toneColor(theme: Theme, tone: QuotaTone): string {
   switch (tone) {
     case "danger":
-      return theme.colors.destructive;
+      return theme.colors.statusDanger;
     case "warn":
-      return theme.colors.palette.amber[500];
+      return theme.colors.statusWarning;
+    case "ok":
+      return theme.colors.statusSuccess;
     default:
       return theme.colors.foreground;
   }
@@ -356,6 +359,7 @@ function QuotaGauge({ label, window }: { label: string; window: ProviderUsageWin
   const fillStyle = useMemo<StyleProp<ViewStyle>>(
     () => [
       styles.gaugeFill,
+      tone === "ok" && styles.gaugeFillOk,
       tone === "warn" && styles.gaugeFillWarn,
       tone === "danger" && styles.gaugeFillDanger,
       { width: `${remaining ?? 0}%` as const },
@@ -491,13 +495,18 @@ const styles = StyleSheet.create((theme) => ({
   gaugeFill: {
     height: "100%",
     borderRadius: theme.borderRadius.full,
+    // Default only shows while the window reports no number; a real reading is
+    // always ok/warn/danger and overrides this with a traffic-light colour.
     backgroundColor: theme.colors.foregroundMuted,
   },
+  gaugeFillOk: {
+    backgroundColor: theme.colors.statusSuccess,
+  },
   gaugeFillWarn: {
-    backgroundColor: theme.colors.palette.amber[500],
+    backgroundColor: theme.colors.statusWarning,
   },
   gaugeFillDanger: {
-    backgroundColor: theme.colors.destructive,
+    backgroundColor: theme.colors.statusDanger,
   },
   gaugeReset: {
     color: theme.colors.foregroundMuted,

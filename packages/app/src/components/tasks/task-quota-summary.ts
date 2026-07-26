@@ -4,12 +4,16 @@ import type {
   ProviderUsageWindow,
 } from "@/provider-usage/types";
 
-/** Below this share of the weekly allowance left the ring turns amber… */
-export const REMAINING_WARN_PCT = 25;
-/** …and below this one it turns red. Both are on REMAINING, not used. */
+/** At or below this share of the allowance left the gauge turns amber… */
+export const REMAINING_WARN_PCT = 20;
+/** …and at or below this one it turns red. Both are on REMAINING, not used. */
 export const REMAINING_DANGER_PCT = 10;
 
-export type QuotaTone = "neutral" | "warn" | "danger";
+/**
+ * "neutral" is the no-number state (grey). A window that DID report a number is
+ * always one of the three traffic-light tones: ok (green) / warn / danger.
+ */
+export type QuotaTone = "neutral" | "ok" | "warn" | "danger";
 
 export interface QuotaProviderSummary {
   providerId: string;
@@ -80,7 +84,7 @@ export function toneForRemaining(remaining: number | null): QuotaTone {
   if (remaining === null) return "neutral";
   if (remaining <= REMAINING_DANGER_PCT) return "danger";
   if (remaining <= REMAINING_WARN_PCT) return "warn";
-  return "neutral";
+  return "ok";
 }
 
 function summarizeProvider(usage: ProviderUsage): QuotaProviderSummary {

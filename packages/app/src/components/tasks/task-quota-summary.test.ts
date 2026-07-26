@@ -130,10 +130,13 @@ describe("buildQuotaSummary", () => {
 });
 
 describe("toneForRemaining", () => {
-  it("warns before the allowance runs dry and alarms at the end", () => {
-    expect(toneForRemaining(60)).toBe("neutral");
-    expect(toneForRemaining(25)).toBe("warn");
+  it("is green above the warn line, amber at or below it, red near the end", () => {
+    expect(toneForRemaining(60)).toBe("ok");
+    expect(toneForRemaining(21)).toBe("ok");
+    expect(toneForRemaining(20)).toBe("warn");
+    expect(toneForRemaining(11)).toBe("warn");
     expect(toneForRemaining(10)).toBe("danger");
+    expect(toneForRemaining(0)).toBe("danger");
     expect(toneForRemaining(null)).toBe("neutral");
   });
 });
