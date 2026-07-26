@@ -310,6 +310,9 @@ export const en = {
       details: "Details",
       noAgent: "No agent has been started for this task yet.",
       launchAgent: "Launch the agent",
+      validateTask: "Validate task",
+      validateTaskMessage:
+        "The task moves to “Done” and becomes ready to deploy. You can still reopen it afterwards.",
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",

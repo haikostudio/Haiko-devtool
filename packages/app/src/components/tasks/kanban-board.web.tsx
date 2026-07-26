@@ -320,13 +320,7 @@ const DroppableColumn = memo(function DroppableColumn({
           </Pressable>
         ) : null}
       </View>
-      <BoardColumnToolbar
-        board={board}
-        folderId={folderId}
-        column={column}
-        controls={controls}
-        onChange={handleControlsChange}
-      />
+      <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
       <div ref={setNodeRef} style={webColumnBodyStyle}>
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>

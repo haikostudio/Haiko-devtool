@@ -17,6 +17,7 @@ import { AgentSynthesisScrim } from "@/panels/agent-synthesis-scrim";
 import { ArchivedAgentCallout } from "@/components/archived-agent-callout";
 import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { Composer } from "@/composer";
+import { useAboveComposerSlot } from "@/panels/above-composer-slot";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
@@ -1602,6 +1603,7 @@ function ActiveAgentComposer({
   // The compact mode selector now lives inside the composer's options drawer
   // (grouped behind the kebab), so there is no dedicated footer control anymore.
   const composerFooter = undefined;
+  const aboveComposerSlot = useAboveComposerSlot();
 
   return (
     <ReanimatedAnimated.View style={inputAreaStyle} onLayout={onInputAreaLayout}>
@@ -1613,6 +1615,9 @@ function ActiveAgentComposer({
         onArchiveFinished={handleHideFinishedProviderSubagents}
         onDetachSubagent={canDetachSubagents ? handleDetachSubagent : undefined}
       />
+      {/* Host-provided strip sitting right on top of the composer. Empty in the
+          normal workspace; the task board puts its "Valider la tâche" bar here. */}
+      {aboveComposerSlot}
       <Composer
         agentId={agentId}
         serverId={serverId}

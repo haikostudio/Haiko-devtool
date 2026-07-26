@@ -315,6 +315,9 @@ export const ptBR: TranslationResources = {
       details: "Detalhes",
       noAgent: "Nenhum agente foi iniciado para esta tarefa ainda.",
       launchAgent: "Iniciar o agente",
+      validateTask: "Validar a tarefa",
+      validateTaskMessage:
+        "A tarefa passa para «Concluída» e fica pronta para implantar. Você ainda poderá reabri-la.",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",

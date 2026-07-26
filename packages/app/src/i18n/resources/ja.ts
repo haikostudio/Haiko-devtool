@@ -314,6 +314,9 @@ export const ja: TranslationResources = {
       details: "詳細",
       noAgent: "このタスクにはまだエージェントが起動されていません。",
       launchAgent: "エージェントを起動",
+      validateTask: "タスクを承認",
+      validateTaskMessage:
+        "タスクは「完了」に移動し、デプロイ可能になります。後から再開することもできます。",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",

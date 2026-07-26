@@ -311,6 +311,8 @@ export const ar: TranslationResources = {
       details: "التفاصيل",
       noAgent: "لم يتم تشغيل أي وكيل لهذه المهمة بعد.",
       launchAgent: "تشغيل الوكيل",
+      validateTask: "اعتماد المهمة",
+      validateTaskMessage: "تنتقل المهمة إلى «منجزة» وتصبح جاهزة للنشر. ويمكنك إعادة فتحها لاحقًا.",
       collapse: "طي اللوحة",
       expand: "توسيع اللوحة",
       billing: "الفوترة",

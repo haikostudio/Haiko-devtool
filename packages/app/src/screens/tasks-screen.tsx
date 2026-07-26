@@ -69,6 +69,7 @@ import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { useToast } from "@/contexts/toast-context";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
@@ -437,11 +438,23 @@ function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCoun
   return counts;
 }
 
+// Compact only: true once the user has deliberately walked BACK to the projects
+// or folders list. The auto-selection below then stands down, so tapping "back"
+// no longer bounces straight into the board it just left. Any explicit pick
+// clears the flag, and so does leaving the screen.
+let compactSelectionCleared = false;
+
+export function __resetCompactSelectionCleared(): void {
+  compactSelectionCleared = false;
+}
+
 function selectProject(entry: ProjectEntry): void {
+  compactSelectionCleared = false;
   router.setParams({ host: entry.serverId, project: entry.projectId, folder: undefined });
 }
 
 function selectFolder(folderId: string): void {
+  compactSelectionCleared = false;
   router.setParams({ folder: folderId });
 }
 
@@ -505,7 +518,11 @@ export function TasksScreen() {
   const firstProject = projects[0] ?? null;
   const firstFolderId = sortedFolders[0]?.id ?? null;
   useEffect(() => {
-    if (isCompact) {
+    // Mobile behaves like desktop: land straight on the board instead of an
+    // empty picker. The one exception is a deliberate "back" — see
+    // compactSelectionCleared — otherwise the back button would bounce the user
+    // right back into the board they just left.
+    if (isCompact && compactSelectionCleared) {
       return;
     }
     if (!projectId && firstProject) {
@@ -516,6 +533,10 @@ export function TasksScreen() {
       selectFolder(firstFolderId);
     }
   }, [isCompact, projectId, firstProject, boardHandle.board, selectedFolder, firstFolderId]);
+
+  // Leaving the board forgets the "user walked back" intent, so the next visit
+  // opens on the board again.
+  useEffect(() => () => __resetCompactSelectionCleared(), []);
 
   // Task selection (which chat the dock shows, which drawer is open) is per
   // project; drop it whenever the project changes so a stale chat/drawer never
@@ -1417,6 +1438,30 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle],
   );
+  // The one and only path from "En cours" to "Terminée". Confirmed first, because
+  // it is the user's statement that the work is good — nothing else moves a card
+  // there, not even an agent that thinks it has finished.
+  const handleValidate = useCallback(
+    (taskId: string) => {
+      void (async () => {
+        const confirmed = await confirmDialog({
+          title: t("tasks.panel.validateTask"),
+          message: t("tasks.panel.validateTaskMessage"),
+          confirmLabel: t("tasks.panel.validateTask"),
+          cancelLabel: t("common.cancel"),
+        });
+        if (!confirmed) {
+          return;
+        }
+        boardHandle
+          .moveTask({ taskId, column: "done", index: 0 })
+          .catch((error: unknown) =>
+            toast.error(error instanceof Error ? error.message : String(error)),
+          );
+      })();
+    },
+    [boardHandle, toast, t],
+  );
   const handleSetHold = useCallback(
     (taskId: string, hold: boolean) => {
       boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
@@ -1425,7 +1470,15 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle, toast],
   );
-  return { handleSave, handleDelete, handleEstimate, handleRunNow, handleApprove, handleSetHold };
+  return {
+    handleSave,
+    handleDelete,
+    handleEstimate,
+    handleRunNow,
+    handleApprove,
+    handleValidate,
+    handleSetHold,
+  };
 }
 
 // Bottom-center floating toggle + the shared chat dock overlay. Gated on the
@@ -1528,6 +1581,7 @@ function ConductorDock({
         onDelete={taskActions.handleDelete}
         onEstimate={taskActions.handleEstimate}
         onApprove={taskActions.handleApprove}
+        onValidate={taskActions.handleValidate}
         onSetHold={taskActions.handleSetHold}
         onClose={handleClose}
       />
@@ -1643,10 +1697,12 @@ function CompactFlow({
 }
 
 function clearFolderSelection() {
+  compactSelectionCleared = true;
   router.setParams({ folder: undefined });
 }
 
 function clearTasksSelection() {
+  compactSelectionCleared = true;
   router.setParams({ host: undefined, project: undefined, folder: undefined });
 }
 

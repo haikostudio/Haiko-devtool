@@ -52,11 +52,14 @@ function hasTwoInProgressTasks(board: { tasks: { column: string }[] }): boolean 
   return board.tasks.length === 2 && board.tasks.every((task) => task.column === "in_progress");
 }
 
-function hasLoginFormTaskDone(board: {
-  tasks: { normalizedTitle: string; column: string }[];
+// A checked-off todo must NOT complete the card: it stays in "En cours" and is
+// only flagged as believed-finished. Reaching "Terminée" requires the user to
+// press "Valider la tâche".
+function hasLoginFormTaskReadyForReview(board: {
+  tasks: { normalizedTitle: string; column: string; progress?: string | null }[];
 }): boolean {
   const task = board.tasks.find((entry) => entry.normalizedTitle === "implement the login form");
-  return task?.column === "done";
+  return task?.column === "in_progress" && task?.progress === "ready_for_review";
 }
 
 describe("AgentTaskSyncService", () => {
@@ -109,7 +112,7 @@ describe("AgentTaskSyncService", () => {
     return service.getBoard("proj-1");
   }
 
-  test("creates cards in the Agent folder from todo items and tracks completion", async () => {
+  test("creates cards in the Agent folder and flags a finished todo for review", async () => {
     emitTodos([
       { text: "Implement the login form", completed: false },
       { text: "Write the login tests", completed: false },
@@ -124,7 +127,11 @@ describe("AgentTaskSyncService", () => {
       { text: "Write the login tests", completed: false },
     ]);
 
-    await waitForBoard(hasLoginFormTaskDone);
+    const board2 = await waitForBoard(hasLoginFormTaskReadyForReview);
+    // The card is emphatically NOT completed — only the user completes a task.
+    const done = board2.tasks.find((entry) => entry.normalizedTitle === "implement the login form");
+    expect(done?.column).toBe("in_progress");
+    expect(done?.completedAt ?? null).toBeNull();
   });
 
   test("ignores agents without a project workspace", async () => {

@@ -184,11 +184,20 @@ export class AgentTaskSyncService {
       ) {
         continue;
       }
-      const targetColumn = item.completed ? "done" : "in_progress";
-      // "done" and "deployed" are terminal: agent-sync never drags a finished or
-      // shipped task backwards.
-      if (task.column !== targetColumn && task.column !== "done" && task.column !== "deployed") {
-        await this.taskBoardService.transitionTask(projectId, task.id, targetColumn);
+      // A checked-off todo no longer completes the card: it lands (or stays) in
+      // "En cours" and is flagged as believed-finished. Only the user's explicit
+      // "Valider la tâche" moves a card to "Terminée".
+      if (task.column !== "in_progress" && task.column !== "done" && task.column !== "deployed") {
+        await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
+      }
+      if (task.column !== "done" && task.column !== "deployed") {
+        const progress = item.completed ? "ready_for_review" : "executing";
+        if (task.progress !== progress) {
+          await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
+            ...current,
+            progress,
+          }));
+        }
       }
     }
   }
@@ -215,8 +224,18 @@ export class AgentTaskSyncService {
         continue;
       }
       const completed = todoState.get(task.normalizedTitle);
+      // Same rule: a completed turn marks the card ready for review, it never
+      // moves it to "Terminée" on the user's behalf.
       if (completed === true && task.column !== "done" && task.column !== "deployed") {
-        await this.taskBoardService.transitionTask(projectId, task.id, "done");
+        if (task.column !== "in_progress") {
+          await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
+        }
+        if (task.progress !== "ready_for_review") {
+          await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
+            ...current,
+            progress: "ready_for_review" as const,
+          }));
+        }
       }
     }
   }

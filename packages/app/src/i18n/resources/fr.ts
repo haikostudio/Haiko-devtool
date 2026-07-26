@@ -316,6 +316,9 @@ export const fr: TranslationResources = {
       details: "Détails",
       noAgent: "Aucun agent n'a encore été lancé pour cette tâche.",
       launchAgent: "Lancer l'agent",
+      validateTask: "Valider la tâche",
+      validateTaskMessage:
+        "La tâche passe en « Terminée » et devient prête à déployer. Vous pourrez toujours la rouvrir ensuite.",
       collapse: "Réduire le panneau",
       expand: "Développer le panneau",
       billing: "Facturation",

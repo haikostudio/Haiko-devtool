@@ -311,6 +311,8 @@ export const zhCN: TranslationResources = {
       details: "详情",
       noAgent: "尚未为此任务启动任何智能体。",
       launchAgent: "启动智能体",
+      validateTask: "验收任务",
+      validateTaskMessage: "任务将移至「已完成」并可以部署。之后仍可重新打开。",
       collapse: "收起面板",
       expand: "展开面板",
       billing: "账单",

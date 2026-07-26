@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
-import { daysUntil, parseTaskTags, type TaskPriorityLevel } from "./task-tags";
+import { parseTaskTags, type TaskPriorityLevel } from "./task-tags";
 
 // Recency is the board's one and only ordering — there is no sort menu. Every
 // column shows the most recent activity first. "done" ranks by completedAt (the
@@ -113,103 +113,87 @@ function matchesQuery(task: KanbanTask, needle: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Faceted filter (the funnel button): narrow the board by priority, deadline,
-// and thematic tags. Facets combine as AND (a card must clear every active
-// facet); values within a facet combine as OR (any selected tag is enough).
+// Sort (the sort button): choose which criterion orders a column. The default is
+// "updated" — most recently modified first — which is what the board has always
+// done; the other criteria are opt-in per column and last only for the session.
+// A column the user has hand-arranged by dragging switches to manual order and
+// ignores this entirely (see ColumnControls.manualOrder).
 // ---------------------------------------------------------------------------
 
-// The priority levels the filter offers — the same three the editor writes.
-// "other"-level priorities (unrecognized suffixes) are never a filter target.
-export type FilterPriorityLevel = Exclude<TaskPriorityLevel, "other">;
+// The three importance levels the note editor writes (and the priority sort
+// ranks). "other" — an unrecognized suffix on an existing tag — is never a
+// choice the user can make.
+export type TaskImportanceLevel = Exclude<TaskPriorityLevel, "other">;
 
-export type DeadlineFilter = "overdue" | "none";
+export type ColumnSortMode = "updated" | "created" | "deadline" | "priority" | "title";
 
-export interface TaskFilter {
-  priorities: FilterPriorityLevel[];
-  deadline: DeadlineFilter[];
-  tags: string[];
+export const DEFAULT_COLUMN_SORT: ColumnSortMode = "updated";
+
+export const COLUMN_SORT_MODES: ColumnSortMode[] = [
+  "updated",
+  "created",
+  "deadline",
+  "priority",
+  "title",
+];
+
+// Importance first (high → low → none), then the soonest deadline, then recency.
+function compareByPriority(left: KanbanTask, right: KanbanTask): number {
+  const leftKeys = noteSortKeys(left);
+  const rightKeys = noteSortKeys(right);
+  return (
+    leftKeys.priority - rightKeys.priority ||
+    leftKeys.deadline - rightKeys.deadline ||
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
-export const EMPTY_TASK_FILTER: TaskFilter = { priorities: [], deadline: [], tags: [] };
-
-export function taskFilterCount(filter: TaskFilter): number {
-  return filter.priorities.length + filter.deadline.length + filter.tags.length;
+// Soonest deadline first; undated cards sink to the bottom.
+function compareByDeadline(left: KanbanTask, right: KanbanTask): number {
+  const leftKeys = noteSortKeys(left);
+  const rightKeys = noteSortKeys(right);
+  return (
+    leftKeys.deadline - rightKeys.deadline ||
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
-// The facets actually present on this folder's board, so the filter menu only
-// offers choices that can match something (no empty "Low priority" row when no
-// card is tagged low). Priorities keep high→low order; tags sort alphabetically.
-export interface BoardFacets {
-  priorities: FilterPriorityLevel[];
-  hasDeadlines: boolean;
-  tags: string[];
+// Newest first, so a freshly captured task leads the column.
+function compareByCreated(left: KanbanTask, right: KanbanTask): number {
+  return (
+    right.createdAt.localeCompare(left.createdAt) ||
+    right.updatedAt.localeCompare(left.updatedAt) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
-const PRIORITY_FILTER_ORDER: FilterPriorityLevel[] = ["high", "medium", "low"];
-
-export function collectBoardFacets(
-  board: TaskBoard | null,
-  folderId: string,
-  // Scope the facets to a single column so each column's filter menu only
-  // offers priorities/tags that can actually match a card sitting in it.
-  column?: TaskColumn,
-): BoardFacets {
-  const priorities = new Set<FilterPriorityLevel>();
-  const tags = new Set<string>();
-  let hasDeadlines = false;
-  for (const task of board?.tasks ?? []) {
-    if (task.folderId !== folderId) {
-      continue;
-    }
-    if (column && task.column !== column) {
-      continue;
-    }
-    const parsed = parseTaskTags(task.tags);
-    if (parsed.priority && parsed.priority.level !== "other") {
-      priorities.add(parsed.priority.level);
-    }
-    if (parsed.deadline) {
-      hasDeadlines = true;
-    }
-    for (const tag of parsed.tags) {
-      tags.add(tag);
-    }
-  }
-  return {
-    priorities: PRIORITY_FILTER_ORDER.filter((level) => priorities.has(level)),
-    hasDeadlines,
-    tags: [...tags].sort((left, right) =>
-      left.localeCompare(right, undefined, { sensitivity: "base" }),
-    ),
-  };
+// Alphabetical, accent- and case-insensitive.
+function compareByTitle(left: KanbanTask, right: KanbanTask): number {
+  return (
+    left.title.localeCompare(right.title, undefined, { sensitivity: "base" }) ||
+    left.id.localeCompare(right.id)
+  );
 }
 
-function matchesFilter(task: KanbanTask, filter: TaskFilter, now: Date): boolean {
-  if (filter.priorities.length === 0 && filter.deadline.length === 0 && filter.tags.length === 0) {
-    return true;
+function comparatorFor(
+  sort: ColumnSortMode,
+  column: TaskColumn,
+): (left: KanbanTask, right: KanbanTask) => number {
+  if (sort === "created") {
+    return compareByCreated;
   }
-  const parsed = parseTaskTags(task.tags);
-  if (filter.priorities.length > 0) {
-    const level = parsed.priority?.level;
-    if (!level || level === "other" || !filter.priorities.includes(level)) {
-      return false;
-    }
+  if (sort === "deadline") {
+    return compareByDeadline;
   }
-  if (filter.deadline.length > 0) {
-    const dueDate = parsed.deadline?.dueDate ?? null;
-    const passesDeadline = filter.deadline.some((cond) =>
-      cond === "none" ? !parsed.deadline : dueDate !== null && daysUntil(dueDate, now) < 0,
-    );
-    if (!passesDeadline) {
-      return false;
-    }
+  if (sort === "priority") {
+    return compareByPriority;
   }
-  if (filter.tags.length > 0) {
-    if (!parsed.tags.some((tag) => filter.tags.includes(tag))) {
-      return false;
-    }
+  if (sort === "title") {
+    return compareByTitle;
   }
-  return true;
+  return compareByRecency(column);
 }
 
 // The search/filter/arrangement state of a single column's toolbar. Each column
@@ -219,13 +203,13 @@ function matchesFilter(task: KanbanTask, filter: TaskFilter, now: Date): boolean
 export interface ColumnControls {
   query: string;
   manualOrder: boolean;
-  filter: TaskFilter;
+  sort: ColumnSortMode;
 }
 
 export const EMPTY_COLUMN_CONTROLS: ColumnControls = {
   query: "",
   manualOrder: false,
-  filter: EMPTY_TASK_FILTER,
+  sort: DEFAULT_COLUMN_SORT,
 };
 
 // Per-column controls, keyed by column. A missing entry means "untouched"
@@ -236,8 +220,6 @@ export function buildColumnModels(
   board: TaskBoard | null,
   folderId: string,
   controls?: ColumnControlsMap,
-  // Injected so the "overdue" deadline facet is deterministic in tests.
-  now: Date = new Date(),
 ): KanbanColumnModel[] {
   return KANBAN_COLUMNS.map((column) => {
     const control = controls?.[column] ?? EMPTY_COLUMN_CONTROLS;
@@ -245,11 +227,11 @@ export function buildColumnModels(
     let compare: (left: KanbanTask, right: KanbanTask) => number;
     if (control.manualOrder) {
       compare = compareByManualOrder;
-    } else if (column === "notes") {
-      // Draft notes lead by importance + deadline, not raw recency.
+    } else if (column === "notes" && control.sort === DEFAULT_COLUMN_SORT) {
+      // Draft notes lead by importance + deadline unless the user picks a sort.
       compare = compareNotes;
     } else {
-      compare = compareByRecency(column);
+      compare = comparatorFor(control.sort, column);
     }
     return {
       column,
@@ -258,43 +240,29 @@ export function buildColumnModels(
           (task) =>
             task.folderId === folderId &&
             task.column === column &&
-            (needle === "" || matchesQuery(task, needle)) &&
-            matchesFilter(task, control.filter, now),
+            (needle === "" || matchesQuery(task, needle)),
         )
         .sort(compare),
     };
   });
 }
 
-export interface FilterLabels {
+export interface SortLabels {
   title: string;
-  empty: string;
-  clear: string;
-  priorityHeading: string;
-  deadlineHeading: string;
-  tagsHeading: string;
-  priority: Record<FilterPriorityLevel, string>;
-  deadline: Record<DeadlineFilter, string>;
+  modes: Record<ColumnSortMode, string>;
 }
 
-export function useFilterLabels(): FilterLabels {
+export function useSortLabels(): SortLabels {
   const { t } = useTranslation();
   return useMemo(
     () => ({
-      title: t("tasks.filter.title"),
-      empty: t("tasks.filter.empty"),
-      clear: t("tasks.filter.clear"),
-      priorityHeading: t("tasks.filter.priorityHeading"),
-      deadlineHeading: t("tasks.filter.deadlineHeading"),
-      tagsHeading: t("tasks.filter.tagsHeading"),
-      priority: {
-        high: t("tasks.filter.priorityHigh"),
-        medium: t("tasks.filter.priorityMedium"),
-        low: t("tasks.filter.priorityLow"),
-      },
-      deadline: {
-        overdue: t("tasks.filter.deadlineOverdue"),
-        none: t("tasks.filter.deadlineNone"),
+      title: t("tasks.sortTasks"),
+      modes: {
+        updated: t("tasks.sort.updated"),
+        created: t("tasks.sort.created"),
+        deadline: t("tasks.sort.deadline"),
+        priority: t("tasks.sort.priority"),
+        title: t("tasks.sort.title"),
       },
     }),
     [t],

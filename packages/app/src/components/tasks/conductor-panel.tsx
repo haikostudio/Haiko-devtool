@@ -64,6 +64,8 @@ export interface ConductorPanelProps {
   onDelete: (taskId: string) => void;
   onEstimate: (taskId: string) => void;
   onApprove: (taskId: string) => void;
+  /** User validation of a task: the only path from "En cours" to "Terminée". */
+  onValidate: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
 }
@@ -91,6 +93,7 @@ export function ConductorPanel({
   onDelete,
   onEstimate,
   onApprove,
+  onValidate,
   onSetHold,
   onClose,
 }: ConductorPanelProps) {
@@ -237,6 +240,7 @@ export function ConductorPanel({
           serverId={serverId}
           task={task}
           onRunNow={onRunNow}
+          onValidate={onValidate}
         />
       </View>
       {taskView === "chat" ? null : (

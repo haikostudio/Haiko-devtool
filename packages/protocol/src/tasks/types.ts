@@ -150,6 +150,20 @@ export const KanbanTaskSchema = z.object({
   executionHold: z.boolean().optional(),
   // Set when a plan-mode run finished: the plan is ready in the linked agent.
   planReadyAt: z.string().nullable().optional(),
+  // Sub-status of a task sitting in "En cours". A task NEVER leaves that column
+  // on its own — not even when the agent stops talking — so this says where it
+  // actually stands without moving the card:
+  //  - "analyzing"/"executing": the agent is working;
+  //  - "waiting": it is waiting on something (a command, an external answer);
+  //  - "awaiting_user": it asked the user a question;
+  //  - "blocked": it hit something it cannot get past;
+  //  - "ready_for_review": it believes it is finished — the user still has to
+  //    press "Valider la tâche" for the card to reach "Terminée".
+  // Optional + additive: old boards/clients simply omit it.
+  progress: z
+    .enum(["analyzing", "executing", "waiting", "awaiting_user", "blocked", "ready_for_review"])
+    .nullable()
+    .optional(),
   links: TaskLinksSchema,
   // Set on user-initiated column moves; suppresses agent-sync transitions afterwards.
   manualOverrideAt: z.string().nullable().optional(),

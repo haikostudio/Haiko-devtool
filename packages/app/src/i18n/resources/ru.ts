@@ -313,6 +313,9 @@ export const ru: TranslationResources = {
       details: "Подробности",
       noAgent: "Для этой задачи ещё не запущен ни один агент.",
       launchAgent: "Запустить агента",
+      validateTask: "Принять задачу",
+      validateTaskMessage:
+        "Задача перейдёт в «Готово» и будет готова к развёртыванию. Её всегда можно открыть заново.",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",

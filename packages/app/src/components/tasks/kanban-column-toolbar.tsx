@@ -1,33 +1,28 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback } from "react";
 import { View } from "react-native";
-import { ListFilter } from "lucide-react-native";
+import { ArrowDownUp } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { FormTextInput } from "@/components/ui/form-field";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuHint,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { TaskBoard, TaskColumn } from "@/data/tasks";
+import type { TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
-  collectBoardFacets,
-  EMPTY_TASK_FILTER,
-  taskFilterCount,
-  useFilterLabels,
+  COLUMN_SORT_MODES,
+  DEFAULT_COLUMN_SORT,
+  useSortLabels,
   type ColumnControls,
-  type DeadlineFilter,
-  type FilterPriorityLevel,
-  type TaskFilter,
+  type ColumnSortMode,
 } from "./kanban-columns";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ThemedFilter = withUnistyles(ListFilter);
+const ThemedSort = withUnistyles(ArrowDownUp);
 
 // Plain (non-Unistyles) style: FormTextInput's chrome/input style split runs the
 // value through RN's StyleSheet.flatten, which silently drops Unistyles proxy
@@ -40,19 +35,18 @@ function iconButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
 }
 
 /**
- * Per-column search / filter / sort toolbar. Each column carries its own copy
- * so a query or facet narrows only that column's cards — the board no longer
- * has a single shared bar above all the columns.
+ * Per-column search + sort toolbar. Each column carries its own copy so a query
+ * or an ordering applies to that column alone — the board has no single shared
+ * bar above all the columns.
+ *
+ * The sort button replaces the faceted filter that briefly stood here: the board
+ * is read by scanning columns, so choosing an order beats hiding cards.
  */
 export const BoardColumnToolbar = memo(function BoardColumnToolbar({
-  board,
-  folderId,
   column,
   controls,
   onChange,
 }: {
-  board: TaskBoard | null;
-  folderId: string;
   column: TaskColumn;
   controls: ColumnControls;
   onChange: (next: ColumnControls) => void;
@@ -63,8 +57,8 @@ export const BoardColumnToolbar = memo(function BoardColumnToolbar({
     (query: string) => onChange({ ...controls, query }),
     [controls, onChange],
   );
-  const handleFilterChange = useCallback(
-    (filter: TaskFilter) => onChange({ ...controls, filter }),
+  const handleSortChange = useCallback(
+    (sort: ColumnSortMode) => onChange({ ...controls, sort }),
     [controls, onChange],
   );
 
@@ -80,105 +74,45 @@ export const BoardColumnToolbar = memo(function BoardColumnToolbar({
           testID={`tasks-column-search-${column}`}
         />
       </View>
-      <ColumnFilterMenu
-        board={board}
-        folderId={folderId}
-        column={column}
-        filter={controls.filter}
-        onChange={handleFilterChange}
-      />
+      <ColumnSortMenu column={column} sort={controls.sort} onChange={handleSortChange} />
     </View>
   );
 });
 
-// A single toggle row inside the filter menu. Binds its own value so the parent
-// can pass a stable handler (no inline closure per row). closeOnSelect is false
-// so the user can flip several facets in one open of the menu.
-const FilterCheckItem = memo(function FilterCheckItem({
+// A single sort row. Binds its own value so the parent can pass a stable handler
+// (no inline closure per row).
+const SortItem = memo(function SortItem({
   value,
   label,
   selected,
-  onToggle,
+  onSelect,
 }: {
-  value: string;
+  value: ColumnSortMode;
   label: string;
   selected: boolean;
-  onToggle: (value: string) => void;
+  onSelect: (value: ColumnSortMode) => void;
 }) {
-  const handleToggle = useCallback(() => onToggle(value), [onToggle, value]);
+  const handleSelect = useCallback(() => onSelect(value), [onSelect, value]);
   return (
-    <DropdownMenuItem
-      selected={selected}
-      showSelectedCheck
-      closeOnSelect={false}
-      onSelect={handleToggle}
-    >
+    <DropdownMenuItem selected={selected} showSelectedCheck onSelect={handleSelect}>
       {label}
     </DropdownMenuItem>
   );
 });
 
-// Faceted filter behind the funnel button: only the facets present in this
-// column are offered (priorities, deadline states, thematic tags), plus a Clear
-// row once anything is active. A dot on the trigger signals an active filter.
-const ColumnFilterMenu = memo(function ColumnFilterMenu({
-  board,
-  folderId,
+// Sort menu behind the arrows button. A dot on the trigger signals the column is
+// on something other than the default (last modified, most recent first).
+const ColumnSortMenu = memo(function ColumnSortMenu({
   column,
-  filter,
+  sort,
   onChange,
 }: {
-  board: TaskBoard | null;
-  folderId: string;
   column: TaskColumn;
-  filter: TaskFilter;
-  onChange: (next: TaskFilter) => void;
+  sort: ColumnSortMode;
+  onChange: (next: ColumnSortMode) => void;
 }) {
-  const labels = useFilterLabels();
-  const facets = useMemo(
-    () => collectBoardFacets(board, folderId, column),
-    [board, folderId, column],
-  );
-  const activeCount = taskFilterCount(filter);
-
-  const togglePriority = useCallback(
-    (value: string) => {
-      const level = value as FilterPriorityLevel;
-      onChange({
-        ...filter,
-        priorities: filter.priorities.includes(level)
-          ? filter.priorities.filter((entry) => entry !== level)
-          : [...filter.priorities, level],
-      });
-    },
-    [filter, onChange],
-  );
-  const toggleDeadline = useCallback(
-    (value: string) => {
-      const entry = value as DeadlineFilter;
-      onChange({
-        ...filter,
-        deadline: filter.deadline.includes(entry)
-          ? filter.deadline.filter((current) => current !== entry)
-          : [...filter.deadline, entry],
-      });
-    },
-    [filter, onChange],
-  );
-  const toggleTag = useCallback(
-    (tag: string) => {
-      onChange({
-        ...filter,
-        tags: filter.tags.includes(tag)
-          ? filter.tags.filter((entry) => entry !== tag)
-          : [...filter.tags, tag],
-      });
-    },
-    [filter, onChange],
-  );
-  const clear = useCallback(() => onChange(EMPTY_TASK_FILTER), [onChange]);
-
-  const hasFacets = facets.priorities.length > 0 || facets.hasDeadlines || facets.tags.length > 0;
+  const labels = useSortLabels();
+  const isCustom = sort !== DEFAULT_COLUMN_SORT;
 
   return (
     <DropdownMenu>
@@ -186,68 +120,24 @@ const ColumnFilterMenu = memo(function ColumnFilterMenu({
         style={iconButtonStyle}
         accessibilityRole="button"
         accessibilityLabel={labels.title}
-        testID={`tasks-column-filter-${column}`}
+        testID={`tasks-column-sort-${column}`}
       >
-        <View style={styles.filterTriggerInner}>
-          <ThemedFilter size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          {activeCount > 0 ? <View style={styles.filterActiveDot} /> : null}
+        <View style={styles.sortTriggerInner}>
+          <ThemedSort size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          {isCustom ? <View style={styles.sortActiveDot} /> : null}
         </View>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" minWidth={200} scrollable maxHeight={360}>
-        {!hasFacets ? <DropdownMenuHint>{labels.empty}</DropdownMenuHint> : null}
-        {facets.priorities.length > 0 ? (
-          <>
-            <DropdownMenuLabel>{labels.priorityHeading}</DropdownMenuLabel>
-            {facets.priorities.map((level) => (
-              <FilterCheckItem
-                key={`priority-${level}`}
-                value={level}
-                label={labels.priority[level]}
-                selected={filter.priorities.includes(level)}
-                onToggle={togglePriority}
-              />
-            ))}
-          </>
-        ) : null}
-        {facets.hasDeadlines ? (
-          <>
-            <DropdownMenuLabel>{labels.deadlineHeading}</DropdownMenuLabel>
-            <FilterCheckItem
-              value="overdue"
-              label={labels.deadline.overdue}
-              selected={filter.deadline.includes("overdue")}
-              onToggle={toggleDeadline}
-            />
-            <FilterCheckItem
-              value="none"
-              label={labels.deadline.none}
-              selected={filter.deadline.includes("none")}
-              onToggle={toggleDeadline}
-            />
-          </>
-        ) : null}
-        {facets.tags.length > 0 ? (
-          <>
-            <DropdownMenuLabel>{labels.tagsHeading}</DropdownMenuLabel>
-            {facets.tags.map((tag) => (
-              <FilterCheckItem
-                key={`tag-${tag}`}
-                value={tag}
-                label={tag}
-                selected={filter.tags.includes(tag)}
-                onToggle={toggleTag}
-              />
-            ))}
-          </>
-        ) : null}
-        {activeCount > 0 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem destructive closeOnSelect={false} onSelect={clear}>
-              {labels.clear}
-            </DropdownMenuItem>
-          </>
-        ) : null}
+      <DropdownMenuContent align="end" minWidth={200}>
+        <DropdownMenuLabel>{labels.title}</DropdownMenuLabel>
+        {COLUMN_SORT_MODES.map((mode) => (
+          <SortItem
+            key={mode}
+            value={mode}
+            label={labels.modes[mode]}
+            selected={sort === mode}
+            onSelect={onChange}
+          />
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -255,8 +145,8 @@ const ColumnFilterMenu = memo(function ColumnFilterMenu({
 
 const styles = StyleSheet.create((theme) => ({
   // Sits in the column header, between the title row and the cards. Spans the
-  // full column width: the search field grows to fill, the funnel button stays
-  // a fixed square on the right.
+  // full column width: the search field grows to fill, the sort button stays a
+  // fixed square on the right.
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
@@ -289,11 +179,11 @@ const styles = StyleSheet.create((theme) => ({
   iconButtonHovered: {
     backgroundColor: theme.colors.surface1,
   },
-  filterTriggerInner: {
+  sortTriggerInner: {
     alignItems: "center",
     justifyContent: "center",
   },
-  filterActiveDot: {
+  sortActiveDot: {
     position: "absolute",
     top: -5,
     right: -5,
