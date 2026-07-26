@@ -2373,12 +2373,17 @@ export const AttachmentLibraryBlobRequestSchema = z.object({
 
 export const GitHubSearchItemSchema = z.object({
   kind: z.enum(["issue", "pr"]),
+  // Restauré : quelle forge a produit ce résultat, et le chemin du projet chez
+  // les forges qui en ont un (GitLab et assimilés) plutôt qu'un couple
+  // propriétaire/dépôt.
+  forge: z.string().optional(),
   number: z.number(),
   title: z.string(),
   url: z.string(),
   state: z.string(),
   body: z.string().nullable(),
   labels: z.array(z.string()),
+  projectPath: z.string().optional(),
   baseRefName: z.string().nullable().optional(),
   headRefName: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
@@ -3041,9 +3046,16 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceScriptManagement: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
         hubRelationship: z.boolean().optional(),
+        // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
+        // checkoutGithubSetAutoMerge fallback after 2026-12-28.
+        checkoutForgeSetAutoMerge: z.boolean().optional(),
         checkoutGithubSetAutoMerge: z.boolean().optional(),
         // COMPAT(githubCheckDetails): added in v0.1.92, remove gate after 2026-12-08.
         githubCheckDetails: z.boolean().optional(),
+        // COMPAT(forgeCheckDetails): added in v0.1.106, remove githubCheckDetails fallback after 2026-12-28.
+        forgeCheckDetails: z.boolean().optional(),
+        // COMPAT(forgeSearch): added in v0.1.106, remove github_search fallback after 2026-12-28.
+        forgeSearch: z.boolean().optional(),
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
