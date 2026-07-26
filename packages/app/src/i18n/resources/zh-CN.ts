@@ -945,6 +945,7 @@ export const zhCN: TranslationResources = {
         newBrowser: "新建浏览器标签",
         importSession: "导入会话",
         copyPath: "复制 workspace 路径",
+        addToChat: "添加到对话",
         copyBranchName: "复制分支名称",
         showSetup: "显示 setup",
       },

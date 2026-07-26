@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { AttachmentMetadata } from "@/attachments/types";
+import type { AttachmentMetadata, UserComposerAttachment } from "@/attachments/types";
+import { isWorkspaceFileComposerAttachment } from "@/attachments/workspace-file";
 import { collectLiveComposerAttachmentIds } from "@/attachments/live-attachment-refs";
 import {
   garbageCollectAttachments,
@@ -35,6 +36,15 @@ interface DraftStoreActions {
   getDraftInput: (draftKey: string) => DraftInput | undefined;
   hydrateDraftInput: (input: { draftKey: string }) => Promise<DraftInput | undefined>;
   saveDraftInput: (input: { draftKey: string; draft: DraftInput }) => void;
+  /**
+   * Appends a workspace-file attachment to a draft, hydrating it first so a
+   * draft that only exists on disk isn't overwritten by an empty one. Adding the
+   * same file twice is a no-op.
+   */
+  attachWorkspaceFile: (input: {
+    draftKey: string;
+    attachment: UserComposerAttachment;
+  }) => Promise<void>;
   markDraftLifecycle: (input: { draftKey: string; lifecycle: DraftLifecycleState }) => void;
   clearDraftInput: (input: {
     draftKey: string;
@@ -303,6 +313,24 @@ export const useDraftStore = create<DraftStore>()(
           };
         });
         scheduleAttachmentGc();
+      },
+
+      attachWorkspaceFile: async ({ draftKey, attachment }) => {
+        const current = (await get().hydrateDraftInput({ draftKey })) ??
+          get().getDraftInput(draftKey) ?? { text: "", attachments: [] };
+        const alreadyThere = current.attachments.some(
+          (entry) =>
+            isWorkspaceFileComposerAttachment(entry) &&
+            isWorkspaceFileComposerAttachment(attachment) &&
+            entry.path === attachment.path,
+        );
+        if (alreadyThere) {
+          return;
+        }
+        get().saveDraftInput({
+          draftKey,
+          draft: { ...current, attachments: [...current.attachments, attachment] },
+        });
       },
 
       markDraftLifecycle: ({ draftKey, lifecycle }) => {

@@ -18,7 +18,10 @@ import {
 import { useToast } from "@/contexts/toast-context";
 import { isNative } from "@/constants/platform";
 import { openServiceUrl } from "@/utils/open-service-url";
-import { resolveWorkspaceScriptLink } from "@/utils/workspace-script-links";
+import {
+  resolveWorkspaceScriptLink,
+  type ResolvedWorkspaceScriptLink,
+} from "@/utils/workspace-script-links";
 import type { Theme } from "@/styles/theme";
 
 type ScriptActionIcon = "start" | "view";
@@ -251,6 +254,12 @@ function resolveScriptIconColorMapping(args: {
   return mutedColorMapping;
 }
 
+// The link a service row opens: the resolver ranks its targets and puts the best
+// one first (public URL over Paseo proxy over direct host).
+function resolvePrimaryLinkUrl(link: ResolvedWorkspaceScriptLink): string | null {
+  return link.primary?.url ?? null;
+}
+
 function ScriptRow({
   script,
   liveTerminalIdSet,
@@ -265,13 +274,13 @@ function ScriptRow({
   const isService = (script.type ?? "service") === "service";
   const exitCode = script.exitCode ?? null;
   const serviceLink = resolveWorkspaceScriptLink({ script, activeConnection });
-  const serviceOpenUrl = isService && isRunning ? serviceLink.openUrl : null;
+  const serviceOpenUrl = isService && isRunning ? resolvePrimaryLinkUrl(serviceLink) : null;
   const liveTerminalId =
     script.terminalId && liveTerminalIdSet.has(script.terminalId) ? script.terminalId : null;
 
   const hostLinks: HostLink[] = [];
   if (isService && isRunning) {
-    const routedUrl = script.proxyUrl ?? serviceLink.labelUrl;
+    const routedUrl = script.proxyUrl ?? resolvePrimaryLinkUrl(serviceLink);
     if (routedUrl) {
       hostLinks.push({
         key: "proxy",

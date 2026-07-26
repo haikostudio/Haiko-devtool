@@ -961,6 +961,7 @@ export const fr: TranslationResources = {
         newBrowser: "Nouvel onglet du navigateur",
         importSession: "Session d'importation",
         copyPath: "Copier le chemin de l'espace de travail",
+        addToChat: "Ajouter au chat",
         copyBranchName: "Copier le nom de la branche",
         showSetup: "Afficher la configuration",
       },

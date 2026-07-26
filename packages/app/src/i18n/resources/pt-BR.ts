@@ -959,6 +959,7 @@ export const ptBR: TranslationResources = {
         newBrowser: "Nova aba de navegador",
         importSession: "Importar sessão",
         copyPath: "Copiar caminho do workspace",
+        addToChat: "Adicionar ao chat",
         copyBranchName: "Copiar nome da branch",
         showSetup: "Mostrar configuração",
       },

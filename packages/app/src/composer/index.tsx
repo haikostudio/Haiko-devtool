@@ -409,7 +409,7 @@ function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): R
   }
   // A workspace file has no forge item to render a pill from.
   if (attachment.kind === "workspace_file") {
-    return <></>;
+    return null;
   }
   return (
     <GithubAttachmentPill
@@ -733,7 +733,7 @@ function GithubPickerOption({
   }, [onToggle, item]);
   const leadingSlot = useMemo(
     () =>
-      item.kind === "pr" ? (
+      item.kind === "change_request" ? (
         <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
       ) : (
         <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />

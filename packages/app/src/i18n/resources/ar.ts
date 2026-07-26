@@ -950,6 +950,7 @@ export const ar: TranslationResources = {
         newBrowser: "علامة تبويب متصفح جديدة",
         importSession: "جلسة الاستيراد",
         copyPath: "نسخ مسار مساحة العمل",
+        addToChat: "إضافة إلى المحادثة",
         copyBranchName: "انسخ اسم الفرع",
         showSetup: "إظهار الإعداد",
       },

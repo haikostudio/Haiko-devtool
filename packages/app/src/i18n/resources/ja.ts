@@ -955,6 +955,7 @@ export const ja: TranslationResources = {
         newBrowser: "新しいブラウザタブ",
         importSession: "セッションをインポート",
         copyPath: "ワークスペースパスをコピー",
+        addToChat: "チャットに追加",
         copyBranchName: "ブランチ名をコピー",
         showSetup: "セットアップを表示",
       },

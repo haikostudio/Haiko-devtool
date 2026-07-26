@@ -345,7 +345,7 @@ function WebPushRow() {
   }
 
   return (
-    <View style={ROW_WITH_BORDER_STYLE}>
+    <View style={styles.rowWithBorder}>
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>{t("settings.general.webPush.label")}</Text>
         <Text style={settingsStyles.rowHint}>{t("settings.general.webPush.description")}</Text>
@@ -1627,6 +1627,17 @@ export default function SettingsScreen({ view, openAddHostIntent = null }: Setti
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create((theme) => ({
+  // A settings row that carries a separator above it — same shape as the shared
+  // row, plus the top border that groups consecutive rows into one block.
+  rowWithBorder: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: theme.spacing[4],
+    paddingHorizontal: theme.spacing[4],
+    borderTopWidth: theme.borderWidth[1],
+    borderTopColor: theme.colors.border,
+  },
   loadingContainer: {
     flex: 1,
     backgroundColor: theme.colors.surface0,

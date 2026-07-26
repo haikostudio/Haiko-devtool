@@ -105,6 +105,12 @@ export interface UserMessageItem {
   text: string;
   timestamp: Date;
   optimistic?: true;
+  /**
+   * Identifiant posé par le client à l'envoi. Sert à rapprocher un message
+   * affiché aussitôt de sa version confirmée par le serveur, pour qu'il ne
+   * s'affiche pas deux fois.
+   */
+  clientMessageId?: string;
   images?: UserMessageImageAttachment[];
   /** Server-persisted images, present on non-optimistic messages from other clients. */
   remoteImages?: RemoteUserMessageImage[];

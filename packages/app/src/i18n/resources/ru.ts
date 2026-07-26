@@ -958,6 +958,7 @@ export const ru: TranslationResources = {
         newBrowser: "Новая вкладка браузера",
         importSession: "Импортировать сеанс",
         copyPath: "Копировать путь к рабочей области",
+        addToChat: "Добавить в чат",
         copyBranchName: "Скопировать название ветки",
         showSetup: "Показать настройки",
       },

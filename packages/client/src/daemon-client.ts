@@ -370,6 +370,8 @@ export interface CreatePaseoWorktreeInput extends Pick<
   | "firstAgentContext"
   | "refName"
   | "action"
+  // Restauré : source du checkout (une demande de changement sur une forge).
+  | "checkoutSource"
   | "githubPrNumber"
 > {}
 
@@ -423,6 +425,9 @@ export interface FileReadResult {
   path: string;
   kind: LegacyFileExplorerFilePayload["kind"];
   modifiedAt: string;
+  // Restauré : révision du fichier, comparée à l'écriture pour refuser
+  // d'écraser une version modifiée entre-temps.
+  revision?: string;
 }
 export interface FileUploadInput {
   fileName: string;

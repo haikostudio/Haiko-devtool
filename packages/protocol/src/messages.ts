@@ -3061,6 +3061,8 @@ export const ServerInfoStatusPayloadSchema = z
         // COMPAT(importSessionWorkspaceTarget): the import sheet lets the user pick
         // which workspace an imported session lands in.
         importSessionWorkspaceTarget: z.boolean().optional(),
+        // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
+        providerRemoval: z.boolean().optional(),
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
         commitBaseClassification: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
@@ -3476,6 +3478,10 @@ export const WorkspaceDescriptorPayloadSchema = z
     scripts: z.array(WorkspaceScriptPayloadSchema).default([]),
     gitRuntime: WorkspaceGitRuntimePayloadSchema,
     githubRuntime: WorkspaceGitHubRuntimePayloadSchema,
+    // COMPAT(forge): added in v0.1.106, remove after 2026-12-27. The forge resolved
+    // for this workspace, so the sidebar/hover-card render the right brand mark.
+    // Old daemons omit it; absent means the client falls back to GitHub.
+    forge: z.string().optional(),
     project: ProjectPlacementPayloadSchema.optional(),
   })
   .transform((workspace) => ({

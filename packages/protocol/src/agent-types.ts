@@ -104,6 +104,10 @@ export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;
+  // Restauré : d'où vient le fournisseur — fourni avec Paseo ou ajouté par
+  // l'utilisateur. L'écran des réglages n'autorise la suppression que pour les
+  // seconds.
+  source?: "builtin" | "custom";
   error?: string;
   models?: AgentModelDefinition[];
   modes?: AgentMode[];

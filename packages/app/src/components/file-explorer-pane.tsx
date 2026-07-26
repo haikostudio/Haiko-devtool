@@ -72,6 +72,8 @@ interface TreeRowItemProps {
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void;
   onDownloadEntry: (entry: ExplorerEntry) => void;
+  /** Absent when there is no focused chat to attach the file to. */
+  onAddToChat?: (path: string) => void;
 }
 
 function stopPressInPropagation(event: { stopPropagation?: () => void }) {
@@ -113,6 +115,7 @@ function TreeRowItem({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
+  onAddToChat,
 }: TreeRowItemProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -130,6 +133,10 @@ function TreeRowItem({
     ],
     [depth, isSelected, theme.spacing],
   );
+
+  const handleAddToChat = useCallback(() => {
+    onAddToChat?.(entry.path);
+  }, [onAddToChat, entry.path]);
 
   const handleCopy = useCallback(() => {
     onCopyPath(entry.path);
@@ -192,6 +199,11 @@ function TreeRowItem({
           <DropdownMenuItem leading={copyLeading} onSelect={handleCopy}>
             {t("workspace.fileExplorer.context.copyPath")}
           </DropdownMenuItem>
+          {entry.kind === "file" && onAddToChat ? (
+            <DropdownMenuItem onSelect={handleAddToChat}>
+              {t("workspace.fileExplorer.context.addToChat")}
+            </DropdownMenuItem>
+          ) : null}
           {entry.kind === "file" ? (
             <DropdownMenuItem leading={downloadLeading} onSelect={handleDownload}>
               {t("workspace.fileExplorer.context.download")}
@@ -208,6 +220,11 @@ interface FileExplorerPaneProps {
   workspaceId?: string | null;
   workspaceRoot: string;
   onOpenFile?: (filePath: string) => void;
+  /**
+   * When provided, each file row offers "add to chat", which attaches the file
+   * to the focused draft. Absent when there is no chat to attach to.
+   */
+  onAddToChat?: (filePath: string) => void;
 }
 
 interface TreeRow {
@@ -220,6 +237,7 @@ export function FileExplorerPane({
   workspaceId,
   workspaceRoot,
   onOpenFile,
+  onAddToChat,
 }: FileExplorerPaneProps) {
   const { t } = useTranslation();
 
@@ -428,12 +446,14 @@ export function FileExplorerPane({
         onEntryPress={handleEntryPress}
         onCopyPath={handleCopyPath}
         onDownloadEntry={handleDownloadEntry}
+        onAddToChat={onAddToChat}
       />
     ),
     [
       expandedPaths,
       handleEntryPress,
       handleCopyPath,
+      onAddToChat,
       handleDownloadEntry,
       isDirectoryLoading,
       selectedEntryPath,
@@ -859,6 +879,7 @@ function TreeRowDispatcher({
   onEntryPress,
   onCopyPath,
   onDownloadEntry,
+  onAddToChat,
 }: {
   info: ListRenderItemInfo<TreeRow>;
   expandedPaths: Set<string>;
@@ -867,6 +888,7 @@ function TreeRowDispatcher({
   onEntryPress: (entry: ExplorerEntry) => void;
   onCopyPath: (path: string) => void | Promise<void>;
   onDownloadEntry: (entry: ExplorerEntry) => void;
+  onAddToChat?: (path: string) => void;
 }) {
   const entry = info.item.entry;
   const depth = info.item.depth;
@@ -885,6 +907,7 @@ function TreeRowDispatcher({
       onEntryPress={onEntryPress}
       onCopyPath={onCopyPath}
       onDownloadEntry={onDownloadEntry}
+      onAddToChat={onAddToChat}
     />
   );
 }

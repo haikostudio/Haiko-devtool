@@ -949,6 +949,7 @@ export const en = {
         newBrowser: "New browser tab",
         importSession: "Import session",
         copyPath: "Copy workspace path",
+        addToChat: "Add to chat",
         copyBranchName: "Copy branch name",
         showSetup: "Show setup",
       },
