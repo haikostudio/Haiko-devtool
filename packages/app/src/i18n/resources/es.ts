@@ -429,6 +429,15 @@ export const es: TranslationResources = {
       deadlineOverdue: "Atrasada",
       deadlineNone: "Sin fecha límite",
     },
+    quota: {
+      rolling: "Ventana móvil",
+      weekly: "Cuota semanal",
+      unavailable: "Consumo no disponible",
+    },
+    explorer: {
+      title: "Explorador",
+      noProject: "Elige un proyecto para explorar sus archivos.",
+    },
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {
       backlog: "Por hacer",

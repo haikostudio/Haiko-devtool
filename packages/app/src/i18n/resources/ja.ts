@@ -427,6 +427,15 @@ export const ja: TranslationResources = {
       deadlineOverdue: "期限超過",
       deadlineNone: "期限なし",
     },
+    quota: {
+      rolling: "ローリング枠",
+      weekly: "週次上限",
+      unavailable: "使用状況を取得できません",
+    },
+    explorer: {
+      title: "エクスプローラー",
+      noProject: "ファイルを閲覧するプロジェクトを選択してください。",
+    },
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
       backlog: "未着手",

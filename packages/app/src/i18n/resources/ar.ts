@@ -421,6 +421,15 @@ export const ar: TranslationResources = {
       deadlineOverdue: "متأخرة",
       deadlineNone: "بدون موعد نهائي",
     },
+    quota: {
+      rolling: "النافذة المتحركة",
+      weekly: "الحصة الأسبوعية",
+      unavailable: "الاستهلاك غير متاح",
+    },
+    explorer: {
+      title: "المستكشف",
+      noProject: "اختر مشروعًا لتصفّح ملفاته.",
+    },
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {
       backlog: "للإنجاز",

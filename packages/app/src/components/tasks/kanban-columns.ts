@@ -218,7 +218,9 @@ export type ColumnControlsMap = Partial<Record<TaskColumn, ColumnControls>>;
 
 export function buildColumnModels(
   board: TaskBoard | null,
-  folderId: string,
+  // Kept in the signature (callers still pass the project's single list id) but
+  // no longer used to narrow the board — see the filter below.
+  _folderId: string,
   controls?: ColumnControlsMap,
 ): KanbanColumnModel[] {
   return KANBAN_COLUMNS.map((column) => {
@@ -238,9 +240,11 @@ export function buildColumnModels(
       tasks: (board?.tasks ?? [])
         .filter(
           (task) =>
-            task.folderId === folderId &&
-            task.column === column &&
-            (needle === "" || matchesQuery(task, needle)),
+            // Folders are gone from the product: one project, one list. The
+            // folderId is still carried by persisted tasks (and by older boards
+            // that had several folders), so every task of the project shows up
+            // here regardless of which folder it was filed under.
+            task.column === column && (needle === "" || matchesQuery(task, needle)),
         )
         .sort(compare),
     };

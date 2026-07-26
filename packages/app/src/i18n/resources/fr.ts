@@ -431,6 +431,15 @@ export const fr: TranslationResources = {
       deadlineOverdue: "En retard",
       deadlineNone: "Sans échéance",
     },
+    quota: {
+      rolling: "Fenêtre glissante",
+      weekly: "Quota hebdomadaire",
+      unavailable: "Consommation indisponible",
+    },
+    explorer: {
+      title: "Explorateur",
+      noProject: "Choisissez un projet pour parcourir ses fichiers.",
+    },
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {
       backlog: "À faire",

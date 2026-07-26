@@ -247,7 +247,9 @@ const buildFallbackAttentionNotification = (input: {
   reason: "finished" | "error" | "permission";
   serverId: string;
   agentId: string;
-  agent: { title: string | null; synthesis?: { summary: string } | null } | undefined;
+  agent:
+    | { title: string | null; workspaceId?: string; synthesis?: { summary: string } | null }
+    | undefined;
   assistantMessage: string | null;
   permissionRequest: NotificationPermissionRequest | null;
 }): AgentAttentionNotificationPayload => {
@@ -255,6 +257,9 @@ const buildFallbackAttentionNotification = (input: {
   return buildAgentAttentionNotificationPayload({
     reason: input.reason,
     serverId: input.serverId,
+    // Targets the notification: without it, tapping it doesn't know where to
+    // open the agent.
+    workspaceId: input.agent?.workspaceId ?? "",
     agentId: input.agentId,
     agentTitle: input.agent?.title ?? null,
     finishedSummary: isFinished ? (input.agent?.synthesis?.summary ?? null) : null,
@@ -2007,7 +2012,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
       };
       if (!client) {
         dropOptimisticMessage();
-        throw new Error("Daemon unavailable");
+        throw new Error(t("common.errors.daemonUnavailable"));
       }
       try {
         await client.sendAgentMessage(agentId, message, {
@@ -2023,7 +2028,7 @@ function SessionProviderInternal({ children, serverId, client }: SessionProvider
         throw error;
       }
     },
-    [serverId, client, setAgentStreamTail, setAgentStreamHead],
+    [serverId, client, setAgentStreamTail, setAgentStreamHead, t],
   );
 
   // Keep the ref updated so the agent_update handler can call it

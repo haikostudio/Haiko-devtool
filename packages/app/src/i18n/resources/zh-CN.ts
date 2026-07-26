@@ -420,6 +420,15 @@ export const zhCN: TranslationResources = {
       deadlineOverdue: "已逾期",
       deadlineNone: "无截止日期",
     },
+    quota: {
+      rolling: "滚动窗口",
+      weekly: "每周配额",
+      unavailable: "无法获取用量",
+    },
+    explorer: {
+      title: "文件浏览器",
+      noProject: "请选择一个项目以浏览其文件。",
+    },
     updateHost: "请更新主机以使用任务功能。",
     columns: {
       backlog: "待办",

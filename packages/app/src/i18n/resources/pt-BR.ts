@@ -430,6 +430,15 @@ export const ptBR: TranslationResources = {
       deadlineOverdue: "Atrasada",
       deadlineNone: "Sem prazo",
     },
+    quota: {
+      rolling: "Janela deslizante",
+      weekly: "Cota semanal",
+      unavailable: "Consumo indisponível",
+    },
+    explorer: {
+      title: "Explorador",
+      noProject: "Escolha um projeto para navegar pelos seus arquivos.",
+    },
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {
       backlog: "A fazer",

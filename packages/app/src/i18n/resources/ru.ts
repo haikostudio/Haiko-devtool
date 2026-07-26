@@ -426,6 +426,15 @@ export const ru: TranslationResources = {
       deadlineOverdue: "Просрочено",
       deadlineNone: "Без срока",
     },
+    quota: {
+      rolling: "Скользящее окно",
+      weekly: "Недельная квота",
+      unavailable: "Данные о расходе недоступны",
+    },
+    explorer: {
+      title: "Проводник",
+      noProject: "Выберите проект, чтобы просмотреть его файлы.",
+    },
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
       backlog: "К выполнению",

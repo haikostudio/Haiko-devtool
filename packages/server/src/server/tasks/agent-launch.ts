@@ -162,10 +162,16 @@ export function resolveTaskLaunch(task: KanbanTask): ResolvedTaskLaunch {
 }
 
 /**
- * How a task's agent should get its working tree. A folder IS a git branch:
- * every task in a branch-folder lands on the SAME branch inside ONE shared
- * worktree (created by the first task, reused by the rest). Legacy folders (no
- * branch) keep the old per-task throwaway branch. Plan-mode always runs in place.
+ * How a task's agent should get its working tree.
+ *
+ * Every task now runs IN PLACE, on the project's main branch. Cutting a branch
+ * (and a worktree) per task produced exactly the problems it was meant to avoid:
+ * conflicts between branches, painful merges, agents working from divergent
+ * contexts, and a deploy step that had to reconcile all of it. One branch, one
+ * context, one deploy.
+ *
+ * The "create"/"reuse" shapes are kept because older boards may still carry a
+ * folder branch and its worktree; nothing produces them any more.
  */
 export type TaskWorktreePlan =
   | { kind: "in-place"; branch: null }
@@ -175,34 +181,13 @@ export type TaskWorktreePlan =
   // Later task of a branch-folder: run inside the folder's shared worktree.
   | { kind: "reuse"; branch: string; workspaceId: string; cwd: string };
 
-export function resolveTaskWorktreePlan(input: {
+export function resolveTaskWorktreePlan(_input: {
   task: KanbanTask;
   folder: TaskFolder | undefined;
   planMode: boolean;
 }): TaskWorktreePlan {
-  const { task, folder, planMode } = input;
-  if (planMode) {
-    return { kind: "in-place", branch: null };
-  }
-  const folderBranch = folder?.branch;
-  if (folderBranch) {
-    if (folder?.workspaceId && folder.worktreeCwd) {
-      return {
-        kind: "reuse",
-        branch: folderBranch,
-        workspaceId: folder.workspaceId,
-        cwd: folder.worktreeCwd,
-      };
-    }
-    return {
-      kind: "create",
-      branchName: folderBranch,
-      branch: folderBranch,
-      recordFolderId: folder ? folder.id : null,
-    };
-  }
-  const branch = taskBranchName(task);
-  return { kind: "create", branchName: branch, branch, recordFolderId: null };
+  // Always in place, on the project's main branch — see the note above.
+  return { kind: "in-place", branch: null };
 }
 
 /**
@@ -263,11 +248,11 @@ export function buildTaskAnalysisPrompt(input: {
   planMode: boolean;
   branch: string | null;
 }): string {
-  const { task, planMode, branch } = input;
+  const { task, planMode } = input;
   const providerLabel = resolveTaskLaunch(task).provider;
   const intro = planMode
     ? "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera directement dans le workspace en cours du projet."
-    : `Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans un worktree dédié, sur la branche ${branch ?? "de la tâche"} (le checkout principal de l'utilisateur n'est pas touché).`;
+    : "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans le checkout principal du projet, sur sa branche principale — comme toutes les autres tâches. Aucune branche dédiée n'est créée.";
   return [
     intro,
     `Agent d'exécution : ${providerLabel}. Chiffre tokens/quota/temps POUR CE modèle.`,
@@ -301,10 +286,10 @@ export function buildTaskExecutionPrompt(input: {
   planMode: boolean;
   branch: string | null;
 }): string {
-  const { task, planMode, branch } = input;
+  const { task, planMode } = input;
   const intro = planMode
     ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
-    : `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un worktree dédié, sur la branche ${branch ?? "de la tâche"} (les autres tâches du même groupe committent sur cette même branche). Le checkout principal de l'utilisateur n'est pas touché.`;
+    : "Tu exécutes une tâche du gestionnaire de tâches Paseo dans le checkout principal du projet, sur sa branche principale. Toutes les tâches travaillent sur cette même branche : ne crée aucune branche, ne change pas de branche.";
   const instructions = planMode
     ? [
         "## Étape 2 — Plan d'implémentation",

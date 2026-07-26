@@ -1,4 +1,5 @@
 import type { AttachmentLibraryEntry } from "@getpaseo/protocol/messages";
+import { useTranslation } from "react-i18next";
 
 import { useFetchQuery } from "@/data/query";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
@@ -31,6 +32,7 @@ export function useAttachmentLibrary({
   workspaceId,
   enabled,
 }: UseAttachmentLibraryOptions) {
+  const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
 
@@ -40,7 +42,7 @@ export function useAttachmentLibrary({
     staleTimeMs: STALE_MS,
     queryFn: async (): Promise<AttachmentLibraryEntry[]> => {
       if (!client) {
-        throw new Error("Daemon client unavailable");
+        throw new Error(t("common.errors.daemonClientUnavailable"));
       }
       return await client.attachmentLibraryList(workspaceId);
     },

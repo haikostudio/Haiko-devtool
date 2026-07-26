@@ -31,6 +31,21 @@ interface TasksBoardUiState {
   /** Whether the Details/Billing dock is collapsed to its title bar. */
   detailsCollapsed: boolean;
   setDetailsCollapsed: (detailsCollapsed: boolean) => void;
+  /** Height (in px) of the always-visible timeline + quota area above the board. */
+  timelineHeight: number;
+  setTimelineHeight: (timelineHeight: number) => void;
+  /** Whether the bottom-docked project file explorer is open. */
+  explorerOpen: boolean;
+  setExplorerOpen: (explorerOpen: boolean) => void;
+  /** Height (in px) of the file explorer dock. */
+  explorerHeight: number;
+  setExplorerHeight: (explorerHeight: number) => void;
+  /** Horizontal offset (in px) of the explorer dock from its centered position. */
+  explorerOffsetX: number;
+  setExplorerOffsetX: (explorerOffsetX: number) => void;
+  /** Whether the explorer dock is collapsed to its title bar. */
+  explorerCollapsed: boolean;
+  setExplorerCollapsed: (explorerCollapsed: boolean) => void;
   /**
    * Ephemeral (not persisted): the task whose agent chat the bottom dock shows.
    * `null` means the dock shows the persistent conductor agent. Set on task tap,
@@ -51,6 +66,8 @@ interface TasksBoardUiState {
 // opens the panel at before the user has resized it.
 const DEFAULT_PANEL_WIDTH = 440;
 const DEFAULT_CONDUCTOR_HEIGHT = 340;
+// Mirrors DEFAULT_TIMELINE_HEIGHT in task-timeline-area.tsx.
+const DEFAULT_TIMELINE_HEIGHT = 190;
 
 export const useTasksBoardUiStore = create<TasksBoardUiState>()(
   persist(
@@ -71,6 +88,16 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setDetailsOffsetX: (detailsOffsetX) => set({ detailsOffsetX }),
       detailsCollapsed: false,
       setDetailsCollapsed: (detailsCollapsed) => set({ detailsCollapsed }),
+      timelineHeight: DEFAULT_TIMELINE_HEIGHT,
+      setTimelineHeight: (timelineHeight) => set({ timelineHeight }),
+      explorerOpen: false,
+      setExplorerOpen: (explorerOpen) => set({ explorerOpen }),
+      explorerHeight: DEFAULT_CONDUCTOR_HEIGHT,
+      setExplorerHeight: (explorerHeight) => set({ explorerHeight }),
+      explorerOffsetX: 0,
+      setExplorerOffsetX: (explorerOffsetX) => set({ explorerOffsetX }),
+      explorerCollapsed: false,
+      setExplorerCollapsed: (explorerCollapsed) => set({ explorerCollapsed }),
       dockTaskId: null,
       setDockTaskId: (dockTaskId) => set({ dockTaskId }),
       detailsTaskId: null,
@@ -90,6 +117,11 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         detailsHeight: state.detailsHeight,
         detailsOffsetX: state.detailsOffsetX,
         detailsCollapsed: state.detailsCollapsed,
+        timelineHeight: state.timelineHeight,
+        explorerOpen: state.explorerOpen,
+        explorerHeight: state.explorerHeight,
+        explorerOffsetX: state.explorerOffsetX,
+        explorerCollapsed: state.explorerCollapsed,
       }),
     },
   ),

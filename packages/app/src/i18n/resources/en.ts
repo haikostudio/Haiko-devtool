@@ -422,6 +422,15 @@ export const en = {
       deadlineOverdue: "Overdue",
       deadlineNone: "No deadline",
     },
+    quota: {
+      rolling: "Rolling window",
+      weekly: "Weekly allowance",
+      unavailable: "Usage unavailable",
+    },
+    explorer: {
+      title: "Explorer",
+      noProject: "Select a project to browse its files.",
+    },
     updateHost: "Update the host to use Tasks.",
     columns: {
       backlog: "To do",
