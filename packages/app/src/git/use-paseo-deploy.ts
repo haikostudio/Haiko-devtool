@@ -16,9 +16,19 @@ export interface PaseoDeployFileEntry {
   status: string;
 }
 
+/** Where one change stands in the publication pipeline. */
+export type PaseoDeployCommitState = "pending" | "deploying" | "deployed" | "failed";
+
 export interface PaseoDeployCommitEntry {
   sha: string;
   subject: string;
+  /**
+   * Status of this individual change. Optional — older daemons don't send it,
+   * and the list then reads as plain pending work.
+   */
+  state?: PaseoDeployCommitState;
+  /** Files this change touches, for the expandable detail. Optional. */
+  files?: string[];
 }
 
 /** Another Paseo checkout (task-branch worktree) with work to merge-and-ship. */
@@ -63,6 +73,13 @@ export interface PaseoDeployStatus {
   hasPending: boolean;
   uncommittedFiles: PaseoDeployFileEntry[];
   unshippedCommits: PaseoDeployCommitEntry[];
+  /**
+   * Every change of the current publication cycle WITH its own status — the list
+   * the sheet actually shows. Superset of `unshippedCommits` (it keeps the ones
+   * that just went live). Optional — older daemons omit it and the sheet falls
+   * back to the plain unshipped list.
+   */
+  changes?: PaseoDeployCommitEntry[];
   /**
    * Real number of distinct changed files vs. the live version. Optional — older
    * daemons don't send it, so callers fall back to summing the two lists.

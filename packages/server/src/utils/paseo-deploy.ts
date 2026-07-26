@@ -84,6 +84,13 @@ interface DeployRun {
   noBuild: boolean;
   /** Agent carrying out this publication, when one was launched for it. */
   agentId: string | null;
+  /**
+   * The changes this run is putting online, captured at the click. Kept after
+   * the run ends because a successful publish empties the "not yet online" list:
+   * without this snapshot the sheet would simply lose the changes instead of
+   * showing them go green, which reads as "they vanished".
+   */
+  commits: PaseoDeployPendingCommit[];
 }
 let currentRun: DeployRun | null = null;
 /** Error from the last finished deploy run, if it failed. */
@@ -211,6 +218,12 @@ export interface PaseoDeployStatus {
   hasPending: boolean;
   uncommittedFiles: PaseoDeployPendingFile[];
   unshippedCommits: PaseoDeployPendingCommit[];
+  /**
+   * Every change of the current publication cycle, each with its own status and
+   * the files it touches. Superset of {@link unshippedCommits}: it keeps the
+   * changes that just went live so the list turns green instead of emptying.
+   */
+  changes: PaseoDeployPendingCommit[];
   /**
    * Real number of distinct files that differ from what's currently live —
    * committed-but-unshipped, uncommitted, and new files all counted once. This
@@ -467,6 +480,97 @@ function parseUncommittedFiles(porcelain: string): PaseoDeployPendingFile[] {
       status: line.slice(0, 2).trim(),
       path: line.slice(3),
     }));
+}
+
+/** Where one change stands in the publication pipeline. */
+export type PaseoDeployCommitState = NonNullable<PaseoDeployPendingCommit["state"]>;
+
+export interface AnnotateDeployCommitsInput {
+  /** Changes that are committed but not live yet, as git sees it right now. */
+  unshipped: PaseoDeployPendingCommit[];
+  /** The changes the current/last run took on, or null when no run is known. */
+  runCommits: PaseoDeployPendingCommit[] | null;
+  running: boolean;
+  outcome: PaseoDeployOutcome | null;
+}
+
+/**
+ * Give every change its own status, so the sheet can say where each one stands
+ * instead of showing a single global figure.
+ *
+ * The subtle part is the successful run: git then reports NOTHING unshipped, so
+ * the list would go empty at the exact moment the reader wants confirmation.
+ * The run's own snapshot is replayed as "deployed" and put first, and anything
+ * committed since (git's list) follows as "pending" — which is the truth: it
+ * landed after the publication started and is not online.
+ *
+ * Pure, so the state machine is unit-tested without git.
+ */
+function withCommitState(
+  commit: PaseoDeployPendingCommit,
+  state: PaseoDeployCommitState,
+): PaseoDeployPendingCommit {
+  return { sha: commit.sha, subject: commit.subject, state, files: commit.files };
+}
+
+export function annotateDeployCommits(
+  input: AnnotateDeployCommitsInput,
+): PaseoDeployPendingCommit[] {
+  if (input.running) {
+    // A publication takes the whole trunk with it — including the work its own
+    // save step commits on the way. So everything still on the ground is on its
+    // way up, and marking part of it "waiting" would be a lie.
+    return input.unshipped.map((commit) => withCommitState(commit, "deploying"));
+  }
+  const runCommits = input.runCommits ?? [];
+  if (runCommits.length === 0) {
+    return input.unshipped.map((commit) => withCommitState(commit, "pending"));
+  }
+  if (input.outcome === "success") {
+    const published = new Set(runCommits.map((commit) => commit.sha));
+    return [
+      ...runCommits.map((commit) => withCommitState(commit, "deployed")),
+      // Committed after the publication started: genuinely still on the ground.
+      ...input.unshipped
+        .filter((commit) => !published.has(commit.sha))
+        .map((commit) => withCommitState(commit, "pending")),
+    ];
+  }
+  // The run failed: nothing went online, and saying so on every line is the
+  // whole point — an empty-looking list after a failure is what makes people
+  // think the mechanism silently swallowed their work.
+  return input.unshipped.map((commit) => withCommitState(commit, "failed"));
+}
+
+/** Cap on per-change file detail: enough for a real publication, bounded cost. */
+const COMMIT_FILE_DETAIL_LIMIT = 25;
+
+/**
+ * Files touched by a change, for the expandable detail under each line. Only
+ * the first {@link COMMIT_FILE_DETAIL_LIMIT} changes are detailed — one git call
+ * each, and a hundred-commit backlog is not worth a hundred subprocesses.
+ */
+async function attachCommitFiles(
+  commits: PaseoDeployPendingCommit[],
+): Promise<PaseoDeployPendingCommit[]> {
+  return Promise.all(
+    commits.map(async (commit, index) => {
+      if (index >= COMMIT_FILE_DETAIL_LIMIT || commit.sha.length === 0) {
+        return commit;
+      }
+      try {
+        const result = await runGitCommand(
+          ["show", "--name-only", "--format=", "--no-renames", commit.sha],
+          { cwd: REPO_ROOT, maxOutputBytes: 64 * 1024 },
+        );
+        const files = result.stdout.split("\n").filter((line) => line.trim().length > 0);
+        return files.length > 0 ? { ...commit, files } : commit;
+      } catch {
+        // A change whose files can't be listed still shows its line and status.
+        return commit;
+      }
+    }),
+  );
 }
 
 async function getUnshippedCommits(
@@ -809,6 +913,14 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const branch = branchResult.stdout.trim() || null;
     const run = await resolveDeployRun(Date.now());
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
+    const changes = await attachCommitFiles(
+      annotateDeployCommits({
+        unshipped: unshippedCommits,
+        runCommits: run?.commits ?? null,
+        running: run !== null && run.finishedAt === null,
+        outcome: run?.outcome ?? null,
+      }),
+    );
     const changesCount = await getChangedFileCount(deployedSha, uncommittedFiles);
     const daemonBehindCount = await getDaemonBehindCount(headSha);
     const allWorktrees = await listWorktrees();
@@ -829,6 +941,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       hasPending,
       uncommittedFiles,
       unshippedCommits,
+      changes,
       changesCount,
       headSha,
       deployedSha,
@@ -845,6 +958,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       hasPending: false,
       uncommittedFiles: [],
       unshippedCommits: [],
+      changes: [],
       changesCount: 0,
       headSha: null,
       deployedSha: null,
@@ -1240,6 +1354,14 @@ export async function triggerPaseoDeploy(input: {
     // Clear the previous run's phase BEFORE starting, so the first status poll
     // cannot report a finished/failed state that belongs to an earlier build.
     await resetDeployPhase();
+    // Snapshot what this publication is taking online, AFTER the merges and
+    // BEFORE the build. This is the list the sheet follows change by change.
+    const [deployedShaAtStart, headShaAtStart] = await Promise.all([
+      readDeployedSha(),
+      runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT })
+        .then((result) => result.stdout.trim() || null)
+        .catch(() => null),
+    ]);
     const run: DeployRun = {
       startedAt: Date.now(),
       finishedAt: null,
@@ -1247,6 +1369,7 @@ export async function triggerPaseoDeploy(input: {
       phase: null,
       noBuild: input.noBuild === true,
       agentId: null,
+      commits: await getUnshippedCommits(deployedShaAtStart, headShaAtStart),
     };
     currentRun = run;
     // Keep the skip note visible after a partial merge; otherwise clear.

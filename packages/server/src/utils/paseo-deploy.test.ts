@@ -1,11 +1,79 @@
 import { describe, expect, it } from "vitest";
 import {
+  annotateDeployCommits,
   AUTO_RESOLVABLE_CONFLICT_PATHS,
   classifyMergeConflicts,
   extractShipFailureReason,
   isPaseoDeployRepairBranch,
   parseWorktreeList,
 } from "./paseo-deploy.js";
+
+describe("annotateDeployCommits", () => {
+  const A = { sha: "aaa", subject: "Corriger le voyant" };
+  const B = { sha: "bbb", subject: "Ajouter les quotas" };
+  const C = { sha: "ccc", subject: "Écrit pendant la publication" };
+
+  it("marks everything as waiting when no publication has run", () => {
+    const result = annotateDeployCommits({
+      unshipped: [A, B],
+      runCommits: null,
+      running: false,
+      outcome: null,
+    });
+    expect(result.map((commit) => commit.state)).toEqual(["pending", "pending"]);
+  });
+
+  it("marks every change as being published while a run is going", () => {
+    // Including one committed after the click: the build takes the whole trunk,
+    // so calling it "waiting" while it is on its way up would be a lie.
+    const result = annotateDeployCommits({
+      unshipped: [C, A, B],
+      runCommits: [A, B],
+      running: true,
+      outcome: null,
+    });
+    expect(result.map((commit) => commit.state)).toEqual(["deploying", "deploying", "deploying"]);
+  });
+
+  it("keeps the published changes visible and green once the run succeeded", () => {
+    // git reports nothing unshipped after a successful publish. Without the run
+    // snapshot the list would go empty at the exact moment the reader wants
+    // confirmation — which reads as "my changes disappeared".
+    const result = annotateDeployCommits({
+      unshipped: [],
+      runCommits: [A, B],
+      running: false,
+      outcome: "success",
+    });
+    expect(result).toEqual([
+      { ...A, state: "deployed" },
+      { ...B, state: "deployed" },
+    ]);
+  });
+
+  it("separates what went live from what landed after the publication started", () => {
+    const result = annotateDeployCommits({
+      unshipped: [C],
+      runCommits: [A],
+      running: false,
+      outcome: "success",
+    });
+    expect(result).toEqual([
+      { ...A, state: "deployed" },
+      { ...C, state: "pending" },
+    ]);
+  });
+
+  it("says plainly, on every line, that a failed run put nothing online", () => {
+    const result = annotateDeployCommits({
+      unshipped: [A, B],
+      runCommits: [A, B],
+      running: false,
+      outcome: "failed",
+    });
+    expect(result.map((commit) => commit.state)).toEqual(["failed", "failed"]);
+  });
+});
 
 describe("classifyMergeConflicts", () => {
   it("treats the generated changelog snapshot as auto-resolvable", () => {

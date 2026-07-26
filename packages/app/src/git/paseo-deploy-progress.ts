@@ -63,6 +63,45 @@ export function formatDeployDuration(ms: number): string {
   return `${minutes} min ${seconds.toString().padStart(2, "0")} s`;
 }
 
+/** Where one change stands in the publication pipeline. */
+export type PaseoDeployCommitState = "pending" | "deploying" | "deployed" | "failed";
+
+export interface DeployCommitStateView {
+  /** Plain-language status shown next to the change. */
+  label: string;
+  /** Which colour family the badge uses. */
+  tone: "neutral" | "active" | "success" | "danger";
+  /** True while this change is on its way up (drives the little spinner). */
+  busy: boolean;
+}
+
+/**
+ * Status of a single change, in words a reader can act on. A change that has no
+ * status (older daemon) reads as waiting — never as published, because claiming
+ * something is online without knowing is the one mistake that destroys trust in
+ * the whole window.
+ */
+export function describeCommitState(
+  state: PaseoDeployCommitState | null | undefined,
+): DeployCommitStateView {
+  switch (state) {
+    case "deploying":
+      return { label: "En cours de publication", tone: "active", busy: true };
+    case "deployed":
+      return { label: "En ligne", tone: "success", busy: false };
+    case "failed":
+      return { label: "Non publié", tone: "danger", busy: false };
+    default:
+      return { label: "En attente", tone: "neutral", busy: false };
+  }
+}
+
+/** "3 fichiers modifiés" — the one-line summary of a change's detail. */
+export function describeCommitFileCount(count: number): string | null {
+  if (count <= 0) return null;
+  return count > 1 ? `${count} fichiers modifiés` : "1 fichier modifié";
+}
+
 export interface DeployActionLabelInput {
   /** A run is happening, or the click hasn't been acknowledged yet. */
   inProgress: boolean;

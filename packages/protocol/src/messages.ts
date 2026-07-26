@@ -4956,6 +4956,15 @@ export const PaseoDeployPendingFileSchema = z.object({
 export const PaseoDeployPendingCommitSchema = z.object({
   sha: z.string(),
   subject: z.string(),
+  /**
+   * Where this change stands in the publication pipeline: waiting, being
+   * published right now, live, or left behind by a failed run. Sent per change
+   * so the sheet can show a status next to each one instead of a single global
+   * progress figure. Optional so older daemons still parse.
+   */
+  state: z.enum(["pending", "deploying", "deployed", "failed"]).optional(),
+  /** Files this change touches, for the expandable detail. Optional. */
+  files: z.array(z.string()).optional(),
 });
 
 /**
@@ -5019,6 +5028,15 @@ export const PaseoDeployStatusResponseSchema = z.object({
     hasPending: z.boolean(),
     uncommittedFiles: z.array(PaseoDeployPendingFileSchema),
     unshippedCommits: z.array(PaseoDeployPendingCommitSchema),
+    /**
+     * Every change of the current publication cycle WITH its own status —
+     * waiting, being published, live, or left behind by a failure. Superset of
+     * `unshippedCommits`: it also keeps the changes that just went live, so the
+     * list turns green instead of emptying out and leaving the reader guessing.
+     * Optional so older daemons still parse (clients fall back to the plain
+     * unshipped list).
+     */
+    changes: z.array(PaseoDeployPendingCommitSchema).optional(),
     /**
      * Real count of distinct files that differ from the live version (committed,
      * uncommitted and new, deduplicated). Optional so older daemons that don't

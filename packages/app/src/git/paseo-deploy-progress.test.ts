@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEPLOY_PHASES,
+  describeCommitFileCount,
+  describeCommitState,
   formatDeployDuration,
   resolveDeployActionLabel,
   resolveDeployProgress,
@@ -168,5 +170,42 @@ describe("resolveDeployActionLabel", () => {
       "Lancer la mise en place",
     );
     expect(resolveDeployActionLabel(BUTTON)).toBe("Rien à publier");
+  });
+});
+
+describe("describeCommitState", () => {
+  it("gives every change a status a reader can act on", () => {
+    expect(describeCommitState("pending").label).toBe("En attente");
+    expect(describeCommitState("deploying").label).toBe("En cours de publication");
+    expect(describeCommitState("deployed").label).toBe("En ligne");
+    expect(describeCommitState("failed").label).toBe("Non publié");
+  });
+
+  it("spins only while the change is actually on its way up", () => {
+    expect(describeCommitState("deploying").busy).toBe(true);
+    expect(describeCommitState("deployed").busy).toBe(false);
+    expect(describeCommitState("pending").busy).toBe(false);
+  });
+
+  it("never claims a change is online when the status is unknown", () => {
+    // An older host sends no status. Reading that as "published" would be the
+    // one mistake that makes the whole window untrustworthy.
+    expect(describeCommitState(undefined).label).toBe("En attente");
+    expect(describeCommitState(null).tone).toBe("neutral");
+  });
+
+  it("colours the four states apart", () => {
+    const tones = (["pending", "deploying", "deployed", "failed"] as const).map(
+      (state) => describeCommitState(state).tone,
+    );
+    expect(new Set(tones).size).toBe(4);
+  });
+});
+
+describe("describeCommitFileCount", () => {
+  it("counts files in plain words, and says nothing when there are none", () => {
+    expect(describeCommitFileCount(0)).toBeNull();
+    expect(describeCommitFileCount(1)).toBe("1 fichier modifié");
+    expect(describeCommitFileCount(4)).toBe("4 fichiers modifiés");
   });
 });

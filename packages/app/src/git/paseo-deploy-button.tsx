@@ -16,12 +16,15 @@ import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
   type PaseoDeployCommitEntry,
+  type PaseoDeployCommitState,
   type PaseoDeployFileEntry,
   type PaseoDeployWorktreeEntry,
   usePaseoDeployStatus,
 } from "@/git/use-paseo-deploy";
 import {
   DEPLOY_PHASES,
+  describeCommitFileCount,
+  describeCommitState,
   type PaseoDeployOutcome,
   resolveDeployActionLabel,
   resolveDeployProgress,
@@ -33,6 +36,7 @@ import type { Theme } from "@/styles/theme";
 const EMPTY_FILES: PaseoDeployFileEntry[] = [];
 const EMPTY_COMMITS: PaseoDeployCommitEntry[] = [];
 const EMPTY_WORKTREES: PaseoDeployWorktreeEntry[] = [];
+const EMPTY_FILE_PATHS: string[] = [];
 
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedCheck = withUnistyles(Check);
@@ -284,18 +288,106 @@ function PendingFilesSection({ files }: { files: PaseoDeployFileEntry[] }) {
   );
 }
 
-/** "Changements prêts, pas encore en ligne" list (hidden when empty). */
-function PendingCommitsSection({ commits }: { commits: PaseoDeployCommitEntry[] }) {
-  if (commits.length === 0) return null;
+/** Fold/unfold marker, hidden when a row has no detail to show. */
+function ExpandChevron({ visible, expanded }: { visible: boolean; expanded: boolean }) {
+  if (!visible) return null;
+  if (expanded) return <ThemedChevronDown size={16} uniProps={chevronColorMapping} />;
+  return <ThemedChevronRight size={16} uniProps={chevronColorMapping} />;
+}
+
+/** Status pill shown at the right of every change: where it stands, in words. */
+function ChangeStatusBadge({ state }: { state: PaseoDeployCommitState | undefined }) {
+  const view = describeCommitState(state);
+  const badgeStyle = useMemo(() => {
+    switch (view.tone) {
+      case "active":
+        return [styles.changeBadge, styles.changeBadgeActive];
+      case "success":
+        return [styles.changeBadge, styles.changeBadgeSuccess];
+      case "danger":
+        return [styles.changeBadge, styles.changeBadgeDanger];
+      default:
+        return [styles.changeBadge, styles.changeBadgeNeutral];
+    }
+  }, [view.tone]);
+  const textStyle = useMemo(() => {
+    switch (view.tone) {
+      case "active":
+        return [styles.changeBadgeText, styles.changeBadgeTextActive];
+      case "success":
+        return [styles.changeBadgeText, styles.changeBadgeTextSuccess];
+      case "danger":
+        return [styles.changeBadgeText, styles.changeBadgeTextDanger];
+      default:
+        return [styles.changeBadgeText, styles.changeBadgeTextNeutral];
+    }
+  }, [view.tone]);
+  return (
+    <View style={badgeStyle}>
+      {view.busy ? (
+        <ThemedActivityIndicator size="small" uniProps={progressSpinnerColorMapping} />
+      ) : null}
+      <Text style={textStyle} numberOfLines={1}>
+        {view.label}
+      </Text>
+    </View>
+  );
+}
+
+/** One change: what it does, where it stands, and — unfolded — what it touches. */
+function ChangeRow({ change }: { change: PaseoDeployCommitEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const files = change.files ?? EMPTY_FILE_PATHS;
+  const handleToggle = useCallback(() => {
+    if (files.length > 0) setExpanded((previous) => !previous);
+  }, [files.length]);
+  const expandedState = useMemo(() => ({ expanded }), [expanded]);
+  const fileCountLabel = describeCommitFileCount(files.length);
+
+  return (
+    <View style={styles.changeCard}>
+      <Pressable
+        style={styles.changeHeader}
+        onPress={handleToggle}
+        disabled={files.length === 0}
+        accessibilityRole="button"
+        accessibilityState={expandedState}
+        testID={`paseo-deploy-change-${change.sha}`}
+      >
+        <View style={styles.changeTextBlock}>
+          <Text style={styles.changeSubject}>{humanizeCommitSubject(change.subject)}</Text>
+          {fileCountLabel ? <Text style={styles.changeMeta}>{fileCountLabel}</Text> : null}
+        </View>
+        <ChangeStatusBadge state={change.state} />
+        <ExpandChevron visible={files.length > 0} expanded={expanded} />
+      </Pressable>
+      {expanded ? (
+        <View style={styles.changeDetails}>
+          {files.map((path) => (
+            <View key={path} style={styles.itemRow}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.itemText}>{describeFilePath(path)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Every change of the current publication cycle, each with its own status. This
+ * is the answer to "où en est chaque chose ?": a single global figure never told
+ * the reader which of their changes was actually online.
+ */
+function ChangesSection({ changes }: { changes: PaseoDeployCommitEntry[] }) {
+  if (changes.length === 0) return null;
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Changements prêts, pas encore en ligne</Text>
-      <View style={styles.list}>
-        {commits.map((commit) => (
-          <View key={commit.sha} style={styles.itemRow}>
-            <Text style={styles.bullet}>•</Text>
-            <Text style={styles.itemText}>{humanizeCommitSubject(commit.subject)}</Text>
-          </View>
+      <Text style={styles.sectionTitle}>Changements et où ils en sont</Text>
+      <View style={styles.changeList}>
+        {changes.map((change) => (
+          <ChangeRow key={change.sha} change={change} />
         ))}
       </View>
     </View>
@@ -666,12 +758,28 @@ type DeployStatusSnapshot = ReturnType<typeof usePaseoDeployStatus>["status"];
 interface DeployBodyView {
   deploying: boolean;
   visibleUncommittedFiles: PaseoDeployFileEntry[];
-  unshippedCommits: PaseoDeployCommitEntry[];
+  changes: PaseoDeployCommitEntry[];
   worktrees: PaseoDeployWorktreeEntry[];
   isClean: boolean;
   changesCount: number;
   daemonBehindCount: number;
   blockedWorktrees: number;
+}
+
+/**
+ * Real number of changes to ship — honest even after work is grouped into a few
+ * commits. The regenerated changelog snapshot is discounted: it is noise the
+ * mechanism creates itself, and counting it inflates every tally.
+ */
+function countDeployChanges(input: {
+  status: DeployStatusSnapshot;
+  uncommittedCount: number;
+  visibleUncommittedCount: number;
+  changeCount: number;
+}): number {
+  const generatedFileCount = input.uncommittedCount - input.visibleUncommittedCount;
+  const reported = input.status?.changesCount ?? input.uncommittedCount + input.changeCount;
+  return Math.max(0, reported - generatedFileCount);
 }
 
 /** Everything the sheet body reads off a status snapshot, derived in one pass. */
@@ -682,14 +790,14 @@ function deriveDeployBodyView(status: DeployStatusSnapshot): DeployBodyView {
     (file) => !isGeneratedDeployFile(file.path),
   );
   const unshippedCommits = status?.unshippedCommits ?? EMPTY_COMMITS;
+  // The per-change list with statuses when the host provides it; a host that
+  // doesn't simply shows the same changes as plain pending work.
+  const changes = status?.changes ?? unshippedCommits;
   const worktrees = status?.worktrees ?? EMPTY_WORKTREES;
-  // Real number of changes to ship — honest even after work is grouped into a
-  // few commits (older daemons that don't send it fall back to the list sum).
-  const generatedFileCount = uncommittedFiles.length - visibleUncommittedFiles.length;
   return {
     deploying,
     visibleUncommittedFiles,
-    unshippedCommits,
+    changes,
     worktrees,
     // A just-finished run states its own outcome below, so the generic
     // "Tout est déjà en ligne" line would only repeat it.
@@ -697,13 +805,14 @@ function deriveDeployBodyView(status: DeployStatusSnapshot): DeployBodyView {
       !deploying &&
       (status?.deployOutcome ?? null) === null &&
       visibleUncommittedFiles.length === 0 &&
-      unshippedCommits.length === 0 &&
+      changes.length === 0 &&
       worktrees.length === 0,
-    changesCount: Math.max(
-      0,
-      (status?.changesCount ?? uncommittedFiles.length + unshippedCommits.length) -
-        generatedFileCount,
-    ),
+    changesCount: countDeployChanges({
+      status,
+      uncommittedCount: uncommittedFiles.length,
+      visibleUncommittedCount: visibleUncommittedFiles.length,
+      changeCount: unshippedCommits.length,
+    }),
     daemonBehindCount: status?.daemonBehindCount ?? 0,
     blockedWorktrees: worktrees.filter(
       (worktree) => worktree.mergeable !== true || worktree.uncommittedCount > 0,
@@ -752,8 +861,8 @@ function DeployModalBody({
       <WorktreesSummary worktrees={view.worktrees} />
       <DeployBlockedNotice count={view.blockedWorktrees} />
 
+      <ChangesSection changes={view.changes} />
       <PendingFilesSection files={view.visibleUncommittedFiles} />
-      <PendingCommitsSection commits={view.unshippedCommits} />
       <WorktreesSection
         worktrees={view.worktrees}
         deselected={deselected}
@@ -1113,6 +1222,77 @@ const styles = StyleSheet.create((theme) => ({
   progressStepLabelActive: {
     fontWeight: "700",
     color: theme.colors.foreground,
+  },
+  // One card per change, with its status pill on the right and — unfolded — the
+  // files it touches. This is what answers "où en est chacune de mes features ?".
+  changeList: {
+    gap: theme.spacing[2],
+  },
+  changeCard: {
+    gap: theme.spacing[1],
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
+  },
+  changeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  changeTextBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  changeSubject: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: "700",
+    color: theme.colors.foreground,
+  },
+  changeMeta: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+  },
+  changeDetails: {
+    gap: theme.spacing[1],
+    paddingLeft: theme.spacing[2],
+  },
+  changeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    paddingVertical: 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  changeBadgeNeutral: {
+    backgroundColor: theme.colors.surface0,
+  },
+  changeBadgeActive: {
+    backgroundColor: theme.colors.palette.amber[900],
+  },
+  changeBadgeSuccess: {
+    backgroundColor: theme.colors.palette.green[900],
+  },
+  changeBadgeDanger: {
+    backgroundColor: theme.colors.palette.red[900],
+  },
+  changeBadgeText: {
+    fontSize: Math.round(theme.fontSize.xs * 0.92),
+    fontWeight: "700",
+  },
+  changeBadgeTextNeutral: {
+    color: theme.colors.foregroundMuted,
+  },
+  changeBadgeTextActive: {
+    color: theme.colors.palette.amber[100],
+  },
+  changeBadgeTextSuccess: {
+    color: theme.colors.palette.green[100],
+  },
+  changeBadgeTextDanger: {
+    color: theme.colors.palette.red[100],
   },
   // Per-atelier cards, each with its own merge-and-publish action.
   worktreeList: {
