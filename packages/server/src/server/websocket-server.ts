@@ -88,6 +88,8 @@ import {
   type WebSocketRuntimeCounters,
   type WebSocketRuntimeDiagnosticSnapshot,
 } from "./websocket/runtime-metrics.js";
+import { ProviderUsageHistoryRecorder } from "../services/quota-fetcher/history-recorder.js";
+import { ProviderUsageHistoryStore } from "../services/quota-fetcher/history-store.js";
 import { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import type { BrainMemoryClient } from "../services/brain-memory/client.js";
 import type { BrainCurator } from "../services/brain-memory/curator.js";
@@ -503,6 +505,8 @@ export class VoiceAssistantWebSocketServer {
   private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
   private readonly providerUsageService: ProviderUsageService;
+  private readonly providerUsageHistoryStore: ProviderUsageHistoryStore;
+  private readonly providerUsageHistoryRecorder: ProviderUsageHistoryRecorder;
   private readonly brainMemory: BrainMemoryClient | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private taskBoardService: TaskBoardService | null = null;
@@ -679,6 +683,20 @@ export class VoiceAssistantWebSocketServer {
     this.providerUsageService = new ProviderUsageService({
       logger: this.logger,
     });
+
+    // The quota curve is accumulated here rather than on each device: providers
+    // only ever report their current numbers, and the daemon is the one process
+    // that keeps polling them whether or not a client is connected.
+    this.providerUsageHistoryStore = new ProviderUsageHistoryStore(
+      join(paseoHome, "provider-usage-history.json"),
+      this.logger,
+    );
+    this.providerUsageHistoryRecorder = new ProviderUsageHistoryRecorder({
+      service: this.providerUsageService,
+      store: this.providerUsageHistoryStore,
+      logger: this.logger,
+    });
+    this.providerUsageHistoryRecorder.start();
 
     this.brainMemory = brainMemoryServices?.client ?? null;
 
@@ -909,6 +927,7 @@ export class VoiceAssistantWebSocketServer {
     this.flushRuntimeMetrics({ final: true });
     this.eventLoopDelayMonitor?.disable();
     this.eventLoopDelayMonitor = null;
+    this.providerUsageHistoryRecorder.stop();
 
     const uniqueConnections = new Set<SessionConnection>([
       ...this.sessions.values(),
@@ -1151,6 +1170,7 @@ export class VoiceAssistantWebSocketServer {
       terminalManager: this.terminalManager,
       providerSnapshotManager: this.providerSnapshotManager,
       providerUsageService: this.providerUsageService,
+      providerUsageHistoryStore: this.providerUsageHistoryStore,
       serviceProxy: this.serviceProxy ?? undefined,
       scriptRuntimeStore: this.scriptRuntimeStore ?? undefined,
       workspaceSetupSnapshots: this.workspaceSetupSnapshots,
@@ -1384,6 +1404,8 @@ export class VoiceAssistantWebSocketServer {
         worktreeRestore: true,
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: true,
+        // COMPAT(providerUsageHistory): added in v0.2.2, remove gate after 2027-01-26.
+        providerUsageHistory: true,
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: true,
         // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.

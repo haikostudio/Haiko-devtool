@@ -89,6 +89,14 @@ Keep the protocol shape provider-agnostic. Do not add provider-specific renderer
 
 Kimi Code usage follows the CLI-managed credential file at `KIMI_CODE_HOME` or `~/.kimi-code/credentials/kimi-code.json`; do not probe the legacy `~/.kimi` path as the primary source for current Kimi Code installs.
 
+### Usage history
+
+Providers only ever report their **current** numbers, so any trend has to be accumulated by whoever polls them — and that is the daemon, not a client. `ProviderUsageHistoryRecorder` polls the shared `ProviderUsageService` every 15 minutes and appends one reading per traceable window to `$PASEO_HOME/provider-usage-history.json` (`ProviderUsageHistoryStore`, 7-day retention, 15-minute throttle). Clients read it with `provider.usage.history.request`, gated on `server_info.features.providerUsageHistory`.
+
+Only two window kinds are traced, matched on window **id** (`five_hour`/`session` → `session`, `weekly`/`seven_day` → `weekly`). Claude's per-model allowances are labelled `Weekly · Opus` and must never be mistaken for the account-wide weekly window — that is why ids, not labels, decide. The wire carries `kind` as a plain string, not an enum, so a daemon that starts tracing a third window kind cannot break an older client's parsing.
+
+Do not rebuild this trace on the device: a curve made of "whenever this phone happened to be open" is a different, less honest curve than the host's.
+
 ---
 
 ## ACP Provider Checklist

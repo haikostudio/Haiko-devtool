@@ -1,34 +1,27 @@
+import type { ProviderUsageHistorySample } from "@getpaseo/protocol/messages";
+
 /** One reading of a weekly allowance: when it was taken, and how much was left. */
 export interface QuotaSample {
   t: number;
   remainingPct: number;
 }
 
-/** How far back the sparkline reaches. */
+/** How far back the curve reaches. */
 export const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
-/**
- * Readings closer together than this overwrite the last point instead of adding
- * one. Quotas are read every time the menu opens, and without this a busy hour
- * would crowd the whole week out of the curve.
- */
-export const MIN_SAMPLE_INTERVAL_MS = 30 * 60 * 1000;
+/** Below this span the readings say nothing about a trend, so no forecast. */
+export const MIN_FORECAST_SPAN_MS = 2 * 60 * 60 * 1000;
 
-/** Hard cap, so a long-lived install can't grow the stored history without bound. */
-export const MAX_SAMPLES = 96;
-
-/**
- * Adds a reading to a provider's history: drops anything older than the window,
- * folds a too-recent reading into the last point, and keeps the list bounded.
- */
-export function appendSample(samples: QuotaSample[], sample: QuotaSample): QuotaSample[] {
-  const cutoff = sample.t - HISTORY_WINDOW_MS;
-  const kept = samples.filter((entry) => entry.t >= cutoff && entry.t <= sample.t);
-  const last = kept.at(-1);
-  if (last && sample.t - last.t < MIN_SAMPLE_INTERVAL_MS) {
-    return [...kept.slice(0, -1), sample];
-  }
-  return [...kept, sample].slice(-MAX_SAMPLES);
+/** Turns the host's wire samples into plain timestamps, oldest first. */
+export function toSamples(
+  wireSamples: ProviderUsageHistorySample[],
+  now: number = Date.now(),
+): QuotaSample[] {
+  const cutoff = now - HISTORY_WINDOW_MS;
+  return wireSamples
+    .map((sample) => ({ t: Date.parse(sample.at), remainingPct: sample.remainingPct }))
+    .filter((sample) => Number.isFinite(sample.t) && sample.t >= cutoff)
+    .sort((a, b) => a.t - b.t);
 }
 
 export interface SparklineSize {
@@ -58,4 +51,67 @@ export function sparklinePoints(samples: QuotaSample[], size: SparklineSize): st
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+}
+
+export type QuotaForecast =
+  | { kind: "unknown" }
+  /** Consumption is flat or slow enough that the window refills first. */
+  | { kind: "lasts" }
+  /** At the observed rate the allowance empties at this instant. */
+  | { kind: "runsOut"; at: number };
+
+export interface ForecastInput {
+  samples: QuotaSample[];
+  /** When the window refills, if the provider says. */
+  resetsAt?: string | null;
+  now?: number;
+}
+
+/**
+ * Projects when the allowance runs out if the last stretch's pace holds.
+ *
+ * Deliberately a straight line through the observed stretch rather than
+ * anything cleverer: the point is "am I burning this faster than the week can
+ * take", and a fitted curve would only dress up a guess. Says nothing at all
+ * when the readings are too short, too flat, or already past the reset.
+ */
+export function forecastRunOut({
+  samples,
+  resetsAt,
+  now = Date.now(),
+}: ForecastInput): QuotaForecast {
+  const first = samples[0];
+  const last = samples.at(-1);
+  if (!first || !last) return { kind: "unknown" };
+
+  const span = last.t - first.t;
+  if (span < MIN_FORECAST_SPAN_MS) return { kind: "unknown" };
+
+  const spent = first.remainingPct - last.remainingPct;
+  // Not consuming (or the window refilled mid-stretch): nothing to project.
+  if (spent <= 0) return { kind: "lasts" };
+
+  const ratePerMs = spent / span;
+  const runsOutAt = last.t + last.remainingPct / ratePerMs;
+  if (runsOutAt <= now) return { kind: "runsOut", at: now };
+
+  const resetMs = resetsAt ? Date.parse(resetsAt) : Number.NaN;
+  if (Number.isFinite(resetMs) && runsOutAt >= resetMs) return { kind: "lasts" };
+
+  return { kind: "runsOut", at: runsOutAt };
+}
+
+export type ForecastDay = "today" | "tomorrow" | "later";
+
+/** Which wording the forecast needs: today, tomorrow, or a named weekday. */
+export function forecastDay(at: number, now: number = Date.now()): ForecastDay {
+  const startOfDay = (ms: number) => {
+    const date = new Date(ms);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  };
+  const dayDiff = Math.round((startOfDay(at) - startOfDay(now)) / (24 * 60 * 60 * 1000));
+  if (dayDiff <= 0) return "today";
+  if (dayDiff === 1) return "tomorrow";
+  return "later";
 }

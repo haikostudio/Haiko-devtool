@@ -11,10 +11,17 @@ import {
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useToast } from "@/contexts/toast-context";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
+import { useProviderUsageHistory } from "@/provider-usage/use-provider-usage-history";
 import type { ProviderUsageWindow } from "@/provider-usage/types";
-import { useQuotaHistoryStore } from "@/stores/quota-history-store";
+import { useQuotaAlertStore } from "@/stores/quota-alert-store";
 import type { Theme } from "@/styles/theme";
-import { sparklinePoints, type QuotaSample } from "./task-quota-history";
+import {
+  forecastDay,
+  forecastRunOut,
+  sparklinePoints,
+  toSamples,
+  type QuotaSample,
+} from "./task-quota-history";
 import {
   buildQuotaSummary,
   REMAINING_DANGER_PCT,
@@ -71,29 +78,28 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
   const isCompact = useIsCompactFormFactor();
   const [open, setOpen] = useState(false);
   const { view, refresh, canFetch } = useProviderUsage(serverId);
+  const { series } = useProviderUsageHistory(serverId);
 
   const summary = useMemo(
     () => buildQuotaSummary(view.kind === "ready" ? view.payload : null),
     [view],
   );
 
-  // Every fresh reading feeds the seven-day curve and, once, the low-quota
-  // warning. Both live here rather than in the menu so they keep working while
-  // the menu is closed — a warning you only see after opening it is useless.
+  // The low-quota warning lives here rather than in the menu so it keeps firing
+  // while the menu is closed — a warning you only see after opening it is useless.
   useEffect(() => {
-    const history = useQuotaHistoryStore.getState();
+    const alerts = useQuotaAlertStore.getState();
     for (const provider of summary.providers) {
       const remaining = remainingPercent(provider.weekly);
       if (remaining === null) continue;
-      history.record(provider.providerId, { t: Date.now(), remainingPct: remaining });
 
       if (remaining > REMAINING_DANGER_PCT) {
-        history.clearWarned(provider.providerId);
+        alerts.clearWarned(provider.providerId);
         continue;
       }
       const resetKey = provider.weekly?.resetsAt ?? "current";
-      if (!history.shouldWarn(provider.providerId, resetKey)) continue;
-      history.markWarned(provider.providerId, resetKey);
+      if (!alerts.shouldWarn(provider.providerId, resetKey)) continue;
+      alerts.markWarned(provider.providerId, resetKey);
       toast.show(
         t("tasks.quota.lowAlert", {
           provider: provider.displayName,
@@ -103,6 +109,17 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
       );
     }
   }, [summary, t, toast]);
+
+  // The host traces both windows; the curve shows the weekly one, the number
+  // that decides whether the week holds.
+  const weeklySamplesByProvider = useMemo(() => {
+    const byProvider = new Map<string, QuotaSample[]>();
+    for (const entry of series) {
+      if (entry.kind !== "weekly") continue;
+      byProvider.set(entry.providerId, toSamples(entry.samples));
+    }
+    return byProvider;
+  }, [series]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -150,7 +167,11 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
             <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
           ) : null}
           {summary.providers.map((provider) => (
-            <QuotaProviderBlock key={provider.providerId} provider={provider} />
+            <QuotaProviderBlock
+              key={provider.providerId}
+              provider={provider}
+              samples={weeklySamplesByProvider.get(provider.providerId) ?? NO_SAMPLES}
+            />
           ))}
         </View>
       </DropdownMenuContent>
@@ -199,7 +220,13 @@ function QuotaRing({ percent, tone }: { percent: number | null; tone: QuotaTone 
   );
 }
 
-function QuotaProviderBlock({ provider }: { provider: QuotaProviderSummary }) {
+function QuotaProviderBlock({
+  provider,
+  samples,
+}: {
+  provider: QuotaProviderSummary;
+  samples: QuotaSample[];
+}) {
   const { t } = useTranslation();
   return (
     <View style={styles.provider}>
@@ -217,7 +244,8 @@ function QuotaProviderBlock({ provider }: { provider: QuotaProviderSummary }) {
         <>
           <QuotaGauge label={t("tasks.quota.rolling")} window={provider.session} />
           <QuotaGauge label={t("tasks.quota.weekly")} window={provider.weekly} />
-          <QuotaHistorySparkline providerId={provider.providerId} />
+          <QuotaForecastLine samples={samples} resetsAt={provider.weekly?.resetsAt ?? null} />
+          <QuotaHistorySparkline samples={samples} />
         </>
       ) : (
         <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
@@ -226,16 +254,56 @@ function QuotaProviderBlock({ provider }: { provider: QuotaProviderSummary }) {
   );
 }
 
+/** The localized weekday a run-out lands on, e.g. "jeudi". */
+function weekdayName(at: number, language: string): string {
+  try {
+    return new Intl.DateTimeFormat(language, { weekday: "long" }).format(new Date(at));
+  } catch {
+    // Some runtimes ship a trimmed Intl; a plain date beats crashing the menu.
+    return new Date(at).toLocaleDateString();
+  }
+}
+
 /**
- * Seven-day trace of the weekly allowance still left, drawn from readings this
- * device took. Absent until there are two readings far enough apart, so it never
- * shows a flat line pretending to be a week.
+ * "At this rate, spent Thursday" — the one line that turns a gauge into a
+ * decision. Silent unless the host's trace is long enough to mean something.
  */
-function QuotaHistorySparkline({ providerId }: { providerId: string }) {
+function QuotaForecastLine({
+  samples,
+  resetsAt,
+}: {
+  samples: QuotaSample[];
+  resetsAt: string | null;
+}) {
+  const { t, i18n } = useTranslation();
+  const forecast = useMemo(() => forecastRunOut({ samples, resetsAt }), [samples, resetsAt]);
+
+  if (forecast.kind === "unknown") {
+    return null;
+  }
+  if (forecast.kind === "lasts") {
+    return <Text style={styles.forecast}>{t("tasks.quota.forecastLasts")}</Text>;
+  }
+
+  const day = forecastDay(forecast.at);
+  let when: string;
+  if (day === "today") {
+    when = t("tasks.quota.forecastToday");
+  } else if (day === "tomorrow") {
+    when = t("tasks.quota.forecastTomorrow");
+  } else {
+    when = weekdayName(forecast.at, i18n.language);
+  }
+  return <Text style={styles.forecastWarn}>{t("tasks.quota.forecastRunsOut", { when })}</Text>;
+}
+
+/**
+ * Seven-day trace of the weekly allowance still left, as recorded by the host.
+ * Absent until there are two readings far enough apart, so it never shows a flat
+ * line pretending to be a week.
+ */
+function QuotaHistorySparkline({ samples }: { samples: QuotaSample[] }) {
   const { t } = useTranslation();
-  const samples = useQuotaHistoryStore(
-    (state) => state.samplesByProvider[providerId] ?? NO_SAMPLES,
-  );
   const points = useMemo(() => sparklinePoints(samples, SPARKLINE_SIZE), [samples]);
   if (!points) {
     return null;
@@ -414,6 +482,14 @@ const styles = StyleSheet.create((theme) => ({
   },
   gaugeReset: {
     color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  forecast: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  forecastWarn: {
+    color: theme.colors.palette.amber[500],
     fontSize: theme.fontSize.xs,
   },
   sparkline: {

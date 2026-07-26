@@ -4807,6 +4807,15 @@ export class DaemonClient {
     });
   }
 
+  async getProviderUsageHistory(options?: { requestId?: string }) {
+    return this.sendNamespacedCorrelatedSessionRequest<"provider.usage.history.response">({
+      requestId: options?.requestId,
+      message: {
+        type: "provider.usage.history.request",
+      },
+    });
+  }
+
   // ============================================================================
   // Tasks board (per-project kanban)
   // ============================================================================

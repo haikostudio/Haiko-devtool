@@ -1,20 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { appendSample, type QuotaSample } from "@/components/tasks/task-quota-history";
 
 /**
- * A rolling seven-day trace of each provider's weekly allowance, plus which
- * low-quota warnings have already been shown.
+ * Which low-quota warnings have already been shown on this device.
  *
- * The daemon only ever reports the CURRENT numbers — it keeps no history — so the
- * curve is built client-side from the readings this device happens to take. That
- * means a device that never opens the board records nothing, which is fine: the
- * curve is a glance aid, never an accounting record.
+ * Device state on purpose: the trace itself belongs to the host (it polls even
+ * with no client open), but "I already told you" is per person, per device.
  */
-interface QuotaHistoryState {
-  samplesByProvider: Record<string, QuotaSample[]>;
-  record: (providerId: string, sample: QuotaSample) => void;
+interface QuotaAlertState {
   /**
    * Reset timestamp of the last weekly window we warned about, per provider. The
    * warning fires once per window: as soon as the allowance refills, the reset
@@ -27,21 +21,10 @@ interface QuotaHistoryState {
   clearWarned: (providerId: string) => void;
 }
 
-export const useQuotaHistoryStore = create<QuotaHistoryState>()(
+export const useQuotaAlertStore = create<QuotaAlertState>()(
   persist(
     (set, get) => ({
-      samplesByProvider: {},
       warnedResetByProvider: {},
-      record: (providerId, sample) => {
-        const id = providerId.trim();
-        if (!id || !Number.isFinite(sample.remainingPct)) return;
-        set((state) => ({
-          samplesByProvider: {
-            ...state.samplesByProvider,
-            [id]: appendSample(state.samplesByProvider[id] ?? [], sample),
-          },
-        }));
-      },
       shouldWarn: (providerId, resetKey) => get().warnedResetByProvider[providerId] !== resetKey,
       markWarned: (providerId, resetKey) => {
         set((state) => ({
@@ -58,12 +41,9 @@ export const useQuotaHistoryStore = create<QuotaHistoryState>()(
       },
     }),
     {
-      name: "quota-history",
+      name: "quota-alerts",
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
-        samplesByProvider: state.samplesByProvider,
-        warnedResetByProvider: state.warnedResetByProvider,
-      }),
+      partialize: (state) => ({ warnedResetByProvider: state.warnedResetByProvider }),
       version: 1,
     },
   ),

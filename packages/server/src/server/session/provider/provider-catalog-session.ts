@@ -12,6 +12,7 @@ import type {
   ProviderSnapshotEntry,
 } from "../../agent/agent-sdk-types.js";
 import type { ProviderAvailability } from "../../agent/agent-manager.js";
+import type { ProviderUsageHistoryStore } from "../../../services/quota-fetcher/history-store.js";
 import type { ProviderUsageService } from "../../../services/quota-fetcher/service.js";
 import { expandTilde } from "../../../utils/path.js";
 
@@ -47,6 +48,7 @@ export interface ProviderCatalogSessionOptions {
   host: ProviderCatalogSessionHost;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  providerUsageHistoryStore?: ProviderUsageHistoryStore;
   logger: pino.Logger;
 }
 
@@ -61,6 +63,7 @@ export class ProviderCatalogSession {
   private readonly host: ProviderCatalogSessionHost;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
   private readonly providerUsageService: ProviderUsageService;
+  private readonly providerUsageHistoryStore: ProviderUsageHistoryStore | undefined;
   private readonly logger: pino.Logger;
   private unsubscribeSnapshotEvents: (() => void) | null = null;
 
@@ -68,6 +71,7 @@ export class ProviderCatalogSession {
     this.host = options.host;
     this.providerSnapshotManager = options.providerSnapshotManager;
     this.providerUsageService = options.providerUsageService;
+    this.providerUsageHistoryStore = options.providerUsageHistoryStore;
     this.logger = options.logger;
   }
 
@@ -447,6 +451,30 @@ export class ProviderCatalogSession {
           requestType: msg.type,
           error: `Failed to list provider usage: ${err.message}`,
           code: "provider_usage_list_failed",
+        },
+      });
+    }
+  }
+
+  async handleProviderUsageHistoryRequest(
+    msg: Extract<SessionInboundMessage, { type: "provider.usage.history.request" }>,
+  ): Promise<void> {
+    try {
+      const series = (await this.providerUsageHistoryStore?.list()) ?? [];
+      this.host.emit({
+        type: "provider.usage.history.response",
+        payload: { requestId: msg.requestId, series },
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.error({ err }, "Failed to read provider usage history");
+      this.host.emit({
+        type: "rpc_error",
+        payload: {
+          requestId: msg.requestId,
+          requestType: msg.type,
+          error: `Failed to read provider usage history: ${err.message}`,
+          code: "provider_usage_history_failed",
         },
       });
     }

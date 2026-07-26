@@ -217,6 +217,7 @@ import {
   GitHubCommandError,
   type GitHubService,
 } from "../services/github-service.js";
+import type { ProviderUsageHistoryStore } from "../services/quota-fetcher/history-store.js";
 import type { ProviderUsageService } from "../services/quota-fetcher/service.js";
 import {
   summarizeFetchWorkspacesEntries,
@@ -496,6 +497,7 @@ export interface SessionOptions {
   terminalManager: TerminalManager | null;
   providerSnapshotManager: ProviderSnapshotManager;
   providerUsageService: ProviderUsageService;
+  providerUsageHistoryStore?: ProviderUsageHistoryStore;
   serviceProxy?: ServiceProxySubsystem;
   scriptRuntimeStore?: WorkspaceScriptRuntimeStore;
   workspaceSetupSnapshots?: Map<string, WorkspaceSetupSnapshot>;
@@ -737,6 +739,7 @@ export class Session {
       terminalManager,
       providerSnapshotManager,
       providerUsageService,
+      providerUsageHistoryStore,
       serviceProxy,
       scriptRuntimeStore,
       workspaceSetupSnapshots,
@@ -905,6 +908,7 @@ export class Session {
       },
       providerSnapshotManager,
       providerUsageService,
+      providerUsageHistoryStore,
       logger: this.sessionLogger,
     });
     this.agentConfigSession = new AgentConfigSession({
@@ -1918,6 +1922,8 @@ export class Session {
         return this.providerCatalogSession.handleProviderDiagnosticRequest(msg);
       case "provider.usage.list.request":
         return this.providerCatalogSession.handleProviderUsageListRequest(msg);
+      case "provider.usage.history.request":
+        return this.providerCatalogSession.handleProviderUsageHistoryRequest(msg);
       default:
         return undefined;
     }

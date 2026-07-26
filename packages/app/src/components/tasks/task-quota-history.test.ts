@@ -1,51 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
-  appendSample,
+  forecastDay,
+  forecastRunOut,
   HISTORY_WINDOW_MS,
-  MAX_SAMPLES,
-  MIN_SAMPLE_INTERVAL_MS,
   sparklinePoints,
+  toSamples,
   type QuotaSample,
 } from "./task-quota-history";
 
 const T0 = Date.parse("2026-07-20T10:00:00.000Z");
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
 
-describe("appendSample", () => {
-  it("adds a point once the throttle window has passed", () => {
-    const samples = appendSample([{ t: T0, remainingPct: 90 }], {
-      t: T0 + HOUR,
-      remainingPct: 80,
-    });
-    expect(samples).toEqual([
-      { t: T0, remainingPct: 90 },
-      { t: T0 + HOUR, remainingPct: 80 },
-    ]);
+describe("toSamples", () => {
+  it("parses, sorts and drops readings older than the window", () => {
+    const samples = toSamples(
+      [
+        { at: new Date(T0).toISOString(), remainingPct: 60 },
+        { at: new Date(T0 - HISTORY_WINDOW_MS - HOUR).toISOString(), remainingPct: 100 },
+        { at: new Date(T0 - HOUR).toISOString(), remainingPct: 70 },
+      ],
+      T0,
+    );
+    expect(samples.map((sample) => sample.remainingPct)).toEqual([70, 60]);
   });
 
-  it("folds a too-recent reading into the last point", () => {
-    const samples = appendSample([{ t: T0, remainingPct: 90 }], {
-      t: T0 + MIN_SAMPLE_INTERVAL_MS - 1,
-      remainingPct: 88,
-    });
-    expect(samples).toEqual([{ t: T0 + MIN_SAMPLE_INTERVAL_MS - 1, remainingPct: 88 }]);
-  });
-
-  it("drops readings older than the seven-day window", () => {
-    const old: QuotaSample = { t: T0 - HISTORY_WINDOW_MS - 1, remainingPct: 100 };
-    const samples = appendSample([old, { t: T0, remainingPct: 60 }], {
-      t: T0 + HOUR,
-      remainingPct: 55,
-    });
-    expect(samples.map((sample) => sample.remainingPct)).toEqual([60, 55]);
-  });
-
-  it("never grows past the cap", () => {
-    let samples: QuotaSample[] = [];
-    for (let index = 0; index < MAX_SAMPLES + 10; index += 1) {
-      samples = appendSample(samples, { t: T0 + index * HOUR, remainingPct: 100 - index });
-    }
-    expect(samples).toHaveLength(MAX_SAMPLES);
+  it("ignores unparseable timestamps", () => {
+    expect(toSamples([{ at: "not-a-date", remainingPct: 50 }], T0)).toEqual([]);
   });
 });
 
@@ -73,5 +54,54 @@ describe("sparklinePoints", () => {
         { width: 100, height: 20 },
       ),
     ).toBeNull();
+  });
+});
+
+describe("forecastRunOut", () => {
+  const steady: QuotaSample[] = [
+    { t: T0, remainingPct: 100 },
+    { t: T0 + DAY, remainingPct: 80 },
+  ];
+
+  it("projects the run-out instant from the observed pace", () => {
+    const forecast = forecastRunOut({ samples: steady, now: T0 + DAY });
+    // 20 points a day, 80 left → four more days.
+    expect(forecast).toEqual({ kind: "runsOut", at: T0 + 5 * DAY });
+  });
+
+  it("says the window lasts when the reset lands first", () => {
+    const forecast = forecastRunOut({
+      samples: steady,
+      resetsAt: new Date(T0 + 3 * DAY).toISOString(),
+      now: T0 + DAY,
+    });
+    expect(forecast).toEqual({ kind: "lasts" });
+  });
+
+  it("says the window lasts when nothing is being consumed", () => {
+    const flat: QuotaSample[] = [
+      { t: T0, remainingPct: 60 },
+      { t: T0 + DAY, remainingPct: 60 },
+    ];
+    expect(forecastRunOut({ samples: flat, now: T0 + DAY })).toEqual({ kind: "lasts" });
+  });
+
+  it("stays silent on too short a stretch", () => {
+    const short: QuotaSample[] = [
+      { t: T0, remainingPct: 90 },
+      { t: T0 + 30 * 60 * 1000, remainingPct: 80 },
+    ];
+    expect(forecastRunOut({ samples: short, now: T0 })).toEqual({ kind: "unknown" });
+    expect(forecastRunOut({ samples: [], now: T0 })).toEqual({ kind: "unknown" });
+  });
+});
+
+describe("forecastDay", () => {
+  const noon = Date.parse("2026-07-20T12:00:00.000Z");
+
+  it("separates today, tomorrow and later", () => {
+    expect(forecastDay(noon + HOUR, noon)).toBe("today");
+    expect(forecastDay(noon + DAY, noon)).toBe("tomorrow");
+    expect(forecastDay(noon + 3 * DAY, noon)).toBe("later");
   });
 });

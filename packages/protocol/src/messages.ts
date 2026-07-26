@@ -1532,6 +1532,11 @@ export const ProviderUsageListRequestMessageSchema = z.object({
   requestId: z.string(),
 });
 
+export const ProviderUsageHistoryRequestMessageSchema = z.object({
+  type: z.literal("provider.usage.history.request"),
+  requestId: z.string(),
+});
+
 export const ResumeAgentRequestMessageSchema = z.object({
   type: z.literal("resume_agent_request"),
   handle: AgentPersistenceHandleSchema,
@@ -3095,6 +3100,8 @@ export const ServerInfoStatusPayloadSchema = z
         worktreeRestore: z.boolean().optional(),
         // COMPAT(providerUsageList): added in v0.1.98, drop the gate when daemon floor >= v0.1.98.
         providerUsageList: z.boolean().optional(),
+        // COMPAT(providerUsageHistory): added in v0.2.2, remove gate after 2027-01-26.
+        providerUsageHistory: z.boolean().optional(),
         // COMPAT(agentDetach): added in v0.1.98, remove gate after 2026-12-19 once daemon floor >= v0.1.98.
         agentDetach: z.boolean().optional(),
         // COMPAT(daemonDiagnostics): added in v0.1.100, remove gate after 2026-12-25 once daemon floor >= v0.1.100.
@@ -5365,6 +5372,32 @@ export const ProviderUsageListResponseMessageSchema = z.object({
   }),
 });
 
+/** One reading of a quota window: when it was taken and how much was left. */
+export const ProviderUsageHistorySampleSchema = z.object({
+  at: z.string(),
+  remainingPct: z.number(),
+});
+
+export const ProviderUsageHistorySeriesSchema = z.object({
+  providerId: z.string(),
+  displayName: z.string().optional(),
+  /**
+   * Which window the series traces: "session" (the short rolling one) or
+   * "weekly". Deliberately a plain string, not an enum, so a daemon that starts
+   * tracing a third kind of window can't break an older client's parsing.
+   */
+  kind: z.string(),
+  samples: z.array(ProviderUsageHistorySampleSchema),
+});
+
+export const ProviderUsageHistoryResponseMessageSchema = z.object({
+  type: z.literal("provider.usage.history.response"),
+  payload: z.object({
+    requestId: z.string(),
+    series: z.array(ProviderUsageHistorySeriesSchema),
+  }),
+});
+
 const AgentSlashCommandSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -5791,6 +5824,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotRequestMessageSchema,
   ProviderDiagnosticRequestMessageSchema,
   ProviderUsageListRequestMessageSchema,
+  ProviderUsageHistoryRequestMessageSchema,
   ResumeAgentRequestMessageSchema,
   ImportAgentRequestMessageSchema,
   RefreshAgentRequestMessageSchema,
@@ -6071,6 +6105,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   RefreshProvidersSnapshotResponseMessageSchema,
   ProviderDiagnosticResponseMessageSchema,
   ProviderUsageListResponseMessageSchema,
+  ProviderUsageHistoryResponseMessageSchema,
   ListCommandsResponseSchema,
   ListTerminalsResponseSchema,
   TerminalsChangedSchema,
@@ -6282,6 +6317,11 @@ export type ProviderUsageBalance = z.infer<typeof ProviderUsageBalanceSchema>;
 export type ProviderUsageDetail = z.infer<typeof ProviderUsageDetailSchema>;
 export type ProviderUsageListResponseMessage = z.infer<
   typeof ProviderUsageListResponseMessageSchema
+>;
+export type ProviderUsageHistorySample = z.infer<typeof ProviderUsageHistorySampleSchema>;
+export type ProviderUsageHistorySeries = z.infer<typeof ProviderUsageHistorySeriesSchema>;
+export type ProviderUsageHistoryResponseMessage = z.infer<
+  typeof ProviderUsageHistoryResponseMessageSchema
 >;
 export type ChatCreateResponse = z.infer<typeof ChatCreateResponseSchema>;
 export type ChatListResponse = z.infer<typeof ChatListResponseSchema>;
