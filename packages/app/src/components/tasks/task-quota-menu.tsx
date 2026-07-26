@@ -1,18 +1,23 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Polyline } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useIsCompactFormFactor } from "@/constants/layout";
+import { useToast } from "@/contexts/toast-context";
 import { useProviderUsage } from "@/provider-usage/use-provider-usage";
 import type { ProviderUsageWindow } from "@/provider-usage/types";
+import { useQuotaHistoryStore } from "@/stores/quota-history-store";
 import type { Theme } from "@/styles/theme";
+import { sparklinePoints, type QuotaSample } from "./task-quota-history";
 import {
   buildQuotaSummary,
+  REMAINING_DANGER_PCT,
   remainingPercent,
   resetCountdown,
   toneForRemaining,
@@ -29,8 +34,13 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 // Svg primitives take colors as plain props, so they go through withUnistyles
 // rather than a style sheet (see docs/unistyles.md).
 const ThemedCircle = withUnistyles(Circle);
+const ThemedPolyline = withUnistyles(Polyline);
+
+const SPARKLINE_SIZE = { width: 240, height: 26 };
+const NO_SAMPLES: QuotaSample[] = [];
 
 const trackColorMapping = (theme: Theme) => ({ stroke: theme.colors.surface3 });
+const sparklineColorMapping = (theme: Theme) => ({ stroke: theme.colors.foregroundMuted });
 
 function ringColorMapping(tone: QuotaTone) {
   return (theme: Theme) => ({ stroke: toneColor(theme, tone) });
@@ -57,6 +67,8 @@ function toneColor(theme: Theme, tone: QuotaTone): string {
  */
 export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const isCompact = useIsCompactFormFactor();
   const [open, setOpen] = useState(false);
   const { view, refresh, canFetch } = useProviderUsage(serverId);
 
@@ -64,6 +76,33 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
     () => buildQuotaSummary(view.kind === "ready" ? view.payload : null),
     [view],
   );
+
+  // Every fresh reading feeds the seven-day curve and, once, the low-quota
+  // warning. Both live here rather than in the menu so they keep working while
+  // the menu is closed — a warning you only see after opening it is useless.
+  useEffect(() => {
+    const history = useQuotaHistoryStore.getState();
+    for (const provider of summary.providers) {
+      const remaining = remainingPercent(provider.weekly);
+      if (remaining === null) continue;
+      history.record(provider.providerId, { t: Date.now(), remainingPct: remaining });
+
+      if (remaining > REMAINING_DANGER_PCT) {
+        history.clearWarned(provider.providerId);
+        continue;
+      }
+      const resetKey = provider.weekly?.resetsAt ?? "current";
+      if (!history.shouldWarn(provider.providerId, resetKey)) continue;
+      history.markWarned(provider.providerId, resetKey);
+      toast.show(
+        t("tasks.quota.lowAlert", {
+          provider: provider.displayName,
+          percent: Math.round(remaining),
+        }),
+        { variant: "warning", durationMs: 6000 },
+      );
+    }
+  }, [summary, t, toast]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -95,6 +134,13 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
         testID="tasks-quota-menu-trigger"
       >
         <QuotaRing percent={remaining} tone={tone} />
+        {/* The number is worth the width on a desktop header; on a phone the
+            header is already tight, so the ring speaks alone there. */}
+        {isCompact || remaining === null ? null : (
+          <Text style={tone === "danger" ? styles.triggerValueDanger : styles.triggerValue}>
+            {t("tasks.quota.percentShort", { percent: Math.round(remaining) })}
+          </Text>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="bottom" width={280} testID="tasks-quota-menu">
         <View style={styles.menu}>
@@ -171,10 +217,49 @@ function QuotaProviderBlock({ provider }: { provider: QuotaProviderSummary }) {
         <>
           <QuotaGauge label={t("tasks.quota.rolling")} window={provider.session} />
           <QuotaGauge label={t("tasks.quota.weekly")} window={provider.weekly} />
+          <QuotaHistorySparkline providerId={provider.providerId} />
         </>
       ) : (
         <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
       )}
+    </View>
+  );
+}
+
+/**
+ * Seven-day trace of the weekly allowance still left, drawn from readings this
+ * device took. Absent until there are two readings far enough apart, so it never
+ * shows a flat line pretending to be a week.
+ */
+function QuotaHistorySparkline({ providerId }: { providerId: string }) {
+  const { t } = useTranslation();
+  const samples = useQuotaHistoryStore(
+    (state) => state.samplesByProvider[providerId] ?? NO_SAMPLES,
+  );
+  const points = useMemo(() => sparklinePoints(samples, SPARKLINE_SIZE), [samples]);
+  if (!points) {
+    return null;
+  }
+  return (
+    <View style={styles.sparkline}>
+      <Text style={styles.sparklineLabel}>{t("tasks.quota.history")}</Text>
+      <Svg
+        width="100%"
+        height={SPARKLINE_SIZE.height}
+        viewBox={`0 0 ${SPARKLINE_SIZE.width} ${SPARKLINE_SIZE.height}`}
+        preserveAspectRatio="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <ThemedPolyline
+          points={points}
+          fill="none"
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          uniProps={sparklineColorMapping}
+        />
+      </Svg>
     </View>
   );
 }
@@ -227,15 +312,31 @@ function QuotaGauge({ label, window }: { label: string; window: ProviderUsageWin
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Row, not a square: the ring keeps the 32px icon footprint of its neighbours
+  // and the optional percentage extends it to the right.
   trigger: {
-    width: 32,
-    height: 32,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: theme.spacing[1],
+    minWidth: 32,
+    height: 32,
+    paddingHorizontal: theme.spacing[1],
     borderRadius: theme.borderRadius.lg,
   },
   triggerHovered: {
     backgroundColor: theme.colors.surface1,
+  },
+  triggerValue: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontVariant: ["tabular-nums"],
+  },
+  triggerValueDanger: {
+    color: theme.colors.destructive,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    fontVariant: ["tabular-nums"],
   },
   // Start the arc at 12 o'clock instead of 3 o'clock.
   ring: {
@@ -312,6 +413,14 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.destructive,
   },
   gaugeReset: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  sparkline: {
+    gap: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  sparklineLabel: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },
