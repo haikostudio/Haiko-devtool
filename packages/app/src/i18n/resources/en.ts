@@ -361,6 +361,7 @@ export const en = {
       title: "Conductor",
       move: "Move panel",
       backToConductor: "Back to conductor",
+      switchProvider: "Switch to {{provider}}",
       resetTitle: "Reset conversation",
       resetMessage:
         "The current conductor conversation is closed and a new empty one starts. Your tasks and data are kept.",

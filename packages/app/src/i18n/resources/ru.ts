@@ -364,6 +364,7 @@ export const ru: TranslationResources = {
       title: "Дирижёр",
       move: "Переместить панель",
       backToConductor: "Вернуться к дирижёру",
+      switchProvider: "Переключиться на {{provider}}",
       resetTitle: "Сбросить диалог",
       resetMessage:
         "Текущий диалог с дирижёром завершается и начинается новый пустой. Ваши задачи и данные сохраняются.",

@@ -369,6 +369,7 @@ export const fr: TranslationResources = {
       title: "Chef d'orchestre",
       move: "Déplacer le panneau",
       backToConductor: "Revenir au chef d'orchestre",
+      switchProvider: "Basculer sur {{provider}}",
       resetTitle: "Réinitialiser la conversation",
       resetMessage:
         "La conversation actuelle du chef d'orchestre est clôturée et une nouvelle repart à vide. Vos tâches et vos données sont conservées.",

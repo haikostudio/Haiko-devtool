@@ -16,7 +16,7 @@ import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
+import { useTasksBoardUiStore, type ConductorProviderChoice } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
@@ -40,13 +40,19 @@ type EnsureState =
 
 /** Task-mode tabs, chat first. Details/Billing live here too — no separate drawer. */
 type TaskView = "chat" | "details" | "billing";
-type ConductorProvider = "codex/gpt-5.4" | "claude/sonnet";
+type ConductorProvider = ConductorProviderChoice;
 
-// The conductor is created on this provider and never switched from a bar of our
-// own: Claude vs Codex is picked in Paseo's NATIVE menu at the bottom of the
-// prompt composer, the single source of truth for model selection. A second,
-// parallel selector here fought that menu and silently overrode the user's pick.
-const CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
+// Claude vs Codex has to be decided HERE, not in the composer's native model
+// menu: that menu only ever lists the running agent's own provider, so once the
+// conductor was created on Codex there was no way back to Claude from inside the
+// chat. The choice is a creation-time input — the daemon keeps one conductor per
+// provider, so switching hands back that provider's own conversation instead of
+// destroying anything. The native menu still owns model + thinking level within
+// the chosen provider; this control never touches those.
+const CONDUCTOR_PROVIDER_LABELS: Record<ConductorProvider, string> = {
+  "claude/sonnet": "Claude",
+  "codex/gpt-5.4": "Codex",
+};
 
 export interface ConductorPanelProps {
   serverId: string | null;
@@ -103,6 +109,8 @@ export function ConductorPanel({
   const conductorHeight = useTasksBoardUiStore((state) => state.conductorHeight);
   const conductorOffsetX = useTasksBoardUiStore((state) => state.conductorOffsetX);
   const conductorCollapsed = useTasksBoardUiStore((state) => state.conductorCollapsed);
+  const conductorProvider = useTasksBoardUiStore((state) => state.conductorProvider);
+  const setConductorProvider = useTasksBoardUiStore((state) => state.setConductorProvider);
   const setConductorHeight = useTasksBoardUiStore((state) => state.setConductorHeight);
   const setConductorOffsetX = useTasksBoardUiStore((state) => state.setConductorOffsetX);
   const setConductorCollapsed = useTasksBoardUiStore((state) => state.setConductorCollapsed);
@@ -152,6 +160,15 @@ export function ConductorPanel({
       setResetNonce((nonce) => nonce + 1);
     })();
   }, [t]);
+
+  // Two engines, so the control is a straight toggle rather than a menu. Only
+  // the stored choice changes here: the ensure effect below reacts to it and asks
+  // the daemon for that provider's conductor. Nothing is reset or destroyed.
+  const nextConductorProvider: ConductorProvider =
+    conductorProvider === "claude/sonnet" ? "codex/gpt-5.4" : "claude/sonnet";
+  const handleToggleProvider = useCallback(() => {
+    setConductorProvider(nextConductorProvider);
+  }, [nextConductorProvider, setConductorProvider]);
 
   // Watches the resolved conductor: if it turns out to be archived, we cannot
   // show its chat and must mint a new one.
@@ -204,7 +221,7 @@ export function ConductorPanel({
       }
       try {
         const payload = await client.tasksConductorEnsure(projectId, {
-          provider: CONDUCTOR_PROVIDER,
+          provider: conductorProvider,
           ...(reset ? { reset: true } : {}),
         });
         if (cancelled) {
@@ -221,7 +238,7 @@ export function ConductorPanel({
           status: "ready",
           agentId: payload.agentId,
           workspaceId: payload.workspaceId ?? null,
-          provider: CONDUCTOR_PROVIDER,
+          provider: conductorProvider,
         });
       } catch (error) {
         if (!cancelled) {
@@ -236,7 +253,10 @@ export function ConductorPanel({
     return () => {
       cancelled = true;
     };
-  }, [serverId, projectId, t, inTaskMode, resetNonce]);
+    // `conductorProvider` is a dependency on purpose: flipping Claude ↔ Codex
+    // re-runs the ensure (without reset) and hands back that provider's own
+    // conductor conversation.
+  }, [serverId, projectId, t, inTaskMode, resetNonce, conductorProvider]);
 
   const renderTaskBody = (task: KanbanTask) => (
     <>
@@ -345,21 +365,43 @@ export function ConductorPanel({
     return {
       title: t("tasks.conductor.title"),
       leading: <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
-      // Conductor mode only: retire the current conversation so the context sent
-      // to the model stops growing forever.
+      // Conductor mode only: pick the engine (Claude / Codex), and retire the
+      // current conversation so the context sent to the model stops growing.
       actions: (
-        <Pressable
-          onPress={handleReset}
-          style={resetButtonStyle}
-          accessibilityRole="button"
-          accessibilityLabel={t("tasks.conductor.resetTitle")}
-          testID="conductor-reset"
-        >
-          <ThemedRotate size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={handleToggleProvider}
+            style={providerButtonStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.conductor.switchProvider", {
+              provider: CONDUCTOR_PROVIDER_LABELS[nextConductorProvider],
+            })}
+            testID="conductor-provider-toggle"
+          >
+            <Text style={styles.providerLabel}>{CONDUCTOR_PROVIDER_LABELS[conductorProvider]}</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleReset}
+            style={resetButtonStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.conductor.resetTitle")}
+            testID="conductor-reset"
+          >
+            <ThemedRotate size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          </Pressable>
+        </View>
       ),
     };
-  }, [inTaskMode, dockTask, onBackToConductor, handleReset, t]);
+  }, [
+    inTaskMode,
+    dockTask,
+    onBackToConductor,
+    handleReset,
+    handleToggleProvider,
+    conductorProvider,
+    nextConductorProvider,
+    t,
+  ]);
 
   return (
     <TaskBottomDock
@@ -383,6 +425,10 @@ export function ConductorPanel({
 
 function resetButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.resetButton, (hovered || pressed) && styles.resetButtonHovered];
+}
+
+function providerButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.providerButton, (hovered || pressed) && styles.resetButtonHovered];
 }
 
 function EmbeddedConductorPane({
@@ -438,12 +484,29 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
   resetButton: {
     width: 28,
     height: 28,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: theme.borderRadius.lg,
+  },
+  providerButton: {
+    height: 28,
+    paddingHorizontal: theme.spacing[2],
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
+  },
+  providerLabel: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: "600",
   },
   resetButtonHovered: {
     backgroundColor: theme.colors.surface1,

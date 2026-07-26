@@ -368,6 +368,7 @@ export const es: TranslationResources = {
       title: "Director",
       move: "Mover el panel",
       backToConductor: "Volver al director",
+      switchProvider: "Cambiar a {{provider}}",
       resetTitle: "Reiniciar la conversación",
       resetMessage:
         "La conversación actual del director se cierra y empieza una nueva vacía. Tus tareas y datos se conservan.",

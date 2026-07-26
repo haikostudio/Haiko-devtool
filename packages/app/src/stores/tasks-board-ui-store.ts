@@ -6,10 +6,21 @@ import { createJSONStorage, persist } from "zustand/middleware";
 // the user dragged it to survives a reload / navigating away and back. Only the
 // width is durable; everything else about the board is derived at render time.
 
+/**
+ * Which agent the "Chef d'orchestre" runs on. The provider of a LIVE agent can
+ * never be changed from the composer's native model menu (that menu only lists
+ * the running agent's own provider), so the Claude/Codex choice has to be made
+ * where the conductor agent is created — here, remembered across reloads.
+ */
+export type ConductorProviderChoice = "claude/sonnet" | "codex/gpt-5.4";
+
 interface TasksBoardUiState {
   /** Open width (in px) of the right-hand Details/Billing drawer. */
   panelWidth: number;
   setPanelWidth: (panelWidth: number) => void;
+  /** Provider the conductor chat runs on (one persisted conductor per provider). */
+  conductorProvider: ConductorProviderChoice;
+  setConductorProvider: (conductorProvider: ConductorProviderChoice) => void;
   /** Whether the bottom-docked "Chef d'orchestre" chat dock is open. */
   conductorOpen: boolean;
   setConductorOpen: (conductorOpen: boolean) => void;
@@ -66,6 +77,8 @@ interface TasksBoardUiState {
 // opens the panel at before the user has resized it.
 const DEFAULT_PANEL_WIDTH = 440;
 const DEFAULT_CONDUCTOR_HEIGHT = 340;
+// Claude by default, matching the daemon's own conductor default.
+const DEFAULT_CONDUCTOR_PROVIDER: ConductorProviderChoice = "claude/sonnet";
 // Mirrors DEFAULT_TIMELINE_HEIGHT in task-timeline-area.tsx.
 const DEFAULT_TIMELINE_HEIGHT = 190;
 
@@ -74,6 +87,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
     (set) => ({
       panelWidth: DEFAULT_PANEL_WIDTH,
       setPanelWidth: (panelWidth) => set({ panelWidth }),
+      conductorProvider: DEFAULT_CONDUCTOR_PROVIDER,
+      setConductorProvider: (conductorProvider) => set({ conductorProvider }),
       conductorOpen: false,
       setConductorOpen: (conductorOpen) => set({ conductorOpen }),
       conductorHeight: DEFAULT_CONDUCTOR_HEIGHT,
@@ -110,6 +125,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       // (which chat the dock shows, which drawer is open) must always start empty.
       partialize: (state) => ({
         panelWidth: state.panelWidth,
+        conductorProvider: state.conductorProvider,
         conductorOpen: state.conductorOpen,
         conductorHeight: state.conductorHeight,
         conductorOffsetX: state.conductorOffsetX,

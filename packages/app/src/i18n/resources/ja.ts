@@ -366,6 +366,7 @@ export const ja: TranslationResources = {
       title: "指揮者",
       move: "パネルを移動",
       backToConductor: "指揮者に戻る",
+      switchProvider: "{{provider}} に切り替え",
       resetTitle: "会話をリセット",
       resetMessage:
         "現在の指揮者との会話を終了し、空の新しい会話を開始します。タスクとデータは保持されます。",

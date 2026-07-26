@@ -361,6 +361,7 @@ export const ar: TranslationResources = {
       title: "قائد الأوركسترا",
       move: "تحريك اللوحة",
       backToConductor: "العودة إلى قائد الأوركسترا",
+      switchProvider: "التبديل إلى {{provider}}",
       resetTitle: "إعادة تعيين المحادثة",
       resetMessage:
         "يتم إنهاء محادثة قائد الأوركسترا الحالية وتبدأ محادثة جديدة فارغة. تبقى مهامك وبياناتك محفوظة.",

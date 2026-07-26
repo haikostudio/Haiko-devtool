@@ -361,6 +361,7 @@ export const zhCN: TranslationResources = {
       title: "指挥",
       move: "移动面板",
       backToConductor: "返回指挥",
+      switchProvider: "切换到 {{provider}}",
       resetTitle: "重置对话",
       resetMessage: "当前的指挥对话将结束并开启一个新的空对话。您的任务和数据将保留。",
       resetConfirm: "重置",
