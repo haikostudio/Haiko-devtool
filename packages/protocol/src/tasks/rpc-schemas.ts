@@ -155,6 +155,11 @@ export const TasksConductorEnsureRequestSchema = z.object({
   requestId: z.string(),
   projectId: z.string(),
   provider: z.string().optional(),
+  // "Réinitialiser": archive the project's current conductor and hand back a
+  // brand-new one, so the model stops carrying an ever-growing conversation.
+  // The archived thread stays readable in the archive; only the ACTIVE context
+  // is dropped. Additive + optional — old daemons simply ignore it.
+  reset: z.boolean().optional(),
 });
 
 export const TasksBoardGetResponseSchema = z.object({

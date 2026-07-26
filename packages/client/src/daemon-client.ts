@@ -4706,7 +4706,7 @@ export class DaemonClient {
 
   async tasksConductorEnsure(
     projectId: string,
-    optionsOrRequestId?: { provider?: string } | string,
+    optionsOrRequestId?: { provider?: string; reset?: boolean } | string,
     requestId?: string,
   ) {
     const options = typeof optionsOrRequestId === "string" ? undefined : optionsOrRequestId;
@@ -4718,6 +4718,7 @@ export class DaemonClient {
         type: "tasks.conductor.ensure.request",
         projectId,
         ...(options?.provider ? { provider: options.provider } : {}),
+        ...(options?.reset ? { reset: true } : {}),
       },
     });
   }

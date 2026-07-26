@@ -360,6 +360,10 @@ export const ja: TranslationResources = {
       title: "指揮者",
       move: "パネルを移動",
       backToConductor: "指揮者に戻る",
+      resetTitle: "会話をリセット",
+      resetMessage:
+        "現在の指揮者との会話を終了し、空の新しい会話を開始します。タスクとデータは保持されます。",
+      resetConfirm: "リセット",
       openDetails: "詳細",
       collapse: "折りたたむ",
       expand: "展開",

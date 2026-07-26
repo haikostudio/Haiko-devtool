@@ -15,6 +15,12 @@ export interface ConductorAgentServiceOptions {
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
   logger: pino.Logger;
+  /**
+   * Archives an agent (soft-delete). Wired to the agent manager at bootstrap and
+   * used by the "Réinitialiser" reset: the current conductor is archived so the
+   * label scan below stops finding it and a fresh conductor is created.
+   */
+  archiveAgent?: (agentId: string) => Promise<unknown>;
 }
 
 export interface EnsureConductorResult {
@@ -198,6 +204,7 @@ export class ConductorAgentService {
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly logger: pino.Logger;
+  private readonly archiveAgent: ((agentId: string) => Promise<unknown>) | null;
   // Serializes concurrent ensure calls per project so we never create two
   // conductors for the same project when two clients open the panel at once.
   private readonly inflight = new Map<string, Promise<EnsureConductorResult>>();
@@ -207,20 +214,30 @@ export class ConductorAgentService {
     this.agentStorage = options.agentStorage;
     this.projectRegistry = options.projectRegistry;
     this.logger = options.logger;
+    this.archiveAgent = options.archiveAgent ?? null;
   }
 
   async ensureConductorAgent(
     projectId: string,
     requestedProvider?: string,
+    options?: { reset?: boolean },
   ): Promise<EnsureConductorResult> {
     const provider = resolveConductorProvider(requestedProvider);
     const inflightKey = `${projectId}:${provider}`;
     const existing = this.inflight.get(inflightKey);
-    if (existing) {
+    // A reset must never join an in-flight plain ensure: that would hand back the
+    // very agent the user asked to retire. Only plain ensures share.
+    if (existing && !options?.reset) {
       return existing;
     }
-    const promise = this.ensureConductorAgentInner(projectId, provider).finally(() => {
-      this.inflight.delete(inflightKey);
+    const promise = this.ensureConductorAgentInner(
+      projectId,
+      provider,
+      options?.reset === true,
+    ).finally(() => {
+      if (this.inflight.get(inflightKey) === promise) {
+        this.inflight.delete(inflightKey);
+      }
     });
     this.inflight.set(inflightKey, promise);
     return promise;
@@ -229,6 +246,7 @@ export class ConductorAgentService {
   private async ensureConductorAgentInner(
     projectId: string,
     provider: ConductorProvider,
+    reset: boolean,
   ): Promise<EnsureConductorResult> {
     const project = await this.projectRegistry.get(projectId);
     if (!project?.rootPath) {
@@ -240,13 +258,26 @@ export class ConductorAgentService {
     // conductor for this project. This is what makes the conductor survive
     // daemon restarts without any separate mapping file.
     const records = await this.agentStorage.list();
-    const found = records.find(
+    const liveConductors = records.filter(
       (record) =>
         !record.archivedAt &&
         record.labels[CONDUCTOR_ROLE_LABEL] === CONDUCTOR_ROLE_VALUE &&
-        record.labels[CONDUCTOR_PROJECT_ID_LABEL] === projectId &&
-        recordMatchesConductorProvider(record, provider),
+        record.labels[CONDUCTOR_PROJECT_ID_LABEL] === projectId,
     );
+    if (reset) {
+      // "Réinitialiser": retire EVERY live conductor of this project (whatever
+      // its provider) so the fresh one below starts from a genuinely empty
+      // context. Archiving is a soft-delete — the old thread stays readable in
+      // the archive, it just stops being sent to the model. Board data is
+      // untouched: conductors own no tasks.
+      await this.archiveConductors(
+        liveConductors.map((record) => record.id),
+        projectId,
+      );
+    }
+    const found = reset
+      ? undefined
+      : liveConductors.find((record) => recordMatchesConductorProvider(record, provider));
     if (found) {
       // Persistence-by-label reuses the SAME agent across restarts, so a
       // conductor created before the hard lock existed — or one whose stored
@@ -288,6 +319,27 @@ export class ConductorAgentService {
       agentId: created.snapshot.id,
       workspaceId: created.snapshot.workspaceId ?? null,
     };
+  }
+
+  /**
+   * Soft-delete the given conductors so the label scan stops finding them and
+   * the next ensure creates a fresh conversation. Best-effort per agent: one
+   * failed archive must not block the reset, otherwise the user is stuck with
+   * the oversized context they asked to drop. Without an archive hook wired
+   * (tests, trimmed hosts) this is a no-op and ensure simply reuses the agent.
+   */
+  private async archiveConductors(agentIds: string[], projectId: string): Promise<void> {
+    if (!this.archiveAgent) {
+      return;
+    }
+    for (const agentId of agentIds) {
+      try {
+        await this.archiveAgent(agentId);
+        this.logger.info({ projectId, agentId }, "Archived conductor agent on reset");
+      } catch (error) {
+        this.logger.warn({ err: error, projectId, agentId }, "Conductor reset archive failed");
+      }
+    }
   }
 
   /**

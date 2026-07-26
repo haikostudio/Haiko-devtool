@@ -1484,6 +1484,7 @@ export async function createPaseoDaemon(
     agentStorage,
     projectRegistry,
     logger,
+    archiveAgent: (agentId) => agentManager.archiveAgent(agentId),
   });
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");

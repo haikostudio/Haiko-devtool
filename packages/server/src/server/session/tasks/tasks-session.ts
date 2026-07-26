@@ -301,6 +301,7 @@ export class TasksSession {
       const { agentId, workspaceId } = await this.conductorService.ensureConductorAgent(
         request.projectId,
         request.provider,
+        { reset: request.reset === true },
       );
       this.host.emit({
         type: "tasks.conductor.ensure.response",

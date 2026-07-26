@@ -362,6 +362,10 @@ export const ptBR: TranslationResources = {
       title: "Maestro",
       move: "Mover o painel",
       backToConductor: "Voltar ao maestro",
+      resetTitle: "Reiniciar a conversa",
+      resetMessage:
+        "A conversa atual do maestro é encerrada e uma nova vazia começa. Suas tarefas e dados são mantidos.",
+      resetConfirm: "Reiniciar",
       openDetails: "Detalhes",
       collapse: "Recolher",
       expand: "Expandir",
