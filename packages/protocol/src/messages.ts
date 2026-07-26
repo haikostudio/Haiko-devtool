@@ -1404,6 +1404,32 @@ export const DictationStreamCancelMessageSchema = z.object({
   dictationId: z.string(),
 });
 
+// COMPAT(githubCheckDetailsRpc): added in v0.1.106, remove after 2026-12-28 once
+// all supported clients use checkout.forge.get_check_details.*.
+// ---------------------------------------------------------------------------
+// Restauré. Ces déclarations avaient disparu de ce fichier lors d'une reprise de
+// version, alors que le serveur et le client les utilisent toujours : sans elles
+// le paquet serveur ne compile plus du tout. L'union des messages entrants est
+// déclarée juste après, car certaines d'entre elles en dépendent.
+// Ne pas re-supprimer sans retirer d'abord le code qui s'en sert.
+// ---------------------------------------------------------------------------
+export const WorkspaceRecoveryInspectRequestSchema = z.object({
+  type: z.literal("workspace.recovery.inspect.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+export const WorkspaceRecoveryRestoreRequestSchema = z.object({
+  type: z.literal("workspace.recovery.restore.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+export const ChangeRequestCheckoutSourceSchema = z.object({
+  kind: z.literal("change_request"),
+  forge: z.string().optional(),
+  number: z.number().int().positive(),
+  projectPath: z.string().optional(),
+});
+
 const GitSetupOptionsSchema = z.object({
   baseBranch: z.string().optional(),
   createNewBranch: z.boolean().optional(),
@@ -1412,6 +1438,10 @@ const GitSetupOptionsSchema = z.object({
   worktreeSlug: z.string().optional(),
   refName: z.string().min(1).optional(),
   action: z.enum(["branch-off", "checkout"]).optional(),
+  // Restauré : source du checkout (demande de changement sur une forge).
+  checkoutSource: ChangeRequestCheckoutSourceSchema.optional(),
+  // COMPAT(githubPrNumber): added in v0.1.106, remove after 2026-12-28 once
+  // clients send checkoutSource.
   githubPrNumber: z.number().int().positive().optional(),
 });
 
@@ -1510,6 +1540,8 @@ export const ImportAgentRequestMessageSchema = z.object({
   sessionId: z.string().optional(),
   providerHandleId: z.string().optional(),
   cwd: z.string().optional(),
+  // Restauré : espace de travail visé par l'import (additif, optionnel).
+  workspaceId: z.string().optional(),
   labels: z.record(z.string(), z.string()).optional(),
   requestId: z.string(),
 });
@@ -2101,31 +2133,6 @@ export const CheckoutGithubSetAutoMergeRequestSchema = z.object({
 
 const GitHubRepoSegmentSchema = z.string().regex(/^[A-Za-z0-9._-]+$/);
 
-// COMPAT(githubCheckDetailsRpc): added in v0.1.106, remove after 2026-12-28 once
-// all supported clients use checkout.forge.get_check_details.*.
-// ---------------------------------------------------------------------------
-// Restauré. Ces déclarations avaient disparu de ce fichier lors d'une reprise de
-// version, alors que le serveur et le client les utilisent toujours : sans elles
-// le paquet serveur ne compile plus du tout. L'union des messages entrants est
-// déclarée juste après, car certaines d'entre elles en dépendent.
-// Ne pas re-supprimer sans retirer d'abord le code qui s'en sert.
-// ---------------------------------------------------------------------------
-export const WorkspaceRecoveryInspectRequestSchema = z.object({
-  type: z.literal("workspace.recovery.inspect.request"),
-  workspaceId: z.string(),
-  requestId: z.string(),
-});
-export const WorkspaceRecoveryRestoreRequestSchema = z.object({
-  type: z.literal("workspace.recovery.restore.request"),
-  workspaceId: z.string(),
-  requestId: z.string(),
-});
-export const ChangeRequestCheckoutSourceSchema = z.object({
-  kind: z.literal("change_request"),
-  forge: z.string().optional(),
-  number: z.number().int().positive(),
-  projectPath: z.string().optional(),
-});
 export const HubManagementDaemonConnectRequestSchema = z.object({
   type: z.literal("hub.management.daemon.connect.request"),
   requestId: z.string(),

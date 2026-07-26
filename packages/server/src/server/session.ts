@@ -41,7 +41,7 @@ import {
   isStoredAgentProviderAvailable,
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
-import { ensureAgentLoaded } from "./agent/agent-loading.js";
+import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import {
   formatSystemNotificationPrompt,
   sendPromptToAgent,
@@ -908,6 +908,15 @@ export class Session {
         emit: (msg) => this.emit(msg),
       },
       operations: {
+        // Restauré : un agent archivé/déchargé est rechargé avant toute
+        // modification de sa configuration, sinon le changement porte dans le vide.
+        ensureLoaded: async (agentId) => {
+          await ensureUnarchivedAgentLoaded(agentId, {
+            agentManager,
+            agentStorage,
+            logger: this.sessionLogger,
+          });
+        },
         setMode: async (agentId, modeId) =>
           (await setAgentModeCommand({ agentManager }, { agentId, modeId })).notice,
         setModel: (agentId, modelId) => agentManager.setAgentModel(agentId, modelId),
@@ -1005,6 +1014,7 @@ export class Session {
       scriptRuntimeStore: this.scriptRuntimeStore,
       terminalManager: this.terminalManager,
       workspaceRegistry: this.workspaceRegistry,
+      projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
       getDaemonTcpPort: this.getDaemonTcpPort,
       getDaemonTcpHost: this.getDaemonTcpHost,
@@ -3609,18 +3619,19 @@ export class Session {
         throw new Error("Import requires cwd from the selected provider session");
       }
       // An imported agent mints its own workspace; ownership is its workspaceId,
-      // never an existing same-cwd workspace resolved by path.
-      const workspace = await this.workspaceProvisioning.createWorkspaceForDirectory(
-        normalized.cwd,
-      );
-      const { snapshot, timelineSize } = await importProviderSession({
+      // never an existing same-cwd workspace resolved by path. La création (et le
+      // retour en arrière si l'import échoue) est portée par le service d'espaces
+      // de travail, pour ne jamais laisser de coquille vide derrière.
+      const { snapshot, timelineSize, createdWorkspace } = await importProviderSession({
         request: normalized,
-        workspaceId: workspace.workspaceId,
+        workspaceProvisioning: this.workspaceProvisioning,
         agentManager: this.agentManager,
         agentStorage: this.agentStorage,
         logger: this.sessionLogger,
       });
-      await this.registerWorkspaceForImportedAgent(workspace);
+      if (createdWorkspace) {
+        await this.registerWorkspaceForImportedAgent(createdWorkspace);
+      }
       const agentPayload = await this.buildAgentPayload(snapshot);
       this.emit({
         type: "status",
@@ -3842,7 +3853,6 @@ export class Session {
         checkoutExistingBranch: (cwd, branch) =>
           this.gitMutation.checkoutExistingBranch(cwd, branch),
         createBranchFromBase: (params) => this.gitMutation.createBranchFromBase(params),
-        github: this.github,
       },
       config,
       gitOptions,
@@ -4934,7 +4944,7 @@ export class Session {
     workspaceId: string;
     cwd: string;
   }): Promise<void> {
-    this.workspaceGitObserver.removeForCwd(input.cwd);
+    this.workspaceGitObserver.removeForWorkspaceId(input.workspaceId);
     this.scriptRuntimeStore?.removeForWorkspace(input.workspaceId);
   }
 
@@ -4979,7 +4989,6 @@ export class Session {
           case "workspace_updated":
             changedWorkspaceIds.add(change.workspaceId);
             break;
-          case "project_archived":
           case "project_updated":
             changedProjectIds.add(change.projectId);
             break;

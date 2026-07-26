@@ -30,6 +30,32 @@ export interface EnsureAgentLoadedDeps {
   logger: Logger;
 }
 
+// Restauré : charge un agent en refusant explicitement les agents archivés, y
+// compris quand l'archivage survient pendant le chargement (on referme alors ce
+// qui vient d'être ouvert). Utilisé avant toute modification de configuration.
+export async function ensureUnarchivedAgentLoaded(
+  agentId: string,
+  deps: EnsureAgentLoadedDeps & {
+    agentManager: AgentLoaderManager & Pick<AgentManager, "closeAgent">;
+  },
+): Promise<ManagedAgent> {
+  const record = await deps.agentStorage.get(agentId);
+  if (record?.archivedAt) {
+    throw new Error(`Agent is archived: ${agentId}`);
+  }
+
+  const agent = await ensureAgentLoaded(agentId, deps);
+  const latestRecord = await deps.agentStorage.get(agentId);
+  if (latestRecord?.archivedAt) {
+    await deps.agentManager.closeAgent(agentId).catch((error: unknown) => {
+      deps.logger.warn({ err: error, agentId }, "Failed to close concurrently archived agent");
+    });
+    throw new Error(`Agent is archived: ${agentId}`);
+  }
+
+  return agent;
+}
+
 export async function ensureAgentLoaded(
   agentId: string,
   deps: EnsureAgentLoadedDeps,

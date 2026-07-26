@@ -141,6 +141,11 @@ import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
+import type { HubRelationshipRemote } from "./hub/relationship-remote.js";
+import type {
+  HubRelationshipClock,
+  HubRelationshipRetryPolicy,
+} from "./hub/relationship-controller.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
@@ -603,9 +608,24 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
   return initialConfig;
 }
 
+/**
+ * Points d'injection pour les tests du « hub » (pilotage de démons distants).
+ * ATTENTION : cette version du démon ne construit pas encore le contrôleur de
+ * relations du hub — le paramètre existe pour que le harnais de test compile et
+ * pour offrir le point d'accroche le jour où le hub sera branché ici. Tant que
+ * ce n'est pas fait, ce qui est passé ici n'a aucun effet.
+ */
+export interface PaseoDaemonDependencies {
+  hubRelationshipRemote?: HubRelationshipRemote;
+  hubRelationshipClock?: HubRelationshipClock;
+  hubRelationshipRetryPolicy?: HubRelationshipRetryPolicy;
+  createHubDaemonId?: () => string;
+}
+
 export async function createPaseoDaemon(
   config: PaseoDaemonConfig,
   rootLogger: Logger,
+  _dependencies: PaseoDaemonDependencies = {},
 ): Promise<PaseoDaemon> {
   const logger = rootLogger.child({ module: "bootstrap" });
   const bootstrapStart = performance.now();
