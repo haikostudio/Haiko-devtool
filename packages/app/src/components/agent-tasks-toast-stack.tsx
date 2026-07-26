@@ -40,11 +40,11 @@ import { agentTaskToastKey, useAgentTaskToastStore } from "@/stores/agent-task-t
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useActiveWorkspaceSelection } from "@/stores/navigation-active-workspace-store";
 import {
-  buildWorkspaceTabPersistenceKey,
   collectAllPanes,
   collectAllTabs,
   useWorkspaceLayoutStore,
 } from "@/stores/workspace-layout-store";
+import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 
 const ICON_SIZE = 16;
 // Matches theme.spacing[4]; kept as a literal so the container can add the

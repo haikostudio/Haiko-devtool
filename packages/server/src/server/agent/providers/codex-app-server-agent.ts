@@ -1930,11 +1930,29 @@ async function loadCodexThreadHistoryTimeline(params: {
   return { timeline, subAgentRoutes };
 }
 
-function readCodexThread(client: CodexAppServerClientLike, threadId: string): Promise<unknown> {
-  return client.request("thread/read", {
-    threadId,
-    includeTurns: true,
-  });
+function isCodexUnmaterializedThreadHistoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("is not materialized yet") &&
+    message.includes("includeTurns is unavailable before first user message")
+  );
+}
+
+async function readCodexThread(
+  client: CodexAppServerClientLike,
+  threadId: string,
+): Promise<unknown> {
+  try {
+    return await client.request("thread/read", {
+      threadId,
+      includeTurns: true,
+    });
+  } catch (error) {
+    if (!isCodexUnmaterializedThreadHistoryError(error)) {
+      throw error;
+    }
+    return { thread: { id: threadId, turns: [] } };
+  }
 }
 
 export async function forkCodexThread(

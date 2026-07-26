@@ -3,7 +3,15 @@ import { resolve } from "node:path";
 
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { getRealpathAwareRelativePath } from "../utils/path.js";
-import type { PersistedWorkspaceRecord } from "./workspace-registry.js";
+import {
+  createPersistedProjectRecord,
+  createPersistedWorkspaceRecord,
+  type PersistedWorkspaceRecord,
+  type ProjectRegistry,
+  type WorkspaceRegistry,
+} from "./workspace-registry.js";
+import { classifyDirectoryForProjectMembership } from "./workspace-registry-bootstrap-legacy.js";
+import { generateWorkspaceId } from "./workspace-registry-model.js";
 import type { WorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import {
   createWorktreeCore,
@@ -140,6 +148,63 @@ async function planWorkspaceCwdForWorktree(
     throw new Error(`Workspace cwd is outside its source worktree: ${normalizedInputCwd}`);
   }
   return { inputCwd: normalizedInputCwd, relativeWorkspaceCwd };
+}
+
+export interface CreateLocalCheckoutWorkspaceDeps {
+  projectRegistry: Pick<ProjectRegistry, "list" | "upsert">;
+  workspaceRegistry: Pick<WorkspaceRegistry, "upsert">;
+  workspaceGitService: Pick<WorkspaceGitService, "getCheckout">;
+}
+
+export async function createLocalCheckoutWorkspace(
+  options: { cwd: string; title?: string | null },
+  deps: CreateLocalCheckoutWorkspaceDeps,
+): Promise<PersistedWorkspaceRecord> {
+  const normalizedCwd = resolve(options.cwd);
+  const checkout = await deps.workspaceGitService.getCheckout(normalizedCwd);
+  const membership = classifyDirectoryForProjectMembership({ cwd: normalizedCwd, checkout });
+  const now = new Date().toISOString();
+  const projects = await deps.projectRegistry.list();
+  const existingProject =
+    projects.find(
+      (project) => !project.archivedAt && project.rootPath === membership.projectRootPath,
+    ) ??
+    projects.find((project) => project.rootPath === membership.projectRootPath) ??
+    null;
+  const project = existingProject
+    ? {
+        ...existingProject,
+        rootPath: membership.projectRootPath,
+        kind: membership.projectKind,
+        archivedAt: null,
+        updatedAt: now,
+      }
+    : createPersistedProjectRecord({
+        projectId: membership.projectKey,
+        rootPath: membership.projectRootPath,
+        kind: membership.projectKind,
+        displayName: membership.projectName,
+        createdAt: now,
+        updatedAt: now,
+      });
+  await deps.projectRegistry.upsert(project);
+
+  const currentBranch = checkout.currentBranch?.trim() ?? null;
+  const branch = currentBranch && currentBranch.toUpperCase() !== "HEAD" ? currentBranch : null;
+  const trimmedTitle = options.title?.trim();
+  const workspace = createPersistedWorkspaceRecord({
+    workspaceId: generateWorkspaceId(),
+    projectId: project.projectId,
+    cwd: normalizedCwd,
+    kind: membership.workspaceKind,
+    displayName: membership.workspaceDisplayName,
+    branch,
+    title: trimmedTitle || null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await deps.workspaceRegistry.upsert(workspace);
+  return workspace;
 }
 
 export async function attemptFirstAgentBranchAutoName(options: {

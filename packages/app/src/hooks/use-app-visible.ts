@@ -41,3 +41,5 @@ function getSnapshot(): boolean {
 export function useAppVisible(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
+
+export const useAppActivelyVisible = useAppVisible;

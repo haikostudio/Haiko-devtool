@@ -3004,6 +3004,29 @@ describe("Codex app-server provider", () => {
     ]);
   });
 
+  test("treats an unmaterialized Codex thread as empty history", async () => {
+    const session = createSession();
+    session.client = {
+      request: vi.fn(async (method: string) => {
+        if (method !== "thread/read") {
+          throw new Error(`Unexpected request: ${method}`);
+        }
+        throw new Error(
+          "thread test-thread is not materialized yet; " +
+            "includeTurns is unavailable before first user message",
+        );
+      }),
+    };
+
+    await expect(asInternals(session).loadPersistedHistory()).resolves.toBeUndefined();
+
+    const history: AgentStreamEvent[] = [];
+    for await (const event of session.streamHistory()) {
+      history.push(event);
+    }
+    expect(history).toEqual([]);
+  });
+
   test("loads mixed legacy and MultiAgentV2 sub-agent history", async () => {
     const session = createSession();
     session.client = {

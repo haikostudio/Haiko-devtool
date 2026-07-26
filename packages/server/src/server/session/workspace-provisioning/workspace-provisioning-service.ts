@@ -1,9 +1,9 @@
 import { resolve } from "node:path";
 import {
   checkoutLiteFromGitSnapshot,
-  classifyDirectoryForProjectMembership,
   generateWorkspaceId,
 } from "../../workspace-registry-model.js";
+import { classifyDirectoryForProjectMembership } from "../../workspace-registry-bootstrap-legacy.js";
 import {
   createPersistedProjectRecord,
   createPersistedWorkspaceRecord,

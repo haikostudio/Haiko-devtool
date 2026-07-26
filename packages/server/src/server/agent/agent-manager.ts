@@ -4274,11 +4274,11 @@ export class AgentManager {
           throw new Error(`Working directory is not a directory: ${normalized.cwd}`);
         }
       } catch (error) {
-        if (
+        const cwdIsMissing =
           error instanceof Error &&
           "code" in error &&
-          (error as NodeJS.ErrnoException).code === "ENOENT"
-        ) {
+          (error as NodeJS.ErrnoException).code === "ENOENT";
+        if (cwdIsMissing) {
           if (options.allowMissingCwd) {
             const fallback = await findNearestExistingDirectory(normalized.cwd);
             console.warn(
@@ -4291,11 +4291,13 @@ export class AgentManager {
               cause: error,
             });
           }
-        }
-        if (error instanceof Error) {
+        } else if (error instanceof Error) {
           throw error;
+        } else {
+          throw new Error(`Failed to access working directory: ${normalized.cwd}`, {
+            cause: error,
+          });
         }
-        throw new Error(`Failed to access working directory: ${normalized.cwd}`, { cause: error });
       }
     }
 

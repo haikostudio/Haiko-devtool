@@ -2022,6 +2022,33 @@ test("resumeAgentFromPersistence replaces stored internal paseo MCP with current
   });
 });
 
+test("resumeAgentFromPersistence falls back when the persisted cwd no longer exists", async () => {
+  const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
+  const missingCwd = join(workdir, "deleted-worktree", "nested");
+  const storage = new AgentStorage(join(workdir, "agents"), logger);
+  const client = new TestAgentClient("claude");
+  const manager = new AgentManager({
+    clients: {
+      claude: client,
+    },
+    registry: storage,
+    logger,
+  });
+  const handle: AgentPersistenceHandle = {
+    provider: "claude",
+    sessionId: "deleted-worktree-session",
+    metadata: {
+      cwd: missingCwd,
+    },
+  };
+
+  const resumed = await manager.resumeAgentFromPersistence(handle);
+
+  expect(resumed.config.cwd).toBe(workdir);
+  expect(client.resumeOverrides[0]?.cwd).toBe(workdir);
+  rmSync(workdir, { recursive: true, force: true });
+});
+
 test("resumeAgentFromPersistence drops stored internal paseo MCP when runtime injection is disabled", async () => {
   const workdir = mkdtempSync(join(tmpdir(), "agent-manager-test-"));
   const storagePath = join(workdir, "agents");
