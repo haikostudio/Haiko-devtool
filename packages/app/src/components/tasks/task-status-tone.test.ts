@@ -60,6 +60,27 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     expect(deriveTaskTone(task, undefined)).toBe("done");
   });
 
+  it("ignores a stale spin-up flag once the card is already in progress", () => {
+    // A "launching"/"pending_estimate" flag that lingers after the card reached
+    // the in-progress column is a leftover the server can no longer clear. With
+    // no live running agent it must NOT resurrect the loader.
+    expect(
+      deriveTaskTone(
+        makeTask({ column: "in_progress", schedule: { state: "launching", attempts: 1 } }),
+        "done",
+      ),
+    ).toBe("done");
+    expect(
+      deriveTaskTone(
+        makeTask({ column: "in_progress", schedule: { state: "pending_estimate", attempts: 1 } }),
+        undefined,
+      ),
+    ).toBe("done");
+    expect(
+      deriveTaskTone(makeTask({ column: "in_progress", refinement: "pending" }), undefined),
+    ).toBe("done");
+  });
+
   it("keeps amber priority when the agent is waiting on the user", () => {
     const task = makeTask({ column: "in_progress" });
     const needsInput: WorkspaceStateBucket = "needs_input";

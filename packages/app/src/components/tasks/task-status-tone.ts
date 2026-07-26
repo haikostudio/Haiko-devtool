@@ -53,12 +53,24 @@ function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
 // (`agentBucket !== "running"`), the run is over and the loader must stop instead
 // of spinning in the void. In the happy path a truly-running agent reports
 // `agentBucket === "running"`, so nothing is lost.
+//
+// The spin-up flags (`refinement === "pending"`, `schedule.state` of
+// `pending_estimate` / `launching`) only light the loader BEFORE the card
+// actually reaches the in-progress or terminal columns. They animate a card
+// being estimated or launched from the backlog. Once the card has moved into
+// "En cours" (or done/deployed), those flags are stale leftovers the server can
+// no longer clear — an estimate/launch that already happened — so they must not
+// resurrect a loader on a card whose agent is idle or gone. Past that point only
+// a live `agentBucket === "running"` keeps the loader spinning.
 function isRunning(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
   const scheduleState = task.schedule?.state;
+  const inProgressOrTerminal =
+    task.column === "in_progress" || task.column === "done" || task.column === "deployed";
   if (
-    task.refinement === "pending" ||
-    scheduleState === "pending_estimate" ||
-    scheduleState === "launching"
+    !inProgressOrTerminal &&
+    (task.refinement === "pending" ||
+      scheduleState === "pending_estimate" ||
+      scheduleState === "launching")
   ) {
     return true;
   }

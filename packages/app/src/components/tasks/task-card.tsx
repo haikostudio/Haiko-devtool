@@ -92,7 +92,9 @@ function noteAccentFor(level: ParsedPriority["level"] | undefined): NoteAccent {
 
 // A card the user has already opened recedes to half opacity so unseen work
 // (full opacity) still leads the eye. Two cases dim, but only once seen:
-//   - a terminal "done"/"deployed" card at rest, and
+//   - a card at rest showing the quiet green "done" light — including a card
+//     parked in "En cours" whose agent has gone idle, not just the done/deployed
+//     columns — and
 //   - a card that is merely *waiting on a reply* (amber "attention") after a
 //     relaunch — it stays dim, but its amber voyant still flags that it wants
 //     the user. A card that is actively *running* (loader) is never dimmed:
@@ -101,7 +103,7 @@ function isCardDimmed(task: KanbanTask, tone: TaskTone | null): boolean {
   if (!task.viewedAt || tone === "running") {
     return false;
   }
-  return task.column === "done" || task.column === "deployed" || tone === "attention";
+  return tone === "done" || tone === "attention";
 }
 
 // When a validated/planned task will actually launch: the scheduler holds
@@ -231,6 +233,11 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   // A task waiting on the user re-lights to full opacity even if it had been
   // opened and dimmed — the amber signal must catch the eye above all else.
   const dimmed = isCardDimmed(task, tone) && tone !== "attention";
+  // A card the user has opened and that is now at rest (dimmed) drops its voyant
+  // entirely: the click both halves the opacity and clears the light. An agent
+  // that comes back to life (running loader / amber attention) is never dimmed,
+  // so its voyant re-lights and un-dims the card — the relaunch stays visible.
+  const showVoyant = !dimmed;
   const accent = isNote ? noteAccentFor(priority?.level) : undefined;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
@@ -247,7 +254,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
         accessibilityRole="button"
         accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
       >
-        <TaskStatusVoyant tone={tone} variant="pip" />
+        {showVoyant ? <TaskStatusVoyant tone={tone} variant="pip" /> : null}
         <View style={styles.titleRow}>
           {priority ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
           <Text style={styles.title} numberOfLines={3}>
