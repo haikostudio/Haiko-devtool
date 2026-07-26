@@ -76,6 +76,23 @@ describe("buildQuotaSummary", () => {
     );
     expect(summary.providers).toHaveLength(2);
     expect(summary.weeklyRemainingPct).toBe(12);
+    expect(summary.ringRemainingPct).toBe(12);
+  });
+
+  it("falls back to the rolling window for a plan that reports no weekly one", () => {
+    const summary = buildQuotaSummary(
+      payload([
+        usage({
+          providerId: "codex",
+          displayName: "Codex",
+          windows: [{ id: "session", label: "Session", remainingPct: 42 }],
+        }),
+      ]),
+    );
+    // Nothing weekly to warn about, but the ring must still show a real number:
+    // an empty circle in the header is a control nobody can see.
+    expect(summary.weeklyRemainingPct).toBeNull();
+    expect(summary.ringRemainingPct).toBe(42);
   });
 
   it("drops providers with no usable number when another one reported", () => {
@@ -97,10 +114,15 @@ describe("buildQuotaSummary", () => {
     );
     expect(summary.providers).toHaveLength(2);
     expect(summary.weeklyRemainingPct).toBeNull();
+    expect(summary.ringRemainingPct).toBeNull();
   });
 
   it("returns an empty summary when usage was never fetched", () => {
-    expect(buildQuotaSummary(null)).toEqual({ providers: [], weeklyRemainingPct: null });
+    expect(buildQuotaSummary(null)).toEqual({
+      providers: [],
+      weeklyRemainingPct: null,
+      ringRemainingPct: null,
+    });
   });
 });
 

@@ -46,7 +46,9 @@ const ThemedPolyline = withUnistyles(Polyline);
 const SPARKLINE_SIZE = { width: 240, height: 26 };
 const NO_SAMPLES: QuotaSample[] = [];
 
-const trackColorMapping = (theme: Theme) => ({ stroke: theme.colors.surface3 });
+// The track has to be readable on its own: when the host reports no number it is
+// the ONLY thing drawn, and a surface-on-surface circle simply cannot be seen.
+const trackColorMapping = (theme: Theme) => ({ stroke: theme.colors.border });
 const sparklineColorMapping = (theme: Theme) => ({ stroke: theme.colors.foregroundMuted });
 
 function ringColorMapping(tone: QuotaTone) {
@@ -60,7 +62,7 @@ function toneColor(theme: Theme, tone: QuotaTone): string {
     case "warn":
       return theme.colors.palette.amber[500];
     default:
-      return theme.colors.foregroundMuted;
+      return theme.colors.foreground;
   }
 }
 
@@ -139,7 +141,7 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
     return null;
   }
 
-  const remaining = summary.weeklyRemainingPct;
+  const remaining = summary.ringRemainingPct;
   const tone = toneForRemaining(remaining);
 
   return (
@@ -151,11 +153,15 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
         testID="tasks-quota-menu-trigger"
       >
         <QuotaRing percent={remaining} tone={tone} />
-        {/* The number is worth the width on a desktop header; on a phone the
-            header is already tight, so the ring speaks alone there. */}
-        {isCompact || remaining === null ? null : (
+        {/* A bare ring is invisible against a dark header — especially with no
+            number to draw, which is exactly when it matters that the control can
+            still be found. The label always shows on a roomy header, and falls
+            back to a dash when the host reports nothing. */}
+        {isCompact ? null : (
           <Text style={tone === "danger" ? styles.triggerValueDanger : styles.triggerValue}>
-            {t("tasks.quota.percentShort", { percent: Math.round(remaining) })}
+            {remaining === null
+              ? t("tasks.quota.noData")
+              : t("tasks.quota.percentShort", { percent: Math.round(remaining) })}
           </Text>
         )}
       </DropdownMenuTrigger>
@@ -380,23 +386,27 @@ function QuotaGauge({ label, window }: { label: string; window: ProviderUsageWin
 }
 
 const styles = StyleSheet.create((theme) => ({
-  // Row, not a square: the ring keeps the 32px icon footprint of its neighbours
-  // and the optional percentage extends it to the right.
+  // A chip, not a bare glyph: sat among four plain icons the ring read as noise
+  // and was missed entirely. The quiet surface + outline makes it a control you
+  // can find without hunting, while staying calmer than a coloured button.
   trigger: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: theme.spacing[1],
+    gap: theme.spacing[1.5],
     minWidth: 32,
     height: 32,
-    paddingHorizontal: theme.spacing[1],
-    borderRadius: theme.borderRadius.lg,
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   triggerHovered: {
-    backgroundColor: theme.colors.surface1,
+    backgroundColor: theme.colors.surface2,
   },
   triggerValue: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.foreground,
     fontSize: theme.fontSize.xs,
     fontVariant: ["tabular-nums"],
   },

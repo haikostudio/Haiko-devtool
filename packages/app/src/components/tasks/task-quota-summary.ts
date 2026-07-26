@@ -26,10 +26,15 @@ export interface QuotaProviderSummary {
 export interface QuotaSummary {
   providers: QuotaProviderSummary[];
   /**
-   * The tightest weekly headroom across providers. The header ring shows this one
-   * because the week runs out as soon as the FIRST provider does.
+   * The tightest weekly headroom across providers — what the low-quota warning
+   * watches, because the week runs out as soon as the FIRST provider does.
    */
   weeklyRemainingPct: number | null;
+  /**
+   * What the header ring draws: the same tightest headroom, but falling back to
+   * a provider's rolling window when its plan reports no weekly allowance at all.
+   */
+  ringRemainingPct: number | null;
 }
 
 function clamp(value: number): number {
@@ -108,9 +113,17 @@ export function buildQuotaSummary(payload: ProviderUsageListPayload | null): Quo
     .map((provider) => remainingPercent(provider.weekly))
     .filter((value): value is number => value !== null);
 
+  // Not every plan reports a weekly allowance — Codex on a session-only plan
+  // reports just the rolling window. Falling back to it keeps the ring showing a
+  // real number instead of an empty circle nobody can even see in the header.
+  const ringValues = withData
+    .map((provider) => remainingPercent(provider.weekly) ?? remainingPercent(provider.session))
+    .filter((value): value is number => value !== null);
+
   return {
     providers,
     weeklyRemainingPct: weeklyValues.length > 0 ? Math.min(...weeklyValues) : null,
+    ringRemainingPct: ringValues.length > 0 ? Math.min(...ringValues) : null,
   };
 }
 
