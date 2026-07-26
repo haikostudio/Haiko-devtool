@@ -227,6 +227,17 @@ class FileBackedRegistry<TRecord extends RegistryRecord> {
     await this.removeIfPresent(id);
   }
 
+  // Restauré : n'archive que si l'enregistrement est encore actif, pour qu'un
+  // second archivage du même élément ne renotifie pas.
+  protected async archiveIfActive(id: string, archivedAt: string): Promise<TRecord | null> {
+    await this.load();
+    const existing = this.cache.get(id);
+    if (!existing || existing.archivedAt) {
+      return null;
+    }
+    return this.archiveIfPresent(id, archivedAt);
+  }
+
   // Restauré : idem pour la suppression.
   protected async removeIfPresent(id: string): Promise<TRecord | null> {
     await this.load();
@@ -304,7 +315,7 @@ export class FileBackedProjectRegistry
   }
 
   override async archive(projectId: string, archivedAt: string): Promise<void> {
-    const project = await this.archiveIfPresent(projectId, archivedAt);
+    const project = await this.archiveIfActive(projectId, archivedAt);
     if (!project) {
       return;
     }

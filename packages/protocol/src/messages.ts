@@ -1470,6 +1470,10 @@ export const CreateAgentRequestMessageSchema = z.object({
   config: AgentSessionConfigSchema,
   env: z.record(z.string(), z.string()).optional(),
   workspaceId: z.string().optional(),
+  // Restauré : contexte de l'appelant, pour qu'une création lancée en ligne de
+  // commande hérite du même espace de travail et de la même parenté qu'une
+  // création faite par un agent.
+  callerAgentId: z.string().optional(),
   worktreeName: z.string().optional(),
   initialPrompt: z.string().optional(),
   clientMessageId: z.string().optional(),
@@ -2761,6 +2765,29 @@ export const StartWorkspaceScriptRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Restauré : gestion des scripts d'un espace de travail (lister, démarrer,
+// arrêter). Le service serveur correspondant existe déjà ; seuls les messages et
+// leur routage manquaient, ce qui rendait « paseo script » inopérant.
+export const WorkspaceScriptListRequestSchema = z.object({
+  type: z.literal("workspace.script.list.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
+export const WorkspaceScriptStartRequestSchema = z.object({
+  type: z.literal("workspace.script.start.request"),
+  workspaceId: z.string(),
+  scriptName: z.string(),
+  requestId: z.string(),
+});
+
+export const WorkspaceScriptStopRequestSchema = z.object({
+  type: z.literal("workspace.script.stop.request"),
+  workspaceId: z.string(),
+  scriptName: z.string(),
+  requestId: z.string(),
+});
+
 export const SubscribeTerminalRequestSchema = z.object({
   type: z.literal("subscribe_terminal_request"),
   terminalId: z.string(),
@@ -3008,6 +3035,10 @@ export const ServerInfoStatusPayloadSchema = z
     features: z
       .object({
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
+        workspaceScriptManagement: z.boolean().optional(),
+        // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        hubRelationship: z.boolean().optional(),
         checkoutGithubSetAutoMerge: z.boolean().optional(),
         // COMPAT(githubCheckDetails): added in v0.1.92, remove gate after 2026-12-08.
         githubCheckDetails: z.boolean().optional(),
@@ -3675,6 +3706,30 @@ export const ProjectGithubCloneResponseSchema = z.object({
     project: WorkspaceProjectDescriptorPayloadSchema.nullable(),
     error: z.string().nullable(),
   }),
+});
+
+const WorkspaceScriptOperationPayloadSchema = z.object({
+  requestId: z.string(),
+  workspaceId: z.string(),
+  scriptName: z.string().optional(),
+  script: WorkspaceScriptPayloadSchema.nullable().optional(),
+  scripts: z.array(WorkspaceScriptPayloadSchema).optional(),
+  error: z.string().nullable(),
+});
+
+export const WorkspaceScriptListResponseMessageSchema = z.object({
+  type: z.literal("workspace.script.list.response"),
+  payload: WorkspaceScriptOperationPayloadSchema,
+});
+
+export const WorkspaceScriptStartResponseMessageSchema = z.object({
+  type: z.literal("workspace.script.start.response"),
+  payload: WorkspaceScriptOperationPayloadSchema,
+});
+
+export const WorkspaceScriptStopResponseMessageSchema = z.object({
+  type: z.literal("workspace.script.stop.response"),
+  payload: WorkspaceScriptOperationPayloadSchema,
 });
 
 export const StartWorkspaceScriptResponseMessageSchema = z.object({
@@ -5747,6 +5802,9 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   CreateTerminalRequestSchema,
   RenameTerminalRequestSchema,
   StartWorkspaceScriptRequestSchema,
+  WorkspaceScriptListRequestSchema,
+  WorkspaceScriptStartRequestSchema,
+  WorkspaceScriptStopRequestSchema,
   SubscribeTerminalRequestSchema,
   UnsubscribeTerminalRequestSchema,
   TerminalInputSchema,
@@ -5845,6 +5903,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   OpenProjectResponseMessageSchema,
   WorkspaceGithubSearchRepositoriesResponseSchema,
   ProjectGithubCloneResponseSchema,
+  WorkspaceScriptListResponseMessageSchema,
+  WorkspaceScriptStartResponseMessageSchema,
+  WorkspaceScriptStopResponseMessageSchema,
   StartWorkspaceScriptResponseMessageSchema,
   LegacyListAvailableEditorsResponseMessageSchema,
   LegacyOpenInEditorResponseMessageSchema,
