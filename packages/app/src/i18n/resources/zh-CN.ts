@@ -300,7 +300,6 @@ export const zhCN: TranslationResources = {
       now: "现在",
       inProgress: "进行中",
       quotaWindow: "5 小时配额",
-      noBranchToSwitch: "此任务还没有分支 — 无可切换。",
     },
     view: {
       board: "看板",
@@ -388,9 +387,6 @@ export const zhCN: TranslationResources = {
       title: "新建文件夹",
       editTitle: "编辑文件夹",
       nameField: "名称",
-      branchField: "Git 分支",
-      branchHint: "该分组中的所有任务都会提交到此分支。",
-      branchPlaceholder: "feat/my-branch",
       colorField: "颜色",
       autopilotField: "自动驾驶",
       autopilotHint: "待办任务将自动启动 — 配额和低峰时段自动管理。",
@@ -535,7 +531,6 @@ export const zhCN: TranslationResources = {
       estimateDetail: "{{tokens}} tokens · 置信度：{{confidence}}",
       noEstimate: "尚无估算 — 拖到「已计划」或重新估算。",
       openPr: "打开 PR",
-      branch: "分支：{{branch}}",
       viewPlan: "查看计划",
       viewAgent: "查看代理",
       cost: {

@@ -302,7 +302,6 @@ export const ru: TranslationResources = {
       now: "Сейчас",
       inProgress: "Выполняется",
       quotaWindow: "Квота 5 ч",
-      noBranchToSwitch: "У этой задачи пока нет ветки — переключаться не на что.",
     },
     view: {
       board: "Доска",
@@ -391,9 +390,6 @@ export const ru: TranslationResources = {
       title: "Новая папка",
       editTitle: "Изменить папку",
       nameField: "Название",
-      branchField: "Git-ветка",
-      branchHint: "Все задачи этой группы коммитятся в эту ветку.",
-      branchPlaceholder: "feat/my-branch",
       colorField: "Цвет",
       autopilotField: "Автопилот",
       autopilotHint:
@@ -540,7 +536,6 @@ export const ru: TranslationResources = {
       estimateDetail: "{{tokens}} токенов · уверенность: {{confidence}}",
       noEstimate: "Оценки пока нет — перетащите в «Запланировано» или пересчитайте.",
       openPr: "Открыть PR",
-      branch: "Ветка: {{branch}}",
       viewPlan: "Посмотреть план",
       viewAgent: "Открыть агента",
       cost: {

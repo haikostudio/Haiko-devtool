@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-27",
     markdown:
-      "### Ajouts\n\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "ce5fd40f683dd16cf65ec58a0321905c2a4ede3b",
+    shortHash: "ce5fd40f6",
+    date: "2026-07-27T01:51:44+02:00",
+    author: "haikostudio",
+    subject: "fix(tâches): pastille d'importance au coin des notes, sans bordure colorée",
+  },
   {
     hash: "d0c294872b1004a8e76a627503d56b7649ed53e2",
     shortHash: "d0c294872",
@@ -2762,14 +2769,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "haikostudio",
     subject: "feat(tâches): chat de tâche déplacé dans le dock du chef d'orchestre + drag corrigé",
   },
-  {
-    hash: "e2f9096a3b0d2faea0aaa420c7aff2435008fcb1",
-    shortHash: "e2f9096a3",
-    date: "2026-07-22T09:51:49+02:00",
-    author: "haikostudio",
-    subject: "feat(déploiement): compteur global et « Tout fusionner & publier »",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T01:27:37+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T01:51:44+02:00";

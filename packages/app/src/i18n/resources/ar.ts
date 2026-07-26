@@ -300,7 +300,6 @@ export const ar: TranslationResources = {
       now: "الآن",
       inProgress: "قيد التنفيذ",
       quotaWindow: "حصة ٥ ساعات",
-      noBranchToSwitch: "لا يوجد فرع لهذه المهمة بعد — لا شيء لعرضه.",
     },
     view: {
       board: "اللوحة",
@@ -389,9 +388,6 @@ export const ar: TranslationResources = {
       title: "مجلد جديد",
       editTitle: "تعديل المجلد",
       nameField: "الاسم",
-      branchField: "فرع Git",
-      branchHint: "كل مهمة في هذه المجموعة تُلتزم على هذا الفرع.",
-      branchPlaceholder: "feat/my-branch",
       colorField: "اللون",
       autopilotField: "الطيار الآلي",
       autopilotHint: "تنطلق مهام قائمة الانتظار تلقائيًا — تُدار الحصة وساعات الذروة المنخفضة.",
@@ -536,7 +532,6 @@ export const ar: TranslationResources = {
       estimateDetail: "{{tokens}} رمزًا · الثقة: {{confidence}}",
       noEstimate: "لا تقدير بعد — اسحب إلى «مُجدولة» أو أعد التقدير.",
       openPr: "فتح PR",
-      branch: "الفرع: {{branch}}",
       viewPlan: "عرض الخطة",
       viewAgent: "عرض الوكيل",
       cost: {

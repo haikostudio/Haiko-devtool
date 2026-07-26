@@ -24,7 +24,6 @@ import {
   Wand2,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader, SidebarMenuToggle } from "@/components/headers/menu-header";
@@ -70,17 +69,9 @@ import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
 import { AttachmentLibraryButton } from "@/attachments/attachment-library-button";
 import { PaseoDeployButton } from "@/git/paseo-deploy-button";
-import { useCheckoutStatusQuery } from "@/git/use-status-query";
-import { useBranchSwitcher } from "@/hooks/use-branch-switcher";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import {
-  getHostRuntimeStore,
-  useHostRuntimeClient,
-  useHostRuntimeIsConnected,
-  useHosts,
-} from "@/runtime/host-runtime";
-import { rememberProjectBranch } from "@/stores/project-branch-selection-store";
+import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
@@ -176,27 +167,11 @@ interface ProjectEntry {
   /**
    * A representative workspace id for the project, used to scope the attachment
    * library (which the daemon keys per-workspace). Prefers the primary checkout
-   * over task-branch worktrees. Empty when the project has no live workspace.
+   * over any legacy worktree. Empty when the project has no live workspace.
    */
   workspaceId: string;
   /** Epoch ms of the most recent agent activity in this project (0 if none). */
   lastActivityAt: number;
-}
-
-// The project's checkout directory, used as the cwd for the active branch switch
-// a timeline tap performs. Null when the project isn't in the loaded set yet.
-function findProjectRootPath(
-  projects: ProjectEntry[],
-  serverId: string | null,
-  projectId: string | null,
-): string | null {
-  if (!serverId || !projectId) {
-    return null;
-  }
-  return (
-    projects.find((entry) => entry.serverId === serverId && entry.projectId === projectId)
-      ?.rootPath ?? null
-  );
 }
 
 function rowItemStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
@@ -234,7 +209,7 @@ function compareByName(left: ProjectEntry, right: ProjectEntry): number {
 // Pick one representative workspace per project to scope the attachment library.
 // The daemon keys the library per-workspace, so the board — which is
 // project-level — points at the primary checkout rather than a throwaway
-// task-branch worktree. First non-worktree wins; otherwise the first seen.
+// legacy worktree. First non-worktree wins; otherwise the first seen.
 function pickRepresentativeWorkspaces(
   workspaces: Iterable<WorkspaceDescriptor>,
 ): Map<string, string> {
@@ -322,7 +297,6 @@ function useProjectEntries(): ProjectEntry[] {
 }
 
 interface ProjectCounts {
-  folders: number;
   tasks: number;
 }
 
@@ -354,7 +328,6 @@ function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCoun
             const payload = await client.tasksBoardGet(entry.projectId);
             if (payload.board) {
               next.set(`${entry.serverId}:${entry.projectId}`, {
-                folders: payload.board.folders.length,
                 tasks: payload.board.tasks.length,
               });
             }
@@ -617,7 +590,6 @@ function DesktopLayout({
         key={`${serverId}:${projectId}`}
         serverId={serverId}
         projectId={projectId}
-        projectRootPath={findProjectRootPath(projects, serverId, projectId)}
         folderId={folderId ?? folders[0]?.id ?? ""}
         boardHandle={boardHandle}
       />
@@ -766,9 +738,9 @@ const ProjectRailItem = memo(function ProjectRailItem({
         >
           {entry.displayName}
         </Text>
-        {counts && (counts.folders > 0 || counts.tasks > 0) ? (
+        {counts && counts.tasks > 0 ? (
           <Text style={styles.railItemSubtitle} numberOfLines={1}>
-            {t("tasks.foldersSummary", { folders: counts.folders, tasks: counts.tasks })}
+            {t("tasks.taskCount", { count: counts.tasks })}
           </Text>
         ) : null}
       </View>
@@ -850,50 +822,20 @@ const renderTimelineIcon = ({ color, size }: { color: string; size: number }) =>
 function BoardContent({
   serverId,
   projectId,
-  projectRootPath,
   folderId,
   boardHandle,
 }: {
   serverId: string | null;
   projectId: string | null;
-  projectRootPath: string | null;
   folderId: string;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const queryClient = useQueryClient();
   const isCompact = useIsCompactFormFactor();
   const { config } = useDaemonConfig(serverId);
   const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
 
-  // The active branch switch operates on the project's main checkout (its root
-  // path). We reuse the very hook the sidebar branch switcher drives, so a
-  // timeline tap performs the exact same real checkout — stash prompt, toasts and
-  // query invalidation included — not just a note for next reload.
-  const branchSwitchServerId = serverId ?? "";
-  const checkoutCwd = projectRootPath ?? "";
-  const client = useHostRuntimeClient(branchSwitchServerId);
-  const isConnected = useHostRuntimeIsConnected(branchSwitchServerId);
-  const { status: checkoutStatus } = useCheckoutStatusQuery({
-    serverId: branchSwitchServerId,
-    cwd: checkoutCwd,
-  });
-  const currentBranchName =
-    checkoutStatus?.currentBranch && checkoutStatus.currentBranch !== "HEAD"
-      ? checkoutStatus.currentBranch
-      : null;
-  const { handleBranchSelect } = useBranchSwitcher({
-    client,
-    normalizedServerId: branchSwitchServerId,
-    normalizedWorkspaceId: projectId ?? checkoutCwd,
-    workspaceDirectory: checkoutCwd || null,
-    currentBranchName,
-    isGitCheckout: Boolean(checkoutCwd),
-    isConnected,
-    toast,
-    queryClient,
-  });
   // Tapping a task on a host without the conductor opens its Details+Billing
   // drawer directly. The drawer itself lives at the screen root (TasksDetailDock)
   // so it docks beside the conductor chat and stacks above it, never behind.
@@ -958,32 +900,6 @@ function BoardContent({
       }
     },
     [supportsConductor, setDockTaskId, setConductorOpen, setDetailsTaskId, boardHandle],
-  );
-
-  // Tapping a task on the timeline does everything a card tap does (open its
-  // drawer/dock) AND immediately switches the project onto that task's git branch
-  // — the same active checkout the sidebar branch switcher performs, not just a
-  // note read back on reload. A task's branch is the one its agent runs on once
-  // launched (links.branch), falling back to its folder's shared branch. When a
-  // task has neither (agent not launched, no folder branch) we only open the
-  // drawer and say so discreetly. Persistence is kept on top of the live switch,
-  // so a reload still restores the same branch.
-  const handlePressTimelineTask = useCallback(
-    (task: KanbanTask) => {
-      handlePressTask(task);
-      if (!serverId || !projectId) {
-        return;
-      }
-      const folder = boardHandle.board?.folders.find((entry) => entry.id === task.folderId);
-      const branch = task.links.branch ?? folder?.branch ?? null;
-      if (!branch) {
-        toast.show(t("tasks.gantt.noBranchToSwitch"));
-        return;
-      }
-      handleBranchSelect(branch);
-      rememberProjectBranch({ serverId, projectId, branch });
-    },
-    [handlePressTask, serverId, projectId, boardHandle.board, handleBranchSelect, toast, t],
   );
 
   const handleCancelNewTask = useCallback(() => {
@@ -1129,7 +1045,7 @@ function BoardContent({
       {showTimeline ? (
         <TaskTimelineArea
           board={boardHandle.board}
-          onPressTask={handlePressTimelineTask}
+          onPressTask={handlePressTask}
           height={timelineHeight}
           onResize={setTimelineHeight}
           containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
@@ -1462,7 +1378,6 @@ function CompactFlow({
       <BoardContent
         serverId={serverId}
         projectId={projectId}
-        projectRootPath={findProjectRootPath(projects, serverId, projectId)}
         folderId={folderId ?? boardHandle.board?.folders[0]?.id ?? ""}
         boardHandle={boardHandle}
       />
@@ -2100,11 +2015,6 @@ const styles = StyleSheet.create((theme) => ({
   railItemSubtitle: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
-  },
-  railItemBranch: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.mono,
   },
   railItemAction: {
     padding: theme.spacing[1],

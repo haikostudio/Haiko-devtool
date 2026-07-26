@@ -304,7 +304,6 @@ export const ptBR: TranslationResources = {
       now: "Agora",
       inProgress: "Em execução",
       quotaWindow: "Cota de 5 h",
-      noBranchToSwitch: "Esta tarefa ainda não tem branch — nada para exibir.",
     },
     view: {
       board: "Quadro",
@@ -396,9 +395,6 @@ export const ptBR: TranslationResources = {
       title: "Nova pasta",
       editTitle: "Editar pasta",
       nameField: "Nome",
-      branchField: "Branch git",
-      branchHint: "Cada tarefa deste grupo faz commit nesta branch.",
-      branchPlaceholder: "feat/minha-branch",
       colorField: "Cor",
       autopilotField: "Piloto automático",
       autopilotHint:
@@ -545,7 +541,6 @@ export const ptBR: TranslationResources = {
       estimateDetail: "{{tokens}} tokens · confiança: {{confidence}}",
       noEstimate: "Sem estimativa — arraste para Planejado ou re-estime.",
       openPr: "Abrir PR",
-      branch: "Branch: {{branch}}",
       viewPlan: "Ver o plano",
       viewAgent: "Ver o agente",
       cost: {

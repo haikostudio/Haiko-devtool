@@ -304,7 +304,6 @@ export const es: TranslationResources = {
       now: "Ahora",
       inProgress: "En curso",
       quotaWindow: "Cuota de 5 h",
-      noBranchToSwitch: "Esta tarea aún no tiene rama — nada que mostrar.",
     },
     view: {
       board: "Tablero",
@@ -396,9 +395,6 @@ export const es: TranslationResources = {
       title: "Nueva carpeta",
       editTitle: "Editar carpeta",
       nameField: "Nombre",
-      branchField: "Rama git",
-      branchHint: "Cada tarea de este grupo se confirma en esta rama.",
-      branchPlaceholder: "feat/mi-rama",
       colorField: "Color",
       autopilotField: "Piloto automático",
       autopilotHint: "Las tareas del backlog se lanzan solas — cuota y horas valle gestionadas.",
@@ -544,7 +540,6 @@ export const es: TranslationResources = {
       estimateDetail: "{{tokens}} tokens · confianza: {{confidence}}",
       noEstimate: "Sin estimación — arrastra a Planificado o re-estima.",
       openPr: "Abrir PR",
-      branch: "Rama: {{branch}}",
       viewPlan: "Ver el plan",
       viewAgent: "Ver el agente",
       cost: {

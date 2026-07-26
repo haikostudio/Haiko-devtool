@@ -303,7 +303,6 @@ export const ja: TranslationResources = {
       now: "現在",
       inProgress: "実行中",
       quotaWindow: "5時間クォータ",
-      noBranchToSwitch: "このタスクにはまだブランチがありません — 切り替え先がありません。",
     },
     view: {
       board: "ボード",
@@ -393,9 +392,6 @@ export const ja: TranslationResources = {
       title: "新しいフォルダー",
       editTitle: "フォルダーを編集",
       nameField: "名前",
-      branchField: "Git ブランチ",
-      branchHint: "このグループのすべてのタスクはこのブランチにコミットします。",
-      branchPlaceholder: "feat/my-branch",
       colorField: "カラー",
       autopilotField: "オートパイロット",
       autopilotHint: "バックログのタスクが自動で起動します — クォータとオフピークは管理されます。",
@@ -541,7 +537,6 @@ export const ja: TranslationResources = {
       estimateDetail: "{{tokens}} トークン · 信頼度: {{confidence}}",
       noEstimate: "見積もりはまだありません — 「予定」に移動するか再見積もりしてください。",
       openPr: "PR を開く",
-      branch: "ブランチ: {{branch}}",
       viewPlan: "プランを見る",
       viewAgent: "エージェントを見る",
       cost: {

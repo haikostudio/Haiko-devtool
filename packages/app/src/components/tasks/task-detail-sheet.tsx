@@ -944,11 +944,6 @@ function TaskMetaSection({ task, effective }: { task: KanbanTask; effective: Eff
       {task.links.prUrl ? (
         <ExternalLink href={task.links.prUrl} label={t("tasks.detail.openPr")} />
       ) : null}
-      {task.links.branch ? (
-        <Text style={styles.metaText}>
-          {t("tasks.detail.branch", { branch: task.links.branch })}
-        </Text>
-      ) : null}
     </View>
   );
 }
