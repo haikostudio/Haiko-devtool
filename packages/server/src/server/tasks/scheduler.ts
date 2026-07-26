@@ -304,7 +304,7 @@ export class TaskScheduler {
           continue;
         }
         if (task.column === "backlog") {
-          this.handleBacklogTask(
+          await this.handleBacklogTask(
             project.projectId,
             task,
             folderAutoStart.get(task.folderId) !== false,
@@ -368,12 +368,16 @@ export class TaskScheduler {
    * then, for auto-start folders (the default), hands the card to "Validé". Only
    * "require validation" folders hold their backlog for the user.
    */
-  private handleBacklogTask(projectId: string, task: KanbanTask, autoStart: boolean): void {
+  private async handleBacklogTask(
+    projectId: string,
+    task: KanbanTask,
+    autoStart: boolean,
+  ): Promise<void> {
     // Self-heal legacy/dirty data — a backlog card must never carry a cost
     // estimate or an armed schedule (those belong to "Validé" onward). Retro-
     // cleans boards where analysis fired too early (e.g. Maestria).
     if (task.estimate || task.schedule) {
-      this.clearBacklogPipelineState(projectId, task.id);
+      await this.clearBacklogPipelineState(projectId, task.id);
     }
     // Light analysis is cheap and produces NO cost/billing, so it's allowed in
     // backlog. Re-arm it after a daemon restart, since the queue is in-memory.
@@ -384,7 +388,7 @@ export class TaskScheduler {
     // start IS the consent — so the pipeline still always runs through "Validé".
     // "Require validation" folders skip this and wait for the user.
     if (autoStart && task.approval?.state !== "pending") {
-      this.autoTransition(projectId, task.id, "validated");
+      await this.taskBoardService.transitionTask(projectId, task.id, "validated");
     }
   }
 
@@ -394,9 +398,9 @@ export class TaskScheduler {
    * so a backlog card must never show one. Runs once per dirty task (subsequent
    * ticks see it clean and skip), fixing boards analyzed before this gate.
    */
-  private clearBacklogPipelineState(projectId: string, taskId: string): void {
-    void this.taskBoardService
-      .patchTask(projectId, taskId, (task) => {
+  private async clearBacklogPipelineState(projectId: string, taskId: string): Promise<void> {
+    try {
+      await this.taskBoardService.patchTask(projectId, taskId, (task) => {
         if (task.column !== "backlog" || (!task.estimate && !task.schedule)) {
           return task;
         }
@@ -404,10 +408,10 @@ export class TaskScheduler {
         delete next.estimate;
         delete next.schedule;
         return next;
-      })
-      .catch((error) => {
-        this.logger.warn({ err: error, taskId }, "Backlog pipeline-state cleanup failed");
       });
+    } catch (error) {
+      this.logger.warn({ err: error, taskId }, "Backlog pipeline-state cleanup failed");
+    }
   }
 
   /** Fire-and-forget column move driven by the scheduler (never manual). */
