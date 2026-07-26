@@ -7,6 +7,7 @@ import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
 import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { useSessionStore } from "@/stores/session-store";
+import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
@@ -16,8 +17,11 @@ import {
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedBot = withUnistyles(Bot);
-const accentColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+// The validate bar is a filled green control, so its icon and spinner ride on
+// the success foreground, not on the neutral text colors.
+const successForegroundMapping = (theme: Theme) => ({ color: theme.colors.successForeground });
 const ThemedCheck = withUnistyles(CheckCircle2);
+const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 
 export interface TaskAgentChatProps {
   serverId: string | null;
@@ -128,38 +132,40 @@ function ValidateTaskBar({
   // Memoized: a fresh object literal here re-renders the whole embedded pane.
   const disabledState = useMemo(() => ({ disabled: running }), [running]);
   return (
-    <View>
-      {/* A rejected check explains itself right where the user is looking, so the
-          next prompt can hand the fix straight back to the agent. */}
-      {rejected && validation?.report ? (
-        <View style={styles.validateReport}>
-          <Text style={styles.validateReportTitle}>
-            {validation.summary ?? t("tasks.panel.validateFailed")}
+    // Outer/inner pair mirrors the composer's own geometry (same horizontal
+    // padding, same MAX_CONTENT_WIDTH cap, centered) so the bar lines up exactly
+    // with the prompt field it sits on instead of overhanging it.
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        {/* A rejected check explains itself right where the user is looking, so the
+            next prompt can hand the fix straight back to the agent. */}
+        {rejected && validation?.report ? (
+          <View style={styles.validateReport}>
+            <Text style={styles.validateReportTitle}>
+              {validation.summary ?? t("tasks.panel.validateFailed")}
+            </Text>
+            <Text style={styles.validateReportBody}>{validation.report}</Text>
+          </View>
+        ) : null}
+        <Pressable
+          onPress={onPress}
+          disabled={running}
+          style={validateBarStyle}
+          accessibilityRole="button"
+          accessibilityState={disabledState}
+          accessibilityLabel={t("tasks.panel.validateTask")}
+          testID="task-validate-bar"
+        >
+          {running ? (
+            <ThemedActivityIndicator size="small" uniProps={successForegroundMapping} />
+          ) : (
+            <ThemedCheck size={ICON_SIZE.sm} uniProps={successForegroundMapping} />
+          )}
+          <Text style={ready && !running ? styles.validateTextReady : styles.validateText}>
+            {running ? t("tasks.panel.validateRunning") : t("tasks.panel.validateTask")}
           </Text>
-          <Text style={styles.validateReportBody}>{validation.report}</Text>
-        </View>
-      ) : null}
-      <Pressable
-        onPress={onPress}
-        disabled={running}
-        style={validateBarStyle}
-        accessibilityRole="button"
-        accessibilityState={disabledState}
-        accessibilityLabel={t("tasks.panel.validateTask")}
-        testID="task-validate-bar"
-      >
-        {running ? (
-          <ActivityIndicator size="small" />
-        ) : (
-          <ThemedCheck
-            size={ICON_SIZE.sm}
-            uniProps={ready ? accentColorMapping : mutedColorMapping}
-          />
-        )}
-        <Text style={ready && !running ? styles.validateTextReady : styles.validateText}>
-          {running ? t("tasks.panel.validateRunning") : t("tasks.panel.validateTask")}
-        </Text>
-      </Pressable>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -227,6 +233,20 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     textAlign: "center",
   },
+  // Same padding the composer applies to its own input area, so the bar's edges
+  // land on the prompt field's edges at every breakpoint.
+  validateOuter: {
+    width: "100%",
+    alignItems: "center",
+    paddingHorizontal: {
+      xs: theme.spacing[3],
+      md: theme.spacing[4],
+    },
+  },
+  validateInner: {
+    width: "100%",
+    maxWidth: MAX_CONTENT_WIDTH,
+  },
   validateBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -237,18 +257,18 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
+    borderColor: theme.colors.statusSuccess,
+    backgroundColor: theme.colors.statusSuccess,
   },
   validateBarHovered: {
-    backgroundColor: theme.colors.surface2,
+    opacity: 0.88,
   },
   validateText: {
-    color: theme.colors.foregroundMuted,
+    color: theme.colors.successForeground,
     fontSize: theme.fontSize.sm,
   },
   validateTextReady: {
-    color: theme.colors.foreground,
+    color: theme.colors.successForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
   },
