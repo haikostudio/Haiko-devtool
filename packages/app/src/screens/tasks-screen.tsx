@@ -1200,25 +1200,34 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle],
   );
-  // The one and only path from "En cours" to "Terminée". The user asks for it,
-  // then the final check decides: it re-reads the request, exercises the work and
-  // runs the tests. A rejected check leaves the card where it is, with a report.
+  // The one and only path from "En cours" to "Terminée". The press hands a check
+  // prompt to the task's OWN agent, in the task's own conversation: it re-reads
+  // the request, runs the project's checks, fixes what it finds, and completes
+  // the card itself once everything is green. The user reads all of it live.
   const handleValidate = useCallback(
     (taskId: string) => {
       void (async () => {
+        const alreadyRunning =
+          boardHandle.board?.tasks.find((entry) => entry.id === taskId)?.validation?.state ===
+          "running";
         const confirmed = await confirmDialog({
           title: t("tasks.panel.validateTask"),
-          message: t("tasks.panel.validateTaskMessage"),
+          message: alreadyRunning
+            ? t("tasks.panel.validateRestartMessage")
+            : t("tasks.panel.validateTaskMessage"),
           confirmLabel: t("tasks.panel.validateTask"),
           cancelLabel: t("common.cancel"),
         });
         if (!confirmed) {
           return;
         }
-        toast.show(t("tasks.panel.validateRunning"));
         try {
           const { passed } = await boardHandle.validateTask(taskId);
-          toast.show(passed ? t("tasks.panel.validatePassed") : t("tasks.panel.validateFailed"));
+          // `passed` here only means "the card was already finished" — the real
+          // verdict now plays out in the conversation.
+          toast.show(
+            passed ? t("tasks.panel.validatePassed") : t("tasks.panel.validateDispatched"),
+          );
         } catch (error) {
           toast.error(error instanceof Error ? error.message : String(error));
         }

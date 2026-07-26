@@ -175,6 +175,37 @@ describe("paseo task board tools", () => {
     expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("backlog");
   });
 
+  test("move_task completes a card only while the user's final check is open", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
+
+    await expect(
+      catalog.executeTool("move_task", { projectId: "proj-1", taskId: task.id, column: "done" }),
+    ).rejects.toThrow(/only the user validates/);
+
+    // The user pressed "Lancer le contrôle": that press is the consent.
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      validation: { state: "running" as const },
+    }));
+    await catalog.executeTool("move_task", {
+      projectId: "proj-1",
+      taskId: task.id,
+      column: "done",
+    });
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("done");
+
+    // Still no free pass to the other user-owned columns.
+    await expect(
+      catalog.executeTool("move_task", {
+        projectId: "proj-1",
+        taskId: task.id,
+        column: "deployed",
+      }),
+    ).rejects.toThrow(/only the user validates/);
+  });
+
   test("move_task still shuffles a card between notes and backlog", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });

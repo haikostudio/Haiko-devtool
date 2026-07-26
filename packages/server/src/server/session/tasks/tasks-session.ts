@@ -364,9 +364,9 @@ export class TasksSession {
   }
 
   /**
-   * "Valider la tâche": run the final check. The card moves to "Terminée" only
-   * when the check passes; a failure leaves it in "En cours" with a report the
-   * client shows next to the validate bar.
+   * "Lancer le contrôle": hand the final check to the task's own agent. The
+   * verification, the fixes and the completion all happen in the task's
+   * conversation, where the user can read them.
    */
   async handleTaskValidateRequest(
     request: Extract<SessionInboundMessage, { type: "tasks.task.validate.request" }>,
@@ -375,10 +375,13 @@ export class TasksSession {
       if (!this.taskValidator) {
         throw new TaskBoardServiceError("validator_unavailable", "Task validator is not available");
       }
-      const { task, passed } = await this.taskValidator.validate(request.projectId, request.taskId);
+      const { task, passed, dispatched } = await this.taskValidator.validate(
+        request.projectId,
+        request.taskId,
+      );
       this.host.emit({
         type: "tasks.task.validate.response",
-        payload: { requestId: request.requestId, task, passed, error: null },
+        payload: { requestId: request.requestId, task, passed, dispatched, error: null },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

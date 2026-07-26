@@ -112,10 +112,15 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
 }
 
 /**
- * Full-width, deliberately quiet bar. It carries the single "Valider la tâche"
+ * Full-width, deliberately quiet bar. It carries the single "Lancer le contrôle"
  * action and nothing else, so it never competes with the conversation or the
  * prompt field it sits on. Visible for the whole discussion, not only when the
  * agent thinks it is done.
+ *
+ * It shows no report of its own: the check runs in the conversation right above,
+ * so the verification, the fixes and the verdict are all readable there. It also
+ * stays pressable while a check runs — a second press asks for confirmation
+ * rather than being silently ignored, so a check can never leave the bar stuck.
  */
 function ValidateTaskBar({
   onPress,
@@ -128,31 +133,16 @@ function ValidateTaskBar({
 }) {
   const { t } = useTranslation();
   const running = validation?.state === "running";
-  const rejected = validation?.state === "failed";
-  // Memoized: a fresh object literal here re-renders the whole embedded pane.
-  const disabledState = useMemo(() => ({ disabled: running }), [running]);
   return (
     // Outer/inner pair mirrors the composer's own geometry (same horizontal
     // padding, same MAX_CONTENT_WIDTH cap, centered) so the bar lines up exactly
     // with the prompt field it sits on instead of overhanging it.
     <View style={styles.validateOuter}>
       <View style={styles.validateInner}>
-        {/* A rejected check explains itself right where the user is looking, so the
-            next prompt can hand the fix straight back to the agent. */}
-        {rejected && validation?.report ? (
-          <View style={styles.validateReport}>
-            <Text style={styles.validateReportTitle}>
-              {validation.summary ?? t("tasks.panel.validateFailed")}
-            </Text>
-            <Text style={styles.validateReportBody}>{validation.report}</Text>
-          </View>
-        ) : null}
         <Pressable
           onPress={onPress}
-          disabled={running}
           style={validateBarStyle}
           accessibilityRole="button"
-          accessibilityState={disabledState}
           accessibilityLabel={t("tasks.panel.validateTask")}
           testID="task-validate-bar"
         >
@@ -271,24 +261,5 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.successForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
-  },
-  validateReport: {
-    width: "100%",
-    gap: theme.spacing[1],
-    padding: theme.spacing[2],
-    marginBottom: theme.spacing[1],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface1,
-  },
-  validateReportTitle: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: "500",
-  },
-  validateReportBody: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
   },
 }));

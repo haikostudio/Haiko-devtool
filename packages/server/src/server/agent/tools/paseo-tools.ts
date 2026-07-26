@@ -68,6 +68,7 @@ import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import type { ProjectRegistry, WorkspaceRegistry } from "../../workspace-registry.js";
 import { resolveProjectDisplayName } from "../../workspace-registry.js";
 import type { TaskBoardService } from "../../tasks/service.js";
+import { isValidationWindowOpen } from "../../tasks/validator.js";
 import { WorktreeRequestError } from "../../worktree-errors.js";
 import {
   archiveCommand,
@@ -386,6 +387,20 @@ function resolveChildAgentCwd(params: {
 // spend quota, "scheduled"/"in_progress" belong to the scheduler, "done" is the
 // user's "Valider la tâche", and "deployed" is stamped by a successful publish.
 const AGENT_WRITABLE_TASK_COLUMNS = new Set<string>(["notes", "backlog"]);
+
+/**
+ * True while the user has an open final check on this card. That press is the
+ * consent that lets the card's own agent complete it — see TaskValidator.
+ */
+async function isTaskValidationWindowOpen(
+  taskBoardService: TaskBoardService,
+  projectId: string,
+  taskId: string,
+): Promise<boolean> {
+  const board = await taskBoardService.getBoard(projectId);
+  const task = board.tasks.find((entry) => entry.id === taskId);
+  return task ? isValidationWindowOpen(task) : false;
+}
 
 const TerminalSummarySchema = z.object({
   id: z.string(),
@@ -3009,7 +3024,8 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         title: "Move task",
         description:
           "Move a kanban task between the two agent-writable columns: 'notes' (free-form draft) and 'backlog' (À faire). " +
-          "The rest of the board belongs to the user: 'validated', 'scheduled', 'in_progress', 'done' and 'deployed' are reached by the user's own validation, by the scheduler, or by a successful publish — an agent may never move a card there.",
+          "The rest of the board belongs to the user: 'validated', 'scheduled', 'in_progress' and 'deployed' are reached by the user's own validation, by the scheduler, or by a successful publish — an agent may never move a card there. " +
+          "Single exception: 'done' is accepted while the user has an open final check on that exact card (they pressed \"Lancer le contrôle\"), and only once everything is verified and fixed.",
         inputSchema: {
           projectId: z.string(),
           taskId: z.string(),
@@ -3043,10 +3059,20 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         // validation, scheduling, execution and completion are the user's calls.
         // An agent that "helpfully" drags its own card into Validé would silently
         // spend the user's quota, which is exactly what this refuses.
+        //
+        // The one exception is completion during a final check: pressing "Lancer
+        // le contrôle" opens a window on that single card (validation.state ===
+        // "running") and IS the user's consent for the agent to finish it once
+        // everything is verified. The window closes as soon as the agent stops.
         if (AGENT_WRITABLE_TASK_COLUMNS.has(args.column) === false) {
-          throw new Error(
-            `move_task cannot move a task to "${args.column}": only the user validates, schedules, completes or deploys a task. Agents may only move cards between "notes" and "backlog".`,
-          );
+          const completionAuthorized =
+            args.column === "done" &&
+            (await isTaskValidationWindowOpen(taskBoardService, args.projectId, args.taskId));
+          if (!completionAuthorized) {
+            throw new Error(
+              `move_task cannot move a task to "${args.column}": only the user validates, schedules or deploys a task. Agents may only move cards between "notes" and "backlog", plus "done" while the user's final check is open on that card.`,
+            );
+          }
         }
         await taskBoardService.moveTask(args.projectId, {
           taskId: args.taskId,

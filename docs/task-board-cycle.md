@@ -18,7 +18,7 @@ everything before it is inert.
 | À faire → Validé    | **user only**        | Drag, or the approval action on a proposed task.                |
 | Validé → Planifié   | scheduler            | Once the cost analysis produced an estimate.                    |
 | Planifié → En cours | scheduler            | When the slot, quota and timing gates all pass.                 |
-| En cours → Terminé  | **user only**        | The "Valider la tâche" action (runs the final review first).    |
+| En cours → Terminé  | **user-initiated**   | "Lancer le contrôle" — the card's own agent finishes it.        |
 | Terminé → Déployé   | publish              | Stamped when the card's branch is confirmed merged + published. |
 
 ## The invariants
@@ -37,9 +37,24 @@ everything before it is inert.
    for the rest. Prompt wording alone is not a gate: a model that is told to be
    helpful will validate its own work.
 4. **A checked-off todo never completes a card.** Agent-sync marks it
-   `ready_for_review` in "En cours"; only the user moves it to "Terminé".
+   `ready_for_review` in "En cours"; nothing moves it to "Terminé" until the user
+   presses "Lancer le contrôle".
 
-## The one exception
+## The final check — a window, not a verdict
+
+Pressing "Lancer le contrôle" does not run a hidden reviewer. It sends a check
+prompt into the card's OWN conversation (`tasks/validator.ts`): the agent
+re-reads the request, runs the project's checks, **fixes what it finds**, and
+completes the card itself once everything is green. The user reads the whole
+thing live instead of a dumped report.
+
+That press opens a consent window on that one card — `validation.state ===
+"running"` — and it is the second exception in `move_task`: `done` is accepted
+while the window is open, for that card only. The window closes as soon as the
+agent stops working (`watchAgentIdle`), whether or not it completed the card, so
+a check can never leave the bar stuck.
+
+## The other exception
 
 A publish blocked by a merge conflict opens a repair task and validates it
 itself (`bootstrap.ts`, the deploy-conflict task creator). The user's click on

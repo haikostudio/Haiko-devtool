@@ -150,8 +150,9 @@ export const TasksTaskApproveRequestSchema = z.object({
   taskId: z.string(),
 });
 
-// "Valider la tâche": run the final check, then move the card to "Terminée" only
-// if it passes. Never moves the card on the caller's behalf otherwise.
+// "Lancer le contrôle": hand the final check to the task's own agent, in the
+// task's own conversation. The agent verifies, fixes what it finds, and
+// completes the card itself once everything is green.
 export const TasksTaskValidateRequestSchema = z.object({
   type: z.literal("tasks.task.validate.request"),
   requestId: z.string(),
@@ -299,8 +300,12 @@ export const TasksTaskValidateResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     task: KanbanTaskSchema.nullable(),
-    // True when the check passed and the card moved to "Terminée".
+    // True when the card was already finished, so nothing had to be checked.
     passed: z.boolean(),
+    // True when the check prompt was handed to the task's own agent — the
+    // verdict then plays out in the conversation, not in this response.
+    // Additive + optional: old clients simply ignore it.
+    dispatched: z.boolean().optional(),
     error: z.string().nullable(),
   }),
 });

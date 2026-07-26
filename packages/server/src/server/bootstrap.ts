@@ -154,7 +154,7 @@ import { createBrainCaptureHook } from "../services/brain-memory/capture.js";
 import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
-import { TaskValidator } from "./tasks/validator.js";
+import { TaskValidator, watchAgentIdle } from "./tasks/validator.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -189,6 +189,7 @@ import {
   triggerPaseoDeploy,
 } from "../utils/paseo-deploy.js";
 import { buildPaseoDeployAgentPrompt } from "../utils/paseo-deploy-agent-prompt.js";
+import { sendPromptToAgent } from "./agent/agent-prompt.js";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@getpaseo/protocol/messages";
@@ -1448,13 +1449,14 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
-  // The final check behind "Valider la tâche": nothing else moves a card to
-  // "Terminée".
+  // The final check behind "Lancer le contrôle": a prompt into the task agent's
+  // own conversation, which verifies, fixes, then completes the card itself.
   const taskValidator = new TaskValidator({
-    agentManager,
-    createAgent,
     taskBoardService,
-    projectRegistry,
+    sendPrompt: async ({ agentId, prompt }) => {
+      await sendPromptToAgent({ agentManager, agentStorage, agentId, prompt, logger });
+    },
+    watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
     logger,
   });
   const taskLightAnalyzer = new TaskLightAnalyzer({
