@@ -95,14 +95,17 @@ describe("buildQuotaSummary", () => {
     expect(summary.ringRemainingPct).toBe(42);
   });
 
-  it("drops providers with no usable number when another one reported", () => {
+  it("keeps a provider with no usable number, so it never silently vanishes", () => {
     const summary = buildQuotaSummary(
       payload([
         usage({ providerId: "gemini", displayName: "Gemini", status: "unavailable" }),
         usage({ windows: [{ id: "weekly", label: "Weekly", remainingPct: 70 }] }),
       ]),
     );
-    expect(summary.providers.map((provider) => provider.providerId)).toEqual(["claude"]);
+    expect(summary.providers.map((provider) => provider.providerId)).toEqual(["gemini", "claude"]);
+    expect(summary.providers[0]?.hasData).toBe(false);
+    // A silent provider must not drag the ring or the warning down to zero.
+    expect(summary.ringRemainingPct).toBe(70);
   });
 
   it("keeps every provider when none reported, so the menu can explain", () => {

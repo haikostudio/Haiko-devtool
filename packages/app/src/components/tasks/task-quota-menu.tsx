@@ -254,7 +254,9 @@ function QuotaProviderBlock({
           <QuotaHistorySparkline samples={samples} />
         </>
       ) : (
-        <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
+        // A provider that answered nothing still gets a row, so its absence is
+        // never mistaken for "this model has no quota".
+        <Text style={styles.hint}>{provider.error ?? t("tasks.quota.unavailable")}</Text>
       )}
     </View>
   );
@@ -420,9 +422,13 @@ const styles = StyleSheet.create((theme) => ({
   ring: {
     transform: [{ rotate: "-90deg" }],
   },
+  // The dropdown surface carries no padding of its own — its built-in rows each
+  // bring theirs. This menu draws its own content, so it has to inset itself or
+  // every label ends up welded to the border.
   menu: {
     gap: theme.spacing[3],
-    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[3],
+    paddingVertical: theme.spacing[3],
   },
   menuTitle: {
     color: theme.colors.foreground,
@@ -445,6 +451,9 @@ const styles = StyleSheet.create((theme) => ({
     fontWeight: theme.fontWeight.medium,
   },
   providerPlan: {
+    // Without this the plan label refuses to shrink and runs off the surface.
+    flexShrink: 1,
+    textAlign: "right",
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.xs,
   },

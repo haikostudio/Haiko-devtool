@@ -21,6 +21,8 @@ export interface QuotaProviderSummary {
   weekly: ProviderUsageWindow | null;
   /** False when the provider answered but reported no usable number. */
   hasData: boolean;
+  /** Why a provider has no number, when it said so. Shown instead of a gauge. */
+  error: string | null;
 }
 
 export interface QuotaSummary {
@@ -92,6 +94,7 @@ function summarizeProvider(usage: ProviderUsage): QuotaProviderSummary {
     session,
     weekly,
     hasData: remainingPercent(session) !== null || remainingPercent(weekly) !== null,
+    error: usage.error ?? null,
   };
 }
 
@@ -99,15 +102,15 @@ function summarizeProvider(usage: ProviderUsage): QuotaProviderSummary {
  * Turns the raw provider-usage payload into what the header ring and its menu
  * need: one row per connected model, plus the single number the ring draws.
  *
- * A provider that reported nothing usable is dropped as long as at least one
- * other did — an unreachable model is noise next to real gauges. When nothing
- * reported at all, every provider is kept so the menu can say so instead of
- * rendering an empty box.
+ * Every connected provider stays in the list, even one that reported nothing.
+ * Hiding it reads as "this model has no quota to watch" when the truth is "we
+ * could not reach it" — and a Claude row silently missing from a Claude-driven
+ * board is the single most confusing thing this menu can do. Rows without a
+ * number say why instead of disappearing; only the ring math skips them.
  */
 export function buildQuotaSummary(payload: ProviderUsageListPayload | null): QuotaSummary {
-  const all = (payload?.providers ?? []).map(summarizeProvider);
-  const withData = all.filter((provider) => provider.hasData);
-  const providers = withData.length > 0 ? withData : all;
+  const providers = (payload?.providers ?? []).map(summarizeProvider);
+  const withData = providers.filter((provider) => provider.hasData);
 
   const weeklyValues = withData
     .map((provider) => remainingPercent(provider.weekly))
