@@ -310,6 +310,12 @@ export const en = {
       details: "Details",
       noAgent: "No agent has been started for this task yet.",
       launchAgent: "Launch the agent",
+      validateTask: "Validate task",
+      validateTaskMessage:
+        "The task moves to “Done” and becomes ready to deploy. You can still reopen it afterwards.",
+      validateRunning: "Final check running…",
+      validatePassed: "Check passed — task completed.",
+      validateFailed: "Check rejected — the task stays in progress.",
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",
@@ -355,6 +361,10 @@ export const en = {
       title: "Conductor",
       move: "Move panel",
       backToConductor: "Back to conductor",
+      resetTitle: "Reset conversation",
+      resetMessage:
+        "The current conductor conversation is closed and a new empty one starts. Your tasks and data are kept.",
+      resetConfirm: "Reset",
       openDetails: "Details",
       collapse: "Collapse",
       expand: "Expand",
@@ -411,6 +421,15 @@ export const en = {
       priorityLow: "Low",
       deadlineOverdue: "Overdue",
       deadlineNone: "No deadline",
+    },
+    quota: {
+      rolling: "Rolling window",
+      weekly: "Weekly allowance",
+      unavailable: "Usage unavailable",
+    },
+    explorer: {
+      title: "Explorer",
+      noProject: "Select a project to browse its files.",
     },
     updateHost: "Update the host to use Tasks.",
     columns: {
@@ -930,6 +949,7 @@ export const en = {
         newBrowser: "New browser tab",
         importSession: "Import session",
         copyPath: "Copy workspace path",
+        addToChat: "Add to chat",
         copyBranchName: "Copy branch name",
         showSetup: "Show setup",
       },

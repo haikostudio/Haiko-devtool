@@ -240,39 +240,33 @@ describe("TaskScheduler", () => {
     expect(estimator.requestEstimate).not.toHaveBeenCalled();
   });
 
-  test("launches an awaiting task in an isolated worktree and marks it done", async () => {
+  test("launches an awaiting task in place on the main branch and flags it for review", async () => {
     const task = await seedScheduledTask({ quotaPercent: 15 });
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
 
     await scheduler.tick();
     await vi.waitFor(async () => {
       const board = await service.getBoard("proj-1");
-      expect(board.tasks[0]?.column).toBe("done");
+      expect(board.tasks[0]?.progress).toBe("ready_for_review");
     });
 
     const board = await service.getBoard("proj-1");
-    const done = board.tasks.find((entry) => entry.id === task.id);
-    expect(done?.links.primaryAgentId).toBe("task-agent-1");
-    expect(done?.links.workspaceId).toBe("ws-proj-1");
-    // A folder IS a git branch: the task lands on the folder's branch (derived
-    // from the "Auth" folder name), shared by all of the folder's tasks.
-    expect(done?.links.branch).toBe("feat/auth");
-    expect(done?.links.prUrl ?? null).toBeNull();
-    expect(done?.schedule ?? null).toBeNull();
-    // The shared worktree is recorded on the folder for its later tasks to reuse.
-    const authFolder = board.folders.find((entry) => entry.branch === "feat/auth");
-    expect(authFolder?.workspaceId).toBe("ws-proj-1");
+    const ran = board.tasks.find((entry) => entry.id === task.id);
+    expect(ran?.links.primaryAgentId).toBe("task-agent-1");
+    expect(ran?.links.workspaceId).toBe("ws-proj-1");
+    // No branch is cut per task any more: every task works on the project's main
+    // branch, in the project checkout.
+    expect(ran?.links.branch ?? null).toBeNull();
+    expect(ran?.links.prUrl ?? null).toBeNull();
+    expect(ran?.schedule ?? null).toBeNull();
+    // A finished run does NOT complete the card — only the user's validation does.
+    expect(ran?.column).toBe("in_progress");
+    expect(ran?.completedAt ?? null).toBeNull();
     expect(createAgent).toHaveBeenCalledTimes(1);
-    // Runs in a fresh worktree branched off the project checkout on that branch.
-    expect(createAgent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: "/tmp/proj-1",
-        worktree: expect.objectContaining({
-          action: "branch-off",
-          branchName: "feat/auth",
-        }),
-      }),
-    );
+    // Runs in the project checkout itself, with no worktree.
+    const createCall = createAgent.mock.calls[0]?.[0];
+    expect(createCall).toHaveProperty("cwd", "/tmp/proj-1");
+    expect(createCall).not.toHaveProperty("worktree");
   });
 
   test("reuses the analysis agent for execution instead of creating a new one", async () => {
@@ -299,7 +293,7 @@ describe("TaskScheduler", () => {
 
     await scheduler.tick();
     await vi.waitFor(async () => {
-      expect((await findTask(task.id))?.column).toBe("done");
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
     });
 
     // No new agent: the same analysis agent runs the execution turn.
@@ -329,7 +323,7 @@ describe("TaskScheduler", () => {
     // An explicit run-now is the user's "go": it lifts the hold and launches.
     await scheduler.runNow("proj-1", task.id);
     await vi.waitFor(async () => {
-      expect((await findTask(task.id))?.column).toBe("done");
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
     });
     held = await findTask(task.id);
     expect(held?.executionHold ?? false).toBe(false);
@@ -418,7 +412,7 @@ describe("TaskScheduler", () => {
     await vi.waitFor(async () => {
       const entry = await findTask(task.id);
       expect(entry?.approval?.state).toBe("approved");
-      expect(entry?.column).toBe("done");
+      expect(entry?.progress).toBe("ready_for_review");
     });
   });
 
@@ -438,7 +432,7 @@ describe("TaskScheduler", () => {
     const inside = buildScheduler({ remainingPct: 90, quietHours, nowMs: nighttime });
     await inside.scheduler.tick();
     await vi.waitFor(async () => {
-      expect((await findTask(task.id))?.column).toBe("done");
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
     });
   });
 
@@ -502,7 +496,7 @@ describe("TaskScheduler", () => {
     const asap = buildScheduler({ remainingPct: 90, quietHours, nowMs: daytime });
     await asap.scheduler.tick();
     await vi.waitFor(async () => {
-      expect((await findTask(heavyAsap.id))?.column).toBe("done");
+      expect((await findTask(heavyAsap.id))?.progress).toBe("ready_for_review");
     });
 
     const lightOffPeak = await seedScheduledTask({
@@ -630,7 +624,7 @@ describe("TaskScheduler", () => {
     // runs to completion (backlog → validated → scheduled → launch → done).
     await vi.waitFor(async () => {
       await scheduler.tick();
-      expect((await findTask(task.id))?.column).toBe("done");
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
     });
     expect(createAgent).toHaveBeenCalledTimes(1);
   });
@@ -675,7 +669,7 @@ describe("TaskScheduler", () => {
 
     await scheduler.tick();
     await vi.waitFor(async () => {
-      expect((await findTask(big.id))?.column).toBe("done");
+      expect((await findTask(big.id))?.progress).toBe("ready_for_review");
     });
 
     expect(createAgent).toHaveBeenCalledTimes(1);
@@ -702,7 +696,7 @@ describe("TaskScheduler", () => {
 
     await scheduler.tick();
     await vi.waitFor(async () => {
-      expect((await findTask(small.id))?.column).toBe("done");
+      expect((await findTask(small.id))?.progress).toBe("ready_for_review");
     });
 
     // Only the light task runs during the day; the heavy one waits for night.

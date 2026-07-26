@@ -104,6 +104,10 @@ export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;
+  // Restauré : d'où vient le fournisseur — fourni avec Paseo ou ajouté par
+  // l'utilisateur. L'écran des réglages n'autorise la suppression que pour les
+  // seconds.
+  source?: "builtin" | "custom";
   error?: string;
   models?: AgentModelDefinition[];
   modes?: AgentMode[];
@@ -423,6 +427,12 @@ export type AgentTimelineItem =
       type: "user_message";
       text: string;
       messageId?: string;
+      /**
+       * Restauré : identifiant posé par le client à l'envoi. Sert à rapprocher un
+       * message optimiste de sa version confirmée par le serveur, pour qu'il ne
+       * s'affiche pas deux fois.
+       */
+      clientMessageId?: string;
       /** Attached images, so other clients render them instead of just the text. */
       images?: TimelineImageAttachment[];
     }

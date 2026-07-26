@@ -42,6 +42,8 @@ import {
   type WorkspaceLayout,
 } from "@/stores/workspace-layout-actions";
 import { normalizeWorkspaceTabTarget } from "@/workspace-tabs/identity";
+// Re-exported here too: callers reach for the key builder alongside the store.
+export { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { clearTabCloseTombstone, recordTabClose } from "@/session-ui-state/close-tombstones";
 import {
   clearTabOpenMarker,

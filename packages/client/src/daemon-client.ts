@@ -53,6 +53,12 @@ import type {
   BranchSuggestionsResponse,
   GitHubSearchResponse,
   GitHubSearchRequest,
+  ForgeSearchRequest,
+  CheckoutCommit,
+  FileVersion,
+  FileWriteResult,
+  ParsedDiffFile,
+  WorkspaceRecoveryState,
   DirectorySuggestionsResponse,
   PaseoWorktreeListResponse,
   PaseoWorktreeArchiveResponse,
@@ -341,6 +347,8 @@ export interface CreateAgentRequestOptions extends AgentConfigOverrides {
   cwd?: string;
   env?: CreateAgentRequestMessage["env"];
   workspaceId?: string;
+  // Restauré : agent appelant, pour rattacher un agent créé par un autre.
+  callerAgentId?: string;
   initialPrompt?: string;
   clientMessageId?: string;
   outputSchema?: Record<string, unknown>;
@@ -362,6 +370,8 @@ export interface CreatePaseoWorktreeInput extends Pick<
   | "firstAgentContext"
   | "refName"
   | "action"
+  // Restauré : source du checkout (une demande de changement sur une forge).
+  | "checkoutSource"
   | "githubPrNumber"
 > {}
 
@@ -415,6 +425,9 @@ export interface FileReadResult {
   path: string;
   kind: LegacyFileExplorerFilePayload["kind"];
   modifiedAt: string;
+  // Restauré : révision du fichier, comparée à l'écriture pour refuser
+  // d'écraser une version modifiée entre-temps.
+  revision?: string;
 }
 export interface FileUploadInput {
   fileName: string;
@@ -1111,6 +1124,13 @@ export class DaemonClient {
     }
   >();
   private terminalDirectorySubscriptions = new Map<string, { cwd: string; workspaceId?: string }>();
+  // Restauré : fichiers suivis en direct. Chaque abonnement retient de quoi se
+  // rétablir après une reconnexion, sinon l'éditeur resterait figé sur une
+  // version périmée sans le dire.
+  private fileSubscriptions = new Map<
+    string,
+    { cwd: string; path: string; onUpdate: (version: FileVersion) => void }
+  >();
   // Live kanban board subscriptions, keyed by subscriptionId. Re-armed on
   // reconnect: the daemon drops all task subscriptions when the socket closes,
   // and the React board hook does not re-run on a transparent reconnect (the
@@ -2365,6 +2385,48 @@ export class DaemonClient {
     });
   }
 
+  // Restauré : gestion des scripts d'un espace de travail depuis la ligne de commande.
+  async listWorkspaceScripts(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "workspace.script.list.response" }>["payload"]
+  > {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "workspace.script.list.request", workspaceId },
+      responseType: "workspace.script.list.response",
+    });
+  }
+
+  async startWorkspaceScriptWithStatus(
+    workspaceId: string,
+    scriptName: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "workspace.script.start.response" }>["payload"]
+  > {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "workspace.script.start.request", workspaceId, scriptName },
+      responseType: "workspace.script.start.response",
+    });
+  }
+
+  async stopWorkspaceScript(
+    workspaceId: string,
+    scriptName: string,
+    requestId?: string,
+  ): Promise<
+    Extract<SessionOutboundMessage, { type: "workspace.script.stop.response" }>["payload"]
+  > {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "workspace.script.stop.request", workspaceId, scriptName },
+      responseType: "workspace.script.stop.response",
+    });
+  }
+
   async archiveWorkspace(
     workspaceId: string,
     requestId?: string,
@@ -2465,6 +2527,22 @@ export class DaemonClient {
     }
   }
 
+  private resubscribeFileSubscriptions(): void {
+    for (const [subscriptionId, subscription] of this.fileSubscriptions) {
+      void this.sendCorrelatedSessionRequest({
+        message: {
+          type: "fs.file.subscribe.request",
+          cwd: subscription.cwd,
+          path: subscription.path,
+          subscriptionId,
+        },
+        responseType: "fs.file.subscribe.response",
+      })
+        .then((payload) => subscription.onUpdate(payload.initial))
+        .catch(() => undefined);
+    }
+  }
+
   private resubscribeTasksBoardSubscriptions(): void {
     if (this.tasksBoardSubscriptions.size === 0) {
       return;
@@ -2496,6 +2574,7 @@ export class DaemonClient {
       config,
       ...(options.env ? { env: options.env } : {}),
       ...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
+      ...(options.callerAgentId !== undefined ? { callerAgentId: options.callerAgentId } : {}),
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
       ...(options.clientMessageId ? { clientMessageId: options.clientMessageId } : {}),
       ...(options.outputSchema ? { outputSchema: options.outputSchema } : {}),
@@ -3798,6 +3877,183 @@ export class DaemonClient {
     });
   }
 
+  // Restauré : variantes « forge » (GitLab, Gitea…) des trois opérations qui
+  // n'existaient qu'en version GitHub. Les anciennes restent, l'appelant choisit
+  // selon la capacité annoncée par l'hôte.
+  // Restauré : historique des commits, différence d'un fichier dans un commit,
+  // et récupération d'un espace de travail. Les messages correspondants existent
+  // déjà côté protocole ; seules ces méthodes manquaient.
+  // Restauré : suivi en direct d'un fichier et écriture avec garde d'écrasement
+  // (l'écriture est refusée si le fichier a changé entre-temps).
+  async subscribeFile(
+    input: { cwd: string; path: string },
+    onUpdate: (version: FileVersion) => void,
+  ): Promise<{ initial: FileVersion; unsubscribe: () => void }> {
+    const subscriptionId = this.createRequestId();
+    this.fileSubscriptions.set(subscriptionId, { ...input, onUpdate });
+    try {
+      const payload = await this.sendCorrelatedSessionRequest({
+        message: {
+          type: "fs.file.subscribe.request",
+          cwd: input.cwd,
+          path: input.path,
+          subscriptionId,
+        },
+        responseType: "fs.file.subscribe.response",
+      });
+      return {
+        initial: payload.initial,
+        unsubscribe: () => {
+          if (!this.fileSubscriptions.delete(subscriptionId)) {
+            return;
+          }
+          void this.sendCorrelatedSessionRequest({
+            message: { type: "fs.file.unsubscribe.request", subscriptionId },
+            responseType: "fs.file.unsubscribe.response",
+          }).catch(() => undefined);
+        },
+      };
+    } catch (error) {
+      this.fileSubscriptions.delete(subscriptionId);
+      throw error;
+    }
+  }
+
+  async writeFile(input: {
+    cwd: string;
+    path: string;
+    content: string;
+    expectedModifiedAt: string;
+    expectedRevision?: string;
+  }): Promise<FileWriteResult> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      message: { type: "fs.file.write.request", ...input },
+      responseType: "fs.file.write.response",
+    });
+    return payload.result;
+  }
+
+  async listCheckoutCommits(
+    cwd: string,
+    requestId?: string,
+  ): Promise<{ baseRef: string | null; commits: CheckoutCommit[] }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.list.response">({
+        requestId,
+        message: { type: "checkout.commits.list.request", cwd },
+        timeout: 60000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return { baseRef: payload.baseRef, commits: payload.commits };
+  }
+
+  async getCommitFileDiff(
+    cwd: string,
+    sha: string,
+    path: string,
+    requestId?: string,
+  ): Promise<{ file: ParsedDiffFile | null }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.file_diff.response">({
+        requestId,
+        message: { type: "checkout.commits.file_diff.request", cwd, sha, path },
+        timeout: 60000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return { file: payload.file };
+  }
+
+  async inspectWorkspaceRecovery(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<WorkspaceRecoveryState> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.inspect.response">({
+        requestId,
+        message: { type: "workspace.recovery.inspect.request", workspaceId },
+      });
+    return payload.state;
+  }
+
+  async restoreWorkspace(workspaceId: string, requestId?: string): Promise<void> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.restore.response">({
+        requestId,
+        message: { type: "workspace.recovery.restore.request", workspaceId },
+        timeout: 150_000,
+      });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "Workspace recovery was rejected by the host");
+    }
+  }
+
+  async checkoutForgeSetAutoMerge(
+    cwd: string,
+    input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.set_auto_merge.response">({
+      requestId,
+      message: {
+        type: "checkout.forge.set_auto_merge.request",
+        cwd,
+        enabled: input.enabled,
+        ...(input.enabled ? { mergeMethod: input.method } : {}),
+      },
+      timeout: 60000,
+    });
+  }
+
+  async checkoutForgeGetCheckDetails(
+    input: {
+      cwd: string;
+      repoOwner?: string;
+      repoName?: string;
+      checkRunId?: number;
+      workflowRunId?: number;
+      changeRequestNumber?: number;
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"checkout.forge.get_check_details.response">(
+      {
+        requestId,
+        message: {
+          type: "checkout.forge.get_check_details.request",
+          cwd: input.cwd,
+          repoOwner: input.repoOwner,
+          repoName: input.repoName,
+          checkRunId: input.checkRunId,
+          workflowRunId: input.workflowRunId,
+          changeRequestNumber: input.changeRequestNumber,
+        },
+        timeout: 60000,
+      },
+    );
+  }
+
+  async searchForge(
+    options: { cwd: string; query: string; limit?: number; kinds?: ForgeSearchRequest["kinds"] },
+    requestId?: string,
+  ) {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "forge.search.request",
+        cwd: options.cwd,
+        query: options.query,
+        limit: options.limit,
+        kinds: options.kinds,
+      },
+      responseType: "forge.search.response",
+      timeout: 15000,
+    });
+  }
+
   async checkoutGithubSetAutoMerge(
     cwd: string,
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
@@ -4410,6 +4666,42 @@ export class DaemonClient {
     });
   }
 
+  // Restauré : pilotage du hub (rattacher / état / détacher) depuis la ligne de
+  // commande. Gardé derrière la capacité annoncée par l'hôte.
+  async connectHub(hubUrl: string, token: string, requestId?: string) {
+    this.requireHubRelationshipSupport();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "hub.management.daemon.connect.request", hubUrl, token },
+      responseType: "hub.management.daemon.connect.response",
+    });
+  }
+
+  async getHubStatus(requestId?: string) {
+    this.requireHubRelationshipSupport();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "hub.management.daemon.get_status.request" },
+      responseType: "hub.management.daemon.get_status.response",
+    });
+  }
+
+  async disconnectHub(force = false, requestId?: string) {
+    this.requireHubRelationshipSupport();
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: { type: "hub.management.daemon.disconnect.request", force },
+      responseType: "hub.management.daemon.disconnect.response",
+    });
+  }
+
+  private requireHubRelationshipSupport(): void {
+    // COMPAT(hubRelationship): drop the gate when the supported host floor ships it.
+    if (this.lastServerInfoMessage?.features?.hubRelationship !== true) {
+      throw new Error("Update the host to use Hub relationship management.");
+    }
+  }
+
   async getDaemonPairingOffer(
     options?: DaemonPairingOfferOptions,
   ): Promise<DaemonPairingOfferPayload> {
@@ -4704,9 +4996,18 @@ export class DaemonClient {
     });
   }
 
+  // "Valider la tâche": runs the final check server-side. Resolves with
+  // passed=false and the task's report when the check rejects the work.
+  async tasksTaskValidate(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.validate.response">({
+      requestId,
+      message: { type: "tasks.task.validate.request", ...input },
+    });
+  }
+
   async tasksConductorEnsure(
     projectId: string,
-    optionsOrRequestId?: { provider?: string } | string,
+    optionsOrRequestId?: { provider?: string; reset?: boolean } | string,
     requestId?: string,
   ) {
     const options = typeof optionsOrRequestId === "string" ? undefined : optionsOrRequestId;
@@ -4718,6 +5019,7 @@ export class DaemonClient {
         type: "tasks.conductor.ensure.request",
         projectId,
         ...(options?.provider ? { provider: options.provider } : {}),
+        ...(options?.reset ? { reset: true } : {}),
       },
     });
   }
@@ -5842,6 +6144,7 @@ export class DaemonClient {
           this.startLivenessHeartbeat();
           this.resubscribeCheckoutDiffSubscriptions();
           this.resubscribeTerminalDirectorySubscriptions();
+          this.resubscribeFileSubscriptions();
           this.resubscribeTasksBoardSubscriptions();
           this.flushPendingSendQueue();
           this.resolveConnect();
@@ -5851,6 +6154,12 @@ export class DaemonClient {
 
     if (consumerMessage.type === "terminal_stream_exit") {
       this.terminalStreams.removeTerminal(consumerMessage.payload.terminalId);
+    }
+
+    if (consumerMessage.type === "fs.file.update") {
+      this.fileSubscriptions
+        .get(consumerMessage.payload.subscriptionId)
+        ?.onUpdate(consumerMessage.payload.version);
     }
 
     if (this.rawMessageListeners.size > 0) {

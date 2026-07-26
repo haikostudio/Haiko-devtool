@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { Button } from "@/components/ui/button";
 import { FormTextInput } from "@/components/ui/form-field";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
-import type { FilterPriorityLevel } from "@/components/tasks/kanban-columns";
+import type { TaskImportanceLevel } from "@/components/tasks/kanban-columns";
 import type { Theme } from "@/styles/theme";
 
 // A note carries a short text, an importance (high/medium/low), and an optional
@@ -14,7 +14,7 @@ import type { Theme } from "@/styles/theme";
 // "backlog", flows through the usual cycle unchanged.
 export interface NewNoteInput {
   text: string;
-  importance: FilterPriorityLevel;
+  importance: TaskImportanceLevel;
   deadline: string;
 }
 
@@ -32,10 +32,10 @@ interface NewNoteCardProps {
 export function NewNoteCard({ onSubmit, onCancel }: NewNoteCardProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
-  const [importance, setImportance] = useState<FilterPriorityLevel>("medium");
+  const [importance, setImportance] = useState<TaskImportanceLevel>("medium");
   const [deadline, setDeadline] = useState("");
 
-  const importanceOptions = useMemo<SegmentedControlOption<FilterPriorityLevel>[]>(
+  const importanceOptions = useMemo<SegmentedControlOption<TaskImportanceLevel>[]>(
     () => [
       {
         value: "high",

@@ -1,6 +1,6 @@
 import { WebSocket, WebSocketServer } from "ws";
 import type { IncomingMessage, Server as HTTPServer } from "http";
-import { basename, join } from "path";
+import { join } from "path";
 import { hostname as getHostname } from "node:os";
 import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay } from "node:perf_hooks";
@@ -26,6 +26,7 @@ import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
 import type { ConductorAgentService } from "./tasks/conductor-agent.js";
+import type { TaskValidator } from "./tasks/validator.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
@@ -48,9 +49,13 @@ import { isHostnameAllowed } from "./hostnames.js";
 import { Session, type SessionLifecycleIntent, type SessionRuntimeMetrics } from "./session.js";
 import type { AgentProvider } from "./agent/agent-sdk-types.js";
 import { ProviderSnapshotManager } from "./agent/provider-snapshot-manager.js";
-import type { WorkspaceGitRuntimeSnapshot, WorkspaceGitService } from "./workspace-git-service.js";
+import type {
+  WorkspaceGitRuntimeSnapshot,
+  WorkspaceGitService,
+  WorkspaceGitServiceMetrics,
+} from "./workspace-git-service.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
-import { buildWorkspaceGitMetadataFromSnapshot } from "./workspace-git-metadata.js";
+import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
 import {
   createPushNotificationSender,
@@ -134,7 +139,8 @@ interface WebSocketServerConfig {
 type WebSocketRuntimeMetrics = SessionRuntimeMetrics & CheckoutDiffMetrics;
 type WebSocketRuntimeDiagnosticPayload = WebSocketRuntimeDiagnosticSnapshot<
   WebSocketRuntimeMetrics,
-  AgentMetricsSnapshot
+  AgentMetricsSnapshot,
+  WorkspaceGitServiceMetrics
 >;
 type WebSocketRuntimeMetricsLogPayload = Omit<WebSocketRuntimeDiagnosticPayload, "collectedAt">;
 
@@ -174,8 +180,9 @@ function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSna
       hasRemote: false,
       diffStat: null,
     },
-    github: {
+    forge: {
       featuresEnabled: false,
+      authState: "no_remote",
       pullRequest: null,
       error: null,
     },
@@ -207,18 +214,11 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     suggestBranchesForCwd: async () => [],
     listStashes: async () => [],
     listWorktrees: async () => [],
-    getWorkspaceGitMetadata: async (cwd: string, options) => {
+    getProjectSlug: async (cwd: string) => {
       const snapshot = createFallbackWorkspaceGitSnapshot(cwd);
-      return buildWorkspaceGitMetadataFromSnapshot({
-        cwd,
-        directoryName: options?.directoryName ?? basename(cwd),
-        isGit: snapshot.git.isGit,
-        repoRoot: snapshot.git.repoRoot,
-        mainRepoRoot: snapshot.git.mainRepoRoot,
-        currentBranch: snapshot.git.currentBranch,
-        remoteUrl: snapshot.git.remoteUrl,
-      });
+      return deriveProjectSlug(cwd, snapshot.git.isGit ? snapshot.git.remoteUrl : null);
     },
+    resolveForge: async () => null,
     resolveRepoRoot: async (cwd: string) => cwd,
     resolveDefaultBranch: async () => "main",
     resolveRepoRemoteUrl: async () => null,
@@ -229,6 +229,21 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     }),
     scheduleRefreshForCwd: () => {},
     onWorkspaceStateMayHaveChanged: () => {},
+    invalidateForge: () => {},
+    getMetrics: () => ({
+      workspaceTargetCount: 0,
+      workspaceListenerCount: 0,
+      repositoryTargetCount: 0,
+      repositoryWorkspaceLinkCount: 0,
+      workingTreeWatchTargetCount: 0,
+      workingTreeWatchListenerCount: 0,
+      workspaceObservationSetupInFlightCount: 0,
+      workingTreeWatchSetupInFlightCount: 0,
+      workspaceRefreshInFlightCount: 0,
+      workspaceRefreshQueuedCount: 0,
+      fetchInFlightCount: 0,
+      snapshotUpdatedListenerCount: 0,
+    }),
     dispose: () => {},
   };
 }
@@ -343,7 +358,8 @@ function getBrowserHostCapability(
   return parsed.success ? parsed.data : null;
 }
 
-interface WebSocketLike {
+// Restauré : exporté — le hub s'appuie sur ce type.
+export interface WebSocketLike {
   readyState: number;
   bufferedAmount?: number;
   send: (data: string | Uint8Array | ArrayBuffer) => void;
@@ -493,6 +509,7 @@ export class VoiceAssistantWebSocketServer {
   private taskEstimator: TaskEstimator | null = null;
   private taskScheduler: TaskScheduler | null = null;
   private conductorService: ConductorAgentService | null = null;
+  private taskValidator: TaskValidator | null = null;
   private activityLogService: ActivityLogService | null = null;
   private comptaSummaryService: ComptaSummaryService | null = null;
   private comptaLinksStore: ComptaLinksStore | null = null;
@@ -1117,6 +1134,7 @@ export class VoiceAssistantWebSocketServer {
       taskEstimator: this.taskEstimator,
       taskScheduler: this.taskScheduler,
       conductorService: this.conductorService,
+      taskValidator: this.taskValidator,
       activityLogService: this.activityLogService ?? undefined,
       comptaSummaryService: this.comptaSummaryService ?? undefined,
       comptaLinksStore: this.comptaLinksStore ?? undefined,
@@ -1305,12 +1323,14 @@ export class VoiceAssistantWebSocketServer {
     taskEstimator: TaskEstimator | null;
     taskScheduler: TaskScheduler | null;
     conductorService: ConductorAgentService | null;
+    taskValidator: TaskValidator | null;
     messageTriage: MessageTriage | null;
   }): void {
     this.taskBoardService = services.taskBoardService;
     this.taskEstimator = services.taskEstimator;
     this.taskScheduler = services.taskScheduler;
     this.conductorService = services.conductorService;
+    this.taskValidator = services.taskValidator;
     this.messageTriage = services.messageTriage;
   }
 
@@ -2096,6 +2116,8 @@ export class VoiceAssistantWebSocketServer {
       runtime: sessionMetrics,
       latency: runtimeMetrics.latency,
       agents: agentSnapshot,
+      // Restauré : compteurs du service git dans le relevé de diagnostic.
+      git: this.workspaceGitService.getMetrics(),
     } satisfies WebSocketRuntimeMetricsLogPayload;
 
     this.lastRuntimeMetricsSnapshot = {
@@ -2150,6 +2172,9 @@ export class VoiceAssistantWebSocketServer {
     const notification = buildAgentAttentionNotificationPayload({
       reason: params.reason,
       serverId: this.serverId,
+      // L'espace de travail cible la notification : sans lui, un appui dessus ne
+      // sait pas où ouvrir l'agent.
+      workspaceId: agent?.workspaceId ?? "",
       agentId: params.agentId,
       agentTitle,
       finishedSummary: synthesisSummary,

@@ -1,8 +1,11 @@
 import { resolve } from "node:path";
+import type { Logger } from "pino";
 import {
   checkoutLiteFromGitSnapshot,
   generateWorkspaceId,
+  initialWorkspacePlacement,
 } from "../../workspace-registry-model.js";
+import { areEquivalentPaths, createRealpathAwarePathMatcher } from "../../../utils/path.js";
 import { classifyDirectoryForProjectMembership } from "../../workspace-registry-bootstrap-legacy.js";
 import {
   createPersistedProjectRecord,
@@ -27,6 +30,32 @@ import type { CreatePaseoWorktreeWorkflowResult } from "../../worktree-session.j
  * Read-only path resolution (no create/persist) lives in resolve-workspace-id-for-path.ts;
  * this module owns the create-and-persist side.
  */
+// Restauré : entrées des deux opérations que les autres modules appellent —
+// créer l'espace de travail d'un worktree fraîchement coupé, et exécuter un
+// import de session dans un espace de travail (créé pour l'occasion si besoin,
+// et défait proprement si l'import échoue).
+export interface CreateWorktreeWorkspaceInput {
+  sourceCwd: string;
+  projectId?: string;
+  repoRoot: string;
+  cwd: string;
+  worktreeRoot: string;
+  branch: string | null;
+  baseBranch: string | null;
+  title: string | null;
+  expectsInitialAgent?: boolean;
+}
+
+export interface ImportWorkspaceInput {
+  cwd: string;
+  requestedWorkspaceId?: string;
+}
+
+export interface ImportWorkspaceResult<T> {
+  value: T;
+  createdWorkspace: PersistedWorkspaceRecord | null;
+}
+
 export interface ResolveOrCreateWorkspaceIdInput {
   createdWorktree: CreatePaseoWorktreeWorkflowResult | null;
   requestedWorkspaceId?: string;
@@ -37,6 +66,13 @@ export interface ResolveOrCreateWorkspaceIdInput {
 export interface WorkspaceProvisioningService {
   findOrCreateWorkspaceForDirectory(cwd: string): Promise<PersistedWorkspaceRecord>;
   resolveOrCreateWorkspaceIdForCreateAgent(input: ResolveOrCreateWorkspaceIdInput): Promise<string>;
+  runInImportWorkspace<T>(
+    input: ImportWorkspaceInput,
+    operation: (workspace: PersistedWorkspaceRecord) => Promise<T>,
+  ): Promise<ImportWorkspaceResult<T>>;
+  createWorkspaceForWorktree(
+    input: CreateWorktreeWorkspaceInput,
+  ): Promise<PersistedWorkspaceRecord>;
   createWorkspaceForDirectory(
     cwd: string,
     title?: string | null,
@@ -51,8 +87,9 @@ export function createWorkspaceProvisioningService(deps: {
   workspaceRegistry: WorkspaceRegistry;
   projectRegistry: ProjectRegistry;
   workspaceGitService: Pick<WorkspaceGitService, "getCheckout" | "peekSnapshot">;
+  logger?: Logger;
 }): WorkspaceProvisioningService {
-  const { workspaceRegistry, projectRegistry, workspaceGitService } = deps;
+  const { workspaceRegistry, projectRegistry, workspaceGitService, logger } = deps;
 
   async function resolveWorkspaceDirectory(
     cwd: string,
@@ -292,7 +329,130 @@ export function createWorkspaceProvisioningService(deps: {
     return unarchivedWorkspace;
   }
 
+  // Restauré : espace de travail d'un worktree fraîchement coupé. Le projet est
+  // celui du dossier source quand on le retrouve, sinon celui de la racine du dépôt.
+  async function createWorkspaceForWorktree(
+    input: CreateWorktreeWorkspaceInput,
+  ): Promise<PersistedWorkspaceRecord> {
+    const sourceCwd = resolve(input.sourceCwd);
+    const repoRoot = resolve(input.repoRoot);
+    const project = await resolveSourceProjectForWorktree({
+      sourceCwd,
+      projectId: input.projectId,
+      repoRoot,
+    });
+    const timestamp = new Date().toISOString();
+    const workspace = createPersistedWorkspaceRecord({
+      workspaceId: generateWorkspaceId(),
+      projectId: project.projectId,
+      ...initialWorkspacePlacement({
+        source: "created_worktree",
+        cwd: resolve(input.cwd),
+        worktreeRoot: resolve(input.worktreeRoot),
+        branch: input.branch,
+        baseBranch: input.baseBranch,
+        mainRepoRoot: repoRoot,
+      }),
+      title: input.title,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await workspaceRegistry.upsert(workspace, {
+      expectsInitialAgent: input.expectsInitialAgent,
+    });
+    return workspace;
+  }
+
+  async function resolveSourceProjectForWorktree(input: {
+    sourceCwd: string;
+    projectId?: string;
+    repoRoot: string;
+  }): Promise<PersistedProjectRecord> {
+    if (input.projectId) {
+      const requested = await projectRegistry.get(input.projectId);
+      if (requested && !requested.archivedAt) {
+        return requested;
+      }
+    }
+    const workspaces = await workspaceRegistry.list();
+    const sourceWorkspace =
+      workspaces.find(
+        (workspace) => !workspace.archivedAt && areEquivalentPaths(workspace.cwd, input.sourceCwd),
+      ) ??
+      workspaces.find(
+        (workspace) => !workspace.archivedAt && areEquivalentPaths(workspace.cwd, input.repoRoot),
+      );
+    if (sourceWorkspace) {
+      const project = await projectRegistry.get(sourceWorkspace.projectId);
+      if (project) {
+        return project;
+      }
+    }
+    return findOrCreateProjectForDirectory(input.repoRoot);
+  }
+
+  // Restauré : exécute un import de session dans un espace de travail. Si l'appelant
+  // en désigne un, il doit exister et correspondre au dossier ; sinon on en crée un,
+  // et on le défait si l'import échoue — pour ne pas laisser de coquille vide.
+  async function runInImportWorkspace<T>(
+    input: ImportWorkspaceInput,
+    operation: (workspace: PersistedWorkspaceRecord) => Promise<T>,
+  ): Promise<ImportWorkspaceResult<T>> {
+    if (input.requestedWorkspaceId) {
+      const workspace = await workspaceRegistry.get(input.requestedWorkspaceId);
+      if (!workspace || workspace.archivedAt) {
+        throw new Error(`Workspace not found: ${input.requestedWorkspaceId}`);
+      }
+      const project = await projectRegistry.get(workspace.projectId);
+      if (!project || project.archivedAt) {
+        throw new Error(`Project not found: ${workspace.projectId}`);
+      }
+      if (!createRealpathAwarePathMatcher(workspace.cwd)(input.cwd)) {
+        throw new Error(`Import cwd does not match workspace: ${workspace.workspaceId}`);
+      }
+      return { value: await operation(workspace), createdWorkspace: null };
+    }
+
+    const projectsBeforeImport = await projectRegistry.list();
+    const workspace = await createWorkspaceForDirectory(input.cwd);
+    const previousProject =
+      projectsBeforeImport.find((project) => project.projectId === workspace.projectId) ?? null;
+    try {
+      return { value: await operation(workspace), createdWorkspace: workspace };
+    } catch (error) {
+      await rollbackFailedImportWorkspace(workspace, previousProject);
+      throw error;
+    }
+  }
+
+  async function rollbackFailedImportWorkspace(
+    workspace: PersistedWorkspaceRecord,
+    previousProject: PersistedProjectRecord | null,
+  ): Promise<void> {
+    try {
+      await workspaceRegistry.remove(workspace.workspaceId);
+      const projectHasActiveWorkspace = (await workspaceRegistry.list()).some(
+        (candidate) => candidate.projectId === workspace.projectId && !candidate.archivedAt,
+      );
+      if (projectHasActiveWorkspace) {
+        return;
+      }
+      if (previousProject?.archivedAt) {
+        await projectRegistry.upsert(previousProject);
+      } else if (!previousProject) {
+        await projectRegistry.remove(workspace.projectId);
+      }
+    } catch (error) {
+      logger?.error(
+        { err: error, workspaceId: workspace.workspaceId, projectId: workspace.projectId },
+        "Failed to restore workspace state after provider import failure",
+      );
+    }
+  }
+
   return {
+    runInImportWorkspace,
+    createWorkspaceForWorktree,
     findOrCreateWorkspaceForDirectory,
     resolveOrCreateWorkspaceIdForCreateAgent,
     createWorkspaceForDirectory,

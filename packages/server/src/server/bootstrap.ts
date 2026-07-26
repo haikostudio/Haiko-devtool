@@ -140,6 +140,12 @@ import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
+import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
+import type { HubRelationshipRemote } from "./hub/relationship-remote.js";
+import type {
+  HubRelationshipClock,
+  HubRelationshipRetryPolicy,
+} from "./hub/relationship-controller.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
@@ -148,6 +154,7 @@ import { createBrainCaptureHook } from "../services/brain-memory/capture.js";
 import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
+import { TaskValidator } from "./tasks/validator.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -376,6 +383,9 @@ export type DaemonLifecycleIntent =
 export interface PaseoDaemonConfig {
   listen: string;
   paseoHome: string;
+  // Restauré : version du démon et démarrage piloté par l'application de bureau.
+  daemonVersion?: string;
+  desktopManaged?: boolean;
   worktreesRoot?: string;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
@@ -599,9 +609,24 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
   return initialConfig;
 }
 
+/**
+ * Points d'injection pour les tests du « hub » (pilotage de démons distants).
+ * ATTENTION : cette version du démon ne construit pas encore le contrôleur de
+ * relations du hub — le paramètre existe pour que le harnais de test compile et
+ * pour offrir le point d'accroche le jour où le hub sera branché ici. Tant que
+ * ce n'est pas fait, ce qui est passé ici n'a aucun effet.
+ */
+export interface PaseoDaemonDependencies {
+  hubRelationshipRemote?: HubRelationshipRemote;
+  hubRelationshipClock?: HubRelationshipClock;
+  hubRelationshipRetryPolicy?: HubRelationshipRetryPolicy;
+  createHubDaemonId?: () => string;
+}
+
 export async function createPaseoDaemon(
   config: PaseoDaemonConfig,
   rootLogger: Logger,
+  _dependencies: PaseoDaemonDependencies = {},
 ): Promise<PaseoDaemon> {
   const logger = rootLogger.child({ module: "bootstrap" });
   const bootstrapStart = performance.now();
@@ -868,8 +893,14 @@ export async function createPaseoDaemon(
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     deps: {
-      github,
+      forgeOverrides: { github },
     },
+  });
+  const workspaceProvisioning = createWorkspaceProvisioningService({
+    workspaceRegistry,
+    projectRegistry,
+    workspaceGitService,
+    logger,
   });
   const providerSnapshotLogger = logger.child({ module: "provider-snapshot-manager" });
   const providerSnapshotManager = new ProviderSnapshotManager({
@@ -1006,6 +1037,9 @@ export async function createPaseoDaemon(
         workspaceId: workspace.workspaceId,
         cwd: workspace.cwd,
         kind: workspace.kind,
+        worktreeRoot: workspace.worktreeRoot,
+        isPaseoOwnedWorktree: workspace.isPaseoOwnedWorktree,
+        mainRepoRoot: workspace.mainRepoRoot,
       }));
   };
   const markWorkspaceArchivingExternal = (workspaceIds: Iterable<string>, archivingAt: string) => {
@@ -1051,7 +1085,6 @@ export async function createPaseoDaemon(
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
     gitMutation: createGitMutationService({
       workspaceGitService,
-      github,
       logger,
     }),
     emitWorkspaceUpdateForCwd: emitWorkspaceUpdateForCwdExternal,
@@ -1095,8 +1128,7 @@ export async function createPaseoDaemon(
                   resolveDefaultBranch: workflowOptions.resolveDefaultBranch,
                 }
               : {}),
-            projectRegistry,
-            workspaceRegistry,
+            workspaceProvisioning,
             workspaceGitService,
           });
         },
@@ -1178,7 +1210,7 @@ export async function createPaseoDaemon(
     await emitWorkspaceUpdatesExternal([result.workspace.workspaceId]);
     return result;
   };
-  const archiveScheduleWorkspaceExternal = async (workspaceId: string, repoRoot: string) => {
+  const archiveScheduleWorkspaceExternal = async (workspaceId: string) => {
     await archiveByScope(
       {
         paseoHome: config.paseoHome,
@@ -1205,8 +1237,6 @@ export async function createPaseoDaemon(
       },
       {
         scope: { kind: "workspace", workspaceId },
-        repoRoot,
-        paseoWorktreesBaseRoot: config.worktreesRoot,
         requestId: "schedule-run-finish",
       },
     );
@@ -1256,7 +1286,7 @@ export async function createPaseoDaemon(
     agentManager,
     agentStorage,
     createAgent,
-    createLocalCheckoutWorkspace: createScheduleLocalWorkspaceExternal,
+    createDirectoryWorkspace: createScheduleLocalWorkspaceExternal,
     createPaseoWorktreeWorkspace: createSchedulePaseoWorktreeExternal,
     archiveWorkspace: archiveScheduleWorkspaceExternal,
   });
@@ -1367,6 +1397,15 @@ export async function createPaseoDaemon(
   });
   activityLogService.start();
   const taskEstimator = new TaskEstimator({
+    agentManager,
+    createAgent,
+    taskBoardService,
+    projectRegistry,
+    logger,
+  });
+  // The final check behind "Valider la tâche": nothing else moves a card to
+  // "Terminée".
+  const taskValidator = new TaskValidator({
     agentManager,
     createAgent,
     taskBoardService,
@@ -1484,6 +1523,7 @@ export async function createPaseoDaemon(
     agentStorage,
     projectRegistry,
     logger,
+    archiveAgent: (agentId) => agentManager.archiveAgent(agentId),
   });
   taskScheduler.start();
   logger.info({ elapsed: elapsed() }, "Task board services initialized");
@@ -1800,6 +1840,7 @@ export async function createPaseoDaemon(
               taskEstimator,
               taskScheduler,
               conductorService,
+              taskValidator,
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);

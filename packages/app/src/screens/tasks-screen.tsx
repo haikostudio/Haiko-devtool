@@ -10,7 +10,6 @@ import {
   View,
 } from "react-native";
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowDownAZ,
@@ -19,13 +18,9 @@ import {
   ChevronRight,
   Clock,
   Folder,
-  Hand,
+  FolderTree,
   LayoutGrid,
-  MoreVertical,
-  Pencil,
-  Plus,
   Settings2,
-  Trash2,
   Wand2,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
@@ -34,18 +29,16 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader, SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
-import { FolderCreateModal } from "@/components/tasks/folder-create-modal";
 import { FormTextInput } from "@/components/ui/form-field";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
-import { TaskGantt } from "@/components/tasks/task-gantt";
+import { TaskTimelineArea } from "@/components/tasks/task-timeline-area";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { NewNoteCard, type NewNoteInput } from "@/components/tasks/new-note-card";
 import {
@@ -57,18 +50,18 @@ import {
   AgentBucketProvider,
   type LiveProjectBoard,
   TaskStatusVoyant,
-  useFolderToneMap,
   useProjectToneMap,
 } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
 import { ConductorPanel } from "@/components/tasks/conductor-panel";
+import { TaskExplorerDock } from "@/components/tasks/task-explorer-dock";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
-import { Button } from "@/components/ui/button";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { useToast } from "@/contexts/toast-context";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
@@ -94,17 +87,13 @@ import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const ThemedFolder = withUnistyles(Folder);
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const ThemedChevronDown = withUnistyles(ChevronDown);
-const ThemedTrash = withUnistyles(Trash2);
-const ThemedKebab = withUnistyles(MoreVertical);
-const ThemedPencil = withUnistyles(Pencil);
 const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
-const ThemedHand = withUnistyles(Hand);
+const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedSettings = withUnistyles(Settings2);
 const ThemedWand = withUnistyles(Wand2);
 const ThemedGradientStop = withUnistyles(Stop);
@@ -169,63 +158,11 @@ function HeaderScrollShadow({ side }: { side: "left" | "right" }) {
   );
 }
 
-const MENU_ICON_SIZE = 16;
 // Base vertical padding for the pinned folder footer; the bottom safe-area inset
 // (PWA home indicator) is added on top at render time.
-const FOOTER_VERTICAL_PADDING = 12;
-const editLeading = <ThemedPencil size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
-const deleteLeading = <ThemedTrash size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
-
-// Reusable three-dots menu for a folder card: opens on the right of the card
-// and offers rename/edit + delete. The card's own onPress opens the folder on
-// the board; this trigger is a nested Pressable, so the responder system routes
-// the tap here and it never selects the folder underneath.
-const FolderKebabMenu = memo(function FolderKebabMenu({
-  folderId,
-  onEdit,
-  onDelete,
-}: {
-  folderId: string;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t("tasks.actions.folderActions")}
-        testID={`tasks-folder-menu-${folderId}`}
-      >
-        <ThemedKebab size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" width={180}>
-        <DropdownMenuItem
-          leading={editLeading}
-          onSelect={onEdit}
-          testID={`tasks-folder-menu-edit-${folderId}`}
-        >
-          {t("tasks.actions.edit")}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          leading={deleteLeading}
-          destructive
-          onSelect={onDelete}
-          testID={`tasks-folder-menu-delete-${folderId}`}
-        >
-          {t("tasks.actions.delete")}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-});
 
 // Stable empty-array identity so the tone hooks' memos don't rebuild every
 // render while a board is still loading (a fresh `[]` would look like new input).
-const EMPTY_TASKS: KanbanTask[] = [];
-
 type ProjectSortMode = "recent" | "name";
 
 interface ProjectEntry {
@@ -437,11 +374,23 @@ function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCoun
   return counts;
 }
 
+// Compact only: true once the user has deliberately walked BACK to the projects
+// or folders list. The auto-selection below then stands down, so tapping "back"
+// no longer bounces straight into the board it just left. Any explicit pick
+// clears the flag, and so does leaving the screen.
+let compactSelectionCleared = false;
+
+export function __resetCompactSelectionCleared(): void {
+  compactSelectionCleared = false;
+}
+
 function selectProject(entry: ProjectEntry): void {
+  compactSelectionCleared = false;
   router.setParams({ host: entry.serverId, project: entry.projectId, folder: undefined });
 }
 
 function selectFolder(folderId: string): void {
+  compactSelectionCleared = false;
   router.setParams({ folder: folderId });
 }
 
@@ -482,7 +431,6 @@ export function TasksScreen() {
 
   const projects = useProjectEntries();
   const supportsTasksBoard = useHostFeature(serverId, "tasksBoard");
-  const supportsAutopilot = useHostFeature(serverId, "tasksAutopilot");
   const boardHandle = useTaskBoard(serverId, projectId);
 
   const selectedProject = useMemo(
@@ -505,7 +453,11 @@ export function TasksScreen() {
   const firstProject = projects[0] ?? null;
   const firstFolderId = sortedFolders[0]?.id ?? null;
   useEffect(() => {
-    if (isCompact) {
+    // Mobile behaves like desktop: land straight on the board instead of an
+    // empty picker. The one exception is a deliberate "back" — see
+    // compactSelectionCleared — otherwise the back button would bounce the user
+    // right back into the board they just left.
+    if (isCompact && compactSelectionCleared) {
       return;
     }
     if (!projectId && firstProject) {
@@ -516,6 +468,10 @@ export function TasksScreen() {
       selectFolder(firstFolderId);
     }
   }, [isCompact, projectId, firstProject, boardHandle.board, selectedFolder, firstFolderId]);
+
+  // Leaving the board forgets the "user walked back" intent, so the next visit
+  // opens on the board again.
+  useEffect(() => () => __resetCompactSelectionCleared(), []);
 
   // Task selection (which chat the dock shows, which drawer is open) is per
   // project; drop it whenever the project changes so a stale chat/drawer never
@@ -584,7 +540,6 @@ export function TasksScreen() {
             folderId={folderId}
             projects={projects}
             supportsTasksBoard={supportsTasksBoard}
-            supportsAutopilot={supportsAutopilot}
             boardHandle={boardHandle}
           />
         ) : (
@@ -595,10 +550,14 @@ export function TasksScreen() {
             projects={projects}
             folders={sortedFolders}
             supportsTasksBoard={supportsTasksBoard}
-            supportsAutopilot={supportsAutopilot}
             boardHandle={boardHandle}
           />
         )}
+        <TaskExplorerDock
+          serverId={serverId}
+          workspaceId={selectedProject?.workspaceId || null}
+          projectRootPath={selectedProject?.rootPath ?? null}
+        />
         <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
         {/* Rendered after the conductor dock so, when both are open, the Details
             drawer stacks above the chat instead of hiding behind it. */}
@@ -621,7 +580,6 @@ function DesktopLayout({
   projects,
   folders,
   supportsTasksBoard,
-  supportsAutopilot,
   boardHandle,
 }: {
   serverId: string | null;
@@ -630,7 +588,6 @@ function DesktopLayout({
   projects: ProjectEntry[];
   folders: TaskFolder[];
   supportsTasksBoard: boolean;
-  supportsAutopilot: boolean;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
@@ -642,22 +599,17 @@ function DesktopLayout({
     boardArea = <CenteredNote text={t("tasks.updateHost")} />;
   } else if (boardHandle.error) {
     boardArea = <CenteredNote text={boardHandle.error} />;
-  } else if (!folderId) {
-    // Only show the "no folders" note once the board has actually loaded and is
-    // empty. While it's still loading — or folders exist but the auto-select
-    // effect hasn't picked one yet — show nothing so the note doesn't flash on
-    // project open.
-    const boardLoaded = boardHandle.board !== null;
-    const hasFolders = (boardHandle.board?.folders.length ?? 0) > 0;
-    boardArea = <CenteredNote text={boardLoaded && !hasFolders ? t("tasks.noFolders") : ""} />;
   } else {
+    // Folders are gone: the board opens straight away. The id below is only the
+    // bucket new cards are filed under — the server mints one on demand — and
+    // the board itself shows every task of the project.
     boardArea = (
       <BoardContent
-        key={`${serverId}:${projectId}:${folderId}`}
+        key={`${serverId}:${projectId}`}
         serverId={serverId}
         projectId={projectId}
         projectRootPath={findProjectRootPath(projects, serverId, projectId)}
-        folderId={folderId}
+        folderId={folderId ?? folders[0]?.id ?? ""}
         boardHandle={boardHandle}
       />
     );
@@ -671,14 +623,6 @@ function DesktopLayout({
         projectId={projectId}
         boardHandle={boardHandle}
       />
-      {serverId && projectId && supportsTasksBoard ? (
-        <FoldersRail
-          folders={folders}
-          folderId={folderId}
-          supportsAutopilot={supportsAutopilot}
-          boardHandle={boardHandle}
-        />
-      ) : null}
       <View style={styles.boardArea}>{boardArea}</View>
     </View>
   );
@@ -827,176 +771,6 @@ const ProjectRailItem = memo(function ProjectRailItem({
   );
 });
 
-function FoldersRail({
-  folders,
-  folderId,
-  supportsAutopilot,
-  boardHandle,
-}: {
-  folders: TaskFolder[];
-  folderId: string | null;
-  supportsAutopilot: boolean;
-  boardHandle: BoardHandle;
-}) {
-  const { t } = useTranslation();
-  const folderModal = useFolderModal(boardHandle, supportsAutopilot);
-  const taskCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const task of boardHandle.board?.tasks ?? []) {
-      counts.set(task.folderId, (counts.get(task.folderId) ?? 0) + 1);
-    }
-    return counts;
-  }, [boardHandle.board]);
-  const folderTones = useFolderToneMap(boardHandle.board?.tasks ?? EMPTY_TASKS);
-
-  const totalTasks = boardHandle.board?.tasks.length ?? 0;
-
-  return (
-    <View style={styles.rail}>
-      <Text style={styles.railHeader}>{t("tasks.folders")}</Text>
-      <Text style={styles.railSummary}>
-        {t("tasks.foldersSummary", { folders: folders.length, tasks: totalTasks })}
-      </Text>
-      <ScrollView style={styles.railScroll} contentContainerStyle={styles.railContent}>
-        {folders.length === 0 && !boardHandle.isLoading ? (
-          <Text style={styles.railEmptyText}>{t("tasks.noFolders")}</Text>
-        ) : null}
-        {folders.map((folder) => (
-          <FolderRailItem
-            key={folder.id}
-            folder={folder}
-            selected={folder.id === folderId}
-            taskCount={taskCounts.get(folder.id) ?? 0}
-            tone={folderTones.get(folder.id) ?? null}
-            onEditFolder={folderModal.openEdit}
-            onDeleteFolder={boardHandle.deleteFolder}
-          />
-        ))}
-      </ScrollView>
-      <View style={styles.railFooter}>
-        <Button
-          leftIcon={Plus}
-          variant="secondary"
-          size="sm"
-          onPress={folderModal.openCreate}
-          style={styles.addButton}
-          testID="tasks-new-folder-open"
-        >
-          {t("tasks.actions.addFolder")}
-        </Button>
-      </View>
-      {folderModal.element}
-    </View>
-  );
-}
-
-// Shared create/edit folder modal wiring: the folders rail and the compact
-// folder list both open the same FolderCreateModal in either mode.
-function useFolderModal(boardHandle: BoardHandle, supportsAutopilot: boolean) {
-  const [mode, setMode] = useState<
-    { kind: "create" } | { kind: "edit"; folder: TaskFolder } | null
-  >(null);
-
-  const openCreate = useCallback(() => {
-    setMode({ kind: "create" });
-  }, []);
-  const openEdit = useCallback((folder: TaskFolder) => {
-    setMode({ kind: "edit", folder });
-  }, []);
-  const close = useCallback(() => {
-    setMode(null);
-  }, []);
-
-  const handleSubmit = useCallback(
-    (input: { name: string; color: string; requireValidation?: boolean; branch?: string }) => {
-      if (mode?.kind === "edit") {
-        void boardHandle.updateFolder({ folderId: mode.folder.id, ...input });
-      } else {
-        void boardHandle.createFolder(input);
-      }
-    },
-    [mode, boardHandle],
-  );
-
-  const initialFolder = useMemo(
-    () =>
-      mode?.kind === "edit"
-        ? {
-            name: mode.folder.name,
-            color: mode.folder.color,
-            requireValidation: mode.folder.requireValidation,
-            branch: mode.folder.branch,
-          }
-        : undefined,
-    [mode],
-  );
-
-  const element = (
-    <FolderCreateModal
-      visible={mode !== null}
-      onClose={close}
-      onCreate={handleSubmit}
-      initialFolder={initialFolder}
-      showLaunchPolicy={supportsAutopilot}
-    />
-  );
-
-  return { openCreate, openEdit, element };
-}
-
-const FolderRailItem = memo(function FolderRailItem({
-  folder,
-  selected,
-  taskCount,
-  tone,
-  onEditFolder,
-  onDeleteFolder,
-}: {
-  folder: TaskFolder;
-  selected: boolean;
-  taskCount: number;
-  tone: TaskTone | null;
-  onEditFolder: (folder: TaskFolder) => void;
-  onDeleteFolder: (folderId: string) => Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const handlePress = useCallback(() => {
-    selectFolder(folder.id);
-  }, [folder.id]);
-  const handleEdit = useCallback(() => {
-    onEditFolder(folder);
-  }, [onEditFolder, folder]);
-  const handleDelete = useCallback(() => {
-    void onDeleteFolder(folder.id);
-  }, [onDeleteFolder, folder.id]);
-  return (
-    <Pressable
-      style={selected ? styles.railItemSelected : railItemStyle}
-      onPress={handlePress}
-      testID={`tasks-folder-${folder.id}`}
-    >
-      <FolderColorMark color={folder.color} />
-      <View style={styles.railItemBody}>
-        <Text
-          style={selected ? styles.railItemTitleSelected : styles.railItemTitle}
-          numberOfLines={1}
-        >
-          {folder.name}
-        </Text>
-        {folder.branch ? (
-          <Text style={styles.railItemBranch} numberOfLines={1}>
-            {folder.branch}
-          </Text>
-        ) : null}
-        <Text style={styles.railItemSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
-      </View>
-      <TaskStatusVoyant tone={tone} />
-      {folder.requireValidation ? <ValidationHoldMark /> : null}
-      <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
-    </Pressable>
-  );
-});
-
 // Colored dot that mirrors the project's icon color elsewhere in the app, so a
 // glance ties each rail row (and the Gantt bars) back to the same project.
 const ProjectColorMark = memo(function ProjectColorMark({ projectKey }: { projectKey: string }) {
@@ -1005,17 +779,6 @@ const ProjectColorMark = memo(function ProjectColorMark({ projectKey }: { projec
     [projectKey],
   );
   return <View style={dotStyle} />;
-});
-
-// "Hold" mark on folders that wait for the user to validate each task before it
-// runs (the exception — immediate start is the default, so it carries no mark).
-const ValidationHoldMark = memo(function ValidationHoldMark() {
-  const { t } = useTranslation();
-  return (
-    <View accessibilityLabel={t("tasks.folderModal.requireValidationField")}>
-      <ThemedHand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-    </View>
-  );
 });
 
 const FolderColorMark = memo(function FolderColorMark({ color }: { color?: string }) {
@@ -1124,6 +887,8 @@ function BoardContent({
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
+  const timelineHeight = useTasksBoardUiStore((state) => state.timelineHeight);
+  const setTimelineHeight = useTasksBoardUiStore((state) => state.setTimelineHeight);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
 
   const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
@@ -1342,12 +1107,17 @@ function BoardContent({
         </View>
       ) : null}
       <FolderBillingTotal serverId={serverId} projectId={projectId} tasks={folderTasks} />
-      {boardHandle.board && showTimeline ? (
-        <TaskGantt
+      {/* Always on screen: even an empty schedule has to show how much quota is
+          left. Only the bars underneath come and go. */}
+      {showTimeline ? (
+        <TaskTimelineArea
           board={boardHandle.board}
+          serverId={serverId}
           onPressTask={handlePressTimelineTask}
+          height={timelineHeight}
+          onResize={setTimelineHeight}
           containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
-          fill={isCompact}
+          resizable={!isCompact}
         />
       ) : null}
       {showBoard ? (
@@ -1417,6 +1187,32 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle],
   );
+  // The one and only path from "En cours" to "Terminée". The user asks for it,
+  // then the final check decides: it re-reads the request, exercises the work and
+  // runs the tests. A rejected check leaves the card where it is, with a report.
+  const handleValidate = useCallback(
+    (taskId: string) => {
+      void (async () => {
+        const confirmed = await confirmDialog({
+          title: t("tasks.panel.validateTask"),
+          message: t("tasks.panel.validateTaskMessage"),
+          confirmLabel: t("tasks.panel.validateTask"),
+          cancelLabel: t("common.cancel"),
+        });
+        if (!confirmed) {
+          return;
+        }
+        toast.show(t("tasks.panel.validateRunning"));
+        try {
+          const { passed } = await boardHandle.validateTask(taskId);
+          toast.show(passed ? t("tasks.panel.validatePassed") : t("tasks.panel.validateFailed"));
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
+      })();
+    },
+    [boardHandle, toast, t],
+  );
   const handleSetHold = useCallback(
     (taskId: string, hold: boolean) => {
       boardHandle.updateTask({ taskId, executionHold: hold }).catch((error) => {
@@ -1425,7 +1221,15 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle, toast],
   );
-  return { handleSave, handleDelete, handleEstimate, handleRunNow, handleApprove, handleSetHold };
+  return {
+    handleSave,
+    handleDelete,
+    handleEstimate,
+    handleRunNow,
+    handleApprove,
+    handleValidate,
+    handleSetHold,
+  };
 }
 
 // Bottom-center floating toggle + the shared chat dock overlay. Gated on the
@@ -1528,6 +1332,7 @@ function ConductorDock({
         onDelete={taskActions.handleDelete}
         onEstimate={taskActions.handleEstimate}
         onApprove={taskActions.handleApprove}
+        onValidate={taskActions.handleValidate}
         onSetHold={taskActions.handleSetHold}
         onClose={handleClose}
       />
@@ -1605,7 +1410,6 @@ function CompactFlow({
   folderId,
   projects,
   supportsTasksBoard,
-  supportsAutopilot,
   boardHandle,
 }: {
   serverId: string | null;
@@ -1613,7 +1417,6 @@ function CompactFlow({
   folderId: string | null;
   projects: ProjectEntry[];
   supportsTasksBoard: boolean;
-  supportsAutopilot: boolean;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
@@ -1626,16 +1429,13 @@ function CompactFlow({
   if (boardHandle.error) {
     return <CenteredNote text={boardHandle.error} />;
   }
-  if (!folderId) {
-    return <CompactFolderList boardHandle={boardHandle} supportsAutopilot={supportsAutopilot} />;
-  }
   return (
     <View style={styles.compactBoardWrap}>
       <BoardContent
         serverId={serverId}
         projectId={projectId}
         projectRootPath={findProjectRootPath(projects, serverId, projectId)}
-        folderId={folderId}
+        folderId={folderId ?? boardHandle.board?.folders[0]?.id ?? ""}
         boardHandle={boardHandle}
       />
     </View>
@@ -1643,10 +1443,12 @@ function CompactFlow({
 }
 
 function clearFolderSelection() {
+  compactSelectionCleared = true;
   router.setParams({ folder: undefined });
 }
 
 function clearTasksSelection() {
+  compactSelectionCleared = true;
   router.setParams({ host: undefined, project: undefined, folder: undefined });
 }
 
@@ -1776,6 +1578,36 @@ function TasksAttachmentLibraryButton({ project }: { project: ProjectEntry | nul
   );
 }
 
+/**
+ * "Explorateur" button for the task manager header: toggles the project's file
+ * tree, docked at the bottom of the board. Kept next to the deploy rocket so the
+ * whole top-right cluster reads as "things about this project".
+ */
+function TasksExplorerButton({ project }: { project: ProjectEntry | null }) {
+  const { t } = useTranslation();
+  const open = useTasksBoardUiStore((state) => state.explorerOpen);
+  const setOpen = useTasksBoardUiStore((state) => state.setExplorerOpen);
+  const handleToggle = useCallback(() => setOpen(!open), [open, setOpen]);
+  if (!project) {
+    return null;
+  }
+  return (
+    <Pressable
+      onPress={handleToggle}
+      style={headerIconButtonStyle}
+      accessibilityRole="button"
+      accessibilityLabel={t("tasks.explorer.title")}
+      testID="tasks-explorer-toggle"
+    >
+      <ThemedFolderTree size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+    </Pressable>
+  );
+}
+
+function headerIconButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.headerIconButton, (hovered || pressed) && styles.headerIconButtonHovered];
+}
+
 function TasksHeader({
   title,
   isCompact,
@@ -1798,6 +1630,7 @@ function TasksHeader({
   const rightContent = useMemo(
     () => (
       <View style={styles.headerRightCluster}>
+        <TasksExplorerButton project={selectedProject} />
         <TasksAttachmentLibraryButton project={selectedProject} />
         <TasksDeployButton project={selectedProject} />
         {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
@@ -2083,112 +1916,22 @@ const CompactProjectRow = memo(function CompactProjectRow({
   );
 });
 
-function CompactFolderList({
-  boardHandle,
-  supportsAutopilot,
-}: {
-  boardHandle: BoardHandle;
-  supportsAutopilot: boolean;
-}) {
-  const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const footerStyle = useMemo(
-    () => [styles.stickyFooter, { paddingBottom: insets.bottom + FOOTER_VERTICAL_PADDING }],
-    [insets.bottom],
-  );
-  const folderModal = useFolderModal(boardHandle, supportsAutopilot);
-  const folders = useMemo(
-    () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
-    [boardHandle.board],
-  );
-  const taskCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const task of boardHandle.board?.tasks ?? []) {
-      counts.set(task.folderId, (counts.get(task.folderId) ?? 0) + 1);
-    }
-    return counts;
-  }, [boardHandle.board]);
-  const folderTones = useFolderToneMap(boardHandle.board?.tasks ?? EMPTY_TASKS);
-
-  return (
-    <View style={styles.compactListWrap}>
-      <ScrollView contentContainerStyle={styles.listContent}>
-        <Text style={styles.sectionLabel}>{t("tasks.folders")}</Text>
-        {folders.map((folder) => (
-          <CompactFolderRow
-            key={folder.id}
-            folder={folder}
-            taskCount={taskCounts.get(folder.id) ?? 0}
-            tone={folderTones.get(folder.id) ?? null}
-            onEditFolder={folderModal.openEdit}
-            onDeleteFolder={boardHandle.deleteFolder}
-          />
-        ))}
-        {folders.length === 0 && !boardHandle.isLoading ? (
-          <Text style={styles.emptyText}>{t("tasks.noFolders")}</Text>
-        ) : null}
-      </ScrollView>
-      <View style={footerStyle}>
-        <Button
-          leftIcon={Plus}
-          variant="secondary"
-          size="sm"
-          onPress={folderModal.openCreate}
-          style={styles.footerButton}
-          testID="tasks-new-folder-open"
-        >
-          {t("tasks.actions.addFolder")}
-        </Button>
-      </View>
-      {folderModal.element}
-    </View>
-  );
-}
-
-const CompactFolderRow = memo(function CompactFolderRow({
-  folder,
-  taskCount,
-  tone,
-  onEditFolder,
-  onDeleteFolder,
-}: {
-  folder: TaskFolder;
-  taskCount: number;
-  tone: TaskTone | null;
-  onEditFolder: (folder: TaskFolder) => void;
-  onDeleteFolder: (folderId: string) => Promise<void>;
-}) {
-  const { t } = useTranslation();
-  const handleOpen = useCallback(() => {
-    selectFolder(folder.id);
-  }, [folder.id]);
-  const handleEdit = useCallback(() => {
-    onEditFolder(folder);
-  }, [onEditFolder, folder]);
-  const handleDelete = useCallback(() => {
-    void onDeleteFolder(folder.id);
-  }, [onDeleteFolder, folder.id]);
-
-  return (
-    <Pressable style={rowItemStyle} onPress={handleOpen} testID={`tasks-folder-${folder.id}`}>
-      <FolderColorMark color={folder.color} />
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{folder.name}</Text>
-        <Text style={styles.rowSubtitle}>{t("tasks.taskCount", { count: taskCount })}</Text>
-      </View>
-      <TaskStatusVoyant tone={tone} />
-      {folder.requireValidation ? <ValidationHoldMark /> : null}
-      <FolderKebabMenu folderId={folder.id} onEdit={handleEdit} onDelete={handleDelete} />
-    </Pressable>
-  );
-});
-
 const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     backgroundColor: theme.colors.surface0,
   },
   // Top-right header cluster: deploy rocket + project gear side by side.
+  headerIconButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
+  },
+  headerIconButtonHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
   headerRightCluster: {
     flexDirection: "row",
     alignItems: "center",

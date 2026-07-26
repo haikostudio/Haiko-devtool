@@ -182,13 +182,7 @@ const BoardColumn = memo(function BoardColumn({
           </Pressable>
         ) : null}
       </View>
-      <BoardColumnToolbar
-        board={board}
-        folderId={folderId}
-        column={column}
-        controls={controls}
-        onChange={handleControlsChange}
-      />
+      <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
       <ScrollView style={styles.columnScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.columnContent}>
           {extras}

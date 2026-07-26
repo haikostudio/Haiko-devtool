@@ -41,7 +41,7 @@ import {
   isStoredAgentProviderAvailable,
   toAgentPersistenceHandle,
 } from "./persistence-hooks.js";
-import { ensureAgentLoaded } from "./agent/agent-loading.js";
+import { ensureAgentLoaded, ensureUnarchivedAgentLoaded } from "./agent/agent-loading.js";
 import {
   formatSystemNotificationPrompt,
   sendPromptToAgent,
@@ -168,6 +168,7 @@ import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
 import type { ConductorAgentService } from "./tasks/conductor-agent.js";
+import type { TaskValidator } from "./tasks/validator.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
@@ -476,6 +477,7 @@ export interface SessionOptions {
   taskEstimator?: TaskEstimator | null;
   taskScheduler?: TaskScheduler | null;
   conductorService?: ConductorAgentService | null;
+  taskValidator?: TaskValidator | null;
   activityLogService?: ActivityLogService;
   messageTriage?: MessageTriage | null;
   checkoutDiffManager: CheckoutDiffManager;
@@ -720,6 +722,7 @@ export class Session {
       taskEstimator,
       taskScheduler,
       conductorService,
+      taskValidator,
       activityLogService,
       messageTriage,
       checkoutDiffManager,
@@ -803,7 +806,6 @@ export class Session {
     this.workspaceGitService = workspaceGitService;
     this.gitMutation = createGitMutationService({
       workspaceGitService: this.workspaceGitService,
-      github: this.github,
       logger: this.sessionLogger,
     });
     this.workspaceAutoName = workspaceAutoName;
@@ -880,6 +882,7 @@ export class Session {
           taskEstimator: taskEstimator ?? null,
           taskScheduler: taskScheduler ?? null,
           conductorService: conductorService ?? null,
+          taskValidator: taskValidator ?? null,
           logger: this.sessionLogger,
         })
       : null;
@@ -909,6 +912,15 @@ export class Session {
         emit: (msg) => this.emit(msg),
       },
       operations: {
+        // Restauré : un agent archivé/déchargé est rechargé avant toute
+        // modification de sa configuration, sinon le changement porte dans le vide.
+        ensureLoaded: async (agentId) => {
+          await ensureUnarchivedAgentLoaded(agentId, {
+            agentManager,
+            agentStorage,
+            logger: this.sessionLogger,
+          });
+        },
         setMode: async (agentId, modeId) =>
           (await setAgentModeCommand({ agentManager }, { agentId, modeId })).notice,
         setModel: (agentId, modelId) => agentManager.setAgentModel(agentId, modelId),
@@ -1006,6 +1018,7 @@ export class Session {
       scriptRuntimeStore: this.scriptRuntimeStore,
       terminalManager: this.terminalManager,
       workspaceRegistry: this.workspaceRegistry,
+      projectRegistry: this.projectRegistry,
       workspaceGitService: this.workspaceGitService,
       getDaemonTcpPort: this.getDaemonTcpPort,
       getDaemonTcpHost: this.getDaemonTcpHost,
@@ -1756,15 +1769,15 @@ export class Session {
       case "checkout_pr_merge_request":
         return this.checkoutSession.handleCheckoutPrMergeRequest(msg);
       case "checkout.github.set_auto_merge.request":
-        return this.checkoutSession.handleCheckoutGithubSetAutoMergeRequest(msg);
+        return this.checkoutSession.handleCheckoutForgeSetAutoMergeRequest(msg);
       case "checkout.github.get_check_details.request":
-        return this.checkoutSession.handleCheckoutGithubGetCheckDetailsRequest(msg);
+        return this.checkoutSession.handleCheckoutForgeGetCheckDetailsRequest(msg);
       case "checkout_pr_status_request":
         return this.checkoutSession.handleCheckoutPrStatusRequest(msg);
       case "pull_request_timeline_request":
         return this.checkoutSession.handlePullRequestTimelineRequest(msg);
       case "github_search_request":
-        return this.checkoutSession.handleGitHubSearchRequest(msg);
+        return this.checkoutSession.handleForgeSearchRequest(msg);
       case "stash_save_request":
         return this.checkoutSession.handleStashSaveRequest(msg);
       case "stash_pop_request":
@@ -1911,10 +1924,19 @@ export class Session {
   }
 
   private dispatchTerminalMessage(msg: SessionInboundMessage): Promise<void> | undefined {
-    if (msg.type === "start_workspace_script_request") {
-      return this.handleStartWorkspaceScriptRequest(msg);
+    switch (msg.type) {
+      case "start_workspace_script_request":
+        return this.handleStartWorkspaceScriptRequest(msg);
+      // Restauré : lister / démarrer / arrêter les scripts d'un espace de travail.
+      case "workspace.script.list.request":
+        return this.handleWorkspaceScriptListRequest(msg);
+      case "workspace.script.start.request":
+        return this.handleWorkspaceScriptStartRequest(msg);
+      case "workspace.script.stop.request":
+        return this.handleWorkspaceScriptStopRequest(msg);
+      default:
+        return this.terminalController.dispatch(msg);
     }
-    return this.terminalController.dispatch(msg);
   }
 
   // eslint-disable-next-line complexity
@@ -2001,6 +2023,8 @@ export class Session {
         return tasksSession.handleTaskRunNowRequest(msg);
       case "tasks.task.approve.request":
         return tasksSession.handleTaskApproveRequest(msg);
+      case "tasks.task.validate.request":
+        return tasksSession.handleTaskValidateRequest(msg);
       case "tasks.conductor.ensure.request":
         return tasksSession.handleConductorEnsureRequest(msg);
       default:
@@ -3610,18 +3634,19 @@ export class Session {
         throw new Error("Import requires cwd from the selected provider session");
       }
       // An imported agent mints its own workspace; ownership is its workspaceId,
-      // never an existing same-cwd workspace resolved by path.
-      const workspace = await this.workspaceProvisioning.createWorkspaceForDirectory(
-        normalized.cwd,
-      );
-      const { snapshot, timelineSize } = await importProviderSession({
+      // never an existing same-cwd workspace resolved by path. La création (et le
+      // retour en arrière si l'import échoue) est portée par le service d'espaces
+      // de travail, pour ne jamais laisser de coquille vide derrière.
+      const { snapshot, timelineSize, createdWorkspace } = await importProviderSession({
         request: normalized,
-        workspaceId: workspace.workspaceId,
+        workspaceProvisioning: this.workspaceProvisioning,
         agentManager: this.agentManager,
         agentStorage: this.agentStorage,
         logger: this.sessionLogger,
       });
-      await this.registerWorkspaceForImportedAgent(workspace);
+      if (createdWorkspace) {
+        await this.registerWorkspaceForImportedAgent(createdWorkspace);
+      }
       const agentPayload = await this.buildAgentPayload(snapshot);
       this.emit({
         type: "status",
@@ -3843,7 +3868,6 @@ export class Session {
         checkoutExistingBranch: (cwd, branch) =>
           this.gitMutation.checkoutExistingBranch(cwd, branch),
         createBranchFromBase: (params) => this.gitMutation.createBranchFromBase(params),
-        github: this.github,
       },
       config,
       gitOptions,
@@ -4865,8 +4889,7 @@ export class Session {
       ...(options?.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
         : {}),
-      projectRegistry: this.projectRegistry,
-      workspaceRegistry: this.workspaceRegistry,
+      workspaceProvisioning: this.workspaceProvisioning,
       workspaceGitService: this.workspaceGitService,
     });
     void Promise.all([
@@ -4889,6 +4912,9 @@ export class Session {
         workspaceId: workspace.workspaceId,
         cwd: workspace.cwd,
         kind: workspace.kind,
+        worktreeRoot: workspace.worktreeRoot,
+        isPaseoOwnedWorktree: workspace.isPaseoOwnedWorktree,
+        mainRepoRoot: workspace.mainRepoRoot,
       }));
   }
 
@@ -4933,7 +4959,7 @@ export class Session {
     workspaceId: string;
     cwd: string;
   }): Promise<void> {
-    this.workspaceGitObserver.removeForCwd(input.cwd);
+    this.workspaceGitObserver.removeForWorkspaceId(input.workspaceId);
     this.scriptRuntimeStore?.removeForWorkspace(input.workspaceId);
   }
 
@@ -4978,7 +5004,6 @@ export class Session {
           case "workspace_updated":
             changedWorkspaceIds.add(change.workspaceId);
             break;
-          case "project_archived":
           case "project_updated":
             changedProjectIds.add(change.projectId);
             break;
@@ -5433,7 +5458,7 @@ export class Session {
     });
     await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
     void this.workspaceGitService
-      .getSnapshot(workspace.cwd, { force: true, includeGitHub: true, reason: "open_project" })
+      .getSnapshot(workspace.cwd, { force: true, includeForge: true, reason: "open_project" })
       .catch((error) => {
         this.sessionLogger.warn(
           { err: error, cwd: workspace.cwd },
@@ -5601,7 +5626,7 @@ export class Session {
       void this.workspaceGitService
         .getSnapshot(workspace.cwd, {
           force: true,
-          includeGitHub: true,
+          includeForge: true,
           reason: "open_project",
         })
         .catch((error) => {
@@ -5900,6 +5925,91 @@ export class Session {
     return this.workspaceScripts.start(request);
   }
 
+  private async handleWorkspaceScriptListRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.script.list.request" }>,
+  ): Promise<void> {
+    try {
+      const scripts = await this.workspaceScripts.list(request.workspaceId);
+      this.emit({
+        type: "workspace.script.list.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          scripts,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "workspace.script.list.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          scripts: [],
+          error: error instanceof Error ? error.message : "Failed to list workspace scripts",
+        },
+      });
+    }
+  }
+
+  private async handleWorkspaceScriptStartRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.script.start.request" }>,
+  ): Promise<void> {
+    try {
+      const script = await this.workspaceScripts.launch(request);
+      this.emit({
+        type: "workspace.script.start.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          scriptName: request.scriptName,
+          script,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "workspace.script.start.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          scriptName: request.scriptName,
+          script: null,
+          error: error instanceof Error ? error.message : "Failed to start workspace script",
+        },
+      });
+    }
+  }
+
+  private async handleWorkspaceScriptStopRequest(
+    request: Extract<SessionInboundMessage, { type: "workspace.script.stop.request" }>,
+  ): Promise<void> {
+    try {
+      const script = await this.workspaceScripts.stop(request);
+      this.emit({
+        type: "workspace.script.stop.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          scriptName: request.scriptName,
+          script,
+          error: null,
+        },
+      });
+    } catch (error) {
+      this.emit({
+        type: "workspace.script.stop.response",
+        payload: {
+          requestId: request.requestId,
+          workspaceId: request.workspaceId,
+          scriptName: request.scriptName,
+          script: null,
+          error: error instanceof Error ? error.message : "Failed to stop workspace script",
+        },
+      });
+    }
+  }
+
   // COMPAT(desktopEditorBridge): added in v0.1.88, remove after 2026-12-03 once old clients no longer call daemon editor RPCs.
   private async handleLegacyListAvailableEditorsRequest(
     request: Extract<SessionInboundMessage, { type: "list_available_editors_request" }>,
@@ -6004,11 +6114,6 @@ export class Session {
         throw new Error(`Workspace not found: ${request.workspaceId}`);
       }
 
-      const gitSnapshot = await this.workspaceGitService
-        .getSnapshot(existing.cwd)
-        .catch(() => null);
-      const repoRoot = gitSnapshot?.git?.repoRoot ?? null;
-
       await archiveByScope(
         {
           paseoHome: this.paseoHome,
@@ -6031,8 +6136,6 @@ export class Session {
         },
         {
           scope: { kind: "workspace", workspaceId: existing.workspaceId },
-          repoRoot,
-          paseoWorktreesBaseRoot: this.worktreesRoot,
           requestId: request.requestId,
         },
       );

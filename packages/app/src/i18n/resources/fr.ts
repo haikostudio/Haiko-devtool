@@ -316,6 +316,12 @@ export const fr: TranslationResources = {
       details: "Détails",
       noAgent: "Aucun agent n'a encore été lancé pour cette tâche.",
       launchAgent: "Lancer l'agent",
+      validateTask: "Valider la tâche",
+      validateTaskMessage:
+        "La tâche passe en « Terminée » et devient prête à déployer. Vous pourrez toujours la rouvrir ensuite.",
+      validateRunning: "Contrôle final en cours…",
+      validatePassed: "Contrôle réussi — tâche terminée.",
+      validateFailed: "Contrôle refusé — la tâche reste en cours.",
       collapse: "Réduire le panneau",
       expand: "Développer le panneau",
       billing: "Facturation",
@@ -363,6 +369,10 @@ export const fr: TranslationResources = {
       title: "Chef d'orchestre",
       move: "Déplacer le panneau",
       backToConductor: "Revenir au chef d'orchestre",
+      resetTitle: "Réinitialiser la conversation",
+      resetMessage:
+        "La conversation actuelle du chef d'orchestre est clôturée et une nouvelle repart à vide. Vos tâches et vos données sont conservées.",
+      resetConfirm: "Réinitialiser",
       openDetails: "Détails",
       collapse: "Réduire",
       expand: "Agrandir",
@@ -420,6 +430,15 @@ export const fr: TranslationResources = {
       priorityLow: "Basse",
       deadlineOverdue: "En retard",
       deadlineNone: "Sans échéance",
+    },
+    quota: {
+      rolling: "Fenêtre glissante",
+      weekly: "Quota hebdomadaire",
+      unavailable: "Consommation indisponible",
+    },
+    explorer: {
+      title: "Explorateur",
+      noProject: "Choisissez un projet pour parcourir ses fichiers.",
     },
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {
@@ -942,6 +961,7 @@ export const fr: TranslationResources = {
         newBrowser: "Nouvel onglet du navigateur",
         importSession: "Session d'importation",
         copyPath: "Copier le chemin de l'espace de travail",
+        addToChat: "Ajouter au chat",
         copyBranchName: "Copier le nom de la branche",
         showSetup: "Afficher la configuration",
       },

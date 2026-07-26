@@ -315,6 +315,12 @@ export const ptBR: TranslationResources = {
       details: "Detalhes",
       noAgent: "Nenhum agente foi iniciado para esta tarefa ainda.",
       launchAgent: "Iniciar o agente",
+      validateTask: "Validar a tarefa",
+      validateTaskMessage:
+        "A tarefa passa para «Concluída» e fica pronta para implantar. Você ainda poderá reabri-la.",
+      validateRunning: "Verificação final em andamento…",
+      validatePassed: "Verificação aprovada — tarefa concluída.",
+      validateFailed: "Verificação recusada — a tarefa continua em andamento.",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",
@@ -362,6 +368,10 @@ export const ptBR: TranslationResources = {
       title: "Maestro",
       move: "Mover o painel",
       backToConductor: "Voltar ao maestro",
+      resetTitle: "Reiniciar a conversa",
+      resetMessage:
+        "A conversa atual do maestro é encerrada e uma nova vazia começa. Suas tarefas e dados são mantidos.",
+      resetConfirm: "Reiniciar",
       openDetails: "Detalhes",
       collapse: "Recolher",
       expand: "Expandir",
@@ -419,6 +429,15 @@ export const ptBR: TranslationResources = {
       priorityLow: "Baixa",
       deadlineOverdue: "Atrasada",
       deadlineNone: "Sem prazo",
+    },
+    quota: {
+      rolling: "Janela deslizante",
+      weekly: "Cota semanal",
+      unavailable: "Consumo indisponível",
+    },
+    explorer: {
+      title: "Explorador",
+      noProject: "Escolha um projeto para navegar pelos seus arquivos.",
     },
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {
@@ -940,6 +959,7 @@ export const ptBR: TranslationResources = {
         newBrowser: "Nova aba de navegador",
         importSession: "Importar sessão",
         copyPath: "Copiar caminho do workspace",
+        addToChat: "Adicionar ao chat",
         copyBranchName: "Copiar nome da branch",
         showSetup: "Mostrar configuração",
       },

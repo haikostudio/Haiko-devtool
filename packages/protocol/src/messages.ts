@@ -7,6 +7,8 @@ import {
   ReviewAttachmentCommentSchema,
   ReviewAttachmentSchema,
   UploadedFileAttachmentSchema,
+  ForgeChangeRequestAttachmentSchema,
+  ForgeIssueAttachmentSchema,
   AgentAttachmentSchema,
   AttachmentLibraryEntrySchema,
 } from "./attachments.js";
@@ -67,6 +69,7 @@ import {
   TasksTaskEstimateRequestSchema,
   TasksTaskRunNowRequestSchema,
   TasksTaskApproveRequestSchema,
+  TasksTaskValidateRequestSchema,
   TasksConductorEnsureRequestSchema,
   TasksBoardGetResponseSchema,
   TasksBoardSubscribeResponseSchema,
@@ -82,6 +85,7 @@ import {
   TasksTaskEstimateResponseSchema,
   TasksTaskRunNowResponseSchema,
   TasksTaskApproveResponseSchema,
+  TasksTaskValidateResponseSchema,
   TasksConductorEnsureResponseSchema,
   TasksBoardUpdateMessageSchema,
 } from "./tasks/rpc-schemas.js";
@@ -229,6 +233,8 @@ export const MutableDaemonConfigPatchSchema = z
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),
+    // Restauré : liste des fournisseurs à retirer de la configuration.
+    removeProviders: z.array(z.string().min(1)).optional(),
     metadataGeneration: MutableMetadataGenerationConfigSchema.partial().optional(),
     autoArchiveAfterMerge: z.boolean().optional(),
     enableTerminalAgentHooks: z.boolean().optional(),
@@ -1170,6 +1176,8 @@ export {
   ReviewAttachmentCommentSchema,
   ReviewAttachmentSchema,
   UploadedFileAttachmentSchema,
+  ForgeChangeRequestAttachmentSchema,
+  ForgeIssueAttachmentSchema,
   AgentAttachmentSchema,
   AttachmentLibraryEntrySchema,
 };
@@ -1398,6 +1406,32 @@ export const DictationStreamCancelMessageSchema = z.object({
   dictationId: z.string(),
 });
 
+// COMPAT(githubCheckDetailsRpc): added in v0.1.106, remove after 2026-12-28 once
+// all supported clients use checkout.forge.get_check_details.*.
+// ---------------------------------------------------------------------------
+// Restauré. Ces déclarations avaient disparu de ce fichier lors d'une reprise de
+// version, alors que le serveur et le client les utilisent toujours : sans elles
+// le paquet serveur ne compile plus du tout. L'union des messages entrants est
+// déclarée juste après, car certaines d'entre elles en dépendent.
+// Ne pas re-supprimer sans retirer d'abord le code qui s'en sert.
+// ---------------------------------------------------------------------------
+export const WorkspaceRecoveryInspectRequestSchema = z.object({
+  type: z.literal("workspace.recovery.inspect.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+export const WorkspaceRecoveryRestoreRequestSchema = z.object({
+  type: z.literal("workspace.recovery.restore.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+export const ChangeRequestCheckoutSourceSchema = z.object({
+  kind: z.literal("change_request"),
+  forge: z.string().optional(),
+  number: z.number().int().positive(),
+  projectPath: z.string().optional(),
+});
+
 const GitSetupOptionsSchema = z.object({
   baseBranch: z.string().optional(),
   createNewBranch: z.boolean().optional(),
@@ -1406,6 +1440,10 @@ const GitSetupOptionsSchema = z.object({
   worktreeSlug: z.string().optional(),
   refName: z.string().min(1).optional(),
   action: z.enum(["branch-off", "checkout"]).optional(),
+  // Restauré : source du checkout (demande de changement sur une forge).
+  checkoutSource: ChangeRequestCheckoutSourceSchema.optional(),
+  // COMPAT(githubPrNumber): added in v0.1.106, remove after 2026-12-28 once
+  // clients send checkoutSource.
   githubPrNumber: z.number().int().positive().optional(),
 });
 
@@ -1434,6 +1472,10 @@ export const CreateAgentRequestMessageSchema = z.object({
   config: AgentSessionConfigSchema,
   env: z.record(z.string(), z.string()).optional(),
   workspaceId: z.string().optional(),
+  // Restauré : contexte de l'appelant, pour qu'une création lancée en ligne de
+  // commande hérite du même espace de travail et de la même parenté qu'une
+  // création faite par un agent.
+  callerAgentId: z.string().optional(),
   worktreeName: z.string().optional(),
   initialPrompt: z.string().optional(),
   clientMessageId: z.string().optional(),
@@ -1504,6 +1546,8 @@ export const ImportAgentRequestMessageSchema = z.object({
   sessionId: z.string().optional(),
   providerHandleId: z.string().optional(),
   cwd: z.string().optional(),
+  // Restauré : espace de travail visé par l'import (additif, optionnel).
+  workspaceId: z.string().optional(),
   labels: z.record(z.string(), z.string()).optional(),
   requestId: z.string(),
 });
@@ -2095,15 +2139,117 @@ export const CheckoutGithubSetAutoMergeRequestSchema = z.object({
 
 const GitHubRepoSegmentSchema = z.string().regex(/^[A-Za-z0-9._-]+$/);
 
-export const CheckoutGithubGetCheckDetailsRequestSchema = z.object({
-  type: z.literal("checkout.github.get_check_details.request"),
-  cwd: z.string(),
-  repoOwner: GitHubRepoSegmentSchema,
-  repoName: GitHubRepoSegmentSchema,
-  checkRunId: z.number().int().positive(),
-  workflowRunId: z.number().int().positive().optional(),
+export const HubManagementDaemonConnectRequestSchema = z.object({
+  type: z.literal("hub.management.daemon.connect.request"),
+  requestId: z.string(),
+  hubUrl: z.string(),
+  token: z.string(),
+});
+export const HubManagementDaemonGetStatusRequestSchema = z.object({
+  type: z.literal("hub.management.daemon.get_status.request"),
   requestId: z.string(),
 });
+export const HubManagementDaemonDisconnectRequestSchema = z.object({
+  type: z.literal("hub.management.daemon.disconnect.request"),
+  requestId: z.string(),
+  force: z.boolean().optional(),
+});
+export const SetAgentTimelineSubscriptionRequestMessageSchema = z.object({
+  type: z.literal("agent.timeline.set_subscription.request"),
+  agentIds: z.array(z.string()),
+  requestId: z.string(),
+});
+export const WorkspaceRecoveryStateSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("recoverable"),
+    workspaceId: z.string(),
+    workspaceName: z.string(),
+    action: z.string(),
+    branch: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("unavailable"),
+    workspaceId: z.string(),
+    reason: z.string(),
+    message: z.string(),
+  }),
+]);
+export const WorkspaceRecoveryInspectResponseSchema = z.object({
+  type: z.literal("workspace.recovery.inspect.response"),
+  payload: z.object({
+    requestId: z.string(),
+    state: WorkspaceRecoveryStateSchema,
+  }),
+});
+export const WorkspaceRecoveryRestoreResponseSchema = z.object({
+  type: z.literal("workspace.recovery.restore.response"),
+  payload: z.object({
+    requestId: z.string(),
+    workspaceId: z.string(),
+    accepted: z.boolean(),
+    error: z.string().nullable(),
+  }),
+});
+export const CheckoutForgeSetAutoMergeRequestSchema = z.object({
+  type: z.literal("checkout.forge.set_auto_merge.request"),
+  cwd: z.string(),
+  enabled: z.boolean(),
+  mergeMethod: z.enum(["merge", "squash", "rebase"]).optional(),
+  requestId: z.string(),
+});
+const CheckoutCommitFileSchema = z.object({
+  path: z.string(),
+  additions: z.number(),
+  deletions: z.number(),
+  status: z.enum(["added", "modified", "deleted", "renamed"]).optional(),
+});
+const CheckoutCommitSchema = z.object({
+  sha: z.string(),
+  shortSha: z.string(),
+  subject: z.string(),
+  authorName: z.string(),
+  authorDate: z.string(), // ISO 8601
+  isOnRemote: z.boolean(), // false = local-only (unpushed)
+  // COMPAT(commitBaseClassification): added in v0.2.0, remove optional after 2027-01-23.
+  isOnBase: z.boolean().optional(),
+  files: z.array(CheckoutCommitFileSchema),
+});
+export const CheckoutCommitsListRequestSchema = z.object({
+  type: z.literal("checkout.commits.list.request"),
+  cwd: z.string(),
+  requestId: z.string(),
+});
+export const CheckoutCommitFileDiffRequestSchema = z.object({
+  type: z.literal("checkout.commits.file_diff.request"),
+  cwd: z.string(),
+  sha: z.string(),
+  path: z.string(),
+  requestId: z.string(),
+});
+const CheckoutCheckDetailsRequestPayloadSchema = z.object({
+  cwd: z.string(),
+  // GitHub addresses check runs by owner/name. GitLab resolves the project from
+  // cwd and omits these GitHub-only single-segment fields.
+  repoOwner: GitHubRepoSegmentSchema.optional(),
+  repoName: GitHubRepoSegmentSchema.optional(),
+  // Permanently optional: a check addressed only by workflowRunId (Gitea
+  // Actions runs carry no check-run id) is fetchable. Callers send at least one
+  // of checkRunId/workflowRunId; the gated forge RPC only reaches daemons that
+  // understand this.
+  checkRunId: z.number().int().positive().optional(),
+  workflowRunId: z.number().int().positive().optional(),
+  // Permanent forge-routing field, optional because only some forges need it:
+  // GitLab routes check details to the MR's head pipeline; Gitea-family adapters
+  // resolve the PR head SHA by number, including after merge/close. GitHub
+  // ignores it.
+  changeRequestNumber: z.number().int().positive().optional(),
+  requestId: z.string(),
+});
+
+export const CheckoutGithubGetCheckDetailsRequestSchema =
+  CheckoutCheckDetailsRequestPayloadSchema.extend({
+    type: z.literal("checkout.github.get_check_details.request"),
+  });
 
 export const CheckoutPrStatusRequestSchema = z.object({
   type: z.literal("checkout_pr_status_request"),
@@ -2227,12 +2373,17 @@ export const AttachmentLibraryBlobRequestSchema = z.object({
 
 export const GitHubSearchItemSchema = z.object({
   kind: z.enum(["issue", "pr"]),
+  // Restauré : quelle forge a produit ce résultat, et le chemin du projet chez
+  // les forges qui en ont un (GitLab et assimilés) plutôt qu'un couple
+  // propriétaire/dépôt.
+  forge: z.string().optional(),
   number: z.number(),
   title: z.string(),
   url: z.string(),
   state: z.string(),
   body: z.string().nullable(),
   labels: z.array(z.string()),
+  projectPath: z.string().optional(),
   baseRefName: z.string().nullable().optional(),
   headRefName: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
@@ -2306,6 +2457,9 @@ export const CreatePaseoWorktreeRequestSchema = z.object({
   firstAgentContext: FirstAgentContextSchema.optional(),
   refName: z.string().min(1).optional(),
   action: z.enum(["branch-off", "checkout"]).optional(),
+  checkoutSource: ChangeRequestCheckoutSourceSchema.optional(),
+  // COMPAT(githubPrNumber): added in v0.1.106, remove after 2026-12-28 once
+  // clients send checkoutSource: { kind: "change_request", forge, number }.
   githubPrNumber: z.number().int().positive().optional(),
   requestId: z.string(),
 });
@@ -2618,6 +2772,29 @@ export const StartWorkspaceScriptRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// Restauré : gestion des scripts d'un espace de travail (lister, démarrer,
+// arrêter). Le service serveur correspondant existe déjà ; seuls les messages et
+// leur routage manquaient, ce qui rendait « paseo script » inopérant.
+export const WorkspaceScriptListRequestSchema = z.object({
+  type: z.literal("workspace.script.list.request"),
+  workspaceId: z.string(),
+  requestId: z.string(),
+});
+
+export const WorkspaceScriptStartRequestSchema = z.object({
+  type: z.literal("workspace.script.start.request"),
+  workspaceId: z.string(),
+  scriptName: z.string(),
+  requestId: z.string(),
+});
+
+export const WorkspaceScriptStopRequestSchema = z.object({
+  type: z.literal("workspace.script.stop.request"),
+  workspaceId: z.string(),
+  scriptName: z.string(),
+  requestId: z.string(),
+});
+
 export const SubscribeTerminalRequestSchema = z.object({
   type: z.literal("subscribe_terminal_request"),
   terminalId: z.string(),
@@ -2703,186 +2880,6 @@ export const HubExecutionControlRequestSchema = z.object({
 });
 
 export type HubExecutionControlRequest = z.infer<typeof HubExecutionControlRequestSchema>;
-
-export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
-  HubExecutionAgentCreateRequestSchema,
-  HubExecutionControlRequestSchema,
-  BrowserAutomationExecuteResponseSchema,
-  VoiceAudioChunkMessageSchema,
-  AbortRequestMessageSchema,
-  AudioPlayedMessageSchema,
-  FetchAgentsRequestMessageSchema,
-  FetchAgentHistoryRequestMessageSchema,
-  FetchRecentProviderSessionsRequestMessageSchema,
-  FetchWorkspacesRequestMessageSchema,
-  FetchAgentRequestMessageSchema,
-  DeleteAgentRequestMessageSchema,
-  ArchiveAgentRequestMessageSchema,
-  CloseItemsRequestMessageSchema,
-  UpdateAgentRequestMessageSchema,
-  ProjectRenameRequestSchema,
-  ProjectRemoveRequestSchema,
-  WorkspaceTitleSetRequestSchema,
-  WorkspacePinSetRequestSchema,
-  SidebarOrderGetRequestSchema,
-  SidebarOrderSetRequestSchema,
-  WorkspaceUiStateGetRequestSchema,
-  WorkspaceUiStateSetRequestSchema,
-  DraftAttachmentPutRequestSchema,
-  DraftAttachmentGetRequestSchema,
-  UsageStatsFetchRequestSchema,
-  ComptaSummaryFetchRequestSchema,
-  ComptaClientsListRequestSchema,
-  ComptaProjectLinkGetRequestSchema,
-  ComptaProjectLinkSetRequestSchema,
-  ComptaDocumentsListRequestSchema,
-  ComptaTaskAddRequestSchema,
-  SetVoiceModeMessageSchema,
-  SendAgentMessageRequestSchema,
-  WaitForFinishRequestSchema,
-  DaemonGetStatusRequestSchema,
-  DaemonGetPairingOfferRequestSchema,
-  DiagnosticsRequestSchema,
-  GetDaemonConfigRequestMessageSchema,
-  SetDaemonConfigRequestMessageSchema,
-  ReadProjectConfigRequestMessageSchema,
-  WriteProjectConfigRequestMessageSchema,
-  DictationStreamStartMessageSchema,
-  DictationStreamChunkMessageSchema,
-  DictationStreamFinishMessageSchema,
-  DictationStreamCancelMessageSchema,
-  CreateAgentRequestMessageSchema,
-  ListProviderModelsRequestMessageSchema,
-  ListProviderModesRequestMessageSchema,
-  ListProviderFeaturesRequestMessageSchema,
-  ListAvailableProvidersRequestMessageSchema,
-  GetProvidersSnapshotRequestMessageSchema,
-  RefreshProvidersSnapshotRequestMessageSchema,
-  ProviderDiagnosticRequestMessageSchema,
-  ProviderUsageListRequestMessageSchema,
-  ResumeAgentRequestMessageSchema,
-  ImportAgentRequestMessageSchema,
-  RefreshAgentRequestMessageSchema,
-  CancelAgentRequestMessageSchema,
-  ShutdownServerRequestMessageSchema,
-  RestartServerRequestMessageSchema,
-  DaemonUpdateRequestMessageSchema,
-  FetchAgentTimelineRequestMessageSchema,
-  ProviderSubagentListRequestMessageSchema,
-  ProviderSubagentTimelineRequestMessageSchema,
-  AgentForkContextRequestMessageSchema,
-  SetAgentModeRequestMessageSchema,
-  SetAgentModelRequestMessageSchema,
-  SetAgentThinkingRequestMessageSchema,
-  SetAgentFeatureRequestMessageSchema,
-  AgentDetachRequestMessageSchema,
-  AgentRewindRequestMessageSchema,
-  AgentPermissionResponseMessageSchema,
-  CheckoutStatusRequestSchema,
-  SubscribeCheckoutDiffRequestSchema,
-  UnsubscribeCheckoutDiffRequestSchema,
-  CheckoutCommitRequestSchema,
-  CheckoutMergeRequestSchema,
-  CheckoutMergeFromBaseRequestSchema,
-  CheckoutPullRequestSchema,
-  CheckoutPushRequestSchema,
-  CheckoutRefreshRequestSchema,
-  CheckoutPrCreateRequestSchema,
-  CheckoutPrMergeRequestSchema,
-  CheckoutGithubSetAutoMergeRequestSchema,
-  CheckoutGithubGetCheckDetailsRequestSchema,
-  CheckoutPrStatusRequestSchema,
-  PullRequestTimelineRequestSchema,
-  CheckoutSwitchBranchRequestSchema,
-  CheckoutRenameBranchRequestSchema,
-  StashSaveRequestSchema,
-  StashPopRequestSchema,
-  StashListRequestSchema,
-  PaseoDeployStatusRequestSchema,
-  PaseoDeployTriggerRequestSchema,
-  PaseoDeployCommitWorktreeRequestSchema,
-  AttachmentLibraryListRequestSchema,
-  AttachmentLibraryBlobRequestSchema,
-  ValidateBranchRequestSchema,
-  BranchSuggestionsRequestSchema,
-  GitHubSearchRequestSchema,
-  DirectorySuggestionsRequestSchema,
-  PaseoWorktreeListRequestSchema,
-  PaseoWorktreeArchiveRequestSchema,
-  CreatePaseoWorktreeRequestSchema,
-  WorkspaceSetupStatusRequestSchema,
-  LegacyListAvailableEditorsRequestSchema,
-  LegacyOpenInEditorRequestSchema,
-  OpenProjectRequestSchema,
-  ProjectAddRequestSchema,
-  ProjectCreateDirectoryRequestSchema,
-  WorkspaceGithubSearchRepositoriesRequestSchema,
-  ProjectGithubCloneRequestSchema,
-  ArchiveWorkspaceRequestSchema,
-  WorkspaceCreateRequestSchema,
-  WorkspaceClearAttentionRequestSchema,
-  FileExplorerRequestSchema,
-  ProjectIconRequestSchema,
-  FileDownloadTokenRequestSchema,
-  FileUploadRequestSchema,
-  ClearAgentAttentionMessageSchema,
-  ClientHeartbeatMessageSchema,
-  PingMessageSchema,
-  ListCommandsRequestSchema,
-  RegisterPushTokenMessageSchema,
-  ListTerminalsRequestSchema,
-  SubscribeTerminalsRequestSchema,
-  UnsubscribeTerminalsRequestSchema,
-  CreateTerminalRequestSchema,
-  RenameTerminalRequestSchema,
-  StartWorkspaceScriptRequestSchema,
-  SubscribeTerminalRequestSchema,
-  UnsubscribeTerminalRequestSchema,
-  TerminalInputSchema,
-  KillTerminalRequestSchema,
-  CaptureTerminalRequestSchema,
-  ChatCreateRequestSchema,
-  ChatListRequestSchema,
-  ChatInspectRequestSchema,
-  ChatDeleteRequestSchema,
-  ChatPostRequestSchema,
-  ChatReadRequestSchema,
-  ChatWaitRequestSchema,
-  ScheduleCreateRequestSchema,
-  ScheduleListRequestSchema,
-  ScheduleInspectRequestSchema,
-  ScheduleLogsRequestSchema,
-  SchedulePauseRequestSchema,
-  ScheduleResumeRequestSchema,
-  ScheduleDeleteRequestSchema,
-  ScheduleRunOnceRequestSchema,
-  ScheduleUpdateRequestSchema,
-  LoopRunRequestSchema,
-  LoopListRequestSchema,
-  LoopInspectRequestSchema,
-  LoopLogsRequestSchema,
-  LoopStopRequestSchema,
-  TasksBoardGetRequestSchema,
-  TasksBoardSubscribeRequestSchema,
-  TasksBoardUnsubscribeRequestSchema,
-  TasksFolderCreateRequestSchema,
-  TasksFolderUpdateRequestSchema,
-  TasksFolderDeleteRequestSchema,
-  TasksTaskCreateRequestSchema,
-  TasksTaskUpdateRequestSchema,
-  TasksTaskMoveRequestSchema,
-  TasksTaskMarkViewedRequestSchema,
-  TasksTaskDeleteRequestSchema,
-  TasksTaskEstimateRequestSchema,
-  TasksTaskRunNowRequestSchema,
-  TasksTaskApproveRequestSchema,
-  TasksConductorEnsureRequestSchema,
-  ActivityLogGetRequestSchema,
-  ActivityLogSubscribeRequestSchema,
-  ActivityLogUnsubscribeRequestSchema,
-]);
-
-export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
 
 // ============================================================================
 // Session Outbound Messages (Session emits these)
@@ -3040,14 +3037,46 @@ export const ServerInfoStatusPayloadSchema = z
     serverId: z.string().trim().min(1),
     hostname: ServerInfoHostnameSchema.optional(),
     version: ServerInfoVersionSchema.optional(),
+    // COMPAT(desktopManaged): added in v0.1.X, remove optional parsing after 2027-01-16.
+    desktopManaged: z.boolean().optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
       .object({
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
+        workspaceScriptManagement: z.boolean().optional(),
+        // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
+        hubRelationship: z.boolean().optional(),
+        // COMPAT(checkoutForgeSetAutoMerge): added in v0.1.106, remove old
+        // checkoutGithubSetAutoMerge fallback after 2026-12-28.
+        checkoutForgeSetAutoMerge: z.boolean().optional(),
         checkoutGithubSetAutoMerge: z.boolean().optional(),
         // COMPAT(githubCheckDetails): added in v0.1.92, remove gate after 2026-12-08.
         githubCheckDetails: z.boolean().optional(),
+        // COMPAT(forgeCheckDetails): added in v0.1.106, remove githubCheckDetails fallback after 2026-12-28.
+        forgeCheckDetails: z.boolean().optional(),
+        // COMPAT(forgeSearch): added in v0.1.106, remove github_search fallback after 2026-12-28.
+        forgeSearch: z.boolean().optional(),
+        // COMPAT(importSessionWorkspaceTarget): the import sheet lets the user pick
+        // which workspace an imported session lands in.
+        importSessionWorkspaceTarget: z.boolean().optional(),
+        // COMPAT(providerRemoval): added in v0.1.105, drop the gate when floor >= v0.1.105.
+        providerRemoval: z.boolean().optional(),
+        // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
+        commitBaseClassification: z.boolean().optional(),
+        // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
+        commitsList: z.boolean().optional(),
+        // COMPAT(forgeProviders): added in v0.1.106, drop the gate when daemon floor >= v0.1.106.
+        // Daemon advertises pluggable non-GitHub forge support (the forge registry);
+        // the client gates non-GitHub setup UI on it.
+        forgeProviders: z.boolean().optional(),
+        // COMPAT(stableProjectIdentity): added in v0.1.109, remove gate after 2027-01-15.
+        stableProjectIdentity: z.boolean().optional(),
+        // COMPAT(workspaceFileEditing): added in v0.2.0, remove after 2027-01-18 once daemon floor >= v0.2.0.
+        workspaceFileEditing: z.boolean().optional(),
+        // COMPAT(workspaceRecovery): added in v0.1.105, remove after 2027-01-11 once daemon floor >= v0.1.105.
+        workspaceRecovery: z.boolean().optional(),
         // COMPAT(daemonStatusRpc): added in v0.1.76, remove gate after 2026-11-18.
         daemonStatusRpc: z.boolean().optional(),
         // COMPAT(terminalRestoreModes): added in v0.1.81, remove gate after 2026-11-23.
@@ -3449,6 +3478,10 @@ export const WorkspaceDescriptorPayloadSchema = z
     scripts: z.array(WorkspaceScriptPayloadSchema).default([]),
     gitRuntime: WorkspaceGitRuntimePayloadSchema,
     githubRuntime: WorkspaceGitHubRuntimePayloadSchema,
+    // COMPAT(forge): added in v0.1.106, remove after 2026-12-27. The forge resolved
+    // for this workspace, so the sidebar/hover-card render the right brand mark.
+    // Old daemons omit it; absent means the client falls back to GitHub.
+    forge: z.string().optional(),
     project: ProjectPlacementPayloadSchema.optional(),
   })
   .transform((workspace) => ({
@@ -3712,6 +3745,30 @@ export const ProjectGithubCloneResponseSchema = z.object({
     project: WorkspaceProjectDescriptorPayloadSchema.nullable(),
     error: z.string().nullable(),
   }),
+});
+
+const WorkspaceScriptOperationPayloadSchema = z.object({
+  requestId: z.string(),
+  workspaceId: z.string(),
+  scriptName: z.string().optional(),
+  script: WorkspaceScriptPayloadSchema.nullable().optional(),
+  scripts: z.array(WorkspaceScriptPayloadSchema).optional(),
+  error: z.string().nullable(),
+});
+
+export const WorkspaceScriptListResponseMessageSchema = z.object({
+  type: z.literal("workspace.script.list.response"),
+  payload: WorkspaceScriptOperationPayloadSchema,
+});
+
+export const WorkspaceScriptStartResponseMessageSchema = z.object({
+  type: z.literal("workspace.script.start.response"),
+  payload: WorkspaceScriptOperationPayloadSchema,
+});
+
+export const WorkspaceScriptStopResponseMessageSchema = z.object({
+  type: z.literal("workspace.script.stop.response"),
+  payload: WorkspaceScriptOperationPayloadSchema,
 });
 
 export const StartWorkspaceScriptResponseMessageSchema = z.object({
@@ -4248,7 +4305,22 @@ const CheckoutPrGithubStatusSchema = z
   })
   .optional();
 
+// The open facts envelope for forge-specific PR facts. Permanent — non-GitHub
+// forges deliver their native facts through it. The transitional piece is the
+// `github` mirror above, which stays populated for clients predating this
+// envelope; see COMPAT(forgeSpecific) in status-projection.ts for the shim.
+//
+// NOTE: `forgeSpecific.forge` is a FACTS-FAMILY tag, not the workspace brand id.
+// The whole Gitea family (gitea, forgejo, codeberg) emits `forge: "gitea"` here
+// because they share one facts shape, while the top-level `forge` above carries
+// the specific brand. Validation of family-specific payloads happens at runtime
+// in the consumer that knows that forge family.
+const CheckoutPrForgeSpecificSchema = z.unknown().optional();
+
 export const CheckoutPrStatusSchema = z.object({
+  // COMPAT(forge): added in v0.1.106, remove the default after 2026-12-27 once daemon floor >= v0.1.106.
+  forge: z.string().optional().default("github"),
+  projectPath: z.string().optional(),
   number: z.number().optional(),
   url: z.string(),
   title: z.string(),
@@ -4281,12 +4353,173 @@ export const CheckoutPrStatusSchema = z.object({
   repoOwner: z.string().optional(),
   repoName: z.string().optional(),
   github: CheckoutPrGithubStatusSchema,
+  forgeSpecific: CheckoutPrForgeSpecificSchema,
+});
+
+export const CheckoutForgeGetCheckDetailsRequestSchema =
+  CheckoutCheckDetailsRequestPayloadSchema.extend({
+    type: z.literal("checkout.forge.get_check_details.request"),
+  });
+export const ForgeSearchItemSchema = GitHubSearchItemSchema.extend({
+  kind: z.enum(["issue", "change_request"]),
+});
+// COMPAT(githubSearchKind): added in v0.1.106, remove with the legacy
+// github_search_request RPC after 2026-12-28.
+export const ForgeSearchKindSchema = z.enum([
+  "issue",
+  "change_request",
+  "github-issue",
+  "github-pr",
+  "pr",
+]);
+export const ForgeSearchRequestSchema = z.object({
+  type: z.literal("forge.search.request"),
+  cwd: z.string(),
+  query: z.string(),
+  limit: z.number().int().min(1).max(50).optional(),
+  kinds: z.array(ForgeSearchKindSchema).optional(),
+  requestId: z.string(),
+});
+export const FileVersionSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ready"),
+    cwd: z.string(),
+    path: z.string(),
+    size: z.number().int().nonnegative(),
+    modifiedAt: z.string(),
+    revision: z.string().optional(),
+  }),
+  z.object({
+    status: z.literal("missing"),
+    cwd: z.string(),
+    path: z.string(),
+  }),
+  z.object({
+    status: z.literal("error"),
+    cwd: z.string(),
+    path: z.string(),
+    error: z.string(),
+  }),
+]);
+export const FileSubscribeRequestSchema = z.object({
+  type: z.literal("fs.file.subscribe.request"),
+  cwd: z.string(),
+  path: z.string(),
+  subscriptionId: z.string(),
+  requestId: z.string(),
+});
+export const FileUnsubscribeRequestSchema = z.object({
+  type: z.literal("fs.file.unsubscribe.request"),
+  subscriptionId: z.string(),
+  requestId: z.string(),
+});
+export const FileWriteRequestSchema = z.object({
+  type: z.literal("fs.file.write.request"),
+  cwd: z.string(),
+  path: z.string(),
+  content: z.string(),
+  expectedModifiedAt: z.string(),
+  expectedRevision: z.string().optional(),
+  requestId: z.string(),
+});
+export const ProjectUpdateMessageSchema = z.object({
+  type: z.literal("project.update"),
+  payload: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("upsert"), project: WorkspaceProjectDescriptorPayloadSchema }),
+    z.object({ kind: z.literal("remove"), projectId: z.string() }),
+  ]),
+});
+export const SetAgentTimelineSubscriptionResponseMessageSchema = z.object({
+  type: z.literal("agent.timeline.set_subscription.response"),
+  payload: z.object({
+    agentIds: z.array(z.string()),
+    requestId: z.string(),
+  }),
+});
+export const AgentAttentionRequiredMessageSchema = z.object({
+  type: z.literal("agent_attention_required"),
+  payload: z.object({
+    agentId: z.string(),
+    reason: z.enum(["finished", "error", "permission"]),
+    timestamp: z.string(),
+    shouldNotify: z.boolean(),
+    notification: z
+      .object({
+        title: z.string(),
+        body: z.string(),
+        data: z.object({
+          serverId: z.string(),
+          workspaceId: z.string().optional(),
+          agentId: z.string(),
+          reason: z.enum(["finished", "error", "permission"]),
+        }),
+      })
+      .optional(),
+  }),
+});
+export const HubRelationshipStatusSchema = z.object({
+  state: z.enum([
+    "not_connected",
+    "connecting",
+    "connected",
+    "reconnecting",
+    "disconnecting",
+    "revoked",
+  ]),
+  daemonId: z.string().nullable(),
+  hubOrigin: z.string().nullable(),
+  scopes: z.array(z.string()),
+  connectedAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export const HubManagementDaemonConnectResponseSchema = z.object({
+  type: z.literal("hub.management.daemon.connect.response"),
+  payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
+});
+export const HubManagementDaemonGetStatusResponseSchema = z.object({
+  type: z.literal("hub.management.daemon.get_status.response"),
+  payload: z.object({ requestId: z.string(), status: HubRelationshipStatusSchema }),
+});
+export const HubManagementDaemonDisconnectResponseSchema = z.object({
+  type: z.literal("hub.management.daemon.disconnect.response"),
+  payload: z.object({
+    requestId: z.string(),
+    status: HubRelationshipStatusSchema,
+    warning: z.string().optional(),
+  }),
+});
+// Why a forge's PR/MR features are (un)available, so the client can offer the
+// precise next step instead of a generic dead-end. Kept open on the wire so
+// feature consumers can ignore values introduced by newer daemons.
+export type ForgeAuthState =
+  | "authenticated"
+  | "unauthenticated"
+  | "cli_missing"
+  | "no_remote"
+  | "error";
+export const ForgeAuthStateSchema = z.unknown().optional();
+export const CheckoutForgeSetAutoMergeResponseSchema = z.object({
+  type: z.literal("checkout.forge.set_auto_merge.response"),
+  payload: z.object({
+    cwd: z.string(),
+    enabled: z.boolean(),
+    success: z.boolean(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
 });
 
 const CheckoutPrStatusPayloadSchema = z.object({
   cwd: z.string(),
   status: CheckoutPrStatusSchema.nullable(),
   githubFeaturesEnabled: z.boolean(),
+  // COMPAT(forgeAuthState): added in v0.1.106, remove after 2026-12-27. Optional richer
+  // signal that supersedes githubFeaturesEnabled. The legacy boolean stays for old clients
+  // and may remain true for non-auth error payloads so old clients still show the error.
+  // Drop the boolean once the daemon floor >= v0.1.106.
+  authState: ForgeAuthStateSchema,
+  // COMPAT(forge): added in v0.1.106, remove the default after 2026-12-27 once daemon floor >= v0.1.106.
+  forge: z.string().optional().default("github"),
   error: CheckoutErrorSchema.nullable(),
   requestId: z.string(),
 });
@@ -4437,6 +4670,56 @@ const CheckoutGithubCheckJobSchema = z.object({
   logTruncated: z.boolean().optional(),
 });
 
+export const CheckoutCommitsListResponseSchema = z.object({
+  type: z.literal("checkout.commits.list.response"),
+  payload: z.object({
+    cwd: z.string(),
+    baseRef: z.string().nullable(),
+    commits: z.array(CheckoutCommitSchema),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+export const CheckoutCommitFileDiffResponseSchema = z.object({
+  type: z.literal("checkout.commits.file_diff.response"),
+  payload: z.object({
+    cwd: z.string(),
+    sha: z.string(),
+    path: z.string(),
+    // null when the file is absent from the commit or carries no textual diff
+    // (e.g. binary-only changes).
+    file: ParsedDiffFileSchema.nullable(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+// Statuses stay open strings so future forge values cannot break parsing.
+const CheckoutPipelineJobSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  stage: z.string(),
+  status: z.string(),
+  rawStatus: z.string(),
+  url: z.string().nullable().optional().default(null),
+  allowFailure: z.boolean().optional().default(false),
+  durationSeconds: z.number().nullable().optional().default(null),
+});
+const CheckoutPipelineStageSchema = z.object({
+  name: z.string(),
+  status: z.string(),
+  jobs: z.array(CheckoutPipelineJobSchema).optional().default([]),
+});
+
+const CheckoutPipelineSchema = z.object({
+  id: z.number(),
+  status: z.string(),
+  rawStatus: z.string(),
+  url: z.string().nullable().optional().default(null),
+  ref: z.string().nullable().optional().default(null),
+  sha: z.string().nullable().optional().default(null),
+  stages: z.array(CheckoutPipelineStageSchema).optional().default([]),
+});
+
 export const CheckoutGithubCheckDetailsSchema = z.object({
   checkRunId: z.number(),
   workflowRunId: z.number().nullable().optional(),
@@ -4456,6 +4739,9 @@ export const CheckoutGithubCheckDetailsSchema = z.object({
   annotations: z.array(CheckoutGithubCheckAnnotationSchema).optional().default([]),
   failedJobs: z.array(CheckoutGithubCheckJobSchema).optional().default([]),
   truncated: z.boolean().optional().default(false),
+  // Restauré : détail du pipeline chez les forges qui en exposent un (GitLab).
+  // Pas de valeur par défaut : GitHub le laisse simplement absent.
+  pipeline: CheckoutPipelineSchema.nullable().optional(),
 });
 
 export const CheckoutGithubGetCheckDetailsResponseSchema = z.object({
@@ -4528,6 +4814,13 @@ const PullRequestTimelineCommentItemSchema = z.object({
   // threads under their parent review. Absent on issue comments and on
   // timelines from daemons that predate the field.
   reviewId: z.string().optional(),
+  // Restauré : identifiant de fil indépendant d'une position dans un fichier,
+  // pour que les réponses générales (celles de GitLab notamment) se regroupent
+  // en une seule discussion.
+  threadId: z.string().optional(),
+  // Restauré : état de résolution d'un fil sans position de fichier. Les fils
+  // rattachés à une ligne portent le leur sous `location.isResolved`.
+  threadIsResolved: z.boolean().optional(),
   location: z
     .object({
       path: z.string(),
@@ -4568,6 +4861,10 @@ export const PullRequestTimelineResponseSchema = z.object({
       error: PullRequestTimelineErrorSchema.nullable().optional().default(null),
       requestId: z.string().optional().default(""),
       githubFeaturesEnabled: z.boolean().optional().default(true),
+      // COMPAT(forgeAuthState): added in v0.1.106, remove after 2026-12-27. Optional richer
+      // signal that supersedes githubFeaturesEnabled, mirroring CheckoutPrStatusPayloadSchema.
+      // Drop the boolean once the daemon floor >= v0.1.106.
+      authState: ForgeAuthStateSchema,
     })
     .optional()
     .prefault({}),
@@ -4766,14 +5063,20 @@ export const BranchSuggestionsResponseSchema = z.object({
   }),
 });
 
+// COMPAT(githubSearchRpc): added in v0.1.106, remove after 2026-12-28 once
+// clients use forge.search.*.
+const GitHubSearchResponsePayloadSchema = z.object({
+  items: z.array(z.unknown()),
+  featuresEnabled: z.boolean().optional(),
+  authState: z.unknown().optional(),
+  githubFeaturesEnabled: z.boolean().optional(),
+  error: z.string().nullable(),
+  requestId: z.string(),
+});
+
 export const GitHubSearchResponseSchema = z.object({
   type: z.literal("github_search_response"),
-  payload: z.object({
-    items: z.array(GitHubSearchItemSchema),
-    githubFeaturesEnabled: z.boolean(),
-    error: z.string().nullable(),
-    requestId: z.string(),
-  }),
+  payload: GitHubSearchResponsePayloadSchema,
 });
 
 export const DirectorySuggestionsResponseSchema = z.object({
@@ -5310,6 +5613,312 @@ export function parseHubExecutionOutboundMessage(value: unknown): HubExecutionOu
 
 export type DaemonUpdateProgressMessage = z.infer<typeof DaemonUpdateProgressMessageSchema>;
 
+export const CheckoutCheckDetailsSchema = CheckoutGithubCheckDetailsSchema;
+export const CheckoutForgeGetCheckDetailsResponseSchema = z.object({
+  type: z.literal("checkout.forge.get_check_details.response"),
+  payload: z.object({
+    cwd: z.string(),
+    success: z.boolean(),
+    details: CheckoutCheckDetailsSchema.nullable().optional().default(null),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+const ForgeSearchResponsePayloadSchema = z.object({
+  items: z.array(z.unknown()),
+  authState: z.unknown().optional(),
+  error: z.string().nullable(),
+  requestId: z.string(),
+});
+
+export const ForgeSearchResponseSchema = z.object({
+  type: z.literal("forge.search.response"),
+  payload: ForgeSearchResponsePayloadSchema,
+});
+export const FileSubscribeResponseSchema = z.object({
+  type: z.literal("fs.file.subscribe.response"),
+  payload: z.object({
+    subscriptionId: z.string(),
+    initial: FileVersionSchema,
+    requestId: z.string(),
+  }),
+});
+export const FileUnsubscribeResponseSchema = z.object({
+  type: z.literal("fs.file.unsubscribe.response"),
+  payload: z.object({
+    subscriptionId: z.string(),
+    requestId: z.string(),
+  }),
+});
+export const FileWriteResultSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("written"),
+    modifiedAt: z.string(),
+    size: z.number(),
+    revision: z.string().optional(),
+  }),
+  z.object({ status: z.literal("conflict"), version: FileVersionSchema }),
+  z.object({ status: z.literal("error"), error: z.string() }),
+]);
+export const FileWriteResponseSchema = z.object({
+  type: z.literal("fs.file.write.response"),
+  payload: z.object({
+    result: FileWriteResultSchema,
+    requestId: z.string(),
+  }),
+});
+export const FileUpdateSchema = z.object({
+  type: z.literal("fs.file.update"),
+  payload: z.object({
+    subscriptionId: z.string(),
+    version: FileVersionSchema,
+  }),
+});
+export type WorkspaceRecoveryState = z.infer<typeof WorkspaceRecoveryStateSchema>;
+export type WorkspaceRecoveryInspectResponse = z.infer<
+  typeof WorkspaceRecoveryInspectResponseSchema
+>;
+export type WorkspaceRecoveryRestoreResponse = z.infer<
+  typeof WorkspaceRecoveryRestoreResponseSchema
+>;
+export type WorkspaceRecoveryInspectRequest = z.infer<typeof WorkspaceRecoveryInspectRequestSchema>;
+export type WorkspaceRecoveryRestoreRequest = z.infer<typeof WorkspaceRecoveryRestoreRequestSchema>;
+export type CheckoutCommitFile = z.infer<typeof CheckoutCommitFileSchema>;
+export type CheckoutCommit = z.infer<typeof CheckoutCommitSchema>;
+export type CheckoutCommitsListRequest = z.infer<typeof CheckoutCommitsListRequestSchema>;
+export type CheckoutCommitsListResponse = z.infer<typeof CheckoutCommitsListResponseSchema>;
+export type CheckoutCommitFileDiffRequest = z.infer<typeof CheckoutCommitFileDiffRequestSchema>;
+export type CheckoutCommitFileDiffResponse = z.infer<typeof CheckoutCommitFileDiffResponseSchema>;
+export type ParsedDiffFile = z.infer<typeof ParsedDiffFileSchema>;
+export type CheckoutForgeSetAutoMergeRequest = z.infer<
+  typeof CheckoutForgeSetAutoMergeRequestSchema
+>;
+export type CheckoutForgeSetAutoMergeResponse = z.infer<
+  typeof CheckoutForgeSetAutoMergeResponseSchema
+>;
+export type CheckoutForgeGetCheckDetailsRequest = z.infer<
+  typeof CheckoutForgeGetCheckDetailsRequestSchema
+>;
+export type CheckoutCheckDetails = z.infer<typeof CheckoutCheckDetailsSchema>;
+export type CheckoutPipeline = z.infer<typeof CheckoutPipelineSchema>;
+export type CheckoutPipelineStage = z.infer<typeof CheckoutPipelineStageSchema>;
+export type CheckoutPipelineJob = z.infer<typeof CheckoutPipelineJobSchema>;
+export type CheckoutForgeGetCheckDetailsResponse = z.infer<
+  typeof CheckoutForgeGetCheckDetailsResponseSchema
+>;
+export type ForgeSearchItem = z.infer<typeof ForgeSearchItemSchema>;
+export type ForgeSearchKind = "issue" | "change_request";
+export type ForgeSearchRequest = z.infer<typeof ForgeSearchRequestSchema>;
+export type ForgeSearchResponse = z.infer<typeof ForgeSearchResponseSchema>;
+export type ChangeRequestCheckoutSource = z.infer<typeof ChangeRequestCheckoutSourceSchema>;
+export type FileVersion = z.infer<typeof FileVersionSchema>;
+export type FileSubscribeRequest = z.infer<typeof FileSubscribeRequestSchema>;
+export type FileSubscribeResponse = z.infer<typeof FileSubscribeResponseSchema>;
+export type FileUnsubscribeRequest = z.infer<typeof FileUnsubscribeRequestSchema>;
+export type FileUnsubscribeResponse = z.infer<typeof FileUnsubscribeResponseSchema>;
+export type FileWriteRequest = z.infer<typeof FileWriteRequestSchema>;
+export type FileWriteResponse = z.infer<typeof FileWriteResponseSchema>;
+export type FileWriteResult = z.infer<typeof FileWriteResultSchema>;
+export type FileUpdate = z.infer<typeof FileUpdateSchema>;
+
+export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
+  HubExecutionAgentCreateRequestSchema,
+  HubExecutionControlRequestSchema,
+  BrowserAutomationExecuteResponseSchema,
+  VoiceAudioChunkMessageSchema,
+  AbortRequestMessageSchema,
+  AudioPlayedMessageSchema,
+  FetchAgentsRequestMessageSchema,
+  FetchAgentHistoryRequestMessageSchema,
+  FetchRecentProviderSessionsRequestMessageSchema,
+  FetchWorkspacesRequestMessageSchema,
+  FetchAgentRequestMessageSchema,
+  DeleteAgentRequestMessageSchema,
+  ArchiveAgentRequestMessageSchema,
+  CloseItemsRequestMessageSchema,
+  UpdateAgentRequestMessageSchema,
+  ProjectRenameRequestSchema,
+  ProjectRemoveRequestSchema,
+  WorkspaceTitleSetRequestSchema,
+  WorkspacePinSetRequestSchema,
+  SidebarOrderGetRequestSchema,
+  SidebarOrderSetRequestSchema,
+  WorkspaceUiStateGetRequestSchema,
+  WorkspaceUiStateSetRequestSchema,
+  DraftAttachmentPutRequestSchema,
+  DraftAttachmentGetRequestSchema,
+  UsageStatsFetchRequestSchema,
+  ComptaSummaryFetchRequestSchema,
+  ComptaClientsListRequestSchema,
+  ComptaProjectLinkGetRequestSchema,
+  ComptaProjectLinkSetRequestSchema,
+  ComptaDocumentsListRequestSchema,
+  ComptaTaskAddRequestSchema,
+  SetVoiceModeMessageSchema,
+  SendAgentMessageRequestSchema,
+  WaitForFinishRequestSchema,
+  DaemonGetStatusRequestSchema,
+  DaemonGetPairingOfferRequestSchema,
+  DiagnosticsRequestSchema,
+  GetDaemonConfigRequestMessageSchema,
+  SetDaemonConfigRequestMessageSchema,
+  ReadProjectConfigRequestMessageSchema,
+  WriteProjectConfigRequestMessageSchema,
+  DictationStreamStartMessageSchema,
+  DictationStreamChunkMessageSchema,
+  DictationStreamFinishMessageSchema,
+  DictationStreamCancelMessageSchema,
+  CreateAgentRequestMessageSchema,
+  ListProviderModelsRequestMessageSchema,
+  ListProviderModesRequestMessageSchema,
+  ListProviderFeaturesRequestMessageSchema,
+  ListAvailableProvidersRequestMessageSchema,
+  GetProvidersSnapshotRequestMessageSchema,
+  RefreshProvidersSnapshotRequestMessageSchema,
+  ProviderDiagnosticRequestMessageSchema,
+  ProviderUsageListRequestMessageSchema,
+  ResumeAgentRequestMessageSchema,
+  ImportAgentRequestMessageSchema,
+  RefreshAgentRequestMessageSchema,
+  CancelAgentRequestMessageSchema,
+  ShutdownServerRequestMessageSchema,
+  RestartServerRequestMessageSchema,
+  DaemonUpdateRequestMessageSchema,
+  FetchAgentTimelineRequestMessageSchema,
+  ProviderSubagentListRequestMessageSchema,
+  ProviderSubagentTimelineRequestMessageSchema,
+  AgentForkContextRequestMessageSchema,
+  SetAgentModeRequestMessageSchema,
+  SetAgentModelRequestMessageSchema,
+  SetAgentThinkingRequestMessageSchema,
+  SetAgentFeatureRequestMessageSchema,
+  AgentDetachRequestMessageSchema,
+  AgentRewindRequestMessageSchema,
+  AgentPermissionResponseMessageSchema,
+  CheckoutStatusRequestSchema,
+  SubscribeCheckoutDiffRequestSchema,
+  UnsubscribeCheckoutDiffRequestSchema,
+  CheckoutCommitRequestSchema,
+  CheckoutMergeRequestSchema,
+  CheckoutMergeFromBaseRequestSchema,
+  CheckoutPullRequestSchema,
+  CheckoutPushRequestSchema,
+  CheckoutRefreshRequestSchema,
+  CheckoutPrCreateRequestSchema,
+  CheckoutPrMergeRequestSchema,
+  CheckoutGithubSetAutoMergeRequestSchema,
+  CheckoutGithubGetCheckDetailsRequestSchema,
+  CheckoutPrStatusRequestSchema,
+  PullRequestTimelineRequestSchema,
+  CheckoutSwitchBranchRequestSchema,
+  CheckoutRenameBranchRequestSchema,
+  StashSaveRequestSchema,
+  StashPopRequestSchema,
+  StashListRequestSchema,
+  PaseoDeployStatusRequestSchema,
+  PaseoDeployTriggerRequestSchema,
+  PaseoDeployCommitWorktreeRequestSchema,
+  AttachmentLibraryListRequestSchema,
+  AttachmentLibraryBlobRequestSchema,
+  ValidateBranchRequestSchema,
+  BranchSuggestionsRequestSchema,
+  GitHubSearchRequestSchema,
+  DirectorySuggestionsRequestSchema,
+  PaseoWorktreeListRequestSchema,
+  PaseoWorktreeArchiveRequestSchema,
+  CreatePaseoWorktreeRequestSchema,
+  WorkspaceSetupStatusRequestSchema,
+  LegacyListAvailableEditorsRequestSchema,
+  LegacyOpenInEditorRequestSchema,
+  OpenProjectRequestSchema,
+  ProjectAddRequestSchema,
+  ProjectCreateDirectoryRequestSchema,
+  WorkspaceGithubSearchRepositoriesRequestSchema,
+  ProjectGithubCloneRequestSchema,
+  ArchiveWorkspaceRequestSchema,
+  WorkspaceCreateRequestSchema,
+  WorkspaceClearAttentionRequestSchema,
+  FileExplorerRequestSchema,
+  ProjectIconRequestSchema,
+  FileDownloadTokenRequestSchema,
+  FileUploadRequestSchema,
+  ClearAgentAttentionMessageSchema,
+  ClientHeartbeatMessageSchema,
+  PingMessageSchema,
+  ListCommandsRequestSchema,
+  RegisterPushTokenMessageSchema,
+  ListTerminalsRequestSchema,
+  SubscribeTerminalsRequestSchema,
+  UnsubscribeTerminalsRequestSchema,
+  CreateTerminalRequestSchema,
+  RenameTerminalRequestSchema,
+  StartWorkspaceScriptRequestSchema,
+  WorkspaceScriptListRequestSchema,
+  WorkspaceScriptStartRequestSchema,
+  WorkspaceScriptStopRequestSchema,
+  SubscribeTerminalRequestSchema,
+  UnsubscribeTerminalRequestSchema,
+  TerminalInputSchema,
+  KillTerminalRequestSchema,
+  CaptureTerminalRequestSchema,
+  ChatCreateRequestSchema,
+  ChatListRequestSchema,
+  ChatInspectRequestSchema,
+  ChatDeleteRequestSchema,
+  ChatPostRequestSchema,
+  ChatReadRequestSchema,
+  ChatWaitRequestSchema,
+  ScheduleCreateRequestSchema,
+  ScheduleListRequestSchema,
+  ScheduleInspectRequestSchema,
+  ScheduleLogsRequestSchema,
+  SchedulePauseRequestSchema,
+  ScheduleResumeRequestSchema,
+  ScheduleDeleteRequestSchema,
+  ScheduleRunOnceRequestSchema,
+  ScheduleUpdateRequestSchema,
+  LoopRunRequestSchema,
+  LoopListRequestSchema,
+  LoopInspectRequestSchema,
+  LoopLogsRequestSchema,
+  LoopStopRequestSchema,
+  TasksBoardGetRequestSchema,
+  TasksBoardSubscribeRequestSchema,
+  TasksBoardUnsubscribeRequestSchema,
+  TasksFolderCreateRequestSchema,
+  TasksFolderUpdateRequestSchema,
+  TasksFolderDeleteRequestSchema,
+  TasksTaskCreateRequestSchema,
+  TasksTaskUpdateRequestSchema,
+  TasksTaskMoveRequestSchema,
+  TasksTaskMarkViewedRequestSchema,
+  TasksTaskDeleteRequestSchema,
+  TasksTaskEstimateRequestSchema,
+  TasksTaskRunNowRequestSchema,
+  TasksTaskApproveRequestSchema,
+  TasksTaskValidateRequestSchema,
+  TasksConductorEnsureRequestSchema,
+  ActivityLogGetRequestSchema,
+  ActivityLogSubscribeRequestSchema,
+  ActivityLogUnsubscribeRequestSchema,
+  WorkspaceRecoveryInspectRequestSchema,
+  WorkspaceRecoveryRestoreRequestSchema,
+  HubManagementDaemonConnectRequestSchema,
+  HubManagementDaemonGetStatusRequestSchema,
+  HubManagementDaemonDisconnectRequestSchema,
+  SetAgentTimelineSubscriptionRequestMessageSchema,
+  CheckoutForgeSetAutoMergeRequestSchema,
+  CheckoutCommitsListRequestSchema,
+  CheckoutCommitFileDiffRequestSchema,
+  CheckoutForgeGetCheckDetailsRequestSchema,
+  ForgeSearchRequestSchema,
+  FileSubscribeRequestSchema,
+  FileUnsubscribeRequestSchema,
+  FileWriteRequestSchema,
+]);
+
+export type SessionInboundMessage = z.infer<typeof SessionInboundMessageSchema>;
+
 export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   HubExecutionAgentCreateResponseSchema,
   HubExecutionControlResponseSchema,
@@ -5346,6 +5955,9 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   OpenProjectResponseMessageSchema,
   WorkspaceGithubSearchRepositoriesResponseSchema,
   ProjectGithubCloneResponseSchema,
+  WorkspaceScriptListResponseMessageSchema,
+  WorkspaceScriptStartResponseMessageSchema,
+  WorkspaceScriptStopResponseMessageSchema,
   StartWorkspaceScriptResponseMessageSchema,
   LegacyListAvailableEditorsResponseMessageSchema,
   LegacyOpenInEditorResponseMessageSchema,
@@ -5490,6 +6102,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskEstimateResponseSchema,
   TasksTaskRunNowResponseSchema,
   TasksTaskApproveResponseSchema,
+  TasksTaskValidateResponseSchema,
   TasksConductorEnsureResponseSchema,
   TasksBoardUpdateMessageSchema,
   ActivityLogGetResponseSchema,
@@ -5498,6 +6111,23 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   ActivityLogUpdateMessageSchema,
   DaemonUpdateProgressMessageSchema,
   DaemonUpdateResponseSchema,
+  ProjectUpdateMessageSchema,
+  SetAgentTimelineSubscriptionResponseMessageSchema,
+  AgentAttentionRequiredMessageSchema,
+  HubManagementDaemonConnectResponseSchema,
+  HubManagementDaemonGetStatusResponseSchema,
+  HubManagementDaemonDisconnectResponseSchema,
+  WorkspaceRecoveryInspectResponseSchema,
+  WorkspaceRecoveryRestoreResponseSchema,
+  CheckoutForgeSetAutoMergeResponseSchema,
+  CheckoutCommitsListResponseSchema,
+  CheckoutCommitFileDiffResponseSchema,
+  CheckoutForgeGetCheckDetailsResponseSchema,
+  ForgeSearchResponseSchema,
+  FileSubscribeResponseSchema,
+  FileUnsubscribeResponseSchema,
+  FileWriteResponseSchema,
+  FileUpdateSchema,
 ]);
 
 export type SessionOutboundMessage = z.infer<typeof SessionOutboundMessageSchema>;

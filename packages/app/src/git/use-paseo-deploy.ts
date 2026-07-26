@@ -1,4 +1,5 @@
 import { useFetchQuery } from "@/data/query";
+import { useTranslation } from "react-i18next";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 
 /**
@@ -85,6 +86,7 @@ interface UsePaseoDeployStatusOptions {
 }
 
 export function usePaseoDeployStatus({ serverId, enabled }: UsePaseoDeployStatusOptions) {
+  const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
 
@@ -94,7 +96,7 @@ export function usePaseoDeployStatus({ serverId, enabled }: UsePaseoDeployStatus
     staleTimeMs: IDLE_REFETCH_INTERVAL_MS,
     queryFn: async (): Promise<PaseoDeployStatus> => {
       if (!client) {
-        throw new Error("Daemon client unavailable");
+        throw new Error(t("common.errors.daemonClientUnavailable"));
       }
       return (await client.paseoDeployStatus()) as PaseoDeployStatus;
     },

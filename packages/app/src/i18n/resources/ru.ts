@@ -313,6 +313,12 @@ export const ru: TranslationResources = {
       details: "Подробности",
       noAgent: "Для этой задачи ещё не запущен ни один агент.",
       launchAgent: "Запустить агента",
+      validateTask: "Принять задачу",
+      validateTaskMessage:
+        "Задача перейдёт в «Готово» и будет готова к развёртыванию. Её всегда можно открыть заново.",
+      validateRunning: "Идёт финальная проверка…",
+      validatePassed: "Проверка пройдена — задача завершена.",
+      validateFailed: "Проверка не пройдена — задача остаётся в работе.",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",
@@ -358,6 +364,10 @@ export const ru: TranslationResources = {
       title: "Дирижёр",
       move: "Переместить панель",
       backToConductor: "Вернуться к дирижёру",
+      resetTitle: "Сбросить диалог",
+      resetMessage:
+        "Текущий диалог с дирижёром завершается и начинается новый пустой. Ваши задачи и данные сохраняются.",
+      resetConfirm: "Сбросить",
       openDetails: "Подробности",
       collapse: "Свернуть",
       expand: "Развернуть",
@@ -415,6 +425,15 @@ export const ru: TranslationResources = {
       priorityLow: "Низкий",
       deadlineOverdue: "Просрочено",
       deadlineNone: "Без срока",
+    },
+    quota: {
+      rolling: "Скользящее окно",
+      weekly: "Недельная квота",
+      unavailable: "Данные о расходе недоступны",
+    },
+    explorer: {
+      title: "Проводник",
+      noProject: "Выберите проект, чтобы просмотреть его файлы.",
     },
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
@@ -939,6 +958,7 @@ export const ru: TranslationResources = {
         newBrowser: "Новая вкладка браузера",
         importSession: "Импортировать сеанс",
         copyPath: "Копировать путь к рабочей области",
+        addToChat: "Добавить в чат",
         copyBranchName: "Скопировать название ветки",
         showSetup: "Показать настройки",
       },

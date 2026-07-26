@@ -105,6 +105,9 @@ export interface ProviderSnapshotEntry {
   provider: AgentProvider;
   status: ProviderStatus;
   enabled: boolean;
+  // Restauré : d'où vient le fournisseur — fourni avec Paseo ou ajouté par
+  // l'utilisateur.
+  source?: "builtin" | "custom";
   error?: string;
   models?: AgentModelDefinition[];
   modes?: AgentMode[];
@@ -199,6 +202,10 @@ export interface AgentRunOptions {
   resumeFrom?: AgentPersistenceHandle;
   maxThinkingTokens?: number;
   messageId?: string;
+  // Restauré : identifiant du message côté client, utilisé par les fournisseurs
+  // pour rapprocher un envoi de sa réponse. `messageId` est conservé pour le
+  // code plus ancien qui s'en sert encore.
+  clientMessageId?: string;
 }
 
 export interface AgentUsage {
@@ -647,6 +654,14 @@ export interface AgentLaunchContext {
   paseoTools?: PaseoToolCatalog;
 }
 
+/**
+ * Restauré : intention d'exécution pour la reprise d'une session enregistrée.
+ * Jamais persistée — le chargement d'historique peut être en lecture seule.
+ */
+export interface AgentResumeSessionOptions {
+  purpose?: "interactive" | "history";
+}
+
 export interface AgentCreateSessionOptions {
   /**
    * Whether the provider should leave a durable native session behind.
@@ -720,6 +735,13 @@ export type FetchCatalogOptions =
 export interface ProviderCatalog {
   models: AgentModelDefinition[];
   modes: AgentMode[];
+  // Restauré : mode par défaut annoncé par le fournisseur (null = aucun).
+  defaultModeId?: string | null;
+}
+
+export interface ResolveAgentDefaultModeInput {
+  config: AgentSessionConfig;
+  env?: Record<string, string>;
 }
 
 export interface AgentClient {
@@ -734,6 +756,7 @@ export interface AgentClient {
     handle: AgentPersistenceHandle,
     overrides?: Partial<AgentSessionConfig>,
     launchContext?: AgentLaunchContext,
+    options?: AgentResumeSessionOptions,
   ): Promise<AgentSession>;
   /**
    * Discover models and modes together. Implementations may use one upstream
@@ -742,6 +765,8 @@ export interface AgentClient {
    * The registry is responsible for merging configured model overrides.
    */
   fetchCatalog(options: FetchCatalogOptions): Promise<ProviderCatalog>;
+  // Restauré : sonde optionnelle du mode par défaut d'un fournisseur.
+  resolveDefaultModeId?(input: ResolveAgentDefaultModeInput): Promise<string | undefined>;
   resolveCreateConfig?(input: ResolveAgentCreateConfigInput): ResolveAgentCreateConfigResult;
   isCreateConfigUnattended?(input: AgentCreateConfigUnattendedInput): boolean;
   listCommands?(config: AgentSessionConfig): Promise<AgentSlashCommand[]>;

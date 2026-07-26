@@ -150,11 +150,25 @@ export const TasksTaskApproveRequestSchema = z.object({
   taskId: z.string(),
 });
 
+// "Valider la tâche": run the final check, then move the card to "Terminée" only
+// if it passes. Never moves the card on the caller's behalf otherwise.
+export const TasksTaskValidateRequestSchema = z.object({
+  type: z.literal("tasks.task.validate.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
 export const TasksConductorEnsureRequestSchema = z.object({
   type: z.literal("tasks.conductor.ensure.request"),
   requestId: z.string(),
   projectId: z.string(),
   provider: z.string().optional(),
+  // "Réinitialiser": archive the project's current conductor and hand back a
+  // brand-new one, so the model stops carrying an ever-growing conversation.
+  // The archived thread stays readable in the archive; only the ACTIVE context
+  // is dropped. Additive + optional — old daemons simply ignore it.
+  reset: z.boolean().optional(),
 });
 
 export const TasksBoardGetResponseSchema = z.object({
@@ -276,6 +290,17 @@ export const TasksTaskApproveResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     task: KanbanTaskSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskValidateResponseSchema = z.object({
+  type: z.literal("tasks.task.validate.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
+    // True when the check passed and the card moved to "Terminée".
+    passed: z.boolean(),
     error: z.string().nullable(),
   }),
 });

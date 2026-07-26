@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Wand2 } from "lucide-react-native";
+import { RotateCcw, Wand2 } from "lucide-react-native";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import { TaskBottomDock, type TaskDockHeader } from "@/components/tasks/task-bottom-dock";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
@@ -24,6 +25,7 @@ import {
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedWand = withUnistyles(Wand2);
+const ThemedRotate = withUnistyles(RotateCcw);
 
 type EnsureState =
   | { status: "loading" }
@@ -38,6 +40,12 @@ type EnsureState =
 /** Task-mode tabs, chat first. Details/Billing live here too — no separate drawer. */
 type TaskView = "chat" | "details" | "billing";
 type ConductorProvider = "codex/gpt-5.4" | "claude/sonnet";
+
+// The conductor is created on this provider and never switched from a bar of our
+// own: Claude vs Codex is picked in Paseo's NATIVE menu at the bottom of the
+// prompt composer, the single source of truth for model selection. A second,
+// parallel selector here fought that menu and silently overrode the user's pick.
+const CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
 
 export interface ConductorPanelProps {
   serverId: string | null;
@@ -56,6 +64,8 @@ export interface ConductorPanelProps {
   onDelete: (taskId: string) => void;
   onEstimate: (taskId: string) => void;
   onApprove: (taskId: string) => void;
+  /** User validation of a task: the only path from "En cours" to "Terminée". */
+  onValidate: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
 }
@@ -83,6 +93,7 @@ export function ConductorPanel({
   onDelete,
   onEstimate,
   onApprove,
+  onValidate,
   onSetHold,
   onClose,
 }: ConductorPanelProps) {
@@ -100,7 +111,13 @@ export function ConductorPanel({
   );
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
-  const [conductorProvider, setConductorProvider] = useState<ConductorProvider>("codex/gpt-5.4");
+  // Bumped by "Réinitialiser": re-runs the ensure effect, this time asking the
+  // daemon to archive the current conductor and hand back an empty one.
+  const [resetNonce, setResetNonce] = useState(0);
+  // Whether THIS ensure run should carry the reset flag. A ref (not state) so the
+  // effect reads it without becoming a dependency — the nonce alone drives re-runs,
+  // and a re-render for any other reason must not resend a destructive reset.
+  const pendingResetRef = useRef(false);
   const inTaskMode = dockTask !== null;
   const dockTaskId = dockTask?.id ?? null;
 
@@ -112,10 +129,27 @@ export function ConductorPanel({
   // Save / delete / run from the Details tab hop back to the chat rather than
   // closing the whole drawer — the task stays open in front of the user.
   const handleTaskFormClose = useCallback(() => setTaskView("chat"), []);
-  const handleConductorProviderChange = useCallback((provider: ConductorProvider) => {
-    setEnsure({ status: "loading" });
-    setConductorProvider(provider);
-  }, []);
+
+  // "Réinitialiser": close the current conductor conversation and start a fresh
+  // one. Confirmed first (the active thread is dropped from the model's context),
+  // then the ensure effect below re-runs with reset=true. Tasks and board data are
+  // untouched — the old exchange is archived, not deleted.
+  const handleReset = useCallback(() => {
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("tasks.conductor.resetTitle"),
+        message: t("tasks.conductor.resetMessage"),
+        confirmLabel: t("tasks.conductor.resetConfirm"),
+        cancelLabel: t("common.cancel"),
+      });
+      if (!confirmed) {
+        return;
+      }
+      pendingResetRef.current = true;
+      setEnsure({ status: "loading" });
+      setResetNonce((nonce) => nonce + 1);
+    })();
+  }, [t]);
 
   const taskViewOptions = useMemo<SegmentedControlOption<TaskView>[]>(
     () => [
@@ -125,14 +159,6 @@ export function ConductorPanel({
     ],
     [t],
   );
-  const conductorProviderOptions = useMemo<SegmentedControlOption<ConductorProvider>[]>(
-    () => [
-      { value: "codex/gpt-5.4", label: "Codex", testID: "conductor-provider-codex" },
-      { value: "claude/sonnet", label: "Claude", testID: "conductor-provider-claude" },
-    ],
-    [],
-  );
-
   useEffect(() => {
     // Task chat reads the task's own linked agent — skip the conductor ensure so
     // opening a task never spins up the conductor agent unnecessarily.
@@ -144,6 +170,11 @@ export function ConductorPanel({
       return;
     }
     let cancelled = false;
+    // Consume the reset intent here: whether this run succeeds or fails, the flag
+    // must not survive into the next ensure (a retry would archive the brand-new
+    // conductor the user just got).
+    const reset = pendingResetRef.current;
+    pendingResetRef.current = false;
     setEnsure({ status: "loading" });
     const run = async () => {
       const client = getHostRuntimeStore().getClient(serverId);
@@ -155,7 +186,8 @@ export function ConductorPanel({
       }
       try {
         const payload = await client.tasksConductorEnsure(projectId, {
-          provider: conductorProvider,
+          provider: CONDUCTOR_PROVIDER,
+          ...(reset ? { reset: true } : {}),
         });
         if (cancelled) {
           return;
@@ -171,7 +203,7 @@ export function ConductorPanel({
           status: "ready",
           agentId: payload.agentId,
           workspaceId: payload.workspaceId ?? null,
-          provider: conductorProvider,
+          provider: CONDUCTOR_PROVIDER,
         });
       } catch (error) {
         if (!cancelled) {
@@ -186,7 +218,7 @@ export function ConductorPanel({
     return () => {
       cancelled = true;
     };
-  }, [serverId, projectId, t, inTaskMode, conductorProvider]);
+  }, [serverId, projectId, t, inTaskMode, resetNonce]);
 
   const renderTaskBody = (task: KanbanTask) => (
     <>
@@ -208,6 +240,7 @@ export function ConductorPanel({
           serverId={serverId}
           task={task}
           onRunNow={onRunNow}
+          onValidate={onValidate}
         />
       </View>
       {taskView === "chat" ? null : (
@@ -253,7 +286,7 @@ export function ConductorPanel({
         </View>
       );
     }
-    if (!serverId || ensure.status !== "ready" || ensure.provider !== conductorProvider) {
+    if (!serverId || ensure.status !== "ready") {
       return null;
     }
     return (
@@ -283,8 +316,21 @@ export function ConductorPanel({
     return {
       title: t("tasks.conductor.title"),
       leading: <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
+      // Conductor mode only: retire the current conversation so the context sent
+      // to the model stops growing forever.
+      actions: (
+        <Pressable
+          onPress={handleReset}
+          style={resetButtonStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.conductor.resetTitle")}
+          testID="conductor-reset"
+        >
+          <ThemedRotate size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </Pressable>
+      ),
     };
-  }, [inTaskMode, dockTask, onBackToConductor, t]);
+  }, [inTaskMode, dockTask, onBackToConductor, handleReset, t]);
 
   return (
     <TaskBottomDock
@@ -299,23 +345,15 @@ export function ConductorPanel({
       onToggleCollapse={handleToggleCollapse}
       testID="conductor-panel"
     >
-      <View style={styles.body}>
-        {inTaskMode ? null : (
-          <View style={styles.providerSwitch}>
-            <SegmentedControl
-              options={conductorProviderOptions}
-              value={conductorProvider}
-              onValueChange={handleConductorProviderChange}
-              size="sm"
-              fullWidth
-              testID="conductor-provider-switch"
-            />
-          </View>
-        )}
-        {renderBody()}
-      </View>
+      {/* No provider bar here: Claude vs Codex is chosen in Paseo's native menu
+          under the prompt composer (see CONDUCTOR_PROVIDER). */}
+      <View style={styles.body}>{renderBody()}</View>
     </TaskBottomDock>
   );
+}
+
+function resetButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.resetButton, (hovered || pressed) && styles.resetButtonHovered];
 }
 
 function EmbeddedConductorPane({
@@ -371,10 +409,15 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing[3],
     paddingBottom: theme.spacing[2],
   },
-  providerSwitch: {
-    paddingTop: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingBottom: theme.spacing[1],
+  resetButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.lg,
+  },
+  resetButtonHovered: {
+    backgroundColor: theme.colors.surface1,
   },
   tabPane: {
     flex: 1,

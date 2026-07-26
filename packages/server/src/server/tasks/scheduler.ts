@@ -764,14 +764,17 @@ export class TaskScheduler {
         return;
       }
 
+      // A finished run does NOT complete the task. The card stays in "En cours"
+      // and only says it believes it is done; reaching "Terminée" requires the
+      // user to press "Valider la tâche", which runs the final check.
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
         ...current,
         schedule: null,
+        progress: "ready_for_review" as const,
       }));
-      await this.taskBoardService.transitionTask(projectId, task.id, "done");
       this.logger.info(
         { taskId: task.id, agentId, branch },
-        "Task executed in an isolated worktree",
+        "Task run finished, awaiting user validation",
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

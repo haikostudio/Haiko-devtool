@@ -315,6 +315,12 @@ export const es: TranslationResources = {
       details: "Detalles",
       noAgent: "Aún no se ha iniciado ningún agente para esta tarea.",
       launchAgent: "Iniciar el agente",
+      validateTask: "Validar la tarea",
+      validateTaskMessage:
+        "La tarea pasa a «Terminada» y queda lista para desplegar. Podrás reabrirla después.",
+      validateRunning: "Comprobación final en curso…",
+      validatePassed: "Comprobación superada: tarea terminada.",
+      validateFailed: "Comprobación rechazada: la tarea sigue en curso.",
       collapse: "Contraer panel",
       expand: "Expandir panel",
       billing: "Facturación",
@@ -362,6 +368,10 @@ export const es: TranslationResources = {
       title: "Director",
       move: "Mover el panel",
       backToConductor: "Volver al director",
+      resetTitle: "Reiniciar la conversación",
+      resetMessage:
+        "La conversación actual del director se cierra y empieza una nueva vacía. Tus tareas y datos se conservan.",
+      resetConfirm: "Reiniciar",
       openDetails: "Detalles",
       collapse: "Contraer",
       expand: "Expandir",
@@ -418,6 +428,15 @@ export const es: TranslationResources = {
       priorityLow: "Baja",
       deadlineOverdue: "Atrasada",
       deadlineNone: "Sin fecha límite",
+    },
+    quota: {
+      rolling: "Ventana móvil",
+      weekly: "Cuota semanal",
+      unavailable: "Consumo no disponible",
+    },
+    explorer: {
+      title: "Explorador",
+      noProject: "Elige un proyecto para explorar sus archivos.",
     },
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {
@@ -941,6 +960,7 @@ export const es: TranslationResources = {
         newBrowser: "Nueva pestaña del navegador",
         importSession: "Importar sesión",
         copyPath: "Copiar ruta del espacio de trabajo",
+        addToChat: "Añadir al chat",
         copyBranchName: "Copiar nombre de sucursal",
         showSetup: "Mostrar configuración",
       },

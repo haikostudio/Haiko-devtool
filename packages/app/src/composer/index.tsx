@@ -95,7 +95,7 @@ import { usePendingSendStore } from "@/stores/pending-send-store";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
 import { isWeb, isNative } from "@/constants/platform";
-import type { GitHubSearchItem } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -407,6 +407,10 @@ function renderComposerAttachmentPill(args: RenderComposerAttachmentPillArgs): R
       onRemove,
     });
   }
+  // A workspace file has no forge item to render a pill from.
+  if (attachment.kind === "workspace_file") {
+    return null;
+  }
   return (
     <GithubAttachmentPill
       key={`${attachment.item.kind}:${attachment.item.number}`}
@@ -621,7 +625,10 @@ function ImageAttachmentPill({
 }
 
 interface GithubAttachmentPillProps {
-  attachment: Extract<ComposerAttachment, { kind: "github_pr" | "github_issue" }>;
+  attachment: Extract<
+    ComposerAttachment,
+    { kind: "github_pr" | "github_issue" | "forge_change_request" | "forge_issue" }
+  >;
   index: number;
   disabled: boolean;
   onOpen: (attachment: ComposerAttachment) => void;
@@ -640,7 +647,8 @@ function GithubAttachmentPill({
   removeLabel,
 }: GithubAttachmentPillProps) {
   const item = attachment.item;
-  const kindLabel = item.kind === "pr" ? "PR" : "issue";
+  const isChangeRequest = item.kind === "change_request";
+  const kindLabel = isChangeRequest ? "PR" : "issue";
   const handleOpen = useCallback(() => {
     onOpen(attachment);
   }, [onOpen, attachment]);
@@ -657,9 +665,9 @@ function GithubAttachmentPill({
       disabled={disabled}
     >
       <AttachmentLabel
-        icon={item.kind === "pr" ? githubPrPillIcon : githubIssuePillIcon}
+        icon={isChangeRequest ? githubPrPillIcon : githubIssuePillIcon}
         title={item.title}
-        subtitle={`${item.kind === "pr" ? "PR" : "Issue"} #${item.number}`}
+        subtitle={`${isChangeRequest ? "PR" : "Issue"} #${item.number}`}
       />
     </AttachmentPill>
   );
@@ -708,8 +716,8 @@ interface GithubPickerOptionProps {
   testID: string;
   active: boolean;
   selected: boolean;
-  item: GitHubSearchItem;
-  onToggle: (item: GitHubSearchItem) => void;
+  item: ForgeSearchItem;
+  onToggle: (item: ForgeSearchItem) => void;
 }
 
 function GithubPickerOption({
@@ -725,7 +733,7 @@ function GithubPickerOption({
   }, [onToggle, item]);
   const leadingSlot = useMemo(
     () =>
-      item.kind === "pr" ? (
+      item.kind === "change_request" ? (
         <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
       ) : (
         <ThemedCircleDot size={ICON_SIZE.sm} uniProps={iconForegroundMutedMapping} />
@@ -1788,7 +1796,7 @@ export function Composer({
   );
 
   const handleToggleGithubItem = useCallback(
-    (item: GitHubSearchItem) => {
+    (item: ForgeSearchItem) => {
       const nextAttachments = toggleGithubAttachmentFromPicker({
         current: attachments,
         item,

@@ -1,4 +1,4 @@
-import type { GitHubSearchItem } from "@getpaseo/protocol/messages";
+import type { ForgeSearchItem } from "@getpaseo/protocol/messages";
 import type {
   AttachmentMetadata,
   ComposerAttachment,
@@ -373,11 +373,21 @@ export function openComposerAttachment(input: OpenComposerAttachmentInput): void
     input.openWorkspaceAttachment({ attachment: input.attachment });
     return;
   }
+  // A workspace file has no external URL to open — it is handled by the
+  // workspace branch above, or simply has nowhere to go.
+  if (input.attachment.kind === "workspace_file") {
+    return;
+  }
   input.openExternalUrl(input.attachment.item.url);
 }
 
-export function buildGithubAttachment(item: GitHubSearchItem): UserComposerAttachment {
-  return item.kind === "pr" ? { kind: "github_pr", item } : { kind: "github_issue", item };
+// A search result is either a change request (a pull/merge request, whatever the
+// forge calls it) or an issue. The attachment kinds keep their historical names
+// so persisted drafts stay readable.
+export function buildGithubAttachment(item: ForgeSearchItem): UserComposerAttachment {
+  return item.kind === "change_request"
+    ? { kind: "github_pr", item }
+    : { kind: "github_issue", item };
 }
 
 function isGithubAttachment(
@@ -388,7 +398,7 @@ function isGithubAttachment(
 
 export function toggleGithubAttachment(
   current: UserComposerAttachment[],
-  item: GitHubSearchItem,
+  item: ForgeSearchItem,
 ): UserComposerAttachment[] {
   const matches = (attachment: UserComposerAttachment) =>
     isGithubAttachment(attachment) &&
@@ -402,7 +412,7 @@ export function toggleGithubAttachment(
 
 interface ToggleGithubAttachmentFromPickerInput {
   current: UserComposerAttachment[];
-  item: GitHubSearchItem;
+  item: ForgeSearchItem;
   markGithubAttachmentRemoved: (attachment: UserComposerAttachment) => void;
 }
 
@@ -424,15 +434,15 @@ export function toggleGithubAttachmentFromPicker({
 }
 
 export function findGithubItemByOption(
-  items: readonly GitHubSearchItem[],
+  items: readonly ForgeSearchItem[],
   optionId: string,
-): GitHubSearchItem | undefined {
+): ForgeSearchItem | undefined {
   return items.find((candidate) => `${candidate.kind}:${candidate.number}` === optionId);
 }
 
 export function isAttachmentSelectedForGithubItem(
   current: readonly ComposerAttachment[],
-  item: GitHubSearchItem,
+  item: ForgeSearchItem,
 ): boolean {
   return userAttachmentsOnly(current).some(
     (attachment) =>

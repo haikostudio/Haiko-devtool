@@ -192,10 +192,12 @@ describe("TaskEstimator", () => {
     expect(analyzed?.links.primaryAgentId).toBe("estimator-agent-1");
     expect(runAgent).toHaveBeenCalledTimes(1);
     const createCall = createAgent.mock.calls[0]?.[0];
-    // Not an internal throwaway agent, and it runs in its own worktree.
+    // Not an internal throwaway agent. And it runs IN PLACE on the project's main
+    // branch: no branch and no worktree is cut per task any more, so every task
+    // shares one context and the deploy step has nothing to reconcile.
     expect(createCall).not.toHaveProperty("internal");
     expect(createCall).toHaveProperty("title", "Tâche : Implement login flow");
-    expect(createCall).toHaveProperty("worktree.action", "branch-off");
+    expect(createCall).not.toHaveProperty("worktree");
   });
 
   test("falls back to a conservative estimate (with minutes) when the agent fails", async () => {

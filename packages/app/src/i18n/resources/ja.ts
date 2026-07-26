@@ -314,6 +314,12 @@ export const ja: TranslationResources = {
       details: "詳細",
       noAgent: "このタスクにはまだエージェントが起動されていません。",
       launchAgent: "エージェントを起動",
+      validateTask: "タスクを承認",
+      validateTaskMessage:
+        "タスクは「完了」に移動し、デプロイ可能になります。後から再開することもできます。",
+      validateRunning: "最終チェック中…",
+      validatePassed: "チェック合格 — タスクを完了しました。",
+      validateFailed: "チェック不合格 — タスクは進行中のままです。",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",
@@ -360,6 +366,10 @@ export const ja: TranslationResources = {
       title: "指揮者",
       move: "パネルを移動",
       backToConductor: "指揮者に戻る",
+      resetTitle: "会話をリセット",
+      resetMessage:
+        "現在の指揮者との会話を終了し、空の新しい会話を開始します。タスクとデータは保持されます。",
+      resetConfirm: "リセット",
       openDetails: "詳細",
       collapse: "折りたたむ",
       expand: "展開",
@@ -416,6 +426,15 @@ export const ja: TranslationResources = {
       priorityLow: "低",
       deadlineOverdue: "期限超過",
       deadlineNone: "期限なし",
+    },
+    quota: {
+      rolling: "ローリング枠",
+      weekly: "週次上限",
+      unavailable: "使用状況を取得できません",
+    },
+    explorer: {
+      title: "エクスプローラー",
+      noProject: "ファイルを閲覧するプロジェクトを選択してください。",
     },
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
@@ -936,6 +955,7 @@ export const ja: TranslationResources = {
         newBrowser: "新しいブラウザタブ",
         importSession: "セッションをインポート",
         copyPath: "ワークスペースパスをコピー",
+        addToChat: "チャットに追加",
         copyBranchName: "ブランチ名をコピー",
         showSetup: "セットアップを表示",
       },

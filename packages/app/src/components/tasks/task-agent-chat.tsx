@@ -1,8 +1,9 @@
 import { useCallback, useMemo } from "react";
-import { Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Bot } from "lucide-react-native";
+import { Bot, CheckCircle2 } from "lucide-react-native";
+import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
 import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { useSessionStore } from "@/stores/session-store";
@@ -15,11 +16,19 @@ import {
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedBot = withUnistyles(Bot);
+const accentColorMapping = (theme: Theme) => ({ color: theme.colors.foreground });
+const ThemedCheck = withUnistyles(CheckCircle2);
 
 export interface TaskAgentChatProps {
   serverId: string | null;
   task: KanbanTask;
   onRunNow: (taskId: string) => void;
+  /**
+   * Mark the task validated. Shown as a full-width bar right above the prompt
+   * composer as soon as the agent has spoken once — the user, not the agent,
+   * decides a task is finished.
+   */
+  onValidate?: (taskId: string) => void;
 }
 
 /**
@@ -30,7 +39,7 @@ export interface TaskAgentChatProps {
  * former in-drawer chat tab so the dock and any future host can reuse it; mount
  * it with a `key` per agentId so switching tasks fully remounts the pane.
  */
-export function TaskAgentChat({ serverId, task, onRunNow }: TaskAgentChatProps) {
+export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgentChatProps) {
   const { t } = useTranslation();
   // Prefer the pipeline agent: analysis AND execution live in that one
   // conversation, so it holds the live thread the card's "Analyse en cours"
@@ -45,11 +54,44 @@ export function TaskAgentChat({ serverId, task, onRunNow }: TaskAgentChatProps) 
     serverId && agentId ? state.sessions[serverId]?.agents?.get(agentId)?.workspaceId : undefined,
   );
   const workspaceId = task.links.workspaceId ?? agentWorkspaceId ?? null;
+  // "The agent has produced at least one reply": the synthesis is regenerated on
+  // every interaction, so its presence is the cheapest honest signal. A task that
+  // already carries a sub-status has clearly been worked on too.
+  const agentHasSpoken = useSessionStore((state) =>
+    serverId && agentId
+      ? Boolean(state.sessions[serverId]?.agents?.get(agentId)?.synthesis)
+      : false,
+  );
+  const isFinished = task.column === "done" || task.column === "deployed";
+  const showValidate =
+    Boolean(onValidate) && !isFinished && (agentHasSpoken || task.progress != null);
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
+  const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);
+
+  // Memoized so the embedded pane (and everything under it) is not re-rendered
+  // by a fresh element on every keystroke in the composer.
+  const validateBar = useMemo(
+    () =>
+      showValidate ? (
+        <ValidateTaskBar
+          onPress={handleValidate}
+          ready={task.progress === "ready_for_review"}
+          validation={task.validation}
+        />
+      ) : null,
+    [showValidate, handleValidate, task.progress, task.validation],
+  );
 
   if (serverId && agentId && workspaceId) {
-    return <EmbeddedAgentPane serverId={serverId} agentId={agentId} workspaceId={workspaceId} />;
+    return (
+      <EmbeddedAgentPane
+        serverId={serverId}
+        agentId={agentId}
+        workspaceId={workspaceId}
+        validateBar={validateBar}
+      />
+    );
   }
 
   return (
@@ -65,14 +107,77 @@ export function TaskAgentChat({ serverId, task, onRunNow }: TaskAgentChatProps) 
   );
 }
 
+/**
+ * Full-width, deliberately quiet bar. It carries the single "Valider la tâche"
+ * action and nothing else, so it never competes with the conversation or the
+ * prompt field it sits on. Visible for the whole discussion, not only when the
+ * agent thinks it is done.
+ */
+function ValidateTaskBar({
+  onPress,
+  ready,
+  validation,
+}: {
+  onPress: () => void;
+  ready: boolean;
+  validation: KanbanTask["validation"];
+}) {
+  const { t } = useTranslation();
+  const running = validation?.state === "running";
+  const rejected = validation?.state === "failed";
+  // Memoized: a fresh object literal here re-renders the whole embedded pane.
+  const disabledState = useMemo(() => ({ disabled: running }), [running]);
+  return (
+    <View>
+      {/* A rejected check explains itself right where the user is looking, so the
+          next prompt can hand the fix straight back to the agent. */}
+      {rejected && validation?.report ? (
+        <View style={styles.validateReport}>
+          <Text style={styles.validateReportTitle}>
+            {validation.summary ?? t("tasks.panel.validateFailed")}
+          </Text>
+          <Text style={styles.validateReportBody}>{validation.report}</Text>
+        </View>
+      ) : null}
+      <Pressable
+        onPress={onPress}
+        disabled={running}
+        style={validateBarStyle}
+        accessibilityRole="button"
+        accessibilityState={disabledState}
+        accessibilityLabel={t("tasks.panel.validateTask")}
+        testID="task-validate-bar"
+      >
+        {running ? (
+          <ActivityIndicator size="small" />
+        ) : (
+          <ThemedCheck
+            size={ICON_SIZE.sm}
+            uniProps={ready ? accentColorMapping : mutedColorMapping}
+          />
+        )}
+        <Text style={ready && !running ? styles.validateTextReady : styles.validateText}>
+          {running ? t("tasks.panel.validateRunning") : t("tasks.panel.validateTask")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function validateBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.validateBar, (hovered || pressed) && styles.validateBarHovered];
+}
+
 function EmbeddedAgentPane({
   serverId,
   agentId,
   workspaceId,
+  validateBar,
 }: {
   serverId: string;
   agentId: string;
   workspaceId: string;
+  validateBar: React.ReactNode;
 }) {
   const content = useMemo(() => {
     const openInNativeWorkspace = () => {
@@ -98,9 +203,11 @@ function EmbeddedAgentPane({
   }, [serverId, agentId, workspaceId]);
 
   return (
-    <View style={styles.paneHost}>
-      <WorkspacePaneContent content={content} isWorkspaceFocused isPaneFocused />
-    </View>
+    <AboveComposerSlotProvider node={validateBar}>
+      <View style={styles.paneHost}>
+        <WorkspacePaneContent content={content} isWorkspaceFocused isPaneFocused />
+      </View>
+    </AboveComposerSlotProvider>
   );
 }
 
@@ -119,5 +226,49 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
+  },
+  validateBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    width: "100%",
+    paddingVertical: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  validateBarHovered: {
+    backgroundColor: theme.colors.surface2,
+  },
+  validateText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  validateTextReady: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+  },
+  validateReport: {
+    width: "100%",
+    gap: theme.spacing[1],
+    padding: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  validateReportTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+  },
+  validateReportBody: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
 }));

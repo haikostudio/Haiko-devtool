@@ -12,6 +12,7 @@ import {
   PARENT_AGENT_ID_LABEL,
 } from "@getpaseo/protocol/agent-labels";
 import type { AgentSynthesis } from "@getpaseo/protocol/messages";
+import type { AgentOwner } from "./agent-owner.js";
 import type { Logger } from "pino";
 import { z } from "zod";
 import type { TerminalManager } from "../../terminal/terminal-manager.js";
@@ -287,6 +288,8 @@ export interface CreateAgentOptions {
   initialTitle?: string | null;
   // undefined is an explicit decision: the agent never appears in the sidebar.
   workspaceId: string | undefined;
+  // Restauré : exécution distante propriétaire de cet agent (hub de démons).
+  owner?: AgentOwner;
   // When true, a missing working directory (e.g. a pruned worktree) falls back to
   // the nearest existing ancestor instead of throwing, so the conversation can still open.
   allowMissingCwd?: boolean;
@@ -365,6 +368,8 @@ interface ManagedAgentBase {
    * Null/undefined for legacy agents created before ownership stamping.
    */
   workspaceId?: string;
+  // Restauré : exécution distante propriétaire de cet agent (hub de démons).
+  owner?: AgentOwner;
   capabilities: AgentCapabilityFlags;
   config: AgentSessionConfig;
   runtimeInfo?: AgentRuntimeInfo;
@@ -669,6 +674,9 @@ export class AgentManager {
   private readonly previousStatuses = new Map<string, AgentLifecycleStatus>();
   private readonly backgroundTasks = new Set<Promise<void>>();
   private readonly agentRegistrationTasks = new Set<Promise<void>>();
+  // Restauré : fermetures en cours, indexées par agent. Permet à waitForAgentClose
+  // d'attendre la fin d'une fermeture déjà lancée au lieu d'en démarrer une autre.
+  private readonly inFlightAgentCloses = new Map<string, Promise<void>>();
   private readonly agentStreamCoalescer: AgentStreamCoalescer;
   private mcpBaseUrl: string | null;
   private readonly mcpAuthToken: string | null;
@@ -1079,6 +1087,36 @@ export class AgentManager {
     return agent ? { ...agent } : null;
   }
 
+  // Restauré : marque une activité sur l'agent sans rien changer d'autre.
+  touchAgentActivity(id: string): ManagedAgent | null {
+    const agent = this.agents.get(id);
+    if (!agent) {
+      return null;
+    }
+    this.touchUpdatedAt(agent);
+    return { ...agent };
+  }
+
+  // Restauré : attend la fermeture déjà en cours, s'il y en a une.
+  async waitForAgentClose(agentId: string): Promise<void> {
+    await this.inFlightAgentCloses.get(agentId)?.catch(() => undefined);
+  }
+
+  // Restauré : nombre d'abonnés actifs, exposé pour les diagnostics.
+  subscriptionCount(): number {
+    return this.subscribers.size;
+  }
+
+  // Restauré : oublie l'état conservé d'un agent (fil en mémoire, sous-agents) et
+  // efface son historique enregistré.
+  async deleteAgentState(agentId: string): Promise<void> {
+    this.timelineStore.delete(agentId);
+    for (const event of this.providerSubagents.deleteParent(agentId)) {
+      this.dispatch({ type: "provider_subagent", event });
+    }
+    await this.deleteCommittedTimeline(agentId);
+  }
+
   getTimeline(id: string): AgentTimelineItem[] {
     this.requireAgent(id);
     return this.timelineStore.getItems(id);
@@ -1153,6 +1191,7 @@ export class AgentManager {
       labels: options.labels,
       initialTitle: options.initialTitle,
       workspaceId: options.workspaceId,
+      owner: options.owner,
     });
   }
 
@@ -1176,6 +1215,7 @@ export class AgentManager {
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
+      owner?: AgentOwner;
     },
   ): Promise<ManagedAgent> {
     return this.trackAgentRegistrationOperation(
@@ -1193,6 +1233,7 @@ export class AgentManager {
       lastUserMessageAt?: Date | null;
       labels?: Record<string, string>;
       workspaceId?: string;
+      owner?: AgentOwner;
     },
   ): Promise<ManagedAgent> {
     this.assertAcceptingAgentRegistrations();
@@ -1373,6 +1414,7 @@ export class AgentManager {
       return this.registerSession(session, storedConfig, agentId, {
         labels: existing.labels,
         workspaceId: existing.workspaceId,
+        owner: existing.owner,
         createdAt: existing.createdAt,
         updatedAt: existing.updatedAt,
         lastUserMessageAt: existing.lastUserMessageAt,
@@ -1442,7 +1484,25 @@ export class AgentManager {
     }
   }
 
-  async closeAgent(agentId: string): Promise<void> {
+  closeAgent(agentId: string): Promise<void> {
+    // Restauré : deux fermetures simultanées du même agent partagent la même
+    // promesse au lieu de se marcher dessus.
+    const existing = this.inFlightAgentCloses.get(agentId);
+    if (existing) {
+      return existing;
+    }
+    const close = this.closeAgentRuntime(agentId);
+    this.inFlightAgentCloses.set(agentId, close);
+    const clearClose = () => {
+      if (this.inFlightAgentCloses.get(agentId) === close) {
+        this.inFlightAgentCloses.delete(agentId);
+      }
+    };
+    void close.then(clearClose, clearClose);
+    return close;
+  }
+
+  private async closeAgentRuntime(agentId: string): Promise<void> {
     const agent = this.requireAgent(agentId);
     this.logger.trace(
       {
@@ -1564,6 +1624,7 @@ export class AgentManager {
         provider: record.provider,
         cwd: record.cwd,
         workspaceId: record.workspaceId,
+        owner: record.owner,
         session: null,
         capabilities: STORED_AGENT_CAPABILITIES,
         config: buildStoredAgentConfig(record),
@@ -1924,7 +1985,12 @@ export class AgentManager {
     return nextRecord;
   }
 
-  async unarchiveSnapshot(agentId: string): Promise<boolean> {
+  // Restauré : la reprise d'un agent archivé peut le réaffecter à un autre espace
+  // de travail et corriger ses étiquettes au passage.
+  async unarchiveSnapshot(
+    agentId: string,
+    updates?: { workspaceId?: string; labels?: Record<string, string | null> },
+  ): Promise<boolean> {
     const registry = this.requireRegistry();
     const record = await registry.get(agentId);
     if (!record || !record.archivedAt) {
@@ -1935,6 +2001,8 @@ export class AgentManager {
 
     await registry.upsert({
       ...record,
+      ...(updates?.workspaceId ? { workspaceId: updates.workspaceId } : {}),
+      ...(updates?.labels ? { labels: applyLabelPatch(record.labels, updates.labels) } : {}),
       archivedAt: null,
       updatedAt: new Date().toISOString(),
     });
@@ -2908,6 +2976,7 @@ export class AgentManager {
       initialTitle?: string | null;
       publishWhenReady?: boolean;
       workspaceId?: string;
+      owner?: AgentOwner;
     },
   ): Promise<ManagedAgent> {
     let registered = false;
@@ -3043,6 +3112,7 @@ export class AgentManager {
           attention?: AttentionState;
           persistence?: AgentPersistenceHandle;
           workspaceId?: string;
+          owner?: AgentOwner;
         }
       | undefined;
   }): ActiveManagedAgent {

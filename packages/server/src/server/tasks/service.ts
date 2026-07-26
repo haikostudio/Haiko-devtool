@@ -23,6 +23,9 @@ const PIPELINE_COLUMNS = new Set<TaskColumn>(["validated", "scheduled"]);
 // The kanban columns, in board order. "notes" is the leftmost draft column
 // (inert: never in PIPELINE_COLUMNS, so no estimate/execution); the last entry
 // is terminal.
+// The one list every project gets now that folders are gone from the product.
+const DEFAULT_TASK_LIST_NAME = "Tâches";
+
 const COLUMN_ORDER = [
   "notes",
   "backlog",
@@ -336,6 +339,39 @@ export class TaskBoardService {
   }
 
   /**
+   * The project's single task list. Folders are gone from the product: every
+   * task lives in one list and runs on the project's main branch. This keeps ONE
+   * folder record per project because the persisted task shape still carries a
+   * folderId — callers never choose it any more.
+   *
+   * Race-safe: serialized by the store, so two concurrent creates cannot mint
+   * two lists.
+   */
+  async ensureDefaultFolder(projectId: string): Promise<string> {
+    let folderId: string | null = null;
+    const board = await this.store.mutate(projectId, (current) => {
+      const existing = current.folders[0];
+      if (existing) {
+        folderId = existing.id;
+        return current;
+      }
+      const created: TaskFolder = {
+        id: generateTaskEntityId(),
+        name: DEFAULT_TASK_LIST_NAME,
+        order: 0,
+        createdAt: new Date().toISOString(),
+      };
+      folderId = created.id;
+      return { ...current, folders: [created] };
+    });
+    this.broadcast(board);
+    if (!folderId) {
+      throw new TaskBoardServiceError("folder_create_failed", "Failed to ensure the task list");
+    }
+    return folderId;
+  }
+
+  /**
    * Returns the id of the folder with the given name, creating it (race-safe,
    * store-serialized) if absent. Used by agent-sync for its auto folder.
    */
@@ -396,6 +432,12 @@ export class TaskBoardService {
 
   async createTask(projectId: string, input: CreateTaskInput): Promise<KanbanTask> {
     let created: KanbanTask | null = null;
+    // Folders are gone from the product: an unknown (or empty) folder id simply
+    // lands in the project's single list instead of failing.
+    const board = await this.store.getBoard(projectId);
+    const folderId = board.folders.some((entry) => entry.id === input.folderId)
+      ? input.folderId
+      : await this.ensureDefaultFolder(projectId);
     // Every task starts in "À faire". Entering the execution pipeline requires
     // an explicit user move or approval after creation.
     const column: TaskColumn = "backlog";
@@ -406,17 +448,12 @@ export class TaskBoardService {
       (input.origin ?? "manual") === "manual" &&
       input.approval?.state !== "pending" &&
       (input.description?.trim() ?? "") !== "";
-    const board = await this.store.mutate(projectId, (current) => {
-      if (!current.folders.some((entry) => entry.id === input.folderId)) {
-        throw new TaskBoardServiceError("folder_not_found", `Folder not found: ${input.folderId}`);
-      }
+    const nextBoard = await this.store.mutate(projectId, (current) => {
       const now = new Date().toISOString();
-      const siblings = current.tasks.filter(
-        (task) => task.folderId === input.folderId && task.column === column,
-      );
+      const siblings = current.tasks.filter((task) => task.column === column);
       created = {
         id: generateTaskEntityId(),
-        folderId: input.folderId,
+        folderId,
         title: input.title.trim(),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.attachments !== undefined && input.attachments.length > 0
@@ -442,7 +479,7 @@ export class TaskBoardService {
       };
       return { ...current, tasks: [...current.tasks, created] };
     });
-    this.broadcast(board);
+    this.broadcast(nextBoard);
     if (!created) {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
     }
