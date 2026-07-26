@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { DEFAULT_EXPLORER_SIDEBAR_WIDTH } from "@/stores/panel-store";
 
 // Remembers the desktop tasks board's right-hand agent panel width so the size
 // the user dragged it to survives a reload / navigating away and back. Only the
@@ -45,16 +46,23 @@ interface TasksBoardUiState {
   /** Height (in px) of the always-visible timeline + quota area above the board. */
   timelineHeight: number;
   setTimelineHeight: (timelineHeight: number) => void;
-  /** Whether the bottom-docked project file explorer is open. */
+  /** Whether the project file explorer panel is open. */
   explorerOpen: boolean;
   setExplorerOpen: (explorerOpen: boolean) => void;
-  /** Height (in px) of the file explorer dock. */
+  /**
+   * Width (in px) of the desktop explorer side panel. The panel splits the row
+   * with the board instead of floating over it, so this width is what the board
+   * gives up — remembered across reloads like every other panel size.
+   */
+  explorerWidth: number;
+  setExplorerWidth: (explorerWidth: number) => void;
+  /** Height (in px) of the compact file explorer dock. */
   explorerHeight: number;
   setExplorerHeight: (explorerHeight: number) => void;
-  /** Horizontal offset (in px) of the explorer dock from its centered position. */
+  /** Horizontal offset (in px) of the compact explorer dock from its centered position. */
   explorerOffsetX: number;
   setExplorerOffsetX: (explorerOffsetX: number) => void;
-  /** Whether the explorer dock is collapsed to its title bar. */
+  /** Whether the compact explorer dock is collapsed to its title bar. */
   explorerCollapsed: boolean;
   setExplorerCollapsed: (explorerCollapsed: boolean) => void;
   /**
@@ -107,6 +115,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setTimelineHeight: (timelineHeight) => set({ timelineHeight }),
       explorerOpen: false,
       setExplorerOpen: (explorerOpen) => set({ explorerOpen }),
+      explorerWidth: DEFAULT_EXPLORER_SIDEBAR_WIDTH,
+      setExplorerWidth: (explorerWidth) => set({ explorerWidth }),
       explorerHeight: DEFAULT_CONDUCTOR_HEIGHT,
       setExplorerHeight: (explorerHeight) => set({ explorerHeight }),
       explorerOffsetX: 0,
@@ -135,6 +145,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         detailsCollapsed: state.detailsCollapsed,
         timelineHeight: state.timelineHeight,
         explorerOpen: state.explorerOpen,
+        explorerWidth: state.explorerWidth,
         explorerHeight: state.explorerHeight,
         explorerOffsetX: state.explorerOffsetX,
         explorerCollapsed: state.explorerCollapsed,

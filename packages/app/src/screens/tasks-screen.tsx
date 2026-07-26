@@ -57,6 +57,7 @@ import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
 import { ConductorPanel } from "@/components/tasks/conductor-panel";
 import { TaskExplorerDock } from "@/components/tasks/task-explorer-dock";
+import { TaskExplorerSidePanel } from "@/components/tasks/task-explorer-side-panel";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
@@ -548,16 +549,21 @@ export function TasksScreen() {
             projectId={projectId}
             folderId={selectedFolder?.id ?? null}
             projects={projects}
+            selectedProject={selectedProject}
             folders={sortedFolders}
             supportsTasksBoard={supportsTasksBoard}
             boardHandle={boardHandle}
           />
         )}
-        <TaskExplorerDock
-          serverId={serverId}
-          workspaceId={selectedProject?.workspaceId || null}
-          projectRootPath={selectedProject?.rootPath ?? null}
-        />
+        {/* Compact keeps the floating bottom dock — a side panel would leave
+            neither the board nor the tree wide enough to use on a phone. */}
+        {isCompact ? (
+          <TaskExplorerDock
+            serverId={serverId}
+            workspaceId={selectedProject?.workspaceId || null}
+            projectRootPath={selectedProject?.rootPath ?? null}
+          />
+        ) : null}
         <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
         {/* Rendered after the conductor dock so, when both are open, the Details
             drawer stacks above the chat instead of hiding behind it. */}
@@ -578,6 +584,7 @@ function DesktopLayout({
   projectId,
   folderId,
   projects,
+  selectedProject,
   folders,
   supportsTasksBoard,
   boardHandle,
@@ -586,6 +593,7 @@ function DesktopLayout({
   projectId: string | null;
   folderId: string | null;
   projects: ProjectEntry[];
+  selectedProject: ProjectEntry | null;
   folders: TaskFolder[];
   supportsTasksBoard: boolean;
   boardHandle: BoardHandle;
@@ -624,6 +632,13 @@ function DesktopLayout({
         boardHandle={boardHandle}
       />
       <View style={styles.boardArea}>{boardArea}</View>
+      {/* The explorer is a sibling of the board, not an overlay: it takes its
+          width out of the row so the columns stay fully readable beside it. */}
+      <TaskExplorerSidePanel
+        serverId={serverId}
+        workspaceId={selectedProject?.workspaceId || null}
+        projectRootPath={selectedProject?.rootPath ?? null}
+      />
     </View>
   );
 }
@@ -1580,8 +1595,9 @@ function TasksAttachmentLibraryButton({ project }: { project: ProjectEntry | nul
 
 /**
  * "Explorateur" button for the task manager header: toggles the project's file
- * tree, docked at the bottom of the board. Kept next to the deploy rocket so the
- * whole top-right cluster reads as "things about this project".
+ * tree — a resizable right-hand panel on desktop, a bottom dock on compact.
+ * Kept next to the deploy rocket so the whole top-right cluster reads as
+ * "things about this project".
  */
 function TasksExplorerButton({ project }: { project: ProjectEntry | null }) {
   const { t } = useTranslation();
