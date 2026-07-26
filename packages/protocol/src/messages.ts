@@ -3037,6 +3037,8 @@ export const ServerInfoStatusPayloadSchema = z
     serverId: z.string().trim().min(1),
     hostname: ServerInfoHostnameSchema.optional(),
     version: ServerInfoVersionSchema.optional(),
+    // COMPAT(desktopManaged): added in v0.1.X, remove optional parsing after 2027-01-16.
+    desktopManaged: z.boolean().optional(),
     capabilities: ServerCapabilitiesFromUnknownSchema.optional(),
     // COMPAT(providersSnapshot): added in v0.1.48, remove gating when all clients use snapshot
     features: z
@@ -3056,6 +3058,9 @@ export const ServerInfoStatusPayloadSchema = z
         forgeCheckDetails: z.boolean().optional(),
         // COMPAT(forgeSearch): added in v0.1.106, remove github_search fallback after 2026-12-28.
         forgeSearch: z.boolean().optional(),
+        // COMPAT(importSessionWorkspaceTarget): the import sheet lets the user pick
+        // which workspace an imported session lands in.
+        importSessionWorkspaceTarget: z.boolean().optional(),
         // COMPAT(commitBaseClassification): added in v0.2.0, remove gate after 2027-01-23.
         commitBaseClassification: z.boolean().optional(),
         // COMPAT(commitsList): added in v0.1.110, remove gate after 2027-01-16.
@@ -4659,6 +4664,56 @@ const CheckoutGithubCheckJobSchema = z.object({
   logTruncated: z.boolean().optional(),
 });
 
+export const CheckoutCommitsListResponseSchema = z.object({
+  type: z.literal("checkout.commits.list.response"),
+  payload: z.object({
+    cwd: z.string(),
+    baseRef: z.string().nullable(),
+    commits: z.array(CheckoutCommitSchema),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+export const CheckoutCommitFileDiffResponseSchema = z.object({
+  type: z.literal("checkout.commits.file_diff.response"),
+  payload: z.object({
+    cwd: z.string(),
+    sha: z.string(),
+    path: z.string(),
+    // null when the file is absent from the commit or carries no textual diff
+    // (e.g. binary-only changes).
+    file: ParsedDiffFileSchema.nullable(),
+    error: CheckoutErrorSchema.nullable(),
+    requestId: z.string(),
+  }),
+});
+// Statuses stay open strings so future forge values cannot break parsing.
+const CheckoutPipelineJobSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  stage: z.string(),
+  status: z.string(),
+  rawStatus: z.string(),
+  url: z.string().nullable().optional().default(null),
+  allowFailure: z.boolean().optional().default(false),
+  durationSeconds: z.number().nullable().optional().default(null),
+});
+const CheckoutPipelineStageSchema = z.object({
+  name: z.string(),
+  status: z.string(),
+  jobs: z.array(CheckoutPipelineJobSchema).optional().default([]),
+});
+
+const CheckoutPipelineSchema = z.object({
+  id: z.number(),
+  status: z.string(),
+  rawStatus: z.string(),
+  url: z.string().nullable().optional().default(null),
+  ref: z.string().nullable().optional().default(null),
+  sha: z.string().nullable().optional().default(null),
+  stages: z.array(CheckoutPipelineStageSchema).optional().default([]),
+});
+
 export const CheckoutGithubCheckDetailsSchema = z.object({
   checkRunId: z.number(),
   workflowRunId: z.number().nullable().optional(),
@@ -4678,6 +4733,9 @@ export const CheckoutGithubCheckDetailsSchema = z.object({
   annotations: z.array(CheckoutGithubCheckAnnotationSchema).optional().default([]),
   failedJobs: z.array(CheckoutGithubCheckJobSchema).optional().default([]),
   truncated: z.boolean().optional().default(false),
+  // Restauré : détail du pipeline chez les forges qui en exposent un (GitLab).
+  // Pas de valeur par défaut : GitHub le laisse simplement absent.
+  pipeline: CheckoutPipelineSchema.nullable().optional(),
 });
 
 export const CheckoutGithubGetCheckDetailsResponseSchema = z.object({
@@ -5549,54 +5607,6 @@ export function parseHubExecutionOutboundMessage(value: unknown): HubExecutionOu
 
 export type DaemonUpdateProgressMessage = z.infer<typeof DaemonUpdateProgressMessageSchema>;
 
-export const CheckoutCommitsListResponseSchema = z.object({
-  type: z.literal("checkout.commits.list.response"),
-  payload: z.object({
-    cwd: z.string(),
-    baseRef: z.string().nullable(),
-    commits: z.array(CheckoutCommitSchema),
-    error: CheckoutErrorSchema.nullable(),
-    requestId: z.string(),
-  }),
-});
-export const CheckoutCommitFileDiffResponseSchema = z.object({
-  type: z.literal("checkout.commits.file_diff.response"),
-  payload: z.object({
-    cwd: z.string(),
-    sha: z.string(),
-    path: z.string(),
-    // null when the file is absent from the commit or carries no textual diff
-    // (e.g. binary-only changes).
-    file: ParsedDiffFileSchema.nullable(),
-    error: CheckoutErrorSchema.nullable(),
-    requestId: z.string(),
-  }),
-});
-// Statuses stay open strings so future forge values cannot break parsing.
-const CheckoutPipelineJobSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  stage: z.string(),
-  status: z.string(),
-  rawStatus: z.string(),
-  url: z.string().nullable().optional().default(null),
-  allowFailure: z.boolean().optional().default(false),
-  durationSeconds: z.number().nullable().optional().default(null),
-});
-const CheckoutPipelineStageSchema = z.object({
-  name: z.string(),
-  status: z.string(),
-  jobs: z.array(CheckoutPipelineJobSchema).optional().default([]),
-});
-const CheckoutPipelineSchema = z.object({
-  id: z.number(),
-  status: z.string(),
-  rawStatus: z.string(),
-  url: z.string().nullable().optional().default(null),
-  ref: z.string().nullable().optional().default(null),
-  sha: z.string().nullable().optional().default(null),
-  stages: z.array(CheckoutPipelineStageSchema).optional().default([]),
-});
 export const CheckoutCheckDetailsSchema = CheckoutGithubCheckDetailsSchema;
 export const CheckoutForgeGetCheckDetailsResponseSchema = z.object({
   type: z.literal("checkout.forge.get_check_details.response"),

@@ -55,6 +55,8 @@ import type {
   GitHubSearchRequest,
   ForgeSearchRequest,
   CheckoutCommit,
+  FileVersion,
+  FileWriteResult,
   ParsedDiffFile,
   WorkspaceRecoveryState,
   DirectorySuggestionsResponse,
@@ -1117,6 +1119,13 @@ export class DaemonClient {
     }
   >();
   private terminalDirectorySubscriptions = new Map<string, { cwd: string; workspaceId?: string }>();
+  // Restauré : fichiers suivis en direct. Chaque abonnement retient de quoi se
+  // rétablir après une reconnexion, sinon l'éditeur resterait figé sur une
+  // version périmée sans le dire.
+  private fileSubscriptions = new Map<
+    string,
+    { cwd: string; path: string; onUpdate: (version: FileVersion) => void }
+  >();
   // Live kanban board subscriptions, keyed by subscriptionId. Re-armed on
   // reconnect: the daemon drops all task subscriptions when the socket closes,
   // and the React board hook does not re-run on a transparent reconnect (the
@@ -2513,6 +2522,22 @@ export class DaemonClient {
     }
   }
 
+  private resubscribeFileSubscriptions(): void {
+    for (const [subscriptionId, subscription] of this.fileSubscriptions) {
+      void this.sendCorrelatedSessionRequest({
+        message: {
+          type: "fs.file.subscribe.request",
+          cwd: subscription.cwd,
+          path: subscription.path,
+          subscriptionId,
+        },
+        responseType: "fs.file.subscribe.response",
+      })
+        .then((payload) => subscription.onUpdate(payload.initial))
+        .catch(() => undefined);
+    }
+  }
+
   private resubscribeTasksBoardSubscriptions(): void {
     if (this.tasksBoardSubscriptions.size === 0) {
       return;
@@ -3853,6 +3878,56 @@ export class DaemonClient {
   // Restauré : historique des commits, différence d'un fichier dans un commit,
   // et récupération d'un espace de travail. Les messages correspondants existent
   // déjà côté protocole ; seules ces méthodes manquaient.
+  // Restauré : suivi en direct d'un fichier et écriture avec garde d'écrasement
+  // (l'écriture est refusée si le fichier a changé entre-temps).
+  async subscribeFile(
+    input: { cwd: string; path: string },
+    onUpdate: (version: FileVersion) => void,
+  ): Promise<{ initial: FileVersion; unsubscribe: () => void }> {
+    const subscriptionId = this.createRequestId();
+    this.fileSubscriptions.set(subscriptionId, { ...input, onUpdate });
+    try {
+      const payload = await this.sendCorrelatedSessionRequest({
+        message: {
+          type: "fs.file.subscribe.request",
+          cwd: input.cwd,
+          path: input.path,
+          subscriptionId,
+        },
+        responseType: "fs.file.subscribe.response",
+      });
+      return {
+        initial: payload.initial,
+        unsubscribe: () => {
+          if (!this.fileSubscriptions.delete(subscriptionId)) {
+            return;
+          }
+          void this.sendCorrelatedSessionRequest({
+            message: { type: "fs.file.unsubscribe.request", subscriptionId },
+            responseType: "fs.file.unsubscribe.response",
+          }).catch(() => undefined);
+        },
+      };
+    } catch (error) {
+      this.fileSubscriptions.delete(subscriptionId);
+      throw error;
+    }
+  }
+
+  async writeFile(input: {
+    cwd: string;
+    path: string;
+    content: string;
+    expectedModifiedAt: string;
+    expectedRevision?: string;
+  }): Promise<FileWriteResult> {
+    const payload = await this.sendCorrelatedSessionRequest({
+      message: { type: "fs.file.write.request", ...input },
+      responseType: "fs.file.write.response",
+    });
+    return payload.result;
+  }
+
   async listCheckoutCommits(
     cwd: string,
     requestId?: string,
@@ -6064,6 +6139,7 @@ export class DaemonClient {
           this.startLivenessHeartbeat();
           this.resubscribeCheckoutDiffSubscriptions();
           this.resubscribeTerminalDirectorySubscriptions();
+          this.resubscribeFileSubscriptions();
           this.resubscribeTasksBoardSubscriptions();
           this.flushPendingSendQueue();
           this.resolveConnect();
@@ -6073,6 +6149,12 @@ export class DaemonClient {
 
     if (consumerMessage.type === "terminal_stream_exit") {
       this.terminalStreams.removeTerminal(consumerMessage.payload.terminalId);
+    }
+
+    if (consumerMessage.type === "fs.file.update") {
+      this.fileSubscriptions
+        .get(consumerMessage.payload.subscriptionId)
+        ?.onUpdate(consumerMessage.payload.version);
     }
 
     if (this.rawMessageListeners.size > 0) {
