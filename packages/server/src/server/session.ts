@@ -803,7 +803,6 @@ export class Session {
     this.workspaceGitService = workspaceGitService;
     this.gitMutation = createGitMutationService({
       workspaceGitService: this.workspaceGitService,
-      github: this.github,
       logger: this.sessionLogger,
     });
     this.workspaceAutoName = workspaceAutoName;

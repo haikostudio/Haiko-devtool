@@ -174,8 +174,9 @@ function createFallbackWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSna
       hasRemote: false,
       diffStat: null,
     },
-    github: {
+    forge: {
       featuresEnabled: false,
+      authState: "no_remote",
       pullRequest: null,
       error: null,
     },
@@ -343,7 +344,8 @@ function getBrowserHostCapability(
   return parsed.success ? parsed.data : null;
 }
 
-interface WebSocketLike {
+// Restauré : exporté — le hub s'appuie sur ce type.
+export interface WebSocketLike {
   readyState: number;
   bufferedAmount?: number;
   send: (data: string | Uint8Array | ArrayBuffer) => void;

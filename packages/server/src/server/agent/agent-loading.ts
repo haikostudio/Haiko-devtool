@@ -13,7 +13,8 @@ import {
 
 const pendingAgentInitializations = new Map<string, Promise<ManagedAgent>>();
 
-type AgentLoaderManager = Pick<
+// Restauré : exporté — l'import de sessions s'appuie sur ce type.
+export type AgentLoaderManager = Pick<
   AgentManager,
   | "createAgent"
   | "getAgent"

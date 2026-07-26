@@ -376,6 +376,9 @@ export type DaemonLifecycleIntent =
 export interface PaseoDaemonConfig {
   listen: string;
   paseoHome: string;
+  // Restauré : version du démon et démarrage piloté par l'application de bureau.
+  daemonVersion?: string;
+  desktopManaged?: boolean;
   worktreesRoot?: string;
   corsAllowedOrigins: string[];
   allowedHosts?: HostnamesConfig;
@@ -1051,7 +1054,6 @@ export async function createPaseoDaemon(
     readDaemonConfig: () => ({ metadataGeneration: daemonConfigStore.get().metadataGeneration }),
     gitMutation: createGitMutationService({
       workspaceGitService,
-      github,
       logger,
     }),
     emitWorkspaceUpdateForCwd: emitWorkspaceUpdateForCwdExternal,
