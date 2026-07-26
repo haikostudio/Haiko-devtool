@@ -1756,15 +1756,15 @@ export class Session {
       case "checkout_pr_merge_request":
         return this.checkoutSession.handleCheckoutPrMergeRequest(msg);
       case "checkout.github.set_auto_merge.request":
-        return this.checkoutSession.handleCheckoutGithubSetAutoMergeRequest(msg);
+        return this.checkoutSession.handleCheckoutForgeSetAutoMergeRequest(msg);
       case "checkout.github.get_check_details.request":
-        return this.checkoutSession.handleCheckoutGithubGetCheckDetailsRequest(msg);
+        return this.checkoutSession.handleCheckoutForgeGetCheckDetailsRequest(msg);
       case "checkout_pr_status_request":
         return this.checkoutSession.handleCheckoutPrStatusRequest(msg);
       case "pull_request_timeline_request":
         return this.checkoutSession.handlePullRequestTimelineRequest(msg);
       case "github_search_request":
-        return this.checkoutSession.handleGitHubSearchRequest(msg);
+        return this.checkoutSession.handleForgeSearchRequest(msg);
       case "stash_save_request":
         return this.checkoutSession.handleStashSaveRequest(msg);
       case "stash_pop_request":
@@ -5433,7 +5433,7 @@ export class Session {
     });
     await this.emitWorkspaceUpdateForWorkspaceId(workspace.workspaceId);
     void this.workspaceGitService
-      .getSnapshot(workspace.cwd, { force: true, includeGitHub: true, reason: "open_project" })
+      .getSnapshot(workspace.cwd, { force: true, includeForge: true, reason: "open_project" })
       .catch((error) => {
         this.sessionLogger.warn(
           { err: error, cwd: workspace.cwd },
@@ -5601,7 +5601,7 @@ export class Session {
       void this.workspaceGitService
         .getSnapshot(workspace.cwd, {
           force: true,
-          includeGitHub: true,
+          includeForge: true,
           reason: "open_project",
         })
         .catch((error) => {
