@@ -83,6 +83,21 @@ describe("TaskValidator", () => {
     expect(sent).toHaveLength(0);
   });
 
+  test("refuses to check a card that never reached « En cours »", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      column: "validated" as const,
+      links: { ...current.links, taskAgentId: "agent-7" },
+    }));
+
+    await expect(validator.validate("proj-1", task.id)).rejects.toThrow(/pas encore en cours/);
+    expect(sent).toHaveLength(0);
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === task.id)?.validation ?? null).toBeNull();
+  });
+
   test("closing window: an agent that stops without completing reopens the bar", async () => {
     const taskId = await inProgressTask({ taskAgentId: "agent-7" });
     await validator.validate("proj-1", taskId);

@@ -66,9 +66,15 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
       ? Boolean(state.sessions[serverId]?.agents?.get(agentId)?.synthesis)
       : false,
   );
-  const isFinished = task.column === "done" || task.column === "deployed";
+  // The bar only exists for a card that is actually being worked on: "En cours"
+  // is the one column a task can legitimately leave for "Terminée". Offering the
+  // final check on a note, a backlog item, a validated-but-not-started card or a
+  // scheduled one invited finishing work that never ran — and the analysis agent
+  // talking during estimation was enough to make the bar appear. Finished cards
+  // (done/deployed) are excluded by the same rule.
+  const isInProgress = task.column === "in_progress";
   const showValidate =
-    Boolean(onValidate) && !isFinished && (agentHasSpoken || task.progress != null);
+    Boolean(onValidate) && isInProgress && (agentHasSpoken || task.progress != null);
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);

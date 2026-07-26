@@ -63,6 +63,17 @@ export class TaskValidator {
     if (task.column === "done" || task.column === "deployed") {
       return { task, passed: true, dispatched: false };
     }
+    // "En cours" is the only column a card may leave for "Terminée", so it is the
+    // only column where a final check makes sense. Without this the consent
+    // window could be opened on a card whose work never ran (an old client, or a
+    // card dragged back out of "En cours" mid-check), and the agent would then be
+    // allowed to complete it.
+    if (task.column !== "in_progress") {
+      throw new TaskBoardServiceError(
+        "task_validate_not_started",
+        "Cette tâche n'est pas encore en cours : lancez-la avant de demander le contrôle final.",
+      );
+    }
 
     const agentId = resolveTaskAgentId(task);
     if (!agentId) {
