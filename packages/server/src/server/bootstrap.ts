@@ -1352,7 +1352,7 @@ export async function createPaseoDaemon(
       const usage = await providerUsageService.listUsage({ forceRefresh: true });
       const claude = usage.providers.find((provider) => provider.providerId === "claude");
       const useCodex = !claude || isProviderUsageExhausted(claude);
-      await taskBoardService.createTask(projectId, {
+      const repair = await taskBoardService.createTask(projectId, {
         folderId,
         title: `Réparer le conflit avant publication : ${branch}`,
         description: [
@@ -1366,7 +1366,6 @@ export async function createPaseoDaemon(
           "Ne publie pas toi-même. Quand la branche est propre et fusionnable, termine la tâche : le mécanisme relancera automatiquement la publication.",
         ].join("\n"),
         tags: [PASEO_DEPLOY_CONFLICT_TAG, branchTag],
-        column: "validated",
         runConfig: useCodex
           ? { provider: "codex", model: "gpt-5.4", mode: "direct" }
           : { provider: "claude", model: "claude-opus-4-8", mode: "direct" },
@@ -1376,6 +1375,12 @@ export async function createPaseoDaemon(
         // before the fallback switched the task to Codex.
         launch: false,
       });
+      // The ONLY column move the daemon makes on the user's behalf, and the one
+      // exception to "validation is manual": the user just clicked "Publier",
+      // the publish is blocked on this conflict, and the repair exists purely to
+      // unblock that click. Every other card waits in "À faire" for a human.
+      // createTask always pins "backlog", so the move has to be explicit here.
+      await taskBoardService.transitionTask(projectId, repair.id, "validated");
     } finally {
       conflictTaskCreationInFlight.delete(branch);
     }

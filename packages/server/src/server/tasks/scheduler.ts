@@ -99,9 +99,10 @@ function isValidatedReady(task: KanbanTask): boolean {
  *   "Planifié" and launched. Backlog tasks are inert — never analyzed or run.
  * - "Planifié" column: estimated tasks awaiting a launch slot (also a valid
  *   direct-drop entry point that skips straight to the queue).
- * - Auto-start folders (the default): the scheduler auto-validates the folder's
- *   backlog — immediate start IS the consent — so execution still flows via
- *   "Validé". A folder with `requireValidation` set holds its backlog instead.
+ * - Backlog ("À faire") is ALWAYS inert: nothing ever leaves it on its own.
+ *   Validation is a human act — only the user (dragging a card, or the "Valider"
+ *   action) moves work into "Validé". No folder setting, no agent, and no
+ *   scheduler heuristic may perform that move on the user's behalf.
  *
  * Every launch opens a fresh visible (non-internal) agent in its own isolated
  * worktree + branch (task/<slug>-<id>), so several task agents can run in the
@@ -289,11 +290,6 @@ export class TaskScheduler {
       }
       const foldersById = new Map(board.folders.map((folder) => [folder.id, folder]));
       const folderOrders = new Map(board.folders.map((folder) => [folder.id, folder.order]));
-      // Immediate start is the default: a folder auto-validates (and launches) its
-      // backlog unless the user opted into manual review via `requireValidation`.
-      const folderAutoStart = new Map(
-        board.folders.map((folder) => [folder.id, folder.requireValidation !== true]),
-      );
       this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
       for (let task of board.tasks) {
         if (task.column === "done" || task.column === "deployed") {
@@ -304,11 +300,7 @@ export class TaskScheduler {
           continue;
         }
         if (task.column === "backlog") {
-          await this.handleBacklogTask(
-            project.projectId,
-            task,
-            folderAutoStart.get(task.folderId) !== false,
-          );
+          await this.handleBacklogTask(project.projectId, task);
           continue;
         }
         task = await this.fallbackDeployConflictProvider(project.projectId, task);
@@ -362,17 +354,12 @@ export class TaskScheduler {
   }
 
   /**
-   * Backlog is inert for the COST pipeline: no estimate, no execution here. This
-   * runs the two things that ARE allowed in backlog — self-healing cleanup of
-   * stray cost state, and the cheap light analysis (title + tidied prompt) —
-   * then, for auto-start folders (the default), hands the card to "Validé". Only
-   * "require validation" folders hold their backlog for the user.
+   * Backlog is inert: no estimate, no execution, and no exit. Exactly two things
+   * are allowed here — self-healing cleanup of stray cost state, and the cheap
+   * light analysis (title + tidied prompt). The card then STAYS in "À faire"
+   * until the user validates it by hand; the scheduler never promotes it.
    */
-  private async handleBacklogTask(
-    projectId: string,
-    task: KanbanTask,
-    autoStart: boolean,
-  ): Promise<void> {
+  private async handleBacklogTask(projectId: string, task: KanbanTask): Promise<void> {
     // Self-heal legacy/dirty data — a backlog card must never carry a cost
     // estimate or an armed schedule (those belong to "Validé" onward). Retro-
     // cleans boards where analysis fired too early (e.g. Maestria).
@@ -383,12 +370,6 @@ export class TaskScheduler {
     // backlog. Re-arm it after a daemon restart, since the queue is in-memory.
     if (task.refinement === "pending" && this.taskLightAnalyzer) {
       this.taskLightAnalyzer.refine(projectId, task.id);
-    }
-    // Auto-start folders (the default) auto-validate their backlog — immediate
-    // start IS the consent — so the pipeline still always runs through "Validé".
-    // "Require validation" folders skip this and wait for the user.
-    if (autoStart && task.approval?.state !== "pending") {
-      await this.taskBoardService.transitionTask(projectId, task.id, "validated");
     }
   }
 

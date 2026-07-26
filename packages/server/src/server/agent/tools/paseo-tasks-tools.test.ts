@@ -160,4 +160,32 @@ describe("paseo task board tools", () => {
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === task.id)?.runConfig?.provider).toBe("codex");
   });
+
+  test("move_task refuses every column the user owns", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
+
+    for (const column of ["validated", "scheduled", "in_progress", "done", "deployed"]) {
+      await expect(
+        catalog.executeTool("move_task", { projectId: "proj-1", taskId: task.id, column }),
+      ).rejects.toThrow(/only the user validates/);
+    }
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("backlog");
+  });
+
+  test("move_task still shuffles a card between notes and backlog", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
+
+    await catalog.executeTool("move_task", {
+      projectId: "proj-1",
+      taskId: task.id,
+      column: "notes",
+    });
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("notes");
+  });
 });

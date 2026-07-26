@@ -381,6 +381,12 @@ function resolveChildAgentCwd(params: {
   return resolvePathFromBase(params.parentCwd, requestedCwd);
 }
 
+// The only kanban columns an agent may put a card in. Everything downstream of
+// "backlog" is the user's own pipeline: "validated" is their explicit consent to
+// spend quota, "scheduled"/"in_progress" belong to the scheduler, "done" is the
+// user's "Valider la tâche", and "deployed" is stamped by a successful publish.
+const AGENT_WRITABLE_TASK_COLUMNS = new Set<string>(["notes", "backlog"]);
+
 const TerminalSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -3002,7 +3008,8 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       {
         title: "Move task",
         description:
-          "Move a kanban task to a different column and position. Columns: notes, backlog, validated, scheduled, in_progress, done, deployed. 'notes' is the draft column (no analysis/agent runs there). Move a task to 'deployed' once its work is confirmed live (merged + published).",
+          "Move a kanban task between the two agent-writable columns: 'notes' (free-form draft) and 'backlog' (À faire). " +
+          "The rest of the board belongs to the user: 'validated', 'scheduled', 'in_progress', 'done' and 'deployed' are reached by the user's own validation, by the scheduler, or by a successful publish — an agent may never move a card there.",
         inputSchema: {
           projectId: z.string(),
           taskId: z.string(),
@@ -3022,9 +3029,25 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       async (args: {
         projectId: string;
         taskId: string;
-        column: "backlog" | "validated" | "scheduled" | "in_progress" | "done" | "deployed";
+        column:
+          | "notes"
+          | "backlog"
+          | "validated"
+          | "scheduled"
+          | "in_progress"
+          | "done"
+          | "deployed";
         index?: number;
       }) => {
+        // The consent gate, enforced at the tool boundary rather than in a prompt:
+        // validation, scheduling, execution and completion are the user's calls.
+        // An agent that "helpfully" drags its own card into Validé would silently
+        // spend the user's quota, which is exactly what this refuses.
+        if (AGENT_WRITABLE_TASK_COLUMNS.has(args.column) === false) {
+          throw new Error(
+            `move_task cannot move a task to "${args.column}": only the user validates, schedules, completes or deploys a task. Agents may only move cards between "notes" and "backlog".`,
+          );
+        }
         await taskBoardService.moveTask(args.projectId, {
           taskId: args.taskId,
           column: args.column,

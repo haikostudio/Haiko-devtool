@@ -178,16 +178,8 @@ describe("TaskScheduler", () => {
   }
 
   test("backlog cleanup: a stray estimate/schedule on a backlog card is stripped", async () => {
-    // A "wait for my validation" folder keeps the card in backlog, so the cleanup
-    // is observable without the default immediate-start auto-validating it away.
-    const folder = await service.createFolder(
-      "proj-1",
-      "Auth",
-      undefined,
-      undefined,
-      undefined,
-      true,
-    );
+    // Backlog cards stay put now, so the cleanup is observable on a plain folder.
+    const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Estimated too early",
@@ -622,59 +614,54 @@ describe("TaskScheduler", () => {
     expect(current?.links.taskAgentId).toBe("codex-existing");
   });
 
-  test("default folder: backlog task auto-validates then launches", async () => {
-    // Immediate start is the default: a plain folder (no requireValidation) runs
-    // its backlog on its own.
+  test("backlog task never leaves À faire on its own, whatever the folder", async () => {
+    // Validation is a human act. A plain folder used to auto-validate its backlog
+    // (agent-created cards started running minutes after being written down);
+    // now nothing promotes a backlog card except the user.
     const folder = await service.createFolder("proj-1", "Auto");
-    const task = await service.createTask("proj-1", {
-      folderId: folder.id,
-      title: "Start me now",
-    });
-    const { scheduler, createAgent, estimator } = buildScheduler({ remainingPct: 80 });
-    // Cost estimation is a "Validé"-only step: a backlog card never carries one.
-    // Simulate the real estimator applying the estimate once the task reaches the
-    // pipeline (the auto-validation moved it there first).
-    (estimator.requestEstimate as ReturnType<typeof vi.fn>).mockImplementation(
-      (projectId: string, taskId: string) => {
-        void service.patchTask(projectId, taskId, withSampleEstimate);
-      },
-    );
-
-    // Immediate start is the folder-level consent: the scheduler moves the backlog
-    // task into "Validé" itself, estimates it there, and from there the pipeline
-    // runs to completion (backlog → validated → scheduled → launch → done).
-    await vi.waitFor(async () => {
-      await scheduler.tick();
-      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
-    });
-    expect(createAgent).toHaveBeenCalledTimes(1);
-  });
-
-  test("require-validation folder: backlog task is inert until the user validates", async () => {
-    // createFolder(projectId, name, color?, autopilot?, branch?, requireValidation?)
-    const folder = await service.createFolder(
-      "proj-1",
-      "Manual",
-      undefined,
-      undefined,
-      undefined,
-      true,
-    );
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Sit in backlog",
     });
     const { scheduler, createAgent, estimator } = buildScheduler({ remainingPct: 80 });
 
-    // With "wait for my validation" on, backlog is the un-validated staging area:
-    // no analysis and no execution happen until the user moves it into "Validé".
     await scheduler.tick();
+    await scheduler.tick();
+
     expect(estimator.requestEstimate).not.toHaveBeenCalled();
     expect(createAgent).not.toHaveBeenCalled();
-
-    await scheduler.tick();
-    expect(estimator.requestEstimate).not.toHaveBeenCalled();
     expect((await findTask(task.id))?.column).toBe("backlog");
+  });
+
+  test("the user's move into Validé is what starts the pipeline", async () => {
+    const folder = await service.createFolder("proj-1", "Auto");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Start me now",
+    });
+    const { scheduler, createAgent, estimator } = buildScheduler({ remainingPct: 80 });
+    // Cost estimation is a "Validé"-only step: simulate the real estimator
+    // applying the estimate once the user's move brought the task into the pipeline.
+    (estimator.requestEstimate as ReturnType<typeof vi.fn>).mockImplementation(
+      (projectId: string, taskId: string) => {
+        void service.patchTask(projectId, taskId, withSampleEstimate);
+      },
+    );
+
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "validated",
+      index: 0,
+      manual: true,
+    });
+
+    // From the user's consent onward everything is automatic:
+    // validated → estimated → scheduled → launched.
+    await vi.waitFor(async () => {
+      await scheduler.tick();
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
+    });
+    expect(createAgent).toHaveBeenCalledTimes(1);
   });
 
   test("quiet hours pack the biggest estimated task first when quota is tight", async () => {
