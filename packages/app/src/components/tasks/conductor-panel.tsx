@@ -15,6 +15,7 @@ import {
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
@@ -111,8 +112,9 @@ export function ConductorPanel({
   );
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
-  // Bumped by "Réinitialiser": re-runs the ensure effect, this time asking the
-  // daemon to archive the current conductor and hand back an empty one.
+  // Bumped by « Réinitialiser » (and by the archived-conductor guard below):
+  // re-runs the ensure effect, asking the daemon to retire the current conductor
+  // and hand back an empty one.
   const [resetNonce, setResetNonce] = useState(0);
   // Whether THIS ensure run should carry the reset flag. A ref (not state) so the
   // effect reads it without becoming a dependency — the nonce alone drives re-runs,
@@ -130,10 +132,10 @@ export function ConductorPanel({
   // closing the whole drawer — the task stays open in front of the user.
   const handleTaskFormClose = useCallback(() => setTaskView("chat"), []);
 
-  // "Réinitialiser": close the current conductor conversation and start a fresh
-  // one. Confirmed first (the active thread is dropped from the model's context),
-  // then the ensure effect below re-runs with reset=true. Tasks and board data are
-  // untouched — the old exchange is archived, not deleted.
+  // "Réinitialiser": step away from the current conductor conversation and start
+  // a fresh one. Confirmed first, then the ensure effect below re-runs with
+  // reset=true. Nothing is destroyed: the previous exchange stays intact and
+  // openable from the agent list, it simply stops being this project's conductor.
   const handleReset = useCallback(() => {
     void (async () => {
       const confirmed = await confirmDialog({
@@ -150,6 +152,22 @@ export function ConductorPanel({
       setResetNonce((nonce) => nonce + 1);
     })();
   }, [t]);
+
+  // Watches the resolved conductor: if it turns out to be archived, we cannot
+  // show its chat and must mint a new one.
+  const ensuredAgentId = ensure.status === "ready" ? ensure.agentId : null;
+  const conductorIsArchived = useSessionStore((state) =>
+    serverId && ensuredAgentId
+      ? Boolean(state.sessions[serverId]?.agents?.get(ensuredAgentId)?.archivedAt)
+      : false,
+  );
+  useEffect(() => {
+    if (!conductorIsArchived || inTaskMode) {
+      return;
+    }
+    pendingResetRef.current = true;
+    setResetNonce((nonce) => nonce + 1);
+  }, [conductorIsArchived, inTaskMode]);
 
   const taskViewOptions = useMemo<SegmentedControlOption<TaskView>[]>(
     () => [
@@ -288,6 +306,17 @@ export function ConductorPanel({
     }
     if (!serverId || ensure.status !== "ready") {
       return null;
+    }
+    // A conductor whose agent has been archived can never load its chat again
+    // (the provider refuses to resume an archived thread). Rather than showing a
+    // dead panel, ask the daemon for a fresh conductor — the user gets a working
+    // prompt instead of an error they cannot act on.
+    if (conductorIsArchived) {
+      return (
+        <View style={styles.centered}>
+          <ActivityIndicator />
+        </View>
+      );
     }
     return (
       <EmbeddedConductorPane

@@ -573,6 +573,27 @@ describe("TaskScheduler", () => {
     });
   });
 
+  test("preserves an explicit Opus 5 choice for deploy repairs", async () => {
+    const task = await seedScheduledTask({
+      title: "Réparer une branche avec Opus 5",
+      runConfig: { provider: "claude", model: "claude-opus-5", mode: "direct" },
+    });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      tags: ["paseo:deploy-conflict"],
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 0 });
+
+    await scheduler.tick();
+
+    expect(createAgent).not.toHaveBeenCalled();
+    expect((await findTask(task.id))?.runConfig).toMatchObject({
+      provider: "claude",
+      model: "claude-opus-5",
+      mode: "direct",
+    });
+  });
+
   test("does not detach a repair that is already running on Codex", async () => {
     const task = await seedScheduledTask({
       title: "Réparer une branche déjà sur Codex",

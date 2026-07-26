@@ -190,6 +190,67 @@ describe("ConductorAgentService", () => {
     expect(result.agentId).toBe("new-codex-conductor");
   });
 
+  it("retires the previous conductor on reset WITHOUT archiving its conversation", async () => {
+    const existing = {
+      id: "old-conductor",
+      provider: "codex/gpt-5.4",
+      cwd: "/tmp/project",
+      workspaceId: "ws-old",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
+        [CONDUCTOR_PROJECT_ID_LABEL]: "project-1",
+        [CONDUCTOR_PROVIDER_LABEL]: "codex/gpt-5.4",
+        "keep.me": "yes",
+      },
+      lastStatus: "closed",
+      config: {},
+    } as unknown as StoredAgentRecord;
+    const upserts: StoredAgentRecord[] = [];
+    const createAgent: BoundCreateAgentCommand = async () =>
+      ({
+        snapshot: { id: "fresh-conductor", workspaceId: "ws-fresh" },
+        liveSnapshot: { id: "fresh-conductor", workspaceId: "ws-fresh" },
+        background: true,
+        initialPromptStarted: false,
+        initialPromptError: null,
+      }) as unknown as CreateAgentCommandResult;
+    const service = new ConductorAgentService({
+      createAgent,
+      agentStorage: {
+        list: async () => [existing],
+        upsert: async (record: StoredAgentRecord) => {
+          upserts.push(record);
+        },
+      } as unknown as AgentStorage,
+      projectRegistry: {
+        get: async () => ({ rootPath: "/tmp/project" }),
+      } as unknown as ProjectRegistry,
+      logger: {
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+      } as unknown as pino.Logger,
+    });
+
+    const result = await service.ensureConductorAgent("project-1", "codex", { reset: true });
+
+    // A brand-new conductor answers the reset.
+    expect(result.agentId).toBe("fresh-conductor");
+    // The old one is retired by DROPPING ITS ROLE LABELS — never archived, which
+    // would archive the provider thread and make that conversation unopenable
+    // forever. Unrelated labels are preserved.
+    expect(upserts).toHaveLength(1);
+    const retired = upserts[0]!;
+    expect(retired.id).toBe("old-conductor");
+    expect(retired.labels[CONDUCTOR_ROLE_LABEL]).toBeUndefined();
+    expect(retired.labels[CONDUCTOR_PROJECT_ID_LABEL]).toBeUndefined();
+    expect(retired.labels["keep.me"]).toBe("yes");
+    expect(retired.archivedAt ?? null).toBeNull();
+  });
+
   it("allows ONLY board tools — every other paseo tool is hard-blocked (allowlist completeness)", async () => {
     const allNames = await listAllPaseoToolNames();
     expect(allNames.length).toBeGreaterThan(0);

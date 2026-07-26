@@ -15,12 +15,6 @@ export interface ConductorAgentServiceOptions {
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
   logger: pino.Logger;
-  /**
-   * Archives an agent (soft-delete). Wired to the agent manager at bootstrap and
-   * used by the "Réinitialiser" reset: the current conductor is archived so the
-   * label scan below stops finding it and a fresh conductor is created.
-   */
-  archiveAgent?: (agentId: string) => Promise<unknown>;
 }
 
 export interface EnsureConductorResult {
@@ -204,7 +198,6 @@ export class ConductorAgentService {
   private readonly agentStorage: AgentStorage;
   private readonly projectRegistry: ProjectRegistry;
   private readonly logger: pino.Logger;
-  private readonly archiveAgent: ((agentId: string) => Promise<unknown>) | null;
   // Serializes concurrent ensure calls per project so we never create two
   // conductors for the same project when two clients open the panel at once.
   private readonly inflight = new Map<string, Promise<EnsureConductorResult>>();
@@ -214,7 +207,6 @@ export class ConductorAgentService {
     this.agentStorage = options.agentStorage;
     this.projectRegistry = options.projectRegistry;
     this.logger = options.logger;
-    this.archiveAgent = options.archiveAgent ?? null;
   }
 
   async ensureConductorAgent(
@@ -265,15 +257,16 @@ export class ConductorAgentService {
         record.labels[CONDUCTOR_PROJECT_ID_LABEL] === projectId,
     );
     if (reset) {
-      // "Réinitialiser": retire EVERY live conductor of this project (whatever
-      // its provider) so the fresh one below starts from a genuinely empty
-      // context. Archiving is a soft-delete — the old thread stays readable in
-      // the archive, it just stops being sent to the model. Board data is
-      // untouched: conductors own no tasks.
-      await this.archiveConductors(
-        liveConductors.map((record) => record.id),
-        projectId,
-      );
+      // "Réinitialiser": retire every live conductor of this project so the fresh
+      // one below starts from an empty context.
+      //
+      // Retiring means REMOVING THE ROLE LABEL, not archiving. Archiving an agent
+      // also archives the provider's own thread, and Codex refuses to resume an
+      // archived thread ever again — which turned "start a new conversation" into
+      // "destroy the old one, and show 'archived' if anything still points at it".
+      // Stripping the label is enough: the scan below stops finding it, while the
+      // conversation stays intact and openable from the agent list.
+      await this.retireConductors(liveConductors, projectId);
     }
     const found = reset
       ? undefined
@@ -322,22 +315,30 @@ export class ConductorAgentService {
   }
 
   /**
-   * Soft-delete the given conductors so the label scan stops finding them and
-   * the next ensure creates a fresh conversation. Best-effort per agent: one
-   * failed archive must not block the reset, otherwise the user is stuck with
-   * the oversized context they asked to drop. Without an archive hook wired
-   * (tests, trimmed hosts) this is a no-op and ensure simply reuses the agent.
+   * Retires the given conductors by removing the role label from their stored
+   * record. The label scan then stops finding them and the next ensure creates a
+   * fresh conversation — while the old exchange stays fully intact and readable.
+   *
+   * Deliberately does NOT archive: archiving also archives the provider's thread
+   * (Codex refuses to resume an archived thread), which destroys the very
+   * conversation the user only wanted to step away from.
+   *
+   * Best-effort per agent: a failed rewrite must not block the reset.
    */
-  private async archiveConductors(agentIds: string[], projectId: string): Promise<void> {
-    if (!this.archiveAgent) {
-      return;
-    }
-    for (const agentId of agentIds) {
+  private async retireConductors(records: StoredAgentRecord[], projectId: string): Promise<void> {
+    for (const record of records) {
       try {
-        await this.archiveAgent(agentId);
-        this.logger.info({ projectId, agentId }, "Archived conductor agent on reset");
+        const labels = { ...record.labels };
+        delete labels[CONDUCTOR_ROLE_LABEL];
+        delete labels[CONDUCTOR_PROJECT_ID_LABEL];
+        delete labels[CONDUCTOR_PROVIDER_LABEL];
+        await this.agentStorage.upsert({ ...record, labels });
+        this.logger.info({ projectId, agentId: record.id }, "Retired conductor agent on reset");
       } catch (error) {
-        this.logger.warn({ err: error, projectId, agentId }, "Conductor reset archive failed");
+        this.logger.warn(
+          { err: error, projectId, agentId: record.id },
+          "Conductor reset retire failed",
+        );
       }
     }
   }
