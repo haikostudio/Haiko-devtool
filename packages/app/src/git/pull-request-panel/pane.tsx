@@ -163,8 +163,8 @@ function renderKebabTriggerIcon({ hovered }: { hovered?: boolean }) {
 }
 
 function getCheckIdentity(check: PrPaneCheck): string {
-  if (check.github?.checkRunId !== undefined) {
-    return `${check.provider}:check-run:${check.github.checkRunId}`;
+  if (check.detailRef?.checkRunId !== undefined) {
+    return `${check.provider}:check-run:${check.detailRef.checkRunId}`;
   }
   return `${check.provider}:${check.name}:${check.url}`;
 }
@@ -281,6 +281,7 @@ export function PullRequestPane({
       }
       const input = {
         provider: data.provider,
+        forge: data.forge,
         pullRequest: { number: data.number, title: data.title, url: data.url },
         activity,
       };
@@ -298,6 +299,7 @@ export function PullRequestPane({
     },
     [
       addWorkspaceAttachment,
+      data.forge,
       data.number,
       data.provider,
       data.title,
@@ -313,6 +315,7 @@ export function PullRequestPane({
       }
       const attachment = buildPullRequestThreadContextAttachment({
         provider: data.provider,
+        forge: data.forge,
         pullRequest: { number: data.number, title: data.title, url: data.url },
         thread,
       });
@@ -326,6 +329,7 @@ export function PullRequestPane({
     },
     [
       addWorkspaceAttachment,
+      data.forge,
       data.number,
       data.provider,
       data.title,
@@ -345,7 +349,7 @@ export function PullRequestPane({
       }
       const threads = entry.kind === "thread" ? [entry] : entry.threads;
       for (const thread of threads) {
-        if (thread.location.isResolved === true) {
+        if (thread.isResolved === true) {
           continue;
         }
         handleAddThreadToChat(thread);
@@ -363,7 +367,7 @@ export function PullRequestPane({
 
       let details = null;
       try {
-        const ref = check.github;
+        const ref = check.detailRef;
         if (
           canFetchGitHubCheckDetails &&
           daemonClient &&
@@ -388,6 +392,7 @@ export function PullRequestPane({
         const attachment = buildPullRequestCheckContextAttachment({
           provider: data.provider,
           pullRequest: { number: data.number, title: data.title, url: data.url },
+          forge: data.forge,
           check,
           githubDetails: details,
         });
@@ -404,6 +409,7 @@ export function PullRequestPane({
     [
       addWorkspaceAttachment,
       canFetchGitHubCheckDetails,
+      data.forge,
       cwd,
       daemonClient,
       data.number,
@@ -1127,10 +1133,10 @@ function ThreadBlock({
     <View onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
       <Pressable onPress={handleHeaderPress} style={threadHeaderPressableStyle}>
         <Text style={styles.threadPath} numberOfLines={1}>
-          {formatPullRequestThreadPath(thread.location)}
+          {thread.location ? formatPullRequestThreadPath(thread.location) : ""}
         </Text>
-        {thread.location.isResolved ? <StatusBadge label="Resolved" variant="success" /> : null}
-        {thread.location.isOutdated ? <StatusBadge label="Outdated" /> : null}
+        {thread.isResolved ? <StatusBadge label="Resolved" variant="success" /> : null}
+        {thread.location?.isOutdated ? <StatusBadge label="Outdated" /> : null}
         <View style={styles.headerTrailing}>
           {collapsed ? (
             <View style={styles.threadCount}>

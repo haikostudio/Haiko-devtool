@@ -54,6 +54,9 @@ import type {
   GitHubSearchResponse,
   GitHubSearchRequest,
   ForgeSearchRequest,
+  CheckoutCommit,
+  ParsedDiffFile,
+  WorkspaceRecoveryState,
   DirectorySuggestionsResponse,
   PaseoWorktreeListResponse,
   PaseoWorktreeArchiveResponse,
@@ -3847,6 +3850,67 @@ export class DaemonClient {
   // Restauré : variantes « forge » (GitLab, Gitea…) des trois opérations qui
   // n'existaient qu'en version GitHub. Les anciennes restent, l'appelant choisit
   // selon la capacité annoncée par l'hôte.
+  // Restauré : historique des commits, différence d'un fichier dans un commit,
+  // et récupération d'un espace de travail. Les messages correspondants existent
+  // déjà côté protocole ; seules ces méthodes manquaient.
+  async listCheckoutCommits(
+    cwd: string,
+    requestId?: string,
+  ): Promise<{ baseRef: string | null; commits: CheckoutCommit[] }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.list.response">({
+        requestId,
+        message: { type: "checkout.commits.list.request", cwd },
+        timeout: 60000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return { baseRef: payload.baseRef, commits: payload.commits };
+  }
+
+  async getCommitFileDiff(
+    cwd: string,
+    sha: string,
+    path: string,
+    requestId?: string,
+  ): Promise<{ file: ParsedDiffFile | null }> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"checkout.commits.file_diff.response">({
+        requestId,
+        message: { type: "checkout.commits.file_diff.request", cwd, sha, path },
+        timeout: 60000,
+      });
+    if (payload.error) {
+      throw new Error(payload.error.message);
+    }
+    return { file: payload.file };
+  }
+
+  async inspectWorkspaceRecovery(
+    workspaceId: string,
+    requestId?: string,
+  ): Promise<WorkspaceRecoveryState> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.inspect.response">({
+        requestId,
+        message: { type: "workspace.recovery.inspect.request", workspaceId },
+      });
+    return payload.state;
+  }
+
+  async restoreWorkspace(workspaceId: string, requestId?: string): Promise<void> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"workspace.recovery.restore.response">({
+        requestId,
+        message: { type: "workspace.recovery.restore.request", workspaceId },
+        timeout: 150_000,
+      });
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "Workspace recovery was rejected by the host");
+    }
+  }
+
   async checkoutForgeSetAutoMerge(
     cwd: string,
     input: { enabled: true; method: CheckoutPrMergeMethod } | { enabled: false },
