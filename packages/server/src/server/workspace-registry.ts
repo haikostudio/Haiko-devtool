@@ -46,6 +46,10 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  // Restauré : racine exacte du checkout/worktree derrière cwd. Diffère de cwd
+  // quand le projet sélectionné est un sous-dossier du dépôt. Persisté pour que
+  // l'archivage et la récupération n'aient pas besoin que le dossier existe encore.
+  worktreeRoot: z.string().nullable().default(null),
   // The base branch the worktree was created from (normalized like worktree.json's
   // baseRefName). Only worktree workspaces carry a base branch; checkout-branch
   // worktrees and directory/local_checkout workspaces leave it null.
@@ -54,6 +58,10 @@ const PersistedWorkspaceRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  // Restauré : vrai quand le worktree a été créé par Paseo (donc supprimable par
+  // lui), et racine du dépôt principal auquel il se rattache.
+  isPaseoOwnedWorktree: z.boolean().default(false),
+  mainRepoRoot: z.string().nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable(),

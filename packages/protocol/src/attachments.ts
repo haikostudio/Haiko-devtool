@@ -78,7 +78,35 @@ export const UploadedFileAttachmentSchema = z.object({
   path: z.string(),
 });
 
+export const ForgeChangeRequestAttachmentSchema = z.object({
+  type: z.literal("forge_change_request"),
+  mimeType: z.literal("application/paseo-forge-change-request"),
+  forge: z.string().optional().default("github"),
+  number: z.number().int().positive(),
+  title: z.string(),
+  url: z.string(),
+  body: z.string().nullable().optional(),
+  projectPath: z.string().optional(),
+  baseRefName: z.string().nullable().optional(),
+  headRefName: z.string().nullable().optional(),
+});
+export type ForgeChangeRequestAttachment = z.infer<typeof ForgeChangeRequestAttachmentSchema>;
+
+export const ForgeIssueAttachmentSchema = z.object({
+  type: z.literal("forge_issue"),
+  mimeType: z.literal("application/paseo-forge-issue"),
+  forge: z.string().optional().default("github"),
+  number: z.number().int().positive(),
+  title: z.string(),
+  url: z.string(),
+  body: z.string().nullable().optional(),
+  projectPath: z.string().optional(),
+});
+export type ForgeIssueAttachment = z.infer<typeof ForgeIssueAttachmentSchema>;
+
 export const AgentAttachmentSchema = z.discriminatedUnion("type", [
+  ForgeChangeRequestAttachmentSchema,
+  ForgeIssueAttachmentSchema,
   GitHubPrAttachmentSchema,
   GitHubIssueAttachmentSchema,
   TextAttachmentSchema,
