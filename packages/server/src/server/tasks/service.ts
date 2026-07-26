@@ -20,6 +20,58 @@ export type TaskCompletedListener = (projectId: string, task: KanbanTask) => voi
 // remains a valid direct-drop entry point (and the queued-for-launch state).
 const PIPELINE_COLUMNS = new Set<TaskColumn>(["validated", "scheduled"]);
 
+// The columns where nothing ever happens on its own. A card sent back here is
+// back to being a draft.
+const INERT_COLUMNS = new Set<TaskColumn>(["notes", "backlog"]);
+
+/**
+ * Everything a run leaves behind on a card, wiped when the user drags it back to
+ * "À faire" (or "Notes"). Dragging a card back there is the "start this one
+ * over" gesture: it must not keep a cost estimate, a half-finished progress
+ * sub-status, a recorded analysis failure, a plan, a pause or an open final
+ * check — all of which would otherwise decide how the card behaves the next
+ * time it is validated.
+ *
+ * Two things are deliberately KEPT:
+ * - `links` (the agent and its conversation). The card's history is never
+ *   erased — that is the whole point of one agent per task. A reset starts the
+ *   work over, not the story.
+ * - `billing`, which records that this task's line was already added to an
+ *   invoice. Clearing it would invite invoicing the same work twice.
+ */
+/** Stamps completedAt / deployedAt the first time a card reaches a terminal column. */
+function stampTerminalDates(
+  task: KanbanTask,
+  column: TaskColumn,
+  now: string,
+): Partial<KanbanTask> {
+  if (column === "done" && task.completedAt == null) {
+    return { completedAt: now };
+  }
+  if (column === "deployed" && task.deployedAt == null) {
+    // A card that jumped straight to "deployed" never got its completion stamp.
+    return { deployedAt: now, ...(task.completedAt == null ? { completedAt: now } : {}) };
+  }
+  return {};
+}
+
+function resetToDraft(task: KanbanTask): Partial<KanbanTask> {
+  const cleared: Partial<KanbanTask> = {
+    estimate: null,
+    schedule: null,
+    analysis: null,
+    progress: null,
+    validation: null,
+    planReadyAt: null,
+    completedAt: null,
+    deployedAt: null,
+  };
+  if (task.executionHold !== undefined) {
+    cleared.executionHold = false;
+  }
+  return cleared;
+}
+
 // The kanban columns, in board order. "notes" is the leftmost draft column
 // (inert: never in PIPELINE_COLUMNS, so no estimate/execution); the last entry
 // is terminal.
@@ -46,6 +98,8 @@ const COLUMN_ORDER = [
  *   dragged back into a pipeline column (kills the "done keeps relaunching" loop).
  * - "done" stamps completedAt; "deployed" (terminal, post-"done") stamps
  *   deployedAt and backfills completedAt if the task jumped straight there.
+ * - dragging a card back into an INERT column ("À faire"/"Notes") RESETS it: see
+ *   {@link resetToDraft}. That is the user's "start this one over" gesture.
  */
 function applyColumnMove(
   task: KanbanTask,
@@ -56,16 +110,13 @@ function applyColumnMove(
   const enteringPipeline =
     !alreadyCompleted && PIPELINE_COLUMNS.has(input.column) && !PIPELINE_COLUMNS.has(task.column);
   const leavingPipeline = !PIPELINE_COLUMNS.has(input.column) && PIPELINE_COLUMNS.has(task.column);
-  const enteringDone = input.column === "done" && task.completedAt == null;
-  const enteringDeployed = input.column === "deployed" && task.deployedAt == null;
+  const returningToDraft = INERT_COLUMNS.has(input.column) && !INERT_COLUMNS.has(task.column);
   const moved: KanbanTask = {
     ...task,
+    ...(returningToDraft ? resetToDraft(task) : {}),
     column: input.column,
     updatedAt: now,
-    ...(enteringDone ? { completedAt: now } : {}),
-    ...(enteringDeployed
-      ? { deployedAt: now, ...(task.completedAt == null ? { completedAt: now } : {}) }
-      : {}),
+    ...stampTerminalDates(task, input.column, now),
     ...(input.manual ? { manualOverrideAt: now } : {}),
     // A user drag into a pipeline column is an implicit approval of the proposal.
     ...(input.manual && enteringPipeline && task.approval?.state === "pending"

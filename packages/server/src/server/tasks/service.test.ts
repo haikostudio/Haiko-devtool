@@ -169,6 +169,112 @@ describe("TaskBoardService", () => {
     expect(board.tasks[0]?.completedAt).toBeTruthy();
   });
 
+  test('dragging a card back to "À faire" resets it to a draft', async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Login flow",
+    });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "validated",
+      index: 0,
+      manual: true,
+    });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 1,
+        quotaPercent: 5,
+        estimatedMinutes: 10,
+        confidence: "high",
+        summary: "ok",
+        model: "claude",
+        estimatedAt: "2026-07-27T00:00:00.000Z",
+      },
+      analysis: {
+        state: "failed",
+        attempts: 3,
+        failedAt: "2026-07-27T00:00:00.000Z",
+        exhausted: true,
+      },
+      progress: "ready_for_review",
+      planReadyAt: "2026-07-27T00:00:00.000Z",
+      executionHold: true,
+      validation: { state: "running", checkedAt: "2026-07-27T00:00:00.000Z" },
+    }));
+
+    const board = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "backlog",
+      index: 0,
+      manual: true,
+    });
+    const reset = board.tasks.find((entry) => entry.id === task.id);
+    expect(reset?.estimate ?? null).toBeNull();
+    expect(reset?.schedule ?? null).toBeNull();
+    expect(reset?.analysis ?? null).toBeNull();
+    expect(reset?.progress ?? null).toBeNull();
+    expect(reset?.planReadyAt ?? null).toBeNull();
+    expect(reset?.validation ?? null).toBeNull();
+    expect(reset?.executionHold).not.toBe(true);
+  });
+
+  test("a reset keeps the card's agent: the work restarts, the history does not", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Login flow",
+      agentId: "agent-1",
+    });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "validated",
+      index: 0,
+      manual: true,
+    });
+
+    const board = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "backlog",
+      index: 0,
+      manual: true,
+    });
+    const reset = board.tasks.find((entry) => entry.id === task.id);
+    expect(reset?.links.agentIds).toContain("agent-1");
+    expect(reset?.links.primaryAgentId).toBe("agent-1");
+  });
+
+  test("a reset keeps billing so the same work is never invoiced twice", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Login flow",
+    });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "validated",
+      index: 0,
+      manual: true,
+    });
+    await service.updateTask("proj-1", task.id, {
+      billing: {
+        kind: "invoice",
+        documentId: "inv-1",
+        number: "FA-2026-001",
+        addedAt: "2026-07-27T00:00:00.000Z",
+      },
+    });
+
+    const board = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "backlog",
+      index: 0,
+      manual: true,
+    });
+    expect(board.tasks.find((entry) => entry.id === task.id)?.billing?.documentId).toBe("inv-1");
+  });
+
   test("upsertSyncedTask dedupes by normalized title project-wide", async () => {
     const folder = await service.createFolder("proj-1", "Agent");
     const first = await service.upsertSyncedTask("proj-1", {
@@ -251,7 +357,19 @@ describe("TaskBoardService", () => {
     expect(refined).toEqual([]);
   });
 
-  test("createTask always lands in backlog even when a pipeline column is requested", async () => {
+  test("createTask honours an explicit inert column", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const note = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Idée en vrac",
+      column: "notes",
+    });
+    // A card asked for in "Notes" stays in "Notes". Silently forcing every
+    // creation into backlog made cards look like they jumped columns on their own.
+    expect(note.column).toBe("notes");
+  });
+
+  test("createTask never lands in a pipeline column even when one is requested", async () => {
     const scheduled: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
     const folder = await service.createFolder("proj-1", "Auth");

@@ -237,15 +237,41 @@ export class TaskEstimator {
   }
 
   /**
-   * User-initiated "analyser à nouveau": wipes the failure (and its attempt
-   * counter) so the sweep picks the card up again from scratch.
+   * User-initiated "analyser à nouveau".
+   *
+   * Analysis belongs to "Validé", so a re-analysis SENDS THE CARD BACK THERE —
+   * a card cannot be re-analyzed while sitting in "Planifié" or "En cours"
+   * pretending the earlier verdict still holds. It also clears the previous
+   * estimate and any recorded failure: without that, {@link estimate} returns
+   * early (an existing estimate, or spent attempts) and the button would do
+   * nothing at all.
+   *
+   * A finished card ("Terminé"/"Déployé") is terminal and is left alone: the
+   * user drags it back to "À faire" to start it over.
    */
   async retry(projectId: string, taskId: string): Promise<void> {
+    const board = await this.taskBoardService.getBoard(projectId);
+    const task = board.tasks.find((entry) => entry.id === taskId);
+    if (!task || task.column === "done" || task.column === "deployed") {
+      return;
+    }
+    // Clear BEFORE moving: the move itself decides how to arm the schedule from
+    // whether an estimate is present, and a stale one would arm it as "ready to
+    // launch" instead of "to be analyzed".
     await this.taskBoardService.patchTask(projectId, taskId, (current) => {
       const next = { ...current };
       delete next.analysis;
-      return next;
+      delete next.estimate;
+      delete next.progress;
+      delete next.planReadyAt;
+      return {
+        ...next,
+        schedule: { state: "pending_estimate" as const, attempts: 0 },
+      };
     });
+    if (task.column !== "validated") {
+      await this.taskBoardService.transitionTask(projectId, taskId, "validated");
+    }
     this.requestEstimate(projectId, taskId);
   }
 

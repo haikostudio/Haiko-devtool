@@ -247,6 +247,36 @@ describe("TaskEstimator", () => {
     expect((await service.getBoard("proj-1")).tasks[0]?.estimate).toBeUndefined();
   });
 
+  test('a re-analysis sends the card back to "Validé" and re-arms the analysis', async () => {
+    const task = await seedScheduledTask();
+    const { estimator } = buildEstimator({ finalText: okEstimate });
+
+    // Sitting in "Planifié" with a verdict already on it.
+    estimator.requestEstimate("proj-1", task.id);
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.estimate).toBeTruthy();
+    });
+
+    await estimator.retry("proj-1", task.id);
+
+    // Analysis belongs to "Validé": the card cannot be re-analyzed while still
+    // sitting further down the pipeline on a verdict that no longer holds.
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks[0]?.column).toBe("validated");
+  });
+
+  test("a re-analysis leaves a finished card alone", async () => {
+    const task = await seedScheduledTask();
+    const { estimator } = buildEstimator({ finalText: okEstimate });
+    await service.transitionTask("proj-1", task.id, "done");
+
+    await estimator.retry("proj-1", task.id);
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks[0]?.column).toBe("done");
+  });
+
   test("retry clears the failure so the card can be analyzed again", async () => {
     const task = await seedScheduledTask();
     const { estimator } = buildEstimator({ finalText: new Error("agent exploded") });
