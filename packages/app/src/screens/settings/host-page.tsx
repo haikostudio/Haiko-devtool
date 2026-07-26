@@ -14,7 +14,7 @@ import {
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles, withUnistyles } from "react-native-unistyles";
 import type { TerminalProfile } from "@getpaseo/protocol/messages";
 import {
@@ -60,7 +60,7 @@ import { SettingsSection } from "@/screens/settings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
 import { settingsStyles } from "@/styles/settings";
 import type { HostConnection, HostProfile } from "@/types/host-connection";
-import { confirmDialog } from "@/utils/confirm-dialog";
+import { alertDialog, confirmDialog } from "@/utils/confirm-dialog";
 import { isVersionMismatch } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
@@ -461,7 +461,7 @@ function ConnectionsSection({ host }: { host: HostProfile }) {
       .then(() => setPendingRemoveConnection(null))
       .catch((error) => {
         console.error("[HostPage] Failed to remove connection", error);
-        Alert.alert(
+        void alertDialog(
           t("settings.host.connections.removeErrorTitle"),
           t("settings.host.connections.removeErrorMessage"),
         );
@@ -654,7 +654,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       if (restartResult.status === "rejected" && !restartResult.disconnectedAfterFailure) {
         console.error(`[HostPage] Failed to restart daemon ${host.label}`, restartResult.error);
         setIsRestarting(false);
-        Alert.alert(
+        void alertDialog(
           t("settings.host.daemon.restart.requestFailedTitle"),
           t("settings.host.daemon.restart.requestFailedMessage"),
         );
@@ -670,7 +670,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       if (isMountedRef.current) {
         setIsRestarting(false);
         if (!reconnected) {
-          Alert.alert(
+          void alertDialog(
             t("settings.host.daemon.restart.unableToReconnectTitle"),
             t("settings.host.daemon.restart.unableToReconnectMessage", { name: host.label }),
           );
@@ -682,14 +682,14 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
 
   const handleRestart = useCallback(() => {
     if (!daemonClient) {
-      Alert.alert(
+      void alertDialog(
         t("settings.host.daemon.restart.unavailableTitle"),
         t("settings.host.daemon.restart.unavailableMessage"),
       );
       return;
     }
     if (!isHostConnected()) {
-      Alert.alert(
+      void alertDialog(
         t("settings.host.daemon.restart.offlineTitle"),
         t("settings.host.daemon.restart.offlineMessage"),
       );
@@ -722,7 +722,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       })
       .catch((error) => {
         console.error(`[HostPage] Failed to open restart confirmation for ${host.label}`, error);
-        Alert.alert(
+        void alertDialog(
           t("settings.host.daemon.restart.requestFailedTitle"),
           t("settings.host.daemon.restart.dialogFailedMessage"),
         );
@@ -1055,7 +1055,7 @@ function AutoArchiveMergedWorkspacesCard({ serverId }: { serverId: string }) {
     (next: boolean) => {
       void patchConfig({ autoArchiveAfterMerge: next }).catch((error) => {
         console.error("[HostPage] Failed to update auto-archive after merge", error);
-        Alert.alert(
+        void alertDialog(
           "Unable to update workspaces",
           error instanceof Error ? error.message : String(error),
         );
@@ -1094,7 +1094,7 @@ function EnableTerminalAgentHooksCard({ serverId }: { serverId: string }) {
     (next: boolean) => {
       void patchConfig({ enableTerminalAgentHooks: next }).catch((error) => {
         console.error("[HostPage] Failed to update terminal agent hooks", error);
-        Alert.alert(
+        void alertDialog(
           "Unable to update terminal agent hooks",
           error instanceof Error ? error.message : String(error),
         );
@@ -1356,7 +1356,7 @@ function RemoveHostSection({
       })
       .catch((error) => {
         console.error("[HostPage] Failed to remove host", error);
-        Alert.alert(
+        void alertDialog(
           t("settings.host.daemon.remove.errorTitle"),
           isLocalDaemon
             ? t("settings.host.daemon.remove.localErrorMessage")
@@ -1669,7 +1669,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
         try {
           await saveProfiles(profiles.filter((p) => p.id !== id));
         } catch (error) {
-          Alert.alert(
+          void alertDialog(
             t("common.errors.unableToSave"),
             error instanceof Error ? error.message : String(error),
           );
@@ -1691,7 +1691,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
+        void alertDialog(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
         );
@@ -1711,7 +1711,7 @@ function TerminalProfilesSection({ serverId }: { serverId: string }) {
       try {
         await saveProfiles(next);
       } catch (error) {
-        Alert.alert(
+        void alertDialog(
           t("common.errors.unableToSave"),
           error instanceof Error ? error.message : String(error),
         );

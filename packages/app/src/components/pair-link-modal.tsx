@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Link, X } from "lucide-react-native";
 import type { HostProfile } from "@/types/host-connection";
 import { useHosts, useHostMutations } from "@/runtime/host-runtime";
 import { decodeOfferFragmentPayload, normalizeHostPort } from "@/utils/daemon-endpoints";
+import { alertDialog } from "@/utils/confirm-dialog";
 import { connectToDaemon } from "@/utils/test-daemon-connection";
 import { ConnectionOfferSchema } from "@getpaseo/protocol/connection-offer";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
@@ -115,7 +116,7 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
         const message = error instanceof Error ? error.message : t("pairing.link.errors.invalid");
         setErrorMessage(message);
         if (!isMobile) {
-          Alert.alert(t("pairing.link.alert.failedTitle"), message);
+          void alertDialog(t("pairing.link.alert.failedTitle"), message);
         }
         return null;
       }
@@ -150,7 +151,7 @@ export function PairLinkModal({ visible, onClose, onCancel, onSaved }: PairLinkM
         error instanceof Error ? error.message : t("pairing.link.errors.unableToPair");
       setErrorMessage(message);
       if (!isMobile) {
-        Alert.alert(t("pairing.link.alert.failedTitle"), message);
+        void alertDialog(t("pairing.link.alert.failedTitle"), message);
       }
     } finally {
       setIsSaving(false);

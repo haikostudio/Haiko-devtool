@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, Link2, X } from "lucide-react-native";
@@ -11,6 +11,7 @@ import {
   serializeConnectionUri,
   serializeConnectionUriForStorage,
 } from "@/utils/daemon-endpoints";
+import { alertDialog } from "@/utils/confirm-dialog";
 import { DaemonConnectionTestError } from "@/utils/test-daemon-connection";
 import { AdaptiveModalSheet, AdaptiveTextInput, type SheetHeader } from "./adaptive-modal-sheet";
 import { Button } from "@/components/ui/button";
@@ -412,7 +413,7 @@ export function AddHostModal({ visible, onClose, onCancel, onSaved }: AddHostMod
       }
       setErrorMessage(combined);
       if (!isMobile) {
-        Alert.alert(t("pairing.direct.errors.failedTitle"), combined);
+        void alertDialog(t("pairing.direct.errors.failedTitle"), combined);
       }
     } finally {
       setIsSaving(false);

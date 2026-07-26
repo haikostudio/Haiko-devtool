@@ -1,6 +1,14 @@
-import { Alert } from "react-native";
-import { getDesktopHost, type DesktopDialogAskOptions } from "@/desktop/host";
+import { i18n } from "@/i18n/i18next";
 import { isNative } from "@/constants/platform";
+import { showAppDialog } from "@/stores/app-dialog-store";
+
+/**
+ * Alerts and confirmations always render in-app (see `<AppDialogHost />`).
+ * Native OS dialogs — `Alert.alert`, `window.confirm`, the Electron dialog
+ * bridge — are deliberately not used: the browser prefixes them with the origin
+ * ("app.example.com indique"), they ignore the theme, and they block the JS
+ * thread.
+ */
 
 export interface ConfirmDialogInput {
   title: string;
@@ -10,62 +18,8 @@ export interface ConfirmDialogInput {
   destructive?: boolean;
 }
 
-interface ConfirmButtonConfig {
-  confirmLabel: string;
-  cancelLabel: string;
-}
-
-function resolveButtonLabels(input: ConfirmDialogInput): ConfirmButtonConfig {
-  return {
-    confirmLabel: input.confirmLabel ?? "Confirm",
-    cancelLabel: input.cancelLabel ?? "Cancel",
-  };
-}
-
-async function showNativeConfirmDialog(input: ConfirmDialogInput): Promise<boolean> {
-  const labels = resolveButtonLabels(input);
-
-  return new Promise<boolean>((resolve) => {
-    Alert.alert(
-      input.title,
-      input.message,
-      [
-        {
-          text: labels.cancelLabel,
-          style: "cancel",
-          onPress: () => resolve(false),
-        },
-        {
-          text: labels.confirmLabel,
-          style: input.destructive ? "destructive" : "default",
-          onPress: () => resolve(true),
-        },
-      ],
-      {
-        cancelable: true,
-        onDismiss: () => resolve(false),
-      },
-    );
-  });
-}
-
-function getDesktopApi() {
-  if (isNative) {
-    return null;
-  }
-  return getDesktopHost();
-}
-
-function buildDesktopAskOptions(input: ConfirmDialogInput): DesktopDialogAskOptions {
-  const labels = resolveButtonLabels(input);
-
-  return {
-    title: input.title,
-    okLabel: labels.confirmLabel,
-    cancelLabel: labels.cancelLabel,
-    kind: input.destructive ? "warning" : "info",
-  };
-}
+const CONFIRM_ACTION_ID = "confirm";
+const CANCEL_ACTION_ID = "cancel";
 
 function blurActiveWebElement(): void {
   if (isNative) {
@@ -75,48 +29,55 @@ function blurActiveWebElement(): void {
   (activeElement as HTMLElement | null)?.blur?.();
 }
 
-async function showDesktopConfirmDialog(input: ConfirmDialogInput): Promise<boolean | null> {
-  const desktopApi = getDesktopApi();
-  if (!desktopApi) {
-    return null;
-  }
-
-  blurActiveWebElement();
-  const options = buildDesktopAskOptions(input);
-  const desktopAsk = desktopApi.dialog?.ask;
-
-  if (typeof desktopAsk === "function") {
-    return await desktopAsk(input.message, options);
-  }
-
-  return null;
-}
-
-function showWebConfirmDialog(input: ConfirmDialogInput): boolean {
-  const browserConfirm = (globalThis as { confirm?: (message?: string) => boolean }).confirm;
-  if (typeof browserConfirm !== "function") {
-    throw new Error("[ConfirmDialog] No web confirmation backend is available.");
-  }
-
-  blurActiveWebElement();
-  const promptMessage = `${input.title}\n\n${input.message}`;
-  return browserConfirm(promptMessage);
-}
-
 export async function confirmDialog(input: ConfirmDialogInput): Promise<boolean> {
-  if (isNative) {
-    return showNativeConfirmDialog(input);
-  }
+  blurActiveWebElement();
 
-  const desktopResult = await showDesktopConfirmDialog(input);
-  if (desktopResult !== null) {
-    return desktopResult;
-  }
+  const actionId = await showAppDialog({
+    title: input.title,
+    message: input.message,
+    actions: [
+      {
+        id: CANCEL_ACTION_ID,
+        label: input.cancelLabel ?? i18n.t("common.actions.cancel"),
+        variant: "secondary",
+      },
+      {
+        id: CONFIRM_ACTION_ID,
+        label: input.confirmLabel ?? i18n.t("common.actions.confirm"),
+        variant: input.destructive ? "destructive" : "default",
+      },
+    ],
+    dismissActionId: CANCEL_ACTION_ID,
+  });
 
-  return showWebConfirmDialog(input);
+  return actionId === CONFIRM_ACTION_ID;
+}
+
+/**
+ * Single-button notice — the in-app replacement for `Alert.alert(title, message)`.
+ * Signature mirrors `Alert.alert` on purpose so call sites read the same.
+ */
+export async function alertDialog(
+  title: string,
+  message?: string,
+  confirmLabel?: string,
+): Promise<void> {
+  blurActiveWebElement();
+
+  await showAppDialog({
+    title,
+    message,
+    actions: [
+      {
+        id: CONFIRM_ACTION_ID,
+        label: confirmLabel ?? i18n.t("common.actions.ok"),
+        variant: "default",
+      },
+    ],
+    dismissActionId: CONFIRM_ACTION_ID,
+  });
 }
 
 export const __private__ = {
   blurActiveWebElement,
-  buildDesktopAskOptions,
 };

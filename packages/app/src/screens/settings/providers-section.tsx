@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   Pressable,
   Text,
   View,
@@ -33,7 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SettingsSection } from "@/screens/settings/settings-section";
 import { useProviderSettingsStore } from "@/stores/provider-settings-store";
-import { confirmDialog } from "@/utils/confirm-dialog";
+import { alertDialog, confirmDialog } from "@/utils/confirm-dialog";
 import { ChevronRight, MoreHorizontal, Trash2 } from "lucide-react-native";
 
 type ProviderDefinition = ReturnType<typeof buildProviderDefinitions>[number];
@@ -348,7 +347,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
       try {
         await patchConfig({ providers: { [providerId]: { enabled } } });
       } catch (error) {
-        Alert.alert(
+        void alertDialog(
           t("settings.providers.updateErrorTitle"),
           error instanceof Error ? error.message : String(error),
         );
@@ -377,7 +376,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
 
         await patchConfig({ removeProviders: [providerId] });
       } catch (error) {
-        Alert.alert(
+        void alertDialog(
           t("settings.providers.remove.errorTitle"),
           error instanceof Error ? error.message : String(error),
         );
@@ -399,7 +398,7 @@ export function ProvidersSection({ serverId }: ProvidersSectionProps) {
         await patchConfig(buildAcpProviderConfigPatch(entry));
         await refresh([entry.id]);
       } catch (error) {
-        Alert.alert(
+        void alertDialog(
           t("settings.providers.addErrorTitle"),
           error instanceof Error ? error.message : String(error),
         );

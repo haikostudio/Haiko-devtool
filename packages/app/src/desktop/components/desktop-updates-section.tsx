@@ -1,5 +1,5 @@
 import React, { type ReactElement, useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -17,6 +17,7 @@ import { useDaemonStatus } from "@/desktop/hooks/use-daemon-status";
 import { useDesktopSettings, type DesktopSettings } from "@/desktop/settings/desktop-settings";
 import { resolveAppVersion } from "@/utils/app-version";
 import { CODE_SURFACE_DATASET } from "@/styles/code-surface";
+import { alertDialog } from "@/utils/confirm-dialog";
 
 type DesktopDaemonSettings = DesktopSettings["daemon"];
 
@@ -67,7 +68,7 @@ function useDaemonCliStatusModal() {
     }
     void Clipboard.setStringAsync(cliStatusOutput)
       .then(() => {
-        Alert.alert(t("common.states.copied"), t("desktop.daemon.fullStatus.copied"));
+        void alertDialog(t("common.states.copied"), t("desktop.daemon.fullStatus.copied"));
         return;
       })
       .catch((error) => {
@@ -99,12 +100,12 @@ function useDaemonLogsModal(daemonLogs: { logPath?: string } | null) {
 
     void Clipboard.setStringAsync(logPath)
       .then(() => {
-        Alert.alert(t("common.states.copied"), t("desktop.daemon.logs.copied"));
+        void alertDialog(t("common.states.copied"), t("desktop.daemon.logs.copied"));
         return;
       })
       .catch((error) => {
         console.error("[Settings] Failed to copy log path", error);
-        Alert.alert(t("common.errors.error"), t("desktop.daemon.logs.copyFailed"));
+        void alertDialog(t("common.errors.error"), t("desktop.daemon.logs.copyFailed"));
       });
   }, [daemonLogs?.logPath, t]);
 

@@ -1,5 +1,4 @@
 import { useCallback, useRef } from "react";
-import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "react-i18next";
 import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
@@ -9,6 +8,7 @@ import {
   type PickedImageAttachmentInput,
 } from "@/hooks/image-attachment-picker";
 import { isWeb } from "@/constants/platform";
+import { alertDialog } from "@/utils/confirm-dialog";
 
 interface UseImageAttachmentPickerResult {
   pickImages: () => Promise<PickedImageAttachmentInput[] | null>;
@@ -32,7 +32,7 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
     }
 
     if (!currentPermission?.granted) {
-      Alert.alert(
+      void alertDialog(
         t("imageAttachmentPicker.permissionTitle"),
         t("imageAttachmentPicker.permissionMessage"),
       );
@@ -81,7 +81,10 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
       return await normalizePickedImageAssets(result.assets);
     } catch (error) {
       console.error("[ImageAttachmentPicker] Failed to pick image:", error);
-      Alert.alert(t("imageAttachmentPicker.errorTitle"), t("imageAttachmentPicker.failedToSelect"));
+      void alertDialog(
+        t("imageAttachmentPicker.errorTitle"),
+        t("imageAttachmentPicker.failedToSelect"),
+      );
       return null;
     } finally {
       isPickingRef.current = false;
