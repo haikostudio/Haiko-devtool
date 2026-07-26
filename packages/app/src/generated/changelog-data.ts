@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-26",
     markdown:
-      "### Ajouts\n\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,69 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "45cc091816d8a0316aff5124e25b7ec3875e27f5",
+    shortHash: "45cc09181",
+    date: "2026-07-26T23:10:48+02:00",
+    author: "haikostudio",
+    subject: "chore: sauvegarde avant build local",
+  },
+  {
+    hash: "9923b99fc84e9094380d13e991f7ad9b9746094c",
+    shortHash: "9923b99fc",
+    date: "2026-07-26T23:10:15+02:00",
+    author: "haikostudio",
+    subject: "feat(quotas): historique tenu par le moteur + estimation « à ce rythme »",
+  },
+  {
+    hash: "a3358272f2da1166942f9b06e9afd3d85a6c078e",
+    shortHash: "a3358272f",
+    date: "2026-07-26T22:57:38+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas",
+  },
+  {
+    hash: "13509119c10d337339b7a931941a1c5736a05d32",
+    shortHash: "13509119c",
+    date: "2026-07-26T22:55:11+02:00",
+    author: "haikostudio",
+    subject: "fix(tâches): la validation redevient un geste humain",
+  },
+  {
+    hash: "460c3e5a5512cb430d15751f04f38de768c1c698",
+    shortHash: "460c3e5a5",
+    date: "2026-07-26T22:52:31+02:00",
+    author: "haikostudio",
+    subject: "fix(déploiement): la fenêtre dit enfin si la publication a réussi ou échoué",
+  },
+  {
+    hash: "653fa7e502264fa55b914926be3e751104b26e4c",
+    shortHash: "653fa7e50",
+    date: "2026-07-26T22:50:32+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): jauge circulaire de quotas dans l'en-tête, à la place de la bande",
+  },
+  {
+    hash: "07aa48cd6e957957d47f2151fb5960acae2e5656",
+    shortHash: "07aa48cd6",
+    date: "2026-07-26T22:48:47+02:00",
+    author: "Mohamed Boudra",
+    subject: "docs(claude): explain reauthentication (#2455)",
+  },
+  {
+    hash: "951800b352c4b34410546b59e0806906c596a41b",
+    shortHash: "951800b35",
+    date: "2026-07-26T22:43:39+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): l'explorateur de fichiers devient un volet latéral redimensionnable",
+  },
+  {
+    hash: "62427b665ca03f3d7ed8903641db8e77671fc4c3",
+    shortHash: "62427b665",
+    date: "2026-07-26T22:32:30+02:00",
+    author: "haikostudio",
+    subject: "chore: publication groupée des mises à jour",
+  },
   {
     hash: "458467176e8bf0feae741a33b07815bca4ce0c67",
     shortHash: "458467176",
@@ -2709,72 +2772,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "haikostudio",
     subject: "feat(tâches): agent « chef d'orchestre » ancré en bas du gestionnaire de tâches",
   },
-  {
-    hash: "2d5463a9f621ebb530f0c06f7455ceae81e5a28a",
-    shortHash: "2d5463a9f",
-    date: "2026-07-21T22:56:05+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(tâches): lancer un agent d'analyse visible dès la validation, puis continuer l'exécution avec le même agent",
-  },
-  {
-    hash: "214a006c97f036843f2f6fe3611ed0c5090cafbe",
-    shortHash: "214a006c9",
-    date: "2026-07-21T22:51:55+02:00",
-    author: "haikostudio",
-    subject:
-      "style(tâches): champ recherche pleine largeur + bouton tri auto, chronologie centrée, bouton dossier pleine largeur",
-  },
-  {
-    hash: "4adc5fb551fc15b5c6f7277115c0b7f57e184810",
-    shortHash: "4adc5fb55",
-    date: "2026-07-21T22:22:20+02:00",
-    author: "haikostudio",
-    subject: "style(app): homogénéise paddings, marges, gaps et tailles sur toute l'app",
-  },
-  {
-    hash: "2ce7bf14ff3588f6f1318da3f711545da028f211",
-    shortHash: "2ce7bf14f",
-    date: "2026-07-21T22:21:30+02:00",
-    author: "haikostudio",
-    subject: "fix(cerveau): ne plus afficher les agents internes du cerveau comme onglets fantômes",
-  },
-  {
-    hash: "309672c8e54f0e6af48463b3737b74a1c1352a7a",
-    shortHash: "309672c8e",
-    date: "2026-07-21T22:12:33+02:00",
-    author: "Mohamed Boudra",
-    subject: "Show recent commit history in the explorer (#2312)",
-  },
-  {
-    hash: "11569ca4cce433244ab4975e0ae54e9d204faba9",
-    shortHash: "11569ca4c",
-    date: "2026-07-21T22:07:11+02:00",
-    author: "haikostudio",
-    subject: "fix(déploiement): liste « À déployer » scrollable sur toute la hauteur du tiroir",
-  },
-  {
-    hash: "cb6d2f1459bd3398c495b9016994c772455bb54b",
-    shortHash: "cb6d2f145",
-    date: "2026-07-21T21:34:20+02:00",
-    author: "Mohamed Boudra",
-    subject: "Open chat file links at the referenced line (#2309)",
-  },
-  {
-    hash: "cf9dfcf9477e16582bdd50220618b1793b7333bd",
-    shortHash: "cf9dfcf94",
-    date: "2026-07-21T21:33:47+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): stop Android chat jumping during streaming",
-  },
-  {
-    hash: "7d10791bad1768af1323fdd8441c39d869148ae6",
-    shortHash: "7d10791ba",
-    date: "2026-07-21T20:49:58+02:00",
-    author: "Mohamed Boudra",
-    subject: "test(app): verify catch-up after actual unsubscription",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-26T22:26:15+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-26T23:10:48+02:00";
