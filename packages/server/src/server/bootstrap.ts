@@ -140,6 +140,7 @@ import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
+import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { BrainMemoryClient } from "../services/brain-memory/client.js";
 import { BrainCurator } from "../services/brain-memory/curator.js";
@@ -871,8 +872,14 @@ export async function createPaseoDaemon(
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     deps: {
-      github,
+      forgeOverrides: { github },
     },
+  });
+  const workspaceProvisioning = createWorkspaceProvisioningService({
+    workspaceRegistry,
+    projectRegistry,
+    workspaceGitService,
+    logger,
   });
   const providerSnapshotLogger = logger.child({ module: "provider-snapshot-manager" });
   const providerSnapshotManager = new ProviderSnapshotManager({
@@ -1009,6 +1016,9 @@ export async function createPaseoDaemon(
         workspaceId: workspace.workspaceId,
         cwd: workspace.cwd,
         kind: workspace.kind,
+        worktreeRoot: workspace.worktreeRoot,
+        isPaseoOwnedWorktree: workspace.isPaseoOwnedWorktree,
+        mainRepoRoot: workspace.mainRepoRoot,
       }));
   };
   const markWorkspaceArchivingExternal = (workspaceIds: Iterable<string>, archivingAt: string) => {
@@ -1097,8 +1107,7 @@ export async function createPaseoDaemon(
                   resolveDefaultBranch: workflowOptions.resolveDefaultBranch,
                 }
               : {}),
-            projectRegistry,
-            workspaceRegistry,
+            workspaceProvisioning,
             workspaceGitService,
           });
         },
@@ -1180,7 +1189,7 @@ export async function createPaseoDaemon(
     await emitWorkspaceUpdatesExternal([result.workspace.workspaceId]);
     return result;
   };
-  const archiveScheduleWorkspaceExternal = async (workspaceId: string, repoRoot: string) => {
+  const archiveScheduleWorkspaceExternal = async (workspaceId: string) => {
     await archiveByScope(
       {
         paseoHome: config.paseoHome,
@@ -1207,8 +1216,6 @@ export async function createPaseoDaemon(
       },
       {
         scope: { kind: "workspace", workspaceId },
-        repoRoot,
-        paseoWorktreesBaseRoot: config.worktreesRoot,
         requestId: "schedule-run-finish",
       },
     );
@@ -1258,7 +1265,7 @@ export async function createPaseoDaemon(
     agentManager,
     agentStorage,
     createAgent,
-    createLocalCheckoutWorkspace: createScheduleLocalWorkspaceExternal,
+    createDirectoryWorkspace: createScheduleLocalWorkspaceExternal,
     createPaseoWorktreeWorkspace: createSchedulePaseoWorktreeExternal,
     archiveWorkspace: archiveScheduleWorkspaceExternal,
   });

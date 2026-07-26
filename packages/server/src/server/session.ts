@@ -4864,8 +4864,7 @@ export class Session {
       ...(options?.resolveDefaultBranch
         ? { resolveDefaultBranch: options.resolveDefaultBranch }
         : {}),
-      projectRegistry: this.projectRegistry,
-      workspaceRegistry: this.workspaceRegistry,
+      workspaceProvisioning: this.workspaceProvisioning,
       workspaceGitService: this.workspaceGitService,
     });
     void Promise.all([
@@ -4888,6 +4887,9 @@ export class Session {
         workspaceId: workspace.workspaceId,
         cwd: workspace.cwd,
         kind: workspace.kind,
+        worktreeRoot: workspace.worktreeRoot,
+        isPaseoOwnedWorktree: workspace.isPaseoOwnedWorktree,
+        mainRepoRoot: workspace.mainRepoRoot,
       }));
   }
 
@@ -6003,11 +6005,6 @@ export class Session {
         throw new Error(`Workspace not found: ${request.workspaceId}`);
       }
 
-      const gitSnapshot = await this.workspaceGitService
-        .getSnapshot(existing.cwd)
-        .catch(() => null);
-      const repoRoot = gitSnapshot?.git?.repoRoot ?? null;
-
       await archiveByScope(
         {
           paseoHome: this.paseoHome,
@@ -6030,8 +6027,6 @@ export class Session {
         },
         {
           scope: { kind: "workspace", workspaceId: existing.workspaceId },
-          repoRoot,
-          paseoWorktreesBaseRoot: this.worktreesRoot,
           requestId: request.requestId,
         },
       );
