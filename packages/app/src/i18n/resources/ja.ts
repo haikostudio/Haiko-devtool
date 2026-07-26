@@ -317,6 +317,9 @@ export const ja: TranslationResources = {
       validateTask: "タスクを承認",
       validateTaskMessage:
         "タスクは「完了」に移動し、デプロイ可能になります。後から再開することもできます。",
+      validateRunning: "最終チェック中…",
+      validatePassed: "チェック合格 — タスクを完了しました。",
+      validateFailed: "チェック不合格 — タスクは進行中のままです。",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",

@@ -4,6 +4,7 @@ import { TaskBoardServiceError, type TaskBoardService } from "../../tasks/servic
 import type { TaskEstimator } from "../../tasks/estimator.js";
 import type { TaskScheduler } from "../../tasks/scheduler.js";
 import type { ConductorAgentService } from "../../tasks/conductor-agent.js";
+import type { TaskValidator } from "../../tasks/validator.js";
 
 export interface TasksSessionHost {
   emit(msg: SessionOutboundMessage): void;
@@ -15,6 +16,7 @@ export interface TasksSessionOptions {
   taskEstimator: TaskEstimator | null;
   taskScheduler: TaskScheduler | null;
   conductorService: ConductorAgentService | null;
+  taskValidator: TaskValidator | null;
   logger: pino.Logger;
 }
 
@@ -28,6 +30,7 @@ export class TasksSession {
   private readonly taskEstimator: TaskEstimator | null;
   private readonly taskScheduler: TaskScheduler | null;
   private readonly conductorService: ConductorAgentService | null;
+  private readonly taskValidator: TaskValidator | null;
   private readonly logger: pino.Logger;
   private readonly subscriptions = new Map<string, () => void>();
 
@@ -37,6 +40,7 @@ export class TasksSession {
     this.taskEstimator = options.taskEstimator;
     this.taskScheduler = options.taskScheduler;
     this.conductorService = options.conductorService;
+    this.taskValidator = options.taskValidator;
     this.logger = options.logger;
   }
 
@@ -356,6 +360,33 @@ export class TasksSession {
       });
     } catch (error) {
       this.emitRpcError(request, error);
+    }
+  }
+
+  /**
+   * "Valider la tâche": run the final check. The card moves to "Terminée" only
+   * when the check passes; a failure leaves it in "En cours" with a report the
+   * client shows next to the validate bar.
+   */
+  async handleTaskValidateRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.validate.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.taskValidator) {
+        throw new TaskBoardServiceError("validator_unavailable", "Task validator is not available");
+      }
+      const { task, passed } = await this.taskValidator.validate(request.projectId, request.taskId);
+      this.host.emit({
+        type: "tasks.task.validate.response",
+        payload: { requestId: request.requestId, task, passed, error: null },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: error, taskId: request.taskId }, "Task validation request failed");
+      this.host.emit({
+        type: "tasks.task.validate.response",
+        payload: { requestId: request.requestId, task: null, passed: false, error: message },
+      });
     }
   }
 

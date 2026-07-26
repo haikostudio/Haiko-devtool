@@ -116,6 +116,22 @@ export const TaskLinksSchema = z.object({
 });
 export type TaskLinks = z.infer<typeof TaskLinksSchema>;
 
+// Outcome of the final check that runs when the user presses "Valider la tâche".
+// The check is what actually moves a card to "Terminée": it re-reads the original
+// request, exercises the work, runs the project's tests and looks for
+// regressions. A failed check leaves the card in "En cours" with the report
+// below, so the user can read exactly what to fix before trying again.
+export const TaskValidationSchema = z.object({
+  state: z.enum(["running", "passed", "failed"]),
+  // Human-readable report, shown next to the "Valider la tâche" bar. On a failure
+  // it lists what is missing or broken.
+  report: z.string().optional(),
+  // Short one-line verdict, for a toast or a card badge.
+  summary: z.string().optional(),
+  checkedAt: z.string().optional(),
+});
+export type TaskValidation = z.infer<typeof TaskValidationSchema>;
+
 export const KanbanTaskSchema = z.object({
   id: z.string(),
   folderId: z.string(),
@@ -183,6 +199,8 @@ export const KanbanTaskSchema = z.object({
   viewedAt: z.string().nullable().optional(),
   // Set once the task's line has been added to a billing document.
   billing: TaskBillingSchema.nullable().optional(),
+  // Result of the final check behind "Valider la tâche". Additive + optional.
+  validation: TaskValidationSchema.nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

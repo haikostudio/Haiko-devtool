@@ -313,6 +313,9 @@ export const en = {
       validateTask: "Validate task",
       validateTaskMessage:
         "The task moves to “Done” and becomes ready to deploy. You can still reopen it afterwards.",
+      validateRunning: "Final check running…",
+      validatePassed: "Check passed — task completed.",
+      validateFailed: "Check rejected — the task stays in progress.",
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",

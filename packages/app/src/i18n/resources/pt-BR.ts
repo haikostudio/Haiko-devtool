@@ -318,6 +318,9 @@ export const ptBR: TranslationResources = {
       validateTask: "Validar a tarefa",
       validateTaskMessage:
         "A tarefa passa para «Concluída» e fica pronta para implantar. Você ainda poderá reabri-la.",
+      validateRunning: "Verificação final em andamento…",
+      validatePassed: "Verificação aprovada — tarefa concluída.",
+      validateFailed: "Verificação recusada — a tarefa continua em andamento.",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",

@@ -318,6 +318,9 @@ export const es: TranslationResources = {
       validateTask: "Validar la tarea",
       validateTaskMessage:
         "La tarea pasa a «Terminada» y queda lista para desplegar. Podrás reabrirla después.",
+      validateRunning: "Comprobación final en curso…",
+      validatePassed: "Comprobación superada: tarea terminada.",
+      validateFailed: "Comprobación rechazada: la tarea sigue en curso.",
       collapse: "Contraer panel",
       expand: "Expandir panel",
       billing: "Facturación",

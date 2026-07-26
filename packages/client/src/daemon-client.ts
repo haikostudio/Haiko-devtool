@@ -4785,6 +4785,15 @@ export class DaemonClient {
     });
   }
 
+  // "Valider la tâche": runs the final check server-side. Resolves with
+  // passed=false and the task's report when the check rejects the work.
+  async tasksTaskValidate(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.validate.response">({
+      requestId,
+      message: { type: "tasks.task.validate.request", ...input },
+    });
+  }
+
   async tasksConductorEnsure(
     projectId: string,
     optionsOrRequestId?: { provider?: string; reset?: boolean } | string,

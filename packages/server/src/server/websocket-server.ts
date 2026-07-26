@@ -26,6 +26,7 @@ import type { TaskEstimator } from "./tasks/estimator.js";
 import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
 import type { ConductorAgentService } from "./tasks/conductor-agent.js";
+import type { TaskValidator } from "./tasks/validator.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
@@ -508,6 +509,7 @@ export class VoiceAssistantWebSocketServer {
   private taskEstimator: TaskEstimator | null = null;
   private taskScheduler: TaskScheduler | null = null;
   private conductorService: ConductorAgentService | null = null;
+  private taskValidator: TaskValidator | null = null;
   private activityLogService: ActivityLogService | null = null;
   private comptaSummaryService: ComptaSummaryService | null = null;
   private comptaLinksStore: ComptaLinksStore | null = null;
@@ -1132,6 +1134,7 @@ export class VoiceAssistantWebSocketServer {
       taskEstimator: this.taskEstimator,
       taskScheduler: this.taskScheduler,
       conductorService: this.conductorService,
+      taskValidator: this.taskValidator,
       activityLogService: this.activityLogService ?? undefined,
       comptaSummaryService: this.comptaSummaryService ?? undefined,
       comptaLinksStore: this.comptaLinksStore ?? undefined,
@@ -1320,12 +1323,14 @@ export class VoiceAssistantWebSocketServer {
     taskEstimator: TaskEstimator | null;
     taskScheduler: TaskScheduler | null;
     conductorService: ConductorAgentService | null;
+    taskValidator: TaskValidator | null;
     messageTriage: MessageTriage | null;
   }): void {
     this.taskBoardService = services.taskBoardService;
     this.taskEstimator = services.taskEstimator;
     this.taskScheduler = services.taskScheduler;
     this.conductorService = services.conductorService;
+    this.taskValidator = services.taskValidator;
     this.messageTriage = services.messageTriage;
   }
 

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Bot, CheckCircle2 } from "lucide-react-native";
@@ -74,9 +74,13 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
   const validateBar = useMemo(
     () =>
       showValidate ? (
-        <ValidateTaskBar onPress={handleValidate} ready={task.progress === "ready_for_review"} />
+        <ValidateTaskBar
+          onPress={handleValidate}
+          ready={task.progress === "ready_for_review"}
+          validation={task.validation}
+        />
       ) : null,
-    [showValidate, handleValidate, task.progress],
+    [showValidate, handleValidate, task.progress, task.validation],
   );
 
   if (serverId && agentId && workspaceId) {
@@ -109,21 +113,54 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
  * prompt field it sits on. Visible for the whole discussion, not only when the
  * agent thinks it is done.
  */
-function ValidateTaskBar({ onPress, ready }: { onPress: () => void; ready: boolean }) {
+function ValidateTaskBar({
+  onPress,
+  ready,
+  validation,
+}: {
+  onPress: () => void;
+  ready: boolean;
+  validation: KanbanTask["validation"];
+}) {
   const { t } = useTranslation();
+  const running = validation?.state === "running";
+  const rejected = validation?.state === "failed";
+  // Memoized: a fresh object literal here re-renders the whole embedded pane.
+  const disabledState = useMemo(() => ({ disabled: running }), [running]);
   return (
-    <Pressable
-      onPress={onPress}
-      style={validateBarStyle}
-      accessibilityRole="button"
-      accessibilityLabel={t("tasks.panel.validateTask")}
-      testID="task-validate-bar"
-    >
-      <ThemedCheck size={ICON_SIZE.sm} uniProps={ready ? accentColorMapping : mutedColorMapping} />
-      <Text style={ready ? styles.validateTextReady : styles.validateText}>
-        {t("tasks.panel.validateTask")}
-      </Text>
-    </Pressable>
+    <View>
+      {/* A rejected check explains itself right where the user is looking, so the
+          next prompt can hand the fix straight back to the agent. */}
+      {rejected && validation?.report ? (
+        <View style={styles.validateReport}>
+          <Text style={styles.validateReportTitle}>
+            {validation.summary ?? t("tasks.panel.validateFailed")}
+          </Text>
+          <Text style={styles.validateReportBody}>{validation.report}</Text>
+        </View>
+      ) : null}
+      <Pressable
+        onPress={onPress}
+        disabled={running}
+        style={validateBarStyle}
+        accessibilityRole="button"
+        accessibilityState={disabledState}
+        accessibilityLabel={t("tasks.panel.validateTask")}
+        testID="task-validate-bar"
+      >
+        {running ? (
+          <ActivityIndicator size="small" />
+        ) : (
+          <ThemedCheck
+            size={ICON_SIZE.sm}
+            uniProps={ready ? accentColorMapping : mutedColorMapping}
+          />
+        )}
+        <Text style={ready && !running ? styles.validateTextReady : styles.validateText}>
+          {running ? t("tasks.panel.validateRunning") : t("tasks.panel.validateTask")}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -214,5 +251,24 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
+  },
+  validateReport: {
+    width: "100%",
+    gap: theme.spacing[1],
+    padding: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  validateReportTitle: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+  },
+  validateReportBody: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
 }));

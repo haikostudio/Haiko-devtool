@@ -1438,9 +1438,9 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle],
   );
-  // The one and only path from "En cours" to "Terminée". Confirmed first, because
-  // it is the user's statement that the work is good — nothing else moves a card
-  // there, not even an agent that thinks it has finished.
+  // The one and only path from "En cours" to "Terminée". The user asks for it,
+  // then the final check decides: it re-reads the request, exercises the work and
+  // runs the tests. A rejected check leaves the card where it is, with a report.
   const handleValidate = useCallback(
     (taskId: string) => {
       void (async () => {
@@ -1453,11 +1453,13 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
         if (!confirmed) {
           return;
         }
-        boardHandle
-          .moveTask({ taskId, column: "done", index: 0 })
-          .catch((error: unknown) =>
-            toast.error(error instanceof Error ? error.message : String(error)),
-          );
+        toast.show(t("tasks.panel.validateRunning"));
+        try {
+          const { passed } = await boardHandle.validateTask(taskId);
+          toast.show(passed ? t("tasks.panel.validatePassed") : t("tasks.panel.validateFailed"));
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
       })();
     },
     [boardHandle, toast, t],

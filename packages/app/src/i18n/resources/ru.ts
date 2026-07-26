@@ -316,6 +316,9 @@ export const ru: TranslationResources = {
       validateTask: "Принять задачу",
       validateTaskMessage:
         "Задача перейдёт в «Готово» и будет готова к развёртыванию. Её всегда можно открыть заново.",
+      validateRunning: "Идёт финальная проверка…",
+      validatePassed: "Проверка пройдена — задача завершена.",
+      validateFailed: "Проверка не пройдена — задача остаётся в работе.",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",

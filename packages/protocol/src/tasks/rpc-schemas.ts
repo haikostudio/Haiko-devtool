@@ -150,6 +150,15 @@ export const TasksTaskApproveRequestSchema = z.object({
   taskId: z.string(),
 });
 
+// "Valider la tâche": run the final check, then move the card to "Terminée" only
+// if it passes. Never moves the card on the caller's behalf otherwise.
+export const TasksTaskValidateRequestSchema = z.object({
+  type: z.literal("tasks.task.validate.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
 export const TasksConductorEnsureRequestSchema = z.object({
   type: z.literal("tasks.conductor.ensure.request"),
   requestId: z.string(),
@@ -281,6 +290,17 @@ export const TasksTaskApproveResponseSchema = z.object({
   payload: z.object({
     requestId: z.string(),
     task: KanbanTaskSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskValidateResponseSchema = z.object({
+  type: z.literal("tasks.task.validate.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
+    // True when the check passed and the card moved to "Terminée".
+    passed: z.boolean(),
     error: z.string().nullable(),
   }),
 });

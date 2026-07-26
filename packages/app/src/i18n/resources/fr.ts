@@ -319,6 +319,9 @@ export const fr: TranslationResources = {
       validateTask: "Valider la tâche",
       validateTaskMessage:
         "La tâche passe en « Terminée » et devient prête à déployer. Vous pourrez toujours la rouvrir ensuite.",
+      validateRunning: "Contrôle final en cours…",
+      validatePassed: "Contrôle réussi — tâche terminée.",
+      validateFailed: "Contrôle refusé — la tâche reste en cours.",
       collapse: "Réduire le panneau",
       expand: "Développer le panneau",
       billing: "Facturation",

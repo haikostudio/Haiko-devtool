@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  KanbanTask,
   TaskBilling,
   TaskBoard,
   TaskColumn,
@@ -66,6 +67,11 @@ export interface TaskBoardHandle {
   estimateTask: (taskId: string) => Promise<void>;
   runTaskNow: (taskId: string) => Promise<void>;
   approveTask: (taskId: string) => Promise<void>;
+  /**
+   * Runs the final check and, only if it passes, completes the task. Resolves
+   * with passed=false plus the task carrying the report when it rejects.
+   */
+  validateTask: (taskId: string) => Promise<{ passed: boolean; task: KanbanTask | null }>;
 }
 
 /**
@@ -314,6 +320,18 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext],
   );
 
+  const validateTask = useCallback(
+    async (taskId: string) => {
+      const { client, projectId: project } = requireContext();
+      const payload = await client.tasksTaskValidate({ projectId: project, taskId });
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+      return { passed: payload.passed, task: payload.task };
+    },
+    [requireContext],
+  );
+
   return useMemo(
     () => ({
       board,
@@ -331,6 +349,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       estimateTask,
       runTaskNow,
       approveTask,
+      validateTask,
     }),
     [
       board,
@@ -348,6 +367,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       estimateTask,
       runTaskNow,
       approveTask,
+      validateTask,
     ],
   );
 }

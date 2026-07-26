@@ -154,6 +154,7 @@ import { createBrainCaptureHook } from "../services/brain-memory/capture.js";
 import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
+import { TaskValidator } from "./tasks/validator.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -1402,6 +1403,15 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
+  // The final check behind "Valider la tâche": nothing else moves a card to
+  // "Terminée".
+  const taskValidator = new TaskValidator({
+    agentManager,
+    createAgent,
+    taskBoardService,
+    projectRegistry,
+    logger,
+  });
   const taskLightAnalyzer = new TaskLightAnalyzer({
     agentManager,
     createAgent,
@@ -1830,6 +1840,7 @@ export async function createPaseoDaemon(
               taskEstimator,
               taskScheduler,
               conductorService,
+              taskValidator,
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);
