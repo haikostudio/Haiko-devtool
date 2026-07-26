@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-26",
     markdown:
-      "### Ajouts\n\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,34 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "72dbd274c0b85716e9ce1330ec5bebd132255b40",
+    shortHash: "72dbd274c",
+    date: "2026-07-26T23:24:49+02:00",
+    author: "haikostudio",
+    subject: "fix(quotas): la pastille de quotas devient visible et affiche toujours un chiffre",
+  },
+  {
+    hash: "00b28fac5478ff12098c8c67a5b4943f8f2d1fec",
+    shortHash: "00b28fac5",
+    date: "2026-07-26T23:22:57+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): bouton « Valider la tâche » vert et aligné sur le champ de prompt",
+  },
+  {
+    hash: "bb6231d55649ab336857a8cc717c1bb4582b61e9",
+    shortHash: "bb6231d55",
+    date: "2026-07-26T23:14:37+02:00",
+    author: "Mohamed Boudra",
+    subject: "fix(app): focus file pane when editing beside an agent (#2457)",
+  },
+  {
+    hash: "606c0df28c786b629ca99abd9e5dead280956571",
+    shortHash: "606c0df28",
+    date: "2026-07-26T23:14:02+02:00",
+    author: "haikostudio",
+    subject: "chore(journal): rafraîchir le journal des modifications",
+  },
   {
     hash: "45cc091816d8a0316aff5124e25b7ec3875e27f5",
     shortHash: "45cc09181",
@@ -2743,36 +2771,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "fix(app): stop markdown lines joining",
   },
-  {
-    hash: "9603397aed3146058f0f52cac38423b147264b37",
-    shortHash: "9603397ae",
-    date: "2026-07-21T23:02:07+02:00",
-    author: "Mohamed Boudra",
-    subject: "perf(app): limit initial sidebar workspace rendering",
-  },
-  {
-    hash: "2b2e02110ab37d1d873b0a190bd5cd06abb51ee8",
-    shortHash: "2b2e02110",
-    date: "2026-07-21T23:20:04+02:00",
-    author: "haikostudio",
-    subject:
-      "feat(déploiement): afficher la quantité réelle de changements en haut de la fenêtre « À déployer »",
-  },
-  {
-    hash: "333130588fd3d869db53095950abc7ad63b80b9b",
-    shortHash: "333130588",
-    date: "2026-07-21T23:17:41+02:00",
-    author: "haikostudio",
-    subject: "feat(tâches): bouton « créer une tâche » sur chaque évolution du chat",
-  },
-  {
-    hash: "955e7c20b8bd3281ae9bfaba70a3a7b9989fd2b2",
-    shortHash: "955e7c20b",
-    date: "2026-07-21T23:14:18+02:00",
-    author: "haikostudio",
-    subject: "feat(tâches): agent « chef d'orchestre » ancré en bas du gestionnaire de tâches",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-26T23:10:48+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-26T23:24:49+02:00";
