@@ -408,6 +408,59 @@ describe("TaskScheduler", () => {
     });
   });
 
+  // Consent-gate regression (see docs/task-board-cycle.md): "À faire"/"Notes" are
+  // inert. run-now on an un-validated card used to promote it straight into the
+  // pipeline, so the card vanished from "À faire" and reappeared in "En cours"
+  // without the user ever clicking "Validé". run-now must refuse and leave the
+  // card exactly where it was — always visible on the board.
+  for (const column of ["backlog", "notes"] as const) {
+    test(`runNow refuses to launch an un-validated "${column}" card, keeping it in place`, async () => {
+      const folder = await service.createFolder("proj-1", "Affaires");
+      const task = await service.createTask("proj-1", {
+        folderId: folder.id,
+        title: "Ne doit pas partir sans validation",
+      });
+      if (column === "notes") {
+        await service.moveTask("proj-1", {
+          taskId: task.id,
+          column: "notes",
+          index: 0,
+          manual: true,
+        });
+      }
+      const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+      await expect(scheduler.runNow("proj-1", task.id)).rejects.toThrow(/not validated/);
+
+      // No agent spawned, and the card is untouched: same column, still present
+      // on the board, no schedule armed behind the user's back.
+      expect(createAgent).not.toHaveBeenCalled();
+      const stuck = await findTask(task.id);
+      expect(stuck).toBeDefined();
+      expect(stuck?.column).toBe(column);
+      expect(stuck?.schedule ?? null).toBeNull();
+    });
+  }
+
+  test("a backlog card stays visible on the board after a scheduler tick (no silent disappearance)", async () => {
+    const folder = await service.createFolder("proj-1", "Affaires");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Créée puis analysée",
+    });
+    const { scheduler } = buildScheduler({ remainingPct: 90 });
+
+    // Sweeping/analysis ticks must never move or drop a backlog card: it stays
+    // in "À faire" and remains findable on the board.
+    await scheduler.tick();
+    await scheduler.tick();
+
+    const board = await service.getBoard("proj-1");
+    const still = board.tasks.find((entry) => entry.id === task.id);
+    expect(still).toBeDefined();
+    expect(still?.column).toBe("backlog");
+  });
+
   test("heavy task waits for quiet hours with a recorded reason, then launches in-window", async () => {
     const task = await seedScheduledTask({ quotaPercent: 40, estimatedMinutes: 120 });
     const daytime = Date.UTC(2026, 6, 17, 12, 0, 0);

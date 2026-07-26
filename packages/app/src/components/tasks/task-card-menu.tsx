@@ -36,9 +36,11 @@ export interface TaskCardMenuHandlers {
 /**
  * Per-card overflow menu (⋮): launch the task now (run-now — moves it straight
  * into "in progress"), re-run its analysis/estimate, or move it to another
- * column. Launch + re-analyze only make sense before a task runs, so they're
- * gated to the backlog/scheduled columns; every card can still be moved. Shared
- * by both board shapes (the native scrollable board and the web dnd board).
+ * column. Launch + re-analyze are POST-consent actions: they only appear once a
+ * card has been validated ("Validé"/"Planifié"). A backlog ("À faire") or notes
+ * card is inert — offering "Exécuter maintenant" there would skip the human
+ * consent the "Validé" column exists to capture (and the daemon rejects it too).
+ * Every card can still be moved. Shared by both board shapes.
  */
 export const TaskCardMenu = memo(function TaskCardMenu({
   task,
@@ -52,8 +54,7 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   labels: Record<TaskColumn, string>;
 } & TaskCardMenuHandlers) {
   const { t } = useTranslation();
-  const canLaunch =
-    task.column === "backlog" || task.column === "validated" || task.column === "scheduled";
+  const canLaunch = task.column === "validated" || task.column === "scheduled";
 
   const handleRun = useCallback(() => {
     onRunTask(task.id);

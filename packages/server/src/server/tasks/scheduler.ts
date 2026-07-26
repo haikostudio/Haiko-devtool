@@ -193,6 +193,17 @@ export class TaskScheduler {
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
     }
+    // Consent gate (see docs/task-board-cycle.md): "Validé" is the user's consent
+    // to spend quota and let an agent touch the code. A card still in the inert
+    // columns ("Notes"/"À faire") has NOT been validated, so run-now must never
+    // pull it into the pipeline on the user's behalf — that is exactly the
+    // "jumps straight to En cours without Validé" bug. The user validates first
+    // (drag to "Validé"), then may run it now. Mirrors the agent tool boundary.
+    if (task.column === "backlog" || task.column === "notes") {
+      throw new Error(
+        `Task ${taskId} is not validated: move it to "Validé" before running it now.`,
+      );
+    }
     if (task.approval?.state === "pending") {
       // An explicit run-now is the strongest form of user approval.
       await this.taskBoardService.approveTask(projectId, taskId);
