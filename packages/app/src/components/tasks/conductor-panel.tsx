@@ -71,6 +71,12 @@ export interface ConductorPanelProps {
   onDelete: (taskId: string) => void;
   onEstimate: (taskId: string) => void;
   onApprove: (taskId: string) => void;
+  /**
+   * Validate a backlog ("À faire") card: the user's consent that admits it into
+   * the pipeline ("À faire" → "Validé"). Distinct from `onValidate` (the final
+   * check). Surfaced as the "Valider la tâche" bar in the task chat.
+   */
+  onApproveTask: (taskId: string) => void;
   /** User validation of a task: the only path from "En cours" to "Terminée". */
   onValidate: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
@@ -100,6 +106,7 @@ export function ConductorPanel({
   onDelete,
   onEstimate,
   onApprove,
+  onApproveTask,
   onValidate,
   onSetHold,
   onClose,
@@ -279,6 +286,7 @@ export function ConductorPanel({
           task={task}
           onRunNow={onRunNow}
           onValidate={onValidate}
+          onApproveTask={onApproveTask}
         />
       </View>
       {taskView === "chat" ? null : (

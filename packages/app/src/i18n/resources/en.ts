@@ -311,6 +311,8 @@ export const en = {
       details: "Details",
       noAgent: "No agent has been started for this task yet.",
       launchAgent: "Launch the agent",
+      approveTask: "Validate the task",
+      approveDispatched: "Task validated — analysis under way.",
       validateTask: "Run the final check",
       validateTaskMessage:
         "The task’s own agent re-reads the request, checks its work, fixes what is wrong, then marks the task “Done” if everything holds. You follow all of it in the conversation.",

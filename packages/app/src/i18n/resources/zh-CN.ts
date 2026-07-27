@@ -312,6 +312,8 @@ export const zhCN: TranslationResources = {
       details: "详情",
       noAgent: "尚未为此任务启动任何智能体。",
       launchAgent: "启动智能体",
+      approveTask: "确认任务",
+      approveDispatched: "任务已确认 — 正在分析。",
       validateTask: "开始最终检查",
       validateTaskMessage:
         "任务的代理会重新阅读需求、核验已完成的工作、修复问题，确认无误后将任务标记为「已完成」。你可在对话中全程跟进。",

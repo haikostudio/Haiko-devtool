@@ -316,6 +316,8 @@ export const ptBR: TranslationResources = {
       details: "Detalhes",
       noAgent: "Nenhum agente foi iniciado para esta tarefa ainda.",
       launchAgent: "Iniciar o agente",
+      approveTask: "Validar a tarefa",
+      approveDispatched: "Tarefa validada — análise em andamento.",
       validateTask: "Iniciar a verificação final",
       validateTaskMessage:
         "O agente da tarefa relê o pedido, verifica o trabalho, corrige o que estiver errado e marca a tarefa como «Concluída» se estiver tudo certo. Você acompanha tudo na conversa.",

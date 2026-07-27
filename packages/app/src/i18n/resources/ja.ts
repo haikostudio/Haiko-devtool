@@ -315,6 +315,8 @@ export const ja: TranslationResources = {
       details: "詳細",
       noAgent: "このタスクにはまだエージェントが起動されていません。",
       launchAgent: "エージェントを起動",
+      approveTask: "タスクを承認",
+      approveDispatched: "タスクを承認しました — 分析を実行中です。",
       validateTask: "最終チェックを開始",
       validateTaskMessage:
         "タスクのエージェントが依頼を読み直し、作業を検証し、問題を修正してから、問題がなければタスクを「完了」にします。会話ですべてを確認できます。",

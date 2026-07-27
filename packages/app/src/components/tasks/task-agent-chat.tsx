@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Bot, CheckCircle2, Play } from "lucide-react-native";
+import { BadgeCheck, Bot, CheckCircle2, Play } from "lucide-react-native";
 import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
 import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-context";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,12 @@ const successForegroundMapping = (theme: Theme) => ({ color: theme.colors.succes
 // The run-now bar is a filled accent control (distinct from the green validate
 // bar), so its icon rides on the accent foreground.
 const accentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
+// The approve bar is a filled primary control (distinct from both the green
+// final-check bar and the accent run-now bar), so its icon rides on the primary
+// foreground.
+const primaryForegroundMapping = (theme: Theme) => ({ color: theme.colors.primaryForeground });
 const ThemedCheck = withUnistyles(CheckCircle2);
+const ThemedBadgeCheck = withUnistyles(BadgeCheck);
 const ThemedPlay = withUnistyles(Play);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 
@@ -44,6 +49,15 @@ export interface TaskAgentChatProps {
    * decides a task is finished.
    */
   onValidate?: (taskId: string) => void;
+  /**
+   * Validate a "À faire" (backlog) card: move it into "Validé" and arm the
+   * analysis. Shown as a full-width bar above the prompt composer while the card
+   * sits in backlog. This is the pipeline's single consent gesture — the user,
+   * never the agent, admits a card into the pipeline (see
+   * docs/task-board-cycle.md). Distinct from `onValidate`, which is the
+   * "En cours" → "Terminé" final check.
+   */
+  onApproveTask?: (taskId: string) => void;
 }
 
 /**
@@ -54,7 +68,13 @@ export interface TaskAgentChatProps {
  * former in-drawer chat tab so the dock and any future host can reuse it; mount
  * it with a `key` per agentId so switching tasks fully remounts the pane.
  */
-export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgentChatProps) {
+export function TaskAgentChat({
+  serverId,
+  task,
+  onRunNow,
+  onValidate,
+  onApproveTask,
+}: TaskAgentChatProps) {
   const { t } = useTranslation();
   // Prefer the pipeline agent: analysis AND execution live in that one
   // conversation, so it holds the live thread the card's "Analyse en cours"
@@ -91,14 +111,23 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
   // the launch and validate controls share one home instead of one being on the
   // kanban card and the other above the composer.
   const showRunNow = task.column === "scheduled";
+  // The approve bar sits on a backlog ("À faire") card only: it is the user's
+  // single consent gesture that admits the card into the pipeline. Until now the
+  // only path out of backlog was a manual drag on the board; this puts the same
+  // decision right above the prompt, next to the run/finish controls.
+  const showApprove = Boolean(onApproveTask) && task.column === "backlog";
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);
+  const handleApprove = useCallback(() => onApproveTask?.(task.id), [onApproveTask, task.id]);
 
   // Memoized so the embedded pane (and everything under it) is not re-rendered
-  // by a fresh element on every keystroke in the composer. Scheduled and
+  // by a fresh element on every keystroke in the composer. Backlog, scheduled and
   // in-progress are mutually exclusive columns, so at most one bar shows.
   const aboveComposerBar = useMemo(() => {
+    if (showApprove) {
+      return <ApproveTaskBar onPress={handleApprove} />;
+    }
     if (showRunNow) {
       return <RunNowTaskBar onPress={handleRun} />;
     }
@@ -112,7 +141,16 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
       );
     }
     return null;
-  }, [showRunNow, showValidate, handleRun, handleValidate, task.progress, task.validation]);
+  }, [
+    showApprove,
+    showRunNow,
+    showValidate,
+    handleApprove,
+    handleRun,
+    handleValidate,
+    task.progress,
+    task.validation,
+  ]);
 
   if (serverId && agentId && workspaceId) {
     return (
@@ -221,6 +259,39 @@ function RunNowTaskBar({ onPress }: { onPress: () => void }) {
 
 function runNowBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.runNowBar, (hovered || pressed) && styles.runNowBarHovered];
+}
+
+/**
+ * Full-width primary bar carrying the single "Valider la tâche" action, shown on
+ * a backlog ("À faire") card right above the prompt composer. It mirrors the
+ * other two control bars' geometry so the family stays consistent, but wears the
+ * primary color to stand apart from the green finish control and the accent
+ * launch control. Pressing it is the user's consent to admit the card into the
+ * pipeline: the server moves it to "Validé" and arms the cost analysis, which the
+ * estimator then picks up on its own.
+ */
+function ApproveTaskBar({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        <Pressable
+          onPress={onPress}
+          style={approveBarStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.approveTask")}
+          testID="task-approve-bar"
+        >
+          <ThemedBadgeCheck size={ICON_SIZE.sm} uniProps={primaryForegroundMapping} />
+          <Text style={styles.approveText}>{t("tasks.panel.approveTask")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function approveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.approveBar, (hovered || pressed) && styles.approveBarHovered];
 }
 
 function EmbeddedAgentPane({
@@ -346,6 +417,29 @@ const styles = StyleSheet.create((theme) => ({
   },
   runNowText: {
     color: theme.colors.accentForeground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+  },
+  // Same geometry as the other two bars, filled with the primary color so the
+  // consent control stands apart from the green finish and accent launch bars.
+  approveBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    width: "100%",
+    paddingVertical: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
+  },
+  approveBarHovered: {
+    opacity: 0.88,
+  },
+  approveText: {
+    color: theme.colors.primaryForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
   },

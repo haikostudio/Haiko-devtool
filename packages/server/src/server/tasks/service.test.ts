@@ -478,6 +478,48 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([task.id]);
   });
 
+  test("approveTask validates a plain backlog card (no proposal) and arms its schedule", async () => {
+    const scheduled: string[] = [];
+    const folder = await service.createFolder("proj-1", "Agent");
+    // A normal manual card, no AI approval attached: the "Valider la tâche" bar
+    // is the user's consent to admit it into the pipeline.
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Plain backlog card",
+    });
+    expect(task.column).toBe("backlog");
+    expect(task.approval).toBeUndefined();
+    service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
+
+    const validated = await service.approveTask("proj-1", task.id);
+
+    // It lands in the "Validé" consent gate with its analysis armed; no approval
+    // record is invented for a card that never had one.
+    expect(validated.column).toBe("validated");
+    expect(validated.schedule?.state).toBe("pending_estimate");
+    expect(validated.approval).toBeUndefined();
+    expect(scheduled).toEqual([task.id]);
+  });
+
+  test("approveTask leaves a non-backlog, non-proposal card untouched", async () => {
+    const folder = await service.createFolder("proj-1", "Agent");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Already scheduled",
+    });
+    // Drag it forward first, then a stray approve must be a no-op.
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "scheduled",
+      index: 0,
+      manual: true,
+    });
+
+    const result = await service.approveTask("proj-1", task.id);
+
+    expect(result.column).toBe("scheduled");
+  });
+
   test("a manual drag into scheduled implicitly approves a pending proposal", async () => {
     const folder = await service.createFolder("proj-1", "Agent");
     const task = await service.createTask("proj-1", {

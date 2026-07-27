@@ -316,6 +316,8 @@ export const es: TranslationResources = {
       details: "Detalles",
       noAgent: "Aún no se ha iniciado ningún agente para esta tarea.",
       launchAgent: "Iniciar el agente",
+      approveTask: "Validar la tarea",
+      approveDispatched: "Tarea validada: análisis en curso.",
       validateTask: "Lanzar la comprobación final",
       validateTaskMessage:
         "El agente de la tarea relee la petición, comprueba su trabajo, corrige lo que falle y marca la tarea como «Terminada» si todo está bien. Puedes seguirlo todo en la conversación.",

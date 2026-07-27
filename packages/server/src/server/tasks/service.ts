@@ -627,16 +627,31 @@ export class TaskBoardService {
   }
 
   /**
-   * User approval of an agent-proposed task. Proposals are born in "backlog"
-   * (like every other task), so approving one is the user's explicit consent to
-   * run it: it moves out of backlog into the "validated" consent gate and arms
-   * the schedule so the estimator/scheduler pick it up. A proposal already in a
-   * pipeline column (legacy state) keeps its column and just gets armed.
+   * The user's "À faire" → "Validé" consent gesture — the single place a card
+   * enters the pipeline on purpose. It covers two shapes of card:
+   *
+   * - an **agent-proposed** task awaiting approval (`approval.state ===
+   *   "pending"`), born in "backlog" like every other card; approving it also
+   *   stamps the approval as accepted.
+   * - a **plain backlog** card the user validates from the task chat's
+   *   "Valider la tâche" bar. There is no approval to stamp — the move itself is
+   *   the consent.
+   *
+   * Both move out of backlog into the "validated" consent gate and arm the
+   * schedule (`pending_estimate`) so the estimator/scheduler pick the card up. A
+   * proposal already sitting in a pipeline column (legacy state) keeps its column
+   * and just gets armed. This is strictly user-initiated: the agent's `move_task`
+   * can never reach it, which is exactly the invariant this gate exists to hold
+   * (see docs/task-board-cycle.md). Any other card (already past backlog, or
+   * terminal) is left untouched.
    */
   async approveTask(projectId: string, taskId: string): Promise<KanbanTask> {
     let needsScheduleNotify = false;
     const board = await this.mutateTask(projectId, taskId, (task) => {
-      if (task.approval?.state !== "pending") {
+      const isProposal = task.approval?.state === "pending";
+      // Only an unapproved proposal or a plain backlog card may be validated
+      // here; everything else is a no-op.
+      if (!isProposal && task.column !== "backlog") {
         return task;
       }
       const now = new Date().toISOString();
@@ -644,7 +659,9 @@ export class TaskBoardService {
       const updated: KanbanTask = {
         ...task,
         column,
-        approval: { ...task.approval, state: "approved", approvedAt: now },
+        ...(isProposal && task.approval
+          ? { approval: { ...task.approval, state: "approved" as const, approvedAt: now } }
+          : {}),
       };
       // Never re-arm a task that already reached the terminal columns.
       if (PIPELINE_COLUMNS.has(column) && !task.schedule && task.completedAt == null) {
@@ -658,6 +675,34 @@ export class TaskBoardService {
       this.notifyScheduled(projectId, task);
     }
     return task;
+  }
+
+  /**
+   * "Archiver": hide a finished card from the board. Stamps (or clears)
+   * `archivedAt` and nothing else — it never changes the card's column, never
+   * publishes it, and never touches the automatic done→deployed publication.
+   * Archiving is orthogonal to the pipeline; the daemon keeps the card so a
+   * future archived view can list and un-archive it (see docs/task-board-cycle.md).
+   * Only ever offered on terminal cards, so it is a no-op unless the card is in
+   * "done" or "deployed".
+   */
+  async archiveTask(projectId: string, taskId: string, archived: boolean): Promise<KanbanTask> {
+    const board = await this.mutateTask(projectId, taskId, (task) => {
+      const isTerminal = task.column === "done" || task.column === "deployed";
+      if (archived) {
+        if (!isTerminal || task.archivedAt) {
+          return task;
+        }
+        return { ...task, archivedAt: new Date().toISOString() };
+      }
+      if (!task.archivedAt) {
+        return task;
+      }
+      const updated = { ...task };
+      delete updated.archivedAt;
+      return updated;
+    });
+    return this.requireTask(board, taskId);
   }
 
   /**

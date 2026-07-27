@@ -1134,6 +1134,19 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle],
   );
+  // The backlog card's "Valider la tâche" bar: the user's consent to admit an
+  // "À faire" card into the pipeline. Shares the server's generalized approve
+  // path with the proposal-approve button, but surfaces a toast since the bar has
+  // no other feedback — the card slides to "Validé" and the estimator takes over.
+  const handleApproveTask = useCallback(
+    (taskId: string) => {
+      toast.show(t("tasks.panel.approveDispatched"));
+      boardHandle.approveTask(taskId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error));
+      });
+    },
+    [boardHandle, toast, t],
+  );
   // The one and only path from "En cours" to "Terminée". The press hands a check
   // prompt to the task's OWN agent, in the task's own conversation: it re-reads
   // the request, runs the project's checks, fixes what it finds, and completes
@@ -1177,14 +1190,40 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle, toast],
   );
+  // "Archiver": hide a finished card from the board. It never publishes or moves
+  // the card — publication already ran on its own when the card reached "Terminé".
+  const handleArchive = useCallback(
+    (taskId: string) => {
+      void (async () => {
+        const confirmed = await confirmDialog({
+          title: t("tasks.panel.archiveTask"),
+          message: t("tasks.panel.archiveTaskMessage"),
+          confirmLabel: t("tasks.panel.archiveTask"),
+          cancelLabel: t("common.actions.cancel"),
+        });
+        if (!confirmed) {
+          return;
+        }
+        try {
+          await boardHandle.archiveTask(taskId);
+          toast.show(t("tasks.toast.archived"));
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
+      })();
+    },
+    [boardHandle, toast, t],
+  );
   return {
     handleSave,
     handleDelete,
     handleEstimate,
     handleRunNow,
     handleApprove,
+    handleApproveTask,
     handleValidate,
     handleSetHold,
+    handleArchive,
   };
 }
 
@@ -1288,6 +1327,7 @@ function ConductorDock({
         onDelete={taskActions.handleDelete}
         onEstimate={taskActions.handleEstimate}
         onApprove={taskActions.handleApprove}
+        onApproveTask={taskActions.handleApproveTask}
         onValidate={taskActions.handleValidate}
         onSetHold={taskActions.handleSetHold}
         onClose={handleClose}

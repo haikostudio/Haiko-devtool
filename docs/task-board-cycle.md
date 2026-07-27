@@ -18,7 +18,7 @@ heuristic — may move a card.
 | Transition          | Who performs it      | Notes                                                                    |
 | ------------------- | -------------------- | ------------------------------------------------------------------------ |
 | → Notes / → À faire | user **or** an agent | The only two columns an agent may write to.                              |
-| À faire → Validé    | **user only**        | Drag, or the approval action on a proposed task.                         |
+| À faire → Validé    | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.   |
 | Validé → Planifié   | estimator            | Auto, the instant the card's cost analysis succeeds (see below).         |
 | Planifié → En cours | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.       |
 | En cours → Terminé  | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it. |
@@ -65,6 +65,16 @@ card and, on success, promotes it to "Planifié" itself. A card can only sit in
 "Validé" while it has no usable estimate (analysis pending, failed and awaiting a
 retry, or explicitly held for review), which is exactly when it must not launch.
 
+That consent has two equivalent front doors, both strictly user-driven and both
+routed through `TaskBoardService.approveTask` (never the agent's `move_task`): a
+drag of the card onto "Validé", and the **"Valider la tâche" bar** shown above
+the prompt in the task chat while the card is in "À faire". `approveTask` handles
+both a plain backlog card and an agent proposal awaiting approval — it moves the
+card into "Validé" and arms its `schedule` with `pending_estimate` so the
+estimator picks it up. Do not confuse it with the "En cours" → "Terminé"
+final-check bar, which shares the confusingly-named `validateTask` label key but
+is a different gesture entirely.
+
 The card then shows **when** it will run, not just that it is scheduled: a
 "Planifié" card carrying an off-peak/heavy estimate renders a concrete
 "Vers mar. 01:00" hint (`computeNextRunAt` in `task-card.tsx`, resolved from the
@@ -108,6 +118,39 @@ That press opens a consent window on that one card — `validation.state ===
 while the window is open, for that card only. The window closes as soon as the
 agent stops working (`watchAgentIdle`), whether or not it completed the card, so
 a check can never leave the bar stuck.
+
+## Archiving a card — hide, never publish
+
+A finished card (in "Terminé" or "Déployé") can be **archived** by hand from the
+"Archiver" bar above its prompt. Archiving is deliberately **orthogonal to the
+seven columns**: it does not move the card, does not publish it, and does not
+touch the automatic `done → deployed` publication that `TaskPublisher` already
+runs (`publish-on-complete.ts`). It only sets an optional `archivedAt` stamp and
+the board **hides** the card from view.
+
+Two behaviours were considered:
+
+- **(a) a manual `Terminé → Déployé` shortcut** — force publication when the
+  automatic path does not apply.
+- **(b) hide the card from the board** — remove it from view without publishing.
+
+We chose **(b)**. Archiving is a filing gesture, not a publishing one: the user
+is saying "I'm done looking at this", not "put this live". Publication already
+happens on its own the instant a card reaches "Terminé" (Paseo by the daemon,
+ordinary projects by the card's own agent inside the final check), so an archive
+that also published would either double the work or race it. Keeping archive
+purely additive means it can never break invariant 4 below.
+
+The mechanics:
+
+- `archivedAt` is an **optional, additive** field on the task (old boards/clients
+  simply omit it). Setting it never changes the card's `column`, so the pipeline,
+  the scheduler and `TaskPublisher` all keep seeing the card exactly as before.
+- The **board hides** archived cards on the display side; the daemon still stores
+  them, so a future "archived" view can list and un-archive them. Nothing on the
+  server drops an archived task from the pipeline.
+- The bar is offered **only** in "Terminé"/"Déployé" — the two terminal columns —
+  because archiving mid-flight would hide live work.
 
 ## The other exception
 
