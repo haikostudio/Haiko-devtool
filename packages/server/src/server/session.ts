@@ -178,6 +178,7 @@ import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon
 import type { DaemonWebSocketRuntimeDiagnosticSnapshot } from "./session/daemon/diagnostics.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
 import { PushTokenStore } from "./push/token-store.js";
+import type { PushNotificationHistoryStore } from "./push/notification-history-store.js";
 import {
   archivePersistedWorkspaceRecord,
   archiveWorkspaceContents,
@@ -458,6 +459,7 @@ export interface SessionOptions {
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
   pushTokenStore: PushTokenStore;
+  pushNotificationHistoryStore?: PushNotificationHistoryStore;
   paseoHome: string;
   worktreesRoot?: string;
   agentManager: AgentManager;
@@ -653,6 +655,7 @@ export class Session {
   private readonly workspaceProvisioning: WorkspaceProvisioningService;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
+  private readonly pushNotificationHistoryStore: PushNotificationHistoryStore | undefined;
   private unsubscribeAgentEvents: (() => void) | null = null;
   private unsubscribeTerminalWorkspaceContributionEvents: (() => void) | null = null;
   private readonly agentUpdates: AgentUpdatesService;
@@ -705,6 +708,7 @@ export class Session {
       logger,
       downloadTokenStore,
       pushTokenStore,
+      pushNotificationHistoryStore,
       paseoHome,
       worktreesRoot,
       agentManager,
@@ -768,6 +772,7 @@ export class Session {
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.pushTokenStore = pushTokenStore;
+    this.pushNotificationHistoryStore = pushNotificationHistoryStore;
     this.paseoHome = paseoHome;
     this.worktreesRoot = worktreesRoot;
     this.sessionLogger = logger.child({
@@ -1875,6 +1880,8 @@ export class Session {
         return this.handleDraftAttachmentGetRequest(msg.id, msg.requestId);
       case "stats.usage.fetch.request":
         return this.handleUsageStatsFetchRequest(msg.days, msg.requestId);
+      case "push.history.list.request":
+        return this.handlePushHistoryListRequest(msg.limit, msg.requestId);
       case "compta.summary.fetch.request":
         return this.handleComptaSummaryFetchRequest(msg.requestId);
       case "compta.clients.list.request":
@@ -2917,6 +2924,34 @@ export class Session {
           days: [],
           success: false,
           error: getErrorMessageOr(error, "Failed to read usage stats"),
+          requestId,
+        },
+      });
+    }
+  }
+
+  private async handlePushHistoryListRequest(
+    limit: number | undefined,
+    requestId: string,
+  ): Promise<void> {
+    try {
+      const store = this.pushNotificationHistoryStore;
+      const entries = store ? store.list(limit) : [];
+      this.emit({
+        type: "push.history.list.response",
+        payload: { entries, success: true, error: null, requestId },
+      });
+    } catch (error) {
+      this.sessionLogger.error(
+        { err: error, requestId },
+        "session: push.history.list.request error",
+      );
+      this.emit({
+        type: "push.history.list.response",
+        payload: {
+          entries: [],
+          success: false,
+          error: getErrorMessageOr(error, "Failed to read push history"),
           requestId,
         },
       });

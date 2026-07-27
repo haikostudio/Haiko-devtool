@@ -58,6 +58,7 @@ import type {
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
+import { PushNotificationHistoryStore } from "./push/notification-history-store.js";
 import {
   createPushNotificationSender,
   type PushNotificationSender,
@@ -477,6 +478,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly worktreesRoot: string | undefined;
   private readonly daemonConfigStore: DaemonConfigStore;
   private readonly pushTokenStore: PushTokenStore;
+  private readonly pushNotificationHistoryStore: PushNotificationHistoryStore;
   private readonly pushNotificationSender: PushNotificationSender;
   private readonly mcpBaseUrl: string | null;
   private speech!: SpeechService | null;
@@ -673,8 +675,17 @@ export class VoiceAssistantWebSocketServer {
 
     const pushLogger = this.logger.child({ module: "push" });
     this.pushTokenStore = new PushTokenStore(pushLogger, join(paseoHome, "push-tokens.json"));
+    this.pushNotificationHistoryStore = new PushNotificationHistoryStore(
+      pushLogger,
+      join(paseoHome, "push-history.json"),
+    );
     this.pushNotificationSender =
-      pushNotificationSender ?? createPushNotificationSender(pushLogger, this.pushTokenStore);
+      pushNotificationSender ??
+      createPushNotificationSender(
+        pushLogger,
+        this.pushTokenStore,
+        this.pushNotificationHistoryStore,
+      );
 
     this.agentManager.setAgentAttentionCallback((params) => {
       void this.broadcastAgentAttention(params).catch((err) => {
@@ -1137,6 +1148,7 @@ export class VoiceAssistantWebSocketServer {
       logger: connectionLogger.child({ module: "session" }),
       downloadTokenStore: this.downloadTokenStore,
       pushTokenStore: this.pushTokenStore,
+      pushNotificationHistoryStore: this.pushNotificationHistoryStore,
       paseoHome: this.paseoHome,
       worktreesRoot: this.worktreesRoot,
       agentManager: this.agentManager,
@@ -1466,6 +1478,10 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(attachmentLibrary): added in v0.1.X, custom fork feature.
         // This daemon indexes chat attachments per workspace (see AttachmentLibraryStore).
         attachmentLibrary: true,
+        // COMPAT(pushHistory): added in v0.1.X, custom fork feature.
+        // This daemon records dispatched push notifications (see
+        // PushNotificationHistoryStore) and can list them for the mobile panel.
+        pushHistory: true,
         // COMPAT(paseoSelfhostDeployRoots): added in v0.1.X, drop the gate when floor >= v0.1.X.
         // Every Paseo checkout (main repo + task worktrees) where the deploy
         // button may appear — cached, refreshed on each deploy-status poll.

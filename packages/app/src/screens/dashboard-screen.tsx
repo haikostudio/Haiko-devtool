@@ -6,6 +6,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { ChevronLeft } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { MenuHeader } from "@/components/headers/menu-header";
+import { NotificationHistoryButton } from "@/components/notification-history-button";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { AgentList } from "@/components/agent-list";
@@ -68,6 +69,8 @@ function DashboardScreenContent() {
     router.navigate(buildOpenProjectRoute());
   }, []);
 
+  const headerRight = useMemo(() => <NotificationHistoryButton />, []);
+
   const statsHeader = useMemo(() => {
     const compta =
       comptaSupported && comptaRows !== null ? (
@@ -88,7 +91,7 @@ function DashboardScreenContent() {
 
   return (
     <View style={styles.container}>
-      <MenuHeader title={t("dashboard.title")} />
+      <MenuHeader title={t("dashboard.title")} rightContent={headerRight} />
       {isInitialLoad ? (
         <View style={styles.loadingContainer}>
           <ThemedLoadingSpinner size="large" uniProps={loadingSpinnerColorMapping} />

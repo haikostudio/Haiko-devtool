@@ -1101,6 +1101,16 @@ export const UsageStatsFetchRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// COMPAT(pushHistory): added in v0.1.X, custom fork feature (push notification
+// history drawer). List every push notification the daemon has dispatched,
+// newest first, so the phone can show a history panel.
+export const PushHistoryListRequestSchema = z.object({
+  type: z.literal("push.history.list.request"),
+  // Max entries to return, newest first. Daemon defaults/caps when omitted.
+  limit: z.number().int().min(1).max(500).optional(),
+  requestId: z.string(),
+});
+
 export const ComptaSummaryFetchRequestSchema = z.object({
   type: z.literal("compta.summary.fetch.request"),
   requestId: z.string(),
@@ -1871,6 +1881,27 @@ export const UsageStatsFetchResponseSchema = z.object({
   type: z.literal("stats.usage.fetch.response"),
   payload: z.object({
     days: z.array(UsageStatsDaySchema),
+    success: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
+// One entry in the push notification history — a notification the daemon has
+// dispatched to registered devices. Purely descriptive (title/body/time), so the
+// mobile app can render a "notifications received" panel newest-first.
+export const PushHistoryEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  body: z.string(),
+  /** When the notification was dispatched (epoch ms). */
+  sentAt: z.number(),
+});
+
+export const PushHistoryListResponseSchema = z.object({
+  type: z.literal("push.history.list.response"),
+  payload: z.object({
+    entries: z.array(PushHistoryEntrySchema),
     success: z.boolean(),
     error: z.string().nullable(),
     requestId: z.string(),
@@ -3146,6 +3177,11 @@ export const ServerInfoStatusPayloadSchema = z
         tasksConductor: z.boolean().optional(),
         // COMPAT(usageStats): added in v0.1.109, drop the gate when floor >= v0.1.109.
         usageStats: z.boolean().optional(),
+        // COMPAT(pushHistory): added in v0.1.X, custom fork feature.
+        // The daemon persists a history of dispatched push notifications and can
+        // list them for the mobile "notifications" panel. Present only on daemons
+        // that record push history.
+        pushHistory: z.boolean().optional(),
         // COMPAT(comptaSummary): added in v0.1.X, drop the gate when floor >= v0.1.X.
         comptaSummary: z.boolean().optional(),
         // COMPAT(comptaBilling): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -5826,6 +5862,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   DraftAttachmentPutRequestSchema,
   DraftAttachmentGetRequestSchema,
   UsageStatsFetchRequestSchema,
+  PushHistoryListRequestSchema,
   ComptaSummaryFetchRequestSchema,
   ComptaClientsListRequestSchema,
   ComptaProjectLinkGetRequestSchema,
@@ -6081,6 +6118,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   DraftAttachmentPutResponseSchema,
   DraftAttachmentGetResponseSchema,
   UsageStatsFetchResponseSchema,
+  PushHistoryListResponseSchema,
   ComptaSummaryFetchResponseSchema,
   ComptaClientsListResponseSchema,
   ComptaProjectLinkGetResponseSchema,
@@ -6304,6 +6342,8 @@ export type UsageStatsProjectBucket = z.infer<typeof UsageStatsProjectBucketSche
 export type UsageStatsHourBucket = z.infer<typeof UsageStatsHourBucketSchema>;
 export type UsageStatsDay = z.infer<typeof UsageStatsDaySchema>;
 export type UsageStatsFetchResponse = z.infer<typeof UsageStatsFetchResponseSchema>;
+export type PushHistoryEntry = z.infer<typeof PushHistoryEntrySchema>;
+export type PushHistoryListResponse = z.infer<typeof PushHistoryListResponseSchema>;
 export type ComptaSummaryRow = z.infer<typeof ComptaSummaryRowSchema>;
 export type ComptaInvoiceRef = z.infer<typeof ComptaInvoiceRefSchema>;
 export type ComptaMonthPoint = z.infer<typeof ComptaMonthPointSchema>;
@@ -6456,6 +6496,7 @@ export type WorkspaceTitleSetRequest = z.infer<typeof WorkspaceTitleSetRequestSc
 export type WorkspacePinSetRequest = z.infer<typeof WorkspacePinSetRequestSchema>;
 export type SidebarOrderGetRequest = z.infer<typeof SidebarOrderGetRequestSchema>;
 export type UsageStatsFetchRequest = z.infer<typeof UsageStatsFetchRequestSchema>;
+export type PushHistoryListRequest = z.infer<typeof PushHistoryListRequestSchema>;
 export type ComptaSummaryFetchRequest = z.infer<typeof ComptaSummaryFetchRequestSchema>;
 export type SidebarOrderSetRequest = z.infer<typeof SidebarOrderSetRequestSchema>;
 export type SidebarOrderChangedStatusPayload = z.infer<

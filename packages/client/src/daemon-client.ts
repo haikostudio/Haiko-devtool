@@ -103,6 +103,7 @@ import type {
   AttachmentLibraryEntry,
   AttachmentLibraryBlobResponse,
   UsageStatsDay,
+  PushHistoryEntry,
   ComptaSummaryRow,
   ComptaMonthlyRevenue,
   ComptaClient,
@@ -2193,6 +2194,18 @@ export class DaemonClient {
       requestId,
       message: { type: "stats.usage.fetch.request", days },
       selectPayload: (payload) => payload.days,
+    });
+  }
+
+  /** History of push notifications the daemon has dispatched, newest first. */
+  async fetchPushHistory(limit?: number, requestId?: string): Promise<PushHistoryEntry[]> {
+    return this.sendNamespacedCorrelatedSessionRequest<
+      "push.history.list.response",
+      PushHistoryEntry[]
+    >({
+      requestId,
+      message: { type: "push.history.list.request", limit },
+      selectPayload: (payload) => payload.entries,
     });
   }
 
