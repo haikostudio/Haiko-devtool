@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { Bot, CheckCircle2 } from "lucide-react-native";
 import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
+import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-context";
 import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { useSessionStore } from "@/stores/session-store";
@@ -206,9 +207,14 @@ function EmbeddedAgentPane({
 
   return (
     <AboveComposerSlotProvider node={validateBar}>
-      <View style={styles.paneHost}>
-        <WorkspacePaneContent content={content} isWorkspaceFocused isPaneFocused />
-      </View>
+      {/* The dock sheet already pads its body by the safe area, so tell the
+          embedded composer not to add its own — otherwise the two stack into an
+          empty white band under the input. */}
+      <HostOwnsComposerSafeAreaProvider>
+        <View style={styles.paneHost}>
+          <WorkspacePaneContent content={content} isWorkspaceFocused isPaneFocused />
+        </View>
+      </HostOwnsComposerSafeAreaProvider>
     </AboveComposerSlotProvider>
   );
 }

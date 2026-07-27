@@ -76,6 +76,7 @@ import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
 import { SPACING, type Theme } from "@/styles/theme";
+import { useHostOwnsComposerSafeArea } from "@/panels/embedded-composer-context";
 import {
   useHideFinishedProviderSubagents,
   useArchiveSubagent,
@@ -1601,7 +1602,13 @@ function ActiveAgentComposer({
   // (inset 0) the 16px baseline reads as a residual empty strip. Absorb the
   // baseline into the inset instead: total gap becomes max(16, inset), so the
   // input hugs the safe area with no doubled-up white space.
-  const composerSafeAreaPaddingBottom = Math.max(0, insets.bottom - SPACING[4]);
+  //
+  // When embedded in a host that already pads by the safe area (the task board's
+  // sheet dock), the composer must add nothing — the host owns that inset.
+  const hostOwnsSafeArea = useHostOwnsComposerSafeArea();
+  const composerSafeAreaPaddingBottom = hostOwnsSafeArea
+    ? 0
+    : Math.max(0, insets.bottom - SPACING[4]);
   const inputAreaStyle = useMemo(
     () => [
       styles.inputAreaWrapper,
