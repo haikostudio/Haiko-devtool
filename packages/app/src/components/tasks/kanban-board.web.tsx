@@ -25,6 +25,7 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
+import { TaskRunNowButton } from "./task-run-now-button";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
   buildColumnModels,
@@ -422,6 +423,18 @@ const SortableTaskCard = memo(function SortableTaskCard({
       data-testid={`tasks-drag-${task.id}`}
     >
       <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
+      {/* Dedicated "Lancer maintenant" button on planned cards. Same drag-guard
+          as the menu overlay: pressing it must never lift the card into a drag. */}
+      {task.column === "scheduled" ? (
+        <div
+          style={runNowButtonStyle}
+          onPointerDown={stopDragActivation}
+          onMouseDown={stopDragActivation}
+          onTouchStart={stopDragActivation}
+        >
+          <TaskRunNowButton task={task} onRunTask={onRunTask} />
+        </div>
+      ) : null}
       {/* Overflow menu overlay: swallow the drag-start pointer/mouse/touch so
           opening the menu never lifts the card into a drag. */}
       <div
@@ -452,6 +465,12 @@ const cardMenuOverlayStyle: React.CSSProperties = {
   top: 8,
   right: 8,
   zIndex: 2,
+};
+
+// Sits just under the card (flows in the drag wrapper's column layout), so the
+// button never overlaps the card content or the overflow menu.
+const runNowButtonStyle: React.CSSProperties = {
+  marginTop: SPACING[1.5],
 };
 
 // Horizontal scroll surface for the columns row. A plain div (not an RNW

@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-27",
     markdown:
-      "### Ajouts\n\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Plus d'erreur « connexion perdue » au premier prompt du chef d'orchestre\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Suivre la publication dans la conversation et lier l'adresse en ligne\n- Terminer une carte publie la tâche, plus de bouton ni de fenêtre « À déployer »\n- Le tableau se déplace à la main, et le contrôle final déploie sur l'instance dev\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Améliorations\n\n- Reduce encrypted binary traffic overhead (#2480)\n\n### Corrections\n\n- Supprimer la bande blanche sous le champ de message\n- Plus de JSON brut dans la discussion, et plus de saut en « En cours »\n- Menu ⋮ dans l'en-tête, marge du prompt et modale écrasée\n- Plus d'erreur « connexion perdue » au premier prompt du chef d'orchestre\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,92 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "5c1444e9e77fb13abc2eff87a349df716e0e8e69",
+    shortHash: "5c1444e9e",
+    date: "2026-07-27T14:35:33+02:00",
+    author: "haikostudio",
+    subject: "fix(saisie): supprimer la bande blanche sous le champ de message",
+  },
+  {
+    hash: "2acb10fce96ff65eae0cad9894ff7338139d417b",
+    shortHash: "2acb10fce",
+    date: "2026-07-27T14:04:29+02:00",
+    author: "Mohamed Boudra",
+    subject: "Keep provider settings above the model selector (#2476)",
+  },
+  {
+    hash: "e1b1ca569d6979c424bff4556dd6ed9f49fdbc80",
+    shortHash: "e1b1ca569",
+    date: "2026-07-27T13:52:57+02:00",
+    author: "Mohamed Boudra",
+    subject: "Keep large file views from disconnecting (#2482)",
+  },
+  {
+    hash: "5a7e49f8f112b92c7562aa9b9d2977394d9787e9",
+    shortHash: "5a7e49f8f",
+    date: "2026-07-27T13:20:53+02:00",
+    author: "haikostudio",
+    subject: "chore: sauvegarde avant build local",
+  },
+  {
+    hash: "f56f8a125bbfd017816f2df9bab0cf8dcc4abd6d",
+    shortHash: "f56f8a125",
+    date: "2026-07-27T13:10:31+02:00",
+    author: "haikostudio",
+    subject: "feat(tâches): suivre la publication dans la conversation et lier l'adresse en ligne",
+  },
+  {
+    hash: "e1307c81d99b8d32e910c5aeadcd181f49cb1031",
+    shortHash: "e1307c81d",
+    date: "2026-07-27T12:38:54+02:00",
+    author: "haikostudio",
+    subject:
+      "feat(déploiement): terminer une carte publie la tâche, plus de bouton ni de fenêtre « À déployer »",
+  },
+  {
+    hash: "b97d6d13f3ff78dc93b7f8458cd1c74e00f294c6",
+    shortHash: "b97d6d13f",
+    date: "2026-07-27T12:21:07+02:00",
+    author: "Mohamed Boudra",
+    subject: "Load complete chat history when reaching the top (#2481)",
+  },
+  {
+    hash: "80c8a0839391c585275279095080ed1aa7c2c4d5",
+    shortHash: "80c8a0839",
+    date: "2026-07-27T12:12:22+02:00",
+    author: "Mohamed Boudra",
+    subject: "Keep parent agents alive while child work runs (#2458)",
+  },
+  {
+    hash: "1d1132de9c513c2febc447755ae9720792b44ab1",
+    shortHash: "1d1132de9",
+    date: "2026-07-27T12:12:02+02:00",
+    author: "Mohamed Boudra",
+    subject: "perf(relay): reduce encrypted binary traffic overhead (#2480)",
+  },
+  {
+    hash: "66456928b6d6f796c8e9cea3ac65b677e759df19",
+    shortHash: "66456928b",
+    date: "2026-07-27T11:57:41+02:00",
+    author: "haikostudio",
+    subject:
+      "feat(tâches): le tableau se déplace à la main, et le contrôle final déploie sur l'instance dev",
+  },
+  {
+    hash: "4fd4430d1d4054bd79bdc87c63e0b2f192f356ba",
+    shortHash: "4fd4430d1",
+    date: "2026-07-27T11:43:52+02:00",
+    author: "haikostudio",
+    subject: "fix(tâches): plus de JSON brut dans la discussion, et plus de saut en « En cours »",
+  },
+  {
+    hash: "36150ac64c9a99f843f524705d4c1e5352de132a",
+    shortHash: "36150ac64",
+    date: "2026-07-27T11:26:16+02:00",
+    author: "haikostudio",
+    subject: "fix(mobile): menu ⋮ dans l'en-tête, marge du prompt et modale écrasée",
+  },
   {
     hash: "4f62e7d9a107e83f831678240e842b138dd39a8b",
     shortHash: "4f62e7d9a",
@@ -2686,92 +2772,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "Mohamed Boudra",
     subject: "Restore archived agents from History (#2316)",
   },
-  {
-    hash: "3ac203c788afacc885beb981f606667dc34151d2",
-    shortHash: "3ac203c78",
-    date: "2026-07-22T14:56:48+02:00",
-    author: "haikostudio",
-    subject: "fix(tâches): ancrer les drawers du tableau — chat en bas, détails à droite (desktop)",
-  },
-  {
-    hash: "57d703a6300ceb3138a231bcd1580f1bb8e6308c",
-    shortHash: "57d703a63",
-    date: "2026-07-22T13:57:59+02:00",
-    author: "haikostudio",
-    subject: "feat(tâches): les dossiers du tableau deviennent de vraies branches git",
-  },
-  {
-    hash: "3662a8d96caef808b553af80a437f9e5fbd74e08",
-    shortHash: "3662a8d96",
-    date: "2026-07-22T13:41:04+02:00",
-    author: "haikostudio",
-    subject: "refactor(app): unifie les fenêtres du tableau de tâches sur le drawer standard",
-  },
-  {
-    hash: "69c03b3433c40563949e9e7608e5438a6aade289",
-    shortHash: "69c03b343",
-    date: "2026-07-22T01:12:25+02:00",
-    author: "haikostudio",
-    subject: "fix(facturation): supprime la bande blanche et rattache la tâche à la facture",
-  },
-  {
-    hash: "a215bd3050e835b97228fbb4ff91cfa53ae438ed",
-    shortHash: "a215bd305",
-    date: "2026-07-22T00:47:54+02:00",
-    author: "haikostudio",
-    subject:
-      "fix(app): retire le bouton retour redondant et le padding en double sur la config projet",
-  },
-  {
-    hash: "b7a1aa28139347d88ca39c74584f29a90674fbba",
-    shortHash: "b7a1aa281",
-    date: "2026-07-22T09:51:49+02:00",
-    author: "haikostudio",
-    subject: "feat(déploiement): compteur global et « Tout fusionner & publier »",
-  },
-  {
-    hash: "8bb9f38f96bbefd7bd2154c208aef8317780b102",
-    shortHash: "8bb9f38f9",
-    date: "2026-07-22T09:31:32+02:00",
-    author: "haikostudio",
-    subject: "feat(déploiement): bouton et fenêtre « À déployer » dans tous les ateliers Paseo",
-  },
-  {
-    hash: "54bc1d79163d9c66025a42b94c3bca2a11a0c3fd",
-    shortHash: "54bc1d791",
-    date: "2026-07-22T13:20:35+02:00",
-    author: "haikostudio",
-    subject: "fix(app): rendre la discussion du drawer de tâche défilable sur mobile",
-  },
-  {
-    hash: "666a1931eaafadb293c05d480f0f47c6c27245bf",
-    shortHash: "666a1931e",
-    date: "2026-07-22T13:19:07+02:00",
-    author: "haikostudio",
-    subject: "feat(déploiement): sélection par coche des ateliers + aperçu du total",
-  },
-  {
-    hash: "68993b7ab35239ec44eb69c169de3c43ae4f1903",
-    shortHash: "68993b7ab",
-    date: "2026-07-22T13:16:27+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(desktop): preserve Windows terminal hook smoke command",
-  },
-  {
-    hash: "a94321e24e93d90a94c3c021c98ada6ed5b2ee02",
-    shortHash: "a94321e24",
-    date: "2026-07-22T13:02:28+02:00",
-    author: "haikostudio",
-    subject: "fix(app): empêcher un nouvel onglet d'agent de se refermer tout seul",
-  },
-  {
-    hash: "246c07fba58468e0044109f62055f589afd1f8c2",
-    shortHash: "246c07fba",
-    date: "2026-07-22T12:26:40+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(cli): make new workspace creation explicit (#2315)",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T09:15:22+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T14:35:33+02:00";
