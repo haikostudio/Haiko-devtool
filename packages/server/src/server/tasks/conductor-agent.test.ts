@@ -130,6 +130,98 @@ describe("ConductorAgentService", () => {
     expect(systemPrompt).toContain("UNE TÂCHE, JAMAIS UNE EXÉCUTION");
   });
 
+  it("starts a Claude conductor on high thinking effort, not the catalog's low", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    });
+
+    await service.ensureConductorAgent("project-1");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.config?.thinkingOptionId).toBe("high");
+  });
+
+  it("re-locks an existing Claude conductor that has no stored thinking level", async () => {
+    const existing = {
+      id: "old-claude-conductor",
+      provider: "claude/sonnet",
+      cwd: "/tmp/project",
+      workspaceId: "ws-claude",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
+        [CONDUCTOR_PROJECT_ID_LABEL]: "project-1",
+        [CONDUCTOR_PROVIDER_LABEL]: "claude/sonnet",
+      },
+      lastStatus: "closed",
+      config: {},
+    } as unknown as StoredAgentRecord;
+    const upserts: StoredAgentRecord[] = [];
+    const service = new ConductorAgentService({
+      createAgent: (async () => {
+        throw new Error("must reuse the existing conductor, not create one");
+      }) as unknown as BoundCreateAgentCommand,
+      agentStorage: {
+        list: async () => [existing],
+        upsert: async (record: StoredAgentRecord) => {
+          upserts.push(record);
+        },
+      } as unknown as AgentStorage,
+      projectRegistry: {
+        get: async () => ({ rootPath: "/tmp/project" }),
+      } as unknown as ProjectRegistry,
+      logger: { info: () => {}, error: () => {}, debug: () => {} } as unknown as pino.Logger,
+    });
+
+    const result = await service.ensureConductorAgent("project-1");
+
+    expect(result.agentId).toBe("old-claude-conductor");
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.config?.thinkingOptionId).toBe("high");
+  });
+
+  it("keeps a thinking level the user picked explicitly", async () => {
+    const existing = {
+      id: "tuned-claude-conductor",
+      provider: "claude/sonnet",
+      cwd: "/tmp/project",
+      workspaceId: "ws-claude",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
+        [CONDUCTOR_PROJECT_ID_LABEL]: "project-1",
+        [CONDUCTOR_PROVIDER_LABEL]: "claude/sonnet",
+      },
+      lastStatus: "closed",
+      // Stale in every other respect, so the re-lock below definitely runs.
+      config: { thinkingOptionId: "max" },
+    } as unknown as StoredAgentRecord;
+    const upserts: StoredAgentRecord[] = [];
+    const service = new ConductorAgentService({
+      createAgent: (async () => {
+        throw new Error("must reuse the existing conductor, not create one");
+      }) as unknown as BoundCreateAgentCommand,
+      agentStorage: {
+        list: async () => [existing],
+        upsert: async (record: StoredAgentRecord) => {
+          upserts.push(record);
+        },
+      } as unknown as AgentStorage,
+      projectRegistry: {
+        get: async () => ({ rootPath: "/tmp/project" }),
+      } as unknown as ProjectRegistry,
+      logger: { info: () => {}, error: () => {}, debug: () => {} } as unknown as pino.Logger,
+    });
+
+    await service.ensureConductorAgent("project-1");
+
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.config?.thinkingOptionId).toBe("max");
+  });
+
   it("can create a Codex conductor locked to read-only execution", async () => {
     let captured: CreateAgentCommandInput | null = null;
     const service = makeService((input) => {

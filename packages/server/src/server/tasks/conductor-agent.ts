@@ -28,6 +28,15 @@ const DEFAULT_CONDUCTOR_PROVIDER: ConductorProvider = "claude/sonnet";
 const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
 
 /**
+ * Thinking effort a Claude conductor starts on. Without an explicit id the model
+ * catalog falls back to the FIRST effort level it declares — "low" — which is the
+ * wrong default for an agent whose entire job is to read a project, split it into
+ * tasks and route them. An explicit user choice still wins: this only fills the
+ * blank.
+ */
+const CONDUCTOR_CLAUDE_THINKING_OPTION_ID = "high";
+
+/**
  * The ONLY paseo MCP tools the "chef d'orchestre" is allowed to use. Its whole
  * job is to manage the kanban board — everything else is off-limits. This is the
  * source of truth for the allowlist: any paseo tool NOT named here is hard-blocked
@@ -435,6 +444,9 @@ function buildConductorConfig(
   const existingClaudeExtra = isRecord(existing?.extra?.claude) ? existing?.extra?.claude : {};
   return {
     ...base,
+    // `base` already carries the stored id when the user picked one, so this only
+    // applies to a conductor that never had an explicit level.
+    thinkingOptionId: base.thinkingOptionId ?? CONDUCTOR_CLAUDE_THINKING_OPTION_ID,
     extra: {
       ...existing?.extra,
       claude: {
@@ -459,6 +471,12 @@ function conductorConfigIsCurrent(
       config.sandboxMode === "read-only" &&
       config.networkAccess === false
     );
+  }
+  // A conductor persisted before this default existed has no stored id and would
+  // otherwise stay on the catalog's "low" forever, since persistence-by-label
+  // reuses the same record across restarts.
+  if (config.thinkingOptionId == null) {
+    return false;
   }
   return sameToolSet(readStoredDisallowedTools(config.extra), CONDUCTOR_DISALLOWED_TOOLS);
 }
