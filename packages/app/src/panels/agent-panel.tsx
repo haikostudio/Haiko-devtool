@@ -75,7 +75,7 @@ import { usePanelStore } from "@/stores/panel-store";
 import { type Agent, useSessionStore } from "@/stores/session-store";
 import { useWorkspaceLayoutStore } from "@/stores/workspace-layout-store";
 import { buildWorkspaceTabPersistenceKey } from "@/workspace-tabs/model";
-import type { Theme } from "@/styles/theme";
+import { SPACING, type Theme } from "@/styles/theme";
 import {
   useHideFinishedProviderSubagents,
   useArchiveSubagent,
@@ -1595,9 +1595,20 @@ function ActiveAgentComposer({
     mode: "translate",
   });
 
+  // The Composer already carries a fixed bottom pad (spacing[4] = 16) below its
+  // input row. Adding the full safe-area inset on top of that stacks two white
+  // bands, so on iOS the input floats well above the home indicator and on PWA
+  // (inset 0) the 16px baseline reads as a residual empty strip. Absorb the
+  // baseline into the inset instead: total gap becomes max(16, inset), so the
+  // input hugs the safe area with no doubled-up white space.
+  const composerSafeAreaPaddingBottom = Math.max(0, insets.bottom - SPACING[4]);
   const inputAreaStyle = useMemo(
-    () => [styles.inputAreaWrapper, { paddingBottom: insets.bottom }, composerKeyboardStyle],
-    [insets.bottom, composerKeyboardStyle],
+    () => [
+      styles.inputAreaWrapper,
+      { paddingBottom: composerSafeAreaPaddingBottom },
+      composerKeyboardStyle,
+    ],
+    [composerSafeAreaPaddingBottom, composerKeyboardStyle],
   );
 
   // The compact mode selector now lives inside the composer's options drawer
