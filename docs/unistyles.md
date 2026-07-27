@@ -187,6 +187,37 @@ const { theme } = useUnistyles();
 
 Use this sparingly. It works because React re-renders the prop, but it gives up the main Unistyles native-update path for that value.
 
+## Never `withUnistyles` An Svg Child — It Silently Erases The Shape On Web
+
+`withUnistyles(Circle)`, `withUnistyles(Path)`, `withUnistyles(Polyline)` and friends look like the textbook case for rule (3): `react-native-svg` primitives take `stroke`/`fill` as plain props, not styles. They are a trap.
+
+On web, `withUnistyles` **always** renders its child inside a `<div style="display: contents">` — unconditionally, whether or not a `style` prop is passed ([`withUnistyles.js`](../node_modules/react-native-unistyles/lib/module/core/withUnistyles/withUnistyles.js)). When that wrapper sits under an `<svg>`, React creates the `div` in the SVG namespace, producing an unknown SVG element. Per the SVG spec an unknown element is not rendered **and neither is its content**, so the wrapped shape disappears — no error, no warning, no console output. Native is unaffected (`withUnistyles.native.js` adds no wrapper), so the bug survives simulator testing and only shows in the browser and the PWA.
+
+Concrete regression we hit: the tasks-header quota ring (`components/tasks/task-quota-menu.tsx`) drew both of its circles through `ThemedCircle = withUnistyles(Circle)`. The pill button rendered with its background, border and percentage label, but the gauge inside it was permanently blank on web while the daemon was returning perfectly good quota numbers.
+
+**The rule: wrap the whole `<Svg>`, never a node inside it.** Give the SVG component plain color props and let `withUnistyles` feed them from one level up, outside the SVG tree:
+
+```tsx
+function QuotaRingSvg({ trackColor, arcColor }: { trackColor: string; arcColor: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20">
+      <Circle cx={10} cy={10} r={9} fill="none" stroke={trackColor} />
+      <Circle cx={10} cy={10} r={9} fill="none" stroke={arcColor} />
+    </Svg>
+  );
+}
+const ThemedQuotaRingSvg = withUnistyles(QuotaRingSvg);
+
+<ThemedQuotaRingSvg
+  uniProps={(theme) => ({
+    trackColor: theme.colors.foregroundMuted,
+    arcColor: theme.colors.statusSuccess,
+  })}
+/>;
+```
+
+Wrapping a lucide icon (`withUnistyles(CircleAlert)`) or `SvgXml` is fine — those components render their own `<svg>` root, so the injected `div` lands in the surrounding HTML flow where `display: contents` behaves normally. The danger is strictly _inside_ an `<svg>`.
+
 ## `withUnistyles` And The `> *` Child-Selector Leak
 
 `withUnistyles` on a component with a theme-dependent `style` prop works by wrapping the component in a `<div style={{display: 'contents'}} className={hash}>` and emitting the style under a `.hash > *` child selector so the styles cascade onto the wrapped component. This is how auto-mapping for `style` and `contentContainerStyle` works on web.

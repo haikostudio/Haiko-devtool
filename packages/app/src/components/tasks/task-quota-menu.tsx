@@ -38,10 +38,15 @@ const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CENTER = RING_SIZE / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-// Svg primitives take colors as plain props, so they go through withUnistyles
-// rather than a style sheet (see docs/unistyles.md).
-const ThemedCircle = withUnistyles(Circle);
-const ThemedPolyline = withUnistyles(Polyline);
+// Svg primitives take colors as plain props, so the theme has to reach them
+// through withUnistyles rather than a style sheet (see docs/unistyles.md).
+//
+// The wrapper goes around the WHOLE <Svg>, never around a <Circle>/<Polyline>
+// inside it: on web withUnistyles always renders its child inside a
+// `<div style="display:contents">`, and React creates that div in the SVG
+// namespace when it sits under an <svg>. An unknown SVG element renders
+// nothing — and neither do its children, so the shapes silently disappeared on
+// web while still drawing fine on native.
 
 const SPARKLINE_SIZE = { width: 240, height: 26 };
 const NO_SAMPLES: QuotaSample[] = [];
@@ -49,12 +54,14 @@ const NO_SAMPLES: QuotaSample[] = [];
 // The track has to be readable on its own: when the host reports no number it is
 // the ONLY thing drawn, and a border-on-surface circle was too faint to spot at
 // all. A muted-foreground ring is always a visible circle behind the arc.
-const trackColorMapping = (theme: Theme) => ({ stroke: theme.colors.foregroundMuted });
-const sparklineColorMapping = (theme: Theme) => ({ stroke: theme.colors.foregroundMuted });
-
 function ringColorMapping(tone: QuotaTone) {
-  return (theme: Theme) => ({ stroke: toneColor(theme, tone) });
+  return (theme: Theme) => ({
+    trackColor: theme.colors.foregroundMuted,
+    arcColor: toneColor(theme, tone),
+  });
 }
+
+const sparklineColorMapping = (theme: Theme) => ({ strokeColor: theme.colors.foregroundMuted });
 
 function toneColor(theme: Theme, tone: QuotaTone): string {
   switch (tone) {
@@ -192,8 +199,21 @@ function triggerStyle({ pressed, hovered }: { pressed: boolean; hovered: boolean
   return [styles.trigger, (hovered || pressed) && styles.triggerHovered];
 }
 
-/** Circular gauge whose arc is what is LEFT, not what is spent. */
-function QuotaRing({ percent, tone }: { percent: number | null; tone: QuotaTone }) {
+/**
+ * Circular gauge whose arc is what is LEFT, not what is spent.
+ *
+ * Colors arrive as plain props so the two circles stay direct children of the
+ * <Svg>; the theming wrapper sits one level up, outside the SVG tree.
+ */
+function QuotaRingSvg({
+  percent,
+  trackColor,
+  arcColor,
+}: {
+  percent: number | null;
+  trackColor: string;
+  arcColor: string;
+}) {
   const dashOffset = RING_CIRCUMFERENCE - ((percent ?? 0) / 100) * RING_CIRCUMFERENCE;
   return (
     <Svg
@@ -204,16 +224,19 @@ function QuotaRing({ percent, tone }: { percent: number | null; tone: QuotaTone 
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      <ThemedCircle
+      {/* The track has to be readable on its own: when the host reports no
+          number it is the ONLY thing drawn, and a border-on-surface circle was
+          too faint to spot at all. */}
+      <Circle
         cx={RING_CENTER}
         cy={RING_CENTER}
         r={RING_RADIUS}
         fill="none"
         strokeWidth={RING_STROKE}
-        uniProps={trackColorMapping}
+        stroke={trackColor}
       />
       {percent === null ? null : (
-        <ThemedCircle
+        <Circle
           cx={RING_CENTER}
           cy={RING_CENTER}
           r={RING_RADIUS}
@@ -222,11 +245,17 @@ function QuotaRing({ percent, tone }: { percent: number | null; tone: QuotaTone 
           strokeLinecap="round"
           strokeDasharray={RING_CIRCUMFERENCE}
           strokeDashoffset={dashOffset}
-          uniProps={ringColorMapping(tone)}
+          stroke={arcColor}
         />
       )}
     </Svg>
   );
+}
+
+const ThemedQuotaRingSvg = withUnistyles(QuotaRingSvg);
+
+function QuotaRing({ percent, tone }: { percent: number | null; tone: QuotaTone }) {
+  return <ThemedQuotaRingSvg percent={percent} uniProps={ringColorMapping(tone)} />;
 }
 
 function QuotaProviderBlock({
@@ -313,6 +342,36 @@ function QuotaForecastLine({
  * Absent until there are two readings far enough apart, so it never shows a flat
  * line pretending to be a week.
  */
+function QuotaHistorySparklineSvg({
+  points,
+  strokeColor,
+}: {
+  points: string;
+  strokeColor: string;
+}) {
+  return (
+    <Svg
+      width="100%"
+      height={SPARKLINE_SIZE.height}
+      viewBox={`0 0 ${SPARKLINE_SIZE.width} ${SPARKLINE_SIZE.height}`}
+      preserveAspectRatio="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Polyline
+        points={points}
+        fill="none"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        stroke={strokeColor}
+      />
+    </Svg>
+  );
+}
+
+const ThemedQuotaHistorySparklineSvg = withUnistyles(QuotaHistorySparklineSvg);
+
 function QuotaHistorySparkline({ samples }: { samples: QuotaSample[] }) {
   const { t } = useTranslation();
   const points = useMemo(() => sparklinePoints(samples, SPARKLINE_SIZE), [samples]);
@@ -322,23 +381,7 @@ function QuotaHistorySparkline({ samples }: { samples: QuotaSample[] }) {
   return (
     <View style={styles.sparkline}>
       <Text style={styles.sparklineLabel}>{t("tasks.quota.history")}</Text>
-      <Svg
-        width="100%"
-        height={SPARKLINE_SIZE.height}
-        viewBox={`0 0 ${SPARKLINE_SIZE.width} ${SPARKLINE_SIZE.height}`}
-        preserveAspectRatio="none"
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        <ThemedPolyline
-          points={points}
-          fill="none"
-          strokeWidth={1.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          uniProps={sparklineColorMapping}
-        />
-      </Svg>
+      <ThemedQuotaHistorySparklineSvg points={points} uniProps={sparklineColorMapping} />
     </View>
   );
 }
