@@ -38,6 +38,39 @@ describe("TaskBoardService", () => {
     expect(board.tasks[0]?.column).toBe("backlog");
   });
 
+  test("getBoard fills blank billing fields of legacy estimates from the task", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Corriger la base active etsigna-dev",
+      description: "Diagnostic et bascule sur la base de test.",
+    });
+    // Simulate an estimate persisted by a daemon that predated the billing
+    // backfill: cost fields present, every billing field absent.
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 200_000,
+        quotaPercent: 10,
+        confidence: "low",
+        model: "claude/haiku",
+        estimatedAt: "2026-07-20T00:00:00.000Z",
+      },
+    }));
+
+    // Read through a fresh service so nothing is served from an in-memory copy.
+    const reloaded = new TaskBoardService({ store: new TaskBoardStore(dir), logger });
+    const board = await reloaded.getBoard("proj-1");
+    const estimate = board.tasks[0]?.estimate;
+    expect(estimate?.billingTitle).toBe("Corriger la base active etsigna-dev");
+    expect(estimate?.billingDescription).toBe("Diagnostic et bascule sur la base de test.");
+    expect(estimate?.billingHours).toBeGreaterThan(0);
+    // Non-destructive: the on-disk estimate keeps its blank billing.
+    const rawStore = new TaskBoardStore(dir);
+    const rawBoard = await rawStore.getBoard("proj-1");
+    expect(rawBoard.tasks[0]?.estimate?.billingTitle).toBeUndefined();
+  });
+
   test("supports remote project ids with slashes and colons", async () => {
     const projectId = "remote:github.com/haikostudio/brain";
     const folder = await service.createFolder(projectId, "Auth");

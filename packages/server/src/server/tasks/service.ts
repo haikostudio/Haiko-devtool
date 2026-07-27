@@ -9,7 +9,7 @@ import type {
   TaskRunConfig,
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
-import { slugifyBranch } from "./agent-launch.js";
+import { backfillTaskBilling, slugifyBranch } from "./agent-launch.js";
 import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
@@ -288,14 +288,35 @@ export class TaskBoardService {
     };
   }
 
+  /**
+   * Fills any missing Facturation fields on every task's estimate the moment the
+   * board leaves the service (a read or a push), without re-persisting anything.
+   * This is the read-time safety net for estimates written by a daemon that
+   * predated the billing backfill: those carry null billing and never re-analyze,
+   * so without this the Facturation tab (and the folder totals / compta line that
+   * read the same fields) would stay blank forever. See {@link backfillTaskBilling}.
+   */
+  private normalizeBoard(board: TaskBoard): TaskBoard {
+    let changed = false;
+    const tasks = board.tasks.map((task) => {
+      const filled = backfillTaskBilling(task);
+      if (filled !== task) {
+        changed = true;
+      }
+      return filled;
+    });
+    return changed ? { ...board, tasks } : board;
+  }
+
   private broadcast(board: TaskBoard): void {
     const set = this.listeners.get(board.projectId);
     if (!set) {
       return;
     }
+    const normalized = this.normalizeBoard(board);
     for (const listener of set) {
       try {
-        listener(board);
+        listener(normalized);
       } catch (error) {
         this.logger.warn({ err: error, projectId: board.projectId }, "Task board listener failed");
       }
@@ -303,7 +324,7 @@ export class TaskBoardService {
   }
 
   async getBoard(projectId: string): Promise<TaskBoard> {
-    return this.store.getBoard(projectId);
+    return this.normalizeBoard(await this.store.getBoard(projectId));
   }
 
   // ---- Folders ----
@@ -988,6 +1009,9 @@ export class TaskBoardService {
     if (!task) {
       throw new TaskBoardServiceError("task_not_found", `Task not found: ${taskId}`);
     }
-    return task;
+    // Single-task mutation returns feed RPC responses; fill the Facturation
+    // fields here too so a returned task never disagrees with the normalized
+    // board snapshot (see normalizeBoard / backfillTaskBilling).
+    return backfillTaskBilling(task);
   }
 }

@@ -71,6 +71,41 @@ function toInvoiceDescription(source: string): string {
   return source.trim().split(/\r?\n/).slice(0, 3).join("\n");
 }
 
+// The three Facturation fields, in their editable-seed form: a partial billing
+// lens (whatever the agent produced) resolved against the task so none is blank.
+interface ResolvedBillingFields {
+  billingTitle: string;
+  billingDescription: string;
+  billingHours: number;
+}
+
+// Shared fallback logic for {@link withBillingDefaults} (pre-persistence) and
+// {@link backfillTaskBilling} (on read). Accepts any object carrying the three
+// optional billing fields — a fresh estimate or a persisted one — and resolves
+// each against the task: title/description fall back to the task's own, hours to
+// a non-zero editable seed.
+function resolveBillingFields(
+  billing: {
+    billingTitle?: string;
+    billingDescription?: string;
+    billingHours?: number;
+  },
+  task: KanbanTask,
+): ResolvedBillingFields {
+  const description = task.description?.trim() ? toInvoiceDescription(task.description) : "";
+  const title = billing.billingTitle?.trim() || toInvoiceTitle(task.title);
+  return {
+    billingTitle: title,
+    // Fall back to the task's own description, then to the invoice title, so the
+    // line is never blank.
+    billingDescription: billing.billingDescription?.trim() || description || title,
+    billingHours:
+      billing.billingHours != null && billing.billingHours > 0
+        ? billing.billingHours
+        : DEFAULT_BILLING_HOURS,
+  };
+}
+
 /**
  * Guarantees the Facturation tab is never blank. The analysis agent is asked to
  * emit billingTitle/Description/Hours, but they're optional — a distracted agent
@@ -87,19 +122,38 @@ export function withBillingDefaults(
   estimate: TaskAnalysisEstimate,
   task: KanbanTask,
 ): TaskAnalysisEstimate {
-  const description = task.description?.trim() ? toInvoiceDescription(task.description) : "";
-  const title = estimate.billingTitle?.trim() || toInvoiceTitle(task.title);
-  return {
-    ...estimate,
-    billingTitle: title,
-    // Fall back to the task's own description, then to the invoice title, so the
-    // line is never blank.
-    billingDescription: estimate.billingDescription?.trim() || description || title,
-    billingHours:
-      estimate.billingHours != null && estimate.billingHours > 0
-        ? estimate.billingHours
-        : DEFAULT_BILLING_HOURS,
-  };
+  return { ...estimate, ...resolveBillingFields(estimate, task) };
+}
+
+/**
+ * Read-time twin of {@link withBillingDefaults} for estimates already on disk.
+ *
+ * {@link withBillingDefaults} only guards estimates written by a daemon that has
+ * this code: estimates persisted BEFORE the billing backfill existed still carry
+ * null billing fields, and a card never re-analyzes once it owns an estimate
+ * (the estimator returns early), so those legacy cards would show a blank
+ * Facturation tab forever. This resolves the same fallbacks against the task on
+ * every board read — non-destructive (nothing is re-persisted), so it also
+ * self-heals cards analyzed by an old daemon without a data migration.
+ *
+ * A no-op (returns the same task reference) when there is no estimate, or when
+ * the estimate's billing fields already match — so untouched cards keep their
+ * identity and only genuinely-stale cards allocate a new object.
+ */
+export function backfillTaskBilling(task: KanbanTask): KanbanTask {
+  const estimate = task.estimate;
+  if (!estimate) {
+    return task;
+  }
+  const resolved = resolveBillingFields(estimate, task);
+  if (
+    estimate.billingTitle === resolved.billingTitle &&
+    estimate.billingDescription === resolved.billingDescription &&
+    estimate.billingHours === resolved.billingHours
+  ) {
+    return task;
+  }
+  return { ...task, estimate: { ...estimate, ...resolved } };
 }
 
 // Turns free-form text into the branch-safe slug portion of a git ref: lowercase,

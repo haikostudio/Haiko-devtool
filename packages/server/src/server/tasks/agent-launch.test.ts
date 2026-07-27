@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import {
   ANALYSIS_FALLBACK_ESTIMATE,
+  backfillTaskBilling,
   buildTaskAnalysisPrompt,
   DEFAULT_BILLING_HOURS,
   parseTaskAnalysisEstimate,
@@ -124,6 +125,54 @@ describe("billing backfill for the Facturation tab", () => {
       makeTask({ description: "Première ligne du besoin.\nSeconde ligne." }),
     );
     expect(result.billingDescription).toBe("Première ligne du besoin.\nSeconde ligne.");
+  });
+});
+
+describe("read-time billing backfill for legacy estimates", () => {
+  // A persisted estimate written before the billing backfill existed: the cost
+  // fields are present but every billing field is null. Such a card never
+  // re-analyzes (it already owns an estimate), so without a read-time fill its
+  // Facturation tab stays blank forever.
+  const legacyEstimate = {
+    tokens: 200_000,
+    quotaPercent: 10,
+    confidence: "low" as const,
+    model: "claude/haiku",
+    estimatedAt: "2026-07-20T00:00:00.000Z",
+  };
+
+  test("fills the billing fields of an on-disk estimate from the task", () => {
+    const task = makeTask({
+      title: "Corriger la base active etsigna-dev",
+      description: "Diagnostic et bascule sur la base de test.",
+      estimate: legacyEstimate,
+    });
+    const filled = backfillTaskBilling(task);
+    expect(filled).not.toBe(task);
+    expect(filled.estimate?.billingTitle).toBe("Corriger la base active etsigna-dev");
+    expect(filled.estimate?.billingDescription).toBe("Diagnostic et bascule sur la base de test.");
+    expect(filled.estimate?.billingHours).toBe(DEFAULT_BILLING_HOURS);
+    // The cost fields are preserved untouched.
+    expect(filled.estimate?.tokens).toBe(200_000);
+    expect(filled.estimate?.model).toBe("claude/haiku");
+  });
+
+  test("is a no-op (same reference) when the estimate already has billing", () => {
+    const task = makeTask({
+      estimate: {
+        ...legacyEstimate,
+        billingTitle: "Connexion Google",
+        billingDescription: "Ajout du flux OAuth.",
+        billingHours: 4,
+      },
+    });
+    expect(backfillTaskBilling(task)).toBe(task);
+  });
+
+  test("leaves an un-analyzed task (no estimate) untouched", () => {
+    const task = makeTask();
+    expect(backfillTaskBilling(task)).toBe(task);
+    expect(backfillTaskBilling(task).estimate).toBeUndefined();
   });
 });
 
