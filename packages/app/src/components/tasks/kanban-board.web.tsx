@@ -489,8 +489,16 @@ const webColumnBodyStyle: React.CSSProperties = {
   gap: SPACING[2],
   padding: SPACING[2],
   flex: 1,
+  // minWidth:0 lets this flex child shrink to its column instead of being
+  // sized by its content — without it a long unbreakable token widens the box.
+  minWidth: 0,
   minHeight: 120,
   overflowY: "auto",
+  // Cards only scroll vertically. Per the CSS overflow spec, setting one axis to
+  // "auto" while the other stays "visible" promotes the visible axis to "auto"
+  // too, so any card that overflows would add a stray horizontal scrollbar.
+  // Pin the cross axis to "hidden" to keep the column vertical-only.
+  overflowX: "hidden",
 };
 
 const styles = StyleSheet.create((theme) => ({
