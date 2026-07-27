@@ -82,16 +82,19 @@ function isScheduledCandidate(task: KanbanTask): boolean {
  * Executes tasks from the board.
  *
  * THE BOARD IS MOVED BY HAND. Every column change belongs to the user dragging
- * the card, with exactly two machine-made exceptions:
+ * the card, with exactly three machine-made exceptions:
+ * - "Validé" → "Planifié", the instant the card's analysis succeeds (the
+ *   estimate/cost/billing is ready), stamped by the estimator (see
+ *   TaskEstimator.estimate) — an already-costed card no longer waits to be
+ *   dragged forward;
  * - "Planifié" → "En cours", stamped at the instant the agent really starts
  *   (that move IS the launch the user asked for by dragging into "Planifié");
  * - "En cours" → "Terminée", and only through the final-check bar the user
  *   presses at the bottom of the card's conversation (see TaskValidator).
- * Nothing else — no analysis result, no agent activity, no heuristic — moves a
- * card. In particular "Validé" no longer promotes itself to "Planifié": the
- * analysis runs there and the card waits for the user's hand.
+ * Nothing else — no agent activity, no heuristic — moves a card.
  *
- * - "Validé" column: analysis runs, and the card stays put.
+ * - "Validé" column: analysis runs; the card promotes itself to "Planifié" only
+ *   once that analysis succeeds, and otherwise stays put (failed/pending).
  * - "Planifié" column: estimated tasks awaiting a launch slot. Dropping a card
  *   here is the user's "go".
  * - Backlog ("À faire") is ALWAYS inert: nothing ever leaves it on its own.
@@ -319,10 +322,11 @@ export class TaskScheduler {
           continue;
         }
         if (task.column === "validated") {
-          // Analysis runs here, and STOPS here. The card does not promote itself
-          // to "Planifié": every column move is the user's, dragging the card by
-          // hand. The only machine move left is "Planifié" → "En cours" at the
-          // instant the agent really starts (see launch below).
+          // Analysis runs here. A card only leaves "Validé" for "Planifié" once
+          // its analysis SUCCEEDS — and the estimator makes that move the instant
+          // the estimate lands (see TaskEstimator.estimate). A card still sitting
+          // here has no usable estimate yet (analysis pending, failed, or held),
+          // so the scheduler leaves it alone rather than launching it.
           continue;
         }
         if (!isScheduledCandidate(task)) {

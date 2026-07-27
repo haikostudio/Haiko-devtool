@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-27",
     markdown:
-      "### Ajouts\n\n- Suivre la publication dans la conversation et lier l'adresse en ligne\n- Terminer une carte publie la tâche, plus de bouton ni de fenêtre « À déployer »\n- Le tableau se déplace à la main, et le contrôle final déploie sur l'instance dev\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Améliorations\n\n- Reduce encrypted binary traffic overhead (#2480)\n\n### Corrections\n\n- Supprimer la bande blanche sous le champ de message\n- Plus de JSON brut dans la discussion, et plus de saut en « En cours »\n- Menu ⋮ dans l'en-tête, marge du prompt et modale écrasée\n- Plus d'erreur « connexion perdue » au premier prompt du chef d'orchestre\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Regrouper chaque IA en bloc et masquer les IA inactives\n- Suivre la publication dans la conversation et lier l'adresse en ligne\n- Terminer une carte publie la tâche, plus de bouton ni de fenêtre « À déployer »\n- Le tableau se déplace à la main, et le contrôle final déploie sur l'instance dev\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Améliorations\n\n- Reduce encrypted binary traffic overhead (#2480)\n\n### Corrections\n\n- L'analyse ne grille plus ses tentatives quand l'agent est occupé, et la carte explique l'échec\n- Supprimer la bande blanche sous le champ de message\n- Plus de JSON brut dans la discussion, et plus de saut en « En cours »\n- Menu ⋮ dans l'en-tête, marge du prompt et modale écrasée\n- Plus d'erreur « connexion perdue » au premier prompt du chef d'orchestre\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,35 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "ea9faab75b215fa21d4520b685def49e4cc2016f",
+    shortHash: "ea9faab75",
+    date: "2026-07-27T14:57:55+02:00",
+    author: "haikostudio",
+    subject: "feat(quotas): regrouper chaque IA en bloc et masquer les IA inactives",
+  },
+  {
+    hash: "31b1d6b81560f3cf53ca265075209a1d5c9b638f",
+    shortHash: "31b1d6b81",
+    date: "2026-07-27T14:54:40+02:00",
+    author: "haikostudio",
+    subject: "chore: publication groupée des mises à jour",
+  },
+  {
+    hash: "029ca03997f8c8753b24803ae270439ea31ae6e1",
+    shortHash: "029ca0399",
+    date: "2026-07-27T14:50:38+02:00",
+    author: "haikostudio",
+    subject: "test(tâches): sortir le prédicat d'estimation pour respecter le budget d'imbrication",
+  },
+  {
+    hash: "246cd7317cd69b71b20dc3b268f951129c2b1710",
+    shortHash: "246cd7317",
+    date: "2026-07-27T14:46:07+02:00",
+    author: "haikostudio",
+    subject:
+      "fix(tâches): l'analyse ne grille plus ses tentatives quand l'agent est occupé, et la carte explique l'échec",
+  },
   {
     hash: "5c1444e9e77fb13abc2eff87a349df716e0e8e69",
     shortHash: "5c1444e9e",
@@ -2743,36 +2772,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "nikuscs",
     subject: "feat: add workspace files to chat from Files and Changes",
   },
-  {
-    hash: "f3d9569d12aef54710a6f5739769134ed038b7fb",
-    shortHash: "f3d9569d1",
-    date: "2026-07-22T15:31:22+02:00",
-    author: "haikostudio",
-    subject:
-      "fix(tâches): tiroirs du tableau en dock bas déplaçable, redimensionnable et rétractable",
-  },
-  {
-    hash: "b1ec1b8394e6009d71302ddae2d7456dcaa84065",
-    shortHash: "b1ec1b839",
-    date: "2026-07-22T15:22:32+02:00",
-    author: "haikostudio",
-    subject: "fix(app): garder le nouvel onglet d'agent vivant même après un rechargement",
-  },
-  {
-    hash: "9462f9ae0b813fd6f5bdd887f20e3d5aac2eb4f2",
-    shortHash: "9462f9ae0",
-    date: "2026-07-22T15:10:38+02:00",
-    author: "haikostudio",
-    subject: "fix(tâches): la recherche projet (rail gauche) adopte la mise en forme des colonnes",
-  },
-  {
-    hash: "42ee5a5949d81993ecc5f83123d864f9f1cd228b",
-    shortHash: "42ee5a594",
-    date: "2026-07-22T15:03:09+02:00",
-    author: "Mohamed Boudra",
-    subject: "Restore archived agents from History (#2316)",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T14:35:33+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T14:57:55+02:00";

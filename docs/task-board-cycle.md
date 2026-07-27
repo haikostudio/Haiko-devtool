@@ -7,10 +7,11 @@ Notes → À faire (backlog) → Validé → Planifié → En cours → Terminé
 ```
 
 **The board is moved by hand.** A card changes column because the user dragged
-it. Two machine-made moves survive, and only two: the launch stamp
-("Planifié" → "En cours", at the instant the agent really starts) and the
-final-check bar ("En cours" → "Terminé"). Nothing else — no analysis result, no
-agent activity, no heuristic — may move a card.
+it. Three machine-made moves survive, and only three: the analysis promotion
+("Validé" → "Planifié", the instant a card's cost analysis succeeds), the launch
+stamp ("Planifié" → "En cours", at the instant the agent really starts) and the
+final-check bar ("En cours" → "Terminé"). Nothing else — no agent activity, no
+heuristic — may move a card.
 
 ## Ownership of each transition
 
@@ -18,7 +19,7 @@ agent activity, no heuristic — may move a card.
 | ------------------- | -------------------- | ------------------------------------------------------------------------ |
 | → Notes / → À faire | user **or** an agent | The only two columns an agent may write to.                              |
 | À faire → Validé    | **user only**        | Drag, or the approval action on a proposed task.                         |
-| Validé → Planifié   | **user only**        | Analysis runs in "Validé" and stops there; the drag is the go signal.    |
+| Validé → Planifié   | estimator            | Auto, the instant the card's cost analysis succeeds (see below).         |
 | Planifié → En cours | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.       |
 | En cours → Terminé  | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it. |
 | Terminé → Déployé   | publish              | Stamped when the card's branch is confirmed merged + published.          |
@@ -44,8 +45,32 @@ agent activity, no heuristic — may move a card.
    started a turn; since every card owns an agent from birth, that dragged brand
    new cards out of "À faire" on their own. A checked-off todo is a
    `ready_for_review` badge, nothing more.
-5. **"Validé" does not promote itself.** The cost analysis runs there and the
-   card waits. The user drags it into "Planifié" when they want it run.
+5. **"Validé" promotes itself only on a _successful_ analysis.** The cost
+   analysis runs there; the instant it succeeds (`TaskEstimator.estimate`), the
+   card moves itself to "Planifié" so the scheduler can pick it up — the user no
+   longer drags an already-costed card forward by hand. This is strictly guarded
+   to the consent gate: a card whose analysis is still pending, failed, or held
+   (`executionHold`) stays in "Validé", and a card the user already moved is left
+   where it is. Validated → scheduled is a move _between_ pipeline columns, so it
+   preserves the estimate and its `awaiting_slot` schedule (it neither re-arms nor
+   disarms anything). The move goes through `transitionTask`, never the agent's
+   `move_task` — the analysis agent is still confined to "Notes"/"À faire".
+
+## Auto-promotion after analysis — the third exception
+
+The consent that used to live in the "Validé" → "Planifié" _drag_ now lives one
+step earlier, at "À faire" → "Validé": validating a card is the user saying "yes,
+run this". Once validated, the pipeline is autonomous — the estimator costs the
+card and, on success, promotes it to "Planifié" itself. A card can only sit in
+"Validé" while it has no usable estimate (analysis pending, failed and awaiting a
+retry, or explicitly held for review), which is exactly when it must not launch.
+
+The card then shows **when** it will run, not just that it is scheduled: a
+"Planifié" card carrying an off-peak/heavy estimate renders a concrete
+"Vers mar. 01:00" hint (`computeNextRunAt` in `task-card.tsx`, resolved from the
+tasks quiet-hours window), so the user sees the actual launch slot the scheduler
+is holding it for. Light "auto"/"asap" cards that run on the next tick show the
+plain "En attente de créneau" badge instead — there is no future slot to name.
 
 ## The final check — a window, not a verdict
 

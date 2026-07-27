@@ -73,8 +73,13 @@ describe("TaskEstimator", () => {
     return task;
   }
 
-  function buildEstimator(options: { finalText: string | Error }) {
+  function buildEstimator(options: { finalText: string | Error; hold?: Promise<unknown> }) {
     const runAgent = vi.fn(async () => {
+      // Optional gate: block the analysis turn so a test can observe the card
+      // before a successful estimate lands (and, now, auto-promotes it).
+      if (options.hold) {
+        await options.hold;
+      }
       if (options.finalText instanceof Error) {
         throw options.finalText;
       }
@@ -311,12 +316,70 @@ describe("TaskEstimator", () => {
       expect(board.tasks[0]?.estimate).toBeTruthy();
     });
 
-    await estimator.retry("proj-1", task.id);
+    // Re-analyze with a turn that never returns, so the card is observed where
+    // retry parks it: a successful turn would immediately re-promote it (see the
+    // auto-promotion test below), which is not what this test is about.
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { estimator: gated } = buildEstimator({ finalText: okEstimate, hold: held });
+    await gated.retry("proj-1", task.id);
 
-    // Analysis belongs to "Validé": the card cannot be re-analyzed while still
-    // sitting further down the pipeline on a verdict that no longer holds.
+    // Analysis belongs to "Validé": the card is pulled back out of the pipeline,
+    // its stale verdict cleared, and re-armed for a fresh estimate.
     const board = await service.getBoard("proj-1");
     expect(board.tasks[0]?.column).toBe("validated");
+    expect(board.tasks[0]?.schedule?.state).toBe("pending_estimate");
+    expect(board.tasks[0]?.estimate).toBeUndefined();
+    release?.();
+  });
+
+  test('a successful analysis promotes a "Validé" card to "Planifié"', async () => {
+    // A card the user validated (not dropped straight into "Planifié"): it sits
+    // in the consent gate awaiting its cost analysis.
+    const folder = await service.createFolder("proj-1", "Auth");
+    const created = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Add password reset",
+    });
+    await service.transitionTask("proj-1", created.id, "validated");
+    const { estimator } = buildEstimator({ finalText: okEstimate });
+
+    estimator.requestEstimate("proj-1", created.id);
+
+    // The estimate lands AND the card promotes itself into "Planifié" — the
+    // third automatic board move — without any manual drag.
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.column).toBe("scheduled");
+    });
+    const promoted = (await service.getBoard("proj-1")).tasks[0];
+    expect(promoted?.estimate).toBeTruthy();
+    // The move between pipeline columns preserves the armed schedule.
+    expect(promoted?.schedule?.state).toBe("awaiting_slot");
+  });
+
+  test('a failed analysis leaves a "Validé" card in "Validé"', async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const created = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Add password reset",
+    });
+    await service.transitionTask("proj-1", created.id, "validated");
+    const { estimator } = buildEstimator({ finalText: new Error("agent exploded") });
+
+    estimator.requestEstimate("proj-1", created.id);
+
+    // No estimate means no promotion: a card the analysis could not cost stays
+    // in the consent gate, never launches, and waits for a retry.
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.analysis?.state).toBe("failed");
+    });
+    const stuck = (await service.getBoard("proj-1")).tasks[0];
+    expect(stuck?.column).toBe("validated");
+    expect(stuck?.estimate).toBeUndefined();
   });
 
   test("a re-analysis leaves a finished card alone", async () => {

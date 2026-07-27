@@ -220,7 +220,7 @@ export class TaskEstimator {
     }
     this.busyRetries.delete(`${projectId}:${taskId}`);
 
-    await this.taskBoardService.patchTask(projectId, taskId, (current) => {
+    const patched = await this.taskBoardService.patchTask(projectId, taskId, (current) => {
       const next = { ...current };
       // A previous failure is history now.
       delete next.analysis;
@@ -238,6 +238,19 @@ export class TaskEstimator {
           : {}),
       };
     });
+
+    // Third automatic board move (see docs/task-board-cycle.md): a card whose
+    // analysis just succeeded promotes itself out of the "Validé" consent gate
+    // into "Planifié" so the scheduler picks it up — the user no longer has to
+    // drag an already-costed card forward by hand. Strictly guarded to the
+    // consent gate: a card the user already moved elsewhere, or one that entered
+    // the pipeline via a direct drop into "Planifié", is left exactly where it
+    // is. The estimate (and its awaiting_slot schedule) is preserved because
+    // validated→scheduled is a move BETWEEN pipeline columns, which never
+    // re-arms or disarms the schedule.
+    if (patched.column === "validated") {
+      await this.taskBoardService.transitionTask(projectId, taskId, "scheduled");
+    }
   }
 
   /**
