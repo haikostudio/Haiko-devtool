@@ -2004,6 +2004,9 @@ export class Session {
     if (!tasksSession) {
       return undefined;
     }
+    // Board reads + folder/task CRUD. Lifecycle actions (estimate, run, approve,
+    // validate, deploy, archive, conductor) live in dispatchTaskActionMessage so
+    // neither switch trips the cyclomatic-complexity ceiling as RPCs are added.
     switch (msg.type) {
       case "tasks.board.get.request":
         return tasksSession.handleBoardGetRequest(msg);
@@ -2027,6 +2030,16 @@ export class Session {
         return tasksSession.handleTaskMarkViewedRequest(msg);
       case "tasks.task.delete.request":
         return tasksSession.handleTaskDeleteRequest(msg);
+      default:
+        return this.dispatchTaskActionMessage(msg, tasksSession);
+    }
+  }
+
+  private dispatchTaskActionMessage(
+    msg: SessionInboundMessage,
+    tasksSession: TasksSession,
+  ): Promise<void> | undefined {
+    switch (msg.type) {
       case "tasks.task.estimate.request":
         return tasksSession.handleTaskEstimateRequest(msg);
       case "tasks.task.run_now.request":
