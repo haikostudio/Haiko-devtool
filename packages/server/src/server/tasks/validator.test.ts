@@ -74,12 +74,13 @@ describe("TaskValidator", () => {
     expect(sent[0]?.agentId).toBe("agent-7");
     expect(sent[0]?.prompt).toContain("CONTRÔLE FINAL");
     expect(sent[0]?.prompt).toContain(`taskId: "${taskId}"`);
-    // The check is also the delegated deploy: it must name the project's dev
-    // instance on the VPS, and forbid publishing Paseo itself.
+    // The check is also the deploy — there is no deploy button any more: it must
+    // name the project's dev instance on the VPS, and say that finishing the
+    // card is what publishes it.
     expect(sent[0]?.prompt).toContain("haikostudio.cloud");
     expect(sent[0]?.prompt).toContain("autoproject-");
     expect(sent[0]?.prompt).toContain("/root/etsigna");
-    expect(sent[0]?.prompt).toContain("paseo-ship-now.sh");
+    expect(sent[0]?.prompt).toContain("c'est ce geste qui publie la tâche");
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === taskId)?.validation?.state).toBe("running");

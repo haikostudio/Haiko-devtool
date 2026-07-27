@@ -464,8 +464,8 @@ with an update strategy and test the installed-app upgrade path.
 
 ### Self-host publish: never build straight off a shared checkout
 
-The self-hosted deploy (`app.haikostudio.cloud`, driven by the "À déployer"
-button → `/home/paseo/paseo-build-local.sh`) runs `expo export` **inside the
+The self-hosted deploy (`app.haikostudio.cloud`, now driven by a task card
+reaching "Terminée" → `/home/paseo/paseo-build-local.sh`) runs `expo export` **inside the
 live daemon checkout `/root/paseo`**, which other agents keep editing while the
 export reads files. Metro therefore snapshots whatever is on disk at the moment
 it touches each file, not the commit recorded in `.deployed-sha`.

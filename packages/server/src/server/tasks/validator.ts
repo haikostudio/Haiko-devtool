@@ -152,11 +152,14 @@ export function isValidationWindowOpen(task: KanbanTask): boolean {
 }
 
 /**
- * The check prompt. Beyond verifying the work, it carries the ONE deployment the
- * user delegated: pushing the change onto the project's dev instance on the VPS
- * (`<slug>.haikostudio.cloud`, served by the `autoproject-<slug>` systemd unit).
- * Publishing Paseo itself is explicitly excluded — that stays the user's call
- * through the "À déployer" window.
+/**
+ * The check prompt. Beyond verifying the work, it carries the deployment: there
+ * is no deploy button in the app any more, finishing a card is what publishes
+ * it. For an ordinary project the agent pushes the change onto its dev instance
+ * on the VPS (`<slug>.haikostudio.cloud`, served by the `autoproject-<slug>`
+ * systemd unit). For Paseo itself the daemon starts the local build+publish the
+ * instant the card reaches "Terminée" (see `setOnTaskCompleted` in bootstrap),
+ * so the agent must not run any publish script by hand.
  */
 export function buildValidationPrompt(input: {
   projectId: string;
@@ -188,8 +191,9 @@ export function buildValidationPrompt(input: {
     "   • Installe les dépendances si le lockfile a changé, puis redémarre : `sudo systemctl restart autoproject-<slug>`.",
     "   • VÉRIFIE que c'est réellement en ligne : `systemctl is-active autoproject-<slug>`, puis `curl -sI https://<slug>.haikostudio.cloud` (réponse 200/3xx attendue). En cas d'échec : `journalctl -u autoproject-<slug> -n 80 --no-pager`, corrige, recommence.",
     "   • Si ce projet n'a AUCUNE instance dev sur le VPS, ne l'invente pas : dis-le en une phrase et passe à l'étape 7.",
-    "   • INTERDIT : redémarrer `paseo.service`, lancer `paseo-ship-now.sh` ou `paseo-app-deploy.sh`, toucher à un autre projet. La publication de Paseo lui-même reste la décision de l'utilisateur.",
-    "7. Seulement une fois le contrôle vert ET l'instance dev à jour, marque la tâche comme terminée avec l'outil move_task :",
+    "   • Cas particulier — si ce projet est Paseo lui-même : NE lance aucun script de publication et NE redémarre pas `paseo.service`. La publication part toute seule au moment où tu marques la carte terminée (étape 7). Contente-toi de committer et pousser.",
+    "   • INTERDIT dans tous les cas : toucher à un autre projet que celui de cette tâche.",
+    "7. Seulement une fois le contrôle vert ET l'instance dev à jour, marque la tâche comme terminée avec l'outil move_task — c'est ce geste qui publie la tâche :",
     `   move_task(projectId: "${projectId}", taskId: "${task.id}", column: "done")`,
     "",
     "Si tu es bloqué sur quelque chose que tu ne peux pas corriger seul, NE marque pas la tâche terminée : explique en clair ce qui bloque et ce dont tu as besoin.",

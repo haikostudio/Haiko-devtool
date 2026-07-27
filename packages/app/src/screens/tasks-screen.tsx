@@ -22,7 +22,6 @@ import {
   LayoutGrid,
   MoreVertical,
   Paperclip,
-  Rocket,
   Settings2,
   Wand2,
 } from "lucide-react-native";
@@ -80,8 +79,6 @@ import {
   AttachmentLibraryButton,
   AttachmentLibrarySheet,
 } from "@/attachments/attachment-library-button";
-import { PaseoDeployButton, PaseoDeploySheet } from "@/git/paseo-deploy-button";
-import { usePaseoDeployStatus } from "@/git/use-paseo-deploy";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -103,7 +100,6 @@ const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedSettings = withUnistyles(Settings2);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedPaperclip = withUnistyles(Paperclip);
-const ThemedRocket = withUnistyles(Rocket);
 const ThemedWand = withUnistyles(Wand2);
 const ThemedGradientStop = withUnistyles(Stop);
 // The shadow is the theme foreground color (dark in light mode, light in dark
@@ -1501,23 +1497,8 @@ function BoardFolderSelector({
 // owns navigation: at the folder-list level it switches projects, on a board it
 // switches folders; everywhere else it's the plain menu header.
 /**
- * Deploy ("Publier") button for the task manager header — same gate as the
- * workspace header: only the Paseo repo itself, and only when the host
- * advertises the `paseoSelfhostDeploy` capability.
- */
-function TasksDeployButton({ project }: { project: ProjectEntry | null }) {
-  const supported = useSessionStore((s) =>
-    project
-      ? s.sessions[project.serverId]?.serverInfo?.features?.paseoSelfhostDeploy === true
-      : false,
-  );
-  if (!project || !supported || project.rootPath !== "/root/paseo") return null;
-  return <PaseoDeployButton serverId={project.serverId} projectId={project.projectId} compact />;
-}
-
-/**
  * "Pièces jointes" button for the task manager header — sits right beside the
- * deploy rocket. Same gate as the workspace header: only when the host
+ * quota ring. Same gate as the workspace header: only when the host
  * advertises the `attachmentLibrary` capability and the project has a live
  * workspace to scope the library to.
  */
@@ -1540,7 +1521,7 @@ function TasksAttachmentLibraryButton({ project }: { project: ProjectEntry | nul
 /**
  * "Explorateur" button for the task manager header: toggles the project's file
  * tree — a resizable right-hand panel on desktop, a bottom dock on compact.
- * Kept next to the deploy rocket so the whole top-right cluster reads as
+ * Kept next to the attachments button so the whole top-right cluster reads as
  * "things about this project".
  */
 function TasksExplorerButton({ project }: { project: ProjectEntry | null }) {
@@ -1568,14 +1549,13 @@ function headerIconButtonStyle({ pressed, hovered }: { pressed: boolean; hovered
   return [styles.headerIconButton, (hovered || pressed) && styles.headerIconButtonHovered];
 }
 
-type HeaderMenuSheet = "quota" | "attachments" | "deploy" | null;
+type HeaderMenuSheet = "quota" | "attachments" | null;
 
 // Static leading icons for the compact header menu — no props, so they are built
 // once at module scope instead of memoized in every render pass.
 const HEADER_MENU_ICONS = {
   explorer: <ThemedFolderTree size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
   attachments: <ThemedPaperclip size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
-  deploy: <ThemedRocket size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
   settings: <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
 } as const;
 
@@ -1599,24 +1579,12 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
       ? s.sessions[project.serverId]?.serverInfo?.features?.attachmentLibrary === true
       : false,
   );
-  const deploySupported = useSessionStore((s) =>
-    project
-      ? s.sessions[project.serverId]?.serverInfo?.features?.paseoSelfhostDeploy === true
-      : false,
-  );
   const quota = useQuotaMenuModel(project?.serverId ?? null);
-  // Same gate as the desktop rocket: the Paseo repo itself, capability on.
-  const canDeploy = Boolean(project && deploySupported && project.rootPath === "/root/paseo");
-  const { pendingCount } = usePaseoDeployStatus({
-    serverId: project?.serverId ?? "",
-    enabled: canDeploy,
-  });
   const canAttach = Boolean(project && attachmentsSupported && project.workspaceId.length > 0);
 
   const closeSheet = useCallback(() => setSheet(null), []);
   const openQuota = useCallback(() => setSheet("quota"), []);
   const openAttachments = useCallback(() => setSheet("attachments"), []);
-  const openDeploy = useCallback(() => setSheet("deploy"), []);
   const toggleExplorer = useCallback(
     () => setExplorerOpen(!explorerOpen),
     [explorerOpen, setExplorerOpen],
@@ -1638,14 +1606,6 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
     ),
     [quota.remaining, t],
   );
-  const deployTrailing = useMemo(
-    () =>
-      pendingCount > 0 ? (
-        <Text style={styles.headerMenuValue}>{pendingCount > 99 ? "99+" : pendingCount}</Text>
-      ) : null,
-    [pendingCount],
-  );
-
   // Nothing to gather (project list level, host with no usage data): no button
   // rather than a "⋮" that opens an empty menu.
   if (!project && !quota.canFetch) {
@@ -1663,9 +1623,6 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
           testID="tasks-header-overflow"
         >
           <ThemedMoreVertical size={ICON_SIZE.md} uniProps={mutedColorMapping} />
-          {/* One dot for "there is something waiting behind this menu", so the
-              deploy badge doesn't disappear along with the rocket. */}
-          {canDeploy && pendingCount > 0 ? <View style={styles.headerMenuDot} /> : null}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="bottom" width={260} testID="tasks-header-menu">
           {quota.canFetch ? (
@@ -1697,16 +1654,6 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
               {t("tasks.headerMenu.attachments")}
             </DropdownMenuItem>
           ) : null}
-          {canDeploy ? (
-            <DropdownMenuItem
-              leading={HEADER_MENU_ICONS.deploy}
-              trailing={deployTrailing}
-              onSelect={openDeploy}
-              testID="tasks-header-menu-deploy"
-            >
-              {t("tasks.headerMenu.deploy")}
-            </DropdownMenuItem>
-          ) : null}
           {project ? (
             <DropdownMenuItem
               leading={HEADER_MENU_ICONS.settings}
@@ -1723,7 +1670,6 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
         quota={quota}
         openSheet={sheet}
         canAttach={canAttach}
-        canDeploy={canDeploy}
         onClose={closeSheet}
       />
     </>
@@ -1740,14 +1686,12 @@ function TasksHeaderMenuSheets({
   quota,
   openSheet,
   canAttach,
-  canDeploy,
   onClose,
 }: {
   project: ProjectEntry | null;
   quota: QuotaMenuModel;
   openSheet: HeaderMenuSheet;
   canAttach: boolean;
-  canDeploy: boolean;
   onClose: () => void;
 }) {
   return (
@@ -1760,14 +1704,6 @@ function TasksHeaderMenuSheets({
           serverId={project.serverId}
           workspaceId={project.workspaceId}
           visible={openSheet === "attachments"}
-          onClose={onClose}
-        />
-      ) : null}
-      {project && canDeploy ? (
-        <PaseoDeploySheet
-          serverId={project.serverId}
-          projectId={project.projectId}
-          visible={openSheet === "deploy"}
           onClose={onClose}
         />
       ) : null}
@@ -1792,10 +1728,10 @@ function TasksHeader({
   projects: ProjectEntry[];
   folders: TaskFolder[];
 }) {
-  // Top-right cluster: the deploy rocket (Paseo repo only) sits next to the
-  // project gear, which stays one tap away on every drill-down level. On a phone
-  // the same five actions collapse into a single "⋮" menu — the header there
-  // already carries the navigation, and the row of icons ate the folder name.
+  // Top-right cluster: quota, explorer and attachments next to the project gear,
+  // which stays one tap away on every drill-down level. On a phone they collapse
+  // into a single "⋮" menu — the header there already carries the navigation,
+  // and the row of icons ate the folder name.
   const rightContent = useMemo(
     () =>
       isCompact ? (
@@ -1805,7 +1741,6 @@ function TasksHeader({
           <TaskQuotaMenuButton serverId={selectedProject?.serverId ?? null} />
           <TasksExplorerButton project={selectedProject} />
           <TasksAttachmentLibraryButton project={selectedProject} />
-          <TasksDeployButton project={selectedProject} />
           {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
         </View>
       ),
@@ -2094,7 +2029,7 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     backgroundColor: theme.colors.surface0,
   },
-  // Top-right header cluster: deploy rocket + project gear side by side.
+  // Top-right header cluster: header actions + project gear side by side.
   headerIconButton: {
     width: 32,
     height: 32,

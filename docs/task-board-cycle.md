@@ -56,13 +56,18 @@ re-reads the request, runs the project's checks, **fixes what it finds**,
 the card itself once everything is green. The user reads the whole thing live
 instead of a dumped report.
 
-That deploy is the one publication delegated to an agent: the project's dev
-server runs as the `autoproject-<slug>` systemd unit behind Caddy on
-`<slug>.haikostudio.cloud`, so the agent merges its branch into the project's
-main checkout, restarts the unit and checks the URL answers. Publishing Paseo
-itself is explicitly excluded — no `paseo-ship-now.sh`, no `paseo-app-deploy.sh`,
-no `paseo.service` restart: that stays the user's call in the "À déployer"
-window.
+**Finishing a card is what publishes it.** There is no deploy button and no
+deploy sheet in the app any more (both were deleted); the whole publication path
+now hangs off the card reaching "Terminée":
+
+- **An ordinary project** is deployed by the agent itself, inside the check: its
+  dev server runs as the `autoproject-<slug>` systemd unit behind Caddy on
+  `<slug>.haikostudio.cloud`, so the agent merges its branch into the project's
+  main checkout, restarts the unit and checks the URL answers.
+- **Paseo itself** is published by the daemon: `setOnTaskCompleted` in
+  `bootstrap.ts` fires `triggerPaseoDeploy` with the card's branch the instant it
+  lands in "Terminée" (local build → Caddy webroot). The agent must NOT run a
+  publish script by hand, and never restarts `paseo.service`.
 
 That press opens a consent window on that one card — `validation.state ===
 "running"` — and it is the second exception in `move_task`: `done` is accepted
@@ -73,7 +78,7 @@ a check can never leave the bar stuck.
 ## The other exception
 
 A publish blocked by a merge conflict opens a repair task and validates it
-itself (`bootstrap.ts`, the deploy-conflict task creator). The user's click on
-"Publier" is the consent, and the repair exists only to unblock that click. It is
+itself (`bootstrap.ts`, the deploy-conflict task creator). The publish being
+unblocked is the consent, and the repair exists only to let it through. It is
 the sole place in the daemon that moves a card into "Validé" on the user's
 behalf — keep it that way.

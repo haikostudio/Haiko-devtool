@@ -183,6 +183,7 @@ import {
   PASEO_DEPLOY_BRANCH_TAG_PREFIX,
   PASEO_DEPLOY_CONFLICT_TAG,
   isPaseoDeployRepairBranch,
+  isPaseoDeployRoot,
   getPaseoDeployRoots,
   recordDaemonBootSha,
   setPaseoDeployAgentLauncher,
@@ -1507,22 +1508,44 @@ export async function createPaseoDaemon(
   taskBoardService.setOnTaskCreated((projectId, task) => {
     taskAgentProvisioner.ensureInBackground(projectId, task.id);
   });
+  // Finishing a card IS the publish. There is no deploy button and no deploy
+  // sheet any more: the user presses the final-check bar, the card's agent
+  // verifies and fixes, and the move to "Terminée" ships that card's work.
+  // Paseo itself publishes through the local build script (this branch); every
+  // other project is deployed by the agent onto its dev instance on the VPS
+  // (see the check prompt in tasks/validator.ts).
   taskBoardService.setOnTaskCompleted(async (projectId, task) => {
-    if (!task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)) {
+    const repairBranch = task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)
+      ? task.tags
+          .find((tag) => tag.startsWith(PASEO_DEPLOY_BRANCH_TAG_PREFIX))
+          ?.slice(PASEO_DEPLOY_BRANCH_TAG_PREFIX.length)
+      : undefined;
+    if (repairBranch) {
+      const result = await triggerPaseoDeploy({ projectId, mergeBranches: [repairBranch] });
+      if (!result.started) {
+        logger.warn(
+          { projectId, branch: repairBranch, error: result.error },
+          "Automatic repaired-branch deploy did not start",
+        );
+      }
       return;
     }
-    const branch = task.tags
-      .find((tag) => tag.startsWith(PASEO_DEPLOY_BRANCH_TAG_PREFIX))
-      ?.slice(PASEO_DEPLOY_BRANCH_TAG_PREFIX.length);
-    if (!branch) {
+    const project = await projectRegistry.get(projectId);
+    if (!isPaseoDeployRoot(project?.rootPath)) {
       return;
     }
-    const result = await triggerPaseoDeploy({ projectId, mergeBranches: [branch] });
+    const branch = task.links.branch ?? null;
+    const result = await triggerPaseoDeploy({
+      projectId,
+      mergeBranches: branch ? [branch] : [],
+    });
     if (!result.started) {
       logger.warn(
-        { projectId, branch, error: result.error },
-        "Automatic repaired-branch deploy did not start",
+        { projectId, taskId: task.id, branch, error: result.error },
+        "Publish on task completion did not start",
       );
+    } else {
+      logger.info({ projectId, taskId: task.id, branch }, "Task completion started a publish");
     }
   });
   // Light analysis tidies manual backlog cards without running cost estimation.

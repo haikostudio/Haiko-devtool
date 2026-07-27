@@ -723,6 +723,18 @@ export function getCachedPaseoDeployRoots(): string[] {
 }
 
 /**
+ * True when a project's checkout is the Paseo self-host repo (main root or one
+ * of its worktrees). Finishing a card on that project publishes it — there is no
+ * deploy button any more, the card's completion IS the publish.
+ */
+export function isPaseoDeployRoot(rootPath: string | null | undefined): boolean {
+  if (!rootPath) {
+    return false;
+  }
+  return rootPath === REPO_ROOT || cachedDeployRoots.includes(rootPath);
+}
+
+/**
  * Count uncommitted files in a worktree (shown as an info count only — those
  * changes must be committed in their own atelier before they can ship).
  */

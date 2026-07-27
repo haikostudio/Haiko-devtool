@@ -66,7 +66,6 @@ import { RetainedPanel } from "@/components/retained-panel";
 import { WindowChromeRegion } from "@/utils/desktop-window";
 import { SourceControlPanelIcon } from "@/components/icons/source-control-panel-icon";
 import { WorkspaceActions } from "@/git/workspace-actions";
-import { PaseoDeployButton } from "@/git/paseo-deploy-button";
 import { WorkspaceOpenInEditorButton } from "@/screens/workspace/workspace-open-in-editor-button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
 import { ImportSessionSheet } from "@/components/import-session-sheet";
@@ -219,13 +218,6 @@ function getWorkspaceScripts(
   workspaceDescriptor: WorkspaceDescriptor | null | undefined,
 ): WorkspaceDescriptor["scripts"] {
   return workspaceDescriptor?.scripts ?? EMPTY_WORKSPACE_SCRIPTS;
-}
-
-/** Project id backing the Paseo deploy sheet's conductor delegation (null if none). */
-function getPaseoDeployProjectId(
-  workspaceDescriptor: WorkspaceDescriptor | null | undefined,
-): string | null {
-  return workspaceDescriptor?.projectId ?? null;
 }
 
 interface WorkspaceFileLocationFields {
@@ -1746,21 +1738,6 @@ function useWorkspaceTerminalTabActions({
   };
 }
 
-/**
- * Whether the deploy button may appear for this workspace. The daemon sends the
- * set of Paseo checkout roots (main repo + task worktrees); older daemons omit
- * it, so we fall back to the main repo path.
- */
-function isPaseoDeployCheckout(
-  workspaceDirectory: string | null,
-  roots: readonly string[] | undefined,
-): boolean {
-  if (roots) {
-    return !!workspaceDirectory && roots.includes(workspaceDirectory);
-  }
-  return workspaceDirectory === "/root/paseo";
-}
-
 function WorkspaceScreenContent({
   serverId,
   workspaceId,
@@ -1802,18 +1779,6 @@ function WorkspaceScreenContent({
   // worktrees, on a host that advertises the capability. The daemon sends the set
   // of checkout roots; older daemons omit it, so we fall back to the main repo
   // path. Personal-fork feature; strings are French inline.
-  const paseoSelfhostDeploySupported = useSessionStore(
-    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeploy === true,
-  );
-  const paseoSelfhostDeployRoots = useSessionStore(
-    (s) => s.sessions[normalizedServerId]?.serverInfo?.features?.paseoSelfhostDeployRoots,
-  );
-  const showPaseoDeployButton =
-    paseoSelfhostDeploySupported &&
-    isPaseoDeployCheckout(workspaceDirectory, paseoSelfhostDeployRoots);
-  // The deploy sheet delegates to this project's "Chef d'orchestre" agent, so it
-  // needs the workspace's project id to reach (or spin up) that agent.
-  const paseoDeployProjectId = getPaseoDeployProjectId(workspaceDescriptor);
   const [isImportSheetVisible, setIsImportSheetVisible] = useState(false);
   const canOpenImportSheet = [client, isConnected, workspaceDirectory].every(Boolean);
   const openImportSheet = useCallback(() => {
@@ -3583,9 +3548,6 @@ function WorkspaceScreenContent({
               cwd={workspaceDirectory}
               hideLabels={showCompactButtonLabels}
             />
-            {showPaseoDeployButton ? (
-              <PaseoDeployButton serverId={normalizedServerId} projectId={paseoDeployProjectId} />
-            ) : null}
             {isGitCheckout ? (
               <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
                 <TooltipTrigger asChild>
@@ -3651,13 +3613,6 @@ function WorkspaceScreenContent({
             }}
           </HeaderToggleButton>
         ) : null}
-        {isMobile && showPaseoDeployButton ? (
-          <PaseoDeployButton
-            serverId={normalizedServerId}
-            projectId={paseoDeployProjectId}
-            compact
-          />
-        ) : null}
         {isMobile ? (
           <HeaderToggleButton
             testID="workspace-explorer-toggle"
@@ -3700,8 +3655,6 @@ function WorkspaceScreenContent({
       handleViewScriptTerminal,
       handleOpenUrlInBrowserTab,
       showCompactButtonLabels,
-      showPaseoDeployButton,
-      paseoDeployProjectId,
       isGitCheckout,
       handleToggleExplorer,
       isExplorerOpen,
