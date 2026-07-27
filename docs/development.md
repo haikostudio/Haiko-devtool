@@ -462,6 +462,36 @@ agents, and an aggressive service worker can strand installed users on stale web
 code. If offline behavior becomes a product requirement, add it deliberately
 with an update strategy and test the installed-app upgrade path.
 
+### Self-host publish: never build straight off a shared checkout
+
+The self-hosted deploy (`app.haikostudio.cloud`, driven by the "À déployer"
+button → `/home/paseo/paseo-build-local.sh`) runs `expo export` **inside the
+live daemon checkout `/root/paseo`**, which other agents keep editing while the
+export reads files. Metro therefore snapshots whatever is on disk at the moment
+it touches each file, not the commit recorded in `.deployed-sha`.
+
+On 2026-07-27 that shipped a torn bundle: an in-flight edit had already removed
+`handlePressTimelineTask` but had not yet removed its JSX usage, so the export
+embedded a reference to a symbol that did not exist. Minifiers cannot rename a
+free variable, which is the tell — a **non-mangled identifier in a
+`ReferenceError` from a production bundle means the build tore**, not that the
+source is wrong. The task board crashed on open, while `git grep` on the
+recorded SHA showed perfectly consistent code.
+
+Two guards now live in the script and must stay:
+
+- A **source fingerprint** (`HEAD` + `git status --porcelain`) taken before the
+  export and re-checked after it. Any drift aborts before publishing — a torn
+  build is never worth shipping, and re-clicking is cheap.
+  `packages/app/src/generated` is excluded because the lefthook changelog
+  regenerates it after the script's own save commit, which would otherwise trip
+  the guard every single run.
+- A **typecheck gate** before the export. Metro happily bundles a dangling
+  reference; `tsgo` does not.
+
+If a publish keeps aborting on drift, another agent is mid-write — wait for it
+rather than weakening the guard.
+
 ## Expo troubleshooting
 
 ```bash
