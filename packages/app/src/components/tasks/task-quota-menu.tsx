@@ -3,6 +3,7 @@ import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { useTranslation } from "react-i18next";
 import Svg, { Circle, Polyline } from "react-native-svg";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,19 +77,28 @@ function toneColor(theme: Theme, tone: QuotaTone): string {
   }
 }
 
+export interface QuotaMenuModel {
+  /** False when the host advertises no usage data at all — draw nothing. */
+  canFetch: boolean;
+  isLoading: boolean;
+  summary: ReturnType<typeof buildQuotaSummary>;
+  samplesByProvider: Map<string, QuotaSample[]>;
+  /** Weekly allowance left across every model, or null when unknown. */
+  remaining: number | null;
+  tone: QuotaTone;
+  /** Re-ask the host (quotas move while the board stays open). */
+  refresh: () => void;
+}
+
 /**
- * The header's quota ring: a circular gauge of the WEEKLY allowance still left,
- * across every connected model — the week runs out as soon as the first one does.
- *
- * Tapping it opens the per-model breakdown, both windows each: the short rolling
- * session and the weekly allowance. It replaces the old permanent quota strip
- * that ate a full row above the timeline for the same two numbers.
+ * Everything the quota control needs, in one place: the summary, the 7-day
+ * trace, and the low-quota alert. Shared by the desktop ring-and-menu and the
+ * compact overflow menu so the warning keeps firing whichever chrome is on
+ * screen — an alert that only exists while a menu is open is useless.
  */
-export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
+export function useQuotaMenuModel(serverId: string | null): QuotaMenuModel {
   const { t } = useTranslation();
   const toast = useToast();
-  const isCompact = useIsCompactFormFactor();
-  const [open, setOpen] = useState(false);
   const { view, refresh, canFetch } = useProviderUsage(serverId);
   const { series } = useProviderUsageHistory(serverId);
 
@@ -133,13 +143,101 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
     return byProvider;
   }, [series]);
 
+  const handleRefresh = useCallback(() => {
+    // Quotas move while the board is open; re-ask on every reveal rather than
+    // showing whatever the 5-minute cache still holds.
+    void refresh().catch(() => {});
+  }, [refresh]);
+
+  const remaining = summary.ringRemainingPct;
+  return {
+    canFetch,
+    isLoading: view.kind === "loading",
+    summary,
+    samplesByProvider: weeklySamplesByProvider,
+    remaining,
+    tone: toneForRemaining(remaining),
+    refresh: handleRefresh,
+  };
+}
+
+/** The per-model breakdown, both windows each — menu body and sheet body alike. */
+export function QuotaMenuBody({ model }: { model: QuotaMenuModel }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.menu}>
+      <Text style={styles.menuTitle}>{t("tasks.quota.title")}</Text>
+      {model.isLoading ? <Text style={styles.hint}>{t("common.loading")}</Text> : null}
+      {model.summary.providers.length === 0 && !model.isLoading ? (
+        <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
+      ) : null}
+      {model.summary.providers.map((provider) => (
+        <QuotaProviderBlock
+          key={provider.providerId}
+          provider={provider}
+          samples={model.samplesByProvider.get(provider.providerId) ?? NO_SAMPLES}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** The ring on its own, for callers that place it inside their own control. */
+export function QuotaRingIndicator({ model }: { model: QuotaMenuModel }) {
+  return <QuotaRing percent={model.remaining} tone={model.tone} />;
+}
+
+/** The quota breakdown as a sheet — the compact header opens it from its menu. */
+export function TaskQuotaSheet({
+  model,
+  visible,
+  onClose,
+}: {
+  model: QuotaMenuModel;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const header = useMemo<SheetHeader>(() => ({ title: t("tasks.quota.title") }), [t]);
+  const refresh = model.refresh;
+  useEffect(() => {
+    if (visible) {
+      refresh();
+    }
+  }, [visible, refresh]);
+  return (
+    <AdaptiveModalSheet
+      visible={visible}
+      onClose={onClose}
+      header={header}
+      scrollable
+      testID="tasks-quota-sheet"
+    >
+      <QuotaMenuBody model={model} />
+    </AdaptiveModalSheet>
+  );
+}
+
+/**
+ * The header's quota ring: a circular gauge of the WEEKLY allowance still left,
+ * across every connected model — the week runs out as soon as the first one does.
+ *
+ * Tapping it opens the per-model breakdown, both windows each: the short rolling
+ * session and the weekly allowance. It replaces the old permanent quota strip
+ * that ate a full row above the timeline for the same two numbers.
+ */
+export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
+  const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  const [open, setOpen] = useState(false);
+  const model = useQuotaMenuModel(serverId);
+  const refresh = model.refresh;
+
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen);
-      // Quotas move while the board is open; re-ask on every reveal rather than
-      // showing whatever the 5-minute cache still holds.
       if (nextOpen) {
-        void refresh().catch(() => {});
+        refresh();
       }
     },
     [refresh],
@@ -147,12 +245,11 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
 
   // No host capability, no ring: the gauge would have nothing to show and the
   // feature is gated in one place (see the capability rules in CLAUDE.md).
-  if (!canFetch) {
+  if (!model.canFetch) {
     return null;
   }
 
-  const remaining = summary.ringRemainingPct;
-  const tone = toneForRemaining(remaining);
+  const { remaining, tone } = model;
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -176,20 +273,7 @@ export function TaskQuotaMenuButton({ serverId }: { serverId: string | null }) {
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="bottom" width={280} testID="tasks-quota-menu">
-        <View style={styles.menu}>
-          <Text style={styles.menuTitle}>{t("tasks.quota.title")}</Text>
-          {view.kind === "loading" ? <Text style={styles.hint}>{t("common.loading")}</Text> : null}
-          {summary.providers.length === 0 && view.kind !== "loading" ? (
-            <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
-          ) : null}
-          {summary.providers.map((provider) => (
-            <QuotaProviderBlock
-              key={provider.providerId}
-              provider={provider}
-              samples={weeklySamplesByProvider.get(provider.providerId) ?? NO_SAMPLES}
-            />
-          ))}
-        </View>
+        <QuotaMenuBody model={model} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

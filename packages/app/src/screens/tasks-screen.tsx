@@ -20,6 +20,9 @@ import {
   Folder,
   FolderTree,
   LayoutGrid,
+  MoreVertical,
+  Paperclip,
+  Rocket,
   Settings2,
   Wand2,
 } from "lucide-react-native";
@@ -37,7 +40,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
-import { TaskQuotaMenuButton } from "@/components/tasks/task-quota-menu";
+import {
+  type QuotaMenuModel,
+  QuotaRingIndicator,
+  TaskQuotaMenuButton,
+  TaskQuotaSheet,
+  useQuotaMenuModel,
+} from "@/components/tasks/task-quota-menu";
 import { TaskTimelineArea } from "@/components/tasks/task-timeline-area";
 import { NewTaskCard } from "@/components/tasks/new-task-card";
 import { NewNoteCard, type NewNoteInput } from "@/components/tasks/new-note-card";
@@ -67,8 +76,12 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
-import { AttachmentLibraryButton } from "@/attachments/attachment-library-button";
-import { PaseoDeployButton } from "@/git/paseo-deploy-button";
+import {
+  AttachmentLibraryButton,
+  AttachmentLibrarySheet,
+} from "@/attachments/attachment-library-button";
+import { PaseoDeployButton, PaseoDeploySheet } from "@/git/paseo-deploy-button";
+import { usePaseoDeployStatus } from "@/git/use-paseo-deploy";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -88,6 +101,9 @@ const ThemedClock = withUnistyles(Clock);
 const ThemedSortAz = withUnistyles(ArrowDownAZ);
 const ThemedFolderTree = withUnistyles(FolderTree);
 const ThemedSettings = withUnistyles(Settings2);
+const ThemedMoreVertical = withUnistyles(MoreVertical);
+const ThemedPaperclip = withUnistyles(Paperclip);
+const ThemedRocket = withUnistyles(Rocket);
 const ThemedWand = withUnistyles(Wand2);
 const ThemedGradientStop = withUnistyles(Stop);
 // The shadow is the theme foreground color (dark in light mode, light in dark
@@ -1138,7 +1154,7 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
             ? t("tasks.panel.validateRestartMessage")
             : t("tasks.panel.validateTaskMessage"),
           confirmLabel: t("tasks.panel.validateTask"),
-          cancelLabel: t("common.cancel"),
+          cancelLabel: t("common.actions.cancel"),
         });
         if (!confirmed) {
           return;
@@ -1552,6 +1568,213 @@ function headerIconButtonStyle({ pressed, hovered }: { pressed: boolean; hovered
   return [styles.headerIconButton, (hovered || pressed) && styles.headerIconButtonHovered];
 }
 
+type HeaderMenuSheet = "quota" | "attachments" | "deploy" | null;
+
+// Static leading icons for the compact header menu — no props, so they are built
+// once at module scope instead of memoized in every render pass.
+const HEADER_MENU_ICONS = {
+  explorer: <ThemedFolderTree size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
+  attachments: <ThemedPaperclip size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
+  deploy: <ThemedRocket size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
+  settings: <ThemedSettings size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
+} as const;
+
+/**
+ * Compact header actions: one "⋮" button instead of the desktop row of icons.
+ *
+ * A phone header also carries the hamburger, the back chevron and the project /
+ * folder selectors, so five trailing icons left the folder name a couple of
+ * characters wide. The menu owns the sheets itself (rather than nesting the
+ * desktop buttons, whose drawers would unmount with the menu) and keeps them
+ * mounted as siblings, so a sheet survives the menu closing behind it.
+ */
+function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) {
+  const { t } = useTranslation();
+  const [sheet, setSheet] = useState<HeaderMenuSheet>(null);
+  const explorerOpen = useTasksBoardUiStore((state) => state.explorerOpen);
+  const setExplorerOpen = useTasksBoardUiStore((state) => state.setExplorerOpen);
+
+  const attachmentsSupported = useSessionStore((s) =>
+    project
+      ? s.sessions[project.serverId]?.serverInfo?.features?.attachmentLibrary === true
+      : false,
+  );
+  const deploySupported = useSessionStore((s) =>
+    project
+      ? s.sessions[project.serverId]?.serverInfo?.features?.paseoSelfhostDeploy === true
+      : false,
+  );
+  const quota = useQuotaMenuModel(project?.serverId ?? null);
+  // Same gate as the desktop rocket: the Paseo repo itself, capability on.
+  const canDeploy = Boolean(project && deploySupported && project.rootPath === "/root/paseo");
+  const { pendingCount } = usePaseoDeployStatus({
+    serverId: project?.serverId ?? "",
+    enabled: canDeploy,
+  });
+  const canAttach = Boolean(project && attachmentsSupported && project.workspaceId.length > 0);
+
+  const closeSheet = useCallback(() => setSheet(null), []);
+  const openQuota = useCallback(() => setSheet("quota"), []);
+  const openAttachments = useCallback(() => setSheet("attachments"), []);
+  const openDeploy = useCallback(() => setSheet("deploy"), []);
+  const toggleExplorer = useCallback(
+    () => setExplorerOpen(!explorerOpen),
+    [explorerOpen, setExplorerOpen],
+  );
+  const openSettings = useCallback(() => {
+    if (project) {
+      router.navigate(buildProjectSettingsRoute(project.projectId));
+    }
+  }, [project]);
+
+  const quotaLeading = useMemo(() => <QuotaRingIndicator model={quota} />, [quota]);
+  const quotaTrailing = useMemo(
+    () => (
+      <Text style={styles.headerMenuValue}>
+        {quota.remaining === null
+          ? t("tasks.quota.noData")
+          : t("tasks.quota.percentShort", { percent: Math.round(quota.remaining) })}
+      </Text>
+    ),
+    [quota.remaining, t],
+  );
+  const deployTrailing = useMemo(
+    () =>
+      pendingCount > 0 ? (
+        <Text style={styles.headerMenuValue}>{pendingCount > 99 ? "99+" : pendingCount}</Text>
+      ) : null,
+    [pendingCount],
+  );
+
+  // Nothing to gather (project list level, host with no usage data): no button
+  // rather than a "⋮" that opens an empty menu.
+  if (!project && !quota.canFetch) {
+    return null;
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          style={headerIconButtonStyle}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.headerMenu.label")}
+          testID="tasks-header-overflow"
+        >
+          <ThemedMoreVertical size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+          {/* One dot for "there is something waiting behind this menu", so the
+              deploy badge doesn't disappear along with the rocket. */}
+          {canDeploy && pendingCount > 0 ? <View style={styles.headerMenuDot} /> : null}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="bottom" width={260} testID="tasks-header-menu">
+          {quota.canFetch ? (
+            <DropdownMenuItem
+              leading={quotaLeading}
+              trailing={quotaTrailing}
+              onSelect={openQuota}
+              testID="tasks-header-menu-quota"
+            >
+              {t("tasks.quota.title")}
+            </DropdownMenuItem>
+          ) : null}
+          {project ? (
+            <DropdownMenuItem
+              leading={HEADER_MENU_ICONS.explorer}
+              selected={explorerOpen}
+              onSelect={toggleExplorer}
+              testID="tasks-header-menu-explorer"
+            >
+              {t("tasks.explorer.title")}
+            </DropdownMenuItem>
+          ) : null}
+          {canAttach ? (
+            <DropdownMenuItem
+              leading={HEADER_MENU_ICONS.attachments}
+              onSelect={openAttachments}
+              testID="tasks-header-menu-attachments"
+            >
+              {t("tasks.headerMenu.attachments")}
+            </DropdownMenuItem>
+          ) : null}
+          {canDeploy ? (
+            <DropdownMenuItem
+              leading={HEADER_MENU_ICONS.deploy}
+              trailing={deployTrailing}
+              onSelect={openDeploy}
+              testID="tasks-header-menu-deploy"
+            >
+              {t("tasks.headerMenu.deploy")}
+            </DropdownMenuItem>
+          ) : null}
+          {project ? (
+            <DropdownMenuItem
+              leading={HEADER_MENU_ICONS.settings}
+              onSelect={openSettings}
+              testID="tasks-header-menu-settings"
+            >
+              {t("sidebar.project.actions.openSettings")}
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TasksHeaderMenuSheets
+        project={project}
+        quota={quota}
+        openSheet={sheet}
+        canAttach={canAttach}
+        canDeploy={canDeploy}
+        onClose={closeSheet}
+      />
+    </>
+  );
+}
+
+/**
+ * The drawers the compact header menu opens, mounted outside the menu itself:
+ * a sheet rendered inside `DropdownMenuContent` would unmount with the menu the
+ * moment the item is picked.
+ */
+function TasksHeaderMenuSheets({
+  project,
+  quota,
+  openSheet,
+  canAttach,
+  canDeploy,
+  onClose,
+}: {
+  project: ProjectEntry | null;
+  quota: QuotaMenuModel;
+  openSheet: HeaderMenuSheet;
+  canAttach: boolean;
+  canDeploy: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {quota.canFetch ? (
+        <TaskQuotaSheet model={quota} visible={openSheet === "quota"} onClose={onClose} />
+      ) : null}
+      {project && canAttach ? (
+        <AttachmentLibrarySheet
+          serverId={project.serverId}
+          workspaceId={project.workspaceId}
+          visible={openSheet === "attachments"}
+          onClose={onClose}
+        />
+      ) : null}
+      {project && canDeploy ? (
+        <PaseoDeploySheet
+          serverId={project.serverId}
+          projectId={project.projectId}
+          visible={openSheet === "deploy"}
+          onClose={onClose}
+        />
+      ) : null}
+    </>
+  );
+}
+
 function TasksHeader({
   title,
   isCompact,
@@ -1570,18 +1793,23 @@ function TasksHeader({
   folders: TaskFolder[];
 }) {
   // Top-right cluster: the deploy rocket (Paseo repo only) sits next to the
-  // project gear, which stays one tap away on every drill-down level.
+  // project gear, which stays one tap away on every drill-down level. On a phone
+  // the same five actions collapse into a single "⋮" menu — the header there
+  // already carries the navigation, and the row of icons ate the folder name.
   const rightContent = useMemo(
-    () => (
-      <View style={styles.headerRightCluster}>
-        <TaskQuotaMenuButton serverId={selectedProject?.serverId ?? null} />
-        <TasksExplorerButton project={selectedProject} />
-        <TasksAttachmentLibraryButton project={selectedProject} />
-        <TasksDeployButton project={selectedProject} />
-        {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
-      </View>
-    ),
-    [selectedProject],
+    () =>
+      isCompact ? (
+        <TasksHeaderOverflowMenu project={selectedProject} />
+      ) : (
+        <View style={styles.headerRightCluster}>
+          <TaskQuotaMenuButton serverId={selectedProject?.serverId ?? null} />
+          <TasksExplorerButton project={selectedProject} />
+          <TasksAttachmentLibraryButton project={selectedProject} />
+          <TasksDeployButton project={selectedProject} />
+          {selectedProject ? <ProjectSettingsButton projectId={selectedProject.projectId} /> : null}
+        </View>
+      ),
+    [isCompact, selectedProject],
   );
   if (isCompact && supportsTasksBoard && selectedFolder) {
     return (
@@ -1881,6 +2109,21 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
+  },
+  // Trailing number in the compact header menu (quota percent, pending count).
+  headerMenuValue: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  headerMenuDot: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primary,
   },
   // Floating toggle anchored bottom-center of the full tasks area. The wrapper
   // holds the absolute position so the Animated.View can handle scale/opacity

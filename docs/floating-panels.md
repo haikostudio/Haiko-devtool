@@ -213,6 +213,29 @@ Do not treat `onChange(-1)` as a close by itself. In a stacked
 another pushed sheet. Close React state from `onDismiss`; use `onChange` only to
 track phase.
 
+## Gotcha 7 — `dynamicSizing` measures the `BottomSheetView` and nothing else
+
+`AdaptiveModalSheet`'s `dynamicSizing` maps to Gorhom's `enableDynamicSizing`,
+which derives the sheet height from a single number: the `BottomSheetView`'s own
+`onLayout` height (plus the handle). Worse, Gorhom styles that view
+`position: absolute; left: 0; right: 0; top: 0`.
+
+So anything rendered as a _sibling_ of the `BottomSheetView` — the sheet header,
+a non-scrollable footer — is both unmeasured (the sheet ends up exactly that much
+too short) and drawn underneath it. The symptom is a dialog crushed against the
+bottom edge with its title printed over its own message and its buttons cut off
+past the screen.
+
+Everything that must be measured therefore lives **inside** the `BottomSheetView`
+(see the compact branch of `adaptive-modal-sheet.tsx`). Keep the view itself
+padding-free and put the body padding on an inner `View`, so the header keeps its
+full-bleed border.
+
+The same asymmetry applies to bottom padding: a body that opts out of the sheet's
+vertical indent (`contentVerticalPaddingScale={0}`, used by the task dock) still
+gets the safe-area inset, because that indent is what keeps a composer off the
+home indicator.
+
 ## Recipe for a new anchored panel
 
 Before you write a new one, ask:

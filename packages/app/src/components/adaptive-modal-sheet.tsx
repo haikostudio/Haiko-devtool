@@ -511,6 +511,81 @@ export interface AdaptiveModalSheetProps {
    * lists that should sit closer to the edges.
    */
   contentPaddingScale?: number;
+  /**
+   * Compact only: vertical padding token for the bottom-sheet body. Defaults to
+   * spacing[3] on top and spacing[4] + safe area at the bottom. Pass `0` when
+   * the content is a full-height pane that owns its own spacing — the bottom
+   * then collapses to the safe-area inset alone instead of stacking an extra
+   * indent under it.
+   */
+  contentVerticalPaddingScale?: number;
+}
+
+/**
+ * Body/footer padding for the sheet: the caller's padding tokens merged with the
+ * compact safe-area indent. The bottom indent grows from whatever vertical
+ * padding the body uses, so a pane that opted out of the sheet's own spacing
+ * (`contentVerticalPaddingScale={0}`) keeps nothing but the safe-area inset.
+ */
+function useSheetBodyStyles({
+  isMobile,
+  hasFooter,
+  safeAreaBottom,
+  spacing,
+  contentPaddingScale,
+  contentVerticalPaddingScale,
+}: {
+  isMobile: boolean;
+  hasFooter: boolean;
+  safeAreaBottom: number;
+  spacing: Record<number, number>;
+  contentPaddingScale?: number;
+  contentVerticalPaddingScale?: number;
+}) {
+  const horizontal = contentPaddingScale != null ? spacing[contentPaddingScale] : null;
+  const vertical =
+    contentVerticalPaddingScale != null ? spacing[contentVerticalPaddingScale] : null;
+  const safeArea = useMemo(
+    () =>
+      getCompactSheetSafeAreaPadding({
+        isCompact: isMobile,
+        hasFooter,
+        baseContentPadding: vertical ?? spacing[SHEET_HORIZONTAL_PADDING_SCALE],
+        baseFooterPadding: spacing[3],
+        safeAreaBottom,
+      }),
+    [hasFooter, isMobile, safeAreaBottom, spacing, vertical],
+  );
+  const contentPadding = useMemo(
+    () => [
+      horizontal != null ? { paddingHorizontal: horizontal } : null,
+      vertical != null ? { paddingVertical: vertical } : null,
+      safeArea.contentPaddingBottom != null
+        ? { paddingBottom: safeArea.contentPaddingBottom }
+        : null,
+    ],
+    [horizontal, vertical, safeArea.contentPaddingBottom],
+  );
+  const footerPadding = useMemo(
+    () =>
+      safeArea.footerPaddingBottom != null ? { paddingBottom: safeArea.footerPaddingBottom } : null,
+    [safeArea.footerPaddingBottom],
+  );
+  return {
+    bottomSheetContentStyle: useMemo(
+      () => [styles.bottomSheetContent, ...contentPadding],
+      [contentPadding],
+    ),
+    bottomSheetStaticContentStyle: useMemo(
+      () => [styles.bottomSheetStaticContent, ...contentPadding],
+      [contentPadding],
+    ),
+    footerStyle: useMemo(() => [styles.footer, footerPadding], [footerPadding]),
+    compactFooterStyle: useMemo(
+      () => [styles.footer, styles.footerCompact, footerPadding],
+      [footerPadding],
+    ),
+  };
 }
 
 export function AdaptiveModalSheet({
@@ -528,66 +603,26 @@ export function AdaptiveModalSheet({
   presentation,
   dynamicSizing = false,
   contentPaddingScale,
+  contentVerticalPaddingScale,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const isMobile = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
   const resolvedSnapPoints = useMemo(() => snapPoints ?? ["65%", "90%"], [snapPoints]);
-  const compactSafeAreaPadding = useMemo(
-    () =>
-      getCompactSheetSafeAreaPadding({
-        isCompact: isMobile,
-        hasFooter: Boolean(footer),
-        baseContentPadding: theme.spacing[SHEET_HORIZONTAL_PADDING_SCALE],
-        baseFooterPadding: theme.spacing[3],
-        safeAreaBottom: insets.bottom,
-      }),
-    [footer, insets.bottom, isMobile, theme.spacing],
-  );
-  const contentHorizontalPadding =
-    contentPaddingScale != null
-      ? theme.spacing[contentPaddingScale as keyof typeof theme.spacing]
-      : null;
-  const bottomSheetContentStyle = useMemo(
-    () => [
-      styles.bottomSheetContent,
-      contentHorizontalPadding != null ? { paddingHorizontal: contentHorizontalPadding } : null,
-      compactSafeAreaPadding.contentPaddingBottom != null
-        ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
-        : null,
-    ],
-    [contentHorizontalPadding, compactSafeAreaPadding.contentPaddingBottom],
-  );
-  const bottomSheetStaticContentStyle = useMemo(
-    () => [
-      styles.bottomSheetStaticContent,
-      contentHorizontalPadding != null ? { paddingHorizontal: contentHorizontalPadding } : null,
-      compactSafeAreaPadding.contentPaddingBottom != null
-        ? { paddingBottom: compactSafeAreaPadding.contentPaddingBottom }
-        : null,
-    ],
-    [contentHorizontalPadding, compactSafeAreaPadding.contentPaddingBottom],
-  );
-  const footerStyle = useMemo(
-    () => [
-      styles.footer,
-      compactSafeAreaPadding.footerPaddingBottom != null
-        ? { paddingBottom: compactSafeAreaPadding.footerPaddingBottom }
-        : null,
-    ],
-    [compactSafeAreaPadding.footerPaddingBottom],
-  );
-  const compactFooterStyle = useMemo(
-    () => [
-      styles.footer,
-      styles.footerCompact,
-      compactSafeAreaPadding.footerPaddingBottom != null
-        ? { paddingBottom: compactSafeAreaPadding.footerPaddingBottom }
-        : null,
-    ],
-    [compactSafeAreaPadding.footerPaddingBottom],
-  );
+  const {
+    bottomSheetContentStyle,
+    bottomSheetStaticContentStyle,
+    footerStyle,
+    compactFooterStyle,
+  } = useSheetBodyStyles({
+    isMobile,
+    hasFooter: Boolean(footer),
+    safeAreaBottom: insets.bottom,
+    spacing: theme.spacing,
+    contentPaddingScale,
+    contentVerticalPaddingScale,
+  });
   // Pinned footer for the compact scrollable sheet: BottomSheetFooter tracks
   // the sheet's animated position (and the keyboard), so the footer stays glued
   // to the visible bottom edge instead of drifting when the sheet extends.
@@ -681,6 +716,10 @@ export function AdaptiveModalSheet({
     return () => clearTimeout(timeout);
   }, [visible, isMobile, notifyNativeModalDismiss]);
 
+  const compactHeader = <SheetHeaderView header={header} onClose={onClose} testID={testID} />;
+  const compactStaticFooter =
+    footer && !scrollable ? <View style={footerStyle}>{footer}</View> : null;
+
   if (isMobile) {
     let compactBody: ReactNode;
     if (dynamicSizing) {
@@ -689,7 +728,20 @@ export function AdaptiveModalSheet({
       // scroll view — a BottomSheetScrollView fills the available frame and the
       // sheet snaps taller than its content. The sheet is capped at `topInset`,
       // so short lists hug their content instead of wasting vertical space.
-      compactBody = <BottomSheetView style={bottomSheetContentStyle}>{children}</BottomSheetView>;
+      //
+      // Header and footer live INSIDE that view on purpose. gorhom derives the
+      // sheet height from the BottomSheetView's layout alone, and renders that
+      // view `position: absolute` — anything left as a sibling is both unmeasured
+      // and drawn underneath, which is how a confirm dialog ended up one header
+      // short with its title printed over its own message and its buttons cut
+      // off past the screen edge.
+      compactBody = (
+        <BottomSheetView>
+          {compactHeader}
+          <View style={bottomSheetContentStyle}>{children}</View>
+          {compactStaticFooter}
+        </BottomSheetView>
+      );
     } else if (scrollable) {
       // Padding lives on an inner View, NOT on contentContainerStyle:
       // BottomSheetScrollView is not a Unistyles-remapped component, so a
@@ -729,9 +781,9 @@ export function AdaptiveModalSheet({
         presentation={presentation}
         footerComponent={footer && scrollable ? renderCompactFooter : undefined}
       >
-        <SheetHeaderView header={header} onClose={onClose} testID={testID} />
+        {dynamicSizing ? null : compactHeader}
         {compactBody}
-        {footer && !scrollable ? <View style={footerStyle}>{footer}</View> : null}
+        {dynamicSizing ? null : compactStaticFooter}
       </IsolatedBottomSheetModal>
     );
   }

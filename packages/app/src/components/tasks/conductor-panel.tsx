@@ -150,7 +150,7 @@ export function ConductorPanel({
         title: t("tasks.conductor.resetTitle"),
         message: t("tasks.conductor.resetMessage"),
         confirmLabel: t("tasks.conductor.resetConfirm"),
-        cancelLabel: t("common.cancel"),
+        cancelLabel: t("common.actions.cancel"),
       });
       if (!confirmed) {
         return;

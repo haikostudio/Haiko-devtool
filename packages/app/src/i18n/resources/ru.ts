@@ -449,6 +449,11 @@ export const ru: TranslationResources = {
       title: "Проводник",
       noProject: "Выберите проект, чтобы просмотреть его файлы.",
     },
+    headerMenu: {
+      label: "Другие действия",
+      attachments: "Вложения",
+      deploy: "Опубликовать",
+    },
     updateHost: "Обновите хост, чтобы использовать Задачи.",
     columns: {
       backlog: "К выполнению",

@@ -38,6 +38,21 @@ describe("getCompactSheetSafeAreaPadding", () => {
     ).toEqual({ contentPaddingBottom: 58 });
   });
 
+  // The task dock passes contentVerticalPaddingScale={0}: its composer sits at
+  // the bottom of a full-height pane, so the only gap under it is the phone's
+  // own safe area — no sheet indent stacked on top of it.
+  it("leaves only the safe area under a body that opted out of vertical padding", () => {
+    expect(
+      getCompactSheetSafeAreaPadding({
+        isCompact: true,
+        hasFooter: false,
+        baseContentPadding: 0,
+        baseFooterPadding: 12,
+        safeAreaBottom: 34,
+      }),
+    ).toEqual({ contentPaddingBottom: 34 });
+  });
+
   it("does not inset desktop sheets", () => {
     expect(
       getCompactSheetSafeAreaPadding({

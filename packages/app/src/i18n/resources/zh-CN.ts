@@ -444,6 +444,11 @@ export const zhCN: TranslationResources = {
       title: "文件浏览器",
       noProject: "请选择一个项目以浏览其文件。",
     },
+    headerMenu: {
+      label: "更多操作",
+      attachments: "附件",
+      deploy: "发布",
+    },
     updateHost: "请更新主机以使用任务功能。",
     columns: {
       backlog: "待办",

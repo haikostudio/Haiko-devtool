@@ -454,6 +454,11 @@ export const ptBR: TranslationResources = {
       title: "Explorador",
       noProject: "Escolha um projeto para navegar pelos seus arquivos.",
     },
+    headerMenu: {
+      label: "Mais ações",
+      attachments: "Anexos",
+      deploy: "Publicar",
+    },
     updateHost: "Atualize o host para usar Tarefas.",
     columns: {
       backlog: "A fazer",

@@ -446,6 +446,11 @@ export const en = {
       title: "Explorer",
       noProject: "Select a project to browse its files.",
     },
+    headerMenu: {
+      label: "More actions",
+      attachments: "Attachments",
+      deploy: "Publish",
+    },
     updateHost: "Update the host to use Tasks.",
     columns: {
       backlog: "To do",

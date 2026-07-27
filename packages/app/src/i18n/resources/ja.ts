@@ -450,6 +450,11 @@ export const ja: TranslationResources = {
       title: "エクスプローラー",
       noProject: "ファイルを閲覧するプロジェクトを選択してください。",
     },
+    headerMenu: {
+      label: "その他の操作",
+      attachments: "添付ファイル",
+      deploy: "公開",
+    },
     updateHost: "タスクを使うにはホストを更新してください。",
     columns: {
       backlog: "未着手",

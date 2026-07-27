@@ -445,6 +445,11 @@ export const ar: TranslationResources = {
       title: "المستكشف",
       noProject: "اختر مشروعًا لتصفّح ملفاته.",
     },
+    headerMenu: {
+      label: "إجراءات إضافية",
+      attachments: "المرفقات",
+      deploy: "نشر",
+    },
     updateHost: "حدّث المضيف لاستخدام المهام.",
     columns: {
       backlog: "للإنجاز",

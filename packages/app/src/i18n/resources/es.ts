@@ -453,6 +453,11 @@ export const es: TranslationResources = {
       title: "Explorador",
       noProject: "Elige un proyecto para explorar sus archivos.",
     },
+    headerMenu: {
+      label: "Más acciones",
+      attachments: "Archivos adjuntos",
+      deploy: "Publicar",
+    },
     updateHost: "Actualiza el host para usar Tareas.",
     columns: {
       backlog: "Por hacer",

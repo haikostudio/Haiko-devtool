@@ -258,6 +258,35 @@ export function PaseoDeployButton({
   );
 }
 
+/**
+ * The deploy window without its rocket trigger, for headers that gather their
+ * project actions behind a single overflow menu (the mobile task board) and
+ * therefore own the open/closed state themselves.
+ */
+export function PaseoDeploySheet({
+  serverId,
+  projectId = null,
+  visible,
+  onClose,
+}: {
+  serverId: string;
+  projectId?: string | null;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const { status, refetch } = usePaseoDeployStatus({ serverId, enabled: true });
+  return (
+    <PaseoDeployModal
+      visible={visible}
+      serverId={serverId}
+      projectId={projectId}
+      status={status}
+      onClose={onClose}
+      onDeployed={refetch}
+    />
+  );
+}
+
 interface PaseoDeployModalProps {
   visible: boolean;
   serverId: string;

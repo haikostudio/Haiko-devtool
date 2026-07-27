@@ -113,8 +113,11 @@ function MobileDockSheet({ visible, header, children, onClose, testID }: TaskBot
       snapPoints={MOBILE_SNAP_POINTS}
       // The dock's inner sections (tabs, chat, forms) each own their horizontal
       // padding, so drop the sheet's outer indent and let the content hug the
-      // edges — otherwise it's doubly inset and reads as a fat margin.
+      // edges — otherwise it's doubly inset and reads as a fat margin. Same for
+      // the vertical indent: the composer sits at the bottom of a full-height
+      // pane, so the only gap under it should be the phone's own safe area.
       contentPaddingScale={0}
+      contentVerticalPaddingScale={0}
       testID={testID}
     >
       <View style={styles.mobileBody}>{children}</View>

@@ -343,27 +343,8 @@ export function AttachmentLibraryButton({
   compact = false,
 }: AttachmentLibraryButtonProps) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("recent");
-
   const handleOpen = useCallback(() => setOpen(true), []);
-  const handleClose = useCallback(() => {
-    setOpen(false);
-    setQuery("");
-  }, []);
-
-  const header = useMemo<SheetHeader>(
-    () => ({
-      title: "Pièces jointes",
-      search: {
-        onChange: (value: string) => setQuery(value.trim().toLowerCase()),
-        placeholder: "Rechercher par nom ou type…",
-        autoFocus: false,
-      },
-    }),
-    [],
-  );
-
+  const handleClose = useCallback(() => setOpen(false), []);
   const iconSize = compact ? 20 : 16;
 
   return (
@@ -377,21 +358,67 @@ export function AttachmentLibraryButton({
       >
         <ThemedPaperclip size={iconSize} uniProps={iconColorMapping} />
       </Pressable>
-      <AdaptiveModalSheet
+      <AttachmentLibrarySheet
+        serverId={serverId}
+        workspaceId={workspaceId}
         visible={open}
         onClose={handleClose}
-        header={header}
-        testID="attachment-library-modal"
-      >
-        <AttachmentLibraryModalBody
-          serverId={serverId}
-          workspaceId={workspaceId}
-          query={query}
-          sort={sort}
-          onSortChange={setSort}
-        />
-      </AdaptiveModalSheet>
+      />
     </>
+  );
+}
+
+/**
+ * The library drawer without its icon trigger, for headers that gather their
+ * project actions behind a single overflow menu (the mobile task board) and
+ * therefore own the open/closed state themselves.
+ */
+export function AttachmentLibrarySheet({
+  serverId,
+  workspaceId,
+  visible,
+  onClose,
+}: {
+  serverId: string;
+  workspaceId: string;
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
+
+  const handleClose = useCallback(() => {
+    setQuery("");
+    onClose();
+  }, [onClose]);
+
+  const header = useMemo<SheetHeader>(
+    () => ({
+      title: "Pièces jointes",
+      search: {
+        onChange: (value: string) => setQuery(value.trim().toLowerCase()),
+        placeholder: "Rechercher par nom ou type…",
+        autoFocus: false,
+      },
+    }),
+    [],
+  );
+
+  return (
+    <AdaptiveModalSheet
+      visible={visible}
+      onClose={handleClose}
+      header={header}
+      testID="attachment-library-modal"
+    >
+      <AttachmentLibraryModalBody
+        serverId={serverId}
+        workspaceId={workspaceId}
+        query={query}
+        sort={sort}
+        onSortChange={setSort}
+      />
+    </AdaptiveModalSheet>
   );
 }
 

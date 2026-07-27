@@ -455,6 +455,11 @@ export const fr: TranslationResources = {
       title: "Explorateur",
       noProject: "Choisissez un projet pour parcourir ses fichiers.",
     },
+    headerMenu: {
+      label: "Plus d'actions",
+      attachments: "Pièces jointes",
+      deploy: "Publier",
+    },
     updateHost: "Mettez à jour l'hôte pour utiliser les Tâches.",
     columns: {
       backlog: "À faire",
