@@ -1,6 +1,7 @@
 import type pino from "pino";
 import type { AgentManager, AgentManagerEvent, ManagedAgent } from "../agent/agent-manager.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
+import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import { normalizeTaskTitle, type TaskBoardService } from "./service.js";
 
 export const AGENT_SYNC_FOLDER_NAME = "Agent";
@@ -59,6 +60,9 @@ interface AgentTaskSyncServiceOptions {
  * - a linked agent starting a turn drags its tasks to "in_progress";
  * - a completed turn with all matched todo items done drags them to "done".
  *
+ * A card's own agent is excluded outright (see {@link isCardOwnedAgent}): this
+ * service only reacts to agents that adopt a card through their todo list.
+ *
  * Tasks the user moved by hand (manualOverrideAt set) are left alone, and
  * scheduler-owned tasks (schedule.state === "running") are transitioned by
  * the scheduler, not here. Internal agents never reach this service: the
@@ -102,12 +106,34 @@ export class AgentTaskSyncService {
     }
   }
 
+  /**
+   * A card's OWN agent is off-limits for this service.
+   *
+   * Since every card gets an agent the moment it is created, that agent runs
+   * turns long before the card is executable: the title tidy-up, the analysis,
+   * a question the user asks from the card's chat. Letting those turns drive the
+   * board would drag brand-new "À faire" cards straight into "En cours" and mint
+   * parasite cards in the "Agent" folder out of the card agent's own todo list.
+   * Column moves for a card agent belong to the scheduler, the validator, or the
+   * user — never to raw agent activity.
+   */
+  private isCardOwnedAgent(agentId: string): boolean {
+    const agent = this.agentManager.getAgent(agentId);
+    return agent?.labels?.[TASK_AGENT_LABEL] !== undefined;
+  }
+
   private async handleEvent(event: AgentManagerEvent): Promise<void> {
     if (event.type === "agent_state") {
+      if (this.isCardOwnedAgent(event.agent.id)) {
+        return;
+      }
       await this.handleAgentState(event.agent);
       return;
     }
     if (event.type !== "agent_stream") {
+      return;
+    }
+    if (this.isCardOwnedAgent(event.agentId)) {
       return;
     }
     if (event.event.type === "timeline" && event.event.item.type === "todo") {

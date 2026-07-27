@@ -1478,10 +1478,13 @@ export async function createPaseoDaemon(
     watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
     logger,
   });
+  // Runs in its own throwaway Haiku agent: the tidy-up must never show up in the
+  // card's Discussion (raw JSON) nor burn the card's real provider.
   const taskLightAnalyzer = new TaskLightAnalyzer({
     agentManager,
-    agentProvisioner: taskAgentProvisioner,
+    createAgent,
     taskBoardService,
+    projectRegistry,
     logger,
   });
   const taskScheduler = new TaskScheduler({

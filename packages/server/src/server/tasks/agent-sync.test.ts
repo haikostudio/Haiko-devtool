@@ -160,6 +160,35 @@ describe("AgentTaskSyncService", () => {
     expect(board.tasks[0]?.column).toBe("backlog");
   });
 
+  // Regression: every card owns an agent from birth, and that agent runs the
+  // title tidy-up seconds later. Before this guard, a brand-new "À faire" card
+  // was dragged into "En cours" by its own tidy-up turn.
+  test("ignores a card's own agent entirely", async () => {
+    agents.set("agent-1", fakeAgent({ labels: { "paseo.task-id": "task-1" }, lifecycle: "idle" }));
+    const folder = await service.createFolder("proj-1", "Backlog");
+    const card = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Corriger l'affichage des batteries",
+    });
+    await service.patchTask("proj-1", card.id, (current) => ({
+      ...current,
+      links: { ...current.links, taskAgentId: "agent-1", agentIds: ["agent-1"] },
+    }));
+
+    subscriber({ type: "agent_state", agent: agents.get("agent-1") as ManagedAgent });
+    subscriber({
+      type: "agent_state",
+      agent: fakeAgent({ labels: { "paseo.task-id": "task-1" }, lifecycle: "running" }),
+    });
+    emitTodos([{ text: "Implement the login form", completed: false }]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const board = await service.getBoard("proj-1");
+    // The card stays put, and no parasite card is minted in an "Agent" folder.
+    expect(board.tasks).toHaveLength(1);
+    expect(board.tasks[0]?.column).toBe("backlog");
+  });
+
   test("never moves a task awaiting user approval", async () => {
     const folder = await service.createFolder("proj-1", AGENT_SYNC_FOLDER_NAME);
     const pending = await service.createTask("proj-1", {
