@@ -489,6 +489,8 @@ export const es: TranslationResources = {
       heldForReview: "Esperando tu visto bueno",
       awaiting: "Esperando hueco",
       awaitingWindow: "Esperando horas valle",
+      awaitingQuota: "Esperando cuota",
+      launchingSoon: "Inicio inminente",
       nextRun: "Hacia {{when}}",
     },
     card: {

@@ -491,6 +491,8 @@ export const fr: TranslationResources = {
       heldForReview: "En attente de ton go",
       awaiting: "En attente de créneau",
       awaitingWindow: "Attente heures creuses",
+      awaitingQuota: "En attente de quota",
+      launchingSoon: "Démarrage imminent",
       nextRun: "Vers {{when}}",
     },
     card: {

@@ -486,6 +486,8 @@ export const ja: TranslationResources = {
       heldForReview: "承認待ち",
       awaiting: "実行待ち",
       awaitingWindow: "オフピーク待ち",
+      awaitingQuota: "クォータ待ち",
+      launchingSoon: "まもなく開始",
       nextRun: "{{when}}頃に実行",
     },
     card: {

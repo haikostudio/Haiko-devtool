@@ -482,6 +482,8 @@ export const en = {
       heldForReview: "Waiting for your go",
       awaiting: "Awaiting slot",
       awaitingWindow: "Waiting for off-peak",
+      awaitingQuota: "Waiting for quota",
+      launchingSoon: "Launching soon",
       nextRun: "Runs ~{{when}}",
     },
     card: {

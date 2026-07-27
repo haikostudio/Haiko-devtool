@@ -1,4 +1,5 @@
 import type { KanbanTask } from "@/data/tasks";
+import { waitsForOffPeak } from "@/components/tasks/task-schedule";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
 
 export type ScheduleBadgeVariant = "success" | "error" | "warning";
@@ -63,8 +64,25 @@ export function getScheduleBadge(
   if (state === "pending_estimate") {
     return { labelKey: "tasks.schedule.estimating" };
   }
+  return queuedBadge(task);
+}
+
+// A card sitting in "awaiting_slot": say WHEN/WHY it is queued instead of a flat
+// "en attente de créneau". The scheduler records why it last held the task back;
+// a task it never held (light "auto"/"asap") carries no reason and launches on
+// the next tick.
+function queuedBadge(task: KanbanTask): ScheduleBadgeDescriptor {
   if (task.schedule?.waitingReason === "quiet_hours") {
     return { labelKey: "tasks.schedule.awaitingWindow" };
+  }
+  if (task.schedule?.waitingReason === "quota") {
+    return { labelKey: "tasks.schedule.awaitingQuota" };
+  }
+  // No blocking reason yet: a light task is about to launch (say so, rather than
+  // the vague "en attente de créneau"); a heavy/off-peak task is parked for the
+  // window — the card shows the concrete "Vers 01:00" time beside this badge.
+  if (task.schedule?.state === "awaiting_slot" && !waitsForOffPeak(task)) {
+    return { labelKey: "tasks.schedule.launchingSoon", variant: "success" };
   }
   return { labelKey: "tasks.schedule.awaiting" };
 }

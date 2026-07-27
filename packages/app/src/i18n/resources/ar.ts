@@ -481,6 +481,8 @@ export const ar: TranslationResources = {
       heldForReview: "بانتظار موافقتك",
       awaiting: "بانتظار فترة",
       awaitingWindow: "بانتظار ساعات الهدوء",
+      awaitingQuota: "بانتظار الحصة",
+      launchingSoon: "الإطلاق وشيك",
       nextRun: "حوالي {{when}}",
     },
     card: {

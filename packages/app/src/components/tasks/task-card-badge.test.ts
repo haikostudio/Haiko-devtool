@@ -68,4 +68,44 @@ describe("getScheduleBadge", () => {
   it("returns no badge for a quiet in-progress task", () => {
     expect(getScheduleBadge(makeTask(), "running")).toBeNull();
   });
+
+  it("says a light queued task is launching soon, not a flat 'awaiting'", () => {
+    // Light (under both thresholds), "auto", no reason recorded: the scheduler
+    // launches it on the next tick — so the badge should say so.
+    const badge = getScheduleBadge(
+      makeTask({
+        column: "scheduled",
+        schedule: { state: "awaiting_slot", attempts: 0 },
+        estimate: { quotaPercent: 5, estimatedMinutes: 10 } as KanbanTask["estimate"],
+      }),
+      null,
+    );
+    expect(badge).toEqual({ labelKey: "tasks.schedule.launchingSoon", variant: "success" });
+  });
+
+  it("names the quota wait when the scheduler held the task back for quota", () => {
+    const badge = getScheduleBadge(
+      makeTask({
+        column: "scheduled",
+        schedule: { state: "awaiting_slot", attempts: 0, waitingReason: "quota" },
+        estimate: { quotaPercent: 5, estimatedMinutes: 10 } as KanbanTask["estimate"],
+      }),
+      null,
+    );
+    expect(badge).toEqual({ labelKey: "tasks.schedule.awaitingQuota" });
+  });
+
+  it("keeps the generic 'awaiting' badge for a heavy off-peak task (paired with its time)", () => {
+    // Heavy (over the quota threshold): parked for the off-peak window, with the
+    // concrete "Vers 01:00" time rendered next to this badge on the card.
+    const badge = getScheduleBadge(
+      makeTask({
+        column: "scheduled",
+        schedule: { state: "awaiting_slot", attempts: 0 },
+        estimate: { quotaPercent: 40, estimatedMinutes: 90 } as KanbanTask["estimate"],
+      }),
+      null,
+    );
+    expect(badge).toEqual({ labelKey: "tasks.schedule.awaiting" });
+  });
 });

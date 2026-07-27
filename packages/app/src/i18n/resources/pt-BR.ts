@@ -490,6 +490,8 @@ export const ptBR: TranslationResources = {
       heldForReview: "Aguardando seu aval",
       awaiting: "Aguardando janela",
       awaitingWindow: "Aguardando horário de baixa",
+      awaitingQuota: "Aguardando cota",
+      launchingSoon: "Início iminente",
       nextRun: "Por volta de {{when}}",
     },
     card: {

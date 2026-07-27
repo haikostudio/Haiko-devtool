@@ -485,6 +485,8 @@ export const ru: TranslationResources = {
       heldForReview: "Ждёт вашего согласия",
       awaiting: "Ожидает слот",
       awaitingWindow: "Ожидание тихих часов",
+      awaitingQuota: "Ожидание квоты",
+      launchingSoon: "Скоро запуск",
       nextRun: "Около {{when}}",
     },
     card: {

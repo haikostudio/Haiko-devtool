@@ -480,6 +480,8 @@ export const zhCN: TranslationResources = {
       heldForReview: "等待你的确认",
       awaiting: "等待时段",
       awaitingWindow: "等待空闲时段",
+      awaitingQuota: "等待配额",
+      launchingSoon: "即将启动",
       nextRun: "约 {{when}} 运行",
     },
     card: {
