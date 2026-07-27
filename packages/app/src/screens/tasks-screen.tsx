@@ -30,6 +30,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useShallow } from "zustand/shallow";
 import { MenuHeader, SidebarMenuToggle } from "@/components/headers/menu-header";
 import { ScreenHeader } from "@/components/headers/screen-header";
+import { NotificationHistoryButton } from "@/components/notification-history-button";
 import { FormTextInput } from "@/components/ui/form-field";
 import {
   DropdownMenu,
@@ -1810,9 +1811,13 @@ function TasksHeader({
   const rightContent = useMemo(
     () =>
       isCompact ? (
-        <TasksHeaderOverflowMenu project={selectedProject} />
+        <View style={styles.headerRightCluster}>
+          <NotificationHistoryButton />
+          <TasksHeaderOverflowMenu project={selectedProject} />
+        </View>
       ) : (
         <View style={styles.headerRightCluster}>
+          <NotificationHistoryButton />
           <TaskQuotaMenuButton serverId={selectedProject?.serverId ?? null} />
           <TasksExplorerButton project={selectedProject} />
           <TasksAttachmentLibraryButton project={selectedProject} />
