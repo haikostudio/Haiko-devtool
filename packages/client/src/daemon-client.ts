@@ -5022,6 +5022,28 @@ export class DaemonClient {
     });
   }
 
+  // "Archiver": hide a finished card from the board. Stamps archivedAt; never
+  // moves or publishes the card. `archived: false` un-archives.
+  async tasksTaskArchive(
+    input: { projectId: string; taskId: string; archived?: boolean },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.archive.response">({
+      requestId,
+      message: { type: "tasks.task.archive.request", ...input },
+    });
+  }
+
+  // "Lancer le déploiement": hands a deploy-then-confirm prompt to a finished
+  // card's own agent. The outcome (deploy + move to "Déployée" + restart flag)
+  // plays out in the card's conversation.
+  async tasksTaskDeploy(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.deploy.response">({
+      requestId,
+      message: { type: "tasks.task.deploy.request", ...input },
+    });
+  }
+
   async tasksConductorEnsure(
     projectId: string,
     optionsOrRequestId?: { provider?: string; reset?: boolean } | string,

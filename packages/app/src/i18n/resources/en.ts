@@ -321,6 +321,16 @@ export const en = {
         "A check is already running in the conversation. Start it again anyway?",
       validateDispatched: "Check started — follow it in the conversation.",
       validatePassed: "Task already completed.",
+      archiveTask: "Archive",
+      archiveTaskMessage:
+        "This card will be hidden from the board. It stays saved and is not published.",
+      deployTask: "Deploy",
+      deployTaskMessage:
+        "The task’s own agent checks that it works, puts the change online, then moves the card to “Deployed” and flags whether a daemon restart is needed. You follow all of it in the conversation.",
+      deployRunning: "Deploying in the conversation…",
+      deployRestartMessage:
+        "A deploy is already running in the conversation. Start it again anyway?",
+      deployDispatched: "Deploy started — follow it in the conversation.",
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",
@@ -494,6 +504,7 @@ export const en = {
       openPr: "Open pull request",
       live: "Live",
       openLive: "Open the live site",
+      needsRestart: "Restart required",
       planReady: "Plan ready",
       awaitingReply: "Waiting for your reply",
       duration: "~{{minutes}} min",
@@ -594,6 +605,7 @@ export const en = {
     toast: {
       launching: "Launching task…",
       reanalyzing: "Re-analyzing task…",
+      archived: "Task archived.",
     },
     confirmDelete: {
       title: "Delete task?",

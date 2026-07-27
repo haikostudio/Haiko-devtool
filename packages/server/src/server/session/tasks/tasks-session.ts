@@ -5,6 +5,7 @@ import type { TaskEstimator } from "../../tasks/estimator.js";
 import type { TaskScheduler } from "../../tasks/scheduler.js";
 import type { ConductorAgentService } from "../../tasks/conductor-agent.js";
 import type { TaskValidator } from "../../tasks/validator.js";
+import type { TaskDeployer } from "../../tasks/deployer.js";
 
 export interface TasksSessionHost {
   emit(msg: SessionOutboundMessage): void;
@@ -17,6 +18,7 @@ export interface TasksSessionOptions {
   taskScheduler: TaskScheduler | null;
   conductorService: ConductorAgentService | null;
   taskValidator: TaskValidator | null;
+  taskDeployer: TaskDeployer | null;
   logger: pino.Logger;
 }
 
@@ -31,6 +33,7 @@ export class TasksSession {
   private readonly taskScheduler: TaskScheduler | null;
   private readonly conductorService: ConductorAgentService | null;
   private readonly taskValidator: TaskValidator | null;
+  private readonly taskDeployer: TaskDeployer | null;
   private readonly logger: pino.Logger;
   private readonly subscriptions = new Map<string, () => void>();
 
@@ -41,6 +44,7 @@ export class TasksSession {
     this.taskScheduler = options.taskScheduler;
     this.conductorService = options.conductorService;
     this.taskValidator = options.taskValidator;
+    this.taskDeployer = options.taskDeployer;
     this.logger = options.logger;
   }
 
@@ -364,6 +368,28 @@ export class TasksSession {
   }
 
   /**
+   * "Archiver": hide a finished (done/deployed) card from the board. Stamps
+   * archivedAt; never moves or publishes the card (see docs/task-board-cycle.md).
+   */
+  async handleTaskArchiveRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.archive.request" }>,
+  ): Promise<void> {
+    try {
+      const task = await this.taskBoardService.archiveTask(
+        request.projectId,
+        request.taskId,
+        request.archived !== false,
+      );
+      this.host.emit({
+        type: "tasks.task.archive.response",
+        payload: { requestId: request.requestId, task, error: null },
+      });
+    } catch (error) {
+      this.emitRpcError(request, error);
+    }
+  }
+
+  /**
    * "Lancer le contrôle": hand the final check to the task's own agent. The
    * verification, the fixes and the completion all happen in the task's
    * conversation, where the user can read them.
@@ -389,6 +415,37 @@ export class TasksSession {
       this.host.emit({
         type: "tasks.task.validate.response",
         payload: { requestId: request.requestId, task: null, passed: false, error: message },
+      });
+    }
+  }
+
+  /**
+   * "Lancer le déploiement": hand a deploy-then-confirm prompt to a finished
+   * card's own agent. The agent verifies, deploys, then moves the card to
+   * "Déployée" and reports whether a daemon restart is needed — all in the card's
+   * own conversation.
+   */
+  async handleTaskDeployRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.deploy.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.taskDeployer) {
+        throw new TaskBoardServiceError("deployer_unavailable", "Task deployer is not available");
+      }
+      const { task, dispatched, needsDaemonRestart } = await this.taskDeployer.deploy(
+        request.projectId,
+        request.taskId,
+      );
+      this.host.emit({
+        type: "tasks.task.deploy.response",
+        payload: { requestId: request.requestId, task, dispatched, needsDaemonRestart, error: null },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: error, taskId: request.taskId }, "Task deploy request failed");
+      this.host.emit({
+        type: "tasks.task.deploy.response",
+        payload: { requestId: request.requestId, task: null, error: message },
       });
     }
   }

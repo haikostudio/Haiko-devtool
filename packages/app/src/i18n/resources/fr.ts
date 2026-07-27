@@ -327,6 +327,16 @@ export const fr: TranslationResources = {
         "Un contrôle est déjà en cours dans la discussion. Le relancer quand même ?",
       validateDispatched: "Contrôle lancé — suivez-le dans la discussion.",
       validatePassed: "Tâche déjà terminée.",
+      archiveTask: "Archiver",
+      archiveTaskMessage:
+        "Cette carte sera masquée du tableau. Elle reste enregistrée et n'est pas publiée.",
+      deployTask: "Lancer le déploiement",
+      deployTaskMessage:
+        "L’agent de cette tâche vérifie le fonctionnement, met la modification en ligne, puis passe la carte en « Déployé » et signale si un redémarrage du démon est nécessaire. Vous suivez tout dans la discussion.",
+      deployRunning: "Déploiement en cours dans la discussion…",
+      deployRestartMessage:
+        "Un déploiement est déjà en cours dans la discussion. Le relancer quand même ?",
+      deployDispatched: "Déploiement lancé — suivez-le dans la discussion.",
       collapse: "Réduire le panneau",
       expand: "Développer le panneau",
       billing: "Facturation",
@@ -503,6 +513,7 @@ export const fr: TranslationResources = {
       openPr: "Ouvrir la pull request",
       live: "En ligne",
       openLive: "Ouvrir le site en ligne",
+      needsRestart: "Redémarrage requis",
       planReady: "Plan prêt",
       awaitingReply: "En attente de ta réponse",
       duration: "~{{minutes}} min",
@@ -603,6 +614,7 @@ export const fr: TranslationResources = {
     toast: {
       launching: "Lancement de la tâche…",
       reanalyzing: "Analyse relancée…",
+      archived: "Tâche archivée.",
     },
     confirmDelete: {
       title: "Supprimer la tâche ?",

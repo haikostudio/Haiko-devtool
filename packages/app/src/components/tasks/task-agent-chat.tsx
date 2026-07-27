@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { BadgeCheck, Bot, CheckCircle2, Play } from "lucide-react-native";
+import { Archive, BadgeCheck, Bot, CheckCircle2, Play, Rocket } from "lucide-react-native";
 import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
 import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-context";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ const primaryForegroundMapping = (theme: Theme) => ({ color: theme.colors.primar
 const ThemedCheck = withUnistyles(CheckCircle2);
 const ThemedBadgeCheck = withUnistyles(BadgeCheck);
 const ThemedPlay = withUnistyles(Play);
+const ThemedArchive = withUnistyles(Archive);
+const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 
 export interface TaskAgentChatProps {
@@ -58,6 +60,21 @@ export interface TaskAgentChatProps {
    * "En cours" → "Terminé" final check.
    */
   onApproveTask?: (taskId: string) => void;
+  /**
+   * Archive (hide) a finished card. Shown as a full-width bar above the prompt
+   * composer while the card sits in "Terminé"/"Déployé". Archiving only hides the
+   * card from the board — it never moves or publishes it (see
+   * docs/task-board-cycle.md).
+   */
+  onArchive?: (taskId: string) => void;
+  /**
+   * Deploy a finished ("Terminé") card: hand its agent a deploy-then-confirm
+   * prompt that verifies, deploys and moves the card to "Déployé" itself. Shown
+   * as a full-width bar above the prompt composer while the card sits in
+   * "Terminé" — takes the slot ahead of the archive bar there, so the natural
+   * order is deploy, then archive.
+   */
+  onDeploy?: (taskId: string) => void;
 }
 
 /**
@@ -74,6 +91,8 @@ export function TaskAgentChat({
   onRunNow,
   onValidate,
   onApproveTask,
+  onArchive,
+  onDeploy,
 }: TaskAgentChatProps) {
   const { t } = useTranslation();
   // Prefer the pipeline agent: analysis AND execution live in that one
@@ -116,10 +135,22 @@ export function TaskAgentChat({
   // only path out of backlog was a manual drag on the board; this puts the same
   // decision right above the prompt, next to the run/finish controls.
   const showApprove = Boolean(onApproveTask) && task.column === "backlog";
+  // The archive bar sits on a finished card ("Terminé"/"Déployé"): it files the
+  // card away by hiding it from the board. It never publishes or moves the card —
+  // publication already happened on its own when the card reached "Terminé".
+  const showArchive =
+    Boolean(onArchive) && (task.column === "done" || task.column === "deployed");
+  // The deploy bar sits on a finished card ("Terminé") only: it hands the card's
+  // own agent a deploy-then-confirm prompt, which verifies the work, publishes it
+  // and moves the card to "Déployé". It takes the composer slot ahead of the
+  // archive bar on a "done" card, so the natural order is deploy, then archive.
+  const showDeploy = Boolean(onDeploy) && task.column === "done";
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);
   const handleApprove = useCallback(() => onApproveTask?.(task.id), [onApproveTask, task.id]);
+  const handleArchive = useCallback(() => onArchive?.(task.id), [onArchive, task.id]);
+  const handleDeploy = useCallback(() => onDeploy?.(task.id), [onDeploy, task.id]);
 
   // Memoized so the embedded pane (and everything under it) is not re-rendered
   // by a fresh element on every keystroke in the composer. Backlog, scheduled and
@@ -140,16 +171,27 @@ export function TaskAgentChat({
         />
       );
     }
+    if (showDeploy) {
+      return <DeployTaskBar onPress={handleDeploy} deployment={task.deployment} />;
+    }
+    if (showArchive) {
+      return <ArchiveTaskBar onPress={handleArchive} />;
+    }
     return null;
   }, [
     showApprove,
     showRunNow,
     showValidate,
+    showDeploy,
+    showArchive,
     handleApprove,
     handleRun,
     handleValidate,
+    handleDeploy,
+    handleArchive,
     task.progress,
     task.validation,
+    task.deployment,
   ]);
 
   if (serverId && agentId && workspaceId) {
@@ -292,6 +334,85 @@ function ApproveTaskBar({ onPress }: { onPress: () => void }) {
 
 function approveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.approveBar, (hovered || pressed) && styles.approveBarHovered];
+}
+
+/**
+ * Full-width, deliberately quiet outline bar carrying the single "Archiver"
+ * action, shown on a finished ("Terminé"/"Déployé") card right above the prompt
+ * composer. It shares the other control bars' geometry but wears a muted outline
+ * instead of a filled color: archiving is a low-stakes "file it away" gesture,
+ * not a publishing or launching one, so it should never shout. Pressing it hides
+ * the card from the board without moving or publishing it.
+ */
+function ArchiveTaskBar({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        <Pressable
+          onPress={onPress}
+          style={archiveBarStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.archiveTask")}
+          testID="task-archive-bar"
+        >
+          <ThemedArchive size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+          <Text style={styles.archiveText}>{t("tasks.panel.archiveTask")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function archiveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.archiveBar, (hovered || pressed) && styles.archiveBarHovered];
+}
+
+/**
+ * Full-width accent bar carrying the single "Lancer le déploiement" action, shown
+ * on a finished ("Terminé") card right above the prompt composer. It mirrors the
+ * other control bars' geometry so the family stays consistent, and wears the
+ * accent color like the run-now launch control — deploying is the other "put it
+ * in motion" gesture. Pressing it hands the card's own agent a deploy-then-confirm
+ * prompt; the agent verifies, publishes and moves the card to "Déployé" itself.
+ * It stays pressable while a deploy runs (a spinner replaces the icon), so a
+ * deploy can never leave the bar stuck.
+ */
+function DeployTaskBar({
+  onPress,
+  deployment,
+}: {
+  onPress: () => void;
+  deployment: KanbanTask["deployment"];
+}) {
+  const { t } = useTranslation();
+  const running = deployment?.state === "running";
+  return (
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        <Pressable
+          onPress={onPress}
+          style={deployBarStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.deployTask")}
+          testID="task-deploy-bar"
+        >
+          {running ? (
+            <ThemedActivityIndicator size="small" uniProps={accentForegroundMapping} />
+          ) : (
+            <ThemedRocket size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />
+          )}
+          <Text style={styles.runNowText}>
+            {running ? t("tasks.panel.deployRunning") : t("tasks.panel.deployTask")}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function deployBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.runNowBar, (hovered || pressed) && styles.runNowBarHovered];
 }
 
 function EmbeddedAgentPane({
@@ -442,5 +563,27 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.primaryForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
+  },
+  // Same geometry as the other bars, but a quiet muted outline (no fill): archiving
+  // a finished card is a low-stakes filing gesture, not a colored action.
+  archiveBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    width: "100%",
+    paddingVertical: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: "transparent",
+  },
+  archiveBarHovered: {
+    backgroundColor: theme.colors.border,
+  },
+  archiveText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
   },
 }));

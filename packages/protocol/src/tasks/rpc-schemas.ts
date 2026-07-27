@@ -170,6 +170,29 @@ export const TasksTaskValidateRequestSchema = z.object({
   taskId: z.string(),
 });
 
+// "Archiver": hide a finished (done/deployed) card from the board. Orthogonal to
+// the columns — it stamps `archivedAt` and never moves or publishes the card
+// (see docs/task-board-cycle.md). `archived: false` un-archives (clears the
+// stamp). Absent `archived` = archive. Additive + optional.
+export const TasksTaskArchiveRequestSchema = z.object({
+  type: z.literal("tasks.task.archive.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+  archived: z.boolean().optional(),
+});
+
+// "Lancer le déploiement": hand a deploy-then-confirm prompt to a finished card's
+// own agent, in the card's own conversation. The agent verifies the work still
+// runs, deploys it (dev instance for a project; Paseo publishes itself), then
+// moves the card to "deployed" and reports whether a daemon restart is needed.
+export const TasksTaskDeployRequestSchema = z.object({
+  type: z.literal("tasks.task.deploy.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
 export const TasksConductorEnsureRequestSchema = z.object({
   type: z.literal("tasks.conductor.ensure.request"),
   requestId: z.string(),
@@ -324,6 +347,32 @@ export const TasksTaskValidateResponseSchema = z.object({
     // verdict then plays out in the conversation, not in this response.
     // Additive + optional: old clients simply ignore it.
     dispatched: z.boolean().optional(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskDeployResponseSchema = z.object({
+  type: z.literal("tasks.task.deploy.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
+    // True when the deploy prompt was handed to the card's own agent — the
+    // outcome then plays out in the conversation, not in this response.
+    // Additive + optional: old clients simply ignore it.
+    dispatched: z.boolean().optional(),
+    // Echoes the card's daemon-restart flag when known at dispatch time (a
+    // re-deploy of a card already flagged). The authoritative value lands on the
+    // task once the agent finishes. Additive + optional.
+    needsDaemonRestart: z.boolean().optional(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskArchiveResponseSchema = z.object({
+  type: z.literal("tasks.task.archive.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
     error: z.string().nullable(),
   }),
 });

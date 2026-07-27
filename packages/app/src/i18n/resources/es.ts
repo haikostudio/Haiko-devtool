@@ -326,6 +326,16 @@ export const es: TranslationResources = {
         "Ya hay una comprobación en curso en la conversación. ¿Lanzarla de nuevo igualmente?",
       validateDispatched: "Comprobación lanzada: síguela en la conversación.",
       validatePassed: "La tarea ya estaba terminada.",
+      archiveTask: "Archivar",
+      archiveTaskMessage:
+        "Esta tarjeta se ocultará del tablero. Permanece guardada y no se publica.",
+      deployTask: "Iniciar el despliegue",
+      deployTaskMessage:
+        "El agente de esta tarea comprueba que funciona, publica el cambio en línea, luego pasa la tarjeta a «Desplegada» e indica si hace falta reiniciar el demonio. Lo sigues todo en la conversación.",
+      deployRunning: "Desplegando en la conversación…",
+      deployRestartMessage:
+        "Ya hay un despliegue en curso en la conversación. ¿Iniciarlo de nuevo igualmente?",
+      deployDispatched: "Despliegue iniciado: síguelo en la conversación.",
       collapse: "Contraer panel",
       expand: "Expandir panel",
       billing: "Facturación",
@@ -601,6 +611,7 @@ export const es: TranslationResources = {
     toast: {
       launching: "Iniciando la tarea…",
       reanalyzing: "Reanalizando la tarea…",
+      archived: "Tarea archivada.",
     },
     confirmDelete: {
       title: "¿Eliminar tarea?",

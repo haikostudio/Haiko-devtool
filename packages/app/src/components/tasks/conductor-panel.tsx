@@ -79,6 +79,10 @@ export interface ConductorPanelProps {
   onApproveTask: (taskId: string) => void;
   /** User validation of a task: the only path from "En cours" to "Terminée". */
   onValidate: (taskId: string) => void;
+  /** Archive (hide) a finished ("Terminé"/"Déployé") card from the board. */
+  onArchive: (taskId: string) => void;
+  /** Deploy a finished ("Terminé") card: hand its agent a deploy-then-confirm prompt. */
+  onDeploy: (taskId: string) => void;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
 }
@@ -108,6 +112,8 @@ export function ConductorPanel({
   onApprove,
   onApproveTask,
   onValidate,
+  onArchive,
+  onDeploy,
   onSetHold,
   onClose,
 }: ConductorPanelProps) {
@@ -287,6 +293,8 @@ export function ConductorPanel({
           onRunNow={onRunNow}
           onValidate={onValidate}
           onApproveTask={onApproveTask}
+          onArchive={onArchive}
+          onDeploy={onDeploy}
         />
       </View>
       {taskView === "chat" ? null : (

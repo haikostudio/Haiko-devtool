@@ -520,6 +520,49 @@ describe("TaskBoardService", () => {
     expect(result.column).toBe("scheduled");
   });
 
+  test("archiveTask stamps archivedAt on a finished card without moving it", async () => {
+    const folder = await service.createFolder("proj-1", "Agent");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Finished work",
+    });
+    await service.moveTask("proj-1", { taskId: task.id, column: "done", index: 0, manual: true });
+
+    const archived = await service.archiveTask("proj-1", task.id, true);
+
+    // Archiving only hides the card: it stays in "done" and gets an archivedAt.
+    expect(archived.column).toBe("done");
+    expect(archived.archivedAt).toBeTruthy();
+  });
+
+  test("archiveTask is a no-op on a card that is not done or deployed", async () => {
+    const folder = await service.createFolder("proj-1", "Agent");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Still in backlog",
+    });
+
+    const result = await service.archiveTask("proj-1", task.id, true);
+
+    expect(result.column).toBe("backlog");
+    expect(result.archivedAt).toBeUndefined();
+  });
+
+  test("archiveTask with archived=false clears a prior archivedAt", async () => {
+    const folder = await service.createFolder("proj-1", "Agent");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Toggle archive",
+    });
+    await service.moveTask("proj-1", { taskId: task.id, column: "done", index: 0, manual: true });
+    const archived = await service.archiveTask("proj-1", task.id, true);
+    expect(archived.archivedAt).toBeTruthy();
+
+    const restored = await service.archiveTask("proj-1", task.id, false);
+
+    expect(restored.archivedAt).toBeUndefined();
+  });
+
   test("a manual drag into scheduled implicitly approves a pending proposal", async () => {
     const folder = await service.createFolder("proj-1", "Agent");
     const task = await service.createTask("proj-1", {

@@ -1214,6 +1214,38 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle, toast, t],
   );
+  // "Lancer le déploiement": the deploy sibling of the final check, offered on a
+  // finished ("Terminé") card. Hands the card's OWN agent a deploy-then-confirm
+  // prompt, in the card's own conversation: it verifies the work, publishes it and
+  // moves the card to "Déployé" itself, reporting whether a daemon restart is
+  // needed. The user reads all of it live.
+  const handleDeploy = useCallback(
+    (taskId: string) => {
+      void (async () => {
+        const alreadyRunning =
+          boardHandle.board?.tasks.find((entry) => entry.id === taskId)?.deployment?.state ===
+          "running";
+        const confirmed = await confirmDialog({
+          title: t("tasks.panel.deployTask"),
+          message: alreadyRunning
+            ? t("tasks.panel.deployRestartMessage")
+            : t("tasks.panel.deployTaskMessage"),
+          confirmLabel: t("tasks.panel.deployTask"),
+          cancelLabel: t("common.actions.cancel"),
+        });
+        if (!confirmed) {
+          return;
+        }
+        try {
+          await boardHandle.deployTask(taskId);
+          toast.show(t("tasks.panel.deployDispatched"));
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
+      })();
+    },
+    [boardHandle, toast, t],
+  );
   return {
     handleSave,
     handleDelete,
@@ -1224,6 +1256,7 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     handleValidate,
     handleSetHold,
     handleArchive,
+    handleDeploy,
   };
 }
 
@@ -1329,6 +1362,8 @@ function ConductorDock({
         onApprove={taskActions.handleApprove}
         onApproveTask={taskActions.handleApproveTask}
         onValidate={taskActions.handleValidate}
+        onArchive={taskActions.handleArchive}
+        onDeploy={taskActions.handleDeploy}
         onSetHold={taskActions.handleSetHold}
         onClose={handleClose}
       />

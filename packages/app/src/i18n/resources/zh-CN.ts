@@ -321,6 +321,8 @@ export const zhCN: TranslationResources = {
       validateRestartMessage: "对话中已有一项检查在进行。仍要重新开始吗？",
       validateDispatched: "检查已开始 — 请在对话中跟进。",
       validatePassed: "任务已经完成。",
+      archiveTask: "归档",
+      archiveTaskMessage: "此卡片将从看板中隐藏。它仍会保存，且不会发布。",
       collapse: "收起面板",
       expand: "展开面板",
       billing: "账单",
@@ -592,6 +594,7 @@ export const zhCN: TranslationResources = {
     toast: {
       launching: "正在启动任务…",
       reanalyzing: "正在重新分析任务…",
+      archived: "任务已归档。",
     },
     confirmDelete: {
       title: "Delete task?",

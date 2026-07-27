@@ -74,6 +74,17 @@ export interface TaskBoardHandle {
    * with passed=false plus the task carrying the report when it rejects.
    */
   validateTask: (taskId: string) => Promise<{ passed: boolean; task: KanbanTask | null }>;
+  /**
+   * Hands the finished card's agent a deploy-then-confirm prompt. The deploy, the
+   * move to "Déployée" and the daemon-restart flag all play out in the card's
+   * conversation; this resolves once the prompt has been dispatched.
+   */
+  deployTask: (taskId: string) => Promise<{ dispatched: boolean; task: KanbanTask | null }>;
+  /**
+   * Archive (hide) a finished card, or un-archive it. Stamps `archivedAt`
+   * server-side; never moves or publishes the card.
+   */
+  archiveTask: (taskId: string, archived?: boolean) => Promise<void>;
 }
 
 /**
@@ -345,9 +356,41 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext],
   );
 
+  const deployTask = useCallback(
+    async (taskId: string) => {
+      const { client, projectId: project } = requireContext();
+      const payload = await client.tasksTaskDeploy({ projectId: project, taskId });
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+      return { dispatched: payload.dispatched ?? false, task: payload.task };
+    },
+    [requireContext],
+  );
+
+  const archiveTask = useCallback(
+    async (taskId: string, archived = true) => {
+      const { client, projectId: project } = requireContext();
+      const payload = await client.tasksTaskArchive({ projectId: project, taskId, archived });
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+    },
+    [requireContext],
+  );
+
+  // Archived cards are hidden from every board consumer (kanban columns, rails,
+  // counts): the daemon still stores them, but archiving is a "file it away"
+  // gesture, so they drop out of view here. Filtering at this single chokepoint
+  // keeps the rest of the UI unaware of the concept.
+  const visibleBoard = useMemo(
+    () => (board ? { ...board, tasks: board.tasks.filter((task) => !task.archivedAt) } : null),
+    [board],
+  );
+
   return useMemo(
     () => ({
-      board,
+      board: visibleBoard,
       isLoading,
       error,
       createFolder,
@@ -364,9 +407,11 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       retryTaskAnalysis,
       approveTask,
       validateTask,
+      deployTask,
+      archiveTask,
     }),
     [
-      board,
+      visibleBoard,
       isLoading,
       error,
       createFolder,
@@ -383,6 +428,8 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       retryTaskAnalysis,
       approveTask,
       validateTask,
+      deployTask,
+      archiveTask,
     ],
   );
 }

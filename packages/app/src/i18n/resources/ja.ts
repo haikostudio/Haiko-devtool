@@ -324,6 +324,8 @@ export const ja: TranslationResources = {
       validateRestartMessage: "会話ですでにチェックが実行中です。それでも再度開始しますか？",
       validateDispatched: "チェックを開始しました — 会話で確認できます。",
       validatePassed: "タスクはすでに完了しています。",
+      archiveTask: "アーカイブ",
+      archiveTaskMessage: "このカードはボードから非表示になります。保存されたままで、公開はされません。",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",
@@ -598,6 +600,7 @@ export const ja: TranslationResources = {
     toast: {
       launching: "タスクを開始しています…",
       reanalyzing: "タスクを再分析しています…",
+      archived: "タスクをアーカイブしました。",
     },
     confirmDelete: {
       title: "Delete task?",

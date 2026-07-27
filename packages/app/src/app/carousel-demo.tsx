@@ -161,6 +161,8 @@ export default function CarouselDemoScreen() {
       // The demo board never runs the real final check.
       retryTaskAnalysis: async () => {},
       validateTask: async () => ({ passed: false, task: null }),
+      deployTask: async () => ({ dispatched: false, task: null }),
+      archiveTask: noop,
     }),
     [board, updateTask, deleteTask, approveTask],
   );

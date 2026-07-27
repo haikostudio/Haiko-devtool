@@ -323,6 +323,9 @@ export const ru: TranslationResources = {
       validateRestartMessage: "Проверка уже идёт в переписке. Всё равно запустить заново?",
       validateDispatched: "Проверка запущена — следите за ней в переписке.",
       validatePassed: "Задача уже завершена.",
+      archiveTask: "Архивировать",
+      archiveTaskMessage:
+        "Эта карточка будет скрыта с доски. Она останется сохранённой и не будет опубликована.",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",
@@ -597,6 +600,7 @@ export const ru: TranslationResources = {
     toast: {
       launching: "Запуск задачи…",
       reanalyzing: "Повторный анализ задачи…",
+      archived: "Задача архивирована.",
     },
     confirmDelete: {
       title: "Delete task?",

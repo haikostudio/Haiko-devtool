@@ -153,6 +153,21 @@ export const TaskValidationSchema = z.object({
 });
 export type TaskValidation = z.infer<typeof TaskValidationSchema>;
 
+// Consent window + outcome for the deploy action behind "Lancer le déploiement".
+// Symmetric to TaskValidationSchema: pressing the deploy bar on a finished ("done")
+// card opens a "running" window that is the user's consent for the card's own
+// agent to move it to "deployed" once the deployment is verified live. The window
+// closes on its own the moment the agent stops, so the bar can never get stuck.
+export const TaskDeploymentSchema = z.object({
+  state: z.enum(["running", "deployed", "failed"]),
+  // Human-readable report shown next to the deploy bar (what was deployed, where).
+  report: z.string().optional(),
+  // Short one-line verdict, for a toast or a card badge.
+  summary: z.string().optional(),
+  startedAt: z.string().optional(),
+});
+export type TaskDeployment = z.infer<typeof TaskDeploymentSchema>;
+
 export const KanbanTaskSchema = z.object({
   id: z.string(),
   folderId: z.string(),
@@ -229,10 +244,25 @@ export const KanbanTaskSchema = z.object({
   // touches updatedAt when set, so marking a card viewed never reorders it.
   // Optional + additive — old boards/clients simply omit it.
   viewedAt: z.string().nullable().optional(),
+  // Stamped when the user archives a finished (done/deployed) card from the
+  // "Archiver" bar. Archiving is orthogonal to the seven columns: it never moves
+  // the card, never publishes it, and never disturbs the automatic done→deployed
+  // publication — it only hides the card from the board (see
+  // docs/task-board-cycle.md). Additive + optional: old boards/clients simply
+  // omit it, and un-archiving clears it back to absent.
+  archivedAt: z.string().nullable().optional(),
   // Set once the task's line has been added to a billing document.
   billing: TaskBillingSchema.nullable().optional(),
   // Result of the final check behind "Valider la tâche". Additive + optional.
   validation: TaskValidationSchema.nullable().optional(),
+  // Consent window + outcome of the "Lancer le déploiement" action, which moves a
+  // finished card to "deployed" through its own agent. Additive + optional.
+  deployment: TaskDeploymentSchema.nullable().optional(),
+  // Set when the deployed work only takes effect after the daemon is restarted
+  // (e.g. a server-side change). Purely informative: it is surfaced as an icon on
+  // the card and NEVER triggers a restart on its own — that stays the user's call.
+  // Additive + optional: old boards/clients simply omit it.
+  needsDaemonRestart: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

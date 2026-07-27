@@ -169,6 +169,7 @@ import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
 import type { ConductorAgentService } from "./tasks/conductor-agent.js";
 import type { TaskValidator } from "./tasks/validator.js";
+import type { TaskDeployer } from "./tasks/deployer.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
@@ -479,6 +480,7 @@ export interface SessionOptions {
   taskScheduler?: TaskScheduler | null;
   conductorService?: ConductorAgentService | null;
   taskValidator?: TaskValidator | null;
+  taskDeployer?: TaskDeployer | null;
   activityLogService?: ActivityLogService;
   messageTriage?: MessageTriage | null;
   checkoutDiffManager: CheckoutDiffManager;
@@ -725,6 +727,7 @@ export class Session {
       taskScheduler,
       conductorService,
       taskValidator,
+      taskDeployer,
       activityLogService,
       messageTriage,
       checkoutDiffManager,
@@ -886,6 +889,7 @@ export class Session {
           taskScheduler: taskScheduler ?? null,
           conductorService: conductorService ?? null,
           taskValidator: taskValidator ?? null,
+          taskDeployer: taskDeployer ?? null,
           logger: this.sessionLogger,
         })
       : null;
@@ -2033,6 +2037,10 @@ export class Session {
         return tasksSession.handleTaskApproveRequest(msg);
       case "tasks.task.validate.request":
         return tasksSession.handleTaskValidateRequest(msg);
+      case "tasks.task.deploy.request":
+        return tasksSession.handleTaskDeployRequest(msg);
+      case "tasks.task.archive.request":
+        return tasksSession.handleTaskArchiveRequest(msg);
       case "tasks.conductor.ensure.request":
         return tasksSession.handleConductorEnsureRequest(msg);
       default:

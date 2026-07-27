@@ -321,6 +321,8 @@ export const ar: TranslationResources = {
       validateRestartMessage: "هناك فحص جارٍ بالفعل في المحادثة. هل تريد إعادة تشغيله على أي حال؟",
       validateDispatched: "بدأ الفحص — تابعه في المحادثة.",
       validatePassed: "المهمة مكتملة بالفعل.",
+      archiveTask: "أرشفة",
+      archiveTaskMessage: "ستُخفى هذه البطاقة من اللوحة. تبقى محفوظة ولا تُنشر.",
       collapse: "طي اللوحة",
       expand: "توسيع اللوحة",
       billing: "الفوترة",
@@ -593,6 +595,7 @@ export const ar: TranslationResources = {
     toast: {
       launching: "جارٍ تشغيل المهمة…",
       reanalyzing: "جارٍ إعادة تحليل المهمة…",
+      archived: "تمت أرشفة المهمة.",
     },
     confirmDelete: {
       title: "Delete task?",

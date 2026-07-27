@@ -326,6 +326,9 @@ export const ptBR: TranslationResources = {
         "Já existe uma verificação em andamento na conversa. Iniciar novamente mesmo assim?",
       validateDispatched: "Verificação iniciada — acompanhe na conversa.",
       validatePassed: "A tarefa já estava concluída.",
+      archiveTask: "Arquivar",
+      archiveTaskMessage:
+        "Este cartão será ocultado do quadro. Ele permanece salvo e não é publicado.",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",
@@ -602,6 +605,7 @@ export const ptBR: TranslationResources = {
     toast: {
       launching: "Iniciando a tarefa…",
       reanalyzing: "Reanalisando a tarefa…",
+      archived: "Tarefa arquivada.",
     },
     confirmDelete: {
       title: "Excluir tarefa?",
