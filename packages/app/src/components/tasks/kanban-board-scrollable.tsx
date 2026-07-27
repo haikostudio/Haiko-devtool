@@ -8,7 +8,6 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
-import { TaskRunNowButton } from "./task-run-now-button";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
   buildColumnModels,
@@ -246,11 +245,6 @@ const BoardCardRow = memo(function BoardCardRow({
   return (
     <View style={styles.cardRow}>
       <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
-      {task.column === "scheduled" ? (
-        <View style={styles.runNowRow}>
-          <TaskRunNowButton task={task} onRunTask={onRunTask} />
-        </View>
-      ) : null}
       <View style={styles.moveTriggerOverlay}>
         <TaskCardMenu
           task={task}
@@ -340,9 +334,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   cardRow: {
     position: "relative",
-  },
-  runNowRow: {
-    marginTop: theme.spacing[1.5],
   },
   moveTriggerOverlay: {
     position: "absolute",

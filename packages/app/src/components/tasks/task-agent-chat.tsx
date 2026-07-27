@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Bot, CheckCircle2 } from "lucide-react-native";
+import { Bot, CheckCircle2, Play } from "lucide-react-native";
 import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
 import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-context";
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,22 @@ const ThemedBot = withUnistyles(Bot);
 // The validate bar is a filled green control, so its icon and spinner ride on
 // the success foreground, not on the neutral text colors.
 const successForegroundMapping = (theme: Theme) => ({ color: theme.colors.successForeground });
+// The run-now bar is a filled accent control (distinct from the green validate
+// bar), so its icon rides on the accent foreground.
+const accentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 const ThemedCheck = withUnistyles(CheckCircle2);
+const ThemedPlay = withUnistyles(Play);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 
 export interface TaskAgentChatProps {
   serverId: string | null;
   task: KanbanTask;
+  /**
+   * Force the "Planifié" → "En cours" transition immediately. Drives both the
+   * empty-state "launch agent" action and the run-now bar shown above the prompt
+   * composer while the card is scheduled — the launch control lives here, next to
+   * the validate control, instead of on the kanban card.
+   */
   onRunNow: (taskId: string) => void;
   /**
    * Mark the task validated. Shown as a full-width bar right above the prompt
@@ -76,23 +86,33 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
   const isInProgress = task.column === "in_progress";
   const showValidate =
     Boolean(onValidate) && isInProgress && (agentHasSpoken || task.progress != null);
+  // The run-now bar sits on a scheduled card only: it forces the launch the user
+  // already asked for by validating the card, and lives right above the prompt so
+  // the launch and validate controls share one home instead of one being on the
+  // kanban card and the other above the composer.
+  const showRunNow = task.column === "scheduled";
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);
 
   // Memoized so the embedded pane (and everything under it) is not re-rendered
-  // by a fresh element on every keystroke in the composer.
-  const validateBar = useMemo(
-    () =>
-      showValidate ? (
+  // by a fresh element on every keystroke in the composer. Scheduled and
+  // in-progress are mutually exclusive columns, so at most one bar shows.
+  const aboveComposerBar = useMemo(() => {
+    if (showRunNow) {
+      return <RunNowTaskBar onPress={handleRun} />;
+    }
+    if (showValidate) {
+      return (
         <ValidateTaskBar
           onPress={handleValidate}
           ready={task.progress === "ready_for_review"}
           validation={task.validation}
         />
-      ) : null,
-    [showValidate, handleValidate, task.progress, task.validation],
-  );
+      );
+    }
+    return null;
+  }, [showRunNow, showValidate, handleRun, handleValidate, task.progress, task.validation]);
 
   if (serverId && agentId && workspaceId) {
     return (
@@ -100,7 +120,7 @@ export function TaskAgentChat({ serverId, task, onRunNow, onValidate }: TaskAgen
         serverId={serverId}
         agentId={agentId}
         workspaceId={workspaceId}
-        validateBar={validateBar}
+        validateBar={aboveComposerBar}
       />
     );
   }
@@ -169,6 +189,38 @@ function ValidateTaskBar({
 
 function validateBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
   return [styles.validateBar, (hovered || pressed) && styles.validateBarHovered];
+}
+
+/**
+ * Full-width accent bar carrying the single "Lancer maintenant" action, shown on
+ * a scheduled card right above the prompt composer. It mirrors ValidateTaskBar's
+ * geometry (same outer/inner alignment to the composer) so the two control bars
+ * feel like one family, but wears the accent color to stay distinct from the
+ * green "finish" control. Pressing it forces the "Planifié" → "En cours"
+ * transition immediately, bypassing the off-peak window and the 5h-quota gate.
+ */
+function RunNowTaskBar({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        <Pressable
+          onPress={onPress}
+          style={runNowBarStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.actions.runNow")}
+          testID="task-run-now-bar"
+        >
+          <ThemedPlay size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />
+          <Text style={styles.runNowText}>{t("tasks.actions.runNow")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function runNowBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.runNowBar, (hovered || pressed) && styles.runNowBarHovered];
 }
 
 function EmbeddedAgentPane({
@@ -271,6 +323,29 @@ const styles = StyleSheet.create((theme) => ({
   },
   validateTextReady: {
     color: theme.colors.successForeground,
+    fontSize: theme.fontSize.sm,
+    fontWeight: "500",
+  },
+  // Same geometry as validateBar, filled with the accent color so the launch
+  // control stays visually distinct from the green finish control.
+  runNowBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    width: "100%",
+    paddingVertical: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.accent,
+  },
+  runNowBarHovered: {
+    opacity: 0.88,
+  },
+  runNowText: {
+    color: theme.colors.accentForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
   },
