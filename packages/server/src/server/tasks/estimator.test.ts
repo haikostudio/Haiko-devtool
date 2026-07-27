@@ -9,6 +9,12 @@ import { TaskBoardStore } from "./store.js";
 import { TaskEstimator } from "./estimator.js";
 import { TaskAgentProvisioner } from "./agent-provisioner.js";
 
+// Extracted so the assertion inside vi.waitFor stays within the nested-callback
+// budget (describe > test > waitFor callback is already three levels deep).
+function everyTaskEstimated(board: { tasks: { estimate?: unknown }[] }): boolean {
+  return board.tasks.every((entry) => Boolean(entry.estimate));
+}
+
 const logger = pino({ level: "silent" });
 
 function fakeProjectRegistry(records: PersistedProjectRecord[]): ProjectRegistry {
@@ -356,7 +362,7 @@ describe("TaskEstimator", () => {
 
     await vi.waitFor(async () => {
       const board = await service.getBoard("proj-1");
-      expect(board.tasks.every((entry) => entry.estimate)).toBe(true);
+      expect(everyTaskEstimated(board)).toBe(true);
     });
     // Independent folders => their analyses overlapped instead of queueing.
     expect(peak()).toBe(2);
@@ -381,7 +387,7 @@ describe("TaskEstimator", () => {
 
     await vi.waitFor(async () => {
       const board = await service.getBoard("proj-1");
-      expect(board.tasks.every((entry) => entry.estimate)).toBe(true);
+      expect(everyTaskEstimated(board)).toBe(true);
     });
     // Same folder = one shared worktree, so the two analyses never overlapped.
     expect(peak()).toBe(1);
@@ -402,7 +408,7 @@ describe("TaskEstimator", () => {
 
     await vi.waitFor(async () => {
       const board = await service.getBoard("proj-1");
-      expect(board.tasks.every((entry) => entry.estimate)).toBe(true);
+      expect(everyTaskEstimated(board)).toBe(true);
     });
     // Four independent tasks, but the cap holds the peak at two at a time.
     expect(peak()).toBe(2);
