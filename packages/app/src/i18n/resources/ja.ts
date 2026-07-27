@@ -321,6 +321,7 @@ export const ja: TranslationResources = {
       validateTaskMessage:
         "タスクのエージェントが依頼を読み直し、作業を検証し、問題を修正してから、問題がなければタスクを「完了」にします。会話ですべてを確認できます。",
       validateRunning: "会話でチェック中…",
+      validateAgentBusy: "エージェントはまだ作業中です…",
       validateRestartMessage: "会話ですでにチェックが実行中です。それでも再度開始しますか？",
       validateDispatched: "チェックを開始しました — 会話で確認できます。",
       validatePassed: "タスクはすでに完了しています。",

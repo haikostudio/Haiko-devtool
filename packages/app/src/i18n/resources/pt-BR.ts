@@ -322,6 +322,7 @@ export const ptBR: TranslationResources = {
       validateTaskMessage:
         "O agente da tarefa relê o pedido, verifica o trabalho, corrige o que estiver errado e marca a tarefa como «Concluída» se estiver tudo certo. Você acompanha tudo na conversa.",
       validateRunning: "Verificação em andamento na conversa…",
+      validateAgentBusy: "O agente ainda está trabalhando…",
       validateRestartMessage:
         "Já existe uma verificação em andamento na conversa. Iniciar novamente mesmo assim?",
       validateDispatched: "Verificação iniciada — acompanhe na conversa.",

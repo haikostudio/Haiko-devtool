@@ -323,6 +323,7 @@ export const fr: TranslationResources = {
       validateTaskMessage:
         "L’agent de cette tâche relit la demande, vérifie son travail, corrige ce qui cloche, puis marque la tâche « Terminée » si tout est bon. Vous suivez tout dans la discussion.",
       validateRunning: "Contrôle en cours dans la discussion…",
+      validateAgentBusy: "L'agent travaille encore…",
       validateRestartMessage:
         "Un contrôle est déjà en cours dans la discussion. Le relancer quand même ?",
       validateDispatched: "Contrôle lancé — suivez-le dans la discussion.",

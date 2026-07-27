@@ -318,6 +318,7 @@ export const ar: TranslationResources = {
       validateTaskMessage:
         "يعيد وكيل المهمة قراءة الطلب، ويتحقق من عمله، ويصلح ما هو خاطئ، ثم يضع المهمة في «منجزة» إذا كان كل شيء سليمًا. يمكنك متابعة ذلك كله في المحادثة.",
       validateRunning: "الفحص جارٍ في المحادثة…",
+      validateAgentBusy: "لا يزال الوكيل يعمل…",
       validateRestartMessage: "هناك فحص جارٍ بالفعل في المحادثة. هل تريد إعادة تشغيله على أي حال؟",
       validateDispatched: "بدأ الفحص — تابعه في المحادثة.",
       validatePassed: "المهمة مكتملة بالفعل.",

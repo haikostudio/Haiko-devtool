@@ -317,6 +317,7 @@ export const en = {
       validateTaskMessage:
         "The task’s own agent re-reads the request, checks its work, fixes what is wrong, then marks the task “Done” if everything holds. You follow all of it in the conversation.",
       validateRunning: "Check running in the conversation…",
+      validateAgentBusy: "The agent is still working…",
       validateRestartMessage:
         "A check is already running in the conversation. Start it again anyway?",
       validateDispatched: "Check started — follow it in the conversation.",

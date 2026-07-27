@@ -318,6 +318,7 @@ export const zhCN: TranslationResources = {
       validateTaskMessage:
         "任务的代理会重新阅读需求、核验已完成的工作、修复问题，确认无误后将任务标记为「已完成」。你可在对话中全程跟进。",
       validateRunning: "正在对话中检查…",
+      validateAgentBusy: "代理仍在工作中…",
       validateRestartMessage: "对话中已有一项检查在进行。仍要重新开始吗？",
       validateDispatched: "检查已开始 — 请在对话中跟进。",
       validatePassed: "任务已经完成。",

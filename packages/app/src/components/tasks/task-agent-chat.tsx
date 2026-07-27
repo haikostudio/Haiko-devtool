@@ -108,6 +108,16 @@ export function TaskAgentChat({
     serverId && agentId ? state.sessions[serverId]?.agents?.get(agentId)?.workspaceId : undefined,
   );
   const workspaceId = task.links.workspaceId ?? agentWorkspaceId ?? null;
+  // Live lifecycle status of the card's own agent, kept as a narrow selector so a
+  // status change re-renders this bar host without dragging the whole session
+  // object through. "running" = the agent is mid-turn (working); any other value
+  // ("idle" once it stops, "initializing"/"error"/"closed") means it is not
+  // actively working. The action bars read this to disable a gesture that cannot
+  // legitimately fire yet — chiefly finishing a card while its agent still works.
+  const agentStatus = useSessionStore((state) =>
+    serverId && agentId ? state.sessions[serverId]?.agents?.get(agentId)?.status : undefined,
+  );
+  const agentBusy = agentStatus === "running";
   // "The agent has produced at least one reply": the synthesis is regenerated on
   // every interaction, so its presence is the cheapest honest signal. A task that
   // already carries a sub-status has clearly been worked on too.
@@ -167,6 +177,7 @@ export function TaskAgentChat({
           onPress={handleValidate}
           ready={task.progress === "ready_for_review"}
           validation={task.validation}
+          agentBusy={agentBusy}
         />
       );
     }
@@ -191,6 +202,7 @@ export function TaskAgentChat({
     task.progress,
     task.validation,
     task.deployment,
+    agentBusy,
   ]);
 
   if (serverId && agentId && workspaceId) {
@@ -224,21 +236,43 @@ export function TaskAgentChat({
  * agent thinks it is done.
  *
  * It shows no report of its own: the check runs in the conversation right above,
- * so the verification, the fixes and the verdict are all readable there. It also
- * stays pressable while a check runs — a second press asks for confirmation
- * rather than being silently ignored, so a check can never leave the bar stuck.
+ * so the verification, the fixes and the verdict are all readable there.
+ *
+ * It is disabled in the two states where finishing a card is not a legitimate
+ * gesture: while a final check is already running (`validation.state ===
+ * "running"`) — so a second press can never fire a duplicate check — and while
+ * the card's own agent is still mid-turn (`agentBusy`) — finishing over a working
+ * agent would race its output. In both cases the bar stays visible with an
+ * explanatory label rather than disappearing, so the user understands why it is
+ * inert. It re-enables on its own the instant the agent goes idle (the store's
+ * live status drives it, no reload). A running check always implies a busy agent,
+ * so its label wins.
  */
 function ValidateTaskBar({
   onPress,
   ready,
   validation,
+  agentBusy,
 }: {
   onPress: () => void;
   ready: boolean;
   validation: KanbanTask["validation"];
+  agentBusy: boolean;
 }) {
   const { t } = useTranslation();
   const running = validation?.state === "running";
+  const disabled = running || agentBusy;
+  let label = t("tasks.panel.validateTask");
+  if (running) {
+    label = t("tasks.panel.validateRunning");
+  } else if (agentBusy) {
+    label = t("tasks.panel.validateAgentBusy");
+  }
+  const barStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) => validateBarStyle({ ...state, disabled }),
+    [disabled],
+  );
+  const a11yState = useMemo(() => ({ disabled }), [disabled]);
   return (
     // Outer/inner pair mirrors the composer's own geometry (same horizontal
     // padding, same MAX_CONTENT_WIDTH cap, centered) so the bar lines up exactly
@@ -247,9 +281,11 @@ function ValidateTaskBar({
       <View style={styles.validateInner}>
         <Pressable
           onPress={onPress}
-          style={validateBarStyle}
+          disabled={disabled}
+          style={barStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("tasks.panel.validateTask")}
+          accessibilityLabel={label}
+          accessibilityState={a11yState}
           testID="task-validate-bar"
         >
           {running ? (
@@ -257,8 +293,8 @@ function ValidateTaskBar({
           ) : (
             <ThemedCheck size={ICON_SIZE.sm} uniProps={successForegroundMapping} />
           )}
-          <Text style={ready && !running ? styles.validateTextReady : styles.validateText}>
-            {running ? t("tasks.panel.validateRunning") : t("tasks.panel.validateTask")}
+          <Text style={ready && !disabled ? styles.validateTextReady : styles.validateText}>
+            {label}
           </Text>
         </Pressable>
       </View>
@@ -266,8 +302,20 @@ function ValidateTaskBar({
   );
 }
 
-function validateBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
-  return [styles.validateBar, (hovered || pressed) && styles.validateBarHovered];
+function validateBarStyle({
+  pressed,
+  hovered,
+  disabled,
+}: {
+  pressed: boolean;
+  hovered?: boolean;
+  disabled?: boolean;
+}) {
+  return [
+    styles.validateBar,
+    disabled && styles.barDisabled,
+    !disabled && (hovered || pressed) && styles.validateBarHovered,
+  ];
 }
 
 /**
@@ -374,8 +422,12 @@ function archiveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
  * accent color like the run-now launch control — deploying is the other "put it
  * in motion" gesture. Pressing it hands the card's own agent a deploy-then-confirm
  * prompt; the agent verifies, publishes and moves the card to "Déployé" itself.
- * It stays pressable while a deploy runs (a spinner replaces the icon), so a
- * deploy can never leave the bar stuck.
+ *
+ * While a deploy runs (`deployment.state === "running"`) the bar shows a spinner
+ * and "Déploiement en cours…" and becomes non-clickable, so a second press can
+ * never launch a duplicate deploy. The window closes on its own when the agent
+ * goes idle (server-side `watchAgentIdle`), which re-enables the bar or, on
+ * success, moves the card to "Déployé" — where this bar is no longer offered.
  */
 function DeployTaskBar({
   onPress,
@@ -386,14 +438,24 @@ function DeployTaskBar({
 }) {
   const { t } = useTranslation();
   const running = deployment?.state === "running";
+  const barStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) =>
+      deployBarStyle({ ...state, disabled: running }),
+    [running],
+  );
+  const a11yState = useMemo(() => ({ disabled: running }), [running]);
   return (
     <View style={styles.validateOuter}>
       <View style={styles.validateInner}>
         <Pressable
           onPress={onPress}
-          style={deployBarStyle}
+          disabled={running}
+          style={barStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("tasks.panel.deployTask")}
+          accessibilityLabel={
+            running ? t("tasks.panel.deployRunning") : t("tasks.panel.deployTask")
+          }
+          accessibilityState={a11yState}
           testID="task-deploy-bar"
         >
           {running ? (
@@ -410,8 +472,20 @@ function DeployTaskBar({
   );
 }
 
-function deployBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
-  return [styles.runNowBar, (hovered || pressed) && styles.runNowBarHovered];
+function deployBarStyle({
+  pressed,
+  hovered,
+  disabled,
+}: {
+  pressed: boolean;
+  hovered?: boolean;
+  disabled?: boolean;
+}) {
+  return [
+    styles.runNowBar,
+    disabled && styles.barDisabled,
+    !disabled && (hovered || pressed) && styles.runNowBarHovered,
+  ];
 }
 
 function EmbeddedAgentPane({
@@ -507,6 +581,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   validateBarHovered: {
     opacity: 0.88,
+  },
+  // Shared dimmed look for any action bar that is disabled because its gesture is
+  // in progress or not yet legitimate (e.g. finishing while the agent works,
+  // deploying while a deploy runs). Kept generic so every bar reads the same.
+  barDisabled: {
+    opacity: 0.5,
   },
   validateText: {
     color: theme.colors.successForeground,

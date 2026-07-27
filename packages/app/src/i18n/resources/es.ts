@@ -322,6 +322,7 @@ export const es: TranslationResources = {
       validateTaskMessage:
         "El agente de la tarea relee la petición, comprueba su trabajo, corrige lo que falle y marca la tarea como «Terminada» si todo está bien. Puedes seguirlo todo en la conversación.",
       validateRunning: "Comprobación en curso en la conversación…",
+      validateAgentBusy: "El agente aún está trabajando…",
       validateRestartMessage:
         "Ya hay una comprobación en curso en la conversación. ¿Lanzarla de nuevo igualmente?",
       validateDispatched: "Comprobación lanzada: síguela en la conversación.",
