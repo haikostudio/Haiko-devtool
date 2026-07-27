@@ -18,6 +18,9 @@ export type QuotaTone = "neutral" | "ok" | "warn" | "danger";
 export interface QuotaProviderSummary {
   providerId: string;
   displayName: string;
+  /** Host verdict: "available" = configured & reporting, "error" = configured
+   * but the fetch failed, "unavailable" = not configured/reachable at all. */
+  status: ProviderUsage["status"];
   planLabel: string | null;
   /** The short rolling window every plan is packed against (Claude 5h / Codex session). */
   session: ProviderUsageWindow | null;
@@ -94,6 +97,7 @@ function summarizeProvider(usage: ProviderUsage): QuotaProviderSummary {
   return {
     providerId: usage.providerId,
     displayName: usage.displayName,
+    status: usage.status,
     planLabel: usage.planLabel ?? null,
     session,
     weekly,
@@ -106,14 +110,19 @@ function summarizeProvider(usage: ProviderUsage): QuotaProviderSummary {
  * Turns the raw provider-usage payload into what the header ring and its menu
  * need: one row per connected model, plus the single number the ring draws.
  *
- * Every connected provider stays in the list, even one that reported nothing.
- * Hiding it reads as "this model has no quota to watch" when the truth is "we
- * could not reach it" — and a Claude row silently missing from a Claude-driven
- * board is the single most confusing thing this menu can do. Rows without a
- * number say why instead of disappearing; only the ring math skips them.
+ * Only providers the user actually runs stay in the list. The host marks a
+ * provider "unavailable" when it is not configured or reachable at all — those
+ * (Copilot, Cursor, Z.ai, Grok, Kimi, MiniMax when unused) only ever say
+ * "usage unavailable" and add nothing, so they are dropped. A provider that IS
+ * configured but whose fetch failed comes back as "error", not "unavailable":
+ * it keeps its row and says why, so a Claude row is never silently missing from
+ * a Claude-driven board. Rows without a number stay; only the ring math skips
+ * them.
  */
 export function buildQuotaSummary(payload: ProviderUsageListPayload | null): QuotaSummary {
-  const providers = (payload?.providers ?? []).map(summarizeProvider);
+  const providers = (payload?.providers ?? [])
+    .map(summarizeProvider)
+    .filter((provider) => provider.status !== "unavailable");
   const withData = providers.filter((provider) => provider.hasData);
 
   const weeklyValues = withData

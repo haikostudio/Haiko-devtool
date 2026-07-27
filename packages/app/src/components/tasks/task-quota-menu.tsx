@@ -566,8 +566,16 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
   },
+  // Each AI reads as its own card: a quiet grey surface with an outline, so two
+  // configured providers no longer blur into one flat list. The `menu` gap above
+  // spaces the cards apart.
   provider: {
     gap: theme.spacing[2],
+    padding: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface1,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   providerHeader: {
     flexDirection: "row",

@@ -95,29 +95,33 @@ describe("buildQuotaSummary", () => {
     expect(summary.ringRemainingPct).toBe(42);
   });
 
-  it("keeps a provider with no usable number, so it never silently vanishes", () => {
+  it("drops a provider the host reports as unavailable, since it only adds noise", () => {
     const summary = buildQuotaSummary(
       payload([
-        usage({ providerId: "gemini", displayName: "Gemini", status: "unavailable" }),
+        usage({ providerId: "copilot", displayName: "Copilot", status: "unavailable" }),
         usage({ windows: [{ id: "weekly", label: "Weekly", remainingPct: 70 }] }),
       ]),
     );
-    expect(summary.providers.map((provider) => provider.providerId)).toEqual(["gemini", "claude"]);
-    expect(summary.providers[0]?.hasData).toBe(false);
-    // A silent provider must not drag the ring or the warning down to zero.
+    expect(summary.providers.map((provider) => provider.providerId)).toEqual(["claude"]);
     expect(summary.ringRemainingPct).toBe(70);
   });
 
-  it("keeps every provider when none reported, so the menu can explain", () => {
+  it("keeps a configured provider whose fetch errored, so a real model never vanishes", () => {
     const summary = buildQuotaSummary(
       payload([
-        usage({ status: "unavailable" }),
-        usage({ providerId: "codex", displayName: "Codex" }),
+        usage({ status: "error", error: "rate limited" }),
+        usage({
+          providerId: "codex",
+          displayName: "Codex",
+          windows: [{ id: "weekly", label: "Weekly", remainingPct: 55 }],
+        }),
       ]),
     );
-    expect(summary.providers).toHaveLength(2);
-    expect(summary.weeklyRemainingPct).toBeNull();
-    expect(summary.ringRemainingPct).toBeNull();
+    // "error" means configured-but-failed: it keeps its row and says why, unlike
+    // "unavailable" which means never configured at all.
+    expect(summary.providers.map((provider) => provider.providerId)).toEqual(["claude", "codex"]);
+    expect(summary.providers[0]?.hasData).toBe(false);
+    expect(summary.ringRemainingPct).toBe(55);
   });
 
   it("returns an empty summary when usage was never fetched", () => {
