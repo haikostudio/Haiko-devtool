@@ -253,6 +253,11 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
             <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
           </View>
         ) : null}
+        {task.analysis?.state === "failed" && task.analysis.reason ? (
+          <Text style={styles.analysisReason} numberOfLines={2}>
+            {t("tasks.analysis.reason", { reason: task.analysis.reason })}
+          </Text>
+        ) : null}
         {nextRunLabel ? (
           <View style={styles.nextRunRow}>
             <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
@@ -534,6 +539,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   description: {
     color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    lineHeight: 17,
+  },
+  // Plain-language "why the analysis failed" line under the error badge, so a
+  // card wearing "Analyse impossible" explains itself instead of staying silent.
+  analysisReason: {
+    color: theme.colors.destructive,
     fontSize: theme.fontSize.xs,
     lineHeight: 17,
   },

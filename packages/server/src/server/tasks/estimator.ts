@@ -26,6 +26,11 @@ interface TaskEstimatorOptions {
    * silently (see the VPS disk gotcha). Defaults to {@link DEFAULT_MAX_CONCURRENT}.
    */
   maxConcurrent?: number;
+  /**
+   * Back-off before re-queuing an analysis whose agent was momentarily busy.
+   * Injectable so tests don't wait the real {@link BUSY_RETRY_DELAY_MS}.
+   */
+  busyRetryDelayMs?: number;
 }
 
 const DEFAULT_MAX_CONCURRENT = 4;
@@ -34,6 +39,23 @@ const DEFAULT_MAX_CONCURRENT = 4;
 // on purpose: an analysis that fails three times is a real problem (no disk, no
 // quota, a broken checkout), not a hiccup, and looping on it burns quota.
 const MAX_ANALYSIS_ATTEMPTS = 3;
+
+// A card's analysis reuses its VISIBLE agent. If that agent is momentarily busy
+// (its own previous turn, an execution run, a user chatting with it), the run is
+// rejected with "already has an active run". That is NOT an analysis failure —
+// it's timing — so it must never burn one of the three real attempts (doing so
+// is exactly how a healthy card ended up wearing "Analyse impossible" with an
+// empty Facturation tab). We back off and re-queue, bounded so a permanently
+// stuck agent still surfaces eventually instead of looping forever.
+const MAX_BUSY_RETRIES = 8;
+const BUSY_RETRY_DELAY_MS = 8_000;
+
+// The agent-manager rejects a concurrent turn with this phrase; we match on it
+// to tell "agent momentarily busy" apart from a genuine analysis failure.
+function isAgentBusyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("already has an active run");
+}
 
 /**
  * Analysis phase of the task pipeline. When a task enters "Validé"/"Planifié",
@@ -59,6 +81,7 @@ export class TaskEstimator {
   private readonly projectRegistry: ProjectRegistry;
   private readonly logger: pino.Logger;
   private readonly maxConcurrent: number;
+  private readonly busyRetryDelayMs: number;
   // Pending analyses, each tagged with its serialization group (a branch-folder
   // key when the task shares a folder's worktree, otherwise a task-unique key).
   private readonly queue: { projectId: string; taskId: string; groupKey: string }[] = [];
@@ -68,6 +91,10 @@ export class TaskEstimator {
   // Groups with an analysis currently running; a group holds at most one slot.
   private readonly activeGroups = new Set<string>();
   private activeCount = 0;
+  // Per-task count of consecutive "agent busy" re-queues, so a transient reject
+  // never eats a real analysis attempt (see MAX_BUSY_RETRIES). Cleared on any
+  // outcome that isn't a busy-retry (success, or a genuine recorded failure).
+  private readonly busyRetries = new Map<string, number>();
 
   constructor(options: TaskEstimatorOptions) {
     this.agentManager = options.agentManager;
@@ -76,6 +103,7 @@ export class TaskEstimator {
     this.projectRegistry = options.projectRegistry;
     this.logger = options.logger.child({ module: "task-estimator" });
     this.maxConcurrent = Math.max(1, options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT);
+    this.busyRetryDelayMs = options.busyRetryDelayMs ?? BUSY_RETRY_DELAY_MS;
   }
 
   requestEstimate(projectId: string, taskId: string): void {
@@ -182,9 +210,15 @@ export class TaskEstimator {
     try {
       estimate = await this.analyze(projectId, task);
     } catch (error) {
+      // A momentarily-busy agent is timing, not a failure: re-queue after a
+      // short back-off WITHOUT spending an attempt, up to a bound.
+      if (isAgentBusyError(error) && this.scheduleBusyRetry(projectId, taskId)) {
+        return;
+      }
       await this.recordFailure(projectId, taskId, error);
       return;
     }
+    this.busyRetries.delete(`${projectId}:${taskId}`);
 
     await this.taskBoardService.patchTask(projectId, taskId, (current) => {
       const next = { ...current };
@@ -217,7 +251,29 @@ export class TaskEstimator {
    * says it failed, retries a bounded number of times on its own, and then waits
    * for the user.
    */
+  /**
+   * Re-queues an analysis whose agent was momentarily busy, after a short
+   * back-off, without spending one of the {@link MAX_ANALYSIS_ATTEMPTS}. Returns
+   * true when it re-queued; false once {@link MAX_BUSY_RETRIES} is spent, so the
+   * caller records a real failure instead of looping forever on a stuck agent.
+   */
+  private scheduleBusyRetry(projectId: string, taskId: string): boolean {
+    const key = `${projectId}:${taskId}`;
+    const count = (this.busyRetries.get(key) ?? 0) + 1;
+    if (count > MAX_BUSY_RETRIES) {
+      this.busyRetries.delete(key);
+      return false;
+    }
+    this.busyRetries.set(key, count);
+    this.logger.debug({ projectId, taskId, attempt: count }, "Analysis agent busy, retrying later");
+    const timer = setTimeout(() => this.requestEstimate(projectId, taskId), this.busyRetryDelayMs);
+    // Never keep the process alive just for a pending re-analysis.
+    timer.unref?.();
+    return true;
+  }
+
   private async recordFailure(projectId: string, taskId: string, error: unknown): Promise<void> {
+    this.busyRetries.delete(`${projectId}:${taskId}`);
     const reason = error instanceof Error ? error.message : String(error);
     this.logger.warn({ err: error, projectId, taskId }, "Task analysis failed");
     await this.taskBoardService.patchTask(projectId, taskId, (current) => {

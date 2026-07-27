@@ -234,6 +234,53 @@ describe("TaskEstimator", () => {
     expect(failed?.schedule?.state).toBe("pending_estimate");
   });
 
+  // Regression: a card's analysis reuses its VISIBLE agent, so a momentarily
+  // busy agent ("already has an active run") is timing, not a failure. It used
+  // to burn a real attempt each time — three quick rejects flipped a healthy
+  // card to "Analyse impossible" with an empty Facturation tab. It must retry
+  // without spending an attempt, then succeed once the agent frees up.
+  test("an 'agent busy' reject retries without spending an analysis attempt", async () => {
+    const task = await seedScheduledTask();
+    let calls = 0;
+    const runAgent = vi.fn(async () => {
+      calls += 1;
+      if (calls <= 2) {
+        throw new Error(`Agent estimator-agent-1 already has an active run`);
+      }
+      return { canceled: false, finalText: okEstimate, timeline: [] };
+    });
+    const estimator = new TaskEstimator({
+      agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
+      agentProvisioner: new TaskAgentProvisioner({
+        createAgent: vi.fn(async () => ({
+          snapshot: { id: "estimator-agent-1" },
+          initialPromptError: null,
+        })) as never,
+        taskBoardService: service,
+        projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
+        logger,
+      }),
+      taskBoardService: service,
+      projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
+      logger,
+      busyRetryDelayMs: 5,
+    });
+
+    estimator.requestEstimate("proj-1", task.id);
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.estimate).toBeTruthy();
+    });
+    const board = await service.getBoard("proj-1");
+    const estimated = board.tasks[0];
+    // Two busy rejects then a success: the estimate lands and NO failure was
+    // ever recorded on the card.
+    expect(runAgent).toHaveBeenCalledTimes(3);
+    expect(estimated?.analysis).toBeUndefined();
+    expect(estimated?.estimate?.estimatedMinutes).toBe(10);
+  });
+
   test("an agent reply with no parseable estimate is a failure, not a made-up cost", async () => {
     const task = await seedScheduledTask();
     const { estimator } = buildEstimator({ finalText: "J'ai regardé, ça a l'air faisable." });
