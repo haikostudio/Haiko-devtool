@@ -511,6 +511,7 @@ export const es: TranslationResources = {
       openPr: "Abrir pull request",
       live: "En línea",
       openLive: "Abrir el sitio publicado",
+      needsRestart: "Reinicio necesario",
       planReady: "Plan listo",
       awaitingReply: "Esperando tu respuesta",
       duration: "~{{minutes}} min",

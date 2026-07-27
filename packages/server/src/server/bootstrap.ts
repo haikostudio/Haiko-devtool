@@ -158,6 +158,7 @@ import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { TaskPublisher } from "./tasks/publish-on-complete.js";
 import { TaskValidator, watchAgentIdle } from "./tasks/validator.js";
+import { TaskDeployer } from "./tasks/deployer.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -1483,6 +1484,18 @@ export async function createPaseoDaemon(
     watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
     logger,
   });
+  // "Lancer le déploiement": the sibling of the final check for a FINISHED card.
+  // It hands the card's own agent a deploy-then-confirm prompt and lets it move
+  // the card to "Déployée" while reporting whether a daemon restart is needed.
+  const taskDeployer = new TaskDeployer({
+    taskBoardService,
+    projectRegistry,
+    sendPrompt: async ({ agentId, prompt }) => {
+      await sendPromptToAgent({ agentManager, agentStorage, agentId, prompt, logger });
+    },
+    watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
+    logger,
+  });
   // Runs in its own throwaway Haiku agent: the tidy-up must never show up in the
   // card's Discussion (raw JSON) nor burn the card's real provider.
   const taskLightAnalyzer = new TaskLightAnalyzer({
@@ -1936,6 +1949,7 @@ export async function createPaseoDaemon(
               taskScheduler,
               conductorService,
               taskValidator,
+              taskDeployer,
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);

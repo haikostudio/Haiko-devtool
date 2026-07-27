@@ -138,8 +138,7 @@ export function TaskAgentChat({
   // The archive bar sits on a finished card ("Terminé"/"Déployé"): it files the
   // card away by hiding it from the board. It never publishes or moves the card —
   // publication already happened on its own when the card reached "Terminé".
-  const showArchive =
-    Boolean(onArchive) && (task.column === "done" || task.column === "deployed");
+  const showArchive = Boolean(onArchive) && (task.column === "done" || task.column === "deployed");
   // The deploy bar sits on a finished card ("Terminé") only: it hands the card's
   // own agent a deploy-then-confirm prompt, which verifies the work, publishes it
   // and moves the card to "Déployé". It takes the composer slot ahead of the

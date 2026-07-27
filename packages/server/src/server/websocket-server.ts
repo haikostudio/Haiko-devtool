@@ -27,6 +27,7 @@ import type { MessageTriage } from "./tasks/message-triage.js";
 import type { TaskScheduler } from "./tasks/scheduler.js";
 import type { ConductorAgentService } from "./tasks/conductor-agent.js";
 import type { TaskValidator } from "./tasks/validator.js";
+import type { TaskDeployer } from "./tasks/deployer.js";
 import type { CheckoutDiffManager, CheckoutDiffMetrics } from "./checkout-diff-manager.js";
 import type { DaemonConfigStore, MutableDaemonConfig } from "./daemon-config-store.js";
 import {
@@ -514,6 +515,7 @@ export class VoiceAssistantWebSocketServer {
   private taskScheduler: TaskScheduler | null = null;
   private conductorService: ConductorAgentService | null = null;
   private taskValidator: TaskValidator | null = null;
+  private taskDeployer: TaskDeployer | null = null;
   private activityLogService: ActivityLogService | null = null;
   private comptaSummaryService: ComptaSummaryService | null = null;
   private comptaLinksStore: ComptaLinksStore | null = null;
@@ -1154,6 +1156,7 @@ export class VoiceAssistantWebSocketServer {
       taskScheduler: this.taskScheduler,
       conductorService: this.conductorService,
       taskValidator: this.taskValidator,
+      taskDeployer: this.taskDeployer,
       activityLogService: this.activityLogService ?? undefined,
       comptaSummaryService: this.comptaSummaryService ?? undefined,
       comptaLinksStore: this.comptaLinksStore ?? undefined,
@@ -1344,6 +1347,7 @@ export class VoiceAssistantWebSocketServer {
     taskScheduler: TaskScheduler | null;
     conductorService: ConductorAgentService | null;
     taskValidator: TaskValidator | null;
+    taskDeployer: TaskDeployer | null;
     messageTriage: MessageTriage | null;
   }): void {
     this.taskBoardService = services.taskBoardService;
@@ -1351,6 +1355,7 @@ export class VoiceAssistantWebSocketServer {
     this.taskScheduler = services.taskScheduler;
     this.conductorService = services.conductorService;
     this.taskValidator = services.taskValidator;
+    this.taskDeployer = services.taskDeployer;
     this.messageTriage = services.messageTriage;
   }
 

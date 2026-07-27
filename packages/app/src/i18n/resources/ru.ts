@@ -326,6 +326,12 @@ export const ru: TranslationResources = {
       archiveTask: "Архивировать",
       archiveTaskMessage:
         "Эта карточка будет скрыта с доски. Она останется сохранённой и не будет опубликована.",
+      deployTask: "Запустить развёртывание",
+      deployTaskMessage:
+        "Агент этой задачи проверяет работу, публикует изменение, затем переводит карточку в «Развёрнуто» и сообщает, нужен ли перезапуск демона. Вы следите за всем в разговоре.",
+      deployRunning: "Развёртывание в разговоре…",
+      deployRestartMessage: "Развёртывание уже выполняется в разговоре. Всё равно запустить снова?",
+      deployDispatched: "Развёртывание запущено — следите за ним в разговоре.",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",
@@ -500,6 +506,7 @@ export const ru: TranslationResources = {
       openPr: "Открыть pull request",
       live: "Онлайн",
       openLive: "Открыть опубликованный сайт",
+      needsRestart: "Требуется перезапуск",
       planReady: "План готов",
       awaitingReply: "Ожидает вашего ответа",
       duration: "~{{minutes}} мин",

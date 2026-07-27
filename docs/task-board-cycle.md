@@ -15,14 +15,14 @@ heuristic — may move a card.
 
 ## Ownership of each transition
 
-| Transition          | Who performs it      | Notes                                                                    |
-| ------------------- | -------------------- | ------------------------------------------------------------------------ |
-| → Notes / → À faire | user **or** an agent | The only two columns an agent may write to.                              |
-| À faire → Validé    | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.   |
-| Validé → Planifié   | estimator            | Auto, the instant the card's cost analysis succeeds (see below).         |
-| Planifié → En cours | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.       |
-| En cours → Terminé  | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it. |
-| Terminé → Déployé   | publish              | Stamped when the card's branch is confirmed merged + published.          |
+| Transition          | Who performs it               | Notes                                                                                                                                                                          |
+| ------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| → Notes / → À faire | user **or** an agent          | The only two columns an agent may write to.                                                                                                                                    |
+| À faire → Validé    | **user only**                 | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                                         |
+| Validé → Planifié   | estimator                     | Auto, the instant the card's cost analysis succeeds (see below).                                                                                                               |
+| Planifié → En cours | scheduler                     | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                                             |
+| En cours → Terminé  | **user-initiated**            | The final-check bar — the card's own agent checks, deploys, finishes it.                                                                                                       |
+| Terminé → Déployé   | publish **or** user-initiated | Auto-stamped when the card's branch is confirmed merged + published; also reachable by hand via the "Lancer le déploiement" bar (the card's own agent deploys, then moves it). |
 
 ## The invariants
 
@@ -37,8 +37,11 @@ heuristic — may move a card.
    themselves, which is precisely the consent the column exists to capture.
 3. **Agents are blocked at the tool boundary, not by a prompt.** `move_task`
    accepts only `notes` and `backlog` (`AGENT_WRITABLE_TASK_COLUMNS`) and throws
-   for the rest. Prompt wording alone is not a gate: a model that is told to be
-   helpful will validate its own work.
+   for the rest — except the two per-card consent windows a user press opens:
+   `done` while a final check runs (`validation.state === "running"`) and
+   `deployed` while a deploy runs (`deployment.state === "running"`). Prompt
+   wording alone is not a gate: a model that is told to be helpful will validate
+   its own work.
 4. **Agent activity never moves a card.** `agent-sync` may create a card, link an
    agent to it and update its `progress` badge — it holds no `transitionTask`
    call at all. It used to drag cards into "En cours" the moment a linked agent
@@ -118,6 +121,31 @@ That press opens a consent window on that one card — `validation.state ===
 while the window is open, for that card only. The window closes as soon as the
 agent stops working (`watchAgentIdle`), whether or not it completed the card, so
 a check can never leave the bar stuck.
+
+## Deploying a finished card — the "Lancer le déploiement" bar
+
+The automatic publish above only stamps `deployed` for cards it actually ships —
+Paseo's own cards, or a project whose branch is confirmed merged. Every other
+finished card used to sit in "Terminé" for good. The **"Lancer le déploiement"**
+bar (offered above the prompt on a "Terminé" card) closes that gap, as the exact
+sibling of the final-check bar:
+
+- It is served by `TaskDeployer` (`deployer.ts`), symmetric to `TaskValidator`.
+  Pressing it hands the card's OWN agent a deploy-then-confirm prompt
+  (`buildDeployPrompt`): verify the work still runs, deploy it (dev instance for a
+  project; for Paseo, only confirm — the daemon already published at "Terminé"),
+  then move the card to "Déployé" itself.
+- The press opens a consent window on that one card — `deployment.state ===
+"running"` — the **third exception** in `move_task`: `deployed` is accepted
+  while the window is open, for that card only. The window closes on
+  `watchAgentIdle`, so a deploy can never leave the bar stuck.
+- The move to `deployed` carries an optional `needsDaemonRestart` argument. When
+  the shipped change only takes effect after a daemon/service restart (typically a
+  server-side change), the agent sets it, and the card shows a **"Redémarrage
+  requis" icon** (`KanbanTask.needsDaemonRestart`). It is **purely informative** —
+  it never triggers a restart; that stays the user's explicit call.
+- On a "Terminé" card the deploy bar takes the composer slot ahead of the archive
+  bar, so the natural order is deploy, then archive.
 
 ## Archiving a card — hide, never publish
 

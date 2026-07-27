@@ -329,6 +329,13 @@ export const ptBR: TranslationResources = {
       archiveTask: "Arquivar",
       archiveTaskMessage:
         "Este cartão será ocultado do quadro. Ele permanece salvo e não é publicado.",
+      deployTask: "Iniciar a implantação",
+      deployTaskMessage:
+        "O agente desta tarefa verifica se funciona, coloca a alteração no ar, depois move o cartão para «Implantado» e sinaliza se é preciso reiniciar o daemon. Você acompanha tudo na conversa.",
+      deployRunning: "Implantando na conversa…",
+      deployRestartMessage:
+        "Já há uma implantação em curso na conversa. Iniciar de novo mesmo assim?",
+      deployDispatched: "Implantação iniciada — acompanhe na conversa.",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",
@@ -505,6 +512,7 @@ export const ptBR: TranslationResources = {
       openPr: "Abrir pull request",
       live: "No ar",
       openLive: "Abrir o site publicado",
+      needsRestart: "Reinício necessário",
       planReady: "Plano pronto",
       awaitingReply: "Aguardando sua resposta",
       duration: "~{{minutes}} min",

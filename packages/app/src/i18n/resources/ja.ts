@@ -325,7 +325,14 @@ export const ja: TranslationResources = {
       validateDispatched: "チェックを開始しました — 会話で確認できます。",
       validatePassed: "タスクはすでに完了しています。",
       archiveTask: "アーカイブ",
-      archiveTaskMessage: "このカードはボードから非表示になります。保存されたままで、公開はされません。",
+      archiveTaskMessage:
+        "このカードはボードから非表示になります。保存されたままで、公開はされません。",
+      deployTask: "デプロイを開始",
+      deployTaskMessage:
+        "このタスクのエージェントが動作を確認し、変更を公開してから、カードを「デプロイ済み」に移動し、デーモンの再起動が必要かどうかを知らせます。すべて会話の中で確認できます。",
+      deployRunning: "会話でデプロイ中…",
+      deployRestartMessage: "会話ですでにデプロイが実行中です。それでも再実行しますか？",
+      deployDispatched: "デプロイを開始しました — 会話で追跡してください。",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",
@@ -500,6 +507,7 @@ export const ja: TranslationResources = {
       openPr: "プルリクエストを開く",
       live: "公開中",
       openLive: "公開サイトを開く",
+      needsRestart: "再起動が必要",
       planReady: "プラン完成",
       awaitingReply: "返信をお待ちしています",
       duration: "約{{minutes}}分",

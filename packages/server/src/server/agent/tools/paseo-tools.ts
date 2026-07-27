@@ -69,6 +69,7 @@ import type { ProjectRegistry, WorkspaceRegistry } from "../../workspace-registr
 import { resolveProjectDisplayName } from "../../workspace-registry.js";
 import type { TaskBoardService } from "../../tasks/service.js";
 import { isValidationWindowOpen } from "../../tasks/validator.js";
+import { isDeploymentWindowOpen } from "../../tasks/deployer.js";
 import { WorktreeRequestError } from "../../worktree-errors.js";
 import {
   archiveCommand,
@@ -400,6 +401,21 @@ async function isTaskValidationWindowOpen(
   const board = await taskBoardService.getBoard(projectId);
   const task = board.tasks.find((entry) => entry.id === taskId);
   return task ? isValidationWindowOpen(task) : false;
+}
+
+/**
+ * True while the user has an open "Lancer le déploiement" window on this card.
+ * That press is the consent that lets the card's own agent move it to "deployed"
+ * — see TaskDeployer.
+ */
+async function isTaskDeploymentWindowOpen(
+  taskBoardService: TaskBoardService,
+  projectId: string,
+  taskId: string,
+): Promise<boolean> {
+  const board = await taskBoardService.getBoard(projectId);
+  const task = board.tasks.find((entry) => entry.id === taskId);
+  return task ? isDeploymentWindowOpen(task) : false;
 }
 
 const TerminalSummarySchema = z.object({
@@ -3024,8 +3040,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         title: "Move task",
         description:
           "Move a kanban task between the two agent-writable columns: 'notes' (free-form draft) and 'backlog' (À faire). " +
-          "The rest of the board belongs to the user: 'validated', 'scheduled', 'in_progress' and 'deployed' are reached by the user's own validation, by the scheduler, or by a successful publish — an agent may never move a card there. " +
-          "Single exception: 'done' is accepted while the user has an open final check on that exact card (they pressed \"Lancer le contrôle\"), and only once everything is verified and fixed.",
+          "The rest of the board belongs to the user: 'validated', 'scheduled' and 'in_progress' are reached by the user's own validation or by the scheduler — an agent may never move a card there. " +
+          "Two exceptions, each opened by the user pressing a bar on that exact card: 'done' while a final check is open (\"Lancer le contrôle\"), and 'deployed' while a deploy is open (\"Lancer le déploiement\"), and only once everything is verified. " +
+          "When moving to 'deployed', set needsDaemonRestart to true if the change only takes effect after a daemon/service restart (the user restarts it themselves — never do it yourself).",
         inputSchema: {
           projectId: z.string(),
           taskId: z.string(),
@@ -3039,6 +3056,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
             "deployed",
           ]),
           index: z.number().int().min(0).optional(),
+          needsDaemonRestart: z.boolean().optional(),
         },
         outputSchema: { success: z.boolean() },
       },
@@ -3054,6 +3072,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           | "done"
           | "deployed";
         index?: number;
+        needsDaemonRestart?: boolean;
       }) => {
         // The consent gate, enforced at the tool boundary rather than in a prompt:
         // validation, scheduling, execution and completion are the user's calls.
@@ -3068,9 +3087,14 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           const completionAuthorized =
             args.column === "done" &&
             (await isTaskValidationWindowOpen(taskBoardService, args.projectId, args.taskId));
-          if (!completionAuthorized) {
+          // The deploy window: pressing "Lancer le déploiement" on a finished card
+          // is the user's consent for the card's agent to move it to "deployed".
+          const deploymentAuthorized =
+            args.column === "deployed" &&
+            (await isTaskDeploymentWindowOpen(taskBoardService, args.projectId, args.taskId));
+          if (!completionAuthorized && !deploymentAuthorized) {
             throw new Error(
-              `move_task cannot move a task to "${args.column}": only the user validates, schedules or deploys a task. Agents may only move cards between "notes" and "backlog", plus "done" while the user's final check is open on that card.`,
+              `move_task cannot move a task to "${args.column}": only the user validates, schedules or deploys a task. Agents may only move cards between "notes" and "backlog", plus "done" while the user's final check is open on that card, or "deployed" while the user's deploy is open on that card.`,
             );
           }
         }
@@ -3080,6 +3104,16 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           index: args.index ?? 0,
           manual: true,
         });
+        // A move to "deployed" carries the one signal we cannot infer from the
+        // outside: whether the shipped change only takes effect after a daemon
+        // restart. Stamp it on the card so it can surface the informative icon.
+        // Purely a flag — it never triggers a restart.
+        if (args.column === "deployed") {
+          await taskBoardService.patchTask(args.projectId, args.taskId, (current) => ({
+            ...current,
+            needsDaemonRestart: args.needsDaemonRestart ?? false,
+          }));
+        }
         return {
           content: [],
           structuredContent: ensureValidJson({ success: true }),

@@ -10,7 +10,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Bot, Clock, GitPullRequest, Globe } from "lucide-react-native";
+import { Bot, Clock, GitPullRequest, Globe, RefreshCw } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { KanbanTask } from "@/data/tasks";
@@ -41,6 +41,7 @@ const ThemedBot = withUnistyles(Bot);
 const ThemedClock = withUnistyles(Clock);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGlobe = withUnistyles(Globe);
+const ThemedRefreshCw = withUnistyles(RefreshCw);
 
 // The triage prefixes generated descriptions with a "Priorité : … — Date
 // objectif : …" line that only restates the chip + deadline already on the card.
@@ -312,7 +313,12 @@ const CardMetaRow = memo(function CardMetaRow({
       : null;
 
   const hasMetaRow = Boolean(
-    deadline || duration || task.links.primaryAgentId || task.links.prUrl || task.deployedUrl,
+    deadline ||
+    duration ||
+    task.links.primaryAgentId ||
+    task.links.prUrl ||
+    task.deployedUrl ||
+    task.needsDaemonRestart,
   );
   if (!hasMetaRow) {
     return null;
@@ -328,6 +334,23 @@ const CardMetaRow = memo(function CardMetaRow({
       ) : null}
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
       {task.deployedUrl ? <LiveChip url={task.deployedUrl} /> : null}
+      {task.needsDaemonRestart ? <RestartChip /> : null}
+    </View>
+  );
+});
+
+/**
+ * "Redémarrage requis" chip on a deployed card: the shipped change only takes
+ * effect once the daemon is restarted. Purely informative — it never triggers a
+ * restart (that stays the user's call), it just makes the need visible at a
+ * glance. Wears the warning color so it reads as "action pending".
+ */
+const RestartChip = memo(function RestartChip() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.prChip} accessibilityLabel={t("tasks.card.needsRestart")}>
+      <ThemedRefreshCw size={ICON_SIZE.sm} uniProps={warningColorMapping} />
+      <Text style={styles.restartText}>{t("tasks.card.needsRestart")}</Text>
     </View>
   );
 });
@@ -644,6 +667,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   prText: {
     color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
+  restartText: {
+    color: theme.colors.statusWarning,
     fontSize: theme.fontSize.xs,
   },
   errorText: {

@@ -438,7 +438,13 @@ export class TasksSession {
       );
       this.host.emit({
         type: "tasks.task.deploy.response",
-        payload: { requestId: request.requestId, task, dispatched, needsDaemonRestart, error: null },
+        payload: {
+          requestId: request.requestId,
+          task,
+          dispatched,
+          needsDaemonRestart,
+          error: null,
+        },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
