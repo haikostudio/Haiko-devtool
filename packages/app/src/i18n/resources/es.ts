@@ -637,6 +637,7 @@ export const es: TranslationResources = {
     collapse: "Contraer",
     expand: "Mostrar todo ({{count}})",
     drag: "Arrastra para mover",
+    dismiss: "Descartar",
   },
   agentList: {
     fallbackTitle: "Nueva sesión",

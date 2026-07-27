@@ -630,6 +630,7 @@ export const en = {
     collapse: "Collapse",
     expand: "Show all ({{count}})",
     drag: "Drag to move",
+    dismiss: "Dismiss",
   },
   agentList: {
     fallbackTitle: "New session",

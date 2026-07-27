@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { ChevronsDownUp, ChevronsUpDown, GripVertical } from "lucide-react-native";
+import { ChevronsDownUp, ChevronsUpDown, GripVertical, X } from "lucide-react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   type AnimatedStyle,
@@ -316,34 +316,65 @@ export function TaskToast({
     onActivate?.();
   }, [task, onActivate, resolveAgentTask]);
 
+  // Web-only quick close: a small X reveals while the cursor is over the card so the
+  // user can drop it from the pile immediately instead of waiting for its agent to
+  // be opened. Hover lives on the plain wrapper View; the X is a separate inner
+  // Pressable (see docs/hover.md), sitting alongside the navigation Pressable rather
+  // than nested inside it. Native never fires pointer events, so `isHovered` stays
+  // false, the button never mounts, and tap-to-open is untouched.
+  const dismiss = useAgentTaskToastStore((state) => state.dismiss);
+  const [isHovered, setIsHovered] = useState(false);
+  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
+  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
+  const handleDismiss = useCallback(() => dismiss(task.key), [dismiss, task.key]);
+  const showClose = isWeb && isHovered;
+
   return (
-    <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger asChild>
-        <Pressable
-          style={fullWidth ? taskToastFullWidthPressableStyle : taskToastPressableStyle}
-          onPress={handlePress}
-          testID={`task-toast-${task.agent.serverId}-${task.agent.id}`}
-        >
-          {pipColorStyle ? <View style={pipColorStyle} /> : null}
-          <Animated.View style={rowStyle}>
-            <TaskToastIcon provider={task.agent.provider} bucket={task.bucket} />
-            <View style={styles.textColumn}>
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
-              </Text>
-              {subtitle ? (
-                <Text style={styles.meta} numberOfLines={1}>
-                  {subtitle}
+    <View
+      style={fullWidth ? styles.cardWrapperFullWidth : styles.cardWrapper}
+      onPointerEnter={isWeb ? handlePointerEnter : undefined}
+      onPointerLeave={isWeb ? handlePointerLeave : undefined}
+    >
+      <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
+        <TooltipTrigger asChild>
+          <Pressable
+            style={fullWidth ? taskToastFullWidthPressableStyle : taskToastPressableStyle}
+            onPress={handlePress}
+            testID={`task-toast-${task.agent.serverId}-${task.agent.id}`}
+          >
+            {pipColorStyle ? <View style={pipColorStyle} /> : null}
+            <Animated.View style={rowStyle}>
+              <TaskToastIcon provider={task.agent.provider} bucket={task.bucket} />
+              <View style={styles.textColumn}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {title}
                 </Text>
-              ) : null}
-            </View>
-          </Animated.View>
+                {subtitle ? (
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+            </Animated.View>
+          </Pressable>
+        </TooltipTrigger>
+        <TooltipContent side="left" align="center">
+          <Text style={styles.tooltipText}>{title}</Text>
+        </TooltipContent>
+      </Tooltip>
+      {showClose ? (
+        <Pressable
+          style={closeButtonStyle}
+          onPress={handleDismiss}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={t("agentTasksToast.dismiss")}
+          testID={`task-toast-dismiss-${task.agent.serverId}-${task.agent.id}`}
+        >
+          <X size={12} color={styles.closeIcon.color} />
         </Pressable>
-      </TooltipTrigger>
-      <TooltipContent side="left" align="center">
-        <Text style={styles.tooltipText}>{title}</Text>
-      </TooltipContent>
-    </Tooltip>
+      ) : null}
+    </View>
   );
 }
 
@@ -588,6 +619,42 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface1,
   },
+  // Wraps a single card so the hover target (this View) and the absolutely-placed
+  // close button share a positioning context. Position is relative by default; kept
+  // explicit for the button's `top/right` anchoring.
+  cardWrapper: {
+    position: "relative",
+  },
+  // In the mobile drawer each card spans the full width, so the wrapper stretches
+  // too — otherwise the inner full-width Pressable would only fill the shrunk wrapper.
+  cardWrapperFullWidth: {
+    position: "relative",
+    alignSelf: "stretch",
+  },
+  // Small round X straddling the top-right corner, mirroring the status pip on the
+  // left. Web-only, revealed on hover.
+  closeButton: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface0,
+    borderWidth: theme.borderWidth[1],
+    borderColor: theme.colors.border,
+    zIndex: 3,
+    ...theme.shadow.sm,
+  },
+  closeButtonHovered: {
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface1,
+  },
+  closeIcon: {
+    color: theme.colors.foregroundMuted,
+  },
   statusPip: {
     position: "absolute",
     // Straddle the top-left corner: sit half outside the card, overlapping the
@@ -723,6 +790,14 @@ function collapseToggleStyle({
   pressed: boolean;
 }) {
   return [styles.collapseToggle, (hovered || pressed) && styles.collapseToggleHovered];
+}
+
+function closeButtonStyle({ hovered = false, pressed }: { hovered?: boolean; pressed: boolean }) {
+  return [
+    styles.closeButton,
+    isWeb && ({ cursor: "pointer" } as object),
+    (hovered || pressed) && styles.closeButtonHovered,
+  ];
 }
 
 // Grab cursor on web signals the handle is draggable; native ignores the cast.

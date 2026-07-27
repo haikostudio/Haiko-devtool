@@ -639,6 +639,7 @@ export const fr: TranslationResources = {
     collapse: "Réduire",
     expand: "Tout afficher ({{count}})",
     drag: "Glisser pour déplacer",
+    dismiss: "Fermer",
   },
   agentList: {
     fallbackTitle: "Nouvelle séance",

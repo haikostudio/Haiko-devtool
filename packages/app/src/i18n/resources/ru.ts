@@ -632,6 +632,7 @@ export const ru: TranslationResources = {
     collapse: "Свернуть",
     expand: "Показать все ({{count}})",
     drag: "Перетащите, чтобы переместить",
+    dismiss: "Закрыть",
   },
   agentList: {
     fallbackTitle: "Новая сессия",

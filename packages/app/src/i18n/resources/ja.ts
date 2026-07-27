@@ -633,6 +633,7 @@ export const ja: TranslationResources = {
     collapse: "折りたたむ",
     expand: "すべて表示 ({{count}})",
     drag: "ドラッグして移動",
+    dismiss: "閉じる",
   },
   agentList: {
     fallbackTitle: "新しいセッション",

@@ -627,6 +627,7 @@ export const ar: TranslationResources = {
     collapse: "طي",
     expand: "عرض الكل ({{count}})",
     drag: "اسحب للتحريك",
+    dismiss: "إغلاق",
   },
   agentList: {
     fallbackTitle: "جلسة جديدة",
