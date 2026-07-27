@@ -492,6 +492,8 @@ export const ja: TranslationResources = {
       quotaEstimate: "クォータ約{{percent}}%",
       pr: "PR #{{number}}",
       openPr: "プルリクエストを開く",
+      live: "公開中",
+      openLive: "公開サイトを開く",
       planReady: "プラン完成",
       awaitingReply: "返信をお待ちしています",
       duration: "約{{minutes}}分",

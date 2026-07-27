@@ -496,6 +496,8 @@ export const ptBR: TranslationResources = {
       quotaEstimate: "~{{percent}}% da cota",
       pr: "PR #{{number}}",
       openPr: "Abrir pull request",
+      live: "No ar",
+      openLive: "Abrir o site publicado",
       planReady: "Plano pronto",
       awaitingReply: "Aguardando sua resposta",
       duration: "~{{minutes}} min",

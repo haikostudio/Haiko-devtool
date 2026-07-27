@@ -156,6 +156,7 @@ import { createBrainCaptureHook } from "../services/brain-memory/capture.js";
 import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
+import { TaskPublisher } from "./tasks/publish-on-complete.js";
 import { TaskValidator, watchAgentIdle } from "./tasks/validator.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
@@ -185,6 +186,7 @@ import {
   isPaseoDeployRepairBranch,
   isPaseoDeployRoot,
   getPaseoDeployRoots,
+  getPaseoDeployRunSnapshot,
   recordDaemonBootSha,
   setPaseoDeployAgentLauncher,
   setPaseoDeployConflictTaskCreator,
@@ -192,6 +194,7 @@ import {
   triggerPaseoDeploy,
 } from "../utils/paseo-deploy.js";
 import { buildPaseoDeployAgentPrompt } from "../utils/paseo-deploy-agent-prompt.js";
+import { getPaseoAppUrl, resolveProjectDevInstanceUrl } from "../utils/project-dev-instance.js";
 import { sendPromptToAgent } from "./agent/agent-prompt.js";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
@@ -1511,9 +1514,21 @@ export async function createPaseoDaemon(
   // Finishing a card IS the publish. There is no deploy button and no deploy
   // sheet any more: the user presses the final-check bar, the card's agent
   // verifies and fixes, and the move to "Terminée" ships that card's work.
-  // Paseo itself publishes through the local build script (this branch); every
-  // other project is deployed by the agent onto its dev instance on the VPS
-  // (see the check prompt in tasks/validator.ts).
+  // Paseo itself publishes through the local build script (narrated into the
+  // card's conversation by the publisher below); every other project is deployed
+  // by the agent onto its dev instance on the VPS (see tasks/validator.ts), and
+  // only its address is stamped here.
+  const taskPublisher = new TaskPublisher({
+    taskBoardService,
+    projectRegistry,
+    agentManager,
+    isSelfHostRoot: (rootPath) => isPaseoDeployRoot(rootPath),
+    resolveProjectUrl: async (rootPath) =>
+      isPaseoDeployRoot(rootPath) ? getPaseoAppUrl() : await resolveProjectDevInstanceUrl(rootPath),
+    triggerDeploy: (input) => triggerPaseoDeploy(input),
+    readDeployRun: () => getPaseoDeployRunSnapshot(),
+    logger,
+  });
   taskBoardService.setOnTaskCompleted(async (projectId, task) => {
     const repairBranch = task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)
       ? task.tags
@@ -1530,23 +1545,7 @@ export async function createPaseoDaemon(
       }
       return;
     }
-    const project = await projectRegistry.get(projectId);
-    if (!isPaseoDeployRoot(project?.rootPath)) {
-      return;
-    }
-    const branch = task.links.branch ?? null;
-    const result = await triggerPaseoDeploy({
-      projectId,
-      mergeBranches: branch ? [branch] : [],
-    });
-    if (!result.started) {
-      logger.warn(
-        { projectId, taskId: task.id, branch, error: result.error },
-        "Publish on task completion did not start",
-      );
-    } else {
-      logger.info({ projectId, taskId: task.id, branch }, "Task completion started a publish");
-    }
+    await taskPublisher.handleCompleted(projectId, task);
   });
   // Light analysis tidies manual backlog cards without running cost estimation.
   taskBoardService.setOnBacklogRefine((projectId, taskId) => {

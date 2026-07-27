@@ -487,6 +487,8 @@ export const ar: TranslationResources = {
       quotaEstimate: "~{{percent}}% من الحصة",
       pr: "PR ‏#{{number}}",
       openPr: "فتح طلب السحب",
+      live: "مباشر",
+      openLive: "فتح الموقع المنشور",
       planReady: "الخطة جاهزة",
       awaitingReply: "في انتظار ردك",
       duration: "~{{minutes}} دقيقة",

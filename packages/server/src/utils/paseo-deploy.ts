@@ -911,6 +911,30 @@ function describeDeployRun(run: DeployRun | null): DeployRunFields {
   };
 }
 
+/** Cheap view of the running/last publication — no git calls, safe to poll. */
+export interface PaseoDeployRunSnapshot {
+  deploying: boolean;
+  phase: string | null;
+  outcome: PaseoDeployOutcome | null;
+  error: string | null;
+}
+
+/**
+ * Light-weight publication progress, for the narration posted into a task's
+ * conversation. {@link getPaseoDeployStatus} answers the same question but runs
+ * a dozen git commands to do it, which is far too heavy to poll every few
+ * seconds while a build runs.
+ */
+export async function getPaseoDeployRunSnapshot(): Promise<PaseoDeployRunSnapshot> {
+  const run = await resolveDeployRun(Date.now());
+  return {
+    deploying: run !== null && run.finishedAt === null,
+    phase: run?.phase ?? null,
+    outcome: run?.outcome ?? null,
+    error: lastError,
+  };
+}
+
 export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
   try {
     const [statusResult, headResult, branchResult, deployedSha] = await Promise.all([

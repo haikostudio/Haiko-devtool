@@ -486,6 +486,8 @@ export const zhCN: TranslationResources = {
       quotaEstimate: "约 {{percent}}% 配额",
       pr: "PR #{{number}}",
       openPr: "打开 Pull Request",
+      live: "已上线",
+      openLive: "打开已发布的站点",
       planReady: "计划已就绪",
       awaitingReply: "等待你的回复",
       duration: "约{{minutes}}分钟",

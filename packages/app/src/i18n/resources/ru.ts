@@ -491,6 +491,8 @@ export const ru: TranslationResources = {
       quotaEstimate: "~{{percent}}% квоты",
       pr: "PR #{{number}}",
       openPr: "Открыть pull request",
+      live: "Онлайн",
+      openLive: "Открыть опубликованный сайт",
       planReady: "План готов",
       awaitingReply: "Ожидает вашего ответа",
       duration: "~{{minutes}} мин",

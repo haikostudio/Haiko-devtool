@@ -65,9 +65,18 @@ now hangs off the card reaching "Terminée":
   `<slug>.haikostudio.cloud`, so the agent merges its branch into the project's
   main checkout, restarts the unit and checks the URL answers.
 - **Paseo itself** is published by the daemon: `setOnTaskCompleted` in
-  `bootstrap.ts` fires `triggerPaseoDeploy` with the card's branch the instant it
-  lands in "Terminée" (local build → Caddy webroot). The agent must NOT run a
-  publish script by hand, and never restarts `paseo.service`.
+  `bootstrap.ts` hands the card to `TaskPublisher`, which fires
+  `triggerPaseoDeploy` with the card's branch the instant it lands in "Terminée"
+  (local build → Caddy webroot). The agent must NOT run a publish script by
+  hand, and never restarts `paseo.service`.
+
+Because there is no progress sheet any more, `TaskPublisher` narrates the
+publication into the card's OWN conversation ("Construction…", "Mise en ligne…",
+"c'est en ligne : <url>", or the failure reason). It also stamps
+`KanbanTask.deployedUrl` — the address the work went live at, resolved from the
+host's `autoproject` layout (`run/<slug>/start.sh` → checkout,
+`project-autostart.d/<slug>.caddy` → hostname) — so a finished card shows an
+"En ligne" chip one tap from the thing it changed.
 
 That press opens a consent window on that one card — `validation.state ===
 "running"` — and it is the second exception in `move_task`: `done` is accepted

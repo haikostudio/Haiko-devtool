@@ -495,6 +495,8 @@ export const es: TranslationResources = {
       quotaEstimate: "~{{percent}}% cuota",
       pr: "PR #{{number}}",
       openPr: "Abrir pull request",
+      live: "En línea",
+      openLive: "Abrir el sitio publicado",
       planReady: "Plan listo",
       awaitingReply: "Esperando tu respuesta",
       duration: "~{{minutes}} min",

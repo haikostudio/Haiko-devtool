@@ -488,6 +488,8 @@ export const en = {
       quotaEstimate: "~{{percent}}% quota",
       pr: "PR #{{number}}",
       openPr: "Open pull request",
+      live: "Live",
+      openLive: "Open the live site",
       planReady: "Plan ready",
       awaitingReply: "Waiting for your reply",
       duration: "~{{minutes}} min",

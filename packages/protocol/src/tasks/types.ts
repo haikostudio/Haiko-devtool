@@ -218,6 +218,11 @@ export const KanbanTaskSchema = z.object({
   // is live (merged + published). Terminal, like completedAt; a task entering
   // "deployed" also gets a completedAt if it somehow skipped "done".
   deployedAt: z.string().nullable().optional(),
+  // Public address the finished card's work went live at — the project's dev
+  // instance, or Paseo's own web app. Shown as a link on the card so a finished
+  // task is one tap from the thing it changed. Additive + optional: cards
+  // finished before this existed, or projects with no instance, simply omit it.
+  deployedUrl: z.string().nullable().optional(),
   // Stamped the first time the user opens this card. Purely a "already seen"
   // marker: a finished (done/deployed) card that has been viewed dims to ~50%
   // opacity so it recedes behind still-unseen finished work. Deliberately never

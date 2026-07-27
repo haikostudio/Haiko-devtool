@@ -10,7 +10,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Bot, Clock, GitPullRequest } from "lucide-react-native";
+import { Bot, Clock, GitPullRequest, Globe } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { KanbanTask } from "@/data/tasks";
@@ -40,6 +40,7 @@ const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarni
 const ThemedBot = withUnistyles(Bot);
 const ThemedClock = withUnistyles(Clock);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
+const ThemedGlobe = withUnistyles(Globe);
 
 // The triage prefixes generated descriptions with a "Priorité : … — Date
 // objectif : …" line that only restates the chip + deadline already on the card.
@@ -305,7 +306,9 @@ const CardMetaRow = memo(function CardMetaRow({
       ? t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })
       : null;
 
-  const hasMetaRow = Boolean(deadline || duration || task.links.primaryAgentId || task.links.prUrl);
+  const hasMetaRow = Boolean(
+    deadline || duration || task.links.primaryAgentId || task.links.prUrl || task.deployedUrl,
+  );
   if (!hasMetaRow) {
     return null;
   }
@@ -319,6 +322,7 @@ const CardMetaRow = memo(function CardMetaRow({
         <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       ) : null}
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
+      {task.deployedUrl ? <LiveChip url={task.deployedUrl} /> : null}
     </View>
   );
 });
@@ -458,6 +462,30 @@ const PrChip = memo(function PrChip({ prUrl }: { prUrl: string }) {
     >
       <ThemedGitPullRequest size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       <Text style={styles.prText}>{t("tasks.card.pr", { number: extractPrNumber(prUrl) })}</Text>
+    </Pressable>
+  );
+});
+
+/**
+ * "En ligne" chip on a finished card: one tap to the address the work actually
+ * went live at. Stamped by the daemon when the card reached "Terminée", so it
+ * only ever appears on work that really shipped.
+ */
+const LiveChip = memo(function LiveChip({ url }: { url: string }) {
+  const { t } = useTranslation();
+  const handleOpen = useCallback(() => {
+    void openExternalUrl(url);
+  }, [url]);
+  return (
+    <Pressable
+      onPress={handleOpen}
+      hitSlop={6}
+      accessibilityRole="link"
+      accessibilityLabel={t("tasks.card.openLive")}
+      style={styles.prChip}
+    >
+      <ThemedGlobe size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      <Text style={styles.prText}>{t("tasks.card.live")}</Text>
     </Pressable>
   );
 });
