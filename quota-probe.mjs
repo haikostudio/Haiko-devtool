@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ channel: 'chrome' });
+const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
+const errs = [];
+p.on('console', m => { if (m.type()==='error') errs.push(m.text()); });
+await p.goto('http://127.0.0.1:6767/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await p.waitForTimeout(8000);
+console.log('URL:', p.url());
+console.log('TITLE:', await p.title());
+await p.screenshot({ path: '/tmp/quota-0.png' });
+console.log('errors:', errs.slice(0,5));
+await b.close();
