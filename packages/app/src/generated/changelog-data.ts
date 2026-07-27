@@ -21,7 +21,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
   {
     "version": "Unreleased",
     "date": "2026-07-27",
-    "markdown": "### Ajouts\n\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation"
+    "markdown": "### Ajouts\n\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Corrections\n\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation"
   },
   {
     "version": "0.2.2",
@@ -546,6 +546,20 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    "hash": "f9c0b4d7cfb3d5826c6e8b5ca90e4e96133652a0",
+    "shortHash": "f9c0b4d7c",
+    "date": "2026-07-27T02:08:07+02:00",
+    "author": "haikostudio",
+    "subject": "chore: sauvegarde avant build local"
+  },
+  {
+    "hash": "ad8fe69d4fe2f9600980e69469b9c161cbc5bbcf",
+    "shortHash": "ad8fe69d4",
+    "date": "2026-07-27T02:06:11+02:00",
+    "author": "haikostudio",
+    "subject": "fix(quotas): l'anneau de quota redevient visible dans l'en-tête web"
+  },
   {
     "hash": "5b42a09ea66d3ffb256132a8647c340087b347f0",
     "shortHash": "5b42a09ea",
@@ -2631,22 +2645,8 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     "date": "2026-07-22T10:56:55+02:00",
     "author": "Mohamed Boudra",
     "subject": "chore(release): cut 0.2.0-beta.2"
-  },
-  {
-    "hash": "14b25d4266aa72c9955ae835c61673bd39de0814",
-    "shortHash": "14b25d426",
-    "date": "2026-07-22T10:34:05+02:00",
-    "author": "Mohamed Boudra",
-    "subject": "docs(changelog): add 0.2.0 beta 2 notes"
-  },
-  {
-    "hash": "6cddc657cda45f3677b3423a4d6d42a142a187f4",
-    "shortHash": "6cddc657c",
-    "date": "2026-07-22T10:33:51+02:00",
-    "author": "Mohamed Boudra",
-    "subject": "chore(acp): refresh provider catalog versions"
   }
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T02:03:35+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-27T02:08:07+02:00";
