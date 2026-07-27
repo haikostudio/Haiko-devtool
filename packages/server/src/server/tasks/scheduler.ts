@@ -78,27 +78,22 @@ function isScheduledCandidate(task: KanbanTask): boolean {
   );
 }
 
-// A "Validé" task whose analysis is done: it has an estimate, is approved, and
-// isn't mid-launch. The scheduler promotes it to "Planifié" (queued for a slot).
-function isValidatedReady(task: KanbanTask): boolean {
-  return (
-    task.column === "validated" &&
-    Boolean(task.estimate) &&
-    task.approval?.state !== "pending" &&
-    task.schedule?.state !== "launching" &&
-    task.schedule?.state !== "running" &&
-    // Held tasks stay in "Validé" (with a badge) until the user gives the go.
-    task.executionHold !== true
-  );
-}
-
 /**
- * Executes tasks from the board. The consent gate is the "Validé" column:
- * dropping a task there starts the automated pipeline (analysis then execution).
- * - "Validé" column: analysis runs; once estimated the task is promoted to
- *   "Planifié" and launched. Backlog tasks are inert — never analyzed or run.
- * - "Planifié" column: estimated tasks awaiting a launch slot (also a valid
- *   direct-drop entry point that skips straight to the queue).
+ * Executes tasks from the board.
+ *
+ * THE BOARD IS MOVED BY HAND. Every column change belongs to the user dragging
+ * the card, with exactly two machine-made exceptions:
+ * - "Planifié" → "En cours", stamped at the instant the agent really starts
+ *   (that move IS the launch the user asked for by dragging into "Planifié");
+ * - "En cours" → "Terminée", and only through the final-check bar the user
+ *   presses at the bottom of the card's conversation (see TaskValidator).
+ * Nothing else — no analysis result, no agent activity, no heuristic — moves a
+ * card. In particular "Validé" no longer promotes itself to "Planifié": the
+ * analysis runs there and the card waits for the user's hand.
+ *
+ * - "Validé" column: analysis runs, and the card stays put.
+ * - "Planifié" column: estimated tasks awaiting a launch slot. Dropping a card
+ *   here is the user's "go".
  * - Backlog ("À faire") is ALWAYS inert: nothing ever leaves it on its own.
  *   Validation is a human act — only the user (dragging a card, or the "Valider"
  *   action) moves work into "Validé". No folder setting, no agent, and no
@@ -324,10 +319,10 @@ export class TaskScheduler {
           continue;
         }
         if (task.column === "validated") {
-          // Analysis done → promote to "Planifié" so it queues for a launch slot.
-          if (isValidatedReady(task)) {
-            this.autoTransition(project.projectId, task.id, "scheduled");
-          }
+          // Analysis runs here, and STOPS here. The card does not promote itself
+          // to "Planifié": every column move is the user's, dragging the card by
+          // hand. The only machine move left is "Planifié" → "En cours" at the
+          // instant the agent really starts (see launch below).
           continue;
         }
         if (!isScheduledCandidate(task)) {
@@ -404,13 +399,6 @@ export class TaskScheduler {
     } catch (error) {
       this.logger.warn({ err: error, taskId }, "Backlog pipeline-state cleanup failed");
     }
-  }
-
-  /** Fire-and-forget column move driven by the scheduler (never manual). */
-  private autoTransition(projectId: string, taskId: string, column: KanbanTask["column"]): void {
-    void this.taskBoardService.transitionTask(projectId, taskId, column).catch((error) => {
-      this.logger.warn({ err: error, taskId, column }, "Task auto-transition failed");
-    });
   }
 
   /**

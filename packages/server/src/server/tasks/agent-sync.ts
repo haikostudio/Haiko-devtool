@@ -1,5 +1,5 @@
 import type pino from "pino";
-import type { AgentManager, AgentManagerEvent, ManagedAgent } from "../agent/agent-manager.js";
+import type { AgentManager, AgentManagerEvent } from "../agent/agent-manager.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
 import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import { normalizeTaskTitle, type TaskBoardService } from "./service.js";
@@ -54,19 +54,22 @@ interface AgentTaskSyncServiceOptions {
 }
 
 /**
- * Bridges live agent activity into the kanban boards:
- * - todo timeline items from agents that belong to a project become (or link
- *   to) task cards in that project's auto "Agent" folder;
- * - a linked agent starting a turn drags its tasks to "in_progress";
- * - a completed turn with all matched todo items done drags them to "done".
+ * Bridges live agent activity into the kanban boards: todo timeline items from
+ * agents that belong to a project become (or link to) task cards in that
+ * project's auto "Agent" folder, and their {@link KanbanTask.progress} flag
+ * follows what the agent reports.
+ *
+ * THIS SERVICE NEVER MOVES A CARD BETWEEN COLUMNS. It used to drag cards into
+ * "En cours" on the first sign of agent activity, which is exactly what made
+ * fresh cards jump columns on their own. Columns belong to the user's hand, to
+ * the scheduler's launch, and to the final-check bar — nothing else. All this
+ * service may do is create a card, link an agent to it, and update its progress
+ * badge.
  *
  * A card's own agent is excluded outright (see {@link isCardOwnedAgent}): this
  * service only reacts to agents that adopt a card through their todo list.
- *
- * Tasks the user moved by hand (manualOverrideAt set) are left alone, and
- * scheduler-owned tasks (schedule.state === "running") are transitioned by
- * the scheduler, not here. Internal agents never reach this service: the
- * AgentManager global subscription already filters them out.
+ * Internal agents never reach it either — the AgentManager global subscription
+ * already filters them out.
  */
 export class AgentTaskSyncService {
   private readonly agentManager: AgentManager;
@@ -79,7 +82,6 @@ export class AgentTaskSyncService {
   // agentId -> normalizedTitle -> completed (last synced todo snapshot)
   private readonly agentTodoState = new Map<string, Map<string, boolean>>();
   private readonly syncedTaskCounts = new Map<string, number>();
-  private readonly agentLifecycles = new Map<string, ManagedAgent["lifecycle"]>();
 
   constructor(options: AgentTaskSyncServiceOptions) {
     this.agentManager = options.agentManager;
@@ -123,13 +125,9 @@ export class AgentTaskSyncService {
   }
 
   private async handleEvent(event: AgentManagerEvent): Promise<void> {
-    if (event.type === "agent_state") {
-      if (this.isCardOwnedAgent(event.agent.id)) {
-        return;
-      }
-      await this.handleAgentState(event.agent);
-      return;
-    }
+    // Agent lifecycle events are deliberately ignored: an agent waking up is not
+    // a reason to move a card. Only what the agent *says* (its todo list) is
+    // mirrored onto the board, and even that never changes a column.
     if (event.type !== "agent_stream") {
       return;
     }
@@ -210,12 +208,9 @@ export class AgentTaskSyncService {
       ) {
         continue;
       }
-      // A checked-off todo no longer completes the card: it lands (or stays) in
-      // "En cours" and is flagged as believed-finished. Only the user's explicit
-      // "Valider la tâche" moves a card to "Terminée".
-      if (task.column !== "in_progress" && task.column !== "done" && task.column !== "deployed") {
-        await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
-      }
+      // Progress badge only — the card does NOT change column, whatever the
+      // agent reports. A checked-off todo means "believed finished", and that is
+      // shown on the card where it already sits.
       if (task.column !== "done" && task.column !== "deployed") {
         const progress = item.completed ? "ready_for_review" : "executing";
         if (task.progress !== progress) {
@@ -250,46 +245,15 @@ export class AgentTaskSyncService {
         continue;
       }
       const completed = todoState.get(task.normalizedTitle);
-      // Same rule: a completed turn marks the card ready for review, it never
-      // moves it to "Terminée" on the user's behalf.
+      // Same rule: a completed turn flags the card as believed-finished, and
+      // leaves it exactly where the user put it.
       if (completed === true && task.column !== "done" && task.column !== "deployed") {
-        if (task.column !== "in_progress") {
-          await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
-        }
         if (task.progress !== "ready_for_review") {
           await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
             ...current,
             progress: "ready_for_review" as const,
           }));
         }
-      }
-    }
-  }
-
-  private async handleAgentState(agent: ManagedAgent): Promise<void> {
-    const previous = this.agentLifecycles.get(agent.id);
-    this.agentLifecycles.set(agent.id, agent.lifecycle);
-    if (previous === agent.lifecycle || agent.lifecycle !== "running") {
-      return;
-    }
-    const projectId = await this.resolveProjectId(agent.id);
-    if (!projectId) {
-      return;
-    }
-    const board = await this.taskBoardService.getBoard(projectId);
-    for (const task of board.tasks) {
-      if (!task.links.agentIds.includes(agent.id)) {
-        continue;
-      }
-      if (
-        task.manualOverrideAt ||
-        task.schedule?.state === "running" ||
-        task.approval?.state === "pending"
-      ) {
-        continue;
-      }
-      if (task.column === "backlog" || task.column === "validated" || task.column === "scheduled") {
-        await this.taskBoardService.transitionTask(projectId, task.id, "in_progress");
       }
     }
   }

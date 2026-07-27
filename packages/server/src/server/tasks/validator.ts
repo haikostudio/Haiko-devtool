@@ -1,6 +1,8 @@
+import { basename } from "node:path";
 import type pino from "pino";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
+import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
 
 export interface TaskValidationOutcome {
@@ -16,6 +18,8 @@ export type ValidationAgentWatcher = Pick<AgentManager, "subscribe" | "getAgent"
 
 export interface TaskValidatorOptions {
   taskBoardService: TaskBoardService;
+  /** Resolves the project's checkout so the deploy step can name it. */
+  projectRegistry: Pick<ProjectRegistry, "get">;
   /** Sends the check prompt into the task agent's own conversation. */
   sendPrompt: (input: { agentId: string; prompt: string }) => Promise<void>;
   /** Calls back once the agent stops working; returns an unsubscribe function. */
@@ -25,6 +29,10 @@ export interface TaskValidatorOptions {
 
 /**
  * The final check behind the "Lancer le contrôle" bar.
+ *
+ * It is also the ONLY machine-made move to "Terminée" on the whole board: every
+ * other column change is the user dragging a card. Pressing the bar hands the
+ * card's agent a check-then-deploy prompt, and completion is its last step.
  *
  * The check is NOT a hidden reviewer: it is a prompt sent to the task's own
  * agent, in the task's own conversation. The user sees the whole thing happen —
@@ -42,12 +50,14 @@ export interface TaskValidatorOptions {
  */
 export class TaskValidator {
   private readonly taskBoardService: TaskBoardService;
+  private readonly projectRegistry: TaskValidatorOptions["projectRegistry"];
   private readonly sendPrompt: TaskValidatorOptions["sendPrompt"];
   private readonly watchAgentIdle: TaskValidatorOptions["watchAgentIdle"];
   private readonly logger: pino.Logger;
 
   constructor(options: TaskValidatorOptions) {
     this.taskBoardService = options.taskBoardService;
+    this.projectRegistry = options.projectRegistry;
     this.sendPrompt = options.sendPrompt;
     this.watchAgentIdle = options.watchAgentIdle;
     this.logger = options.logger.child({ module: "task-validator" });
@@ -98,7 +108,11 @@ export class TaskValidator {
       });
     });
 
-    await this.sendPrompt({ agentId, prompt: buildValidationPrompt({ projectId, task }) });
+    const project = await this.projectRegistry.get(projectId);
+    await this.sendPrompt({
+      agentId,
+      prompt: buildValidationPrompt({ projectId, task, projectRoot: project?.rootPath ?? null }),
+    });
     this.logger.info({ projectId, taskId, agentId }, "Validation check handed to the task agent");
     return { task: patched, passed: false, dispatched: true };
   }
@@ -137,8 +151,21 @@ export function isValidationWindowOpen(task: KanbanTask): boolean {
   return task.validation?.state === "running";
 }
 
-function buildValidationPrompt(input: { projectId: string; task: KanbanTask }): string {
-  const { projectId, task } = input;
+/**
+ * The check prompt. Beyond verifying the work, it carries the ONE deployment the
+ * user delegated: pushing the change onto the project's dev instance on the VPS
+ * (`<slug>.haikostudio.cloud`, served by the `autoproject-<slug>` systemd unit).
+ * Publishing Paseo itself is explicitly excluded — that stays the user's call
+ * through the "À déployer" window.
+ */
+export function buildValidationPrompt(input: {
+  projectId: string;
+  task: KanbanTask;
+  projectRoot: string | null;
+}): string {
+  const { projectId, task, projectRoot } = input;
+  const slug = projectRoot ? basename(projectRoot).toLowerCase() : null;
+  const slugHint = slug ? `« ${slug} » (à confirmer)` : "à retrouver";
   return [
     "L'utilisateur demande le CONTRÔLE FINAL de cette tâche avant de la considérer comme terminée.",
     "",
@@ -153,9 +180,17 @@ function buildValidationPrompt(input: { projectId: string; task: KanbanTask }): 
     "2. Vérifie que ce qui a été fait fonctionne : relis le code, lance le typecheck, le lint et les tests qui couvrent la zone modifiée.",
     "3. Cherche les régressions : ce qui marchait avant doit marcher encore.",
     "4. S'il reste quoi que ce soit à corriger, CORRIGE-LE toi-même, puis reprends la vérification au point 1.",
-    "5. Quand — et seulement quand — tout est vert et la demande entièrement satisfaite : enregistre ton travail (commit puis push), et marque la tâche comme terminée avec l'outil move_task :",
+    "5. Quand tout est vert : enregistre ton travail (commit puis push).",
+    "6. DÉPLOIE la modification sur l'instance de développement du projet, sur le VPS (domaine haikostudio.cloud). C'est le seul déploiement que l'utilisateur t'a délégué, et il fait partie du contrôle final :",
+    `   • Dépôt principal du projet : ${projectRoot ?? "(inconnu — retrouve-le)"}. Sous-domaine et service attendus : ${slugHint} → https://<slug>.haikostudio.cloud, service systemd « autoproject-<slug> ».`,
+    "   • Confirme le nom exact : `systemctl list-units 'autoproject-*' --all` et `ls /etc/caddy/project-autostart.d/`.",
+    "   • Si tu as travaillé dans un classeur (worktree/branche) séparé, fusionne d'abord ton travail dans le dépôt principal ci-dessus, sur sa branche courante — c'est ce checkout que sert l'instance dev.",
+    "   • Installe les dépendances si le lockfile a changé, puis redémarre : `sudo systemctl restart autoproject-<slug>`.",
+    "   • VÉRIFIE que c'est réellement en ligne : `systemctl is-active autoproject-<slug>`, puis `curl -sI https://<slug>.haikostudio.cloud` (réponse 200/3xx attendue). En cas d'échec : `journalctl -u autoproject-<slug> -n 80 --no-pager`, corrige, recommence.",
+    "   • Si ce projet n'a AUCUNE instance dev sur le VPS, ne l'invente pas : dis-le en une phrase et passe à l'étape 7.",
+    "   • INTERDIT : redémarrer `paseo.service`, lancer `paseo-ship-now.sh` ou `paseo-app-deploy.sh`, toucher à un autre projet. La publication de Paseo lui-même reste la décision de l'utilisateur.",
+    "7. Seulement une fois le contrôle vert ET l'instance dev à jour, marque la tâche comme terminée avec l'outil move_task :",
     `   move_task(projectId: "${projectId}", taskId: "${task.id}", column: "done")`,
-    "   Ne déploie pas et ne publie rien : la mise en ligne reste la décision de l'utilisateur.",
     "",
     "Si tu es bloqué sur quelque chose que tu ne peux pas corriger seul, NE marque pas la tâche terminée : explique en clair ce qui bloque et ce dont tu as besoin.",
     "Règle absolue : en cas de doute, ne termine pas. Un faux « c'est bon » livre du travail cassé ; un doute annoncé ne coûte qu'un aller-retour.",

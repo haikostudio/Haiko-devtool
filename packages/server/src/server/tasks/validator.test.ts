@@ -23,6 +23,9 @@ describe("TaskValidator", () => {
     idleCallbacks = [];
     validator = new TaskValidator({
       taskBoardService: service,
+      projectRegistry: {
+        get: async () => ({ projectId: "proj-1", rootPath: "/root/etsigna" }) as never,
+      },
       sendPrompt: async (input) => {
         sent.push(input);
       },
@@ -71,6 +74,12 @@ describe("TaskValidator", () => {
     expect(sent[0]?.agentId).toBe("agent-7");
     expect(sent[0]?.prompt).toContain("CONTRÔLE FINAL");
     expect(sent[0]?.prompt).toContain(`taskId: "${taskId}"`);
+    // The check is also the delegated deploy: it must name the project's dev
+    // instance on the VPS, and forbid publishing Paseo itself.
+    expect(sent[0]?.prompt).toContain("haikostudio.cloud");
+    expect(sent[0]?.prompt).toContain("autoproject-");
+    expect(sent[0]?.prompt).toContain("/root/etsigna");
+    expect(sent[0]?.prompt).toContain("paseo-ship-now.sh");
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === taskId)?.validation?.state).toBe("running");

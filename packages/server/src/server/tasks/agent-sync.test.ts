@@ -48,18 +48,20 @@ describe("extractTrackableItems", () => {
   });
 });
 
-function hasTwoInProgressTasks(board: { tasks: { column: string }[] }): boolean {
-  return board.tasks.length === 2 && board.tasks.every((task) => task.column === "in_progress");
+// Synced cards are born in the backlog and STAY there: this service never moves
+// a card between columns, whatever the agent reports.
+function hasTwoBacklogTasks(board: { tasks: { column: string }[] }): boolean {
+  return board.tasks.length === 2 && board.tasks.every((task) => task.column === "backlog");
 }
 
-// A checked-off todo must NOT complete the card: it stays in "En cours" and is
-// only flagged as believed-finished. Reaching "Terminée" requires the user to
-// press "Valider la tâche".
+// A checked-off todo must NOT complete the card, nor move it: it is only flagged
+// as believed-finished, where it sits. Reaching "Terminée" requires the user to
+// press the final-check bar.
 function hasLoginFormTaskReadyForReview(board: {
   tasks: { normalizedTitle: string; column: string; progress?: string | null }[];
 }): boolean {
   const task = board.tasks.find((entry) => entry.normalizedTitle === "implement the login form");
-  return task?.column === "in_progress" && task?.progress === "ready_for_review";
+  return task?.column === "backlog" && task?.progress === "ready_for_review";
 }
 
 describe("AgentTaskSyncService", () => {
@@ -118,7 +120,7 @@ describe("AgentTaskSyncService", () => {
       { text: "Write the login tests", completed: false },
     ]);
 
-    const board = await waitForBoard(hasTwoInProgressTasks);
+    const board = await waitForBoard(hasTwoBacklogTasks);
     expect(board.folders.map((folder) => folder.name)).toEqual([AGENT_SYNC_FOLDER_NAME]);
     expect(board.tasks.every((task) => task.origin === "agent_sync")).toBe(true);
 
@@ -128,9 +130,10 @@ describe("AgentTaskSyncService", () => {
     ]);
 
     const board2 = await waitForBoard(hasLoginFormTaskReadyForReview);
-    // The card is emphatically NOT completed — only the user completes a task.
+    // The card is emphatically NOT completed, and it has not moved an inch —
+    // only the user moves cards, only the final-check bar completes them.
     const done = board2.tasks.find((entry) => entry.normalizedTitle === "implement the login form");
-    expect(done?.column).toBe("in_progress");
+    expect(done?.column).toBe("backlog");
     expect(done?.completedAt ?? null).toBeNull();
   });
 

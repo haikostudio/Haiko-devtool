@@ -6,20 +6,22 @@ The kanban board has seven columns, in order:
 Notes → À faire (backlog) → Validé → Planifié → En cours → Terminé → Déployé
 ```
 
-**Validation is a human act.** "Validé" is not a status, it is the user's consent
-to spend quota and let an agent touch the code. Everything after it is automatic;
-everything before it is inert.
+**The board is moved by hand.** A card changes column because the user dragged
+it. Two machine-made moves survive, and only two: the launch stamp
+("Planifié" → "En cours", at the instant the agent really starts) and the
+final-check bar ("En cours" → "Terminé"). Nothing else — no analysis result, no
+agent activity, no heuristic — may move a card.
 
 ## Ownership of each transition
 
-| Transition          | Who performs it      | Notes                                                           |
-| ------------------- | -------------------- | --------------------------------------------------------------- |
-| → Notes / → À faire | user **or** an agent | The only two columns an agent may write to.                     |
-| À faire → Validé    | **user only**        | Drag, or the approval action on a proposed task.                |
-| Validé → Planifié   | scheduler            | Once the cost analysis produced an estimate.                    |
-| Planifié → En cours | scheduler            | When the slot, quota and timing gates all pass.                 |
-| En cours → Terminé  | **user-initiated**   | "Lancer le contrôle" — the card's own agent finishes it.        |
-| Terminé → Déployé   | publish              | Stamped when the card's branch is confirmed merged + published. |
+| Transition          | Who performs it      | Notes                                                                    |
+| ------------------- | -------------------- | ------------------------------------------------------------------------ |
+| → Notes / → À faire | user **or** an agent | The only two columns an agent may write to.                              |
+| À faire → Validé    | **user only**        | Drag, or the approval action on a proposed task.                         |
+| Validé → Planifié   | **user only**        | Analysis runs in "Validé" and stops there; the drag is the go signal.    |
+| Planifié → En cours | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.       |
+| En cours → Terminé  | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it. |
+| Terminé → Déployé   | publish              | Stamped when the card's branch is confirmed merged + published.          |
 
 ## The invariants
 
@@ -36,17 +38,31 @@ everything before it is inert.
    accepts only `notes` and `backlog` (`AGENT_WRITABLE_TASK_COLUMNS`) and throws
    for the rest. Prompt wording alone is not a gate: a model that is told to be
    helpful will validate its own work.
-4. **A checked-off todo never completes a card.** Agent-sync marks it
-   `ready_for_review` in "En cours"; nothing moves it to "Terminé" until the user
-   presses "Lancer le contrôle".
+4. **Agent activity never moves a card.** `agent-sync` may create a card, link an
+   agent to it and update its `progress` badge — it holds no `transitionTask`
+   call at all. It used to drag cards into "En cours" the moment a linked agent
+   started a turn; since every card owns an agent from birth, that dragged brand
+   new cards out of "À faire" on their own. A checked-off todo is a
+   `ready_for_review` badge, nothing more.
+5. **"Validé" does not promote itself.** The cost analysis runs there and the
+   card waits. The user drags it into "Planifié" when they want it run.
 
 ## The final check — a window, not a verdict
 
 Pressing "Lancer le contrôle" does not run a hidden reviewer. It sends a check
 prompt into the card's OWN conversation (`tasks/validator.ts`): the agent
-re-reads the request, runs the project's checks, **fixes what it finds**, and
-completes the card itself once everything is green. The user reads the whole
-thing live instead of a dumped report.
+re-reads the request, runs the project's checks, **fixes what it finds**,
+**deploys the change onto the project's dev instance on the VPS**, and completes
+the card itself once everything is green. The user reads the whole thing live
+instead of a dumped report.
+
+That deploy is the one publication delegated to an agent: the project's dev
+server runs as the `autoproject-<slug>` systemd unit behind Caddy on
+`<slug>.haikostudio.cloud`, so the agent merges its branch into the project's
+main checkout, restarts the unit and checks the URL answers. Publishing Paseo
+itself is explicitly excluded — no `paseo-ship-now.sh`, no `paseo-app-deploy.sh`,
+no `paseo.service` restart: that stays the user's call in the "À déployer"
+window.
 
 That press opens a consent window on that one card — `validation.state ===
 "running"` — and it is the second exception in `move_task`: `done` is accepted

@@ -1472,6 +1472,7 @@ export async function createPaseoDaemon(
   // own conversation, which verifies, fixes, then completes the card itself.
   const taskValidator = new TaskValidator({
     taskBoardService,
+    projectRegistry,
     sendPrompt: async ({ agentId, prompt }) => {
       await sendPromptToAgent({ agentManager, agentStorage, agentId, prompt, logger });
     },

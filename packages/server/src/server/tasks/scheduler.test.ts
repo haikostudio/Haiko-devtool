@@ -686,7 +686,7 @@ describe("TaskScheduler", () => {
     expect((await findTask(task.id))?.column).toBe("backlog");
   });
 
-  test("the user's move into Validé is what starts the pipeline", async () => {
+  test("Validé analyses the card and leaves it there; only the user's move to Planifié launches it", async () => {
     const folder = await service.createFolder("proj-1", "Auto");
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
@@ -708,13 +708,28 @@ describe("TaskScheduler", () => {
       manual: true,
     });
 
-    // From the user's consent onward everything is automatic:
-    // validated → estimated → scheduled → launched.
+    // Analysis runs — and the card does NOT promote itself to "Planifié".
+    await vi.waitFor(async () => {
+      await scheduler.tick();
+      expect((await findTask(task.id))?.estimate).toBeTruthy();
+    });
+    await scheduler.tick();
+    expect((await findTask(task.id))?.column).toBe("validated");
+    expect(createAgent).not.toHaveBeenCalled();
+
+    // The user's own drag into "Planifié" is the go signal.
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "scheduled",
+      index: 0,
+      manual: true,
+    });
     await vi.waitFor(async () => {
       await scheduler.tick();
       expect((await findTask(task.id))?.progress).toBe("ready_for_review");
     });
     expect(createAgent).toHaveBeenCalledTimes(1);
+    expect((await findTask(task.id))?.column).toBe("in_progress");
   });
 
   test("quiet hours pack the biggest estimated task first when quota is tight", async () => {
