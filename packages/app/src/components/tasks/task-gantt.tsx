@@ -17,9 +17,11 @@ import {
   AXIS_HEIGHT,
   MAX_VISIBLE_ROWS,
   ROW_GAP,
+  ROW_HEIGHT,
   ROW_TRACK_HEIGHT,
   ROW_VERTICAL_PADDING,
   rowsAreaHeight,
+  usesWideBoardGutter,
 } from "./task-gantt-layout";
 
 // The timeline is scoped to committed work only: what's running now, then what
@@ -287,7 +289,7 @@ export const TaskGantt = memo(function TaskGantt({
   const rootStyle = useMemo(
     () => [
       styles.container,
-      isCompact ? styles.containerCompact : styles.containerDesktop,
+      usesWideBoardGutter(isCompact) ? styles.containerWideGutter : styles.containerTightGutter,
       fill && styles.containerFill,
       containerStyle,
     ],
@@ -489,13 +491,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[2],
     gap: theme.spacing[1],
   },
-  // Same inset as kanban-board's `boardRow` (desktop) …
-  containerDesktop: {
+  // Same inset as the web board's `boardRow` (desktop) …
+  containerWideGutter: {
     marginHorizontal: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
   },
-  // … and as `boardRowCompact` (phones), so both blocks share one left edge.
-  containerCompact: {
+  // … and as `boardRowCompact` / the native scroller, so both blocks share one
+  // left edge (see usesWideBoardGutter).
+  containerTightGutter: {
     marginHorizontal: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
   },
@@ -561,10 +564,14 @@ const styles = StyleSheet.create((theme) => ({
   rowsScrollFill: {
     flex: 1,
   },
+  // Pinned height, not "whatever the tallest child measures": the panel height
+  // is computed from ROW_HEIGHT, so a row that rendered taller (a text line box
+  // above the track height) would silently overflow the computed area.
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: CELL_GAP,
+    height: ROW_HEIGHT,
     paddingVertical: ROW_VERTICAL_PADDING,
     borderRadius: theme.borderRadius.md,
   },

@@ -755,6 +755,14 @@ function GithubPickerOption({
   );
 }
 
+export interface ComposerFocusInputOptions {
+  /**
+   * Focus the input on native too, raising the keyboard. Off by default: most
+   * callers focus after a config tap, where a keyboard would be intrusive.
+   */
+  raiseKeyboardOnNative?: boolean;
+}
+
 interface ComposerProps {
   agentId: string;
   serverId: string;
@@ -798,8 +806,12 @@ interface ComposerProps {
   clearDraft: (lifecycle: "sent" | "abandoned") => void;
   /** When true, auto-focuses the text input on web. */
   autoFocus?: boolean;
-  /** Callback to expose a focus function to parent components (desktop only). */
-  onFocusInput?: (focus: () => void) => void;
+  /**
+   * Callback to expose a focus function to parent components. Focusing is a
+   * no-op on native unless the caller asks for it explicitly, so config
+   * pickers don't raise the keyboard on phones after a selection.
+   */
+  onFocusInput?: (focus: (options?: ComposerFocusInputOptions) => void) => void;
   /** Optional draft context for listing commands before an agent exists. */
   commandDraftConfig?: DraftCommandConfig;
   /** Called when a message is about to be sent (any path: keyboard, dictation, queued). */
@@ -1198,12 +1210,14 @@ export function Composer({
     [setSelectedAttachments],
   );
 
-  const focusInput = useCallback(() => {
-    // Native has no focus race to retry around: focus directly so callers (e.g.
-    // inserting an "Évolutions possibles" bullet into the draft) also raise the
-    // keyboard on phones.
+  const focusInput = useCallback((options?: ComposerFocusInputOptions) => {
+    // Native focus raises the keyboard, so only callers that explicitly want it
+    // get it (inserting an "Évolutions possibles" bullet does; picking a model
+    // in the config drawer does not). No retry loop is needed there.
     if (isNative) {
-      messageInputRef.current?.focus();
+      if (options?.raiseKeyboardOnNative) {
+        messageInputRef.current?.focus();
+      }
       return;
     }
     focusWithRetries({

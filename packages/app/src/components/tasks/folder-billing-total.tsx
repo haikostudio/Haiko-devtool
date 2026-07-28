@@ -6,6 +6,7 @@ import type { KanbanTask } from "@/data/tasks";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { usesWideBoardGutter } from "@/components/tasks/task-gantt-layout";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
@@ -71,7 +72,9 @@ export function FolderBillingTotal({
     return null;
   }
   return (
-    <View style={[styles.row, isCompact ? styles.rowCompact : styles.rowDesktop]}>
+    <View
+      style={[styles.row, usesWideBoardGutter(isCompact) ? styles.rowWide : styles.rowTight]}
+    >
       <ThemedReceipt size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       <Text style={styles.text}>{`≈ ${formatChf(computeManualBillingChf(totalHours, rate))}`}</Text>
     </View>
@@ -86,11 +89,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
   },
   // Same gutters as the kanban board and the timeline panel, so the whole
-  // board header column shares one left edge.
-  rowDesktop: {
+  // board header column shares one left edge (see usesWideBoardGutter).
+  rowWide: {
     paddingHorizontal: theme.spacing[4],
   },
-  rowCompact: {
+  rowTight: {
     paddingHorizontal: theme.spacing[3],
   },
   text: {

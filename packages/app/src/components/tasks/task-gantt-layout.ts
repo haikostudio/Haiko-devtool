@@ -1,4 +1,19 @@
+import { isWeb } from "@/constants/platform";
 import { SPACING } from "@/styles/theme";
+
+/**
+ * Whether the board below uses the wide gutter, so the timeline panel and the
+ * billing total can line up with the columns exactly.
+ *
+ * Two board implementations, two rules: the web board (kanban-board.web.tsx)
+ * insets by spacing[4] on desktop and spacing[3] when compact, while the
+ * native/compact scroller (kanban-board-scrollable.tsx) always insets by
+ * spacing[3]. Anything sitting above the columns has to follow the same rule
+ * or the block edges drift apart.
+ */
+export function usesWideBoardGutter(isCompact: boolean): boolean {
+  return isWeb && !isCompact;
+}
 
 /**
  * Row metrics for the timeline panel, shared by its styles and by the height
