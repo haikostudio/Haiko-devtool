@@ -477,6 +477,9 @@ export const ar: TranslationResources = {
       title: "المستكشف",
       noProject: "اختر مشروعًا لتصفّح ملفاته.",
     },
+    filePreview: {
+      close: "إغلاق معاينة الملف",
+    },
     headerMenu: {
       label: "إجراءات إضافية",
       attachments: "المرفقات",

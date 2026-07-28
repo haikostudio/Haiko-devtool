@@ -54,6 +54,10 @@ export function TaskExplorerSidePanel({
   const setOpen = useTasksBoardUiStore((state) => state.setExplorerOpen);
   const requestedWidth = useTasksBoardUiStore((state) => state.explorerWidth);
   const setWidth = useTasksBoardUiStore((state) => state.setExplorerWidth);
+  // Tapping a file hands it to the board's preview overlay (see
+  // task-file-preview-panel.tsx); the tree itself stays open beside it so the
+  // next file is one click away.
+  const setPreviewFilePath = useTasksBoardUiStore((state) => state.setPreviewFilePath);
 
   const { width: viewportWidth } = useWindowDimensions();
   const availableWidth = Math.max(0, viewportWidth - PROJECTS_RAIL_WIDTH);
@@ -132,6 +136,7 @@ export function TaskExplorerSidePanel({
               serverId={serverId}
               workspaceId={workspaceId}
               workspaceRoot={projectRootPath}
+              onOpenFile={setPreviewFilePath}
             />
           ) : (
             <View style={styles.centered}>

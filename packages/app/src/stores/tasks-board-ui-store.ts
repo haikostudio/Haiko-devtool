@@ -91,6 +91,14 @@ interface TasksBoardUiState {
    */
   detailsTaskId: string | null;
   setDetailsTaskId: (detailsTaskId: string | null) => void;
+  /**
+   * Ephemeral (not persisted): absolute path of the file the board's preview
+   * panel is showing, `null` when the panel is closed. Set by tapping a file in
+   * the explorer tree; tapping another file only swaps this path, so the panel
+   * stays up and re-reads instead of closing and re-opening.
+   */
+  previewFilePath: string | null;
+  setPreviewFilePath: (previewFilePath: string | null) => void;
 }
 
 /**
@@ -182,6 +190,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setDockTaskId: (dockTaskId) => set({ dockTaskId }),
       detailsTaskId: null,
       setDetailsTaskId: (detailsTaskId) => set({ detailsTaskId }),
+      previewFilePath: null,
+      setPreviewFilePath: (previewFilePath) => set({ previewFilePath }),
     }),
     {
       name: "tasks-board-ui",

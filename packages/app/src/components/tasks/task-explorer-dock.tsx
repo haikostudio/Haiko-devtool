@@ -40,6 +40,9 @@ export function TaskExplorerDock({
   const setOffsetX = useTasksBoardUiStore((state) => state.setExplorerOffsetX);
   const collapsed = useTasksBoardUiStore((state) => state.explorerCollapsed);
   const setCollapsed = useTasksBoardUiStore((state) => state.setExplorerCollapsed);
+  // Tapping a file opens the board's preview — a full-height sheet on compact,
+  // stacked over this dock (see task-file-preview-panel.tsx).
+  const setPreviewFilePath = useTasksBoardUiStore((state) => state.setPreviewFilePath);
 
   const handleClose = useCallback(() => setOpen(false), [setOpen]);
   // Memoized: a fresh header object would re-render the whole dock on every tick.
@@ -78,6 +81,7 @@ export function TaskExplorerDock({
             serverId={serverId}
             workspaceId={workspaceId}
             workspaceRoot={projectRootPath}
+            onOpenFile={setPreviewFilePath}
           />
         ) : (
           <View style={styles.centered}>

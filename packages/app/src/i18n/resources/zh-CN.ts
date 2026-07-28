@@ -474,6 +474,9 @@ export const zhCN: TranslationResources = {
       title: "文件浏览器",
       noProject: "请选择一个项目以浏览其文件。",
     },
+    filePreview: {
+      close: "关闭文件预览",
+    },
     headerMenu: {
       label: "更多操作",
       attachments: "附件",

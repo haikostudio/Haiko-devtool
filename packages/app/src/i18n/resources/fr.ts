@@ -490,6 +490,9 @@ export const fr: TranslationResources = {
       title: "Explorateur",
       noProject: "Choisissez un projet pour parcourir ses fichiers.",
     },
+    filePreview: {
+      close: "Fermer l'aperçu du fichier",
+    },
     headerMenu: {
       label: "Plus d'actions",
       attachments: "Pièces jointes",

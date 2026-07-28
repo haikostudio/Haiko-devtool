@@ -62,6 +62,7 @@ import { ConductorPanel, type ConductorPanelProps } from "@/components/tasks/con
 import { ConductorSidePanel } from "@/components/tasks/conductor-side-panel";
 import { TaskExplorerDock } from "@/components/tasks/task-explorer-dock";
 import { TaskExplorerSidePanel } from "@/components/tasks/task-explorer-side-panel";
+import { TaskFilePreviewPanel } from "@/components/tasks/task-file-preview-panel";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
@@ -458,11 +459,20 @@ export function TasksScreen() {
         {/* Compact keeps the floating bottom dock — a side panel would leave
             neither the board nor the tree wide enough to use on a phone. */}
         {isCompact ? (
-          <TaskExplorerDock
-            serverId={serverId}
-            workspaceId={selectedProject?.workspaceId || null}
-            projectRootPath={selectedProject?.rootPath ?? null}
-          />
+          <>
+            <TaskExplorerDock
+              serverId={serverId}
+              workspaceId={selectedProject?.workspaceId || null}
+              projectRootPath={selectedProject?.rootPath ?? null}
+            />
+            {/* Compact preview is a full-height sheet over the dock — half a
+                phone width would be unreadable. Desktop mounts its overlay
+                inside the board area instead. */}
+            <TaskFilePreviewPanel
+              serverId={serverId}
+              projectRootPath={selectedProject?.rootPath ?? null}
+            />
+          </>
         ) : null}
         <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
         {/* Rendered after the conductor dock so, when both are open, the Details
@@ -525,7 +535,16 @@ function DesktopLayout({
         projectId={projectId}
         boardHandle={boardHandle}
       />
-      <View style={styles.boardArea}>{boardArea}</View>
+      {/* The board area doubles as the preview overlay's stage: the panel floats
+          over the timeline and the columns without resizing either, while the
+          explorer tree beside it stays visible to pick the next file. */}
+      <View style={styles.boardArea}>
+        {boardArea}
+        <TaskFilePreviewPanel
+          serverId={serverId}
+          projectRootPath={selectedProject?.rootPath ?? null}
+        />
+      </View>
       {/* The explorer is a sibling of the board, not an overlay: it takes its
           width out of the row so the columns stay fully readable beside it. */}
       <TaskExplorerSidePanel

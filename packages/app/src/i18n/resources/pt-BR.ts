@@ -489,6 +489,9 @@ export const ptBR: TranslationResources = {
       title: "Explorador",
       noProject: "Escolha um projeto para navegar pelos seus arquivos.",
     },
+    filePreview: {
+      close: "Fechar a pré-visualização do arquivo",
+    },
     headerMenu: {
       label: "Mais ações",
       attachments: "Anexos",

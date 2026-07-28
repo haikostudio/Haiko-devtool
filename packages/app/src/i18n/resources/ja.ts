@@ -483,6 +483,9 @@ export const ja: TranslationResources = {
       title: "エクスプローラー",
       noProject: "ファイルを閲覧するプロジェクトを選択してください。",
     },
+    filePreview: {
+      close: "ファイルのプレビューを閉じる",
+    },
     headerMenu: {
       label: "その他の操作",
       attachments: "添付ファイル",

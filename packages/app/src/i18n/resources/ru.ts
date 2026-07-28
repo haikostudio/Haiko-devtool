@@ -483,6 +483,9 @@ export const ru: TranslationResources = {
       title: "Проводник",
       noProject: "Выберите проект, чтобы просмотреть его файлы.",
     },
+    filePreview: {
+      close: "Закрыть предпросмотр файла",
+    },
     headerMenu: {
       label: "Другие действия",
       attachments: "Вложения",

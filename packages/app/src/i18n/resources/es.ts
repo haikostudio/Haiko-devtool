@@ -488,6 +488,9 @@ export const es: TranslationResources = {
       title: "Explorador",
       noProject: "Elige un proyecto para explorar sus archivos.",
     },
+    filePreview: {
+      close: "Cerrar la vista previa del archivo",
+    },
     headerMenu: {
       label: "Más acciones",
       attachments: "Archivos adjuntos",

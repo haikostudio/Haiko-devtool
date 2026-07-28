@@ -480,6 +480,9 @@ export const en = {
       title: "Explorer",
       noProject: "Select a project to browse its files.",
     },
+    filePreview: {
+      close: "Close file preview",
+    },
     headerMenu: {
       label: "More actions",
       attachments: "Attachments",
