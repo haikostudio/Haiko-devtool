@@ -300,6 +300,7 @@ export const zhCN: TranslationResources = {
       now: "现在",
       inProgress: "进行中",
       quotaWindow: "5 小时配额",
+      empty: "暂无排期任务",
     },
     view: {
       board: "看板",

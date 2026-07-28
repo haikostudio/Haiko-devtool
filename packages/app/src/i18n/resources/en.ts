@@ -299,6 +299,7 @@ export const en = {
       now: "Now",
       inProgress: "Running",
       quotaWindow: "5h quota",
+      empty: "Nothing scheduled",
     },
     view: {
       board: "Board",

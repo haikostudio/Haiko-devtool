@@ -304,6 +304,7 @@ export const es: TranslationResources = {
       now: "Ahora",
       inProgress: "En curso",
       quotaWindow: "Cuota de 5 h",
+      empty: "Nada programado",
     },
     view: {
       board: "Tablero",

@@ -302,6 +302,7 @@ export const ru: TranslationResources = {
       now: "Сейчас",
       inProgress: "Выполняется",
       quotaWindow: "Квота 5 ч",
+      empty: "Ничего не запланировано",
     },
     view: {
       board: "Доска",

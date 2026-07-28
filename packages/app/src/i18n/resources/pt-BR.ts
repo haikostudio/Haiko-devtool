@@ -304,6 +304,7 @@ export const ptBR: TranslationResources = {
       now: "Agora",
       inProgress: "Em execução",
       quotaWindow: "Cota de 5 h",
+      empty: "Nada agendado",
     },
     view: {
       board: "Quadro",

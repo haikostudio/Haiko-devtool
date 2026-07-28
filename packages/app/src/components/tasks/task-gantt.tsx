@@ -12,6 +12,15 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
+import { SPACING } from "@/styles/theme";
+import {
+  AXIS_HEIGHT,
+  MAX_VISIBLE_ROWS,
+  ROW_GAP,
+  ROW_TRACK_HEIGHT,
+  ROW_VERTICAL_PADDING,
+  rowsAreaHeight,
+} from "./task-gantt-layout";
 
 // The timeline is scoped to committed work only: what's running now, then what
 // is planned to launch next. Backlog / validated / done never appear — the
@@ -40,7 +49,7 @@ const MAX_HORIZON_MS = 12 * HOUR_MS;
 const LABEL_WIDTH_DESKTOP = 200;
 const LABEL_WIDTH_COMPACT = 112;
 const START_WIDTH = 56;
-const CELL_GAP = 8;
+const CELL_GAP = SPACING[2];
 
 // Axis-label collision budget (px), applied against the measured track width so
 // the hour ticks never pile onto the "now"/quota labels or each other on narrow
@@ -276,25 +285,36 @@ export const TaskGantt = memo(function TaskGantt({
   );
 
   const rootStyle = useMemo(
-    () => [styles.container, fill && styles.containerFill, containerStyle],
-    [fill, containerStyle],
+    () => [
+      styles.container,
+      isCompact ? styles.containerCompact : styles.containerDesktop,
+      fill && styles.containerFill,
+      containerStyle,
+    ],
+    [fill, isCompact, containerStyle],
   );
   const bodyStyle = useMemo(() => [styles.timelineBody, fill && styles.timelineBodyFill], [fill]);
+  // Content-derived height: the panel is exactly as tall as the rows it shows.
+  // In `fill` mode (its own compact tab) it takes the whole area instead.
+  const rowsStyle = useMemo(
+    () => (fill ? styles.rowsScrollFill : { height: rowsAreaHeight(rows.length) }),
+    [fill, rows.length],
+  );
 
-  if (rows.length === 0) {
-    return null;
+  // No rows, no summary: an empty schedule has no cost to announce.
+  let summary: string | null = null;
+  if (rows.length > 0) {
+    summary =
+      totalQuota > 0
+        ? `${t("tasks.card.quotaEstimate", { percent: Math.round(totalQuota) })} · ${formatDuration(totalDurationMs)}`
+        : formatDuration(totalDurationMs);
   }
-
-  const summary =
-    totalQuota > 0
-      ? `${t("tasks.card.quotaEstimate", { percent: Math.round(totalQuota) })} · ${formatDuration(totalDurationMs)}`
-      : formatDuration(totalDurationMs);
 
   return (
     <View style={rootStyle}>
       <View style={styles.header}>
         <Text style={styles.title}>{t("tasks.gantt.title")}</Text>
-        <Text style={styles.summary}>{summary}</Text>
+        {summary ? <Text style={styles.summary}>{summary}</Text> : null}
       </View>
       <View style={bodyStyle}>
         <View style={styles.axisRow}>
@@ -311,18 +331,23 @@ export const TaskGantt = memo(function TaskGantt({
           <View style={startSpacerStyle} />
         </View>
         <ScrollView
-          style={fill ? styles.rowsScrollFill : styles.rowsScroll}
-          contentContainerStyle={styles.rowsContent}
+          style={rowsStyle}
+          contentContainerStyle={rowsContentStyle}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={rows.length > MAX_VISIBLE_ROWS || fill}
         >
-          {rows.map((row) => (
-            <TimelineRowView
-              key={row.task.id}
-              row={row}
-              labelWidth={labelWidth}
-              onPressTask={onPressTask}
-            />
-          ))}
+          {rows.length === 0 ? (
+            <EmptyTimelineRow labelWidth={labelWidth} label={t("tasks.gantt.empty")} />
+          ) : (
+            rows.map((row) => (
+              <TimelineRowView
+                key={row.task.id}
+                row={row}
+                labelWidth={labelWidth}
+                onPressTask={onPressTask}
+              />
+            ))
+          )}
         </ScrollView>
         <View pointerEvents="none" style={nowLineStyle} />
         {quotaLineStyle ? <View pointerEvents="none" style={quotaLineStyle} /> : null}
@@ -332,6 +357,11 @@ export const TaskGantt = memo(function TaskGantt({
 });
 
 const startSpacerStyle = { width: START_WIDTH };
+
+// Plain object, not a Unistyles style: styles created by StyleSheet.create are
+// dropped when passed to contentContainerStyle on web (docs/unistyles.md), and
+// this gap has to hold — the panel height is computed from it.
+const rowsContentStyle = { gap: ROW_GAP };
 
 const AxisTickView = memo(function AxisTickView({
   px,
@@ -348,6 +378,34 @@ const AxisTickView = memo(function AxisTickView({
       <Text style={quota ? styles.axisQuotaLabel : styles.axisTickLabel} numberOfLines={1}>
         {label}
       </Text>
+    </View>
+  );
+});
+
+/**
+ * Placeholder lane drawn when nothing is running or planned. Without it the
+ * panel collapsed to a blank area and the axis lost its reference line — the
+ * timeline has to stay readable even when the schedule is empty, so we keep one
+ * quiet, empty lane instead of hiding the whole strip.
+ */
+const EmptyTimelineRow = memo(function EmptyTimelineRow({
+  labelWidth,
+  label,
+}: {
+  labelWidth: number;
+  label: string;
+}) {
+  const labelCellStyle = useMemo(() => [styles.labelCell, { width: labelWidth }], [labelWidth]);
+  return (
+    <View style={styles.row} testID="tasks-gantt-empty-row">
+      <View style={labelCellStyle}>
+        <View style={[styles.rowDot, styles.rowDotEmpty]} />
+        <Text style={styles.emptyLabelText} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      <View style={[styles.track, styles.trackEmpty]} />
+      <View style={startSpacerStyle} />
     </View>
   );
 });
@@ -421,18 +479,28 @@ function rowPressableStyle({ pressed, hovered }: { pressed: boolean; hovered?: b
 
 const styles = StyleSheet.create((theme) => ({
   // Flat panel matching the board columns: no border, big radius, quiet
-  // surface. The timeline earns real height — it is the "when" view.
+  // surface. Its outer gutter and inner padding mirror the kanban's, so the
+  // panel edge lines up with the columns block and its text lines up with the
+  // column headers. Vertical padding stays tight — the height comes from the
+  // rows, not from padding.
   container: {
     backgroundColor: theme.colors.surface1,
     borderRadius: theme.borderRadius["2xl"],
+    paddingVertical: theme.spacing[2],
+    gap: theme.spacing[1],
+  },
+  // Same inset as kanban-board's `boardRow` (desktop) …
+  containerDesktop: {
+    marginHorizontal: theme.spacing[4],
     paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
-    paddingBottom: theme.spacing[3],
-    gap: theme.spacing[2],
+  },
+  // … and as `boardRowCompact` (phones), so both blocks share one left edge.
+  containerCompact: {
+    marginHorizontal: theme.spacing[3],
+    paddingHorizontal: theme.spacing[3],
   },
   containerFill: {
     flex: 1,
-    marginHorizontal: theme.spacing[4],
   },
   header: {
     flexDirection: "row",
@@ -461,7 +529,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: CELL_GAP,
-    height: 18,
+    height: AXIS_HEIGHT,
     marginBottom: theme.spacing[1],
   },
   axisTrack: {
@@ -490,20 +558,14 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusWarning,
     fontSize: theme.fontSize.xs,
   },
-  rowsScroll: {
-    maxHeight: 280,
-  },
   rowsScrollFill: {
     flex: 1,
-  },
-  rowsContent: {
-    gap: theme.spacing[1],
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: CELL_GAP,
-    paddingVertical: theme.spacing[1],
+    paddingVertical: ROW_VERTICAL_PADDING,
     borderRadius: theme.borderRadius.md,
   },
   rowHovered: {
@@ -527,17 +589,30 @@ const styles = StyleSheet.create((theme) => ({
   rowDotScheduled: {
     backgroundColor: theme.colors.palette.blue[500],
   },
+  // Empty lane: same shape as a real row, dimmed so it reads as "nothing here"
+  // rather than as a task.
+  rowDotEmpty: {
+    opacity: 0.4,
+  },
   labelText: {
     flex: 1,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.xs,
   },
+  emptyLabelText: {
+    flex: 1,
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+  },
   track: {
     flex: 1,
-    height: 20,
+    height: ROW_TRACK_HEIGHT,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.surface3,
     overflow: "hidden",
+  },
+  trackEmpty: {
+    opacity: 0.5,
   },
   bar: {
     position: "absolute",
@@ -583,7 +658,7 @@ const styles = StyleSheet.create((theme) => ({
   // Vertical "now" cursor: spans axis + rows, sits at the start of the track.
   nowLine: {
     position: "absolute",
-    top: 18,
+    top: AXIS_HEIGHT,
     bottom: 0,
     width: 2,
     borderRadius: theme.borderRadius.full,
@@ -593,7 +668,7 @@ const styles = StyleSheet.create((theme) => ({
   // End of the 5h quota window: dashed amber divider.
   quotaLine: {
     position: "absolute",
-    top: 18,
+    top: AXIS_HEIGHT,
     bottom: 0,
     width: 1,
     borderLeftWidth: 1,

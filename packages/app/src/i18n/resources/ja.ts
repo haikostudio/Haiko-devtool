@@ -303,6 +303,7 @@ export const ja: TranslationResources = {
       now: "現在",
       inProgress: "実行中",
       quotaWindow: "5時間クォータ",
+      empty: "予定されたタスクはありません",
     },
     view: {
       board: "ボード",

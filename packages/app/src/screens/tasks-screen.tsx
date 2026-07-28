@@ -862,8 +862,6 @@ function BoardContent({
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
-  const timelineHeight = useTasksBoardUiStore((state) => state.timelineHeight);
-  const setTimelineHeight = useTasksBoardUiStore((state) => state.setTimelineHeight);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
 
   const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
@@ -1063,10 +1061,7 @@ function BoardContent({
         <TaskTimelineArea
           board={boardHandle.board}
           onPressTask={handlePressTask}
-          height={timelineHeight}
-          onResize={setTimelineHeight}
-          containerStyle={isCompact ? undefined : styles.ganttBoardAlign}
-          resizable={!isCompact}
+          fill={isCompact}
         />
       ) : null}
       {showBoard ? (
@@ -2354,10 +2349,12 @@ const styles = StyleSheet.create((theme) => ({
   boardArea: {
     flex: 1,
   },
+  // Tight vertical rhythm: the timeline sizes itself from its rows now, so the
+  // space this used to reserve above the board goes back to the columns.
   boardContainer: {
     flex: 1,
-    gap: theme.spacing[3],
-    paddingTop: theme.spacing[4],
+    gap: theme.spacing[2],
+    paddingTop: theme.spacing[3],
   },
   // Compact keeps a single, even rhythm around the tab switch: the same 12px
   // sits above it (paddingTop) and below it (the container gap to the board),
@@ -2365,16 +2362,13 @@ const styles = StyleSheet.create((theme) => ({
   // not floating in a big empty gap.
   boardContainerCompact: {
     flex: 1,
-    gap: theme.spacing[3],
+    gap: theme.spacing[2],
     paddingTop: theme.spacing[3],
   },
   // Compact board/timeline tab switch — full width, aligned to the board inset
   // (12) with breathing room below the header so it isn't glued to it.
   compactViewSwitch: {
     paddingHorizontal: theme.spacing[3],
-  },
-  ganttBoardAlign: {
-    marginHorizontal: theme.spacing[4],
   },
   centered: {
     flex: 1,

@@ -300,6 +300,7 @@ export const ar: TranslationResources = {
       now: "الآن",
       inProgress: "قيد التنفيذ",
       quotaWindow: "حصة ٥ ساعات",
+      empty: "لا توجد مهام مجدولة",
     },
     view: {
       board: "اللوحة",

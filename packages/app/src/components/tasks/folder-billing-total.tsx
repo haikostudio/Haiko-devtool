@@ -5,6 +5,7 @@ import { Receipt } from "lucide-react-native";
 import type { KanbanTask } from "@/data/tasks";
 import type { Theme } from "@/styles/theme";
 import { ICON_SIZE } from "@/styles/theme";
+import { useIsCompactFormFactor } from "@/constants/layout";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
@@ -33,6 +34,7 @@ export function FolderBillingTotal({
   tasks: KanbanTask[];
 }) {
   const supported = useHostFeature(serverId, "comptaBilling");
+  const isCompact = useIsCompactFormFactor();
   const client = useHostRuntimeClient(serverId ?? "");
   // null = no linked billing client (or unsupported): the total stays hidden.
   const [rate, setRate] = useState<number | null>(null);
@@ -69,7 +71,7 @@ export function FolderBillingTotal({
     return null;
   }
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, isCompact ? styles.rowCompact : styles.rowDesktop]}>
       <ThemedReceipt size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       <Text style={styles.text}>{`≈ ${formatChf(computeManualBillingChf(totalHours, rate))}`}</Text>
     </View>
@@ -81,8 +83,15 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
+  },
+  // Same gutters as the kanban board and the timeline panel, so the whole
+  // board header column shares one left edge.
+  rowDesktop: {
+    paddingHorizontal: theme.spacing[4],
+  },
+  rowCompact: {
+    paddingHorizontal: theme.spacing[3],
   },
   text: {
     color: theme.colors.foregroundMuted,

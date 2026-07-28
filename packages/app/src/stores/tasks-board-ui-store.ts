@@ -50,9 +50,6 @@ interface TasksBoardUiState {
   /** Whether the Details/Billing dock is collapsed to its title bar. */
   detailsCollapsed: boolean;
   setDetailsCollapsed: (detailsCollapsed: boolean) => void;
-  /** Height (in px) of the always-visible timeline + quota area above the board. */
-  timelineHeight: number;
-  setTimelineHeight: (timelineHeight: number) => void;
   /** Whether the project file explorer panel is open. */
   explorerOpen: boolean;
   setExplorerOpen: (explorerOpen: boolean) => void;
@@ -138,9 +135,6 @@ export function toConductorEnsureProvider(choice: ConductorProviderChoice): stri
   return choice === "codex/gpt-5.4" ? "codex/gpt-5.4" : "claude";
 }
 
-// Mirrors DEFAULT_TIMELINE_HEIGHT in task-timeline-area.tsx.
-const DEFAULT_TIMELINE_HEIGHT = 190;
-
 export const useTasksBoardUiStore = create<TasksBoardUiState>()(
   persist(
     (set) => ({
@@ -164,8 +158,6 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setDetailsOffsetX: (detailsOffsetX) => set({ detailsOffsetX }),
       detailsCollapsed: false,
       setDetailsCollapsed: (detailsCollapsed) => set({ detailsCollapsed }),
-      timelineHeight: DEFAULT_TIMELINE_HEIGHT,
-      setTimelineHeight: (timelineHeight) => set({ timelineHeight }),
       explorerOpen: false,
       setExplorerOpen: (explorerOpen) => set({ explorerOpen }),
       explorerWidth: DEFAULT_EXPLORER_SIDEBAR_WIDTH,
@@ -197,7 +189,6 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         detailsHeight: state.detailsHeight,
         detailsOffsetX: state.detailsOffsetX,
         detailsCollapsed: state.detailsCollapsed,
-        timelineHeight: state.timelineHeight,
         explorerOpen: state.explorerOpen,
         explorerWidth: state.explorerWidth,
         explorerHeight: state.explorerHeight,
