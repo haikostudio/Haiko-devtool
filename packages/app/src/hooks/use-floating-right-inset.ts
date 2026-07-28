@@ -69,12 +69,13 @@ export function useReserveFloatingRightInset(
   useEffect(() => {
     // Seed immediately: the reaction above only settles on the next frame, and a
     // panel that mounts already open would leave the pile overlapping until the
-    // first resize.
+    // first resize. `recomputeTotal` is a worklet, but a worklet is still a plain
+    // function — calling it from here just runs the same sum on the JS thread.
     target.value = enabled ? width.value : 0;
-    total.value = slots.tasksExplorer.value + slots.tasksConductor.value;
+    recomputeTotal();
     return () => {
       target.value = 0;
-      total.value = slots.tasksExplorer.value + slots.tasksConductor.value;
+      recomputeTotal();
     };
   }, [enabled, width, target]);
 }

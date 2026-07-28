@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { Gesture } from "react-native-gesture-handler";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -91,7 +92,12 @@ export function ConductorSidePanel(props: ConductorPanelProps) {
   // positioned against the window, so they'd sit on top of this panel. Publish the
   // live width — the one the resize gesture writes on every frame — and they keep
   // to the board's side of the row, following the drag in real time.
-  useReserveFloatingRightInset("tasksConductor", resizeWidth, true);
+  //
+  // Gated on screen focus: the tasks screen stays mounted underneath when a chat
+  // route is pushed on top of it, and a reservation left standing there would
+  // shift the pile on a screen that has no side panel at all.
+  const isFocused = useIsFocused();
+  useReserveFloatingRightInset("tasksConductor", resizeWidth, isFocused);
 
   const widthStyle = useAnimatedStyle(() => ({ width: resizeWidth.value }));
   const panelStyle = useMemo(() => [staticStyles.panel, widthStyle], [widthStyle]);

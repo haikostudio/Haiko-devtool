@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useIsFocused } from "@react-navigation/native";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { Gesture } from "react-native-gesture-handler";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -100,8 +101,10 @@ export function TaskExplorerSidePanel({
 
   // Same reservation as the conductor column: the root-mounted toast pile is
   // positioned against the window, so it has to know how much of the right edge
-  // this panel eats — live, while the edge is being dragged.
-  useReserveFloatingRightInset("tasksExplorer", resizeWidth, open);
+  // this panel eats — live, while the edge is being dragged. Focus-gated for the
+  // same reason (the tasks screen stays mounted under a pushed chat route).
+  const isFocused = useIsFocused();
+  useReserveFloatingRightInset("tasksExplorer", resizeWidth, open && isFocused);
 
   const widthStyle = useAnimatedStyle(() => ({ width: resizeWidth.value }));
   const panelStyle = useMemo(() => [staticStyles.panel, widthStyle], [widthStyle]);
