@@ -1337,6 +1337,17 @@ export async function createPaseoDaemon(
     const project = await projectRegistry.get(projectId);
     return resolveDaemonRestartImpact(project?.rootPath ?? null);
   });
+  // This process is running the current code, so every already-published card's
+  // restart debt is settled. Done once at boot, per known project.
+  void (async () => {
+    try {
+      for (const project of await projectRegistry.list()) {
+        await taskBoardService.settleRestartFlags(project.projectId);
+      }
+    } catch (error) {
+      logger.warn({ err: error }, "Failed to settle daemon-restart flags at boot");
+    }
+  })();
   const conflictTaskCreationInFlight = new Set<string>();
   setPaseoDeployConflictTaskCreator(async ({ projectId, branch, worktreePath, reason }) => {
     // Automatic repair worktrees are implementation details. They must never

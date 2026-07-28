@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { needsDaemonRestartForFiles } from "./restart-impact.js";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
+import { needsDaemonRestartForFiles, settleDeployedRestartFlags } from "./restart-impact.js";
 
 describe("needsDaemonRestartForFiles", () => {
   it("asks for a restart when the daemon's own code changed", () => {
@@ -52,5 +53,49 @@ describe("needsDaemonRestartForFiles", () => {
 
   it("says no when nothing changed", () => {
     expect(needsDaemonRestartForFiles([])).toBe(false);
+  });
+});
+
+describe("settleDeployedRestartFlags", () => {
+  function task(overrides: Partial<KanbanTask> = {}): KanbanTask {
+    return {
+      id: "t1",
+      folderId: "f1",
+      title: "Task",
+      tags: [],
+      column: "deployed",
+      order: 0,
+      origin: "manual",
+      normalizedTitle: "task",
+      links: { agentIds: [] },
+      createdAt: "2026-07-28T10:00:00.000Z",
+      updatedAt: "2026-07-28T10:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  it("clears the debt of a card whose work is already live", () => {
+    // The daemon just booted on the current code: that restart has happened.
+    const [settled] = settleDeployedRestartFlags([task({ needsDaemonRestart: true })]);
+    expect(settled?.needsDaemonRestart).toBe(false);
+  });
+
+  it("also clears a done card that was published (deployedUrl stamped)", () => {
+    const [settled] = settleDeployedRestartFlags([
+      task({ column: "done", deployedUrl: "https://app.example.com", needsDaemonRestart: true }),
+    ]);
+    expect(settled?.needsDaemonRestart).toBe(false);
+  });
+
+  it("keeps the forecast on a card that is not published yet", () => {
+    // That flag is about the NEXT publication, which this boot says nothing about.
+    const [kept] = settleDeployedRestartFlags([task({ column: "done", needsDaemonRestart: true })]);
+    expect(kept?.needsDaemonRestart).toBe(true);
+  });
+
+  it("returns the very same array when nothing needed settling", () => {
+    // Identity matters: the caller skips the disk write on an unchanged board.
+    const tasks = [task({ needsDaemonRestart: false }), task({ column: "done" })];
+    expect(settleDeployedRestartFlags(tasks)).toBe(tasks);
   });
 });

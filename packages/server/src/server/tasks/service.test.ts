@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pino from "pino";
@@ -719,5 +719,45 @@ describe("TaskBoardService", () => {
     expect(moved).toBe(0);
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === done.id)?.column).toBe("done");
+  });
+
+  test("settleRestartFlags clears published cards and leaves pending ones alone", async () => {
+    const folder = await service.createFolder("proj-1", "Tâches");
+    const live = await service.createTask("proj-1", { folderId: folder.id, title: "Livré" });
+    const pending = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "En attente",
+    });
+    await service.moveTask("proj-1", {
+      taskId: live.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+    await service.moveTask("proj-1", {
+      taskId: pending.id,
+      column: "done",
+      index: 0,
+      manual: true,
+    });
+    await service.patchTask("proj-1", live.id, (task) => ({ ...task, needsDaemonRestart: true }));
+    await service.patchTask("proj-1", pending.id, (task) => ({
+      ...task,
+      needsDaemonRestart: true,
+    }));
+
+    await service.settleRestartFlags("proj-1");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((t) => t.id === live.id)?.needsDaemonRestart).toBe(false);
+    // Still a forecast about the NEXT publication: this boot says nothing about it.
+    expect(board.tasks.find((t) => t.id === pending.id)?.needsDaemonRestart).toBe(true);
+  });
+
+  test("settleRestartFlags never creates a board for a project that has none", async () => {
+    // Boot runs this for EVERY known project; writing unconditionally would
+    // create a board file (and push a board update) for projects with no cards.
+    await service.settleRestartFlags("untouched-project");
+    await expect(readdir(dir)).resolves.toEqual([]);
   });
 });

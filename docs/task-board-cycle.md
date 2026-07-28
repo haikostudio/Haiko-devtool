@@ -225,6 +225,15 @@ only take effect after a daemon restart — instead of discovering it afterwards
   — it still opens its undo window). The choice is remembered
   (`preferDeployThenRestart`) and becomes the highlighted default next time; both
   doors always stay on screen, so a habit can never railroad a one-off.
+- **The debt is settled at boot.** A daemon that has just started IS running the
+  current code, so `settleRestartFlags` clears `needsDaemonRestart` on every card
+  whose work is already live (per project, at bootstrap). Without it the flag was
+  permanent: a shipped card kept offering "Redémarrer le moteur" forever, and the
+  "Archiver" bar it shares that slot with could never be reached again. Cards not
+  yet published keep their flag — that one is a forecast about the NEXT
+  publication, which this boot says nothing about. It reads before it writes:
+  `store.mutate` persists unconditionally, so going straight to it would create a
+  board file (and push a board update) for every project with no cards at all.
 - **One owner for all of it.** `DaemonRestartWatcher` is mounted exactly once at
   the **app root** (`DaemonRestartHost`, which mounts nothing while idle) and owns
   the clock, the arming→send transition, the reconnection detection, the timeout

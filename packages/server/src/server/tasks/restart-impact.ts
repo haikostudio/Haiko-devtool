@@ -1,3 +1,4 @@
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import {
   DAEMON_CODE_PATHS,
   getPendingDeployFiles,
@@ -76,4 +77,32 @@ export async function resolveDaemonRestartImpact(
     return null;
   }
   return needsDaemonRestartForFiles(files);
+}
+
+/**
+ * Clears the restart debt of cards whose work is already live, because a daemon
+ * that has just booted IS running the current code — every published card was
+ * waiting on exactly this.
+ *
+ * Without it the flag would be permanent: nothing ever cleared it, so a shipped
+ * card kept offering "Redémarrer le moteur" forever and its "Archiver" bar (which
+ * shares that one slot) could never be reached again.
+ *
+ * Deliberately limited to cards that are LIVE. A card still waiting to be
+ * published keeps its flag: that one is a forecast about the next publication,
+ * which this boot says nothing about.
+ *
+ * Pure, so the rule is unit-tested without a store, a clock or git.
+ */
+export function settleDeployedRestartFlags<T extends KanbanTask>(tasks: T[]): T[] {
+  let changed = false;
+  const settled = tasks.map((task) => {
+    const isLive = task.column === "deployed" || task.deployedUrl != null;
+    if (!isLive || task.needsDaemonRestart !== true) {
+      return task;
+    }
+    changed = true;
+    return { ...task, needsDaemonRestart: false };
+  });
+  return changed ? settled : tasks;
 }

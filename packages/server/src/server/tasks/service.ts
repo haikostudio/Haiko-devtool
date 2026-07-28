@@ -10,6 +10,7 @@ import type {
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
 import { backfillTaskBilling, slugifyBranch } from "./agent-launch.js";
+import { settleDeployedRestartFlags } from "./restart-impact.js";
 import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
@@ -976,6 +977,33 @@ export class TaskBoardService {
       throw new TaskBoardServiceError("task_upsert_failed", "Task upsert produced no task");
     }
     return result;
+  }
+
+  /**
+   * Boot-time housekeeping: a daemon that has just started IS running the
+   * current code, so no already-published card is waiting on a restart any more.
+   * Clearing those flags is what stops the card's "Redémarrer le moteur" bar
+   * from being offered forever (and hiding the "Archiver" bar it shares a slot
+   * with). Best-effort and idempotent — an untouched board is never rewritten.
+   */
+  async settleRestartFlags(projectId: string): Promise<void> {
+    try {
+      // Read before writing. `store.mutate` persists unconditionally, so going
+      // straight to it would create a board file for every project the daemon
+      // knows — including the ones that never had a single card — and push a
+      // board update to their subscribers, on every single boot.
+      const current = await this.store.getBoard(projectId);
+      if (settleDeployedRestartFlags(current.tasks) === current.tasks) {
+        return;
+      }
+      const board = await this.store.mutate(projectId, (latest) => ({
+        ...latest,
+        tasks: settleDeployedRestartFlags(latest.tasks),
+      }));
+      this.broadcast(board);
+    } catch (error) {
+      this.logger.warn({ err: error, projectId }, "Failed to settle daemon-restart flags");
+    }
   }
 
   /**
