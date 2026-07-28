@@ -178,7 +178,11 @@ import { applyTerminalAgentHookSetting } from "../terminal/agent-hooks/terminal-
 import { createConnectionOfferV2, encodeOfferToFragmentUrl } from "./connection-offer.js";
 import { loadOrCreateDaemonKeyPair } from "./daemon-keypair.js";
 import { startRelayTransport, type RelayTransportController } from "./relay-transport.js";
-import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
+import type {
+  PushHistoryContext,
+  PushNotificationSender,
+  PushPayload,
+} from "./push/notifications.js";
 import { getOrCreateServerId } from "./server-id.js";
 import { resolveDaemonVersion } from "./daemon-version.js";
 import {
@@ -1589,14 +1593,15 @@ export async function createPaseoDaemon(
     })();
   });
   // Rebound to the live websocket server once it exists (see setTasksServices site).
-  let taskProposalPush: ((payload: PushPayload) => void) | null = null;
+  let taskProposalPush: ((payload: PushPayload, context?: PushHistoryContext) => void) | null =
+    null;
   const taskProposalNotifier = new TaskProposalNotifier({
     serverId,
     getProjectName: async (projectId) => {
       const project = await projectRegistry.get(projectId);
       return project ? resolveProjectDisplayName(project) : null;
     },
-    sendPush: (payload) => taskProposalPush?.(payload),
+    sendPush: (payload, context) => taskProposalPush?.(payload, context),
     logger,
   });
   taskBoardService.setOnTaskProposed((projectId) => {
@@ -1969,7 +1974,7 @@ export async function createPaseoDaemon(
             }
             {
               const boundWsServer = wsServer;
-              taskProposalPush = (payload) => boundWsServer.sendPush(payload);
+              taskProposalPush = (payload, context) => boundWsServer.sendPush(payload, context);
             }
 
             if (relayEnabled) {

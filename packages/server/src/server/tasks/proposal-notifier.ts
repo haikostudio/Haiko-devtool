@@ -1,5 +1,5 @@
 import type pino from "pino";
-import type { PushPayload } from "../push/notifications.js";
+import type { PushHistoryContext, PushPayload } from "../push/notifications.js";
 
 const DEBOUNCE_MS = 5_000;
 
@@ -11,7 +11,7 @@ interface PendingBatch {
 interface TaskProposalNotifierOptions {
   serverId: string;
   getProjectName: (projectId: string) => Promise<string | null>;
-  sendPush: (payload: PushPayload) => void;
+  sendPush: (payload: PushPayload, context?: PushHistoryContext) => void;
   logger: pino.Logger;
   debounceMs?: number;
 }
@@ -24,7 +24,7 @@ interface TaskProposalNotifierOptions {
 export class TaskProposalNotifier {
   private readonly serverId: string;
   private readonly getProjectName: (projectId: string) => Promise<string | null>;
-  private readonly sendPush: (payload: PushPayload) => void;
+  private readonly sendPush: (payload: PushPayload, context?: PushHistoryContext) => void;
   private readonly logger: pino.Logger;
   private readonly debounceMs: number;
   private readonly pending = new Map<string, PendingBatch>();
@@ -66,17 +66,23 @@ export class TaskProposalNotifier {
 
   private async flush(projectId: string, count: number): Promise<void> {
     const projectName = (await this.getProjectName(projectId)) ?? projectId;
-    this.sendPush({
-      title: count === 1 ? "Tâche proposée" : "Tâches proposées",
-      body:
-        count === 1
-          ? `1 tâche proposée dans ${projectName} — à confirmer`
-          : `${count} tâches proposées dans ${projectName} — à confirmer`,
-      data: {
-        serverId: this.serverId,
-        projectId,
-        kind: "tasks_proposal",
+    const title = count === 1 ? "Tâche proposée" : "Tâches proposées";
+    const body =
+      count === 1
+        ? `1 tâche proposée dans ${projectName} — à confirmer`
+        : `${count} tâches proposées dans ${projectName} — à confirmer`;
+    this.sendPush(
+      {
+        title,
+        body,
+        data: {
+          serverId: this.serverId,
+          projectId,
+          kind: "tasks_proposal",
+        },
       },
-    });
+      // The history row groups by project like every other notification.
+      { projectName, summary: body },
+    );
   }
 }

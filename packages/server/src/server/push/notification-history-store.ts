@@ -5,6 +5,10 @@ import type pino from "pino";
 import type { PushHistoryEntry } from "@getpaseo/protocol/messages";
 
 import { ensurePrivateFile, writePrivateFileAtomicSync } from "../private-files.js";
+import {
+  normalizePushHistoryContext,
+  type PushHistoryContext,
+} from "./notification-history-context.js";
 import type { PushPayload } from "./push-service.js";
 
 // Keep the on-disk history bounded — the panel only ever shows the recent tail,
@@ -32,7 +36,7 @@ export class PushNotificationHistoryStore {
   }
 
   /** Record a dispatched notification. Best-effort: never throws. */
-  record(payload: PushPayload): void {
+  record(payload: PushPayload, context?: PushHistoryContext): void {
     const title = payload.title ?? "";
     const body = payload.body ?? "";
     if (!title && !body) {
@@ -43,6 +47,9 @@ export class PushNotificationHistoryStore {
       title,
       body,
       sentAt: Date.now(),
+      // Blank fields are dropped rather than stored as "": the panel treats a
+      // missing field as "old daemon / not agent-bound" and falls back cleanly.
+      ...normalizePushHistoryContext(context),
     };
     // Newest first; trim the oldest beyond the cap.
     this.entries.unshift(entry);

@@ -1896,6 +1896,19 @@ export const PushHistoryEntrySchema = z.object({
   body: z.string(),
   /** When the notification was dispatched (epoch ms). */
   sentAt: z.number(),
+  // Context captured at dispatch time so a history row can answer "which task,
+  // which project, what happened" without a second round trip. All optional:
+  // older daemons record none of it and the panel falls back to title/body.
+  /** Title of the task/agent the notification is about. */
+  taskTitle: z.string().optional(),
+  /** Display name of the project the task belongs to. */
+  projectName: z.string().optional(),
+  /** Short recap (max 3 sentences) taken from the agent synthesis banner. */
+  summary: z.string().optional(),
+  /** Agent the notification came from, for tap-to-open routing. */
+  agentId: z.string().optional(),
+  /** Workspace the agent runs in, for tap-to-open routing. */
+  workspaceId: z.string().optional(),
 });
 
 export const PushHistoryListResponseSchema = z.object({

@@ -14,7 +14,11 @@ import { AttachmentLibraryStore } from "./attachment-library-store.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type pino from "pino";
-import type { ProjectRegistry, WorkspaceRegistry } from "./workspace-registry.js";
+import {
+  resolveProjectDisplayName,
+  type ProjectRegistry,
+  type WorkspaceRegistry,
+} from "./workspace-registry.js";
 import type { FileBackedChatService } from "./chat/chat-service.js";
 import type { LoopService } from "./loop-service.js";
 import type { ScheduleService } from "./schedule/service.js";
@@ -59,8 +63,10 @@ import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
 import { PushNotificationHistoryStore } from "./push/notification-history-store.js";
+import { clampToSentences } from "./push/notification-history-context.js";
 import {
   createPushNotificationSender,
+  type PushHistoryContext,
   type PushNotificationSender,
   type PushPayload,
 } from "./push/notifications.js";
@@ -1384,8 +1390,8 @@ export class VoiceAssistantWebSocketServer {
   }
 
   /** Fire-and-forget push to all registered devices (task proposals, etc.). */
-  public sendPush(payload: PushPayload): void {
-    void this.pushNotificationSender.send(payload).catch((err) => {
+  public sendPush(payload: PushPayload, context?: PushHistoryContext): void {
+    void this.pushNotificationSender.send(payload, context).catch((err) => {
       this.logger.warn({ err }, "Failed to send push notification");
     });
   }
@@ -2189,6 +2195,31 @@ export class VoiceAssistantWebSocketServer {
     };
   }
 
+  /**
+   * Human project name behind a workspace, for the notification history panel.
+   * Best-effort: registries are noop stubs in some daemon configurations, so a
+   * miss just means the row shows no project line.
+   */
+  private async resolveProjectDisplayNameForWorkspace(
+    workspaceId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!workspaceId) {
+      return null;
+    }
+    try {
+      const workspace = await this.workspaceRegistry.get(workspaceId);
+      if (!workspace) {
+        return null;
+      }
+      const project = await this.projectRegistry.get(workspace.projectId);
+      return project ? resolveProjectDisplayName(project) : null;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.logger.debug({ err, workspaceId }, "Failed to resolve project name for notification");
+      return null;
+    }
+  }
+
   private async broadcastAgentAttention(params: {
     agentId: string;
     provider: AgentProvider;
@@ -2233,7 +2264,16 @@ export class VoiceAssistantWebSocketServer {
     });
 
     if (plan.shouldPush) {
-      void this.pushNotificationSender.send(notification).catch((err) => {
+      // The history row needs more than the push text: which task, which
+      // project, and the same deterministic recap the chat banner shows.
+      const historyContext: PushHistoryContext = {
+        taskTitle: agentTitle,
+        projectName: await this.resolveProjectDisplayNameForWorkspace(agent?.workspaceId),
+        summary: clampToSentences(synthesisSummary),
+        agentId: params.agentId,
+        workspaceId: agent?.workspaceId ?? null,
+      };
+      void this.pushNotificationSender.send(notification, historyContext).catch((err) => {
         this.logger.warn({ err, agentId: params.agentId }, "Failed to send push notification");
       });
     }

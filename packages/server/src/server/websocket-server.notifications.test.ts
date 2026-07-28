@@ -11,7 +11,11 @@ import type { ScheduleService } from "./schedule/service.js";
 import type { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { asInternals, createStub } from "./test-utils/class-mocks.js";
 import { createProviderSnapshotManagerStub } from "./test-utils/session-stubs.js";
-import type { PushNotificationSender, PushPayload } from "./push/notifications.js";
+import type {
+  PushHistoryContext,
+  PushNotificationSender,
+  PushPayload,
+} from "./push/notifications.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
 
 const WORKSPACE_ID = "workspace-1";
@@ -77,9 +81,11 @@ function createWorkspaceAutoNameStub(): WorkspaceAutoName {
 
 class RecordingPushNotificationSender implements PushNotificationSender {
   readonly sent: PushPayload[] = [];
+  readonly contexts: Array<PushHistoryContext | undefined> = [];
 
-  async send(payload: PushPayload): Promise<void> {
+  async send(payload: PushPayload, context?: PushHistoryContext): Promise<void> {
     this.sent.push(payload);
+    this.contexts.push(context);
   }
 }
 
@@ -281,9 +287,45 @@ describe("VoiceAssistantWebSocketServer notification payloads", () => {
         body: "Reworked completion notifications to show title and summary.",
         data: {
           serverId: "srv-test",
+          // No workspace on the stubbed agent: the payload still carries the
+          // key so tapping the notification has a field to read.
+          workspaceId: "",
           agentId: "agent-1",
           reason: "finished",
         },
+      },
+    ]);
+  });
+
+  it("records task and recap context alongside the push for the history panel", async () => {
+    const { server, pushNotifications } = createServer({
+      getAgent: vi.fn(() => ({
+        config: { title: "Refonte notifications" },
+        cwd: "/tmp/worktree",
+        workspaceId: WORKSPACE_ID,
+        pendingPermissions: new Map(),
+      })),
+      getLastAssistantMessage: vi.fn(async () => "Rambling last message we skip."),
+      getAgentNotificationContext: vi.fn(async () => ({
+        title: "Refonte notifications",
+        synthesisSummary: "Un. Deux. Trois. Quatre.",
+      })),
+    });
+
+    await asInternals<WebSocketServerInternals>(server).broadcastAgentAttention({
+      agentId: "agent-1",
+      provider: "claude",
+      reason: "finished",
+    });
+
+    expect(pushNotifications.contexts).toEqual([
+      {
+        taskTitle: "Refonte notifications",
+        // No registry wired in this harness — the row simply shows no project.
+        projectName: null,
+        summary: "Un. Deux. Trois.",
+        agentId: "agent-1",
+        workspaceId: WORKSPACE_ID,
       },
     ]);
   });
