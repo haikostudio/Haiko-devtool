@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   describeRestartProgress,
+  isRestartCancellable,
+  RESTART_ARMING_MS,
   RESTART_EXPECTED_MS,
   RESTART_TIMEOUT_MS,
 } from "./daemon-restart-progress";
@@ -61,5 +63,39 @@ describe("describeRestartProgress", () => {
     expect(
       describeRestartProgress({ startedAtMs: T0, nowMs: T0 - 5_000, reconnected: false }),
     ).toEqual({ state: "counting", secondsLeft: 10 });
+  });
+
+  it("opens an undo window before the request leaves", () => {
+    const result = describeRestartProgress({
+      armedAtMs: T0,
+      startedAtMs: null,
+      nowMs: T0 + 1_500,
+      reconnected: false,
+    });
+    expect(result).toEqual({ state: "arming", secondsLeft: 4 });
+    expect(isRestartCancellable(result)).toBe(true);
+  });
+
+  it("closes the undo window when the grace period runs out", () => {
+    // The request is leaving now: offering "Annuler" past this point would be a
+    // button that cannot keep its promise.
+    const result = describeRestartProgress({
+      armedAtMs: T0,
+      startedAtMs: null,
+      nowMs: T0 + RESTART_ARMING_MS,
+      reconnected: false,
+    });
+    expect(result).toEqual({ state: "counting", secondsLeft: 10 });
+    expect(isRestartCancellable(result)).toBe(false);
+  });
+
+  it("is not cancellable once the daemon is actually restarting", () => {
+    const result = describeRestartProgress({
+      armedAtMs: null,
+      startedAtMs: T0,
+      nowMs: T0 + 2_000,
+      reconnected: false,
+    });
+    expect(isRestartCancellable(result)).toBe(false);
   });
 });

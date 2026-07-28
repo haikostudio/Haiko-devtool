@@ -187,23 +187,42 @@ only take effect after a daemon restart — instead of discovering it afterwards
   gesture as Settings → host), so nothing new was added to the protocol.
   **It always confirms first, and says how many agents the restart will cut** —
   the daemon is only ever restarted on an explicit, informed go.
-- **The countdown.** Once fired, the bar counts down ("Reconnexion dans 7 s…"),
+- **The undo window.** Pressing the bar does NOT fire the request: it arms it for
+  a few seconds, during which the bar itself becomes "Annuler (3 s)". The seconds
+  right after saying yes are exactly when people change their mind, and a restart
+  cuts every running agent. Past that window the request goes out and the button
+  is unpressable — offering "Annuler" there would be a button that cannot keep its
+  promise.
+- **The countdown.** Once sent, the bar counts down ("Reconnexion dans 7 s…"),
   then falls back to a quiet "Reconnexion…" past the estimate and to "Le moteur
-  n'est pas revenu" past a minute. The wording rule (`describeRestartProgress`)
-  is pure and unit-tested. Reconnection is only believed once the connection has
-  been seen to **drop and come back**: the old socket survives the request by a
-  moment, so a naive "connected?" check would end the countdown before the daemon
-  had even stopped.
+  n'est pas revenu" past a minute. The wording rule (`describeRestartProgress`,
+  `restartProgressLabel`) is pure and unit-tested, and **shared with the settings
+  host page** so a restart says the same thing wherever it was started from.
+  Reconnection is only believed once the connection has been seen to **drop and
+  come back**: the old socket survives the request by a moment, so a naive
+  "connected?" check would end the countdown before the daemon had even stopped.
+- **Interrupted agents pick their work back up.** The agents mid-turn are captured
+  _before_ the request goes out (once the daemon is down, nobody can be asked),
+  and each gets a message when it returns. Deliberately **not** a replay of the
+  original prompt — re-sending "commit and push" to an agent that had already
+  committed is how work gets done twice. `buildRestartResumePrompt` names the
+  objective from the agent's own synthesis and asks it to check what is already
+  done before continuing.
 - **One gesture, not two.** On a card that will need a restart, the deploy
   confirmation offers a third door — "Publier puis redémarrer". Choosing it arms
-  `restartAfterDeployTaskId`; the watcher fires the restart the instant that
-  card's work is live, **without asking again** (one decision, already made).
-  A card that turns out not to need a restart drops the promise silently.
+  `restartAfterDeployTaskId`; `DeployRestartChain` fires the restart the instant
+  that card's work is live, **without asking again** (one decision, already made
+  — it still opens its undo window). The choice is remembered
+  (`preferDeployThenRestart`) and becomes the highlighted default next time; both
+  doors always stay on screen, so a habit can never railroad a one-off.
 - **One owner for all of it.** `DaemonRestartWatcher` is mounted exactly once at
-  the tasks screen root and owns the clock, the reconnection detection, the
-  timeout and the chained restart; `useDaemonRestartStore` holds the state.
-  Putting those effects in the shared hook would give every mounted reader
-  (side panel + dock) its own timer and its own "moteur redémarré" toast.
+  the **app root** (`DaemonRestartHost`, which mounts nothing while idle) and owns
+  the clock, the arming→send transition, the reconnection detection, the timeout
+  and the agent resumes; `useDaemonRestartStore` holds the state, including which
+  host is being restarted. App-root, not screen-level: a restart started from a
+  card must keep running when the user walks off to another screen. Putting those
+  effects in the shared hook would give every mounted reader its own timer and its
+  own "moteur redémarré" toast.
 - **The reminder.** `DaemonRestartReminder` polls the daemon's restart debt
   (`getDaemonRestartDebt`: daemon-side commits since the boot SHA) and, if
   published work stays dormant past a two-hour grace period, sends **one** push

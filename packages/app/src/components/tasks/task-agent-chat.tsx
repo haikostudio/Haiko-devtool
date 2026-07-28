@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -10,6 +9,7 @@ import {
   CheckCircle2,
   Play,
   Power,
+  Undo2,
   Rocket,
   RotateCw,
 } from "lucide-react-native";
@@ -19,7 +19,11 @@ import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { resolveRunNowState } from "@/components/tasks/task-run-now-state";
 import { isTaskDeployed, offersDaemonRestart } from "@/components/tasks/task-card-badge";
-import type { RestartProgress } from "@/components/tasks/daemon-restart-progress";
+import {
+  isRestartCancellable,
+  type RestartProgress,
+} from "@/components/tasks/daemon-restart-progress";
+import { restartProgressLabel } from "@/components/tasks/restart-progress-label";
 import { useSessionStore } from "@/stores/session-store";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -50,6 +54,7 @@ const ThemedArchive = withUnistyles(Archive);
 // "Redémarrage requis" pill so the promise and the control read as one thing.
 const warningForegroundMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const ThemedPower = withUnistyles(Power);
+const ThemedUndo = withUnistyles(Undo2);
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 
@@ -103,6 +108,8 @@ export interface TaskAgentChatProps {
    * this fires only once the user has said yes.
    */
   onRestartDaemon?: (taskId: string) => void;
+  /** Takes back a restart while its undo window is still open. */
+  onCancelRestartDaemon?: () => void;
   /** Live restart state, so the bar can count down to the reconnection. */
   restartProgress?: RestartProgress;
 }
@@ -124,6 +131,7 @@ export function TaskAgentChat({
   onArchive,
   onDeploy,
   onRestartDaemon,
+  onCancelRestartDaemon,
   restartProgress = IDLE_RESTART,
 }: TaskAgentChatProps) {
   const { t } = useTranslation();
@@ -206,6 +214,10 @@ export function TaskAgentChat({
     () => onRestartDaemon?.(task.id),
     [onRestartDaemon, task.id],
   );
+  const handleCancelRestartDaemon = useCallback(
+    () => onCancelRestartDaemon?.(),
+    [onCancelRestartDaemon],
+  );
 
   // Memoized so the embedded pane (and everything under it) is not re-rendered
   // by a fresh element on every keystroke in the composer. Backlog, scheduled and
@@ -231,7 +243,13 @@ export function TaskAgentChat({
       return <DeployTaskBar onPress={handleDeploy} deployment={task.deployment} />;
     }
     if (showRestartDaemon) {
-      return <RestartDaemonBar onPress={handleRestartDaemon} progress={restartProgress} />;
+      return (
+        <RestartDaemonBar
+          onPress={handleRestartDaemon}
+          onCancel={handleCancelRestartDaemon}
+          progress={restartProgress}
+        />
+      );
     }
     if (showArchive) {
       return <ArchiveTaskBar onPress={handleArchive} />;
@@ -249,6 +267,7 @@ export function TaskAgentChat({
     handleValidate,
     handleDeploy,
     handleRestartDaemon,
+    handleCancelRestartDaemon,
     handleArchive,
     restartProgress,
     task.progress,
@@ -620,37 +639,39 @@ function archiveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
  */
 function RestartDaemonBar({
   onPress,
+  onCancel,
   progress,
 }: {
   onPress: () => void;
+  onCancel: () => void;
   progress: RestartProgress;
 }) {
   const { t } = useTranslation();
-  const running = progress.state !== "idle";
+  const cancellable = isRestartCancellable(progress);
+  // While the undo window is open the bar itself becomes the cancel button: one
+  // control, one meaning at a time. Everything after that point is unpressable —
+  // the daemon is already on its way down.
+  const disabled = progress.state !== "idle" && !cancellable;
   const barStyle = useCallback(
     (state: { pressed: boolean; hovered?: boolean }) =>
-      restartDaemonBarStyle({ ...state, disabled: running }),
-    [running],
+      restartDaemonBarStyle({ ...state, disabled }),
+    [disabled],
   );
-  const a11yState = useMemo(() => ({ disabled: running }), [running]);
-  const label = restartBarLabel(progress, t);
+  const a11yState = useMemo(() => ({ disabled }), [disabled]);
+  const label = restartProgressLabel(progress, t, "tasks.panel.restartDaemon");
   return (
     <View style={styles.validateOuter}>
       <View style={styles.validateInner}>
         <Pressable
-          onPress={onPress}
-          disabled={running}
+          onPress={cancellable ? onCancel : onPress}
+          disabled={disabled}
           style={barStyle}
           accessibilityRole="button"
           accessibilityLabel={label}
           accessibilityState={a11yState}
-          testID="task-restart-daemon-bar"
+          testID={cancellable ? "task-restart-daemon-cancel" : "task-restart-daemon-bar"}
         >
-          {running ? (
-            <ThemedActivityIndicator size="small" uniProps={warningForegroundMapping} />
-          ) : (
-            <ThemedPower size={ICON_SIZE.sm} uniProps={warningForegroundMapping} />
-          )}
+          <RestartBarIcon progress={progress} cancellable={cancellable} />
           <Text style={styles.restartDaemonText}>{label}</Text>
         </Pressable>
       </View>
@@ -658,24 +679,21 @@ function RestartDaemonBar({
   );
 }
 
-/**
- * What the bar reads during a restart. The countdown is the whole point: an
- * unqualified "Redémarrage en cours…" gives the user no idea whether to wait
- * two seconds or go make coffee. When the estimate runs out the wording drops
- * the number rather than counting into negatives, and a daemon that never comes
- * back says so instead of pretending.
- */
-function restartBarLabel(progress: RestartProgress, t: TFunction): string {
-  if (progress.state === "counting") {
-    return t("tasks.panel.restartDaemonCountdown", { seconds: progress.secondsLeft });
+/** Undo arrow while it can still be taken back, spinner once it cannot. */
+function RestartBarIcon({
+  progress,
+  cancellable,
+}: {
+  progress: RestartProgress;
+  cancellable: boolean;
+}) {
+  if (cancellable) {
+    return <ThemedUndo size={ICON_SIZE.sm} uniProps={warningForegroundMapping} />;
   }
-  if (progress.state === "reconnecting") {
-    return t("tasks.panel.restartDaemonReconnecting");
+  if (progress.state === "idle") {
+    return <ThemedPower size={ICON_SIZE.sm} uniProps={warningForegroundMapping} />;
   }
-  if (progress.state === "timeout") {
-    return t("tasks.panel.restartDaemonTimeout");
-  }
-  return t("tasks.panel.restartDaemon");
+  return <ThemedActivityIndicator size="small" uniProps={warningForegroundMapping} />;
 }
 
 function restartDaemonBarStyle({

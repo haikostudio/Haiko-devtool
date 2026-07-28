@@ -70,6 +70,14 @@ interface TasksBoardUiState {
   explorerCollapsed: boolean;
   setExplorerCollapsed: (explorerCollapsed: boolean) => void;
   /**
+   * Remembers that the user chose "Publier puis redémarrer" last time, so that
+   * choice becomes the highlighted default on the next card that needs a
+   * restart. Persisted: it is a habit, not a session state. Only ever a
+   * DEFAULT — the plain "Publier" door stays right next to it.
+   */
+  preferDeployThenRestart: boolean;
+  setPreferDeployThenRestart: (preferDeployThenRestart: boolean) => void;
+  /**
    * Ephemeral (not persisted): the task whose agent chat the bottom dock shows.
    * `null` means the dock shows the persistent conductor agent. Set on task tap,
    * cleared by the dock's "back to conductor" control.
@@ -168,6 +176,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setExplorerOffsetX: (explorerOffsetX) => set({ explorerOffsetX }),
       explorerCollapsed: false,
       setExplorerCollapsed: (explorerCollapsed) => set({ explorerCollapsed }),
+      preferDeployThenRestart: false,
+      setPreferDeployThenRestart: (preferDeployThenRestart) => set({ preferDeployThenRestart }),
       dockTaskId: null,
       setDockTaskId: (dockTaskId) => set({ dockTaskId }),
       detailsTaskId: null,
@@ -194,6 +204,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         explorerHeight: state.explorerHeight,
         explorerOffsetX: state.explorerOffsetX,
         explorerCollapsed: state.explorerCollapsed,
+        preferDeployThenRestart: state.preferDeployThenRestart,
       }),
       merge: (persisted, current) => {
         const stored = (persisted ?? {}) as Partial<TasksBoardUiState>;

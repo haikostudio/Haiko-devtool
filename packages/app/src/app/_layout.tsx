@@ -32,6 +32,7 @@ import { QuittingOverlay } from "@/components/quitting-overlay";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { AppDiagnosticHost } from "@/components/app-diagnostic-host";
 import { AppDialogHost } from "@/components/app-dialog-host";
+import { DaemonRestartHost } from "@/components/daemon-restart-host";
 import { AppUpdateBanner } from "@/components/app-update-banner";
 import { LeftSidebar } from "@/components/left-sidebar";
 import { WindowSidebarMenuToggle } from "@/components/headers/menu-header";
@@ -567,6 +568,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
       <KeyboardShortcutsDialog />
       <AppDiagnosticHost />
       <AppDialogHost />
+      <DaemonRestartHost />
       <QuittingOverlay />
       <AppUpdateBanner />
     </View>

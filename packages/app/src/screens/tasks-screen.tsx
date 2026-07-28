@@ -1,15 +1,5 @@
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Animated,
-  type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from "react-native-svg";
+import { Animated, Pressable, ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   ArrowDownAZ,
@@ -17,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Folder,
   FolderTree,
   LayoutGrid,
   MoreVertical,
@@ -38,9 +27,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
+import { ProjectBillingTotal } from "@/components/tasks/project-billing-total";
 import { PendingPublishSummary } from "@/components/tasks/pending-publish-summary";
-import { DaemonRestartWatcher } from "@/components/tasks/daemon-restart-watcher";
+import { DeployRestartChain } from "@/components/tasks/deploy-restart-chain";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
 import { useDaemonRestartStore } from "@/stores/daemon-restart-store";
 import { showAppDialog } from "@/stores/app-dialog-store";
@@ -81,7 +70,7 @@ import { confirmDialog } from "@/utils/confirm-dialog";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
-import { useTaskBoard, type KanbanTask, type TaskColumn, type TaskFolder } from "@/data/tasks";
+import { useTaskBoard, type KanbanTask, type TaskBoard, type TaskColumn } from "@/data/tasks";
 import {
   AttachmentLibraryButton,
   AttachmentLibrarySheet,
@@ -97,7 +86,6 @@ import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
-const ThemedFolder = withUnistyles(Folder);
 const ThemedChevronRight = withUnistyles(ChevronRight);
 const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const ThemedChevronDown = withUnistyles(ChevronDown);
@@ -108,71 +96,6 @@ const ThemedSettings = withUnistyles(Settings2);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedWand = withUnistyles(Wand2);
-const ThemedGradientStop = withUnistyles(Stop);
-// The shadow is the theme foreground color (dark in light mode, light in dark
-// mode) so it stays visible against the header surface on both themes.
-const shadowStopColor = (theme: Theme) => ({ stopColor: theme.colors.foreground });
-
-// An inner shadow on one edge of the scrollable header: a soft dark edge that
-// makes the hidden content read as tucked under the rail, hinting you can slide
-// it into view. Purely decorative — no taps. The shadow sits ON the given edge,
-// so "left" is darkest at the left and fades toward the right, and vice-versa.
-//
-// The SVG is sized in explicit pixels (measured via onLayout) with a
-// userSpaceOnUse gradient: percentage sizing silently paints nothing on web, so
-// numeric dimensions are the only reliable option across web + native.
-function HeaderScrollShadow({ side }: { side: "left" | "right" }) {
-  const isLeft = side === "left";
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
-  }, []);
-  return (
-    <View
-      pointerEvents="none"
-      onLayout={handleLayout}
-      style={isLeft ? styles.headerScrollFadeLeft : styles.headerScrollFadeRight}
-    >
-      {size.width > 0 && size.height > 0 ? (
-        <Svg width={size.width} height={size.height}>
-          <Defs>
-            <SvgLinearGradient
-              id={`tasksHeaderShadow-${side}`}
-              x1="0"
-              y1="0"
-              x2={size.width}
-              y2="0"
-              gradientUnits="userSpaceOnUse"
-            >
-              <ThemedGradientStop
-                offset="0"
-                stopOpacity={isLeft ? 0.3 : 0}
-                uniProps={shadowStopColor}
-              />
-              <ThemedGradientStop
-                offset="1"
-                stopOpacity={isLeft ? 0 : 0.3}
-                uniProps={shadowStopColor}
-              />
-            </SvgLinearGradient>
-          </Defs>
-          <Rect
-            x={0}
-            y={0}
-            width={size.width}
-            height={size.height}
-            fill={`url(#tasksHeaderShadow-${side})`}
-          />
-        </Svg>
-      ) : null}
-    </View>
-  );
-}
-
-// Base vertical padding for the pinned folder footer; the bottom safe-area inset
-// (PWA home indicator) is added on top at render time.
-
 // Stable empty-array identity so the tone hooks' memos don't rebuild every
 // render while a board is still loading (a fresh `[]` would look like new input).
 type ProjectSortMode = "recent" | "name";
@@ -369,9 +292,9 @@ function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCoun
 }
 
 // Compact only: true once the user has deliberately walked BACK to the projects
-// or folders list. The auto-selection below then stands down, so tapping "back"
-// no longer bounces straight into the board it just left. Any explicit pick
-// clears the flag, and so does leaving the screen.
+// list. The auto-selection below then stands down, so tapping "back" no longer
+// bounces straight into the board it just left. Any explicit pick clears the
+// flag, and so does leaving the screen.
 let compactSelectionCleared = false;
 
 export function __resetCompactSelectionCleared(): void {
@@ -380,23 +303,23 @@ export function __resetCompactSelectionCleared(): void {
 
 function selectProject(entry: ProjectEntry): void {
   compactSelectionCleared = false;
+  // `folder: undefined` scrubs the legacy folder param off bookmarked/restored
+  // URLs — folders are gone from the product and nothing reads it any more.
   router.setParams({ host: entry.serverId, project: entry.projectId, folder: undefined });
 }
 
-function selectFolder(folderId: string): void {
-  compactSelectionCleared = false;
-  router.setParams({ folder: folderId });
+// A project has exactly one task list now. Its id is only the bucket new cards
+// are filed under (the server mints one on demand); the board itself never
+// narrows by it.
+function boardListId(board: TaskBoard | null): string {
+  return board?.folders[0]?.id ?? "";
 }
 
 function tasksHeaderTitle(
   t: ReturnType<typeof useTranslation>["t"],
   isCompact: boolean,
-  selectedFolder: TaskFolder | null,
   selectedProject: ProjectEntry | null,
 ): string {
-  if (isCompact && selectedFolder) {
-    return `${t("tasks.title")} · ${selectedFolder.name}`;
-  }
   if (isCompact && selectedProject) {
     return `${t("tasks.title")} · ${selectedProject.displayName}`;
   }
@@ -418,10 +341,9 @@ function taskOwnsAgent(task: KanbanTask, agentId: string): boolean {
 export function TasksScreen() {
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
-  const params = useLocalSearchParams<{ host?: string; project?: string; folder?: string }>();
+  const params = useLocalSearchParams<{ host?: string; project?: string }>();
   const serverId = typeof params.host === "string" && params.host ? params.host : null;
   const projectId = typeof params.project === "string" && params.project ? params.project : null;
-  const folderId = typeof params.folder === "string" && params.folder ? params.folder : null;
 
   const projects = useProjectEntries();
   const supportsTasksBoard = useHostFeature(serverId, "tasksBoard");
@@ -433,19 +355,10 @@ export function TasksScreen() {
       null,
     [projects, serverId, projectId],
   );
-  const sortedFolders = useMemo(
-    () => [...(boardHandle.board?.folders ?? [])].sort((left, right) => left.order - right.order),
-    [boardHandle.board],
-  );
-  const selectedFolder = useMemo(
-    () => sortedFolders.find((folder) => folder.id === folderId) ?? null,
-    [sortedFolders, folderId],
-  );
-
-  // One-page desktop layout: keep a project and a folder selected at all times
-  // so the three panes are always populated.
+  // One-page layout: keep a project selected at all times so the panes are
+  // always populated. There is no second level any more — a project opens
+  // straight onto its single board.
   const firstProject = projects[0] ?? null;
-  const firstFolderId = sortedFolders[0]?.id ?? null;
   useEffect(() => {
     // Mobile behaves like desktop: land straight on the board instead of an
     // empty picker. The one exception is a deliberate "back" — see
@@ -456,12 +369,8 @@ export function TasksScreen() {
     }
     if (!projectId && firstProject) {
       selectProject(firstProject);
-      return;
     }
-    if (projectId && boardHandle.board && !selectedFolder && firstFolderId) {
-      selectFolder(firstFolderId);
-    }
-  }, [isCompact, projectId, firstProject, boardHandle.board, selectedFolder, firstFolderId]);
+  }, [isCompact, projectId, firstProject]);
 
   // Leaving the board forgets the "user walked back" intent, so the next visit
   // opens on the board again.
@@ -513,28 +422,25 @@ export function TasksScreen() {
     return () => setResolveAgentTask(null);
   }, [setResolveAgentTask, setDockTaskId, setDetailsTaskId, setConductorOpen]);
 
-  const title = tasksHeaderTitle(t, isCompact, selectedFolder, selectedProject);
+  const title = tasksHeaderTitle(t, isCompact, selectedProject);
 
   return (
     <AgentBucketProvider>
       <View style={styles.container}>
-        {/* Renders nothing: owns the restart clock and the "publier puis
-            redémarrer" chain, mounted exactly once for the whole screen. */}
-        <DaemonRestartWatcher serverId={serverId} tasks={boardHandle.board?.tasks ?? EMPTY_TASKS} />
+        {/* Renders nothing: fires the restart the user chained to a
+            publication, once that card's work is actually live. */}
+        <DeployRestartChain serverId={serverId} tasks={boardHandle.board?.tasks ?? EMPTY_TASKS} />
         <TasksHeader
           title={title}
           isCompact={isCompact}
           supportsTasksBoard={supportsTasksBoard}
           selectedProject={selectedProject}
-          selectedFolder={selectedFolder}
           projects={projects}
-          folders={sortedFolders}
         />
         {isCompact ? (
           <CompactFlow
             serverId={serverId}
             projectId={projectId}
-            folderId={folderId}
             projects={projects}
             supportsTasksBoard={supportsTasksBoard}
             boardHandle={boardHandle}
@@ -543,10 +449,8 @@ export function TasksScreen() {
           <DesktopLayout
             serverId={serverId}
             projectId={projectId}
-            folderId={selectedFolder?.id ?? null}
             projects={projects}
             selectedProject={selectedProject}
-            folders={sortedFolders}
             supportsTasksBoard={supportsTasksBoard}
             boardHandle={boardHandle}
           />
@@ -572,25 +476,21 @@ export function TasksScreen() {
 type BoardHandle = ReturnType<typeof useTaskBoard>;
 
 // ---------------------------------------------------------------------------
-// Desktop: one-page three-pane layout — projects rail | folders rail | board.
+// Desktop: one-page two-pane layout — projects rail | board.
 // ---------------------------------------------------------------------------
 
 function DesktopLayout({
   serverId,
   projectId,
-  folderId,
   projects,
   selectedProject,
-  folders,
   supportsTasksBoard,
   boardHandle,
 }: {
   serverId: string | null;
   projectId: string | null;
-  folderId: string | null;
   projects: ProjectEntry[];
   selectedProject: ProjectEntry | null;
-  folders: TaskFolder[];
   supportsTasksBoard: boolean;
   boardHandle: BoardHandle;
 }) {
@@ -604,15 +504,14 @@ function DesktopLayout({
   } else if (boardHandle.error) {
     boardArea = <CenteredNote text={boardHandle.error} />;
   } else {
-    // Folders are gone: the board opens straight away. The id below is only the
-    // bucket new cards are filed under — the server mints one on demand — and
-    // the board itself shows every task of the project.
+    // Folders are gone: the board opens straight away and shows every task of
+    // the project.
     boardArea = (
       <BoardContent
         key={`${serverId}:${projectId}`}
         serverId={serverId}
         projectId={projectId}
-        folderId={folderId ?? folders[0]?.id ?? ""}
+        listId={boardListId(boardHandle.board)}
         boardHandle={boardHandle}
       />
     );
@@ -794,17 +693,6 @@ const ProjectColorMark = memo(function ProjectColorMark({ projectKey }: { projec
   return <View style={dotStyle} />;
 });
 
-const FolderColorMark = memo(function FolderColorMark({ color }: { color?: string }) {
-  const dotStyle = useMemo(
-    () => (color ? [styles.folderColorDot, { backgroundColor: color }] : null),
-    [color],
-  );
-  if (!dotStyle) {
-    return <ThemedFolder size={ICON_SIZE.sm} uniProps={mutedColorMapping} />;
-  }
-  return <View style={dotStyle} />;
-});
-
 function CenteredNote({ text }: { text: string }) {
   if (!text) {
     return <View style={styles.centered} />;
@@ -847,12 +735,13 @@ const renderTimelineIcon = ({ color, size }: { color: string; size: number }) =>
 function BoardContent({
   serverId,
   projectId,
-  folderId,
+  listId,
   boardHandle,
 }: {
   serverId: string | null;
   projectId: string | null;
-  folderId: string;
+  // Bucket new cards are filed under — see boardListId. Never a filter.
+  listId: string;
   boardHandle: BoardHandle;
 }) {
   const { t } = useTranslation();
@@ -890,11 +779,9 @@ function BoardContent({
     [t],
   );
 
-  // Tasks in the open folder, for the folder's glanceable billable total.
-  const folderTasks = useMemo(
-    () => (boardHandle.board?.tasks ?? []).filter((task) => task.folderId === folderId),
-    [boardHandle.board, folderId],
-  );
+  // Every task of the project, for the glanceable billable total and the
+  // pending-publish summary: one project, one board, one set of totals.
+  const projectTasks = boardHandle.board?.tasks ?? EMPTY_TASKS;
 
   const handleMoveTask = useCallback(
     (input: { taskId: string; column: TaskColumn; index: number }) => {
@@ -949,7 +836,7 @@ function BoardContent({
       // column and fills in live as the agent analyzes; opening it shows the
       // agent's chat.
       void boardHandle.createTask({
-        folderId,
+        folderId: listId,
         title,
         description: text,
         ...(attachments.length > 0 ? { attachments } : {}),
@@ -957,7 +844,7 @@ function BoardContent({
         launch: true,
       });
     },
-    [newTaskColumn, folderId, boardHandle],
+    [newTaskColumn, listId, boardHandle],
   );
 
   // A note is a task in the "notes" column with priority + deadline tags and no
@@ -978,7 +865,7 @@ function BoardContent({
         tags: [],
       });
       void boardHandle.createTask({
-        folderId,
+        folderId: listId,
         title,
         // Keep the full note as the description only when it says more than the
         // one-line title, so a short note doesn't render its text twice.
@@ -987,7 +874,7 @@ function BoardContent({
         tags,
       });
     },
-    [folderId, boardHandle],
+    [listId, boardHandle],
   );
 
   const columnExtras = useMemo(() => {
@@ -1003,13 +890,21 @@ function BoardContent({
         <NewTaskCard
           serverId={serverId}
           cwd=""
-          draftKey={`tasks-new:${folderId}:${newTaskColumn}`}
+          draftKey={`tasks-new:${projectId ?? listId}:${newTaskColumn}`}
           onSubmit={handleCreateTask}
           onCancel={handleCancelNewTask}
         />
       );
     return { column: newTaskColumn, node };
-  }, [newTaskColumn, serverId, folderId, handleCreateTask, handleCreateNote, handleCancelNewTask]);
+  }, [
+    newTaskColumn,
+    serverId,
+    projectId,
+    listId,
+    handleCreateTask,
+    handleCreateNote,
+    handleCancelNewTask,
+  ]);
 
   const handleEstimateTask = useCallback(
     (taskId: string) => {
@@ -1064,8 +959,8 @@ function BoardContent({
           />
         </View>
       ) : null}
-      <FolderBillingTotal serverId={serverId} projectId={projectId} tasks={folderTasks} />
-      <PendingPublishSummary tasks={folderTasks} />
+      <ProjectBillingTotal serverId={serverId} projectId={projectId} tasks={projectTasks} />
+      <PendingPublishSummary tasks={projectTasks} />
       {showTimeline ? (
         <TaskTimelineArea
           board={boardHandle.board}
@@ -1076,7 +971,6 @@ function BoardContent({
       {showBoard ? (
         <KanbanBoard
           board={boardHandle.board}
-          folderId={folderId}
           onMoveTask={handleMoveTask}
           onPressTask={handlePressTask}
           onAddTask={setNewTaskColumn}
@@ -1100,22 +994,17 @@ const EMPTY_TASKS: KanbanTask[] = [];
 type DeployChoice = "cancel" | "deploy" | "deploy_restart";
 
 /**
- * The deploy confirmation for a card that will need a daemon restart: three
- * doors instead of two. "Publier" leaves the restart for later (the card keeps
- * its bar); "Publier puis redémarrer" chains both so the errand is one gesture.
- * Cancelling — including dismissing the sheet — is always the safe default.
- */
-/**
  * Two doors for an app-only card, three when a restart will be needed. Kept as
  * one call so the deploy handler reads as a single decision.
  */
 async function askDeployChoice(
   needsRestart: boolean,
   message: string,
+  preferChained: boolean,
   t: (key: string) => string,
 ): Promise<DeployChoice> {
   if (needsRestart) {
-    return confirmDeployWithRestart(message, t);
+    return confirmDeployWithRestart(message, preferChained, t);
   }
   const confirmed = await confirmDialog({
     title: t("tasks.panel.deployTask"),
@@ -1126,18 +1015,37 @@ async function askDeployChoice(
   return confirmed ? "deploy" : "cancel";
 }
 
+/**
+ * The deploy confirmation for a card that will need a daemon restart: three
+ * doors instead of two. "Publier" leaves the restart for later (the card keeps
+ * its bar); "Publier puis redémarrer" chains both so the errand is one gesture.
+ * Cancelling — including dismissing the sheet — is always the safe default.
+ *
+ * `preferChained` remembers what the user chose last time and makes it the
+ * highlighted (last, primary) action. It only ever reorders: both doors stay on
+ * screen, so a remembered habit can never railroad a one-off decision.
+ */
 async function confirmDeployWithRestart(
   message: string,
+  preferChained: boolean,
   t: (key: string) => string,
 ): Promise<DeployChoice> {
+  const deploy = {
+    id: "deploy",
+    label: t("tasks.panel.deployTask"),
+    variant: "secondary" as const,
+  };
+  const chained = { id: "deploy_restart", label: t("tasks.panel.deployThenRestart") };
   const actionId = await showAppDialog({
     title: t("tasks.panel.deployTask"),
     message: `${message}\n\n${t("tasks.panel.deployThenRestartMessage")}`,
-    actions: [
-      { id: "cancel", label: t("common.actions.cancel"), variant: "secondary" },
-      { id: "deploy", label: t("tasks.panel.deployTask"), variant: "secondary" },
-      { id: "deploy_restart", label: t("tasks.panel.deployThenRestart") },
-    ],
+    actions: preferChained
+      ? [{ id: "cancel", label: t("common.actions.cancel"), variant: "secondary" }, deploy, chained]
+      : [
+          { id: "cancel", label: t("common.actions.cancel"), variant: "secondary" },
+          { ...chained, variant: "secondary" as const },
+          { ...deploy, variant: undefined },
+        ],
     dismissActionId: "cancel",
   });
   return actionId === "deploy" || actionId === "deploy_restart" ? actionId : "cancel";
@@ -1278,6 +1186,8 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
   // moves the card to "Déployé" itself, reporting whether a daemon restart is
   // needed. The user reads all of it live.
   const setRestartAfterDeploy = useDaemonRestartStore((state) => state.setRestartAfterDeploy);
+  const preferChained = useTasksBoardUiStore((state) => state.preferDeployThenRestart);
+  const setPreferChained = useTasksBoardUiStore((state) => state.setPreferDeployThenRestart);
   const handleDeploy = useCallback(
     (taskId: string) => {
       void (async () => {
@@ -1289,13 +1199,18 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
         // A card that will need a daemon restart gets a third choice, so the
         // whole "publier puis redémarrer" errand is one decision instead of two
         // trips: publish, wait, come back, press restart.
-        const choice = await askDeployChoice(task?.needsDaemonRestart === true, message, t);
+        const needsRestart = task?.needsDaemonRestart === true;
+        const choice = await askDeployChoice(needsRestart, message, preferChained, t);
         if (choice === "cancel") {
           return;
         }
         // Armed BEFORE the deploy so a publication that lands fast can never
         // slip past the watcher.
         setRestartAfterDeploy(choice === "deploy_restart" ? taskId : null);
+        // Remember the habit, but only when both doors were actually offered.
+        if (needsRestart) {
+          setPreferChained(choice === "deploy_restart");
+        }
         try {
           await boardHandle.deployTask(taskId);
           toast.show(
@@ -1309,7 +1224,7 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
         }
       })();
     },
-    [boardHandle, toast, t, setRestartAfterDeploy],
+    [boardHandle, toast, t, setRestartAfterDeploy, preferChained, setPreferChained],
   );
   return {
     handleSave,
@@ -1350,6 +1265,7 @@ function useConductorPanelProps(
   const handleRestartDaemon = useCallback(() => {
     void daemonRestart.restart();
   }, [daemonRestart]);
+  const handleCancelRestartDaemon = daemonRestart.cancel;
 
   const dockTask = useMemo(
     () =>
@@ -1381,6 +1297,7 @@ function useConductorPanelProps(
       onArchive: taskActions.handleArchive,
       onDeploy: taskActions.handleDeploy,
       onRestartDaemon: handleRestartDaemon,
+      onCancelRestartDaemon: handleCancelRestartDaemon,
       restartProgress: daemonRestart.progress,
       onSetHold: taskActions.handleSetHold,
       onClose: handleClose,
@@ -1393,6 +1310,7 @@ function useConductorPanelProps(
       handleClose,
       taskActions,
       handleRestartDaemon,
+      handleCancelRestartDaemon,
       daemonRestart.progress,
     ],
   );
@@ -1557,20 +1475,18 @@ function TasksDetailDock({
 }
 
 // ---------------------------------------------------------------------------
-// Compact (phone): keep the drill-down flow — projects → folders → board.
+// Compact (phone): one drill-down step — projects → board.
 // ---------------------------------------------------------------------------
 
 function CompactFlow({
   serverId,
   projectId,
-  folderId,
   projects,
   supportsTasksBoard,
   boardHandle,
 }: {
   serverId: string | null;
   projectId: string | null;
-  folderId: string | null;
   projects: ProjectEntry[];
   supportsTasksBoard: boolean;
   boardHandle: BoardHandle;
@@ -1590,16 +1506,11 @@ function CompactFlow({
       <BoardContent
         serverId={serverId}
         projectId={projectId}
-        folderId={folderId ?? boardHandle.board?.folders[0]?.id ?? ""}
+        listId={boardListId(boardHandle.board)}
         boardHandle={boardHandle}
       />
     </View>
   );
-}
-
-function clearFolderSelection() {
-  compactSelectionCleared = true;
-  router.setParams({ folder: undefined });
 }
 
 function clearTasksSelection() {
@@ -1607,95 +1518,8 @@ function clearTasksSelection() {
   router.setParams({ host: undefined, project: undefined, folder: undefined });
 }
 
-const FolderSelectorItem = memo(function FolderSelectorItem({ folder }: { folder: TaskFolder }) {
-  const leading = useMemo(() => <FolderColorMark color={folder.color} />, [folder.color]);
-  const handleSelect = useCallback(() => {
-    selectFolder(folder.id);
-  }, [folder.id]);
-  return (
-    <DropdownMenuItem
-      leading={leading}
-      onSelect={handleSelect}
-      testID={`tasks-header-folder-${folder.id}`}
-    >
-      {folder.name}
-    </DropdownMenuItem>
-  );
-});
-
-// Project pill for the board header (name + dropdown), followed by a "/" divider.
-// Extracted so the header's JSX stays under the max-depth lint budget.
-function BoardProjectSelector({
-  currentProject,
-  projects,
-}: {
-  currentProject: ProjectEntry;
-  projects: ProjectEntry[];
-}) {
-  const { t } = useTranslation();
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          style={styles.folderSelector}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t("tasks.pickProject")}
-          testID="tasks-header-board-project-selector"
-        >
-          <ProjectColorMark projectKey={currentProject.projectId} />
-          <Text style={styles.folderSelectorLabel} numberOfLines={1}>
-            {currentProject.displayName}
-          </Text>
-          <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" width={240}>
-          {projects.map((entry) => (
-            <ProjectSelectorItem key={`${entry.serverId}:${entry.projectId}`} entry={entry} />
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Text style={styles.headerSeparator}>/</Text>
-    </>
-  );
-}
-
-// Folder pill for the board header (name + dropdown to switch folders in place).
-function BoardFolderSelector({
-  currentFolder,
-  folders,
-}: {
-  currentFolder: TaskFolder;
-  folders: TaskFolder[];
-}) {
-  const { t } = useTranslation();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        style={styles.folderSelector}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={t("tasks.folders")}
-        testID="tasks-header-folder-selector"
-      >
-        <FolderColorMark color={currentFolder.color} />
-        <Text style={styles.folderSelectorLabel} numberOfLines={1}>
-          {currentFolder.name}
-        </Text>
-        <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" width={240}>
-        {folders.map((folder) => (
-          <FolderSelectorItem key={folder.id} folder={folder} />
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-// Picks the right header for the current drill-down level. On mobile the header
-// owns navigation: at the folder-list level it switches projects, on a board it
-// switches folders; everywhere else it's the plain menu header.
+// Picks the right header. On mobile the header owns navigation — it switches
+// projects in place; everywhere else it's the plain menu header.
 /**
  * "Pièces jointes" button for the task manager header — sits right beside the
  * quota ring. Same gate as the workspace header: only when the host
@@ -1762,9 +1586,9 @@ const HEADER_MENU_ICONS = {
 /**
  * Compact header actions: one "⋮" button instead of the desktop row of icons.
  *
- * A phone header also carries the hamburger, the back chevron and the project /
- * folder selectors, so five trailing icons left the folder name a couple of
- * characters wide. The menu owns the sheets itself (rather than nesting the
+ * A phone header also carries the hamburger, the back chevron and the project
+ * selector, so five trailing icons left the project name a couple of characters
+ * wide. The menu owns the sheets itself (rather than nesting the
  * desktop buttons, whose drawers would unmount with the menu) and keeps them
  * mounted as siblings, so a sheet survives the menu closing behind it.
  */
@@ -1916,22 +1740,18 @@ function TasksHeader({
   isCompact,
   supportsTasksBoard,
   selectedProject,
-  selectedFolder,
   projects,
-  folders,
 }: {
   title: string;
   isCompact: boolean;
   supportsTasksBoard: boolean;
   selectedProject: ProjectEntry | null;
-  selectedFolder: TaskFolder | null;
   projects: ProjectEntry[];
-  folders: TaskFolder[];
 }) {
   // Top-right cluster: quota, explorer and attachments next to the project gear,
   // which stays one tap away on every drill-down level. On a phone they collapse
   // into a single "⋮" menu — the header there already carries the navigation,
-  // and the row of icons ate the folder name.
+  // and the row of icons ate the project name.
   const rightContent = useMemo(
     () =>
       isCompact ? (
@@ -1950,17 +1770,6 @@ function TasksHeader({
       ),
     [isCompact, selectedProject],
   );
-  if (isCompact && supportsTasksBoard && selectedFolder) {
-    return (
-      <CompactBoardHeader
-        currentFolder={selectedFolder}
-        folders={folders}
-        currentProject={selectedProject}
-        projects={projects}
-        right={rightContent}
-      />
-    );
-  }
   if (isCompact && supportsTasksBoard && selectedProject) {
     return (
       <CompactProjectHeader
@@ -1971,121 +1780,6 @@ function TasksHeader({
     );
   }
   return <MenuHeader title={title} rightContent={rightContent} />;
-}
-
-// Mobile board header: hamburger + back-to-folders chevron + a folder-name
-// dropdown that switches folders in place. Replaces the old separate "‹ Dossiers"
-// row so the navigation lives in a single, obvious bar.
-function CompactBoardHeader({
-  currentFolder,
-  folders,
-  currentProject,
-  projects,
-  right,
-}: {
-  currentFolder: TaskFolder;
-  folders: TaskFolder[];
-  currentProject: ProjectEntry | null;
-  projects: ProjectEntry[];
-  right?: ReactNode;
-}) {
-  const { t } = useTranslation();
-  const scrollRef = useRef<ScrollView>(null);
-  const containerWidthRef = useRef(0);
-  const contentWidthRef = useRef(0);
-  const offsetRef = useRef(0);
-  const didAutoScrollRef = useRef(false);
-  const [fades, setFades] = useState({ left: false, right: false });
-
-  // Each edge fades only when there's hidden content past it: the left fade means
-  // "scrolled-off content to the left", the right fade means "more to the right".
-  // Both vanish once you reach the corresponding end.
-  const refreshFade = useCallback(() => {
-    const overflow = contentWidthRef.current - containerWidthRef.current;
-    if (overflow <= 1) {
-      setFades((prev) => (prev.left || prev.right ? { left: false, right: false } : prev));
-      return;
-    }
-    const offset = offsetRef.current;
-    const next = { left: offset > 1, right: offset < overflow - 1 };
-    setFades((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
-  }, []);
-
-  const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      containerWidthRef.current = event.nativeEvent.layout.width;
-      refreshFade();
-    },
-    [refreshFade],
-  );
-
-  // First time the content is measured wider than the rail, jump to the end so
-  // the active folder (rightmost item) is the one in view.
-  const handleContentSizeChange = useCallback(
-    (width: number) => {
-      contentWidthRef.current = width;
-      if (!didAutoScrollRef.current && width > containerWidthRef.current + 1) {
-        didAutoScrollRef.current = true;
-        scrollRef.current?.scrollToEnd({ animated: false });
-        // scrollToEnd is programmatic and may not emit onScroll, so mirror the
-        // resulting offset ourselves — otherwise the left shadow never lights up.
-        offsetRef.current = width - containerWidthRef.current;
-      }
-      refreshFade();
-    },
-    [refreshFade],
-  );
-
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      offsetRef.current = event.nativeEvent.contentOffset.x;
-      refreshFade();
-    },
-    [refreshFade],
-  );
-
-  return (
-    <ScreenHeader
-      leftStyle={styles.boardHeaderLeft}
-      left={
-        <>
-          <SidebarMenuToggle />
-          <Pressable
-            onPress={clearFolderSelection}
-            hitSlop={8}
-            style={styles.boardHeaderBack}
-            accessibilityRole="button"
-            accessibilityLabel={t("tasks.folders")}
-            testID="tasks-header-back"
-          >
-            <ThemedChevronLeft size={ICON_SIZE.md} uniProps={mutedColorMapping} />
-          </Pressable>
-          <View style={styles.boardHeaderScrollWrap}>
-            <ScrollView
-              ref={scrollRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.boardHeaderScroll}
-              contentContainerStyle={styles.boardHeaderScrollContent}
-              keyboardShouldPersistTaps="handled"
-              onLayout={handleLayout}
-              onContentSizeChange={handleContentSizeChange}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-            >
-              {currentProject ? (
-                <BoardProjectSelector currentProject={currentProject} projects={projects} />
-              ) : null}
-              <BoardFolderSelector currentFolder={currentFolder} folders={folders} />
-            </ScrollView>
-            {fades.left ? <HeaderScrollShadow side="left" /> : null}
-            {fades.right ? <HeaderScrollShadow side="right" /> : null}
-          </View>
-        </>
-      }
-      right={right}
-    />
-  );
 }
 
 const ProjectSelectorItem = memo(function ProjectSelectorItem({ entry }: { entry: ProjectEntry }) {
@@ -2107,9 +1801,9 @@ const ProjectSelectorItem = memo(function ProjectSelectorItem({ entry }: { entry
   );
 });
 
-// Mobile folder-list header: hamburger + back-to-projects chevron + a
-// project-name dropdown that switches projects in place. Mirrors
-// CompactBoardHeader so the two drill-down levels share one navigation pattern.
+// Mobile board header: hamburger + back-to-projects chevron + a project-name
+// dropdown that switches projects in place. A project has a single board, so
+// this is the only board-level header there is.
 function CompactProjectHeader({
   currentProject,
   projects,
@@ -2138,14 +1832,14 @@ function CompactProjectHeader({
           </Pressable>
           <DropdownMenu>
             <DropdownMenuTrigger
-              style={styles.folderSelector}
+              style={styles.projectSelector}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={t("tasks.pickProject")}
               testID="tasks-header-project-selector"
             >
               <ProjectColorMark projectKey={currentProject.projectId} />
-              <Text style={styles.folderSelectorLabel} numberOfLines={1}>
+              <Text style={styles.projectSelectorLabel} numberOfLines={1}>
                 {currentProject.displayName}
               </Text>
               <ThemedChevronDown size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
@@ -2405,11 +2099,6 @@ const styles = StyleSheet.create((theme) => ({
   headerSettingsButton: {
     padding: theme.spacing[1],
   },
-  folderColorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: theme.borderRadius.full,
-  },
   projectColorDot: {
     width: 10,
     height: 10,
@@ -2509,14 +2198,15 @@ const styles = StyleSheet.create((theme) => ({
     textAlign: "center",
     paddingVertical: theme.spacing[4],
   },
-  // Mobile board header: back chevron + folder-name dropdown selector.
+  // Mobile board header: back chevron + project-name dropdown selector.
   boardHeaderLeft: {
     gap: theme.spacing[1],
   },
   boardHeaderBack: {
     padding: theme.spacing[1],
   },
-  folderSelector: {
+  // Project pill in the compact board header (dot + name + chevron).
+  projectSelector: {
     flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -2526,61 +2216,11 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing[1],
     borderRadius: theme.borderRadius.lg,
   },
-  folderSelectorLabel: {
+  projectSelectorLabel: {
     flexShrink: 1,
     minWidth: 0,
     fontSize: theme.fontSize.base,
     color: theme.colors.foreground,
-  },
-  headerSeparator: {
-    fontSize: theme.fontSize.base,
-    color: theme.colors.mutedForeground,
-  },
-  boardHeaderScrollWrap: {
-    flex: 1,
-    minWidth: 0,
-    position: "relative",
-  },
-  boardHeaderScroll: {
-    flexGrow: 0,
-  },
-  boardHeaderScrollContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[1],
-  },
-  headerScrollFadeRight: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: 0,
-    width: theme.spacing[8],
-  },
-  headerScrollFadeLeft: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: theme.spacing[8],
-  },
-  // Folder list: scroll area flexes, footer stays pinned to the bottom edge.
-  compactListWrap: {
-    flex: 1,
-  },
-  stickyFooter: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.surface0,
-    paddingHorizontal: theme.spacing[4],
-    paddingTop: theme.spacing[3],
-  },
-  footerButton: {
-    alignSelf: "stretch",
-  },
-  // Add-folder action button: full-width across the rail footer so it reads as a
-  // clear primary action anchoring the bottom of the folders list.
-  addButton: {
-    alignSelf: "stretch",
   },
   newTaskRow: {
     flexDirection: "row",

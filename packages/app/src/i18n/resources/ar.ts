@@ -343,6 +343,9 @@ export const ar: TranslationResources = {
       restartDaemonBusyMessage:
         "يعمل {{count}} من الوكلاء الآن: ستؤدي إعادة التشغيل إلى مقاطعة عملهم. إعادة التشغيل على أي حال؟",
       restartDaemonStarted: "بدأت إعادة التشغيل — إعادة الاتصال خلال ثوانٍ.",
+      restartDaemonUndo: "إلغاء ({{seconds}} ث)",
+      restartDaemonCancelled: "أُلغيت إعادة التشغيل",
+      restartResumed: "{{count}} وكيل متوقف — طُلب استئناف العمل",
       restartDaemonCountdown: "إعادة الاتصال خلال {{seconds}} ث…",
       restartDaemonReconnecting: "جارٍ إعادة الاتصال…",
       restartDaemonTimeout: "لم يعد المحرك",
@@ -412,9 +415,6 @@ export const ar: TranslationResources = {
     pickProject: "اختر مشروعًا",
     noProjects: "لا توجد مشاريع متاحة — صِل مضيفًا أولاً.",
     allProjects: "كل المشاريع",
-    folders: "المجلدات",
-    noFolders: "لا توجد مجلدات — أنشئ واحدًا أدناه.",
-    newFolderPlaceholder: "اسم المجلد الجديد",
     newTaskPlaceholder: "عنوان المهمة",
     newTaskDescriptionPlaceholder: "الوصف (اختياري)",
     folderModal: {
@@ -430,7 +430,6 @@ export const ar: TranslationResources = {
       save: "حفظ",
     },
     taskCount: "{{count}} مهمة",
-    foldersSummary: "{{folders}} مجلد · {{tasks}} مهمة",
     searchProjects: "بحث في المشاريع",
     sortProjects: "ترتيب المشاريع",
     searchTasks: "بحث في المهام",

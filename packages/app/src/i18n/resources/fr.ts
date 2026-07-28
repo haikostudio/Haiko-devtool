@@ -351,6 +351,9 @@ export const fr: TranslationResources = {
       restartDaemonBusyMessage:
         "{{count}} agent(s) travaillent en ce moment : le redémarrage interrompra leur travail en cours. Redémarrer quand même ?",
       restartDaemonStarted: "Redémarrage lancé — reconnexion dans quelques secondes.",
+      restartDaemonUndo: "Annuler ({{seconds}} s)",
+      restartDaemonCancelled: "Redémarrage annulé",
+      restartResumed: "{{count}} agent(s) interrompus — reprise demandée",
       restartDaemonCountdown: "Reconnexion dans {{seconds}} s…",
       restartDaemonReconnecting: "Reconnexion…",
       restartDaemonTimeout: "Le moteur n'est pas revenu",
@@ -423,9 +426,6 @@ export const fr: TranslationResources = {
     pickProject: "Choisir un projet",
     noProjects: "Aucun projet disponible — connectez d'abord un hôte.",
     allProjects: "Tous les projets",
-    folders: "Classeurs",
-    noFolders: "Aucun classeur — créez-en un ci-dessous.",
-    newFolderPlaceholder: "Nom du nouveau classeur",
     newTaskPlaceholder: "Titre de la tâche",
     newTaskDescriptionPlaceholder: "Description (optionnelle)",
     folderModal: {
@@ -443,7 +443,6 @@ export const fr: TranslationResources = {
       save: "Enregistrer",
     },
     taskCount: "{{count}} tâche(s)",
-    foldersSummary: "{{folders}} classeur(s) · {{tasks}} tâche(s)",
     searchProjects: "Rechercher un projet",
     sortProjects: "Trier les projets",
     searchTasks: "Rechercher une tâche",

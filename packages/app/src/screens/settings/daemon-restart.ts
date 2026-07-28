@@ -43,15 +43,24 @@ async function isLocalDesktopManagedDaemon(
   return desktopSettings.daemon.manageBuiltInDaemon;
 }
 
+/**
+ * Which mechanism actually restarted the daemon. The caller needs to know:
+ * the desktop bridge restarts the process itself (so the page waits for the
+ * reconnection on its own), while the RPC path goes through the shared restart
+ * machinery, which already owns the countdown and the reconnection.
+ */
+export type SettingsDaemonRestartPath = "desktop" | "rpc";
+
 export async function restartDaemonFromSettings(
   hostServerId: string,
   reason: string,
   deps: SettingsDaemonRestartDeps,
-): Promise<void> {
+): Promise<SettingsDaemonRestartPath> {
   if (await isLocalDesktopManagedDaemon(hostServerId, deps)) {
     await deps.restartDesktopDaemon();
-    return;
+    return "desktop";
   }
 
   await deps.restartServer(reason);
+  return "rpc";
 }

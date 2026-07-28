@@ -129,3 +129,17 @@ describe("restartDaemonFromSettings", () => {
     expect(calls).toEqual(["desktop-status", "desktop-settings", "desktop-restart"]);
   });
 });
+
+describe("restartDaemonFromSettings path", () => {
+  it("reports the desktop bridge path so the caller waits for it itself", async () => {
+    const { deps } = makeDeps();
+    await expect(restartDaemonFromSettings("local-desktop", "reason", deps)).resolves.toBe(
+      "desktop",
+    );
+  });
+
+  it("reports the RPC path, which the shared restart machinery follows", async () => {
+    const { deps } = makeDeps();
+    await expect(restartDaemonFromSettings("remote-host", "reason", deps)).resolves.toBe("rpc");
+  });
+});

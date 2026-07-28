@@ -71,6 +71,8 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { hasDaemonReconnectedAfter, type DaemonConnectionMarker } from "./daemon-reconnect";
 import { restartDaemonFromSettings } from "./daemon-restart";
+import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
+import { restartProgressLabel } from "@/components/tasks/restart-progress-label";
 
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedArrowDown = withUnistyles(ArrowDown);
@@ -603,6 +605,11 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
   const isConnected = useHostRuntimeIsConnected(host.serverId);
   const runtime = getHostRuntimeStore();
   const [isRestarting, setIsRestarting] = useState(false);
+  // The shared restart machinery (undo window + countdown + reconnection), the
+  // same one the task cards use.
+  const { restartWithoutAsking: armSharedRestart, progress: sharedProgress } =
+    useDaemonRestartAction(host.serverId);
+  const sharedRestartRunning = sharedProgress.state !== "idle";
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -706,6 +713,10 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
       .then((confirmed) => {
         if (!confirmed) return;
         setIsRestarting(true);
+        // The RPC path hands the restart to the shared machinery, which owns the
+        // undo window, the countdown and the reconnection — so a restart says the
+        // same thing here as on a task card. The desktop bridge restarts the
+        // process itself, so that path keeps waiting on its own.
         const restartRequest = restartDaemonFromSettings(
           host.serverId,
           `settings_daemon_restart_${host.serverId}`,
@@ -714,10 +725,18 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
             getDesktopDaemonStatus,
             getDesktopSettings: loadDesktopSettings,
             restartDesktopDaemon,
-            restartServer: (reason) => daemonClient.restartServer(reason),
+            restartServer: async () => armSharedRestart(),
           },
         );
-        void waitForDaemonRestart(restartRequest);
+        void restartRequest.then((path) => {
+          // The RPC path is now the shared machinery's business: hand the button
+          // back so it can show that vocabulary instead of a second "en cours".
+          if (path === "rpc" && isMountedRef.current) {
+            setIsRestarting(false);
+          }
+          return path;
+        });
+        void waitForDaemonRestart(restartRequest.then(() => undefined));
         return;
       })
       .catch((error) => {
@@ -727,12 +746,30 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
           t("settings.host.daemon.restart.dialogFailedMessage"),
         );
       });
-  }, [daemonClient, host.label, host.serverId, isHostConnected, t, waitForDaemonRestart]);
+  }, [
+    daemonClient,
+    host.label,
+    host.serverId,
+    isHostConnected,
+    t,
+    waitForDaemonRestart,
+    armSharedRestart,
+  ]);
 
   const restartIcon = useMemo(
     () => <RotateCw size={theme.iconSize.sm} color={theme.colors.foreground} />,
     [theme.iconSize.sm, theme.colors.foreground],
   );
+  // One vocabulary for restarts, wherever they were started from: "Annuler
+  // (3 s)", "Reconnexion dans 8 s…", "Le moteur n'est pas revenu".
+  const restartLabel = useMemo(() => {
+    if (sharedRestartRunning) {
+      return restartProgressLabel(sharedProgress, t, "settings.host.daemon.restart.confirm");
+    }
+    return isRestarting
+      ? t("settings.host.daemon.restart.restarting")
+      : t("settings.host.daemon.restart.confirm");
+  }, [sharedRestartRunning, sharedProgress, isRestarting, t]);
 
   return (
     <View style={settingsStyles.card} testID="host-page-restart-card">
@@ -749,9 +786,7 @@ function RestartDaemonCard({ host }: { host: HostProfile }) {
           disabled={isRestarting || !daemonClient || !isConnected}
           testID="host-page-restart-button"
         >
-          {isRestarting
-            ? t("settings.host.daemon.restart.restarting")
-            : t("settings.host.daemon.restart.confirm")}
+          {restartLabel}
         </Button>
       </View>
     </View>

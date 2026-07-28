@@ -96,6 +96,8 @@ export interface ConductorPanelProps {
    * a restart. Confirms (and counts the agents it will cut) before firing.
    */
   onRestartDaemon?: (taskId: string) => void;
+  /** Takes back a restart while its undo window is still open. */
+  onCancelRestartDaemon?: () => void;
   /** Live restart state, so the card's bar can count down to the reconnection. */
   restartProgress?: RestartProgress;
   onSetHold?: (taskId: string, hold: boolean) => void;
@@ -169,6 +171,7 @@ export function useConductorController({
   onArchive,
   onDeploy,
   onRestartDaemon,
+  onCancelRestartDaemon,
   restartProgress,
   onSetHold,
 }: ConductorPanelProps): { header: TaskDockHeader; body: ReactNode } {
@@ -378,6 +381,7 @@ export function useConductorController({
           onArchive={onArchive}
           onDeploy={onDeploy}
           onRestartDaemon={onRestartDaemon}
+          onCancelRestartDaemon={onCancelRestartDaemon}
           restartProgress={restartProgress}
         />
       </View>

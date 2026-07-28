@@ -347,6 +347,9 @@ export const ja: TranslationResources = {
       restartDaemonBusyMessage:
         "現在 {{count}} 件のエージェントが作業中です。再起動すると作業が中断されます。それでも再起動しますか？",
       restartDaemonStarted: "再起動を開始しました — 数秒で再接続します。",
+      restartDaemonUndo: "取り消し（{{seconds}} 秒）",
+      restartDaemonCancelled: "再起動を取り消しました",
+      restartResumed: "中断された {{count}} 件のエージェントに再開を依頼しました",
       restartDaemonCountdown: "{{seconds}} 秒後に再接続…",
       restartDaemonReconnecting: "再接続中…",
       restartDaemonTimeout: "エンジンが戻りませんでした",
@@ -417,9 +420,6 @@ export const ja: TranslationResources = {
     pickProject: "プロジェクトを選択",
     noProjects: "利用可能なプロジェクトがありません — まずホストに接続してください。",
     allProjects: "すべてのプロジェクト",
-    folders: "フォルダー",
-    noFolders: "フォルダーがありません — 下で作成できます。",
-    newFolderPlaceholder: "新しいフォルダー名",
     newTaskPlaceholder: "タスクのタイトル",
     newTaskDescriptionPlaceholder: "説明（任意）",
     folderModal: {
@@ -436,7 +436,6 @@ export const ja: TranslationResources = {
       save: "保存",
     },
     taskCount: "{{count}} 件のタスク",
-    foldersSummary: "{{folders}} フォルダ · {{tasks}} タスク",
     searchProjects: "プロジェクトを検索",
     sortProjects: "プロジェクトを並べ替え",
     searchTasks: "タスクを検索",

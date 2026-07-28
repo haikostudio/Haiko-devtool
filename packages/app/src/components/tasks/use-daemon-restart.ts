@@ -1,8 +1,7 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
-import { useDaemonRestartStore } from "@/stores/daemon-restart-store";
-import { useHostRuntimeClient } from "@/runtime/host-runtime";
+import { useDaemonRestartStore, type InterruptedAgent } from "@/stores/daemon-restart-store";
 import { useToast } from "@/contexts/toast-context";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
@@ -11,11 +10,13 @@ import {
 } from "@/components/tasks/daemon-restart-progress";
 
 export interface DaemonRestartAction {
-  /** Confirms, then restarts the daemon. */
+  /** Confirms, then arms the restart (the undo window opens). */
   restart: () => Promise<void>;
-  /** Restarts WITHOUT asking — for a restart the user already agreed to. */
-  restartWithoutAsking: () => Promise<void>;
-  /** What the bar should say right now (countdown, reconnecting, timed out). */
+  /** Arms WITHOUT asking — for a restart the user already agreed to. */
+  restartWithoutAsking: () => void;
+  /** Takes the restart back, while the undo window is still open. */
+  cancel: () => void;
+  /** What the bar should say right now (undo, countdown, reconnecting, timed out). */
   progress: RestartProgress;
 }
 
@@ -26,29 +27,49 @@ export interface DaemonRestartAction {
  * reader would fire its own timer and its own "moteur redémarré" toast.
  */
 export function useDaemonRestartProgress(): RestartProgress {
+  const armedAtMs = useDaemonRestartStore((state) => state.armedAtMs);
   const startedAtMs = useDaemonRestartStore((state) => state.startedAtMs);
   const reconnected = useDaemonRestartStore((state) => state.reconnected);
   const nowMs = useDaemonRestartStore((state) => state.nowMs);
-  return describeRestartProgress({ startedAtMs, nowMs, reconnected });
+  return describeRestartProgress({ armedAtMs, startedAtMs, nowMs, reconnected });
+}
+
+/** Agents mid-turn right now, with what each was trying to achieve. */
+function readRunningAgents(serverId: string | null): InterruptedAgent[] {
+  const agents = serverId ? useSessionStore.getState().sessions[serverId]?.agents : undefined;
+  if (!agents) {
+    return [];
+  }
+  const running: InterruptedAgent[] = [];
+  for (const [agentId, agent] of agents) {
+    if (agent.status === "running") {
+      running.push({ agentId, objective: agent.synthesis?.objective ?? null });
+    }
+  }
+  return running;
 }
 
 /**
  * The card's "Redémarrer le moteur" gesture.
  *
- * Restarting is never silent. A restart cuts every agent mid-turn, so the
- * confirmation says how many are working right now — the daemon is only ever
- * restarted on an explicit, informed go. `restartWithoutAsking` exists for the
- * one case where that go was already given: the user chose "publier puis
- * redémarrer", and asking twice for one decision is worse than not asking.
+ * Restarting is never silent, and never instant. The confirmation says how many
+ * agents are working right now — the daemon is only ever restarted on an
+ * explicit, informed go — and pressing it opens a short undo window rather than
+ * firing straight away, because the seconds right after "oui" are exactly when
+ * people change their mind.
+ *
+ * `restartWithoutAsking` exists for the one case where the go was already given:
+ * the user chose "publier puis redémarrer". It still opens the undo window.
  */
 export function useDaemonRestartAction(serverId: string | null): DaemonRestartAction {
   const { t } = useTranslation();
   const toast = useToast();
-  const client = useHostRuntimeClient(serverId ?? "");
+  const armedAtMs = useDaemonRestartStore((state) => state.armedAtMs);
   const startedAtMs = useDaemonRestartStore((state) => state.startedAtMs);
-  const begin = useDaemonRestartStore((state) => state.begin);
+  const arm = useDaemonRestartStore((state) => state.arm);
   const clear = useDaemonRestartStore((state) => state.clear);
   const progress = useDaemonRestartProgress();
+  const inFlight = armedAtMs !== null || startedAtMs !== null;
 
   // A count, not the agent map: a number keeps this selector stable, so a
   // streaming agent doesn't re-render the whole panel on every token.
@@ -66,27 +87,17 @@ export function useDaemonRestartAction(serverId: string | null): DaemonRestartAc
     return count;
   });
 
-  const fire = useCallback(async () => {
-    if (!client || startedAtMs !== null) {
+  // Captured HERE, not after the restart: once the daemon is down, there is no
+  // one left to ask which agents were mid-turn.
+  const armNow = useCallback(() => {
+    if (inFlight) {
       return;
     }
-    begin(Date.now());
-    try {
-      await client.restartServer("tasks_card_daemon_restart");
-    } catch (error) {
-      // The socket dropping mid-restart is the SUCCESS path, not a failure: the
-      // daemon exits before it can answer, and the watcher settles the restart
-      // when the connection comes back. Only a refusal that left us connected is
-      // a real error — the watcher's timeout catches anything else.
-      if (!useDaemonRestartStore.getState().sawDisconnect) {
-        clear();
-        toast.error(error instanceof Error ? error.message : String(error));
-      }
-    }
-  }, [client, startedAtMs, begin, clear, toast]);
+    arm({ serverId, armedAtMs: Date.now(), interrupted: readRunningAgents(serverId) });
+  }, [inFlight, arm, serverId]);
 
   const restart = useCallback(async () => {
-    if (!client || startedAtMs !== null) {
+    if (inFlight) {
       return;
     }
     const confirmed = await confirmDialog({
@@ -102,8 +113,18 @@ export function useDaemonRestartAction(serverId: string | null): DaemonRestartAc
     if (!confirmed) {
       return;
     }
-    await fire();
-  }, [client, startedAtMs, busyAgentCount, t, fire]);
+    armNow();
+  }, [inFlight, busyAgentCount, t, armNow]);
 
-  return { restart, restartWithoutAsking: fire, progress };
+  const cancel = useCallback(() => {
+    // Only while the request has not left. Past that the button is gone anyway,
+    // but a stale press must never clear a real restart's countdown.
+    if (useDaemonRestartStore.getState().startedAtMs !== null) {
+      return;
+    }
+    clear();
+    toast.show(t("tasks.panel.restartDaemonCancelled"));
+  }, [clear, toast, t]);
+
+  return { restart, restartWithoutAsking: armNow, cancel, progress };
 }

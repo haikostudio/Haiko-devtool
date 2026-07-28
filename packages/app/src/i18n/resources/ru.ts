@@ -346,6 +346,9 @@ export const ru: TranslationResources = {
       restartDaemonBusyMessage:
         "Сейчас работают агентов: {{count}}. Перезапуск прервёт их работу. Всё равно перезапустить?",
       restartDaemonStarted: "Перезапуск начат — переподключение через несколько секунд.",
+      restartDaemonUndo: "Отменить ({{seconds}} с)",
+      restartDaemonCancelled: "Перезапуск отменён",
+      restartResumed: "Прервано агентов: {{count}} — запрошено продолжение",
       restartDaemonCountdown: "Переподключение через {{seconds}} с…",
       restartDaemonReconnecting: "Переподключение…",
       restartDaemonTimeout: "Движок не вернулся",
@@ -416,9 +419,6 @@ export const ru: TranslationResources = {
     pickProject: "Выберите проект",
     noProjects: "Нет доступных проектов — сначала подключите хост.",
     allProjects: "Все проекты",
-    folders: "Папки",
-    noFolders: "Папок нет — создайте ниже.",
-    newFolderPlaceholder: "Имя новой папки",
     newTaskPlaceholder: "Название задачи",
     newTaskDescriptionPlaceholder: "Описание (необязательно)",
     folderModal: {
@@ -436,7 +436,6 @@ export const ru: TranslationResources = {
       save: "Сохранить",
     },
     taskCount: "Задач: {{count}}",
-    foldersSummary: "Папок: {{folders}} · задач: {{tasks}}",
     searchProjects: "Поиск проектов",
     sortProjects: "Сортировать проекты",
     searchTasks: "Поиск задач",

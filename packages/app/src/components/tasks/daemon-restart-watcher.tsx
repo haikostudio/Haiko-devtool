@@ -1,60 +1,84 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { KanbanTask } from "@/data/tasks";
-import { useDaemonRestartStore } from "@/stores/daemon-restart-store";
-import { useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useDaemonRestartStore, type InterruptedAgent } from "@/stores/daemon-restart-store";
+import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
 import { useToast } from "@/contexts/toast-context";
-import { isTaskDeployed } from "@/components/tasks/task-card-badge";
-import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
-import { RESTART_TIMEOUT_MS } from "@/components/tasks/daemon-restart-progress";
+import { buildRestartResumePrompt } from "@/components/tasks/restart-resume-prompt";
+import { RESTART_ARMING_MS, RESTART_TIMEOUT_MS } from "@/components/tasks/daemon-restart-progress";
 
 /** The countdown only needs to redraw once a second. */
-const TICK_MS = 1000;
+const TICK_MS = 250;
+
+interface RestartClient {
+  restartServer: (reason?: string) => Promise<unknown>;
+  sendMessage: (agentId: string, text: string) => Promise<void>;
+}
 
 /**
  * Renders nothing; owns everything that must happen exactly once for a daemon
- * restart. Mounted a single time at the tasks screen root — putting these
- * effects in the shared hook would give every mounted reader its own timer and
- * its own "moteur redémarré" toast.
+ * restart. Mounted a single time at the app root — putting these effects in the
+ * shared hook would give every mounted reader its own timer and its own
+ * "moteur redémarré" toast, and mounting it on one screen would strand a
+ * restart started from another.
  *
- * Three jobs:
- *  - tick the clock the countdown reads, but only while a restart is in flight;
- *  - settle the restart when the connection drops and comes back (or give up,
- *    loudly, if it never does);
- *  - honour "publier puis redémarrer": fire the restart the user already agreed
- *    to, the moment that card's work is actually live.
+ * Four jobs, in order:
+ *  - tick the clock the bar reads, but only while a restart is in flight;
+ *  - send the request once the undo window closes (that delay IS the feature);
+ *  - settle the restart when the connection drops and comes back — or give up,
+ *    loudly, if it never does;
+ *  - hand every agent the restart cut short a resume instruction, so a turn
+ *    interrupted mid-flight is picked back up instead of silently lost.
  */
-export function DaemonRestartWatcher({
-  serverId,
-  tasks,
-}: {
-  serverId: string | null;
-  tasks: KanbanTask[];
-}) {
+export function DaemonRestartWatcher({ serverId }: { serverId: string | null }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const client = useHostRuntimeClient(serverId ?? "") as RestartClient | null;
   const connected = useHostRuntimeIsConnected(serverId ?? "");
+  const armedAtMs = useDaemonRestartStore((state) => state.armedAtMs);
   const startedAtMs = useDaemonRestartStore((state) => state.startedAtMs);
   const nowMs = useDaemonRestartStore((state) => state.nowMs);
   const sawDisconnect = useDaemonRestartStore((state) => state.sawDisconnect);
   const tick = useDaemonRestartStore((state) => state.tick);
+  const begin = useDaemonRestartStore((state) => state.begin);
   const markDisconnected = useDaemonRestartStore((state) => state.markDisconnected);
   const markReconnected = useDaemonRestartStore((state) => state.markReconnected);
   const clear = useDaemonRestartStore((state) => state.clear);
-  const pendingTaskId = useDaemonRestartStore((state) => state.restartAfterDeployTaskId);
-  const setRestartAfterDeploy = useDaemonRestartStore((state) => state.setRestartAfterDeploy);
-  const { restartWithoutAsking } = useDaemonRestartAction(serverId);
+  // Guards the one-shot transitions against a re-render landing between two
+  // store updates (an effect that fires twice must not send two requests).
+  const firedRef = useRef(false);
 
-  // Drive the countdown, and stop the moment it is over — an interval ticking on
-  // an idle board is pure waste.
+  // Drive the clock, and stop the moment it is over — an interval ticking on an
+  // idle app is pure waste.
   useEffect(() => {
-    if (startedAtMs === null) {
+    if (armedAtMs === null && startedAtMs === null) {
       return;
     }
     tick(Date.now());
     const timer = setInterval(() => tick(Date.now()), TICK_MS);
     return () => clearInterval(timer);
-  }, [startedAtMs, tick]);
+  }, [armedAtMs, startedAtMs, tick]);
+
+  // The undo window closed: send the request for real.
+  useEffect(() => {
+    if (armedAtMs === null || startedAtMs !== null) {
+      firedRef.current = false;
+      return;
+    }
+    if (nowMs - armedAtMs < RESTART_ARMING_MS || firedRef.current || !client) {
+      return;
+    }
+    firedRef.current = true;
+    begin(Date.now());
+    void client.restartServer("tasks_card_daemon_restart").catch((error) => {
+      // The socket dropping mid-restart is the SUCCESS path, not a failure: the
+      // daemon exits before it can answer. Only a refusal that left us connected
+      // is a real error — the timeout below catches anything else.
+      if (!useDaemonRestartStore.getState().sawDisconnect) {
+        clear();
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    });
+  }, [armedAtMs, startedAtMs, nowMs, client, begin, clear, toast]);
 
   // Down, then up again = the daemon is back.
   useEffect(() => {
@@ -65,12 +89,30 @@ export function DaemonRestartWatcher({
       markDisconnected();
       return;
     }
-    if (sawDisconnect) {
-      markReconnected();
-      clear();
-      toast.show(t("tasks.panel.restartDaemonDone"));
+    if (!sawDisconnect) {
+      return;
     }
-  }, [connected, startedAtMs, sawDisconnect, markDisconnected, markReconnected, clear, toast, t]);
+    // Read before clearing: settling the restart wipes the list.
+    const interrupted = useDaemonRestartStore.getState().interrupted;
+    markReconnected();
+    clear();
+    toast.show(t("tasks.panel.restartDaemonDone"));
+    if (interrupted.length > 0 && client) {
+      resumeInterruptedAgents(client, interrupted, () => {
+        toast.show(t("tasks.panel.restartResumed", { count: interrupted.length }));
+      });
+    }
+  }, [
+    connected,
+    startedAtMs,
+    sawDisconnect,
+    client,
+    markDisconnected,
+    markReconnected,
+    clear,
+    toast,
+    t,
+  ]);
 
   // A daemon that never came back: say so and free the bar, rather than
   // counting into the void.
@@ -82,31 +124,20 @@ export function DaemonRestartWatcher({
     toast.error(t("tasks.panel.restartDaemonTimeout"));
   }, [nowMs, startedAtMs, clear, toast, t]);
 
-  // "Publier puis redémarrer": wait for the card's work to actually be live,
-  // then restart without asking again — the user already said yes, once, for
-  // both steps. A card that turns out not to need a restart after all simply
-  // drops the promise.
-  useEffect(() => {
-    if (pendingTaskId === null || startedAtMs !== null) {
-      return;
-    }
-    const task = tasks.find((entry) => entry.id === pendingTaskId);
-    if (!task) {
-      // The card is gone (deleted, or another project is showing): drop it
-      // rather than leave a restart armed forever.
-      setRestartAfterDeploy(null);
-      return;
-    }
-    if (!isTaskDeployed(task) && task.column !== "deployed") {
-      return;
-    }
-    setRestartAfterDeploy(null);
-    if (task.needsDaemonRestart !== true) {
-      return;
-    }
-    toast.show(t("tasks.panel.restartAfterDeployFiring"));
-    void restartWithoutAsking();
-  }, [pendingTaskId, startedAtMs, tasks, setRestartAfterDeploy, restartWithoutAsking, toast, t]);
-
   return null;
+}
+
+/**
+ * Hands each interrupted agent its resume instruction. Failures are swallowed
+ * per agent: an agent that has since been archived must not stop the others from
+ * picking their work back up.
+ */
+function resumeInterruptedAgents(
+  client: RestartClient,
+  interrupted: InterruptedAgent[],
+  onDone: () => void,
+): void {
+  void Promise.allSettled(
+    interrupted.map((agent) => client.sendMessage(agent.agentId, buildRestartResumePrompt(agent))),
+  ).then(onDone);
 }

@@ -345,6 +345,9 @@ export const en = {
       restartDaemonBusyMessage:
         "{{count}} agent(s) are working right now: restarting will interrupt them. Restart anyway?",
       restartDaemonStarted: "Restart started — reconnecting in a few seconds.",
+      restartDaemonUndo: "Cancel ({{seconds}} s)",
+      restartDaemonCancelled: "Restart cancelled",
+      restartResumed: "{{count}} interrupted agent(s) — asked to resume",
       restartDaemonCountdown: "Reconnecting in {{seconds}} s…",
       restartDaemonReconnecting: "Reconnecting…",
       restartDaemonTimeout: "The engine did not come back",
@@ -414,9 +417,6 @@ export const en = {
     pickProject: "Choose a project",
     noProjects: "No projects available — connect a host first.",
     allProjects: "All projects",
-    folders: "Folders",
-    noFolders: "No folders yet — create one below.",
-    newFolderPlaceholder: "New folder name",
     newTaskPlaceholder: "Task title",
     newTaskDescriptionPlaceholder: "Description (optional)",
     folderModal: {
@@ -433,7 +433,6 @@ export const en = {
       save: "Save",
     },
     taskCount: "{{count}} task(s)",
-    foldersSummary: "{{folders}} folder(s) · {{tasks}} task(s)",
     searchProjects: "Search projects",
     sortProjects: "Sort projects",
     searchTasks: "Search tasks",
