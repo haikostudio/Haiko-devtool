@@ -139,6 +139,7 @@ import { TaskBoardService } from "./tasks/service.js";
 import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
 import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
+import { createTaskResponseTemplateHook } from "./tasks/response-template.js";
 import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskAgentProvisioner } from "./tasks/agent-provisioner.js";
@@ -1473,6 +1474,17 @@ export async function createPaseoDaemon(
     logger,
   });
   agentTaskSync.start();
+  // A card agent's answer structure follows the card's column: analysis in
+  // "Validé", work report in "En cours", publication log in "Déployé". Resolved
+  // at dispatch time, at the same choke point as the Cerveau recall.
+  agentManager.setResponseFormatTemplateHook(
+    createTaskResponseTemplateHook({
+      agentManager,
+      workspaceRegistry,
+      taskBoardService,
+      logger,
+    }),
+  );
   const activityLogService = new ActivityLogService({
     agentManager,
     agentStorage,

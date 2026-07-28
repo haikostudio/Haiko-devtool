@@ -29,6 +29,7 @@ At the start of non-trivial work, list `docs/` and skim anything relevant to the
 | [docs/task-board-cycle.md](docs/task-board-cycle.md)               | Kanban columns — who may move a card, why "Validé" is user-only, the one exception                                             |
 | [docs/data-model.md](docs/data-model.md)                           | File-based JSON persistence, Zod schemas, atomic writes, no migrations                                                         |
 | [docs/glossary.md](docs/glossary.md)                               | Authoritative terminology — UI label wins, no synonyms                                                                         |
+| [docs/response-templates.md](docs/response-templates.md)           | Fixed answer shape per board column (analysis / progress / publication) and the "+" chain on evolutions                        |
 | [docs/coding-standards.md](docs/coding-standards.md)               | Type hygiene, error handling, state design, React patterns, file organization                                                  |
 | [docs/design.md](docs/design.md)                                   | Theme tokens — colors, fonts, spacing, radii, icons                                                                            |
 | [docs/forms.md](docs/forms.md)                                     | Form architecture — non-React form model, form kit, load-state gating; the schedule form is the golden example                 |

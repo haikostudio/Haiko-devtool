@@ -94,7 +94,11 @@ import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { TaskAnalysisCard } from "@/components/tasks/task-analysis-card";
 import { parseTaskAnalysisEstimateBlock } from "@/components/tasks/task-analysis-estimate";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
-import { flagEvolutionBlocks } from "@/utils/evolution-section";
+import {
+  flagEvolutionBlocks,
+  normalizeEvolutionBlock,
+  splitBlocksAtHeadings,
+} from "@/utils/evolution-section";
 import { parseCalloutBlock, type CalloutType, type ParsedCallout } from "@/utils/markdown-callout";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
@@ -2279,15 +2283,23 @@ export const AssistantMessage = memo(function AssistantMessage({
     [markdownRules],
   );
 
-  const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
+  // Headings always open a block, so the "Évolutions possibles" section is
+  // detected even in an answer written without blank lines around its titles.
+  const blocks = useMemo(() => splitBlocksAtHeadings(splitMarkdownBlocks(message)), [message]);
   const keyedBlocks = useMemo(() => {
     const evolutionFlags = flagEvolutionBlocks(blocks);
-    return blocks.map((block, index) => ({
-      key: `${index}:${block.slice(0, 32)}`,
-      block,
-      callout: parseCalloutBlock(block),
-      evolutions: evolutionFlags[index] === true,
-    }));
+    return blocks.map((block, index) => {
+      const evolutions = evolutionFlags[index] === true;
+      // Inside that section every proposal is rendered as a list item, whatever
+      // shape the model wrote it in, so each one carries the "+" button.
+      const text = evolutions ? normalizeEvolutionBlock(block) : block;
+      return {
+        key: `${index}:${block.slice(0, 32)}`,
+        block: text,
+        callout: parseCalloutBlock(text),
+        evolutions,
+      };
+    });
   }, [blocks]);
 
   const assistantContainerStyle = useMemo(

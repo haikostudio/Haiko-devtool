@@ -72,9 +72,11 @@ import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js
 import type { BrainCapturePromptHook } from "../../services/brain-memory/capture.js";
 import type { BrainRecallPromptHook } from "../../services/brain-memory/recall.js";
 import {
+  DEFAULT_RESPONSE_TEMPLATE,
   hasResponseFormatDirective,
   injectResponseFormat,
   stripResponseFormat,
+  type ResponseFormatTemplateHook,
 } from "../../services/response-format.js";
 import { stripInternalPaseoMcpServer, withRuntimePaseoMcpServer } from "./runtime-mcp-config.js";
 import { resolveCreateAgentTitles } from "./create-agent-title.js";
@@ -687,6 +689,7 @@ export class AgentManager {
   private onAgentArchived?: AgentArchivedCallback;
   private brainRecallHook: BrainRecallPromptHook | null = null;
   private brainCaptureHook: BrainCapturePromptHook | null = null;
+  private responseFormatTemplateHook: ResponseFormatTemplateHook | null = null;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -785,6 +788,30 @@ export class AgentManager {
    */
   setBrainCaptureHook(hook: BrainCapturePromptHook | null): void {
     this.brainCaptureHook = hook;
+  }
+
+  /**
+   * Install the resolver that decides WHICH fixed answer structure a prompt
+   * carries (analysis / progress / publication / default). Set once at
+   * bootstrap by the task board side, which is the only place that knows a
+   * card's current column. Absent or failing, every prompt keeps the default
+   * five-section report.
+   */
+  setResponseFormatTemplateHook(hook: ResponseFormatTemplateHook | null): void {
+    this.responseFormatTemplateHook = hook;
+  }
+
+  private async resolveResponseFormatTemplate(agentId: string) {
+    const hook = this.responseFormatTemplateHook;
+    if (!hook) {
+      return DEFAULT_RESPONSE_TEMPLATE;
+    }
+    try {
+      return (await hook({ agentId })) ?? DEFAULT_RESPONSE_TEMPLATE;
+    } catch (err) {
+      this.logger.debug({ err, agentId }, "response-format: template resolution failed");
+      return DEFAULT_RESPONSE_TEMPLATE;
+    }
   }
 
   setMcpBaseUrl(url: string | null): void {
@@ -2310,7 +2337,12 @@ export class AgentManager {
         // same choke point as recall, so every entrypoint's turn is distilled.
         this.brainCaptureHook?.({ agentId: agent.id, text });
         const recalled = hook ? await hook({ agentId: agent.id, text }) : text;
-        return injectResponseFormat(recalled);
+        // Which structure the answer must follow depends on where the agent's
+        // card currently sits on the board — an analysis in "Validé", a work
+        // report in "En cours", a publication log in "Déployé". Anything that
+        // is not a card keeps the default five-section report.
+        const template = await this.resolveResponseFormatTemplate(agent.id);
+        return injectResponseFormat(recalled, template);
       };
       if (typeof prompt === "string") {
         if (!prompt.trim()) {

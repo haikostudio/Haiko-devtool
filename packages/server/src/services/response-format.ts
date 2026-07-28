@@ -1,27 +1,77 @@
 /**
  * Server-side response-format directive.
  *
- * The user's fixed answer structure (five numbered sections + billing block)
- * used to live only in a per-session memory note, so only agents that happened
- * to carry that memory produced it — every other path (Codex admin tasks,
- * schedules, loops, MCP sends, other sessions) answered free-form. This module
- * turns that guidance into a prompt envelope injected at the AgentManager choke
- * point, exactly like the Cerveau recall block, so EVERY non-internal agent gets
- * it for free.
+ * The user's fixed answer structure used to live only in a per-session memory
+ * note, so only agents that happened to carry that memory produced it — every
+ * other path (Codex admin tasks, schedules, loops, MCP sends, other sessions)
+ * answered free-form. This module turns that guidance into a prompt envelope
+ * injected at the AgentManager choke point, exactly like the Cerveau recall
+ * block, so EVERY non-internal agent gets it for free.
+ *
+ * There is not ONE structure but four, because a card's answer means a
+ * different thing depending on where the card sits on the board (see
+ * docs/response-templates.md, the single reference for the three card
+ * templates):
+ *  - "analysis"    — "Validé"/"Planifié": the work has NOT run yet, so the answer
+ *                    is a plan + an estimate, never a report.
+ *  - "progress"    — "En cours"/"Terminée": what was done, and what could come
+ *                    next (each proposal on its own line, so the app can hang a
+ *                    "+" button on it).
+ *  - "publication" — a running deployment, or "Déployé": what went online, how
+ *                    it went, and how it was verified.
+ *  - "conductor"   — the board's chef d'orchestre: it never executes anything,
+ *                    so it never reports — a short answer, or a bullet list of
+ *                    the cards it touched.
+ *  - "default"     — everything that is not a card (plain chat, schedules, MCP):
+ *                    the historical five-section report.
+ *
+ * The template is chosen by the daemon, never by the agent: the hook installed
+ * on the AgentManager resolves the card's current column at dispatch time.
  *
  * The directive is wrapped in a <paseo-format>…</paseo-format> envelope so the
  * daemon can strip it from the displayed user message (like the brain envelope)
  * — the agent reads it, the user never sees the raw XML.
  */
 
-/** The instruction body. French, because the user's answers are French. */
-const RESPONSE_FORMAT_BODY = [
-  "Réponds TOUJOURS en suivant exactement cette structure de réponse de tâche.",
+/** Which fixed answer structure a prompt must carry. */
+export type ResponseFormatTemplate =
+  | "default"
+  | "analysis"
+  | "progress"
+  | "publication"
+  | "conductor";
+
+/**
+ * Resolves the template for an agent at dispatch time. Installed on the
+ * AgentManager at bootstrap by the task board side, which is the only place
+ * that knows whether an agent belongs to a card and in which column it sits.
+ * Returning null (or throwing) falls back to {@link DEFAULT_RESPONSE_TEMPLATE}.
+ */
+export type ResponseFormatTemplateHook = (input: {
+  agentId: string;
+}) => Promise<ResponseFormatTemplate | null>;
+
+export const DEFAULT_RESPONSE_TEMPLATE: ResponseFormatTemplate = "default";
+
+/** Opening line shared by every template: who answers, and for whom. */
+const COMMON_HEADER = [
   "Lecteur non technique : phrases simples, images concrètes, pas de jargon ni de chemins de fichiers.",
   "",
   "En-tête (avant la réponse) : une ligne annonçant le modèle utilisé (Opus = code, Codex = administratif),",
   "son niveau (Claude : de « eau » à « ultra code » ; GPT : de « eau » à « très haut »),",
   "le temps estimé et le coût approximatif (tarif : 130 CHF/h).",
+];
+
+/** Closing lines shared by every template. */
+const COMMON_FOOTER = [
+  "Utilise des callouts colorés (> [!TIP], > [!NOTE], > [!WARNING], etc.) uniquement là où ils aident vraiment.",
+  "Les icônes des titres sont ajoutées automatiquement par l'app — n'en mets pas toi-même.",
+];
+
+/** Historical five-section report — everything that is not a board card. */
+const DEFAULT_BODY = [
+  "Réponds TOUJOURS en suivant exactement cette structure de réponse de tâche.",
+  ...COMMON_HEADER,
   "",
   "Puis exactement ces cinq sections, titres numérotés en Markdown `## N.` :",
   "## 1. Ce qui est fait",
@@ -34,9 +84,123 @@ const RESPONSE_FORMAT_BODY = [
   "Si le travail se rattache à un projet client identifiable (site/app d'un client, pas l'outillage interne),",
   "ajoute après le bloc récapitulatif une proposition d'ajouter la prestation en ligne de facture brouillon",
   "via la compétence compta (client, libellé, heures × 130 CHF) — ne jamais créer/modifier une facture sans accord explicite.",
-  "Utilise des callouts colorés (> [!TIP], > [!NOTE], > [!WARNING], etc.) uniquement là où ils aident vraiment.",
-  "Les icônes des titres sont ajoutées automatiquement par l'app — n'en mets pas toi-même.",
+  ...COMMON_FOOTER,
 ].join("\n");
+
+/**
+ * "Validé"/"Planifié": nothing has been implemented yet. Anything phrased as a
+ * report ("Ce qui est fait") would be a lie, so those sections are banned
+ * outright rather than merely discouraged.
+ */
+const ANALYSIS_BODY = [
+  "Cette carte est en analyse (colonne « Validé ») : le travail n'est PAS encore exécuté.",
+  "Réponds TOUJOURS en suivant exactement cette structure de réponse d'ANALYSE.",
+  ...COMMON_HEADER,
+  "",
+  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "## 1. Objectif",
+  "## 2. Approche retenue",
+  "## 3. Fichiers & points de vigilance",
+  "## 4. Estimation",
+  "",
+  "« 1. Objectif » : en une ou deux phrases, le résultat visé.",
+  "« 2. Approche retenue » : le plan d'action, étapes ordonnées, concret et court.",
+  "« 3. Fichiers & points de vigilance » : un TABLEAU Markdown à deux colonnes | Élément | Détail |,",
+  "une ligne par fichier touché et une ligne par point de vigilance (risque, dépendance, test).",
+  "« 4. Estimation » : temps d'exécution estimé, heures facturables, taux 130 CHF/h, montant total,",
+  "et part de quota consommée. Si le prompt demande un bloc ```json d'estimation, il termine cette",
+  "section et rien ne vient après lui.",
+  "",
+  "N'écris AUCUNE autre section. Sont formellement exclues : « Ce qui est fait », « Ce qui change »,",
+  "« Impact », « Évolutions possibles », « Activation & facturation ».",
+  ...COMMON_FOOTER,
+].join("\n");
+
+/**
+ * "En cours"/"Terminée": the work report. The evolutions section is the one the
+ * app decorates — every proposal gets a "+" button that drops the line into the
+ * composer — hence the "one self-contained line per proposal" rule.
+ */
+const PROGRESS_BODY = [
+  "Cette carte est en cours de travail (colonne « En cours ») : ta réponse est un point d'AVANCEMENT.",
+  "Réponds TOUJOURS en suivant exactement cette structure.",
+  ...COMMON_HEADER,
+  "",
+  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "## 1. Ce qui est fait",
+  "## 2. Ce qui change",
+  "## 3. Impact",
+  "## 4. Évolutions possibles",
+  "",
+  "Dans « 4. Évolutions possibles », chaque proposition tient sur UNE seule ligne,",
+  "écrite comme un élément de liste (« - » ou « 1. »), autonome et compréhensible seule :",
+  "l'app pose un bouton « + » sur chaque ligne pour la réutiliser telle quelle comme consigne suivante.",
+  "Pas de sous-listes ni de paragraphe libre dans cette section.",
+  "",
+  "N'écris AUCUNE autre section : ni « Activation & facturation », ni analyse, ni estimation.",
+  ...COMMON_FOOTER,
+].join("\n");
+
+/**
+ * A running deployment, or "Déployé": the publication log. Billing and
+ * evolutions belong to the other two moments of the card's life, so they are
+ * excluded here.
+ */
+const PUBLICATION_BODY = [
+  "Cette carte est en publication (colonne « Déployé ») : ta réponse est un compte rendu de MISE EN LIGNE.",
+  "Réponds TOUJOURS en suivant exactement cette structure.",
+  ...COMMON_HEADER,
+  "",
+  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "## 1. Ce qui a été publié",
+  "## 2. Déroulé de la publication",
+  "## 3. Vérification",
+  "## 4. Suites éventuelles",
+  "",
+  "« 2. Déroulé de la publication » : les étapes dans l'ordre et leur résultat (réussi / échoué, et pourquoi).",
+  "« 3. Vérification » : la version réellement en ligne — ce que tu as contrôlé pour l'affirmer.",
+  "« 4. Suites éventuelles » : redémarrage du moteur nécessaire ou non, points à surveiller. « Rien à signaler » si c'est le cas.",
+  "",
+  "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
+  ...COMMON_FOOTER,
+].join("\n");
+
+/**
+ * The board's "chef d'orchestre". It never executes anything, so it has nothing
+ * to report: dressing its answers in the work-report sections turned a plain
+ * "combien de cartes en attente ?" into a fake chantier with an invoice line at
+ * the end. Its shape follows the message it answers — a couple of sentences for
+ * a question, a bullet list of the cards it touched otherwise — which is the
+ * same rule its system prompt states (see conductor-agent.ts).
+ */
+const CONDUCTOR_BODY = [
+  "Tu es le chef d'orchestre du tableau : tu n'exécutes aucun travail, donc tu n'en rends jamais compte.",
+  "N'utilise AUCUN gabarit à sections numérotées, aucune estimation de temps, de quota ou de coût,",
+  "aucune ligne de facturation, et pas d'en-tête annonçant un modèle.",
+  "",
+  "La forme suit le message auquel tu réponds :",
+  "- Question, demande d'information, cas ambigu ou geste sur le tableau : réponds en quelques",
+  "  phrases de français simple, sans titre de section. Pour un cas ambigu, termine par la",
+  "  proposition d'en faire une tâche.",
+  "- Cartes créées, modifiées, déplacées ou supprimées : termine par un court récapitulatif,",
+  "  une puce par carte (son titre et ce qui lui est arrivé).",
+  "",
+  "Lecteur non technique : phrases simples, pas de jargon ni de chemins de fichiers.",
+  ...COMMON_FOOTER,
+].join("\n");
+
+const RESPONSE_FORMAT_BODIES: Record<ResponseFormatTemplate, string> = {
+  default: DEFAULT_BODY,
+  analysis: ANALYSIS_BODY,
+  progress: PROGRESS_BODY,
+  publication: PUBLICATION_BODY,
+  conductor: CONDUCTOR_BODY,
+};
+
+/** The instruction body for a template. Exported for tests and docs checks. */
+export function responseFormatBody(template: ResponseFormatTemplate): string {
+  return RESPONSE_FORMAT_BODIES[template];
+}
 
 const OPEN_TAG = "<paseo-format>";
 const CLOSE_TAG = "</paseo-format>";
@@ -55,11 +219,14 @@ export function hasResponseFormatDirective(text: string): boolean {
 }
 
 /** Prepend the directive envelope to a prompt, unless it is already present. */
-export function injectResponseFormat(text: string): string {
+export function injectResponseFormat(
+  text: string,
+  template: ResponseFormatTemplate = DEFAULT_RESPONSE_TEMPLATE,
+): string {
   if (hasResponseFormatDirective(text)) {
     return text;
   }
-  return `${OPEN_TAG}\n${RESPONSE_FORMAT_BODY}\n${CLOSE_TAG}\n\n${text}`;
+  return `${OPEN_TAG}\n${RESPONSE_FORMAT_BODIES[template]}\n${CLOSE_TAG}\n\n${text}`;
 }
 
 /** Remove the leading directive envelope for display. No-op when absent. */

@@ -317,20 +317,23 @@ export function buildTaskAnalysisPrompt(input: {
     "Explore le dépôt en LECTURE SEULE (quelques fichiers au plus) pour cerner le périmètre.",
     "NE MODIFIE AUCUN fichier à cette étape. L'exécution reprendra ensuite dans CETTE MÊME conversation.",
     "",
+    // Same four sections as the "analysis" response template (see
+    // services/response-format.ts and docs/response-templates.md): the envelope
+    // imposes the shape, this prompt adds the estimate block's own spec.
     "## Format imposé de la réponse",
     "Réponds TOUJOURS avec EXACTEMENT ces quatre sections numérotées, dans cet ordre, chacune avec son titre puis son contenu :",
     "",
-    "### 1. Objectif",
+    "## 1. Objectif",
     "En une ou deux phrases : ce que la tâche doit accomplir, du point de vue du résultat.",
     "",
-    "### 2. Approche retenue",
+    "## 2. Approche retenue",
     "Le plan d'action en texte clair, étapes ordonnées. Reste concis et concret.",
     "",
-    "### 3. Fichiers concernés & points de vigilance",
+    "## 3. Fichiers & points de vigilance",
     "Présente-les sous forme de TABLEAU Markdown à deux colonnes : | Élément | Détail |.",
     "Une ligne par fichier touché et une ligne par point de vigilance (risque, dépendance, test).",
     "",
-    "### 4. Estimation",
+    "## 4. Estimation",
     "Termine impérativement cette section par un bloc ```json (et rien après) avec l'objet d'estimation :",
     '   {"tokens": <entier>, "quotaPercent": <0-100>, "estimatedMinutes": <entier>, "confidence": "low|medium|high", "summary": "<justification en une phrase>", "billingTitle": "<titre facturation, 5 mots max>", "billingDescription": "<description facturation, 3 lignes max>", "billingHours": <heures>}',
     `   • estimatedMinutes : le temps que TOI, l'agent (${providerLabel}), mettras réellement à EXÉCUTER la tâche, montre en main — en général quelques minutes (2 à 15), rarement plus de 30 même pour un gros chantier. C'est ce temps MACHINE qui s'affiche sur la carte. Ce n'est PAS l'effort humain (voir billingHours).`,
@@ -373,7 +376,11 @@ export function buildTaskExecutionPrompt(input: {
         "2. Vérifie ton travail (typecheck, lint, tests ciblés pertinents s'ils existent).",
         "3. Commite tes changements sur cette branche avec un message conventionnel clair.",
         "4. NE pousse PAS et NE crée PAS de pull request : l'utilisateur relit la branche et merge lui-même.",
-        "5. Termine ta réponse par un résumé de ce que tu as fait et la liste des fichiers modifiés.",
+        // The shape of that report is imposed by the response-format envelope
+        // (the "progress" template while the card sits in "En cours"), so this
+        // step only says WHAT to report, never HOW to lay it out.
+        "5. Rends compte de ton travail en suivant exactement le gabarit de réponse imposé,",
+        "   en citant les fichiers modifiés dans « Ce qui change ».",
       ];
   return [intro, "", ...taskHeader(task), "", ...instructions]
     .filter((line) => line !== "")
