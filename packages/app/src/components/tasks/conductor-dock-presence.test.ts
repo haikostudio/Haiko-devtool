@@ -3,14 +3,14 @@ import { resolveConductorDockPresence } from "./conductor-dock-presence";
 
 describe("resolveConductorDockPresence", () => {
   it("shows the conductor, focused, when no task is docked", () => {
-    expect(
-      resolveConductorDockPresence({ hasDockedTask: false, conductorResolved: true }),
-    ).toEqual({
-      showTaskView: false,
-      conductorVisible: true,
-      conductorFocused: true,
-      ensureSuspended: false,
-    });
+    expect(resolveConductorDockPresence({ hasDockedTask: false, conductorResolved: true })).toEqual(
+      {
+        showTaskView: false,
+        conductorVisible: true,
+        conductorFocused: true,
+        ensureSuspended: false,
+      },
+    );
   });
 
   it("hides the conductor behind a docked task without ever suspending it", () => {

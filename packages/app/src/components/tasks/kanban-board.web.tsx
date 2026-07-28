@@ -223,8 +223,8 @@ export function KanbanBoard({
 }
 
 const DroppableColumn = memo(function DroppableColumn({
-  board,
-  folderId,
+  // Same as the native board: both props stay in the type (the parent spreads
+  // them) but the column itself no longer reads them.
   column,
   label,
   labels,

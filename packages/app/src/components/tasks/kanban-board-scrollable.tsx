@@ -96,8 +96,9 @@ export function ScrollableKanbanBoard({
 }
 
 const BoardColumn = memo(function BoardColumn({
-  board,
-  folderId,
+  // `board` / `folderId` stay in the props type (the parent still spreads them)
+  // but the column stopped reading them when "Lancer maintenant" moved to the
+  // task detail — destructuring them here would just be an unused binding.
   column,
   label,
   labels,
