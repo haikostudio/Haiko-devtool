@@ -515,6 +515,11 @@ export const ptBR: TranslationResources = {
       pendingPublish: "{{count}} cartão(ões) prontos para publicar",
       pendingPublishWithRestart:
         "{{count}} cartão(ões) prontos para publicar, {{restart}} exigem reinício",
+      batch: {
+        label: "Lote · {{count}} cartões",
+        expand: "Expandir o lote",
+        collapse: "Recolher o lote",
+      },
     },
     analysis: {
       failedRetrying: "Análise falhou — tentando de novo",

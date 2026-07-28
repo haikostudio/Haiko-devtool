@@ -502,6 +502,11 @@ export const ar: TranslationResources = {
       emptyColumn: "لا مهام",
       pendingPublish: "{{count}} بطاقة جاهزة للنشر",
       pendingPublishWithRestart: "{{count}} بطاقة جاهزة للنشر، منها {{restart}} تتطلب إعادة تشغيل",
+      batch: {
+        label: "دفعة · {{count}} بطاقة",
+        expand: "توسيع الدفعة",
+        collapse: "طي الدفعة",
+      },
     },
     analysis: {
       failedRetrying: "فشل التحليل — إعادة المحاولة",

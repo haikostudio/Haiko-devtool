@@ -514,6 +514,11 @@ export const es: TranslationResources = {
       pendingPublish: "{{count}} tarjeta(s) listas para publicar",
       pendingPublishWithRestart:
         "{{count}} tarjeta(s) listas para publicar, {{restart}} requieren reinicio",
+      batch: {
+        label: "Lote · {{count}} tarjetas",
+        expand: "Desplegar el lote",
+        collapse: "Plegar el lote",
+      },
     },
     analysis: {
       failedRetrying: "Análisis fallido — reintentando",

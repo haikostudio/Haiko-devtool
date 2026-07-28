@@ -506,6 +506,11 @@ export const en = {
       pendingPublish: "{{count}} card(s) ready to publish",
       pendingPublishWithRestart:
         "{{count}} card(s) ready to publish, {{restart}} needing a restart",
+      batch: {
+        label: "Batch · {{count}} cards",
+        expand: "Unfold the batch",
+        collapse: "Fold the batch",
+      },
     },
     analysis: {
       failedRetrying: "Analysis failed — retrying",

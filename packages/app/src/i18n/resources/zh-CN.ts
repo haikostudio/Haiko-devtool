@@ -499,6 +499,11 @@ export const zhCN: TranslationResources = {
       emptyColumn: "暂无任务",
       pendingPublish: "{{count}} 张卡片待发布",
       pendingPublishWithRestart: "{{count}} 张卡片待发布，其中 {{restart}} 张需要重启",
+      batch: {
+        label: "批次 · {{count}} 张卡片",
+        expand: "展开批次",
+        collapse: "折叠批次",
+      },
     },
     analysis: {
       failedRetrying: "分析失败 — 正在重试",

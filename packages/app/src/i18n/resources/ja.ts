@@ -509,6 +509,11 @@ export const ja: TranslationResources = {
       pendingPublish: "公開待ちのカード {{count}} 件",
       pendingPublishWithRestart:
         "公開待ちのカード {{count}} 件（うち {{restart}} 件は再起動が必要）",
+      batch: {
+        label: "ロット · {{count}} 件",
+        expand: "ロットを展開",
+        collapse: "ロットを折りたたむ",
+      },
     },
     analysis: {
       failedRetrying: "分析に失敗 — 再試行中",
