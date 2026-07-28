@@ -94,6 +94,7 @@ import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
 import { TaskAnalysisCard } from "@/components/tasks/task-analysis-card";
 import { parseTaskAnalysisEstimateBlock } from "@/components/tasks/task-analysis-estimate";
 import { splitMarkdownBlocks } from "@/utils/split-markdown-blocks";
+import { flagEvolutionBlocks } from "@/utils/evolution-section";
 import { parseCalloutBlock, type CalloutType, type ParsedCallout } from "@/utils/markdown-callout";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
@@ -1727,17 +1728,6 @@ function MarkdownListView({ baseStyle, spacing, children }: MarkdownListViewProp
   return <View style={style}>{children}</View>;
 }
 
-// "Évolutions possibles" heading detector. Leading numbering ("## 4. …",
-// "## 5) …") is stripped first, and the accent is optional so a model that
-// drops it still triggers the affordance. Anchored on the first word so a
-// heading that merely mentions an evolution further along ("Impact sur
-// l'évolution du build") keeps plain rendering.
-const EVOLUTION_HEADING_PATTERN = /^(?:\d+\s*[.)]\s*)?[ée]volution/i;
-
-function isEvolutionHeading(headingText: string): boolean {
-  return EVOLUTION_HEADING_PATTERN.test(headingText.trim().replace(/^[*_#\s]+/, ""));
-}
-
 // Flatten an AST node to its plain text — used to seed the task title from a
 // bullet without dragging along inline markdown markup.
 function extractAstNodeText(node: ASTNode): string {
@@ -2291,36 +2281,13 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
   const keyedBlocks = useMemo(() => {
-    // Blocks are split on blank lines, so the section heading and its bullet
-    // list are usually separate blocks. Track the active section as we walk
-    // them and flag every block under "Évolutions possibles". A heading glued
-    // to its list (no blank line in between) lands in a single block, hence
-    // scanning every line rather than just the first one.
-    let sectionIsEvolutions = false;
-    return blocks.map((block, index) => {
-      let blockIsEvolutions = sectionIsEvolutions;
-      let isFirstLine = true;
-      for (const line of block.trim().split("\n")) {
-        const headingMatch = /^#{1,6}\s+(.+)$/.exec(line.trim());
-        if (!headingMatch) {
-          isFirstLine = false;
-          continue;
-        }
-        sectionIsEvolutions = isEvolutionHeading(headingMatch[1]);
-        // Only a heading opening the block re-flags the block itself; a heading
-        // further down applies to what follows.
-        if (isFirstLine) {
-          blockIsEvolutions = sectionIsEvolutions;
-        }
-        isFirstLine = false;
-      }
-      return {
-        key: `${index}:${block.slice(0, 32)}`,
-        block,
-        callout: parseCalloutBlock(block),
-        evolutions: blockIsEvolutions,
-      };
-    });
+    const evolutionFlags = flagEvolutionBlocks(blocks);
+    return blocks.map((block, index) => ({
+      key: `${index}:${block.slice(0, 32)}`,
+      block,
+      callout: parseCalloutBlock(block),
+      evolutions: evolutionFlags[index] === true,
+    }));
   }, [blocks]);
 
   const assistantContainerStyle = useMemo(

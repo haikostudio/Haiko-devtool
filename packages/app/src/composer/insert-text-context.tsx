@@ -1,12 +1,14 @@
+import * as React from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { appendTextToDraft } from "./insert-draft-text";
+import type { ComposerFocusInputOptions } from "./types";
 
 interface ComposerInsertContextValue {
   /** Appends `text` to the current draft and focuses the message input. */
   insertText: (text: string) => void;
   /** Lets the composer publish its focus function to this provider. */
-  registerFocusInput: (focus: () => void) => void;
+  registerFocusInput: (focus: (options?: ComposerFocusInputOptions) => void) => void;
 }
 
 const ComposerInsertContext = createContext<ComposerInsertContextValue | null>(null);
@@ -36,8 +38,8 @@ export function ComposerInsertProvider({
     textRef.current = text;
   }, [text]);
 
-  const focusInputRef = useRef<(() => void) | null>(null);
-  const registerFocusInput = useCallback((focus: () => void) => {
+  const focusInputRef = useRef<((options?: ComposerFocusInputOptions) => void) | null>(null);
+  const registerFocusInput = useCallback((focus: (options?: ComposerFocusInputOptions) => void) => {
     focusInputRef.current = focus;
   }, []);
 
@@ -48,8 +50,9 @@ export function ComposerInsertProvider({
         textRef.current = nextText;
         setText(nextText);
       }
-      // Focus only — the message is never sent automatically.
-      focusInputRef.current?.();
+      // Focus only — the message is never sent automatically. On phones the
+      // keyboard should come up, since the user is about to keep typing.
+      focusInputRef.current?.({ raiseKeyboardOnNative: true });
     },
     [setText],
   );

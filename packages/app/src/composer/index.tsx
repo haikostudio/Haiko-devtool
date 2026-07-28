@@ -46,7 +46,7 @@ import { useFilePicker } from "@/hooks/use-file-picker";
 import { useFileDrop } from "@/components/file-drop/use-file-drop";
 import type { DroppedItem } from "@/components/file-drop/types";
 import { MessageInput, type MessageInputRef, type AttachmentMenuItem } from "./input/input";
-import type { ImageAttachment, MessagePayload } from "./types";
+import type { ComposerFocusInputOptions, ImageAttachment, MessagePayload } from "./types";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import type { DraftCommandConfig } from "@/hooks/use-agent-commands-query";
 import { encodeImages } from "@/utils/encode-images";
@@ -753,14 +753,6 @@ function GithubPickerOption({
       leadingSlot={leadingSlot}
     />
   );
-}
-
-export interface ComposerFocusInputOptions {
-  /**
-   * Focus the input on native too, raising the keyboard. Off by default: most
-   * callers focus after a config tap, where a keyboard would be intrusive.
-   */
-  raiseKeyboardOnNative?: boolean;
 }
 
 interface ComposerProps {
