@@ -69,6 +69,7 @@ import {
   type QueuedComposerMessage,
 } from "@/composer/actions";
 import { useVoiceOptional } from "@/contexts/voice-context";
+import { useComposerFooterControls } from "@/composer/footer-controls-context";
 import { useToast } from "@/contexts/toast-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Shortcut } from "@/components/ui/shortcut";
@@ -1035,6 +1036,9 @@ export function Composer({
   const toastErrorRef = useRef(toast.error);
   toastErrorRef.current = toast.error;
   const voice = useVoiceOptional();
+  // Extra footer controls injected by an ancestor (e.g. the conductor drawer's
+  // « Réinitialiser » button). Null everywhere else, so the footer is unchanged.
+  const footerControls = useComposerFooterControls();
   const voiceToggleKeys = useShortcutKeys("voice-toggle");
   const agentInterruptKeys = useShortcutKeys("agent-interrupt");
   const isDictationReady = useIsDictationReady({
@@ -1694,26 +1698,30 @@ export function Composer({
 
   const rightContent = useMemo(
     () => (
-      <ComposerRightControlsSlot
-        isVoiceModeForAgent={isVoiceModeForAgent}
-        hasAgent={hasAgent}
-        isAgentRunning={isAgentRunning}
-        hasSendableContent={hasSendableContent}
-        isProcessing={isProcessing}
-        isCompact={isCompactLayout}
-        buttonIconSize={buttonIconSize}
-        handleToggleRealtimeVoice={handleToggleRealtimeVoice}
-        isConnected={isConnected}
-        isVoiceSwitching={isVoiceSwitching}
-        realtimeVoiceButtonStyle={realtimeVoiceButtonStyle}
-        voiceToggleKeys={voiceToggleKeys}
-        t={t}
-        cancelButton={cancelButton}
-      />
+      <>
+        <ComposerRightControlsSlot
+          isVoiceModeForAgent={isVoiceModeForAgent}
+          hasAgent={hasAgent}
+          isAgentRunning={isAgentRunning}
+          hasSendableContent={hasSendableContent}
+          isProcessing={isProcessing}
+          isCompact={isCompactLayout}
+          buttonIconSize={buttonIconSize}
+          handleToggleRealtimeVoice={handleToggleRealtimeVoice}
+          isConnected={isConnected}
+          isVoiceSwitching={isVoiceSwitching}
+          realtimeVoiceButtonStyle={realtimeVoiceButtonStyle}
+          voiceToggleKeys={voiceToggleKeys}
+          t={t}
+          cancelButton={cancelButton}
+        />
+        {footerControls}
+      </>
     ),
     [
       buttonIconSize,
       cancelButton,
+      footerControls,
       handleToggleRealtimeVoice,
       hasAgent,
       hasSendableContent,
