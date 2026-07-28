@@ -2748,7 +2748,9 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       model: z
         .string()
         .optional()
-        .describe('Provider model id, e.g. "claude-opus-4-8". Omit for the provider default.'),
+        .describe(
+          'Provider model id, e.g. "claude-opus-5[1m]" (Opus 5 with the 1M context window). Omit for the provider default, which is already that model for code work.',
+        ),
       thinkingOptionId: z
         .string()
         .optional()

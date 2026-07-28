@@ -22,10 +22,27 @@ export interface EnsureConductorResult {
   workspaceId: string | null;
 }
 
-type ConductorProvider = "claude/sonnet" | "codex/gpt-5.4";
+type ConductorProvider = "claude/claude-opus-4-8" | "codex/gpt-5.4";
 
-const DEFAULT_CONDUCTOR_PROVIDER: ConductorProvider = "claude/sonnet";
+/**
+ * Model the Claude conductor runs on. Pinned on purpose: the conductor is a
+ * router, not a coder, so it must NOT inherit the Claude catalog default (Opus 5
+ * with the 1M window) that code tasks want. Only fills the blank — the composer's
+ * native model menu can still move a live conductor to any other Claude model.
+ */
+const CLAUDE_CONDUCTOR_MODEL = "claude-opus-4-8";
+const CLAUDE_CONDUCTOR_PROVIDER: ConductorProvider = "claude/claude-opus-4-8";
+const DEFAULT_CONDUCTOR_PROVIDER: ConductorProvider = CLAUDE_CONDUCTOR_PROVIDER;
 const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
+
+// COMPAT(conductorClaudeModel): until v0.2.3 the Claude conductor was created on
+// the bare "sonnet" alias. That string is persisted in two places we do not
+// migrate — the provider label of every existing conductor record and its
+// `config.model` — and old clients still send it over the wire. Both are accepted
+// and mapped onto the current Claude conductor. Drop when floor >= v0.2.3 AND
+// every stored conductor has been re-locked (see `conductorConfigIsCurrent`).
+const LEGACY_CLAUDE_CONDUCTOR_PROVIDER = "claude/sonnet";
+const LEGACY_CLAUDE_CONDUCTOR_MODEL = "sonnet";
 
 /**
  * Thinking effort a Claude conductor starts on. Without an explicit id the model
@@ -402,8 +419,12 @@ function resolveConductorProvider(value: string | undefined): ConductorProvider 
   if (!normalized) {
     return DEFAULT_CONDUCTOR_PROVIDER;
   }
-  if (normalized === "claude" || normalized === DEFAULT_CONDUCTOR_PROVIDER) {
-    return DEFAULT_CONDUCTOR_PROVIDER;
+  if (
+    normalized === "claude" ||
+    normalized === CLAUDE_CONDUCTOR_PROVIDER ||
+    normalized === LEGACY_CLAUDE_CONDUCTOR_PROVIDER
+  ) {
+    return CLAUDE_CONDUCTOR_PROVIDER;
   }
   if (normalized === "codex" || normalized === CODEX_CONDUCTOR_PROVIDER) {
     return CODEX_CONDUCTOR_PROVIDER;
@@ -447,6 +468,7 @@ function buildConductorConfig(
     // `base` already carries the stored id when the user picked one, so this only
     // applies to a conductor that never had an explicit level.
     thinkingOptionId: base.thinkingOptionId ?? CONDUCTOR_CLAUDE_THINKING_OPTION_ID,
+    model: resolveClaudeConductorModel(base.model),
     extra: {
       ...existing?.extra,
       claude: {
@@ -478,7 +500,26 @@ function conductorConfigIsCurrent(
   if (config.thinkingOptionId == null) {
     return false;
   }
+  // Same reasoning for the model: a conductor persisted on the legacy "sonnet"
+  // alias (or with no model at all) must be moved onto the pinned conductor model
+  // instead of staying on the old default for the life of the record.
+  if (config.model == null || config.model === LEGACY_CLAUDE_CONDUCTOR_MODEL) {
+    return false;
+  }
   return sameToolSet(readStoredDisallowedTools(config.extra), CONDUCTOR_DISALLOWED_TOOLS);
+}
+
+/**
+ * Model a Claude conductor should carry. An explicit pick from the composer's
+ * model menu wins; a blank — or the legacy bare "sonnet" alias, which that menu
+ * never offers and so can only come from the old hardcoded default — falls to the
+ * pinned conductor model.
+ */
+function resolveClaudeConductorModel(storedModel: string | null | undefined): string {
+  if (!storedModel || storedModel === LEGACY_CLAUDE_CONDUCTOR_MODEL) {
+    return CLAUDE_CONDUCTOR_MODEL;
+  }
+  return storedModel;
 }
 
 function toAgentSessionConfigOverrides(

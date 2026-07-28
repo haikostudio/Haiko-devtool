@@ -13,7 +13,7 @@ import { DEFAULT_EXPLORER_SIDEBAR_WIDTH } from "@/stores/panel-store";
  * the running agent's own provider), so the Claude/Codex choice has to be made
  * where the conductor agent is created — here, remembered across reloads.
  */
-export type ConductorProviderChoice = "claude/sonnet" | "codex/gpt-5.4";
+export type ConductorProviderChoice = "claude/claude-opus-4-8" | "codex/gpt-5.4";
 
 interface TasksBoardUiState {
   /** Open width (in px) of the right-hand Details/Billing drawer. */
@@ -22,9 +22,16 @@ interface TasksBoardUiState {
   /** Provider the conductor chat runs on (one persisted conductor per provider). */
   conductorProvider: ConductorProviderChoice;
   setConductorProvider: (conductorProvider: ConductorProviderChoice) => void;
-  /** Whether the bottom-docked "Chef d'orchestre" chat dock is open. */
+  /** Whether the right-hand "Chef d'orchestre" chat side panel is open. */
   conductorOpen: boolean;
   setConductorOpen: (conductorOpen: boolean) => void;
+  /**
+   * Width (in px) of the desktop conductor/agents side panel. Like the explorer
+   * side panel, it splits the row with the board instead of floating over it, so
+   * this width is what the board gives up — remembered across reloads.
+   */
+  conductorPanelWidth: number;
+  setConductorPanelWidth: (conductorPanelWidth: number) => void;
   /** Height (in px) of the conductor chat dock. */
   conductorHeight: number;
   setConductorHeight: (conductorHeight: number) => void;
@@ -100,8 +107,25 @@ export function useOpenTaskId(): string | null {
 // opens the panel at before the user has resized it.
 const DEFAULT_PANEL_WIDTH = 440;
 const DEFAULT_CONDUCTOR_HEIGHT = 340;
+// Opening width of the desktop conductor/agents side panel before the user drags
+// it — a touch wider than the file explorer since it hosts a chat, not a tree.
+const DEFAULT_CONDUCTOR_PANEL_WIDTH = 440;
 // Claude by default, matching the daemon's own conductor default.
-const DEFAULT_CONDUCTOR_PROVIDER: ConductorProviderChoice = "claude/sonnet";
+const DEFAULT_CONDUCTOR_PROVIDER: ConductorProviderChoice = "claude/claude-opus-4-8";
+
+/**
+ * Coerces a persisted provider choice back into the union: Codex stays Codex,
+ * anything else lands on the Claude default rather than leaking outside the type.
+ *
+ * COMPAT(conductorClaudeModel): added in v0.2.3 — the Claude choice used to be
+ * the bare "claude/sonnet" alias and is still sitting in every existing install's
+ * persisted store, where it would otherwise blank the toggle label. Drop the
+ * normalizer when no install can still hold that value.
+ */
+function normalizeConductorProviderChoice(value: unknown): ConductorProviderChoice {
+  return value === "codex/gpt-5.4" ? "codex/gpt-5.4" : DEFAULT_CONDUCTOR_PROVIDER;
+}
+
 // Mirrors DEFAULT_TIMELINE_HEIGHT in task-timeline-area.tsx.
 const DEFAULT_TIMELINE_HEIGHT = 190;
 
@@ -114,6 +138,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setConductorProvider: (conductorProvider) => set({ conductorProvider }),
       conductorOpen: false,
       setConductorOpen: (conductorOpen) => set({ conductorOpen }),
+      conductorPanelWidth: DEFAULT_CONDUCTOR_PANEL_WIDTH,
+      setConductorPanelWidth: (conductorPanelWidth) => set({ conductorPanelWidth }),
       conductorHeight: DEFAULT_CONDUCTOR_HEIGHT,
       setConductorHeight: (conductorHeight) => set({ conductorHeight }),
       conductorOffsetX: 0,
@@ -152,6 +178,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         panelWidth: state.panelWidth,
         conductorProvider: state.conductorProvider,
         conductorOpen: state.conductorOpen,
+        conductorPanelWidth: state.conductorPanelWidth,
         conductorHeight: state.conductorHeight,
         conductorOffsetX: state.conductorOffsetX,
         conductorCollapsed: state.conductorCollapsed,
@@ -165,6 +192,14 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         explorerOffsetX: state.explorerOffsetX,
         explorerCollapsed: state.explorerCollapsed,
       }),
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<TasksBoardUiState>;
+        return {
+          ...current,
+          ...stored,
+          conductorProvider: normalizeConductorProviderChoice(stored.conductorProvider),
+        };
+      },
     },
   ),
 );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Keyboard, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -52,7 +52,7 @@ type ConductorProvider = ConductorProviderChoice;
 // destroying anything. The native menu still owns model + thinking level within
 // the chosen provider; this control never touches those.
 const CONDUCTOR_PROVIDER_LABELS: Record<ConductorProvider, string> = {
-  "claude/sonnet": "Claude",
+  "claude/claude-opus-4-8": "Claude",
   "codex/gpt-5.4": "Codex",
 };
 
@@ -102,7 +102,46 @@ export interface ConductorPanelProps {
  * agents, and the chat tab stays mounted (hidden) so its state survives a hop to
  * Details or Billing and back.
  */
-export function ConductorPanel({
+export function ConductorPanel(props: ConductorPanelProps) {
+  const { header, body } = useConductorController(props);
+
+  const conductorHeight = useTasksBoardUiStore((state) => state.conductorHeight);
+  const conductorOffsetX = useTasksBoardUiStore((state) => state.conductorOffsetX);
+  const conductorCollapsed = useTasksBoardUiStore((state) => state.conductorCollapsed);
+  const setConductorHeight = useTasksBoardUiStore((state) => state.setConductorHeight);
+  const setConductorOffsetX = useTasksBoardUiStore((state) => state.setConductorOffsetX);
+  const setConductorCollapsed = useTasksBoardUiStore((state) => state.setConductorCollapsed);
+  const handleToggleCollapse = useCallback(
+    () => setConductorCollapsed(!conductorCollapsed),
+    [conductorCollapsed, setConductorCollapsed],
+  );
+
+  return (
+    <TaskBottomDock
+      header={header}
+      visible
+      onClose={props.onClose}
+      height={conductorHeight}
+      offsetX={conductorOffsetX}
+      collapsed={conductorCollapsed}
+      onResize={setConductorHeight}
+      onMove={setConductorOffsetX}
+      onToggleCollapse={handleToggleCollapse}
+      testID="conductor-panel"
+    >
+      {body}
+    </TaskBottomDock>
+  );
+}
+
+/**
+ * All of the conductor's state and behavior, independent of the shell it renders
+ * in. Returns the `header` (title, leading icon, back, provider + reset actions)
+ * and the `body` node (loading / error / conductor chat / task tabs) so both the
+ * compact bottom dock (`ConductorPanel`) and the desktop right-hand side panel
+ * (`ConductorSidePanel`) share one implementation.
+ */
+export function useConductorController({
   serverId,
   projectId,
   dockTask,
@@ -117,22 +156,11 @@ export function ConductorPanel({
   onArchive,
   onDeploy,
   onSetHold,
-  onClose,
-}: ConductorPanelProps) {
+}: ConductorPanelProps): { header: TaskDockHeader; body: ReactNode } {
   const { t } = useTranslation();
 
-  const conductorHeight = useTasksBoardUiStore((state) => state.conductorHeight);
-  const conductorOffsetX = useTasksBoardUiStore((state) => state.conductorOffsetX);
-  const conductorCollapsed = useTasksBoardUiStore((state) => state.conductorCollapsed);
   const conductorProvider = useTasksBoardUiStore((state) => state.conductorProvider);
   const setConductorProvider = useTasksBoardUiStore((state) => state.setConductorProvider);
-  const setConductorHeight = useTasksBoardUiStore((state) => state.setConductorHeight);
-  const setConductorOffsetX = useTasksBoardUiStore((state) => state.setConductorOffsetX);
-  const setConductorCollapsed = useTasksBoardUiStore((state) => state.setConductorCollapsed);
-  const handleToggleCollapse = useCallback(
-    () => setConductorCollapsed(!conductorCollapsed),
-    [conductorCollapsed, setConductorCollapsed],
-  );
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
   // True once this project's conductor has been resolved at least once. Gates the
@@ -193,7 +221,7 @@ export function ConductorPanel({
   // the stored choice changes here: the ensure effect below reacts to it and asks
   // the daemon for that provider's conductor. Nothing is reset or destroyed.
   const nextConductorProvider: ConductorProvider =
-    conductorProvider === "claude/sonnet" ? "codex/gpt-5.4" : "claude/sonnet";
+    conductorProvider === "codex/gpt-5.4" ? "claude/claude-opus-4-8" : "codex/gpt-5.4";
   const handleToggleProvider = useCallback(() => {
     setConductorProvider(nextConductorProvider);
   }, [nextConductorProvider, setConductorProvider]);
@@ -445,32 +473,21 @@ export function ConductorPanel({
     t,
   ]);
 
-  return (
-    <TaskBottomDock
-      header={header}
-      visible
-      onClose={onClose}
-      height={conductorHeight}
-      offsetX={conductorOffsetX}
-      collapsed={conductorCollapsed}
-      onResize={setConductorHeight}
-      onMove={setConductorOffsetX}
-      onToggleCollapse={handleToggleCollapse}
-      testID="conductor-panel"
-    >
-      {/* No provider bar here: Claude vs Codex is chosen in Paseo's native menu
-          under the prompt composer (see CONDUCTOR_PROVIDER). */}
-      <View style={styles.body}>
-        {presence.showTaskView && dockTask ? (
-          <View style={styles.tabPane}>{renderTaskBody(dockTask)}</View>
-        ) : null}
-        {/* Kept mounted whatever the dock shows — see `renderConductorBody`. */}
-        <View style={presence.conductorVisible ? styles.tabPane : styles.tabPaneHidden}>
-          {renderConductorBody()}
-        </View>
+  const body = (
+    // No provider bar here: Claude vs Codex is chosen in Paseo's native menu under
+    // the prompt composer (see CONDUCTOR_PROVIDER).
+    <View style={styles.body}>
+      {presence.showTaskView && dockTask ? (
+        <View style={styles.tabPane}>{renderTaskBody(dockTask)}</View>
+      ) : null}
+      {/* Kept mounted whatever the dock shows — see `renderConductorBody`. */}
+      <View style={presence.conductorVisible ? styles.tabPane : styles.tabPaneHidden}>
+        {renderConductorBody()}
       </View>
-    </TaskBottomDock>
+    </View>
   );
+
+  return { header, body };
 }
 
 function resetButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
