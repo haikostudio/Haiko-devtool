@@ -22,7 +22,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
     version: "Unreleased",
     date: "2026-07-28",
     markdown:
-      "### Ajouts\n\n- Barrer une évolution ajoutée au composeur\n- Ne créer une carte que pour les demandes d'action\n- Volet latéral avec aperçu intégré\n- Un gabarit de réponse par colonne du tableau\n- Compteur, annulation, rangement auto et effacement par catégorie\n- Largeur ajustable et mémorisée pour le volet d'aperçu\n- Volet d'aperçu de fichier sur le tableau\n- Fenêtre d'annulation, reprise des agents et vocabulaire unique du redémarrage\n- Brancher la pile de lot sur les deux tableaux\n- Pile dépliable pour les cartes d'un même lot\n- Repérer une question posée en pleine phrase\n- Tiroir des tâches quasi plein écran\n- Compte à rebours de reconnexion et enchaînement « publier puis redémarrer »\n- Boucler le parcours « publication → redémarrage » sur la carte\n- Prévenir avant publication qu'un redémarrage du démon sera nécessaire\n- Section « Évolutions possibles » numérotée avec bouton « + » vers le composeur\n- Pile de toasts compacte, largeur unique et fermeture globale\n- Panneau ancré sous la cloche, compteur et lignes détaillées\n- Déplacer « Réinitialiser » en bas, avec les commandes de saisie\n- Chef d'orchestre et agents en volet latéral droit\n- Emplacement optionnel pour un bouton dans la barre de saisie\n- Rétablir les propositions de tâches dans le chat\n- Chef d'orchestre sur Opus 4.8, défaut code sur Opus 5 1M\n- Liseré violet sur la carte de tâche ouverte\n- Réduire le compte rendu de tâche à cinq sections\n- Le bouton de lancement rend compte du démarrage réel\n- Synchroniser les boutons d'action à l'état réel de l'agent\n- Cloche de notifications dans l'en-tête de l'écran Tâches\n- Historique des notifications push\n- Croix de fermeture au survol sur la pile d'agents\n- Déploiement d'une carte terminée via son agent\n- Archivage manuel des cartes terminées\n- Barre « Valider la tâche » sur les cartes À faire\n- Libellés de créneau plus clairs sur les cartes planifiées\n- Une carte validée passe seule en « Planifié » dès l'analyse réussie\n- Regrouper chaque IA en bloc et masquer les IA inactives\n- Suivre la publication dans la conversation et lier l'adresse en ligne\n- Terminer une carte publie la tâche, plus de bouton ni de fenêtre « À déployer »\n- Le tableau se déplace à la main, et le contrôle final déploie sur l'instance dev\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Améliorations\n\n- Retirer les outils de classeur au chef d'orchestre\n- Retirer la ligne « classeur » des propositions de tâche\n- Supprimer le sélecteur de classeurs du tableau\n- Isoler la détection de la section « Évolutions possibles » et cadrer le focus natif\n- Parallelize server dependencies (#2434)\n- Scinder le routage des messages tâches\n- Déplacer « Lancer maintenant » de la carte au détail\n- Reduce encrypted binary traffic overhead (#2480)\n\n### Corrections\n\n- Cartes terminées toujours à 100% dopacité, pastille selon létat\n- Dégager le contenu de la barre de défilement flottante\n- Déplier une pile de lot depuis sa carte de tête\n- Ne réserver la bordure droite que sur l'écran actif\n- Garder le téléchargement à portée dans l'aperçu\n- Fiabiliser l'indicateur de quota Claude face aux 429\n- Garder la barre de toasts hors des colonnes latérales\n- La corbeille n'efface que les notifications terminées\n- Solder la dette de redémarrage au démarrage du moteur\n- Retirer un octet nul et fiabiliser le champ taux\n- Pré-remplir le tiroir Facturation depuis l'estimation\n- Restore Grok Settings usage for current CLI auth/billing (#2353)\n- Dire « Terminé » quand aucune action n'est attendue\n- Aligner la chronologie sur la gouttière réelle du tableau\n- Show a single 1M-context Opus 5 model (#2497)\n- Calibrer le bandeau chronologique sur le tableau kanban\n- Une seule requête à l'ouverture du panneau + tests de contexte\n- Masquer « Lancer le déploiement » et marquer « Déployé » après une publication réussie\n- Garder le choix Claude compatible avec un démon plus ancien\n- Supprimer deux liaisons inutilisées dans les colonnes du tableau\n- Tags de statut fidèles à l'action réelle de l'agent\n- Garder la discussion du chef d'orchestre vivante en changeant de tâche\n- Le bouton de lancement ne peut plus se verrouiller\n- Débloquer « Lancer maintenant » sur une carte figée au lancement\n- Accept nullable model context windows (#2406)\n- Expose injected Paseo tools directly (#2418)\n- Discover Codex project skills from cwd (#2423)\n- Render HTML in PR comments (#2432)\n- Preserve non-default port in forge web URLs (#2478)\n- Make worktree setup run on Windows (#2431)\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Remplir les champs facturation des anciennes estimations à la lecture\n- Bloquer le scroll horizontal des colonnes kanban\n- Supprimer la bande blanche sous le champ dans le tiroir des tâches\n- L'analyse ne grille plus ses tentatives quand l'agent est occupé, et la carte explique l'échec\n- Supprimer la bande blanche sous le champ de message\n- Plus de JSON brut dans la discussion, et plus de saut en « En cours »\n- Menu ⋮ dans l'en-tête, marge du prompt et modale écrasée\n- Plus d'erreur « connexion perdue » au premier prompt du chef d'orchestre\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
+      "### Ajouts\n\n- Barre de progression, mise en attente, récapitulatif et publication en heures creuses\n- File « À déployer » et bouton « Tout déployer »\n- Dismiss the chat keyboard on a fast upward flick (#2417)\n- Barrer une évolution ajoutée au composeur\n- Ne créer une carte que pour les demandes d'action\n- Volet latéral avec aperçu intégré\n- Un gabarit de réponse par colonne du tableau\n- Compteur, annulation, rangement auto et effacement par catégorie\n- Largeur ajustable et mémorisée pour le volet d'aperçu\n- Volet d'aperçu de fichier sur le tableau\n- Fenêtre d'annulation, reprise des agents et vocabulaire unique du redémarrage\n- Brancher la pile de lot sur les deux tableaux\n- Pile dépliable pour les cartes d'un même lot\n- Repérer une question posée en pleine phrase\n- Tiroir des tâches quasi plein écran\n- Compte à rebours de reconnexion et enchaînement « publier puis redémarrer »\n- Boucler le parcours « publication → redémarrage » sur la carte\n- Prévenir avant publication qu'un redémarrage du démon sera nécessaire\n- Section « Évolutions possibles » numérotée avec bouton « + » vers le composeur\n- Pile de toasts compacte, largeur unique et fermeture globale\n- Panneau ancré sous la cloche, compteur et lignes détaillées\n- Déplacer « Réinitialiser » en bas, avec les commandes de saisie\n- Chef d'orchestre et agents en volet latéral droit\n- Emplacement optionnel pour un bouton dans la barre de saisie\n- Rétablir les propositions de tâches dans le chat\n- Chef d'orchestre sur Opus 4.8, défaut code sur Opus 5 1M\n- Liseré violet sur la carte de tâche ouverte\n- Réduire le compte rendu de tâche à cinq sections\n- Le bouton de lancement rend compte du démarrage réel\n- Synchroniser les boutons d'action à l'état réel de l'agent\n- Cloche de notifications dans l'en-tête de l'écran Tâches\n- Historique des notifications push\n- Croix de fermeture au survol sur la pile d'agents\n- Déploiement d'une carte terminée via son agent\n- Archivage manuel des cartes terminées\n- Barre « Valider la tâche » sur les cartes À faire\n- Libellés de créneau plus clairs sur les cartes planifiées\n- Une carte validée passe seule en « Planifié » dès l'analyse réussie\n- Regrouper chaque IA en bloc et masquer les IA inactives\n- Suivre la publication dans la conversation et lier l'adresse en ligne\n- Terminer une carte publie la tâche, plus de bouton ni de fenêtre « À déployer »\n- Le tableau se déplace à la main, et le contrôle final déploie sur l'instance dev\n- Remettre une carte à zéro en la ramenant dans « À faire »\n- Un agent par carte dès sa création, et un historique qui ne s'efface jamais\n- Le contrôle final se fait dans la discussion, par l'agent de la tâche\n- Wrap long Markdown lines (#2459)\n- Barres et anneau colorés selon le niveau restant\n- Chaque changement affiche où il en est de la publication\n- Un agent publie, et la fenêtre ne montre plus de pourcentage inventé\n- Bouton « Valider la tâche » vert et aligné sur le champ de prompt\n- Historique tenu par le moteur + estimation « à ce rythme »\n- Chiffre, alerte sous 10 % et courbe 7 jours sur la jauge de quotas\n- Jauge circulaire de quotas dans l'en-tête, à la place de la bande\n- L'explorateur de fichiers devient un volet latéral redimensionnable\n- Stop the daemon when you quit the app (#2454)\n- Explorateur, chronologie permanente, et fin des dossiers\n- Contrôle final automatique derrière « Valider la tâche »\n- Mobile aligné, tri des colonnes, et validation par l'utilisateur\n- Réinitialisation du chef d'orchestre et sélecteur de modèle unique\n\n### Améliorations\n\n- Retirer les outils de classeur au chef d'orchestre\n- Retirer la ligne « classeur » des propositions de tâche\n- Supprimer le sélecteur de classeurs du tableau\n- Isoler la détection de la section « Évolutions possibles » et cadrer le focus natif\n- Parallelize server dependencies (#2434)\n- Scinder le routage des messages tâches\n- Déplacer « Lancer maintenant » de la carte au détail\n- Reduce encrypted binary traffic overhead (#2480)\n\n### Corrections\n\n- Terminer une carte prévient enfin la file, et « À déployer » cesse de mentir sur l'état en ligne\n- Cartes terminées toujours à 100% dopacité, pastille selon létat\n- Dégager le contenu de la barre de défilement flottante\n- Déplier une pile de lot depuis sa carte de tête\n- Ne réserver la bordure droite que sur l'écran actif\n- Garder le téléchargement à portée dans l'aperçu\n- Fiabiliser l'indicateur de quota Claude face aux 429\n- Garder la barre de toasts hors des colonnes latérales\n- La corbeille n'efface que les notifications terminées\n- Solder la dette de redémarrage au démarrage du moteur\n- Retirer un octet nul et fiabiliser le champ taux\n- Pré-remplir le tiroir Facturation depuis l'estimation\n- Restore Grok Settings usage for current CLI auth/billing (#2353)\n- Dire « Terminé » quand aucune action n'est attendue\n- Aligner la chronologie sur la gouttière réelle du tableau\n- Show a single 1M-context Opus 5 model (#2497)\n- Calibrer le bandeau chronologique sur le tableau kanban\n- Une seule requête à l'ouverture du panneau + tests de contexte\n- Masquer « Lancer le déploiement » et marquer « Déployé » après une publication réussie\n- Garder le choix Claude compatible avec un démon plus ancien\n- Supprimer deux liaisons inutilisées dans les colonnes du tableau\n- Tags de statut fidèles à l'action réelle de l'agent\n- Garder la discussion du chef d'orchestre vivante en changeant de tâche\n- Le bouton de lancement ne peut plus se verrouiller\n- Débloquer « Lancer maintenant » sur une carte figée au lancement\n- Accept nullable model context windows (#2406)\n- Expose injected Paseo tools directly (#2418)\n- Discover Codex project skills from cwd (#2423)\n- Render HTML in PR comments (#2432)\n- Preserve non-default port in forge web URLs (#2478)\n- Make worktree setup run on Windows (#2431)\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Remplir les champs facturation des anciennes estimations à la lecture\n- Bloquer le scroll horizontal des colonnes kanban\n- Supprimer la bande blanche sous le champ dans le tiroir des tâches\n- L'analyse ne grille plus ses tentatives quand l'agent est occupé, et la carte explique l'échec\n- Supprimer la bande blanche sous le champ de message\n- Plus de JSON brut dans la discussion, et plus de saut en « En cours »\n- Menu ⋮ dans l'en-tête, marge du prompt et modale écrasée\n- Plus d'erreur « connexion perdue » au premier prompt du chef d'orchestre\n- L'anneau de quota redevient visible dans l'en-tête web\n- Le contrôle final n'apparaît qu'une fois la carte en cours\n- Plus aucune référence aux branches dans le tableau\n- Pastille d'importance au coin des notes, sans bordure colorée\n- Une carte ne part plus en exécution sans validation manuelle\n- Fini les pop-ups du navigateur, tout passe par une fenêtre maison\n- Voyant piloté par l'activité réelle de l'agent, éteint au clic\n- Menu aéré et Claude qui ne disparaît plus quand il ne répond pas\n- La pastille de quotas devient visible et affiche toujours un chiffre\n- Focus file pane when editing beside an agent (#2457)\n- La validation redevient un geste humain\n- La fenêtre dit enfin si la publication a réussi ou échoué\n- Le chef d'orchestre revient sur Claude, avec bascule Claude/Codex\n- La réinitialisation ne détruit plus la conversation\n- Plus aucune alerte de vérification — de 148 à zéro\n- Dernier tiers des alertes résiduelles (38 -> 15)\n- Suivi de fichier en direct, pipeline CI et doublon de centre de commandes (52 -> 38)\n- Compléter la démo du carousel après l'ajout du contrôle final\n- Restaurer les capacités de forge, commits et récupération (81 -> 52 erreurs)\n- Restaurer le vocabulaire de forge et de messages côté application (148 -> 81 erreurs)\n- Keep streamed chat position stable on Android\n- La construction complète repasse au vert (193 -> 0 erreurs)\n- Le paquet serveur compile de nouveau (193 -> 0 erreurs)\n- Aligner les appelants sur les services d'espaces de travail et de forge (23 -> 15 erreurs)\n- Restaurer les abonnements de registre et les opérations d'espace de travail\n- Restaurer les capacités d'agent et de configuration attendues par le code\n- Schémas checkout/forge remis au niveau attendu par le code\n- Restaurer les définitions partagées perdues lors d'une reprise de version\n- Filtrer les ateliers fantômes de la fenêtre « À déployer »\n- Preserve workspace creation error codes\n- Await backlog reconciliation during scheduler ticks\n- Mise à jour des signatures du lockfile et du hash Nix [skip ci]\n- Stabilize self-hosted runtime before consolidation",
   },
   {
     version: "0.2.2",
@@ -647,6 +647,57 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 ];
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
+  {
+    hash: "95b1f6697d11ba9829186b925b5e591c8921dacf",
+    shortHash: "95b1f6697",
+    date: "2026-07-28T21:09:03+02:00",
+    author: "haikostudio",
+    subject: "chore: publication groupée des mises à jour",
+  },
+  {
+    hash: "6e19f5de01bb26c6f7935b2b787fac655dc0ef24",
+    shortHash: "6e19f5de0",
+    date: "2026-07-28T20:56:23+02:00",
+    author: "haikostudio",
+    subject:
+      "fix(déploiement): terminer une carte prévient enfin la file, et « À déployer » cesse de mentir sur l'état en ligne",
+  },
+  {
+    hash: "d30282cf0448d396dab8ee418f7d375b5fe7dd68",
+    shortHash: "d30282cf0",
+    date: "2026-07-28T18:53:31+02:00",
+    author: "haikostudio",
+    subject:
+      "feat(déploiement): barre de progression, mise en attente, récapitulatif et publication en heures creuses",
+  },
+  {
+    hash: "ea2e653807f07466c35bd596a699948bd35f1708",
+    shortHash: "ea2e65380",
+    date: "2026-07-28T18:31:12+02:00",
+    author: "haikostudio",
+    subject: "feat(déploiement): file « À déployer » et bouton « Tout déployer »",
+  },
+  {
+    hash: "bbf3d0f9ccef3785d96b98ddcde2238a795a726a",
+    shortHash: "bbf3d0f9c",
+    date: "2026-07-28T17:10:32+02:00",
+    author: "Mohamed Boudra",
+    subject: "Keep plan approval focused on the latest proposal (#2534)",
+  },
+  {
+    hash: "963d4f92400c6511fc58fd1b44fb162c9d29d0af",
+    shortHash: "963d4f924",
+    date: "2026-07-28T16:30:50+02:00",
+    author: "Mohamed Boudra",
+    subject: "Configure agent thinking from the CLI (#2533)",
+  },
+  {
+    hash: "e241e02afbb24ead6e51cbf2ceb02b2897ac2d31",
+    shortHash: "e241e02af",
+    date: "2026-07-28T16:29:33+02:00",
+    author: "nllptrx",
+    subject: "feat(app): dismiss the chat keyboard on a fast upward flick (#2417)",
+  },
   {
     hash: "73cd11bcc23b8d24b19de0e9adf4f94a950092e8",
     shortHash: "73cd11bcc",
@@ -2725,56 +2776,7 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     author: "haikostudio",
     subject: "feat(server): partage du stockage entre ateliers + garde-fous disque",
   },
-  {
-    hash: "4b5551d61cf958060d871a6c9621743e664cda6c",
-    shortHash: "4b5551d61",
-    date: "2026-07-23T22:25:59+00:00",
-    author: "paseo-ai[bot]",
-    subject: "fix: update lockfile signatures and Nix hash [skip ci]",
-  },
-  {
-    hash: "b02acb882c8fab0653ed3c5a50b5f0b9fb23b7f8",
-    shortHash: "b02acb882",
-    date: "2026-07-24T00:16:25+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(release): cut 0.2.0-beta.4",
-  },
-  {
-    hash: "13bce0563005c95fd80cea71f4ad6b897e3ff1dc",
-    shortHash: "13bce0563",
-    date: "2026-07-23T23:33:37+02:00",
-    author: "Mohamed Boudra",
-    subject: "docs: prepare 0.2.0-beta.4 changelog",
-  },
-  {
-    hash: "17c12e2e1a1ee20ac3991c4a2b5dca683af103d4",
-    shortHash: "17c12e2e1",
-    date: "2026-07-23T23:33:31+02:00",
-    author: "Mohamed Boudra",
-    subject: "chore(acp): update provider catalog versions",
-  },
-  {
-    hash: "c469ac124acc637d8f7148cc97a07cfbe4577e2b",
-    shortHash: "c469ac124",
-    date: "2026-07-23T23:29:58+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): show only workspace commits in Changes",
-  },
-  {
-    hash: "09cfdecbbf03f1ab378ad39adf8f316903b0be35",
-    shortHash: "09cfdecbb",
-    date: "2026-07-23T21:44:41+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(app): release inactive query caches",
-  },
-  {
-    hash: "1c95f8c37e014e01ac91b7b9c93999b842f24c6a",
-    shortHash: "1c95f8c37",
-    date: "2026-07-23T22:36:42+02:00",
-    author: "Mohamed Boudra",
-    subject: "fix(server): stop workspace updates triggering full scans (#2379)",
-  },
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-28T16:13:12+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-28T21:09:03+02:00";
