@@ -517,7 +517,8 @@ export const ja: TranslationResources = {
       openLive: "公開サイトを開く",
       needsRestart: "再起動が必要",
       planReady: "プラン完成",
-      awaitingReply: "返信をお待ちしています",
+      needsAction: "あなたの対応が必要です",
+      finished: "完了",
       deploying: "公開中…",
       deployed: "デプロイ済み",
       finalCheck: "最終チェック中…",
@@ -534,7 +535,7 @@ export const ja: TranslationResources = {
       explainer: "エージェントによる提案 — 承認するまで実行されません。",
     },
     status: {
-      attention: "対応待ち",
+      attention: "あなたの対応が必要です",
       running: "実行中",
       scheduled: "予定",
       done: "完了",

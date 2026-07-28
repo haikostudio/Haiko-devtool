@@ -26,8 +26,16 @@ export function taskAgentId(task: KanbanTask): string | null {
 }
 
 // Wants the user: proposed-but-unapproved, paused for an explicit go, a
-// plan-mode result ready to review, a failed run, or a live agent blocked on a
-// permission / question / attention flag.
+// plan-mode result ready to review, a failed run, or a live agent actually
+// blocked on a permission / question prompt.
+//
+// It deliberately does NOT include the `attention` bucket. That bucket is the
+// agent's "I finished my turn, come look" flag (`requiresAttention` with an
+// attentionReason of "finished") — a *notification*, not a pending question. A
+// permission prompt or an explicit input request lands in `needs_input`, and an
+// error lands in `failed`; those are the only live-agent states where the user
+// genuinely has something to do. Treating "finished" as attention is what made
+// every completed card claim it was waiting for a reply nobody owed it.
 function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
   return (
     task.approval?.state === "pending" ||
@@ -35,8 +43,7 @@ function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
     Boolean(task.planReadyAt) ||
     task.schedule?.state === "failed" ||
     agentBucket === "needs_input" ||
-    agentBucket === "failed" ||
-    agentBucket === "attention"
+    agentBucket === "failed"
   );
 }
 

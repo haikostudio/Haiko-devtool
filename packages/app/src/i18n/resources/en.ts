@@ -514,7 +514,8 @@ export const en = {
       openLive: "Open the live site",
       needsRestart: "Restart required",
       planReady: "Plan ready",
-      awaitingReply: "Waiting for your reply",
+      needsAction: "Needs an action from you",
+      finished: "Done",
       deploying: "Publishing…",
       finalCheck: "Final check running…",
       deployFailed: "Publish failed",
@@ -531,7 +532,7 @@ export const en = {
       explainer: "Proposed by an agent — it will only run once you approve it.",
     },
     status: {
-      attention: "Waiting for you",
+      attention: "Needs an action from you",
       running: "In progress",
       scheduled: "Scheduled",
       done: "Done",

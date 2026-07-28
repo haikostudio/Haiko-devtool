@@ -91,12 +91,21 @@ export function getScheduleBadge(
   if (task.executionHold === true) {
     return { labelKey: "tasks.schedule.heldForReview", variant: "warning" };
   }
-  // The live agent is waiting on the user (a question / a permission) with no
-  // board field to explain it: surface an explicit amber "waiting for your
-  // reply". Wins over a stale "running" schedule badge so the yellow badge and
-  // the card's attention shake always agree.
+  // The live agent is genuinely blocked on the user (a question, a permission
+  // prompt) with no board field to explain it: surface an explicit amber "needs
+  // an action from you". Wins over a stale "running" schedule badge so the
+  // yellow badge and the card's attention shake always agree. An agent that
+  // merely FINISHED never reaches here — that is a "done" tone, handled below.
   if (tone === "attention") {
-    return { labelKey: "tasks.card.awaitingReply", variant: "warning" };
+    return { labelKey: "tasks.card.needsAction", variant: "warning" };
+  }
+  // Nothing is expected from the user and nothing is running: the card's work is
+  // over, so say "Terminé" plainly. Sits above the schedule-state fallbacks on
+  // purpose — a finished card often keeps a stale `schedule.state === "running"`
+  // the server can no longer clear, and a green "En exécution" on an idle card is
+  // exactly the kind of lie this badge is meant to stop telling.
+  if (tone === "done") {
+    return { labelKey: "tasks.card.finished", variant: "success" };
   }
   const state = task.schedule?.state;
   if (!state) {

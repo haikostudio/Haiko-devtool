@@ -516,7 +516,8 @@ export const ru: TranslationResources = {
       openLive: "Открыть опубликованный сайт",
       needsRestart: "Требуется перезапуск",
       planReady: "План готов",
-      awaitingReply: "Ожидает вашего ответа",
+      needsAction: "Требуется ваше действие",
+      finished: "Готово",
       deploying: "Публикация…",
       deployed: "Развёрнуто",
       finalCheck: "Идёт финальная проверка…",
@@ -533,7 +534,7 @@ export const ru: TranslationResources = {
       explainer: "Предложена агентом — запустится только после вашего подтверждения.",
     },
     status: {
-      attention: "Ожидает вас",
+      attention: "Требуется ваше действие",
       running: "Выполняется",
       scheduled: "Запланировано",
       done: "Готово",

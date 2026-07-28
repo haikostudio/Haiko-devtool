@@ -511,7 +511,8 @@ export const ar: TranslationResources = {
       openLive: "فتح الموقع المنشور",
       needsRestart: "يلزم إعادة التشغيل",
       planReady: "الخطة جاهزة",
-      awaitingReply: "في انتظار ردك",
+      needsAction: "بحاجة إلى إجراء منك",
+      finished: "مكتمل",
       deploying: "جارٍ النشر…",
       deployed: "تم النشر",
       finalCheck: "جارٍ التحقق النهائي…",
@@ -528,7 +529,7 @@ export const ar: TranslationResources = {
       explainer: "اقترحها وكيل — لن تُنفَّذ إلا بعد موافقتك.",
     },
     status: {
-      attention: "بانتظارك",
+      attention: "بحاجة إلى إجراء منك",
       running: "قيد التنفيذ",
       scheduled: "مجدولة",
       done: "مكتمل",

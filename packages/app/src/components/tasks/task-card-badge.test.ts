@@ -22,11 +22,37 @@ function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
 }
 
 describe("getScheduleBadge", () => {
-  it("shows an amber 'waiting for your reply' badge when the live agent is waiting", () => {
+  it("shows an amber 'needs an action from you' badge when the live agent is blocked on the user", () => {
     // No board field explains the pause — the amber tone comes from the agent
     // blocking on a question/permission. This is the case the card used to miss.
     const badge = getScheduleBadge(makeTask(), "attention");
-    expect(badge).toEqual({ labelKey: "tasks.card.awaitingReply", variant: "warning" });
+    expect(badge).toEqual({ labelKey: "tasks.card.needsAction", variant: "warning" });
+  });
+
+  it("says « Terminé » when nothing is expected from the user", () => {
+    // The agent finished and went idle: no question, no running action. The card
+    // must read as done instead of claiming it waits for a reply.
+    const badge = getScheduleBadge(makeTask({ column: "done" }), "done");
+    expect(badge).toEqual({ labelKey: "tasks.card.finished", variant: "success" });
+  });
+
+  it("says « Terminé » rather than a stale « En exécution » on an idle card", () => {
+    // A finished run often leaves schedule.state === "running" behind; with an
+    // idle agent (tone "done") the green "in progress" badge would be a lie.
+    const badge = getScheduleBadge(
+      makeTask({ column: "in_progress", schedule: { state: "running", attempts: 1 } }),
+      "done",
+    );
+    expect(badge).toEqual({ labelKey: "tasks.card.finished", variant: "success" });
+  });
+
+  it("keeps the running / deploy windows ahead of the « Terminé » badge", () => {
+    expect(
+      getScheduleBadge(makeTask({ column: "done", validation: { state: "running" } }), "done"),
+    ).toEqual({ labelKey: "tasks.card.finalCheck", variant: "success" });
+    expect(
+      getScheduleBadge(makeTask({ column: "done", deployment: { state: "running" } }), "done"),
+    ).toEqual({ labelKey: "tasks.card.deploying", variant: "success" });
   });
 
   it("prefers the precise approval wording over the generic waiting badge", () => {
@@ -47,14 +73,14 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.schedule.failed", variant: "error" });
   });
 
-  it("the waiting badge wins over a stale 'running' schedule state", () => {
+  it("the needs-action badge wins over a stale 'running' schedule state", () => {
     // The agent asked a question mid-run: the schedule may still read "running",
     // but the amber tone (attention) must surface, not a green "in progress".
     const badge = getScheduleBadge(
       makeTask({ schedule: { state: "running", attempts: 1 } }),
       "attention",
     );
-    expect(badge).toEqual({ labelKey: "tasks.card.awaitingReply", variant: "warning" });
+    expect(badge).toEqual({ labelKey: "tasks.card.needsAction", variant: "warning" });
   });
 
   it("shows the deploying badge the instant the deploy window opens, over a stale waiting badge", () => {

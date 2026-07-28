@@ -523,7 +523,8 @@ export const fr: TranslationResources = {
       openLive: "Ouvrir le site en ligne",
       needsRestart: "Redémarrage requis",
       planReady: "Plan prêt",
-      awaitingReply: "En attente de ta réponse",
+      needsAction: "Nécessite une action de votre part",
+      finished: "Terminé",
       deploying: "Publication en cours",
       deployed: "Déployé",
       finalCheck: "Contrôle final en cours",
@@ -540,7 +541,7 @@ export const fr: TranslationResources = {
       explainer: "Proposée par un agent — elle ne sera lancée qu'après votre confirmation.",
     },
     status: {
-      attention: "Attend une réponse",
+      attention: "Nécessite une action de votre part",
       running: "En cours",
       scheduled: "Planifiée",
       done: "Terminé",

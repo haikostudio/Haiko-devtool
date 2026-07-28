@@ -87,6 +87,20 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     expect(deriveTaskTone(task, needsInput)).toBe("attention");
   });
 
+  it("reads an agent that merely finished its turn as done, not as waiting on the user", () => {
+    // The "attention" bucket is the agent's "I'm done, come look" notification —
+    // requiresAttention with attentionReason "finished". It is NOT a pending
+    // question, so the card must read green "Terminé", not amber.
+    const attention: WorkspaceStateBucket = "attention";
+    expect(deriveTaskTone(makeTask({ column: "in_progress" }), attention)).toBe("done");
+    expect(deriveTaskTone(makeTask({ column: "done" }), attention)).toBe("done");
+  });
+
+  it("still reads a failed agent as needing the user", () => {
+    const failed: WorkspaceStateBucket = "failed";
+    expect(deriveTaskTone(makeTask({ column: "in_progress" }), failed)).toBe("attention");
+  });
+
   it("spins the loader while the final check / deploy window is running, over a stale amber bucket", () => {
     // The user launched the final check or the deploy from a finished card. The
     // live bucket may still read needs_input until the agent starts streaming, but

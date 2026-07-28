@@ -522,7 +522,8 @@ export const ptBR: TranslationResources = {
       openLive: "Abrir o site publicado",
       needsRestart: "Reinício necessário",
       planReady: "Plano pronto",
-      awaitingReply: "Aguardando sua resposta",
+      needsAction: "Precisa de uma ação sua",
+      finished: "Concluído",
       deploying: "Publicando…",
       deployed: "Implantado",
       finalCheck: "Verificação final em andamento…",
@@ -539,7 +540,7 @@ export const ptBR: TranslationResources = {
       explainer: "Proposta por um agente — só será executada após sua aprovação.",
     },
     status: {
-      attention: "Aguardando você",
+      attention: "Precisa de uma ação sua",
       running: "Em andamento",
       scheduled: "Agendada",
       done: "Concluído",

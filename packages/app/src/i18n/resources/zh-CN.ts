@@ -510,7 +510,8 @@ export const zhCN: TranslationResources = {
       openLive: "打开已发布的站点",
       needsRestart: "需要重启",
       planReady: "计划已就绪",
-      awaitingReply: "等待你的回复",
+      needsAction: "需要你处理",
+      finished: "已完成",
       deploying: "发布中…",
       deployed: "已部署",
       finalCheck: "正在进行最终检查…",
@@ -527,7 +528,7 @@ export const zhCN: TranslationResources = {
       explainer: "由智能体提出 — 需要你确认后才会执行。",
     },
     status: {
-      attention: "等待你",
+      attention: "需要你处理",
       running: "进行中",
       scheduled: "已排期",
       done: "已完成",
