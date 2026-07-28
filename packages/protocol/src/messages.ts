@@ -5444,6 +5444,12 @@ export const ProviderUsageSchema = z.object({
   sourceLabel: z.string().nullable().optional(),
   fetchedAt: z.string().nullable().optional(),
   nextRefreshAt: z.string().nullable().optional(),
+  /**
+   * The reading is the last one that succeeded, replayed because the refresh behind it
+   * failed (rate limit, timeout). `fetchedAt` then dates the reading, not the response.
+   * Absent means "as fresh as `fetchedAt` says".
+   */
+  stale: z.boolean().optional(),
   windows: z.array(ProviderUsageWindowSchema),
   balances: z.array(ProviderUsageBalanceSchema).optional(),
   details: z.array(ProviderUsageDetailSchema).optional(),

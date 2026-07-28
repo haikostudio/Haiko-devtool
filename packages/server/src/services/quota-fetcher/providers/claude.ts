@@ -14,6 +14,7 @@ import type { ProviderApiFetch, ProviderUsageFetcher } from "../provider.js";
 import {
   ApiNumberSchema,
   fetchProviderApi,
+  type ProviderApiRetryOptions,
   toneFromUsedPct,
   unavailableUsage,
   windowFromUsedPct,
@@ -94,6 +95,8 @@ interface ClaudeQuotaProviderOptions {
   claudeKeychainReader?: () => Promise<unknown | null>;
   platform?: typeof process.platform;
   fetch?: ProviderApiFetch;
+  /** Retry pacing for a rate-limited usage call. Tests inject a no-wait sleep. */
+  retry?: ProviderApiRetryOptions;
 }
 
 function buildClaudePlan(
@@ -321,6 +324,7 @@ export class ClaudeQuotaProvider implements ProviderUsageFetcher {
   private readonly readKeychainCredentials: () => Promise<unknown | null>;
   private readonly platform: typeof process.platform;
   private readonly fetchApi: ProviderApiFetch;
+  private readonly retry: ProviderApiRetryOptions;
 
   constructor(options: ClaudeQuotaProviderOptions) {
     this.logger = options.logger.child({ module: "claude-quota-provider" });
@@ -329,6 +333,7 @@ export class ClaudeQuotaProvider implements ProviderUsageFetcher {
     this.readKeychainCredentials = options.claudeKeychainReader ?? readClaudeKeychainCredentials;
     this.platform = options.platform ?? process.platform;
     this.fetchApi = options.fetch ?? fetch;
+    this.retry = options.retry ?? {};
   }
 
   async fetchUsage(): Promise<ProviderUsage> {
@@ -455,13 +460,21 @@ export class ClaudeQuotaProvider implements ProviderUsageFetcher {
   }
 
   private async callClaudeApi(token: string): Promise<ClaudeUsageResponse | "NEEDS_AUTH"> {
-    const res = await fetchProviderApi(this.fetchApi, "https://api.anthropic.com/api/oauth/usage", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "anthropic-beta": CLAUDE_OAUTH_BETA,
+    // A 429 never reaches here: fetchProviderApi retries it and then throws a typed
+    // ProviderRateLimitError, which the usage service turns into a cooldown plus the last
+    // known good reading instead of an error card.
+    const res = await fetchProviderApi(
+      this.fetchApi,
+      "https://api.anthropic.com/api/oauth/usage",
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "anthropic-beta": CLAUDE_OAUTH_BETA,
+        },
       },
-    });
+      this.retry,
+    );
     if (res.status === 401 || res.status === 403) return "NEEDS_AUTH";
     if (!res.ok) throw new Error(`Claude usage API returned ${res.status}`);
     return ClaudeUsageResponseSchema.parse(await res.json());

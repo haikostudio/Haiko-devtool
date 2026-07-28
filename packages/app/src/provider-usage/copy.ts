@@ -15,4 +15,7 @@ export const providerUsageCopy = {
   clientUnavailable: "Host connection is not ready",
   retry: "Try again",
   tooltipLoading: "Loading plan usage…",
+  // Shown instead of a transport error when the host replays the last reading it managed
+  // to take. The card's "Updated …" footer carries how old that reading is.
+  stale: "Not up to date",
 } as const;

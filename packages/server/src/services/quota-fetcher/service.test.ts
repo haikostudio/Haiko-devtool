@@ -14,6 +14,7 @@ import { KimiQuotaProvider } from "./providers/kimi.js";
 import { MiniMaxQuotaProvider } from "./providers/minimax.js";
 import { ZaiQuotaProvider } from "./providers/zai.js";
 import { ProviderUsageService } from "./service.js";
+import { ProviderRateLimitError } from "./usage.js";
 
 function writeClaudeCredentials(
   dir: string,
@@ -290,7 +291,9 @@ describe("ProviderUsageService", () => {
           windows: [],
           balances: [],
           details: [],
-          error: "Claude auth expired",
+          // The thrown text ("Claude auth expired") stays in the daemon log; the card
+          // gets a sentence written for a reader, never a transport diagnostic.
+          error: "Usage data is temporarily unavailable.",
         },
         {
           providerId: "codex",
@@ -301,6 +304,179 @@ describe("ProviderUsageService", () => {
         },
       ],
     });
+  });
+});
+
+// The 429 the quota pill kept showing was not one bad response: it was the request rate
+// the daemon itself produced, plus a failure path that replaced a good reading with the
+// transport error. These cover both halves.
+describe("ProviderUsageService under rate limiting", () => {
+  const goodUsage: ProviderUsage = {
+    providerId: "claude",
+    displayName: "Claude",
+    status: "available",
+    planLabel: "Max 20x",
+    windows: [{ id: "session", label: "Session", usedPct: 41, remainingPct: 59 }],
+  };
+
+  interface ScriptedFetcher extends ProviderUsageFetcher {
+    calls: number;
+  }
+
+  /** A Claude fetcher that answers once, then does whatever the script says. */
+  function scriptedFetcher(afterFirst: () => Promise<ProviderUsage>): ScriptedFetcher {
+    return {
+      providerId: "claude",
+      displayName: "Claude",
+      calls: 0,
+      async fetchUsage() {
+        this.calls += 1;
+        return this.calls === 1 ? goodUsage : afterFirst();
+      },
+    };
+  }
+
+  it("a forced refresh cannot call the provider more often than the floor", async () => {
+    let now = Date.parse("2026-07-28T10:00:00.000Z");
+    const fetcher = scriptedFetcher(async () => goodUsage);
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => now,
+      minRefreshIntervalMs: 30_000,
+      fetchers: [fetcher],
+    });
+
+    await service.listUsage();
+    // Every scheduler tick and publication hook forces a refresh; on their own schedules
+    // that is several a minute, which is exactly what earned the 429.
+    now += 5_000;
+    await service.listUsage({ forceRefresh: true });
+    now += 5_000;
+    await service.listUsage({ forceRefresh: true });
+    expect(fetcher.calls).toBe(1);
+
+    now += 25_000;
+    await service.listUsage({ forceRefresh: true });
+    expect(fetcher.calls).toBe(2);
+  });
+
+  it("serves one network call to every client asking at the same time", async () => {
+    const fetcher = scriptedFetcher(async () => goodUsage);
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => Date.parse("2026-07-28T10:00:00.000Z"),
+      fetchers: [fetcher],
+    });
+
+    const results = await Promise.all([
+      service.listUsage(),
+      service.listUsage(),
+      service.listUsage({ forceRefresh: true }),
+    ]);
+
+    expect(fetcher.calls).toBe(1);
+    expect(results[1]).toBe(results[0]);
+    expect(results[2]).toBe(results[0]);
+  });
+
+  it("replays the last known good reading instead of an error card", async () => {
+    let now = Date.parse("2026-07-28T10:00:00.000Z");
+    const fetcher = scriptedFetcher(async () => {
+      throw new ProviderRateLimitError(null);
+    });
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => now,
+      cacheTtlMs: 1_000,
+      minRefreshIntervalMs: 0,
+      fetchers: [fetcher],
+    });
+
+    await service.listUsage();
+    now += 60_000;
+    const degraded = findProvider(await service.listUsage(), "claude");
+
+    expect(degraded.status).toBe("available");
+    expect(degraded.stale).toBe(true);
+    expect(degraded.error).toBeNull();
+    expect(degraded.windows[0]?.usedPct).toBe(41);
+    // Dated by when the reading was taken, so the card can say how old it is.
+    expect(degraded.fetchedAt).toBe("2026-07-28T10:00:00.000Z");
+  });
+
+  it("stops calling a rate-limited provider until its cooldown elapses", async () => {
+    let now = Date.parse("2026-07-28T10:00:00.000Z");
+    const fetcher = scriptedFetcher(async () => {
+      throw new ProviderRateLimitError(120_000);
+    });
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => now,
+      cacheTtlMs: 1_000,
+      minRefreshIntervalMs: 0,
+      fetchers: [fetcher],
+    });
+
+    await service.listUsage();
+    now += 10_000;
+    await service.listUsage();
+    expect(fetcher.calls).toBe(2);
+
+    // Inside the window the provider asked for: no call at all, still the good reading.
+    now += 60_000;
+    const quiet = findProvider(await service.listUsage(), "claude");
+    expect(fetcher.calls).toBe(2);
+    expect(quiet.stale).toBe(true);
+
+    now += 60_000;
+    await service.listUsage();
+    expect(fetcher.calls).toBe(3);
+  });
+
+  it("falls back to plain language once the last reading is too old to trust", async () => {
+    let now = Date.parse("2026-07-28T10:00:00.000Z");
+    const fetcher = scriptedFetcher(async () => {
+      throw new Error("Claude usage API returned 429");
+    });
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => now,
+      cacheTtlMs: 1_000,
+      minRefreshIntervalMs: 0,
+      staleMaxAgeMs: 60_000,
+      rateLimitCooldownMs: 0,
+      fetchers: [fetcher],
+    });
+
+    await service.listUsage();
+    now += 10 * 60_000;
+    const expired = findProvider(await service.listUsage(), "claude");
+
+    expect(expired.status).toBe("error");
+    expect(expired.stale).toBeUndefined();
+    expect(expired.error).not.toContain("429");
+    expect(expired.error).toMatch(/busy/i);
+  });
+
+  it("keeps a provider's own reported error out of the card too", async () => {
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => Date.parse("2026-07-28T10:00:00.000Z"),
+      fetchers: [
+        usageFetcher({
+          providerId: "claude",
+          displayName: "Claude",
+          status: "error",
+          planLabel: null,
+          windows: [],
+          error: "Claude usage API returned 429",
+        }),
+      ],
+    });
+
+    const provider = findProvider(await service.listUsage(), "claude");
+    expect(provider.error).not.toContain("429");
+    expect(provider.error).toMatch(/busy/i);
   });
 });
 

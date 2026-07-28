@@ -9,6 +9,17 @@ import type { ProviderApiFetch } from "./provider.js";
 
 const PROVIDER_HTTP_TIMEOUT_MS = 15_000;
 
+/**
+ * Inline retry budget for a 429. Deliberately small: every provider refreshes in the same
+ * batch and a client is waiting on the whole batch, so holding the request open for a long
+ * `Retry-After` would trade one bad card for a hung panel. Anything longer than the inline
+ * cap is handed to the service, which puts the provider on a cooldown and replays the last
+ * known good reading instead.
+ */
+const RATE_LIMIT_RETRY_ATTEMPTS = 2;
+const RATE_LIMIT_BASE_DELAY_MS = 500;
+const RATE_LIMIT_MAX_INLINE_DELAY_MS = 4_000;
+
 export const ApiNumberSchema = z.coerce.number().finite();
 export const ApiNullableNumberSchema = z.preprocess(
   (value) => (value == null ? null : value),
@@ -19,15 +30,96 @@ export const ApiOptionalStringSchema = z.preprocess(
   z.coerce.string().optional(),
 );
 
-export function fetchProviderApi(
+/** A provider answered 429. Carries how long it asked us to wait, when it said so. */
+export class ProviderRateLimitError extends Error {
+  constructor(public readonly retryAfterMs: number | null) {
+    super("Provider usage API is rate limiting requests");
+    this.name = "ProviderRateLimitError";
+  }
+}
+
+export interface ProviderApiRetryOptions {
+  attempts?: number;
+  baseDelayMs?: number;
+  maxInlineDelayMs?: number;
+  /** Injected by tests so a 429 path doesn't have to spend real seconds. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** `Retry-After` in either legal form: delta-seconds, or an HTTP date. */
+export function retryAfterMsFrom(headers: Headers, nowMs: number = Date.now()): number | null {
+  const raw = headers.get("retry-after");
+  if (!raw) return null;
+
+  const seconds = Number(raw.trim());
+  if (Number.isFinite(seconds)) {
+    return seconds > 0 ? seconds * 1000 : 0;
+  }
+
+  const at = Date.parse(raw);
+  if (Number.isNaN(at)) return null;
+  return Math.max(0, at - nowMs);
+}
+
+/**
+ * One provider HTTP call, with the 429 handling every provider needs.
+ *
+ * A rate-limited call is retried with an increasing delay — honouring `Retry-After` when
+ * the provider sets one — and gives up as a `ProviderRateLimitError` rather than as a bare
+ * response, so callers can't accidentally surface "returned 429" as user-facing text.
+ */
+export async function fetchProviderApi(
   fetchApi: ProviderApiFetch,
   input: RequestInfo | URL,
   init: RequestInit = {},
+  retry: ProviderApiRetryOptions = {},
 ): Promise<Response> {
-  return fetchApi(input, {
-    ...init,
-    signal: init.signal ?? AbortSignal.timeout(PROVIDER_HTTP_TIMEOUT_MS),
-  });
+  const attempts = retry.attempts ?? RATE_LIMIT_RETRY_ATTEMPTS;
+  const baseDelayMs = retry.baseDelayMs ?? RATE_LIMIT_BASE_DELAY_MS;
+  const maxInlineDelayMs = retry.maxInlineDelayMs ?? RATE_LIMIT_MAX_INLINE_DELAY_MS;
+  const sleep = retry.sleep ?? defaultSleep;
+
+  for (let attempt = 0; ; attempt += 1) {
+    const res = await fetchApi(input, {
+      ...init,
+      signal: init.signal ?? AbortSignal.timeout(PROVIDER_HTTP_TIMEOUT_MS),
+    });
+    if (res.status !== 429) return res;
+
+    const retryAfterMs = retryAfterMsFrom(res.headers);
+    const backoffMs = retryAfterMs ?? baseDelayMs * 2 ** attempt;
+    if (attempt >= attempts || backoffMs > maxInlineDelayMs) {
+      throw new ProviderRateLimitError(retryAfterMs);
+    }
+    await sleep(backoffMs);
+  }
+}
+
+export const RATE_LIMITED_PROVIDER_MESSAGE =
+  "Usage service is busy — showing the last known values.";
+const TIMED_OUT_MESSAGE = "Usage service did not answer in time.";
+const GENERIC_MESSAGE = "Usage data is temporarily unavailable.";
+
+/**
+ * Plain-language text for a failed refresh.
+ *
+ * Provider transport errors are diagnostics, not copy: the raw ones read like
+ * "Claude usage API returned 429". The detail stays in the daemon log; the card gets a
+ * sentence a user can act on.
+ */
+export function friendlyProviderErrorMessage(error: unknown): string {
+  if (error instanceof ProviderRateLimitError) return RATE_LIMITED_PROVIDER_MESSAGE;
+
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/\b429\b|rate limit|too many requests/i.test(message)) return RATE_LIMITED_PROVIDER_MESSAGE;
+  if (/timeout|timed out|abort/i.test(message)) return TIMED_OUT_MESSAGE;
+  return GENERIC_MESSAGE;
 }
 
 export function unavailableUsage(provider: {

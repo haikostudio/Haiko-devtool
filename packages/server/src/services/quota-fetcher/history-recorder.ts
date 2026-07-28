@@ -75,7 +75,9 @@ export class ProviderUsageHistoryRecorder {
   async tick(): Promise<void> {
     try {
       const usage = await this.service.listUsage();
-      await this.store.record(usage.providers);
+      // A replayed last-known-good reading is not a new measurement: recording it would
+      // draw a flat segment on the curve that never actually happened.
+      await this.store.record(usage.providers.filter((provider) => provider.stale !== true));
     } catch (err) {
       this.logger.debug({ err }, "Provider usage history tick failed");
     }

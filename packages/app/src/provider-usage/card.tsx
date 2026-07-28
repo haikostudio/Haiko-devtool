@@ -5,6 +5,7 @@ import { getProviderIcon } from "@/components/provider-icons";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Theme } from "@/styles/theme";
 import { ProviderUsageBalanceBar } from "./balance-bar";
+import { providerUsageCopy } from "./copy";
 import { formatAgo } from "./format";
 import type { ProviderUsage } from "./types";
 import { ProviderUsageWindowBar } from "./window-bar";
@@ -25,6 +26,8 @@ const ThemedProviderUsageIcon = withUnistyles(ProviderUsageIcon);
 const mutedIconColor = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 function statusText(usage: ProviderUsage): string | null {
+  // A stale reading is a real reading, just an older one: it keeps the available dot and
+  // says so through the badge instead of flipping the card to an error state.
   if (usage.status === "available") return null;
   return usage.status === "error" ? "Error" : "Unavailable";
 }
@@ -70,6 +73,7 @@ export function ProviderUsageCard({
           {usage.displayName}
         </Text>
         {usage.planLabel ? <StatusBadge label={usage.planLabel} variant="muted" /> : null}
+        {usage.stale ? <StatusBadge label={providerUsageCopy.stale} variant="muted" /> : null}
         <View style={styles.headerSpacer} />
         {status ? (
           <View style={styles.statusRow}>

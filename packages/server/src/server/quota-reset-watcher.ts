@@ -131,6 +131,12 @@ export class QuotaResetWatcher {
     if (!claude || claude.status !== "available") {
       return;
     }
+    // A replayed last-known-good reading dates from before the refresh started failing,
+    // so its reset timestamp is necessarily in the past. Acting on it would spawn a
+    // keep-alive agent on evidence we no longer have.
+    if (claude.stale) {
+      return;
+    }
 
     const window = claude.windows.find((w) => w.id === CLAUDE_FIVE_HOUR_WINDOW_ID);
     const resetAtMs = window?.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
