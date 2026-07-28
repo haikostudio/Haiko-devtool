@@ -26,14 +26,13 @@ const BACKGROUND_POLL_MS = 60_000;
  * newest-first. Hosts without the feature are skipped; `isSupported` is false
  * when none support it (old daemons).
  *
- * `enabled` marks the panel as open: it only changes the refresh cadence (fast
- * on open, slow poll while closed), never whether data is fetched at all — the
- * unread badge needs entries before anything is opened.
+ * Fetching does not wait for the panel to be opened: the unread badge needs the
+ * entries before anything is opened. Callers re-fetch on open via `refresh`.
  *
  * Gated behind the `pushHistory` daemon capability; callers show the panel only
  * when `isSupported` is true.
  */
-export function usePushHistory(enabled: boolean): PushHistoryResult {
+export function usePushHistory(): PushHistoryResult {
   const hosts = useHosts();
   const serverIds = useMemo(() => hosts.map((host) => host.serverId), [hosts]);
   const featureByServer = useHostFeatureMap(serverIds, "pushHistory");
@@ -86,7 +85,7 @@ export function usePushHistory(enabled: boolean): PushHistoryResult {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [enabled, supportedServerIds, refreshKey]);
+  }, [supportedServerIds, refreshKey]);
 
   const refresh = useCallback(() => {
     setRefreshKey((key) => key + 1);

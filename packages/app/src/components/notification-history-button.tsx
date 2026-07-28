@@ -129,7 +129,7 @@ export function NotificationHistoryButton() {
 
   // Entries load in the background too — the badge has to be right before
   // anything is opened.
-  const { entries, isLoading, isSupported, refresh } = usePushHistory(open);
+  const { entries, isLoading, isSupported, refresh } = usePushHistory();
 
   const lastOpenedAt = useNotificationsReadStore((state) => state.lastOpenedAt);
   const hasHydrated = useNotificationsReadStore((state) => state.hasHydrated);
