@@ -81,6 +81,21 @@ interface TasksBoardUiState {
   setDetailsTaskId: (detailsTaskId: string | null) => void;
 }
 
+/**
+ * The task the user currently has open — the one whose chat the dock shows, or
+ * whose Details drawer is up on hosts without a conductor. Cards read this to
+ * wear the "open" outline, so the outline follows the selection and clears
+ * itself when either surface closes (both ids are dropped on close).
+ *
+ * The dock's id only counts while the dock is actually open: a stale id would
+ * otherwise keep a card outlined after the dock was dismissed.
+ */
+export function useOpenTaskId(): string | null {
+  return useTasksBoardUiStore((state) =>
+    state.conductorOpen ? (state.dockTaskId ?? state.detailsTaskId) : state.detailsTaskId,
+  );
+}
+
 // Mirrors DEFAULT_PANEL_WIDTH in tasks-screen.tsx — the width a fresh install
 // opens the panel at before the user has resized it.
 const DEFAULT_PANEL_WIDTH = 440;

@@ -31,6 +31,7 @@ import {
   waitsForOffPeak,
   type QuietHours,
 } from "@/components/tasks/task-schedule";
+import { useOpenTaskId } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 
@@ -59,16 +60,28 @@ interface TaskCardProps {
 // Cards carry no colored left edge: the user rejected that accent bar outright,
 // so importance is signalled by the corner pip / inline dot only. Do not
 // reintroduce a borderLeft here in a future restyle.
+//
+// `selected` (the card open in the dock / Details drawer) comes last so its
+// violet outline wins over hover, and so it can undo the "already seen" dim —
+// opening a finished card marks it seen, which would otherwise fade the very
+// card the user is looking at. The dim comes back as soon as the card closes.
 function cardStyle({
   pressed,
   hovered,
   dimmed,
+  selected,
 }: {
   pressed: boolean;
   hovered?: boolean;
   dimmed?: boolean;
+  selected?: boolean;
 }) {
-  return [styles.card, (hovered || pressed) && styles.cardHovered, dimmed && styles.cardDimmed];
+  return [
+    styles.card,
+    (hovered || pressed) && styles.cardHovered,
+    dimmed && styles.cardDimmed,
+    selected && styles.cardSelected,
+  ];
 }
 
 // A card the user has already opened recedes to half opacity so unseen work
@@ -219,10 +232,13 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   // that comes back to life (running loader / amber attention) is never dimmed,
   // so its voyant re-lights and un-dims the card — the relaunch stays visible.
   const showVoyant = !dimmed;
+  // The card the user currently has open (dock chat or Details drawer) wears a
+  // thin violet outline so the board says which card the panel belongs to.
+  const selected = useOpenTaskId() === task.id;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
-      cardStyle({ pressed, hovered, dimmed }),
-    [dimmed],
+      cardStyle({ pressed, hovered, dimmed, selected }),
+    [dimmed, selected],
   );
 
   return (
@@ -538,6 +554,13 @@ const styles = StyleSheet.create((theme) => ({
   // Finished + already-seen: recede to half opacity so unseen finished work leads.
   cardDimmed: {
     opacity: 0.5,
+  },
+  // The open card: same 1px frame, repainted violet. No fill, no shadow, no size
+  // change — nothing that would shift the layout or fight the corner voyant.
+  // `statusMerged` is the theme's violet in both light and dark.
+  cardSelected: {
+    borderColor: theme.colors.statusMerged,
+    opacity: 1,
   },
   chipRow: {
     flexDirection: "row",
