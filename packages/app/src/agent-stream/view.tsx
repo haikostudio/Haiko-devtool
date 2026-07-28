@@ -1221,6 +1221,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
               baseListContentContainerStyle: stylesheet.listContentContainer,
               forwardListContentContainerStyle: stylesheet.forwardListContentContainer,
               topContentInset,
+              reserveMagicScrollbarGutter: magicScrollbarEntries.length >= 2,
             })}
           </MessageOuterSpacingProvider>
           {!isNearBottom && (

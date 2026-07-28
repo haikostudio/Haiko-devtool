@@ -100,6 +100,11 @@ function isScrollContainerOverscrolledPastBottom(
   return getScrollContainerDistanceFromBottom(scrollContainer) < -BOTTOM_OVERSCROLL_TOLERANCE_PX;
 }
 
+// Room to clear the floating magic scrollbar rail on the right edge. The rail
+// sits at right:12 with width 20 (see magic-scrollbar.web.tsx), so it occupies
+// the outer 32px; add a small gap so text doesn't butt right up against it.
+const MAGIC_SCROLLBAR_GUTTER = 40;
+
 function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: boolean }) {
   const {
     segments,
@@ -119,6 +124,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
     scrollEnabled,
     isMobileBreakpoint,
     topContentInset = 0,
+    reserveMagicScrollbarGutter = false,
   } = props;
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLElement | null>(null);
@@ -652,6 +658,7 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
   ]);
 
   const contentContainerStyle = useMemo((): CSSProperties => {
+    const basePaddingRight = isMobileBreakpoint ? SPACING[2] : SPACING[4];
     return {
       display: "flex",
       flexDirection: "column",
@@ -661,10 +668,14 @@ function WebStreamViewport(props: StreamRenderInput & { isMobileBreakpoint: bool
       paddingTop: SPACING[4] + topContentInset,
       paddingBottom: SPACING[4],
       paddingLeft: isMobileBreakpoint ? SPACING[2] : SPACING[4],
-      paddingRight: isMobileBreakpoint ? SPACING[2] : SPACING[4],
+      // When the magic scrollbar can appear, widen the right gutter so the rail
+      // (an absolute overlay, not a layout scrollbar) never covers paragraphs.
+      paddingRight: reserveMagicScrollbarGutter
+        ? Math.max(basePaddingRight, MAGIC_SCROLLBAR_GUTTER)
+        : basePaddingRight,
       boxSizing: "border-box",
     };
-  }, [isMobileBreakpoint, topContentInset]);
+  }, [isMobileBreakpoint, topContentInset, reserveMagicScrollbarGutter]);
   const scrollContainerStyle = useMemo((): CSSProperties => {
     return {
       flex: 1,

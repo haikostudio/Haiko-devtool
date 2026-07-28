@@ -93,6 +93,13 @@ export interface StreamRenderInput {
    * the inverted native list adds it to paddingBottom (its visual top).
    */
   topContentInset?: number;
+  /**
+   * When true, reserve extra room on the transcript's right edge so paragraphs
+   * don't slide under the floating magic scrollbar rail (web-only overlay,
+   * anchored at the right). Set when the rail can appear (>=2 user turns); the
+   * native list ignores it since its scrollbar isn't an overlay.
+   */
+  reserveMagicScrollbarGutter?: boolean;
 }
 
 export interface ResolveStreamRenderStrategyInput {
