@@ -75,6 +75,12 @@ definition, no longer eligible to begin.
   so its injected `collapsable={false}` reaches Android/Fabric.
 - Mobile sidebars render through `MobilePanelOverlay`; do not duplicate overlay lifecycle or motion
   styles in sidebar components.
+- The tasks board's right-hand slide-overs (file preview, attachments library) render through
+  `TaskSlideOverPanel`. It owns the geometry, the slide/resize motion, Esc-to-close on web, the header
+  row (back / title / actions / close / search) and the compact fallback to a full-height
+  `AdaptiveModalSheet`. Add a new board panel by passing it a `SheetHeader`; do not re-implement the
+  chrome, and expect only one of these panels to be open at a time (`tasks-board-ui-store` closes the
+  other).
 - The desktop left sidebar is retained too. App chrome owns separate mounted and visible decisions:
   closing it or yielding its width marks it inactive and applies `display: none` without conditionally
   removing the sidebar tree.

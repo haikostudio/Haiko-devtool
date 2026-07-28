@@ -1,36 +1,25 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  type LayoutChangeEvent,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, type LayoutChangeEvent, ScrollView, Text, View } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { SvgXml } from "react-native-svg";
-import { Download } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { AttachmentLibraryEntry } from "@getpaseo/protocol/messages";
 
 import { MarkdownRenderer } from "@/components/markdown/renderer";
-import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import {
   type AttachmentBlob,
   decodeAttachmentText,
-  openAttachment,
   useAttachmentBlob,
 } from "@/attachments/attachment-blob";
+import { AttachmentDownloadButton } from "@/attachments/attachment-download";
 import {
   type AttachmentPreviewKind,
   resolveAttachmentPreviewKind,
 } from "@/attachments/attachment-preview-kind";
 import { AttachmentPdfView, SUPPORTS_EMBEDDED_PDF } from "@/attachments/attachment-pdf-view";
-import { isWeb } from "@/constants/platform";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { type Theme } from "@/styles/theme";
 
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
-const ThemedDownload = withUnistyles(Download);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 export interface AttachmentPreviewProps {
@@ -203,43 +192,10 @@ function UnsupportedPreview({
   entry: AttachmentLibraryEntry;
   note: string;
 }) {
-  const client = useHostRuntimeClient(serverId);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  const handlePress = useCallback(async () => {
-    if (!client || busy) {
-      return;
-    }
-    setBusy(true);
-    setFailure(null);
-    try {
-      await openAttachment(client, workspaceId, entry);
-    } catch (err) {
-      setFailure(err instanceof Error ? err.message : "Échec de l'ouverture.");
-    } finally {
-      setBusy(false);
-    }
-  }, [busy, client, entry, workspaceId]);
-
   return (
     <View style={styles.centered} testID="attachment-preview-unsupported">
       <Text style={styles.note}>{note}</Text>
-      <Pressable
-        onPress={handlePress}
-        style={styles.downloadButton}
-        accessibilityRole="button"
-        accessibilityLabel={isWeb ? `Télécharger ${entry.fileName}` : `Ouvrir ${entry.fileName}`}
-        testID="attachment-preview-download"
-      >
-        {busy ? (
-          <ThemedActivityIndicator size="small" uniProps={mutedColorMapping} />
-        ) : (
-          <ThemedDownload size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-        )}
-        <Text style={styles.downloadLabel}>{isWeb ? "Télécharger" : "Ouvrir"}</Text>
-      </Pressable>
-      {failure ? <Text style={styles.error}>{failure}</Text> : null}
+      <AttachmentDownloadButton serverId={serverId} workspaceId={workspaceId} entry={entry} />
     </View>
   );
 }
@@ -271,20 +227,6 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     textAlign: "center",
-  },
-  downloadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  downloadLabel: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
   },
   error: {
     color: theme.colors.palette.red[500],

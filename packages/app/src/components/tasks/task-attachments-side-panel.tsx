@@ -5,6 +5,7 @@ import {
   AttachmentLibraryList,
   type AttachmentSortKey,
 } from "@/attachments/attachment-library-list";
+import { AttachmentDownloadAction } from "@/attachments/attachment-download";
 import { AttachmentPreview } from "@/attachments/attachment-preview";
 import { useAttachmentLibrary } from "@/attachments/use-attachment-library";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
@@ -73,6 +74,15 @@ function AttachmentsPanel({ serverId, workspaceId }: { serverId: string; workspa
         ? {
             title: selected.fileName,
             back: { onPress: handleBack, accessibilityLabel: "Revenir à la liste" },
+            // Tapping a row used to download the file; now it previews it, so the
+            // download stays reachable from the preview's own header.
+            actions: (
+              <AttachmentDownloadAction
+                serverId={serverId}
+                workspaceId={workspaceId}
+                entry={selected}
+              />
+            ),
           }
         : {
             title: "Pièces jointes",
@@ -83,7 +93,7 @@ function AttachmentsPanel({ serverId, workspaceId }: { serverId: string; workspa
               testID: "attachment-library-search",
             },
           },
-    [handleBack, handleSearch, selected],
+    [handleBack, handleSearch, selected, serverId, workspaceId],
   );
 
   return (
