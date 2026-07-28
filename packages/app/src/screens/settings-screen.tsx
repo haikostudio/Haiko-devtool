@@ -362,6 +362,43 @@ function WebPushRow() {
   );
 }
 
+// Logout for the self-hosted web deployment, whose Caddy auth wall exposes
+// /auth/logout (see docs/selfhost-auth.md). Hidden everywhere else: the row only
+// renders when the self-host build sets EXPO_PUBLIC_SELFHOST_AUTH=1, so the
+// public web app, dev builds, and native are untouched.
+function WebLogoutRow() {
+  const { t } = useTranslation();
+
+  const handleLogout = useCallback(() => {
+    // Full-page navigation to the reverse-proxy logout endpoint, which clears
+    // the session cookie and bounces back to the login page.
+    if (isWeb && typeof window !== "undefined") {
+      window.location.assign("/auth/logout");
+    }
+  }, []);
+
+  if (process.env.EXPO_PUBLIC_SELFHOST_AUTH !== "1") return null;
+
+  return (
+    <View style={styles.rowWithBorder}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {t("settings.general.logout.label", "Se déconnecter")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {t(
+            "settings.general.logout.description",
+            "Terminer la session et revenir à l'écran de connexion.",
+          )}
+        </Text>
+      </View>
+      <Button size="sm" variant="outline" onPress={handleLogout}>
+        {t("settings.general.logout.action", "Déconnexion")}
+      </Button>
+    </View>
+  );
+}
+
 function GeneralSection({
   settings,
   isDesktopApp,
@@ -454,6 +491,7 @@ function GeneralSection({
           </DropdownMenu>
         </View>
         {isWeb ? <WebPushRow /> : null}
+        {isWeb ? <WebLogoutRow /> : null}
         {isDesktopApp ? (
           <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
             <View style={settingsStyles.rowContent}>

@@ -1,0 +1,29 @@
+# systemd unit for the self-host auth wall.
+#
+# Install: copy to /etc/systemd/system/paseo-selfhost-auth.service, adjust the
+# paths, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now paseo-selfhost-auth
+#
+# Secrets are read from an EnvironmentFile (chmod 600) so they never appear in
+# `systemctl show` output or the process command line. See docs/selfhost-auth.md.
+
+[Unit]
+Description=Paseo self-host web auth wall (app.haikostudio.cloud)
+After=network.target
+
+[Service]
+Type=simple
+# Point this at your checkout; the script is dependency-free.
+ExecStart=/usr/bin/node /root/paseo/ops/selfhost-auth/auth-server.mjs
+EnvironmentFile=/etc/paseo-selfhost-auth.env
+Restart=on-failure
+RestartSec=2
+# Hardening: the service needs nothing but the network.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

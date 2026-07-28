@@ -1,0 +1,51 @@
+# Reference Caddy site block for app.haikostudio.cloud WITH the auth wall.
+#
+# This is the drop-in replacement for the existing (unauthenticated) block at
+# /etc/caddy/project-autostart.d/app.caddy. Everything except the public
+# /auth/* endpoints is gated behind a valid session cookie via forward_auth.
+#
+# Apply: back up the current file, replace it with this, `caddy validate`, then
+# `systemctl reload caddy`. See docs/selfhost-auth.md for the full procedure.
+
+app.haikostudio.cloud {
+	encode gzip
+
+	# --- Public auth endpoints: login page, cookie verify, logout ---
+	# These must stay reachable WITHOUT a session, otherwise nobody can log in.
+	@authpublic path /auth/*
+	handle @authpublic {
+		reverse_proxy 127.0.0.1:17790
+	}
+
+	# --- Gate everything below behind a valid session cookie ---
+	# On a missing/invalid cookie the auth service replies 302 → /auth/login,
+	# which Caddy relays to the browser.
+	forward_auth 127.0.0.1:17790 {
+		uri /auth/verify
+		method GET
+		copy_headers X-Auth-User
+	}
+
+	# --- Web push receiver (now behind the gate; same-origin cookie is sent) ---
+	handle /push/* {
+		reverse_proxy 127.0.0.1:8099
+	}
+
+	# --- Static PWA (unchanged behaviour, now only served to authed sessions) ---
+	handle {
+		root * /var/www/paseo-app
+
+		# Content-hashed assets never change under a given name — cache them hard.
+		@static path /_expo/* /assets/*
+		header @static Cache-Control "public, max-age=31536000, immutable"
+
+		# index.html (and every SPA fallback) must be revalidated on each load, or
+		# iOS PWAs pin a stale index.html via heuristic caching and keep loading the
+		# old bundle even after the app is reinstalled.
+		@dynamic not path /_expo/* /assets/*
+		header @dynamic Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+
+		try_files {path} /index.html
+		file_server
+	}
+}
