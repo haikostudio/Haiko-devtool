@@ -60,7 +60,7 @@ const CONDUCTOR_CLAUDE_THINKING_OPTION_ID = "high";
  * for the conductor (see `CONDUCTOR_DISALLOWED_PASEO_TOOLS`).
  *
  * `list_task_boards` / `list_tasks` are read-only board tools the conductor needs
- * to locate the right project/folder before creating or editing tasks.
+ * to locate the right project before creating or editing tasks.
  */
 export const CONDUCTOR_ALLOWED_PASEO_TOOLS: readonly string[] = [
   "list_task_boards",
@@ -69,8 +69,6 @@ export const CONDUCTOR_ALLOWED_PASEO_TOOLS: readonly string[] = [
   "update_task",
   "move_task",
   "delete_task",
-  "create_task_folder",
-  "delete_task_folder",
 ];
 
 /**
@@ -99,6 +97,10 @@ const CONDUCTOR_DISALLOWED_BUILTIN_TOOLS: readonly string[] = [
  * paseo tool is neither allowed nor listed here — so new tools are blocked by
  * default and must be classified on purpose.
  *
+ * Folders are gone from the product — a project has exactly one task list, minted
+ * by the server on demand — so the folder tools are blocked here too: nothing in
+ * the UI could show or manage a folder the conductor invented.
+ *
  * Beyond code execution, this blocks steering OTHER agents (create/cancel/kill/
  * update/set_agent_mode/send_agent_prompt), approving their permission prompts
  * (respond_to_permission), driving terminals, worktrees, schedules, heartbeats,
@@ -112,9 +114,11 @@ const CONDUCTOR_DISALLOWED_PASEO_TOOLS: readonly string[] = [
   "create_agent",
   "create_heartbeat",
   "create_schedule",
+  "create_task_folder",
   "create_terminal",
   "create_worktree",
   "delete_schedule",
+  "delete_task_folder",
   "get_agent_activity",
   "get_agent_status",
   "inspect_provider",
@@ -168,8 +172,8 @@ function conductorSystemPrompt(projectId: string): string {
     "modifies aucun fichier, tu ne lances aucune commande : ni commit, ni push, ni",
     "build, ni test, ni déploiement, ni terminal. Tu ne fais pas le travail",
     "toi-même et tu ne le confies pas non plus à un autre agent que tu lancerais :",
-    "tu te contentes de créer, modifier, déplacer ou supprimer des tâches (et des",
-    "dossiers). Les outils d'édition, de shell et de lancement d'agents te sont",
+    "tu te contentes de créer, modifier, déplacer ou supprimer des tâches. Les",
+    "outils d'édition, de shell et de lancement d'agents te sont",
     "d'ailleurs techniquement retirés — si tu ressens le besoin d'agir sur le code,",
     "c'est le signe qu'il faut créer une tâche à la place.",
     "",
@@ -182,13 +186,11 @@ function conductorSystemPrompt(projectId: string): string {
     "te paraît minuscule.",
     "",
     "Tu pilotes le tableau via les outils paseo :",
-    "- list_tasks : lister les tâches et dossiers du tableau.",
+    "- list_tasks : lister les tâches du tableau.",
     "- create_task : créer une tâche.",
     "- update_task : modifier le titre, la description, les tags, la config d'exécution.",
     "- move_task : déplacer une tâche entre « notes » et « backlog » UNIQUEMENT.",
     "- delete_task : supprimer une tâche.",
-    "- create_task_folder : créer un dossier.",
-    "- delete_task_folder : supprimer un dossier.",
     "",
     "RÈGLE PRINCIPALE — CHAQUE DEMANDE = UNE OU PLUSIEURS TÂCHES DANS LA LISTE :",
     "Interprète CHAQUE message de l'utilisateur comme une intention d'ajouter du",

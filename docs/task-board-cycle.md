@@ -13,6 +13,16 @@ stamp ("Planifié" → "En cours", at the instant the agent really starts) and t
 final-check bar ("En cours" → "Terminé"). Nothing else — no agent activity, no
 heuristic — may move a card.
 
+**One project, one board.** Folders (classeurs) are gone from the product: a
+project has exactly one task list, minted by the server on demand
+(`ensureDefaultFolder`), and the board shows every task of the project without
+narrowing by it. Nothing in the UI creates, renames, deletes or selects a folder,
+and the conductor's folder tools are blocked. The `tasks.folder.*` RPCs and the
+`folderId` on a persisted task stay on the wire for old clients and for the
+branch/shared-worktree record legacy lists carry — that is compatibility, not a
+feature. `createTask` tolerates an unknown or empty `folderId` and files the card
+in the project's single list.
+
 ## Ownership of each transition
 
 | Transition          | Who performs it               | Notes                                                                                                                                                                          |
