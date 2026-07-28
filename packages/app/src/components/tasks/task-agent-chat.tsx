@@ -16,6 +16,7 @@ import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-con
 import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { resolveRunNowState } from "@/components/tasks/task-run-now-state";
+import { isTaskDeployed } from "@/components/tasks/task-card-badge";
 import { useSessionStore } from "@/stores/session-store";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -163,7 +164,12 @@ export function TaskAgentChat({
   // own agent a deploy-then-confirm prompt, which verifies the work, publishes it
   // and moves the card to "Déployé". It takes the composer slot ahead of the
   // archive bar on a "done" card, so the natural order is deploy, then archive.
-  const showDeploy = Boolean(onDeploy) && task.column === "done";
+  // Only offer the deploy bar while the work is NOT yet live. Once the server
+  // confirms it is published (deployment reached "deployed", or a deployedUrl was
+  // stamped by the auto-publish that fires the instant a card reaches "Terminé"),
+  // the button must not linger as if nothing shipped: it steps aside — the card
+  // wears a "Déployé" badge and the archive bar takes the slot instead.
+  const showDeploy = Boolean(onDeploy) && task.column === "done" && !isTaskDeployed(task);
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);

@@ -510,6 +510,7 @@ export const zhCN: TranslationResources = {
       planReady: "计划已就绪",
       awaitingReply: "等待你的回复",
       deploying: "发布中…",
+      deployed: "已部署",
       finalCheck: "正在进行最终检查…",
       deployFailed: "发布失败",
       finalCheckFailed: "检查失败",

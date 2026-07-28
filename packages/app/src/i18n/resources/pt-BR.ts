@@ -522,6 +522,7 @@ export const ptBR: TranslationResources = {
       planReady: "Plano pronto",
       awaitingReply: "Aguardando sua resposta",
       deploying: "Publicando…",
+      deployed: "Implantado",
       finalCheck: "Verificação final em andamento…",
       deployFailed: "Falha na publicação",
       finalCheckFailed: "Falha na verificação",

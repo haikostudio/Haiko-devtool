@@ -521,6 +521,7 @@ export const es: TranslationResources = {
       planReady: "Plan listo",
       awaitingReply: "Esperando tu respuesta",
       deploying: "Publicando…",
+      deployed: "Desplegado",
       finalCheck: "Verificación final en curso…",
       deployFailed: "Error al publicar",
       finalCheckFailed: "Verificación fallida",

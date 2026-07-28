@@ -523,6 +523,7 @@ export const fr: TranslationResources = {
       planReady: "Plan prêt",
       awaitingReply: "En attente de ta réponse",
       deploying: "Publication en cours",
+      deployed: "Déployé",
       finalCheck: "Contrôle final en cours",
       deployFailed: "Publication échouée",
       finalCheckFailed: "Contrôle échoué",

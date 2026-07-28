@@ -130,7 +130,11 @@ export class TaskDeployer {
     if (!task || task.deployment?.state !== "running") {
       return;
     }
-    const deployed = task.column === "deployed";
+    // The deploy succeeded either when the agent moved the card to "deployed" or
+    // when the work is demonstrably live (a deployedUrl was stamped). Treating a
+    // live URL as success keeps the window from resetting to a fresh, clickable
+    // "Lancer le déploiement" on a card whose work is already published.
+    const deployed = task.column === "deployed" || Boolean(task.deployedUrl);
     await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       deployment: deployed

@@ -516,6 +516,7 @@ export const en = {
       deploying: "Publishing…",
       finalCheck: "Final check running…",
       deployFailed: "Publish failed",
+      deployed: "Deployed",
       finalCheckFailed: "Check failed",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}}d",

@@ -517,6 +517,7 @@ export const ja: TranslationResources = {
       planReady: "プラン完成",
       awaitingReply: "返信をお待ちしています",
       deploying: "公開中…",
+      deployed: "デプロイ済み",
       finalCheck: "最終チェック中…",
       deployFailed: "公開に失敗しました",
       finalCheckFailed: "チェックに失敗しました",

@@ -130,6 +130,24 @@ describe("TaskDeployer", () => {
     expect(board.tasks.find((entry) => entry.id === taskId)?.deployment?.state).toBe("deployed");
   });
 
+  test("closing window: a live deployedUrl records a successful deploy even without a move", async () => {
+    const taskId = await doneTask({ taskAgentId: "agent-7" });
+    await deployer.deploy("proj-1", taskId);
+    // The work is demonstrably live (auto-publish stamped a URL) but the agent
+    // never moved the card to « Déployée ». The window must still close as
+    // deployed, not reset to a fresh clickable bar.
+    await service.patchTask("proj-1", taskId, (current) => ({
+      ...current,
+      deployedUrl: "https://etsigna.haikostudio.cloud",
+    }));
+
+    idleCallbacks.forEach((callback) => callback());
+    await settled(taskId);
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === taskId)?.deployment?.state).toBe("deployed");
+  });
+
   test("an already deployed card is a no-op", async () => {
     const taskId = await doneTask({ taskAgentId: "agent-7" });
     await service.transitionTask("proj-1", taskId, "deployed");

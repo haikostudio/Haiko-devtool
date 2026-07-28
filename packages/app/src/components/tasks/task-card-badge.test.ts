@@ -81,6 +81,27 @@ describe("getScheduleBadge", () => {
     });
   });
 
+  it("shows the « Déployé » badge once the work is live via deployment state", () => {
+    const badge = getScheduleBadge(makeTask({ deployment: { state: "deployed" } }), null);
+    expect(badge).toEqual({ labelKey: "tasks.card.deployed", variant: "success" });
+  });
+
+  it("shows the « Déployé » badge once a deployedUrl is stamped", () => {
+    const badge = getScheduleBadge(
+      makeTask({ column: "done", deployedUrl: "https://etsigna.haikostudio.cloud" }),
+      null,
+    );
+    expect(badge).toEqual({ labelKey: "tasks.card.deployed", variant: "success" });
+  });
+
+  it("keeps a running re-deploy spinner ahead of the deployed badge", () => {
+    const badge = getScheduleBadge(
+      makeTask({ deployment: { state: "running" }, deployedUrl: "https://x.haikostudio.cloud" }),
+      "attention",
+    );
+    expect(badge).toEqual({ labelKey: "tasks.card.deploying", variant: "success" });
+  });
+
   it("shows the green running badge when the agent is actually working", () => {
     const badge = getScheduleBadge(
       makeTask({ schedule: { state: "running", attempts: 1 } }),

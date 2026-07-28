@@ -516,6 +516,7 @@ export const ru: TranslationResources = {
       planReady: "План готов",
       awaitingReply: "Ожидает вашего ответа",
       deploying: "Публикация…",
+      deployed: "Развёрнуто",
       finalCheck: "Идёт финальная проверка…",
       deployFailed: "Ошибка публикации",
       finalCheckFailed: "Проверка не пройдена",

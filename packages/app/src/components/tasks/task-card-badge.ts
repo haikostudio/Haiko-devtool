@@ -21,6 +21,15 @@ export interface ScheduleBadgeDescriptor {
 // over every other status, including a stale "waiting for your reply" that
 // lingers until the agent starts streaming. Kept as its own function so
 // getScheduleBadge stays under the branch-complexity budget.
+// True once the card's work is actually live. The strongest signal is an
+// explicit deploy that reached "deployed"; the everyday one is `deployedUrl`,
+// which the server stamps the moment a completed card is published (Paseo's own
+// web app, or the project's dev instance). Derived from server truth, never from
+// a client flag, so a done card that was already published never lies about it.
+export function isTaskDeployed(task: KanbanTask): boolean {
+  return task.deployment?.state === "deployed" || Boolean(task.deployedUrl);
+}
+
 function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (task.deployment?.state === "running") {
     return { labelKey: "tasks.card.deploying", variant: "success" };
@@ -45,6 +54,13 @@ export function getScheduleBadge(
   const actionBadge = actionWindowBadge(task);
   if (actionBadge) {
     return actionBadge;
+  }
+  // A terminal "Déployé" truth: the work is live. Sits just under the running
+  // action window (a re-deploy still shows its live spinner first) and above the
+  // softer board states, so a published card reads as shipped at a glance instead
+  // of falling back to a blank or a stale schedule badge.
+  if (isTaskDeployed(task)) {
+    return { labelKey: "tasks.card.deployed", variant: "success" };
   }
   // Board-field reasons that carry precise wording win first.
   if (task.approval?.state === "pending") {

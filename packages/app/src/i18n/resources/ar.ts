@@ -511,6 +511,7 @@ export const ar: TranslationResources = {
       planReady: "الخطة جاهزة",
       awaitingReply: "في انتظار ردك",
       deploying: "جارٍ النشر…",
+      deployed: "تم النشر",
       finalCheck: "جارٍ التحقق النهائي…",
       deployFailed: "فشل النشر",
       finalCheckFailed: "فشل التحقق",
