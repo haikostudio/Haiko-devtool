@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { KanbanTask } from "@/data/tasks";
-import { countTasksAwaitingDeploy, isDeployAllRunning } from "./deploy-all-button";
+import { countTasksAwaitingDeploy, isDeployAllRunning } from "./deploy-queue";
 
 function makeTask(overrides: Partial<KanbanTask> & { id: string }): KanbanTask {
   return {

@@ -519,6 +519,7 @@ export const ja: TranslationResources = {
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",
       deployAllConfirm: "すべてデプロイ",
       deployAllStarted: "一括公開を開始しました",
+      deployMenu: "公開オプション",
       deployOffPeak: "オフピークに自動公開",
       deployOffPeakMessage:
         "待機中の一括が静音時間帯に自動で公開され、その後エンジンが再起動します。オプションはいつでも解除できます。",

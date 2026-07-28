@@ -513,6 +513,7 @@ export const ar: TranslationResources = {
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",
       deployAllConfirm: "نشر الكل",
       deployAllStarted: "بدأ النشر الجماعي",
+      deployMenu: "خيارات النشر",
       deployOffPeak: "النشر تلقائيًا في ساعات الهدوء",
       deployOffPeakMessage:
         "ستُنشر الدفعة المنتظرة تلقائيًا خلال ساعات الهدوء، ثم يُعاد تشغيل المحرك. يمكنك إيقاف الخيار في أي وقت.",

@@ -524,6 +524,7 @@ export const es: TranslationResources = {
         "{{count}} tarea(s) se publicarán de una sola vez y luego el motor se reiniciará. Los agentes en curso se interrumpirán.",
       deployAllConfirm: "Desplegar todo",
       deployAllStarted: "Publicación en lote iniciada",
+      deployMenu: "Opciones de publicación",
       deployOffPeak: "Publicar automáticamente en horas valle",
       deployOffPeakMessage:
         "El lote en espera saldrá solo durante las horas valle y el motor se reiniciará al terminar. Puedes desactivar la opción cuando quieras.",

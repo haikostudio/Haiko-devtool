@@ -526,6 +526,7 @@ export const fr: TranslationResources = {
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",
       deployAllConfirm: "Tout déployer",
       deployAllStarted: "Publication groupée lancée",
+      deployMenu: "Options de publication",
       deployOffPeak: "Publier automatiquement en heures creuses",
       deployOffPeakMessage:
         "Le lot en attente partira tout seul pendant les heures creuses, et le moteur redémarrera à la fin. Vous pourrez désactiver l'option à tout moment.",
