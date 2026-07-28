@@ -642,6 +642,8 @@ export const zhCN: TranslationResources = {
     expand: "显示全部 ({{count}})",
     drag: "拖动以移动",
     dismiss: "关闭",
+    dismissAll: "全部关闭",
+    overflow: "+{{count}}",
   },
   agentList: {
     fallbackTitle: "新会话",

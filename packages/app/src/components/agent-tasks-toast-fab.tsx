@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
 import { Pressable, Text, View } from "react-native";
+import { Trash2 } from "lucide-react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,6 +10,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useDraggableToast, useToastSection } from "@/hooks/use-draggable-toast";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { TaskToast, useTrackedTasks } from "@/components/agent-tasks-toast-stack";
+import { useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
 // Matches theme.spacing[4]; kept a literal so the container can add the safe-area
@@ -94,7 +96,34 @@ function AgentTasksToastDrawer({
 }): ReactElement {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const header = useMemo(() => ({ title: t("agentTasks.drawerTitle") }), [t]);
+  const dismissAll = useAgentTaskToastStore((state) => state.dismissAll);
+
+  // Clearing the pile empties the drawer, so close it in the same gesture rather
+  // than leaving the user staring at the "nothing in progress" line.
+  const handleDismissAll = useCallback(() => {
+    dismissAll();
+    onClose();
+  }, [dismissAll, onClose]);
+
+  const header = useMemo(
+    () => ({
+      title: t("agentTasks.drawerTitle"),
+      actions:
+        tasks.length > 0 ? (
+          <Pressable
+            onPress={handleDismissAll}
+            style={drawerDismissAllStyle}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t("agentTasksToast.dismissAll")}
+            testID="agent-tasks-toast-drawer-dismiss-all"
+          >
+            <Trash2 size={16} color={styles.drawerDismissAllIcon.color} />
+          </Pressable>
+        ) : undefined,
+    }),
+    [t, tasks.length, handleDismissAll],
+  );
 
   // The sheet's own bottom safe-area padding doesn't render on the standalone
   // PWA (env() insets don't reach the portaled bottom sheet), so the drawer must
@@ -166,6 +195,20 @@ const styles = StyleSheet.create((theme) => ({
     // so give the list a little headroom or the badge gets clipped by the sheet.
     paddingTop: theme.spacing[2],
   },
+  // Icon-only trash sitting in the sheet header actions slot.
+  drawerDismissAll: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+  },
+  drawerDismissAllPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  drawerDismissAllIcon: {
+    color: theme.colors.foregroundMuted,
+  },
   emptyText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.foregroundMuted,
@@ -175,4 +218,8 @@ const styles = StyleSheet.create((theme) => ({
 
 function fabPressableStyle({ pressed }: { pressed: boolean }) {
   return [styles.fab, pressed && styles.fabPressed];
+}
+
+function drawerDismissAllStyle({ pressed }: { pressed: boolean }) {
+  return [styles.drawerDismissAll, pressed && styles.drawerDismissAllPressed];
 }

@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { ChevronsDownUp, ChevronsUpDown, GripVertical, X } from "lucide-react-native";
+import { ChevronsDownUp, ChevronsUpDown, GripVertical, Trash2, X } from "lucide-react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   type AnimatedStyle,
@@ -30,6 +30,10 @@ import {
   useToastSection,
 } from "@/hooks/use-draggable-toast";
 import { useAggregatedAgents, type AggregatedAgent } from "@/hooks/use-aggregated-agents";
+import {
+  selectRenderedToasts,
+  toastStackSlot,
+} from "@/components/agent-tasks-toast-stack-geometry";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -57,16 +61,14 @@ const BASE_BOTTOM_OFFSET = 44;
 // the rightmost ~32px of the pane. Offset the toast stack past it (plus a small
 // gap) so the rail stays visible instead of hiding behind the toasts.
 const RAIL_CLEARANCE = 44;
-// How much of each card behind the front one peeks out at the top when the stack
-// is collapsed into a pile — just enough to show the status pip and a sliver.
-const COLLAPSED_PEEK = 10;
-// When collapsed, the pile fades into the distance: the front card is fully opaque
-// and each card further back drops one step, floored so its status pip still reads.
-const COLLAPSED_OPACITY_STEP = 0.18;
-const COLLAPSED_MIN_OPACITY = 0.35;
+// Every card in the floating pile is exactly this wide, whatever its title says.
+// A shared fixed width (rather than a max) is what keeps the stack reading as one
+// object: ragged edges make the pile look broken, and depth is carried by opacity
+// and scale instead (see agent-tasks-toast-stack-geometry).
+const STACK_CARD_WIDTH = 320;
 // Once this many toasts are tracked, the pile folds itself by default (until the
 // user overrides it with the toggle). Keeps a busy corner from taking over.
-const AUTO_COLLAPSE_COUNT = 4;
+const AUTO_COLLAPSE_COUNT = 3;
 // Fold/unfold timing — short enough to feel snappy, long enough to read as motion.
 const FOLD_DURATION_MS = 220;
 
@@ -84,17 +86,6 @@ function bucketOf(agent: AggregatedAgent): WorkspaceStateBucket {
     attentionReason: agent.attentionReason,
   });
 }
-
-// Groups the five status buckets into the three lifecycle lanes the stack sorts by:
-// waiting-for-user (top) → running (middle) → finished (bottom, nearest the corner).
-// Lower rank renders higher up the column.
-const BUCKET_GROUP_RANK: Record<WorkspaceStateBucket, number> = {
-  needs_input: 0,
-  failed: 0,
-  attention: 0,
-  running: 1,
-  done: 2,
-};
 
 function TaskToastIcon({
   provider,
@@ -184,10 +175,11 @@ export function useTrackedTasks(): TrackedTask[] {
     reconcile({ activeKeys, existingKeys });
   }, [reconcile, activeKeys, existingKeys]);
 
-  // Auto-sort by lifecycle lane so cards settle into three groups: waiting-for-user
-  // at the top, running in the middle, finished at the bottom (nearest the corner).
-  // Within a lane, keep appearance order (oldest first) for stability. Any tracked
-  // key whose agent has since disappeared is dropped.
+  // Strict recency order: oldest first, newest last. The stack renders top-to-
+  // bottom, so the newest notification lands at the bottom of the pile — nearest
+  // the corner, in front of everything — and older ones recede upward and behind.
+  // Same list feeds the mobile drawer, where it simply reads as a chronology.
+  // Any tracked key whose agent has since disappeared is dropped.
   const items = useMemo(() => {
     const list: TrackedTask[] = [];
     for (const key of order.keys()) {
@@ -196,13 +188,7 @@ export function useTrackedTasks(): TrackedTask[] {
         list.push(task);
       }
     }
-    list.sort((a, b) => {
-      const rankDiff = BUCKET_GROUP_RANK[a.bucket] - BUCKET_GROUP_RANK[b.bucket];
-      if (rankDiff !== 0) {
-        return rankDiff;
-      }
-      return (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0);
-    });
+    list.sort((a, b) => (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0));
     return list;
   }, [order, buckets]);
 
@@ -406,6 +392,31 @@ function CollapseToggle({
   );
 }
 
+// Clears the whole pile in one gesture. Sits with the drag handle and the fold
+// toggle so all three pile controls share one row.
+function DismissAllButton({ onPress }: { onPress: () => void }): ReactElement {
+  const { t } = useTranslation();
+  return (
+    <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
+      <TooltipTrigger asChild>
+        <Pressable
+          onPress={onPress}
+          style={dismissAllButtonStyle}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={t("agentTasksToast.dismissAll")}
+          testID="agent-tasks-toast-dismiss-all"
+        >
+          <Trash2 size={13} color={styles.collapseToggleLabel.color} />
+        </Pressable>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="center">
+        <Text style={styles.tooltipText}>{t("agentTasksToast.dismissAll")}</Text>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 // A grab handle sitting next to the collapse toggle. Dragging it slides the whole
 // pile horizontally (see the Pan gesture in the stack). Pure affordance — it has no
 // tap behaviour, just a grab cursor on web and the drag gesture attached by the host.
@@ -430,12 +441,14 @@ function ToastStackItem({
   task,
   overlap,
   opacity,
+  scale,
   zIndex,
   onMeasure,
 }: {
   task: TrackedTask;
   overlap: number;
   opacity: number;
+  scale: number;
   zIndex: number;
   onMeasure: (key: string, height: number) => void;
 }): ReactElement {
@@ -459,10 +472,18 @@ function ToastStackItem({
     contentOpacity.value = withTiming(opacity, { duration: FOLD_DURATION_MS });
   }, [opacity, contentOpacity]);
   const contentStyle = useAnimatedStyle(() => ({ opacity: contentOpacity.value }));
+  // Depth scale rides the same timing. It lives on the card (not the content) and
+  // is a transform, so it never changes the laid-out width — the cards stay the
+  // same size, they just sit a hair further away.
+  const depthScale = useSharedValue(scale);
+  useEffect(() => {
+    depthScale.value = withTiming(scale, { duration: FOLD_DURATION_MS });
+  }, [scale, depthScale]);
   // zIndex rides along in the animated style so later (lower) cards stay on top
   // and the ones behind only show their top sliver — no second style prop needed.
   const wrapperStyle = useAnimatedStyle(() => ({
     marginBottom: foldOffset.value,
+    transform: [{ scale: depthScale.value }],
     zIndex,
   }));
 
@@ -474,11 +495,13 @@ function ToastStackItem({
 }
 
 export function AgentTasksToastStack(): ReactElement | null {
+  const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
   const insets = useSafeAreaInsets();
   const visible = useTrackedTasks();
   const collapsed = useAgentTaskToastStore((state) => state.collapsed);
   const setCollapsed = useAgentTaskToastStore((state) => state.setCollapsed);
+  const dismissAll = useAgentTaskToastStore((state) => state.dismissAll);
   const section = useToastSection();
   // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
   // can pull each card up over the one behind it and leave only a top sliver.
@@ -534,9 +557,12 @@ export function AgentTasksToastStack(): ReactElement | null {
     return null;
   }
 
+  // Saturation guard: only the most recent cards are mounted. The rest stay
+  // tracked (and counted on the fold toggle) but never lengthen the pile.
+  const { rendered, hiddenCount } = selectRenderedToasts(visible);
   // The front (fully visible) card is the last one — nearest the bottom-right
   // corner. Cards above it fold up behind it, so their status pips peek out.
-  const lastIndex = visible.length - 1;
+  const lastIndex = rendered.length - 1;
 
   return (
     <Animated.View style={animatedContainerStyle} pointerEvents="box-none" onLayout={onDragLayout}>
@@ -545,29 +571,33 @@ export function AgentTasksToastStack(): ReactElement | null {
         onPointerEnter={handleHoverEnter}
         onPointerLeave={handleHoverLeave}
       >
-        {visible.map((task, index) => {
-          const isFront = index === lastIndex;
-          const overlap =
-            isCollapsed && !isFront ? -Math.max((heights[task.key] ?? 0) - COLLAPSED_PEEK, 0) : 0;
-          // Depth fade only while piled: front card stays solid, each one behind it
-          // dims a step (floored) so the stack recedes into the distance.
-          const depthFromFront = lastIndex - index;
-          const opacity = isCollapsed
-            ? Math.max(1 - depthFromFront * COLLAPSED_OPACITY_STEP, COLLAPSED_MIN_OPACITY)
-            : 1;
+        {hiddenCount > 0 ? (
+          <Text style={styles.overflowLabel} testID="agent-tasks-toast-overflow">
+            {t("agentTasksToast.overflow", { count: hiddenCount })}
+          </Text>
+        ) : null}
+        {rendered.map((task, index) => {
+          const slot = toastStackSlot({
+            depth: lastIndex - index,
+            renderedCount: rendered.length,
+            cardHeight: heights[task.key] ?? 0,
+            collapsed: isCollapsed,
+          });
           return (
             <ToastStackItem
               key={task.key}
               task={task}
-              overlap={overlap}
-              opacity={opacity}
-              zIndex={index}
+              overlap={slot.overlap}
+              opacity={slot.opacity}
+              scale={slot.scale}
+              zIndex={slot.zIndex}
               onMeasure={handleMeasure}
             />
           );
         })}
         <View style={styles.controlsRow}>
           <DragHandle gesture={dragGesture} />
+          <DismissAllButton onPress={dismissAll} />
           {canCollapse ? (
             <CollapseToggle
               collapsed={stickyCollapsed}
@@ -586,7 +616,7 @@ const styles = StyleSheet.create((theme) => ({
     position: "absolute",
     right: RAIL_CLEARANCE,
     alignItems: "flex-end",
-    maxWidth: 320,
+    maxWidth: STACK_CARD_WIDTH,
     zIndex: 1000,
   },
   // Hover target that hugs the pile + controls. It has to be a plain (pointer-events
@@ -594,13 +624,18 @@ const styles = StyleSheet.create((theme) => ({
   // a box-none node is transparent to the pointer and never gets them.
   hoverWrapper: {
     alignItems: "flex-end",
-    gap: theme.spacing[2],
+    // No flex `gap` here on purpose: each card owns its own bottom margin (see
+    // toastStackSlot). A gap would be added on top of the negative fold margins
+    // and every "peek" would silently grow by that amount.
   },
   toast: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
-    maxWidth: 320,
+    // Fills whichever wrapper hosts it: the fixed-width pile slot, or the
+    // stretched row inside the mobile drawer. Never content-sized — that is what
+    // used to give the pile its ragged right edge.
+    width: "100%",
     backgroundColor: theme.colors.surface2,
     borderRadius: theme.borderRadius.lg,
     borderWidth: theme.borderWidth[1],
@@ -611,9 +646,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   toastFullWidth: {
     alignSelf: "stretch",
-    // "100%" (not undefined) so it reliably overrides the base 320px cap when the
-    // styles merge — a later `undefined` does not reset an earlier value in RN.
-    maxWidth: "100%",
   },
   toastHovered: {
     borderColor: theme.colors.borderAccent,
@@ -624,6 +656,9 @@ const styles = StyleSheet.create((theme) => ({
   // explicit for the button's `top/right` anchoring.
   cardWrapper: {
     position: "relative",
+    // Every card in the pile gets the exact same width — no ragged edges, no
+    // card wider than the one in front of it.
+    width: STACK_CARD_WIDTH,
   },
   // In the mobile drawer each card spans the full width, so the wrapper stretches
   // too — otherwise the inner full-width Pressable would only fill the shrunk wrapper.
@@ -761,7 +796,17 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     ...theme.shadow.sm,
   },
-  dragHandle: {
+  // Muted "+N" line above the pile: the cards that are tracked but deliberately
+  // not mounted, so a saturated corner still tells the truth about its size.
+  overflowLabel: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    paddingHorizontal: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+  },
+  // Square icon-only control shared by the drag handle and the trash button, so
+  // the three pile controls read as one set.
+  iconControl: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: theme.spacing[1],
@@ -801,7 +846,21 @@ function closeButtonStyle({ hovered = false, pressed }: { hovered?: boolean; pre
 }
 
 // Grab cursor on web signals the handle is draggable; native ignores the cast.
-const dragHandleStyle = [styles.dragHandle, isWeb && ({ cursor: "grab" } as object)];
+const dragHandleStyle = [styles.iconControl, isWeb && ({ cursor: "grab" } as object)];
+
+function dismissAllButtonStyle({
+  hovered = false,
+  pressed,
+}: {
+  hovered?: boolean;
+  pressed: boolean;
+}) {
+  return [
+    styles.iconControl,
+    isWeb && ({ cursor: "pointer" } as object),
+    (hovered || pressed) && styles.collapseToggleHovered,
+  ];
+}
 
 // Declared after `styles` so the referenced style identities exist. `done` maps to
 // no dot (finished tasks show only the provider icon).

@@ -653,6 +653,8 @@ export const es: TranslationResources = {
     expand: "Mostrar todo ({{count}})",
     drag: "Arrastra para mover",
     dismiss: "Descartar",
+    dismissAll: "Cerrar todo",
+    overflow: "+{{count}}",
   },
   agentList: {
     fallbackTitle: "Nueva sesión",

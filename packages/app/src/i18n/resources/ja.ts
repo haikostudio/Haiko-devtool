@@ -649,6 +649,8 @@ export const ja: TranslationResources = {
     expand: "すべて表示 ({{count}})",
     drag: "ドラッグして移動",
     dismiss: "閉じる",
+    dismissAll: "すべて閉じる",
+    overflow: "+{{count}}",
   },
   agentList: {
     fallbackTitle: "新しいセッション",

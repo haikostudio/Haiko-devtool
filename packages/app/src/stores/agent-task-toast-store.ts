@@ -29,6 +29,17 @@ interface AgentTaskToastState {
   reconcile: (input: { activeKeys: readonly string[]; existingKeys: ReadonlySet<string> }) => void;
   /** Hide a toast (used once a finished task's agent is opened on screen). */
   dismiss: (key: AgentTaskToastKey) => void;
+  /** Clear the whole pile in one gesture (the trash button in the controls row). */
+  dismissAll: () => void;
+  /**
+   * Keys the user has explicitly dismissed while their agent was still active.
+   * Without this, `reconcile` would re-add a running agent's toast on the very
+   * next tick and the card would appear to refuse being closed. A key leaves the
+   * set as soon as its agent stops being active, so the *next* activation brings
+   * the toast back — dismissing mutes this round, not the agent forever. Live
+   * state, never persisted.
+   */
+  suppressed: Set<AgentTaskToastKey>;
   /**
    * Fold preference for the floating pile, persisted so the user's choice survives
    * a reload. `null` means "auto": the stack folds itself once there are enough
@@ -59,6 +70,7 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
     (set) => ({
       order: new Map(),
       seq: 0,
+      suppressed: new Set(),
       collapsed: null,
       setCollapsed: (collapsed) => set({ collapsed }),
       positions: {},
@@ -70,8 +82,19 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
           const next = new Map(state.order);
           let seq = state.seq;
 
+          // Release the mute on any agent that has stopped being active — the
+          // dismissal only covered the run the user waved away.
+          const active = new Set(activeKeys);
+          const suppressed = new Set(state.suppressed);
+          for (const key of suppressed) {
+            if (!active.has(key)) {
+              suppressed.delete(key);
+            }
+          }
+          const suppressedChanged = suppressed.size !== state.suppressed.size;
+
           for (const key of activeKeys) {
-            if (!next.has(key)) {
+            if (!next.has(key) && !suppressed.has(key)) {
               next.set(key, seq++);
               changed = true;
             }
@@ -83,10 +106,10 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
             }
           }
 
-          if (!changed) {
+          if (!changed && !suppressedChanged) {
             return state;
           }
-          return { order: next, seq };
+          return { order: next, seq, suppressed };
         }),
       dismiss: (key) =>
         set((state) => {
@@ -95,7 +118,18 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
           }
           const next = new Map(state.order);
           next.delete(key);
-          return { order: next };
+          return { order: next, suppressed: new Set(state.suppressed).add(key) };
+        }),
+      dismissAll: () =>
+        set((state) => {
+          if (state.order.size === 0) {
+            return state;
+          }
+          const suppressed = new Set(state.suppressed);
+          for (const key of state.order.keys()) {
+            suppressed.add(key);
+          }
+          return { order: new Map(), suppressed };
         }),
     }),
     {

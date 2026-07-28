@@ -646,6 +646,8 @@ export const en = {
     expand: "Show all ({{count}})",
     drag: "Drag to move",
     dismiss: "Dismiss",
+    dismissAll: "Dismiss all",
+    overflow: "+{{count}}",
   },
   agentList: {
     fallbackTitle: "New session",

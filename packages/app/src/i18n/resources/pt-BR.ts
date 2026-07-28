@@ -654,6 +654,8 @@ export const ptBR: TranslationResources = {
     expand: "Mostrar tudo ({{count}})",
     drag: "Arraste para mover",
     dismiss: "Dispensar",
+    dismissAll: "Fechar tudo",
+    overflow: "+{{count}}",
   },
   agentList: {
     fallbackTitle: "Nova sessão",
