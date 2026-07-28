@@ -126,6 +126,18 @@ function normalizeConductorProviderChoice(value: unknown): ConductorProviderChoi
   return value === "codex/gpt-5.4" ? "codex/gpt-5.4" : DEFAULT_CONDUCTOR_PROVIDER;
 }
 
+/**
+ * The value to send to the daemon when asking for this conductor. The Claude
+ * choice travels as the BARE provider id, never as the full `provider/model`
+ * spec: which Claude model the conductor runs on is the daemon's call, and a
+ * daemon older than this build rejects outright any spec it does not recognise
+ * by name. "claude" is understood by every daemon version and always lands on
+ * that daemon's own conductor default.
+ */
+export function toConductorEnsureProvider(choice: ConductorProviderChoice): string {
+  return choice === "codex/gpt-5.4" ? "codex/gpt-5.4" : "claude";
+}
+
 // Mirrors DEFAULT_TIMELINE_HEIGHT in task-timeline-area.tsx.
 const DEFAULT_TIMELINE_HEIGHT = 190;
 

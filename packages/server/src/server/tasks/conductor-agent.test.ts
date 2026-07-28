@@ -182,6 +182,19 @@ describe("ConductorAgentService", () => {
     expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-opus-4-8");
   });
 
+  it('accepts the bare "claude" provider the client sends over the wire', async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    });
+
+    await service.ensureConductorAgent("project-1", "claude");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.provider).toBe("claude/claude-opus-4-8");
+    expect(input.config?.model).toBe("claude-opus-4-8");
+  });
+
   it("still answers to the legacy claude/sonnet provider spec", async () => {
     let captured: CreateAgentCommandInput | null = null;
     const service = makeService((input) => {
