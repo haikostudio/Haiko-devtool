@@ -337,6 +337,11 @@ export const zhCN: TranslationResources = {
       deployRunning: "正在对话中部署…",
       deployRestartMessage: "对话中已有部署正在进行。仍要重新开始吗？",
       deployDispatched: "部署已开始——在对话中跟进。",
+      restartDaemon: "重启引擎",
+      restartDaemonMessage:
+        "改动已上线，但需要重启 Paseo 引擎后才会生效。重启只需几秒，应用会自动重新连接。",
+      restartDaemonBusyMessage: "当前有 {{count}} 个智能体正在工作：重启会中断它们。仍要重启吗？",
+      restartDaemonStarted: "已开始重启 — 几秒后重新连接。",
       collapse: "收起面板",
       expand: "展开面板",
       billing: "账单",
@@ -484,6 +489,8 @@ export const zhCN: TranslationResources = {
     },
     board: {
       emptyColumn: "暂无任务",
+      pendingPublish: "{{count}} 张卡片待发布",
+      pendingPublishWithRestart: "{{count}} 张卡片待发布，其中 {{restart}} 张需要重启",
     },
     analysis: {
       failedRetrying: "分析失败 — 正在重试",
@@ -509,6 +516,7 @@ export const zhCN: TranslationResources = {
       live: "已上线",
       openLive: "打开已发布的站点",
       needsRestart: "需要重启",
+      republishOnly: "仅需重新发布",
       planReady: "计划已就绪",
       needsAction: "需要你处理",
       finished: "已完成",

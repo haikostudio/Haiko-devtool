@@ -1,6 +1,6 @@
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import { describe, expect, it } from "vitest";
-import { getScheduleBadge, showsRestartNotice } from "./task-card-badge";
+import { getPublishNotice, getScheduleBadge, offersDaemonRestart } from "./task-card-badge";
 
 // Minimal in-progress task fixture; individual specs override the fields that
 // drive the badge (approval, schedule, executionHold, planReadyAt).
@@ -181,30 +181,66 @@ describe("getScheduleBadge", () => {
   });
 });
 
-describe("showsRestartNotice", () => {
+describe("getPublishNotice", () => {
   it("warns a finished-but-unpublished card that the daemon will need a restart", () => {
-    expect(showsRestartNotice(makeTask({ column: "done", needsDaemonRestart: true }))).toBe(true);
+    expect(getPublishNotice(makeTask({ column: "done", needsDaemonRestart: true }))).toEqual({
+      labelKey: "tasks.card.needsRestart",
+      variant: "warning",
+    });
   });
 
-  it("stays silent on an app-only card", () => {
-    // No server-side change: publishing is enough, so the card says nothing.
-    expect(showsRestartNotice(makeTask({ column: "done" }))).toBe(false);
-    expect(showsRestartNotice(makeTask({ column: "done", needsDaemonRestart: false }))).toBe(false);
+  it("says out loud that an app-only card just needs republishing", () => {
+    // Silence would be indistinguishable from "the daemon hasn't answered yet".
+    expect(getPublishNotice(makeTask({ column: "done", needsDaemonRestart: false }))).toEqual({
+      labelKey: "tasks.card.republishOnly",
+      variant: "success",
+    });
   });
 
-  it("drops the warning once the work is live", () => {
+  it("shows nothing while the verdict is unknown", () => {
+    expect(getPublishNotice(makeTask({ column: "done" }))).toBeNull();
+  });
+
+  it("drops the notice once the work is live", () => {
     // Both truths that mean "published": the column, and the server-stamped URL.
-    expect(showsRestartNotice(makeTask({ column: "deployed", needsDaemonRestart: true }))).toBe(
-      false,
-    );
+    expect(getPublishNotice(makeTask({ column: "deployed", needsDaemonRestart: true }))).toBeNull();
     expect(
-      showsRestartNotice(
+      getPublishNotice(
         makeTask({
           column: "done",
           needsDaemonRestart: true,
           deployedUrl: "https://app.example.com",
         }),
       ),
-    ).toBe(false);
+    ).toBeNull();
+  });
+});
+
+describe("offersDaemonRestart", () => {
+  it("offers the restart once the work is live and needs one", () => {
+    expect(offersDaemonRestart(makeTask({ column: "deployed", needsDaemonRestart: true }))).toBe(
+      true,
+    );
+    expect(
+      offersDaemonRestart(
+        makeTask({
+          column: "done",
+          needsDaemonRestart: true,
+          deployedUrl: "https://app.example.com",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not offer it before the work is published", () => {
+    // Restarting for a change that is not online yet would prove nothing.
+    expect(offersDaemonRestart(makeTask({ column: "done", needsDaemonRestart: true }))).toBe(false);
+  });
+
+  it("does not offer it for an app-only card", () => {
+    expect(offersDaemonRestart(makeTask({ column: "deployed", needsDaemonRestart: false }))).toBe(
+      false,
+    );
+    expect(offersDaemonRestart(makeTask({ column: "deployed" }))).toBe(false);
   });
 });

@@ -51,7 +51,7 @@ const SHIP_LOG_TAIL_BYTES = 32 * 1024;
  * (packages/app, docs, …) reach users through a web deploy instead, so they must
  * NOT trigger the "restart the engine" hint.
  */
-const DAEMON_CODE_PATHS = [
+export const DAEMON_CODE_PATHS = [
   "packages/server",
   "packages/protocol",
   "packages/cli",
@@ -192,6 +192,29 @@ async function getDaemonBehindCount(headSha: string | null): Promise<number> {
   } catch {
     // Range failed (e.g. boot SHA unknown to git after a rebase) — no honest count.
     return 0;
+  }
+}
+
+/** What the running daemon is missing: how many daemon-side commits, at which HEAD. */
+export interface DaemonRestartDebt {
+  commitCount: number;
+  headSha: string | null;
+}
+
+/**
+ * The daemon's restart debt right now: daemon-side commits landed since it
+ * booted. `commitCount === 0` means the running process IS the current code —
+ * nothing to restart for. Used by the restart reminder; deliberately cheap (two
+ * git reads) so it can be polled.
+ */
+export async function getDaemonRestartDebt(): Promise<DaemonRestartDebt> {
+  try {
+    const head = await runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT });
+    const headSha = head.stdout.trim() || null;
+    return { commitCount: await getDaemonBehindCount(headSha), headSha };
+  } catch {
+    // No git, no honest answer — and an unknown debt must never nag.
+    return { commitCount: 0, headSha: null };
   }
 }
 

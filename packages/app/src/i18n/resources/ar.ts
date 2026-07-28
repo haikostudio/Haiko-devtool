@@ -337,6 +337,12 @@ export const ar: TranslationResources = {
       deployRunning: "جارٍ النشر في المحادثة…",
       deployRestartMessage: "هناك نشر قيد التنفيذ بالفعل في المحادثة. هل تبدؤه من جديد على أي حال؟",
       deployDispatched: "بدأ النشر — تابعه في المحادثة.",
+      restartDaemon: "إعادة تشغيل المحرك",
+      restartDaemonMessage:
+        "العمل منشور، لكنه لن يسري إلا بعد إعادة تشغيل محرك Paseo. تستغرق إعادة التشغيل ثوانٍ قليلة، ويعيد التطبيق الاتصال تلقائيًا.",
+      restartDaemonBusyMessage:
+        "يعمل {{count}} من الوكلاء الآن: ستؤدي إعادة التشغيل إلى مقاطعة عملهم. إعادة التشغيل على أي حال؟",
+      restartDaemonStarted: "بدأت إعادة التشغيل — إعادة الاتصال خلال ثوانٍ.",
       collapse: "طي اللوحة",
       expand: "توسيع اللوحة",
       billing: "الفوترة",
@@ -485,6 +491,8 @@ export const ar: TranslationResources = {
     },
     board: {
       emptyColumn: "لا مهام",
+      pendingPublish: "{{count}} بطاقة جاهزة للنشر",
+      pendingPublishWithRestart: "{{count}} بطاقة جاهزة للنشر، منها {{restart}} تتطلب إعادة تشغيل",
     },
     analysis: {
       failedRetrying: "فشل التحليل — إعادة المحاولة",
@@ -510,6 +518,7 @@ export const ar: TranslationResources = {
       live: "مباشر",
       openLive: "فتح الموقع المنشور",
       needsRestart: "يلزم إعادة التشغيل",
+      republishOnly: "إعادة نشر فقط",
       planReady: "الخطة جاهزة",
       needsAction: "بحاجة إلى إجراء منك",
       finished: "مكتمل",

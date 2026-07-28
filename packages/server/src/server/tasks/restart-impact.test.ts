@@ -21,12 +21,12 @@ describe("needsDaemonRestartForFiles", () => {
     ).toBe(false);
   });
 
-  it("stays silent for processes the daemon does not run", () => {
-    // The CLI and the desktop wrapper are relaunched by the user, never by a
-    // daemon restart.
-    expect(
-      needsDaemonRestartForFiles(["packages/cli/src/main.ts", "packages/desktop/src/main.ts"]),
-    ).toBe(false);
+  it("asks for a restart for the CLI, which is the daemon's own entry point", () => {
+    expect(needsDaemonRestartForFiles(["packages/cli/src/main.ts"])).toBe(true);
+  });
+
+  it("stays silent for the desktop wrapper, a separate process", () => {
+    expect(needsDaemonRestartForFiles(["packages/desktop/src/main.ts"])).toBe(false);
   });
 
   it("ignores files the daemon never loads, even under a daemon package", () => {

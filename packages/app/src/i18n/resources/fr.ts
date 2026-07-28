@@ -345,6 +345,12 @@ export const fr: TranslationResources = {
       deployRestartMessage:
         "Un déploiement est déjà en cours dans la discussion. Le relancer quand même ?",
       deployDispatched: "Déploiement lancé — suivez-le dans la discussion.",
+      restartDaemon: "Redémarrer le moteur",
+      restartDaemonMessage:
+        "Le travail est en ligne, mais il ne prendra effet qu'après le redémarrage du moteur Paseo. Le redémarrage prend quelques secondes ; l'application se reconnecte toute seule.",
+      restartDaemonBusyMessage:
+        "{{count}} agent(s) travaillent en ce moment : le redémarrage interrompra leur travail en cours. Redémarrer quand même ?",
+      restartDaemonStarted: "Redémarrage lancé — reconnexion dans quelques secondes.",
       collapse: "Réduire le panneau",
       expand: "Développer le panneau",
       billing: "Facturation",
@@ -497,6 +503,9 @@ export const fr: TranslationResources = {
     },
     board: {
       emptyColumn: "Aucune tâche",
+      pendingPublish: "{{count}} carte(s) prête(s) à publier",
+      pendingPublishWithRestart:
+        "{{count}} carte(s) prête(s) à publier, dont {{restart}} nécessitant un redémarrage",
     },
     analysis: {
       failedRetrying: "Analyse échouée — nouvelle tentative",
@@ -522,6 +531,7 @@ export const fr: TranslationResources = {
       live: "En ligne",
       openLive: "Ouvrir le site en ligne",
       needsRestart: "Redémarrage requis",
+      republishOnly: "Republication simple",
       planReady: "Plan prêt",
       needsAction: "Nécessite une action de votre part",
       finished: "Terminé",

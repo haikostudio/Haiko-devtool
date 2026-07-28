@@ -156,18 +156,44 @@ only take effect after a daemon restart — instead of discovering it afterwards
   `resolveDaemonRestartImpact`) against the files the next publication will carry
   (`getPendingDeployFiles` — the diff from `.deployed-sha` plus the working tree).
   `needsDaemonRestartForFiles` (pure, unit-tested) answers yes for anything under
-  `packages/server|protocol|relay|highlight` — the code the daemon process loads —
-  and no for app/website work, for the CLI and desktop wrapper (separate processes),
-  and for tests/markdown. **Only Paseo's own checkout can require one**: a client
-  project's work never touches the Paseo daemon, so it resolves to `false`.
+  `DAEMON_CODE_PATHS` — deliberately the SAME list the "engine is behind" counter
+  uses, so the pre-publication warning and the post-publication debt can never
+  disagree. That covers `server`/`protocol`/`relay`/`highlight` plus `cli` (the
+  daemon is launched through the CLI entry point); app/website/desktop work and
+  tests/markdown answer no. **Only Paseo's own checkout can require one**: a
+  client project's work never touches the Paseo daemon, so it resolves to `false`.
 - **Never a guess.** An unresolved verdict (`null`: git unavailable, no baseline)
   leaves whatever the card already carried, so a flag an agent set by hand is
   never wiped.
-- **On the card.** `showsRestartNotice` renders it as an amber `StatusBadge`
+- **On the card.** `getPublishNotice` renders the verdict as a `StatusBadge`
   beside the live status badge — same tinted-frame family as "Publication en
-  cours" / "Contrôle final en cours". It rides the card for the whole wait and
-  **disappears once the work is live** (column `deployed`, or a stamped
-  `deployedUrl`): by then the user has already been told.
+  cours" / "Contrôle final en cours". Both outcomes speak: amber "Redémarrage
+  requis", or a quiet green "Republication simple" for app-only work. Silence is
+  reserved for "no verdict yet", so it can't be mistaken for "nothing to do". The
+  notice rides the card for the whole wait and **disappears once the work is
+  live** (column `deployed`, or a stamped `deployedUrl`).
+- **On the board.** `PendingPublishSummary` sits above the columns (same gutter
+  rule as the billable total) with one line — "3 cartes prêtes à publier, dont 1
+  nécessitant un redémarrage" — so the pending volume and the restart debt read
+  without opening a card. Archived cards are excluded; the line hides entirely
+  when nothing is pending, and drops the restart clause when none needs one.
+
+### Finishing the job — the restart itself
+
+- **On the card.** Once the work IS live and needed a restart, the card offers a
+  "Redémarrer le moteur" bar (`offersDaemonRestart` → `RestartDaemonBar`), taking
+  the composer slot ahead of the archive bar: publish → restart → archive, with
+  no terminal in between. It reuses the existing `restart_server` RPC (the same
+  gesture as Settings → host), so nothing new was added to the protocol.
+  **It always confirms first, and says how many agents the restart will cut** —
+  the daemon is only ever restarted on an explicit, informed go.
+- **The reminder.** `DaemonRestartReminder` polls the daemon's restart debt
+  (`getDaemonRestartDebt`: daemon-side commits since the boot SHA) and, if
+  published work stays dormant past a two-hour grace period, sends **one** push
+  per HEAD. The decision rule (`decideRestartReminder`) is pure and unit-tested:
+  a new HEAD restarts the countdown, a restart clears the state so the next
+  publication gets its own reminder, and an unreadable debt never nags. It only
+  ever notifies — it never restarts anything.
 
 ## Archiving a card — hide, never publish
 

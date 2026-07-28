@@ -8,6 +8,7 @@ import {
   Bot,
   CheckCircle2,
   Play,
+  Power,
   Rocket,
   RotateCw,
 } from "lucide-react-native";
@@ -16,7 +17,7 @@ import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-con
 import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { resolveRunNowState } from "@/components/tasks/task-run-now-state";
-import { isTaskDeployed } from "@/components/tasks/task-card-badge";
+import { isTaskDeployed, offersDaemonRestart } from "@/components/tasks/task-card-badge";
 import { useSessionStore } from "@/stores/session-store";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -43,6 +44,10 @@ const ThemedBadgeCheck = withUnistyles(BadgeCheck);
 const ThemedPlay = withUnistyles(Play);
 const ThemedRotate = withUnistyles(RotateCw);
 const ThemedArchive = withUnistyles(Archive);
+// The restart bar is an outlined warning control, matching the card's amber
+// "Redémarrage requis" pill so the promise and the control read as one thing.
+const warningForegroundMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
+const ThemedPower = withUnistyles(Power);
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 
@@ -86,6 +91,15 @@ export interface TaskAgentChatProps {
    * order is deploy, then archive.
    */
   onDeploy?: (taskId: string) => void;
+  /**
+   * Restart the Paseo daemon. Offered on a card whose work is live but only
+   * takes effect after a restart, so the publication can be finished without a
+   * terminal. The host confirms first (a restart drops every running agent) —
+   * this fires only once the user has said yes.
+   */
+  onRestartDaemon?: (taskId: string) => void;
+  /** True while a restart this card asked for is under way. */
+  restartingDaemon?: boolean;
 }
 
 /**
@@ -104,6 +118,8 @@ export function TaskAgentChat({
   onApproveTask,
   onArchive,
   onDeploy,
+  onRestartDaemon,
+  restartingDaemon = false,
 }: TaskAgentChatProps) {
   const { t } = useTranslation();
   // Prefer the pipeline agent: analysis AND execution live in that one
@@ -170,12 +186,21 @@ export function TaskAgentChat({
   // the button must not linger as if nothing shipped: it steps aside — the card
   // wears a "Déployé" badge and the archive bar takes the slot instead.
   const showDeploy = Boolean(onDeploy) && task.column === "done" && !isTaskDeployed(task);
+  // The restart bar is the other side of the publication: the work IS live, and
+  // a daemon restart is the only thing left between the user and their feature.
+  // It takes the slot ahead of the archive bar, so the natural order stays
+  // deploy → restart → archive, with no terminal in the middle.
+  const showRestartDaemon = Boolean(onRestartDaemon) && offersDaemonRestart(task);
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);
   const handleApprove = useCallback(() => onApproveTask?.(task.id), [onApproveTask, task.id]);
   const handleArchive = useCallback(() => onArchive?.(task.id), [onArchive, task.id]);
   const handleDeploy = useCallback(() => onDeploy?.(task.id), [onDeploy, task.id]);
+  const handleRestartDaemon = useCallback(
+    () => onRestartDaemon?.(task.id),
+    [onRestartDaemon, task.id],
+  );
 
   // Memoized so the embedded pane (and everything under it) is not re-rendered
   // by a fresh element on every keystroke in the composer. Backlog, scheduled and
@@ -200,6 +225,9 @@ export function TaskAgentChat({
     if (showDeploy) {
       return <DeployTaskBar onPress={handleDeploy} deployment={task.deployment} />;
     }
+    if (showRestartDaemon) {
+      return <RestartDaemonBar onPress={handleRestartDaemon} running={restartingDaemon} />;
+    }
     if (showArchive) {
       return <ArchiveTaskBar onPress={handleArchive} />;
     }
@@ -209,12 +237,15 @@ export function TaskAgentChat({
     showRunNow,
     showValidate,
     showDeploy,
+    showRestartDaemon,
     showArchive,
     handleApprove,
     handleRun,
     handleValidate,
     handleDeploy,
+    handleRestartDaemon,
     handleArchive,
+    restartingDaemon,
     task.progress,
     task.validation,
     task.deployment,
@@ -572,6 +603,66 @@ function archiveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
 }
 
 /**
+ * Full-width amber bar carrying the "Redémarrer le moteur" action, offered on a
+ * card whose work is LIVE but only takes effect once the daemon restarts. It is
+ * the last step of the publication, so it takes the composer slot ahead of the
+ * archive bar: publish, restart, then file away — no terminal in between.
+ *
+ * It wears the warning color, matching the card's "Redémarrage requis" pill, so
+ * the promise made on the board and the control that keeps it look like the same
+ * thing. Restarting drops every running agent, which is why the caller confirms
+ * first (and says how many agents are working) rather than firing on the press.
+ */
+function RestartDaemonBar({ onPress, running }: { onPress: () => void; running: boolean }) {
+  const { t } = useTranslation();
+  const barStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) =>
+      restartDaemonBarStyle({ ...state, disabled: running }),
+    [running],
+  );
+  const a11yState = useMemo(() => ({ disabled: running }), [running]);
+  const label = running ? t("tasks.panel.restartDaemonStarted") : t("tasks.panel.restartDaemon");
+  return (
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        <Pressable
+          onPress={onPress}
+          disabled={running}
+          style={barStyle}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityState={a11yState}
+          testID="task-restart-daemon-bar"
+        >
+          {running ? (
+            <ThemedActivityIndicator size="small" uniProps={warningForegroundMapping} />
+          ) : (
+            <ThemedPower size={ICON_SIZE.sm} uniProps={warningForegroundMapping} />
+          )}
+          <Text style={styles.restartDaemonText}>{label}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function restartDaemonBarStyle({
+  pressed,
+  hovered,
+  disabled,
+}: {
+  pressed: boolean;
+  hovered?: boolean;
+  disabled?: boolean;
+}) {
+  return [
+    styles.restartDaemonBar,
+    (hovered || pressed) && !disabled && styles.restartDaemonBarHovered,
+    disabled && styles.restartDaemonBarDisabled,
+  ];
+}
+
+/**
  * Full-width accent bar carrying the single "Lancer le déploiement" action, shown
  * on a finished ("Terminé") card right above the prompt composer. It mirrors the
  * other control bars' geometry so the family stays consistent, and wears the
@@ -819,6 +910,29 @@ const styles = StyleSheet.create((theme) => ({
   },
   archiveText: {
     color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+  },
+  restartDaemonBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing[2],
+    width: "100%",
+    paddingVertical: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: `${theme.colors.statusWarning}66`,
+    backgroundColor: `${theme.colors.statusWarning}1A`,
+  },
+  restartDaemonBarHovered: {
+    backgroundColor: `${theme.colors.statusWarning}33`,
+  },
+  restartDaemonBarDisabled: {
+    opacity: 0.6,
+  },
+  restartDaemonText: {
+    color: theme.colors.statusWarning,
     fontSize: theme.fontSize.sm,
   },
 }));

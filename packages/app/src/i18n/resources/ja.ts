@@ -341,6 +341,12 @@ export const ja: TranslationResources = {
       deployRunning: "会話でデプロイ中…",
       deployRestartMessage: "会話ですでにデプロイが実行中です。それでも再実行しますか？",
       deployDispatched: "デプロイを開始しました — 会話で追跡してください。",
+      restartDaemon: "エンジンを再起動",
+      restartDaemonMessage:
+        "作業は公開済みですが、Paseo エンジンを再起動するまで反映されません。再起動は数秒で終わり、アプリは自動的に再接続します。",
+      restartDaemonBusyMessage:
+        "現在 {{count}} 件のエージェントが作業中です。再起動すると作業が中断されます。それでも再起動しますか？",
+      restartDaemonStarted: "再起動を開始しました — 数秒で再接続します。",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",
@@ -491,6 +497,9 @@ export const ja: TranslationResources = {
     },
     board: {
       emptyColumn: "タスクなし",
+      pendingPublish: "公開待ちのカード {{count}} 件",
+      pendingPublishWithRestart:
+        "公開待ちのカード {{count}} 件（うち {{restart}} 件は再起動が必要）",
     },
     analysis: {
       failedRetrying: "分析に失敗 — 再試行中",
@@ -516,6 +525,7 @@ export const ja: TranslationResources = {
       live: "公開中",
       openLive: "公開サイトを開く",
       needsRestart: "再起動が必要",
+      republishOnly: "再公開のみ",
       planReady: "プラン完成",
       needsAction: "あなたの対応が必要です",
       finished: "完了",

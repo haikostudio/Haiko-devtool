@@ -344,6 +344,12 @@ export const es: TranslationResources = {
       deployRestartMessage:
         "Ya hay un despliegue en curso en la conversación. ¿Iniciarlo de nuevo igualmente?",
       deployDispatched: "Despliegue iniciado: síguelo en la conversación.",
+      restartDaemon: "Reiniciar el motor",
+      restartDaemonMessage:
+        "El trabajo está en línea, pero solo surtirá efecto tras reiniciar el motor de Paseo. El reinicio tarda unos segundos; la aplicación se reconecta sola.",
+      restartDaemonBusyMessage:
+        "{{count}} agente(s) están trabajando ahora mismo: el reinicio interrumpirá su trabajo. ¿Reiniciar de todos modos?",
+      restartDaemonStarted: "Reinicio iniciado: reconectando en unos segundos.",
       collapse: "Contraer panel",
       expand: "Expandir panel",
       billing: "Facturación",
@@ -495,6 +501,9 @@ export const es: TranslationResources = {
     },
     board: {
       emptyColumn: "Sin tareas",
+      pendingPublish: "{{count}} tarjeta(s) listas para publicar",
+      pendingPublishWithRestart:
+        "{{count}} tarjeta(s) listas para publicar, {{restart}} requieren reinicio",
     },
     analysis: {
       failedRetrying: "Análisis fallido — reintentando",
@@ -520,6 +529,7 @@ export const es: TranslationResources = {
       live: "En línea",
       openLive: "Abrir el sitio publicado",
       needsRestart: "Reinicio necesario",
+      republishOnly: "Solo republicar",
       planReady: "Plan listo",
       needsAction: "Requiere una acción tuya",
       finished: "Hecho",

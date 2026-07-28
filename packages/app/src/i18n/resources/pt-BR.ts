@@ -344,6 +344,12 @@ export const ptBR: TranslationResources = {
       deployRestartMessage:
         "Já há uma implantação em curso na conversa. Iniciar de novo mesmo assim?",
       deployDispatched: "Implantação iniciada — acompanhe na conversa.",
+      restartDaemon: "Reiniciar o motor",
+      restartDaemonMessage:
+        "O trabalho está no ar, mas só terá efeito após reiniciar o motor do Paseo. O reinício leva alguns segundos; o app reconecta sozinho.",
+      restartDaemonBusyMessage:
+        "{{count}} agente(s) estão trabalhando agora: o reinício vai interromper o trabalho deles. Reiniciar mesmo assim?",
+      restartDaemonStarted: "Reinício iniciado — reconectando em alguns segundos.",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",
@@ -496,6 +502,9 @@ export const ptBR: TranslationResources = {
     },
     board: {
       emptyColumn: "Sem tarefas",
+      pendingPublish: "{{count}} cartão(ões) prontos para publicar",
+      pendingPublishWithRestart:
+        "{{count}} cartão(ões) prontos para publicar, {{restart}} exigem reinício",
     },
     analysis: {
       failedRetrying: "Análise falhou — tentando de novo",
@@ -521,6 +530,7 @@ export const ptBR: TranslationResources = {
       live: "No ar",
       openLive: "Abrir o site publicado",
       needsRestart: "Reinício necessário",
+      republishOnly: "Apenas republicar",
       planReady: "Plano pronto",
       needsAction: "Precisa de uma ação sua",
       finished: "Concluído",

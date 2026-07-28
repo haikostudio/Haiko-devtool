@@ -133,6 +133,7 @@ import {
   ProviderUsageService,
 } from "../services/quota-fetcher/service.js";
 import { TaskBoardStore } from "./tasks/store.js";
+import { DaemonRestartReminder } from "./tasks/daemon-restart-reminder.js";
 import { resolveDaemonRestartImpact } from "./tasks/restart-impact.js";
 import { TaskBoardService } from "./tasks/service.js";
 import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
@@ -1614,6 +1615,15 @@ export async function createPaseoDaemon(
   taskBoardService.setOnTaskProposed((projectId) => {
     taskProposalNotifier.notifyProposed(projectId);
   });
+  // Published work that stays dormant because nobody restarted the daemon is
+  // invisible by definition — the card says "Déployé" and nothing has changed.
+  // This nudges the user once, hours later, if the restart never came. It only
+  // ever notifies: restarting stays the user's explicit call.
+  const daemonRestartReminder = new DaemonRestartReminder({
+    sendPush: (payload) => taskProposalPush?.(payload),
+    logger,
+  });
+  daemonRestartReminder.start();
   // Inline task-intent triage (opt-in): interprets chat messages that ask for
   // tasks and proposes them (awaiting approval) or asks clarifying questions.
   const messageTriage = config.messageTriage?.enabled

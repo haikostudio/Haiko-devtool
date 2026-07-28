@@ -39,6 +39,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
+import { PendingPublishSummary } from "@/components/tasks/pending-publish-summary";
+import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import {
   type QuotaMenuModel,
@@ -1057,6 +1059,7 @@ function BoardContent({
         </View>
       ) : null}
       <FolderBillingTotal serverId={serverId} projectId={projectId} tasks={folderTasks} />
+      <PendingPublishSummary tasks={folderTasks} />
       {showTimeline ? (
         <TaskTimelineArea
           board={boardHandle.board}
@@ -1278,6 +1281,13 @@ function useConductorPanelProps(
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const taskActions = useBoardTaskActions(boardHandle);
+  // "Redémarrer le moteur", offered on a published card whose work only takes
+  // effect after a restart. Lives here (not in useBoardTaskActions) because it
+  // acts on the host, not on the board.
+  const daemonRestart = useDaemonRestartAction(serverId);
+  const handleRestartDaemon = useCallback(() => {
+    void daemonRestart.restart();
+  }, [daemonRestart]);
 
   const dockTask = useMemo(
     () =>
@@ -1308,10 +1318,21 @@ function useConductorPanelProps(
       onValidate: taskActions.handleValidate,
       onArchive: taskActions.handleArchive,
       onDeploy: taskActions.handleDeploy,
+      onRestartDaemon: handleRestartDaemon,
+      restartingDaemon: daemonRestart.restarting,
       onSetHold: taskActions.handleSetHold,
       onClose: handleClose,
     }),
-    [serverId, projectId, dockTask, handleBack, handleClose, taskActions],
+    [
+      serverId,
+      projectId,
+      dockTask,
+      handleBack,
+      handleClose,
+      taskActions,
+      handleRestartDaemon,
+      daemonRestart.restarting,
+    ],
   );
 }
 

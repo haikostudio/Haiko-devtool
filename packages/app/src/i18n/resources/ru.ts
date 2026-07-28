@@ -340,6 +340,12 @@ export const ru: TranslationResources = {
       deployRunning: "Развёртывание в разговоре…",
       deployRestartMessage: "Развёртывание уже выполняется в разговоре. Всё равно запустить снова?",
       deployDispatched: "Развёртывание запущено — следите за ним в разговоре.",
+      restartDaemon: "Перезапустить движок",
+      restartDaemonMessage:
+        "Работа опубликована, но вступит в силу только после перезапуска движка Paseo. Перезапуск занимает несколько секунд; приложение переподключится само.",
+      restartDaemonBusyMessage:
+        "Сейчас работают агентов: {{count}}. Перезапуск прервёт их работу. Всё равно перезапустить?",
+      restartDaemonStarted: "Перезапуск начат — переподключение через несколько секунд.",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",
@@ -490,6 +496,9 @@ export const ru: TranslationResources = {
     },
     board: {
       emptyColumn: "Нет задач",
+      pendingPublish: "Готово к публикации: {{count}}",
+      pendingPublishWithRestart:
+        "Готово к публикации: {{count}}, из них требуют перезапуска: {{restart}}",
     },
     analysis: {
       failedRetrying: "Анализ не удался — повтор",
@@ -515,6 +524,7 @@ export const ru: TranslationResources = {
       live: "Онлайн",
       openLive: "Открыть опубликованный сайт",
       needsRestart: "Требуется перезапуск",
+      republishOnly: "Только перепубликация",
       planReady: "План готов",
       needsAction: "Требуется ваше действие",
       finished: "Готово",

@@ -339,6 +339,12 @@ export const en = {
       deployRestartMessage:
         "A deploy is already running in the conversation. Start it again anyway?",
       deployDispatched: "Deploy started — follow it in the conversation.",
+      restartDaemon: "Restart the engine",
+      restartDaemonMessage:
+        "The work is live, but it only takes effect once the Paseo engine restarts. The restart takes a few seconds; the app reconnects on its own.",
+      restartDaemonBusyMessage:
+        "{{count}} agent(s) are working right now: restarting will interrupt them. Restart anyway?",
+      restartDaemonStarted: "Restart started — reconnecting in a few seconds.",
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",
@@ -488,6 +494,9 @@ export const en = {
     },
     board: {
       emptyColumn: "No tasks",
+      pendingPublish: "{{count}} card(s) ready to publish",
+      pendingPublishWithRestart:
+        "{{count}} card(s) ready to publish, {{restart}} needing a restart",
     },
     analysis: {
       failedRetrying: "Analysis failed — retrying",
@@ -513,6 +522,7 @@ export const en = {
       live: "Live",
       openLive: "Open the live site",
       needsRestart: "Restart required",
+      republishOnly: "Republish only",
       planReady: "Plan ready",
       needsAction: "Needs an action from you",
       finished: "Done",

@@ -25,8 +25,8 @@ import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
 import {
+  getPublishNotice,
   getScheduleBadge,
-  showsRestartNotice,
   type ScheduleBadgeDescriptor,
 } from "@/components/tasks/task-card-badge";
 import {
@@ -183,7 +183,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const tone = useTaskTone(task);
   const scheduleBadge = useMemo(() => getScheduleBadge(task, tone), [task, tone]);
-  const restartNotice = showsRestartNotice(task);
+  const publishNotice = useMemo(() => getPublishNotice(task), [task]);
 
   const isNote = task.column === "notes";
   // A note whose deadline is here (overdue or within two days) nudges itself, the
@@ -269,7 +269,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
             {task.title}
           </Text>
         </View>
-        <CardStatusRow badge={scheduleBadge} restartNotice={restartNotice} />
+        <CardStatusRow badge={scheduleBadge} publishNotice={publishNotice} />
         {task.analysis?.state === "failed" && task.analysis.reason ? (
           <Text style={styles.analysisReason} numberOfLines={2}>
             {t("tasks.analysis.reason", { reason: task.analysis.reason })}
@@ -324,20 +324,20 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
  */
 const CardStatusRow = memo(function CardStatusRow({
   badge,
-  restartNotice,
+  publishNotice,
 }: {
   badge: ScheduleBadgeDescriptor | null;
-  restartNotice: boolean;
+  publishNotice: ScheduleBadgeDescriptor | null;
 }) {
   const { t } = useTranslation();
-  if (!badge && !restartNotice) {
+  if (!badge && !publishNotice) {
     return null;
   }
   return (
     <View style={styles.chipRow}>
       {badge ? <StatusBadge label={t(badge.labelKey)} variant={badge.variant} /> : null}
-      {restartNotice ? (
-        <StatusBadge label={t("tasks.card.needsRestart")} variant="warning" />
+      {publishNotice ? (
+        <StatusBadge label={t(publishNotice.labelKey)} variant={publishNotice.variant} />
       ) : null}
     </View>
   );

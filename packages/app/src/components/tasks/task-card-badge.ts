@@ -31,18 +31,38 @@ export function isTaskDeployed(task: KanbanTask): boolean {
 }
 
 /**
- * "Redémarrage requis": the card's work is finished but NOT live yet, and
- * publishing it will only take effect once the daemon is restarted (a
- * server-side change, as opposed to an app-only one that a plain republication
- * carries). It is an advance warning, so it rides the card for the whole wait
- * and goes away the moment the work is live — at that point the card says
- * "Déployé" and the restart is a step the user has already been told about.
+ * What publishing this card will take, announced BEFORE the user publishes:
  *
- * The daemon resolves the flag automatically from the files the next
- * publication will carry; an app-only card simply never gets it.
+ * - amber "Redémarrage requis" — the work only takes effect once the daemon is
+ *   restarted (a server-side change);
+ * - quiet green "Republication simple" — an app-only change; publishing is the
+ *   whole story.
+ *
+ * Both are advance warnings, so they ride the card for the whole wait and go
+ * away the moment the work is live: the card then says "Déployé", and the user
+ * has already been told what remains. Saying BOTH cases out loud is deliberate —
+ * silence would be indistinguishable from "the daemon hasn't answered yet".
+ *
+ * The verdict is resolved by the daemon from the files the next publication will
+ * carry; a card it could not settle carries no flag and shows nothing.
  */
-export function showsRestartNotice(task: KanbanTask): boolean {
-  return task.needsDaemonRestart === true && task.column !== "deployed" && !isTaskDeployed(task);
+export function getPublishNotice(task: KanbanTask): ScheduleBadgeDescriptor | null {
+  if (task.needsDaemonRestart === undefined || task.column === "deployed" || isTaskDeployed(task)) {
+    return null;
+  }
+  return task.needsDaemonRestart
+    ? { labelKey: "tasks.card.needsRestart", variant: "warning" }
+    : { labelKey: "tasks.card.republishOnly", variant: "success" };
+}
+
+/**
+ * The card's own "Redémarrer le moteur" gesture is offered on the other side of
+ * the publication: once the work IS live and it needed a restart, the restart is
+ * the last step standing between the user and their feature. Before that the
+ * button would restart the daemon for a change that is not published yet.
+ */
+export function offersDaemonRestart(task: KanbanTask): boolean {
+  return task.needsDaemonRestart === true && (task.column === "deployed" || isTaskDeployed(task));
 }
 
 function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {

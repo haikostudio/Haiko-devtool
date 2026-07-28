@@ -1,22 +1,23 @@
-import { getPendingDeployFiles, isPaseoDeployRoot } from "../../utils/paseo-deploy.js";
+import {
+  DAEMON_CODE_PATHS,
+  getPendingDeployFiles,
+  isPaseoDeployRoot,
+} from "../../utils/paseo-deploy.js";
 
 /**
- * Paths whose code is loaded by the RUNNING daemon process. A change under one
- * of these only takes effect once the daemon is restarted — publishing the web
+ * Paths whose code is loaded by the RUNNING daemon process — a change under one
+ * of these only takes effect once the daemon is restarted; publishing the web
  * app is not enough.
  *
- * `protocol`, `relay` and `highlight` are compiled INTO the daemon bundle, so a
- * change there is as much a daemon change as `server` itself. Deliberately
- * absent: `packages/app` and `packages/website` (a rebuild/publish is all they
- * need), `packages/cli` and `packages/desktop` (separate processes the user
- * relaunches on their own, never the daemon).
+ * Deliberately the SAME list the "engine is behind" counter uses
+ * ({@link DAEMON_CODE_PATHS}): the pre-publication warning and the
+ * post-publication debt must never disagree about what counts as daemon code.
+ * It covers `server`, `protocol`, `relay`, `highlight` (all compiled into the
+ * daemon) and `cli` — the daemon is launched through the CLI entry point, so its
+ * code is the daemon's too. `packages/app`, `packages/website` and the desktop
+ * wrapper are absent: they reach users through a publish, not a restart.
  */
-export const DAEMON_RESTART_PREFIXES = [
-  "packages/server/",
-  "packages/protocol/",
-  "packages/relay/",
-  "packages/highlight/",
-] as const;
+const DAEMON_RESTART_PREFIXES = DAEMON_CODE_PATHS.map((path) => `${path}/`);
 
 /**
  * Files that live under a daemon package but change nothing the daemon runs:

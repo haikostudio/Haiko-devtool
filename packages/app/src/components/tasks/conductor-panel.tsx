@@ -90,6 +90,13 @@ export interface ConductorPanelProps {
   onArchive: (taskId: string) => void;
   /** Deploy a finished ("Terminé") card: hand its agent a deploy-then-confirm prompt. */
   onDeploy: (taskId: string) => void;
+  /**
+   * Restart the daemon from a published card whose work only takes effect after
+   * a restart. Confirms (and counts the agents it will cut) before firing.
+   */
+  onRestartDaemon?: (taskId: string) => void;
+  /** True while a restart is under way, so the bar can't be pressed twice. */
+  restartingDaemon?: boolean;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
 }
@@ -160,6 +167,8 @@ export function useConductorController({
   onValidate,
   onArchive,
   onDeploy,
+  onRestartDaemon,
+  restartingDaemon,
   onSetHold,
 }: ConductorPanelProps): { header: TaskDockHeader; body: ReactNode } {
   const { t } = useTranslation();
@@ -367,6 +376,8 @@ export function useConductorController({
           onApproveTask={onApproveTask}
           onArchive={onArchive}
           onDeploy={onDeploy}
+          onRestartDaemon={onRestartDaemon}
+          restartingDaemon={restartingDaemon}
         />
       </View>
       {taskView === "chat" ? null : (
