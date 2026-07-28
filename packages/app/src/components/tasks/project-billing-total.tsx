@@ -19,13 +19,14 @@ const ThemedReceipt = withUnistyles(Receipt);
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
 /**
- * Glanceable billable total for a folder: the sum of the analysis agent's
- * senior-dev hours across the folder's tasks × the project's rate. Renders
+ * Glanceable billable total for a project: the sum of the analysis agent's
+ * senior-dev hours across every task of the project's single board × the
+ * project's rate. Renders
  * nothing until the project is linked to a billing client and the total is > 0,
  * so unrelated projects never see it. Self-contained (fetches the rate itself)
  * to keep the board header free of billing plumbing.
  */
-export function FolderBillingTotal({
+export function ProjectBillingTotal({
   serverId,
   projectId,
   tasks,

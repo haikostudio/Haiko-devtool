@@ -22,24 +22,11 @@ export interface TaskBoardHandle {
   board: TaskBoard | null;
   isLoading: boolean;
   error: string | null;
-  createFolder: (input: {
-    name: string;
-    color?: string;
-    autopilot?: boolean;
-    requireValidation?: boolean;
-    branch?: string;
-  }) => Promise<void>;
-  renameFolder: (folderId: string, name: string) => Promise<void>;
-  updateFolder: (input: {
-    folderId: string;
-    name?: string;
-    color?: string;
-    autopilot?: boolean;
-    requireValidation?: boolean;
-    branch?: string;
-  }) => Promise<void>;
-  deleteFolder: (folderId: string) => Promise<void>;
+  // No folder mutations: a project has exactly one task list, minted by the
+  // server on demand. The tasks.folder.* RPCs stay on the wire for older
+  // clients, but nothing in this app creates, renames or deletes a folder.
   createTask: (input: {
+    /** The project's single list — see boardListId in the tasks screen. */
     folderId: string;
     title: string;
     description?: string;
@@ -177,51 +164,6 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     }
     return { client, projectId };
   }, [getClient, projectId]);
-
-  const createFolder = useCallback(
-    async (input: {
-      name: string;
-      color?: string;
-      autopilot?: boolean;
-      requireValidation?: boolean;
-      branch?: string;
-    }) => {
-      const { client, projectId: project } = requireContext();
-      await client.tasksFolderCreate({ projectId: project, ...input });
-    },
-    [requireContext],
-  );
-
-  const renameFolder = useCallback(
-    async (folderId: string, name: string) => {
-      const { client, projectId: project } = requireContext();
-      await client.tasksFolderUpdate({ projectId: project, folderId, name });
-    },
-    [requireContext],
-  );
-
-  const updateFolder = useCallback(
-    async (input: {
-      folderId: string;
-      name?: string;
-      color?: string;
-      autopilot?: boolean;
-      requireValidation?: boolean;
-      branch?: string;
-    }) => {
-      const { client, projectId: project } = requireContext();
-      await client.tasksFolderUpdate({ projectId: project, ...input });
-    },
-    [requireContext],
-  );
-
-  const deleteFolder = useCallback(
-    async (folderId: string) => {
-      const { client, projectId: project } = requireContext();
-      await client.tasksFolderDelete({ projectId: project, folderId });
-    },
-    [requireContext],
-  );
 
   const createTask = useCallback(
     async (input: {
@@ -393,10 +335,6 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       board: visibleBoard,
       isLoading,
       error,
-      createFolder,
-      renameFolder,
-      updateFolder,
-      deleteFolder,
       createTask,
       updateTask,
       moveTask,
@@ -414,10 +352,6 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       visibleBoard,
       isLoading,
       error,
-      createFolder,
-      renameFolder,
-      updateFolder,
-      deleteFolder,
       createTask,
       updateTask,
       moveTask,

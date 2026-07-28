@@ -218,9 +218,6 @@ export type ColumnControlsMap = Partial<Record<TaskColumn, ColumnControls>>;
 
 export function buildColumnModels(
   board: TaskBoard | null,
-  // Kept in the signature (callers still pass the project's single list id) but
-  // no longer used to narrow the board — see the filter below.
-  _folderId: string,
   controls?: ColumnControlsMap,
 ): KanbanColumnModel[] {
   return KANBAN_COLUMNS.map((column) => {
@@ -240,10 +237,10 @@ export function buildColumnModels(
       tasks: (board?.tasks ?? [])
         .filter(
           (task) =>
-            // Folders are gone from the product: one project, one list. The
-            // folderId is still carried by persisted tasks (and by older boards
-            // that had several folders), so every task of the project shows up
-            // here regardless of which folder it was filed under.
+            // Folders are gone from the product: one project, one board. The
+            // persisted task shape still carries a folderId (and older boards may
+            // still hold several folder records), but nothing narrows by it — every
+            // task of the project shows up here, whichever folder it was filed under.
             task.column === column &&
             // Agent-proposed tasks awaiting the user's validation NEVER surface
             // in a column — they live only in the chat approval tray until the
@@ -298,7 +295,6 @@ export function useColumnLabels(): Record<TaskColumn, string> {
 
 export interface KanbanBoardProps {
   board: TaskBoard | null;
-  folderId: string;
   onMoveTask: (input: { taskId: string; column: TaskColumn; index: number }) => void;
   onPressTask: (task: KanbanTask) => void;
   onAddTask: (column: TaskColumn) => void;

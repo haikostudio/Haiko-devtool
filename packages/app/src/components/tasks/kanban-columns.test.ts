@@ -46,14 +46,14 @@ function makeNote(
 
 function notesColumn(tasks: KanbanTask[]): KanbanTask[] {
   const board: TaskBoard = { version: 1, projectId: "p1", folders: [], tasks };
-  const model = buildColumnModels(board, "f1").find((entry) => entry.column === "notes");
+  const model = buildColumnModels(board).find((entry) => entry.column === "notes");
   return model?.tasks ?? [];
 }
 
 // Same column, but with an explicit sort picked from the column's sort menu.
 function notesColumnSortedBy(tasks: KanbanTask[], sort: ColumnSortMode): KanbanTask[] {
   const board: TaskBoard = { version: 1, projectId: "p1", folders: [], tasks };
-  const model = buildColumnModels(board, "f1", {
+  const model = buildColumnModels(board, {
     notes: { ...EMPTY_COLUMN_CONTROLS, sort },
   }).find((entry) => entry.column === "notes");
   return model?.tasks ?? [];
