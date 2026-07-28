@@ -228,10 +228,14 @@ export class TaskScheduler {
     // stuck state (attempts back to 0, drop the recorded error) to let this launch
     // actually reach the launcher. A genuinely in-flight launch is still protected
     // from double-spawning by the in-memory `inFlight` guard in tick().
-    if (
-      task.estimate &&
-      (task.schedule?.state === "launching" || task.schedule?.state === "failed")
-    ) {
+    //
+    // Deliberately NOT conditioned on the task carrying an estimate. A stuck card
+    // that somehow lost its estimate would otherwise be unreachable forever: the
+    // estimator only re-arms a schedule sitting in "pending_estimate", so it would
+    // never clear "launching" either. Setting "awaiting_slot" is safe in that case
+    // — isScheduledCandidate still withholds the launch until the estimate lands,
+    // and requestEstimate below asks for it.
+    if (task.schedule?.state === "launching" || task.schedule?.state === "failed") {
       await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
         ...current,
         schedule: {

@@ -356,6 +356,26 @@ describe("TaskScheduler", () => {
     expect(createAgent).toHaveBeenCalledTimes(1);
   });
 
+  test("run-now clears a stuck 'launching' even on a card with no estimate, so nothing is unreachable", async () => {
+    const task = await seedScheduledTask({ quotaPercent: 10 });
+    // A card frozen at "launching" AND missing its estimate used to be a dead end:
+    // the estimator only re-arms a schedule sitting in "pending_estimate", so
+    // nothing would ever clear "launching". Run-now must always leave the card in
+    // a state something can act on.
+    await service.patchTask("proj-1", task.id, (current) => {
+      const next = { ...current, schedule: { state: "launching" as const, attempts: 2 } };
+      delete next.estimate;
+      return next;
+    });
+    const { scheduler } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.runNow("proj-1", task.id);
+
+    const rearmed = await findTask(task.id);
+    expect(rearmed?.schedule?.state).toBe("awaiting_slot");
+    expect(rearmed?.schedule?.attempts).toBe(0);
+  });
+
   test("defers launch when remaining quota is below estimate + margin", async () => {
     await seedScheduledTask({ quotaPercent: 50 });
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 40 });

@@ -340,13 +340,16 @@ function LaunchAgentButton({
 }) {
   const { t } = useTranslation();
   const { pending, press } = useRunNowPending(onPress, schedule);
-  const { labelKey, busy } = resolveRunNowState(schedule, pending);
+  const { labelKey, disabled } = resolveRunNowState(schedule, pending);
   // The default wording stays "Lancer l'agent" here: this button is the empty
   // state's own call to action, not the scheduled card's bar. Every other state
   // explains an absence of progress, so it wins over the generic label.
   const label = labelKey === "tasks.actions.runNow" ? "tasks.panel.launchAgent" : labelKey;
+  // `loading` on Button implies disabled, so it rides on `disabled` (the local,
+  // self-clearing press) and never on a daemon state — a card whose launch died
+  // mid-flight must stay pressable. The label still says a launch is under way.
   return (
-    <Button onPress={press} loading={busy} testID="task-panel-launch-agent">
+    <Button onPress={press} loading={disabled} testID="task-panel-launch-agent">
       {t(label)}
     </Button>
   );
@@ -363,24 +366,13 @@ function LaunchAgentButton({
 const RUN_NOW_PENDING_TIMEOUT_MS = 10_000;
 
 /**
- * Full-width accent bar carrying the single "Lancer maintenant" action, shown on
- * a scheduled card right above the prompt composer. It mirrors ValidateTaskBar's
- * geometry (same outer/inner alignment to the composer) so the two control bars
- * feel like one family, but wears the accent color to stay distinct from the
- * green "finish" control. Pressing it forces the "Planifié" → "En cours"
- * transition immediately, bypassing the off-peak window and the 5h-quota gate.
+ * Optimistic "I just pressed launch" flag, shared by the run-now bar and the
+ * empty-state button so the two report a launch identically.
  *
- * The bar reports the launch instead of merely requesting it. A press used to
- * produce nothing but a transient toast, so a launch that never happened looked
- * identical to one still starting — the button just sat there. Now it spins
- * while the launch is in flight, names the reason a queued card has not started
- * (quota, quiet hours, analysis pending), and turns into an explicit
- * "Échec du lancement — réessayer" once the attempts are spent, which is also
- * the gesture that re-arms the card server-side.
- *
- * The optimistic spinner is deliberately self-clearing (see
- * RUN_NOW_PENDING_TIMEOUT_MS): the whole point of this bar is that no launch
- * indicator may ever get stuck.
+ * It exists to close the gap before the daemon's own state lands, and it is
+ * deliberately self-clearing — on the daemon's answer, or failing that on
+ * RUN_NOW_PENDING_TIMEOUT_MS. It is the ONLY thing allowed to refuse a press, so
+ * no launch indicator can ever latch this control off (see RunNowState.disabled).
  */
 function useRunNowPending(
   onPress: () => void,
@@ -436,6 +428,25 @@ function RunNowIcon({ busy, retry }: { busy: boolean; retry: boolean }) {
   return <ThemedPlay size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />;
 }
 
+/**
+ * Full-width accent bar carrying the single "Lancer maintenant" action, shown on
+ * a scheduled card right above the prompt composer. It mirrors ValidateTaskBar's
+ * geometry (same outer/inner alignment to the composer) so the two control bars
+ * feel like one family, but wears the accent color to stay distinct from the
+ * green "finish" control. Pressing it forces the "Planifié" → "En cours"
+ * transition immediately, bypassing the off-peak window and the 5h-quota gate.
+ *
+ * The bar reports the launch instead of merely requesting it. A press used to
+ * produce nothing but a transient toast, so a launch that never happened looked
+ * identical to one still starting — the button just sat there. Now it spins while
+ * the launch is in flight, names the reason a queued card has not started (quota,
+ * quiet hours, analysis pending), and turns into an explicit "Échec du lancement
+ * — réessayer" once the attempts are spent, which is also the gesture that
+ * re-arms the card server-side.
+ *
+ * Crucially it never latches: a stalled launch still shows as busy but stays
+ * pressable, so the cure is never behind the disease.
+ */
 function RunNowTaskBar({
   onPress,
   schedule,
@@ -445,21 +456,20 @@ function RunNowTaskBar({
 }) {
   const { t } = useTranslation();
   const { pending, press: handlePress } = useRunNowPending(onPress, schedule);
-  const { labelKey, busy, retry } = resolveRunNowState(schedule, pending);
+  const { labelKey, busy, disabled, retry } = resolveRunNowState(schedule, pending);
   const label = t(labelKey);
   const barStyle = useCallback(
-    (state: { pressed: boolean; hovered?: boolean }) =>
-      runNowBarStyle({ ...state, disabled: busy }),
-    [busy],
+    (state: { pressed: boolean; hovered?: boolean }) => runNowBarStyle({ ...state, disabled }),
+    [disabled],
   );
-  const a11yState = useMemo(() => ({ disabled: busy, busy }), [busy]);
+  const a11yState = useMemo(() => ({ disabled, busy }), [disabled, busy]);
 
   return (
     <View style={styles.validateOuter}>
       <View style={styles.validateInner}>
         <Pressable
           onPress={handlePress}
-          disabled={busy}
+          disabled={disabled}
           style={barStyle}
           accessibilityRole="button"
           accessibilityLabel={label}
