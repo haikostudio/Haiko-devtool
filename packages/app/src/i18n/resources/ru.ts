@@ -513,6 +513,7 @@ export const ru: TranslationResources = {
       emptyColumn: "Нет задач",
       deployAll: "Развернуть всё ({{count}})",
       deployAllRunning: "Публикация…",
+      deployAllEmpty: "Нечего публиковать",
       deployAllTitle: "Развернуть всё",
       deployAllMessage:
         "{{count}} задач(и) будут опубликованы одним запуском, затем движок перезапустится. Запущенные агенты будут прерваны.",

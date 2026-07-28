@@ -507,6 +507,7 @@ export const ar: TranslationResources = {
       emptyColumn: "لا مهام",
       deployAll: "نشر الكل ({{count}})",
       deployAllRunning: "جارٍ النشر…",
+      deployAllEmpty: "لا شيء للنشر",
       deployAllTitle: "نشر الكل",
       deployAllMessage:
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",

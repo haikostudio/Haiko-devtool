@@ -510,6 +510,7 @@ export const en = {
       emptyColumn: "No tasks",
       deployAll: "Deploy all ({{count}})",
       deployAllRunning: "Publishing…",
+      deployAllEmpty: "Nothing to publish",
       deployAllTitle: "Deploy all",
       deployAllMessage:
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",

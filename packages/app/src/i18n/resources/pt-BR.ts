@@ -519,6 +519,7 @@ export const ptBR: TranslationResources = {
       emptyColumn: "Sem tarefas",
       deployAll: "Implantar tudo ({{count}})",
       deployAllRunning: "Publicando…",
+      deployAllEmpty: "Nada a publicar",
       deployAllTitle: "Implantar tudo",
       deployAllMessage:
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",

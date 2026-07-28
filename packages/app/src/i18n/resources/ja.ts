@@ -513,6 +513,7 @@ export const ja: TranslationResources = {
       emptyColumn: "タスクなし",
       deployAll: "すべてデプロイ ({{count}})",
       deployAllRunning: "公開中…",
+      deployAllEmpty: "公開するものはありません",
       deployAllTitle: "すべてデプロイ",
       deployAllMessage:
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",

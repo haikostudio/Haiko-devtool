@@ -520,6 +520,7 @@ export const fr: TranslationResources = {
       emptyColumn: "Aucune tâche",
       deployAll: "Tout déployer ({{count}})",
       deployAllRunning: "Publication en cours…",
+      deployAllEmpty: "Rien à publier",
       deployAllTitle: "Tout déployer",
       deployAllMessage:
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",

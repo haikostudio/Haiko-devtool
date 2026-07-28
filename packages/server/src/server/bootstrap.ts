@@ -1345,6 +1345,10 @@ export async function createPaseoDaemon(
   void (async () => {
     try {
       for (const project of await projectRegistry.list()) {
+        // Must run BEFORE anything reads the publication queue: it is what tells
+        // the cards that were "Déployé" under the old meaning apart from the ones
+        // genuinely waiting to go out.
+        await taskBoardService.backfillLegacyDeployedCards(project.projectId);
         await taskBoardService.settleRestartFlags(project.projectId);
       }
     } catch (error) {

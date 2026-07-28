@@ -518,6 +518,7 @@ export const es: TranslationResources = {
       emptyColumn: "Sin tareas",
       deployAll: "Desplegar todo ({{count}})",
       deployAllRunning: "Publicando…",
+      deployAllEmpty: "Nada que publicar",
       deployAllTitle: "Desplegar todo",
       deployAllMessage:
         "{{count}} tarea(s) se publicarán de una sola vez y luego el motor se reiniciará. Los agentes en curso se interrumpirán.",

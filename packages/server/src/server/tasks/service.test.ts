@@ -793,6 +793,36 @@ describe("TaskBoardService", () => {
     expect(board.tasks.find((t) => t.id === pending.id)?.needsDaemonRestart).toBe(true);
   });
 
+  test("legacy « Déployé » cards are stamped live once, so the queue starts empty", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const legacy = await service.createTask("proj-1", { folderId: folder.id, title: "Ancienne" });
+    await service.moveTask("proj-1", {
+      taskId: legacy.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+
+    expect(await service.backfillLegacyDeployedCards("proj-1")).toBe(1);
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((t) => t.id === legacy.id)?.deployedAt).toBeTruthy();
+    expect(board.legacyDeployedBackfilledAt).toBeTruthy();
+
+    // Idempotent: a card queued AFTER the migration is never mistaken for
+    // history, so the next batch really does publish it.
+    const fresh = await service.createTask("proj-1", { folderId: folder.id, title: "Nouvelle" });
+    await service.transitionTask("proj-1", fresh.id, "deployed");
+    expect(await service.backfillLegacyDeployedCards("proj-1")).toBe(0);
+    const after = await service.getBoard("proj-1");
+    expect(after.tasks.find((t) => t.id === fresh.id)?.deployedAt ?? null).toBeNull();
+  });
+
+  test("the legacy migration never creates a board for a project that has none", async () => {
+    await service.backfillLegacyDeployedCards("ghost-project");
+    const boards = await readdir(dir).catch(() => [] as string[]);
+    expect(boards.some((name) => name.includes("ghost-project"))).toBe(false);
+  });
+
   test("settleRestartFlags never creates a board for a project that has none", async () => {
     // Boot runs this for EVERY known project; writing unconditionally would
     // create a board file (and push a board update) for projects with no cards.

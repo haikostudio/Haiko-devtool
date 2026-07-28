@@ -504,6 +504,7 @@ export const zhCN: TranslationResources = {
       emptyColumn: "暂无任务",
       deployAll: "全部部署（{{count}}）",
       deployAllRunning: "发布中…",
+      deployAllEmpty: "没有待发布内容",
       deployAllTitle: "全部部署",
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",

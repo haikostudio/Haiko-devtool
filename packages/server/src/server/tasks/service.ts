@@ -1080,6 +1080,63 @@ export class TaskBoardService {
   }
 
   /**
+   * One-time migration, run at boot: before the publication queue existed, the
+   * last column meant "already deployed" — every card in it had gone live. The
+   * queue reversed that meaning, so those legacy cards would now read as "waiting
+   * to be published", and the first "Tout déployer" would offer to re-publish the
+   * whole history (109 cards on the real board, every branch merged again).
+   *
+   * So the first daemon that opens a board with the new meaning stamps every card
+   * already sitting in that column as live — which is what they truthfully are —
+   * and records that it did. Idempotent: the marker makes it a no-op forever
+   * after, so a card queued later is never mistaken for history.
+   */
+  async backfillLegacyDeployedCards(projectId: string): Promise<number> {
+    try {
+      // Read before writing: boot runs this for every known project, and
+      // store.mutate would otherwise create a board file for projects with none.
+      const current = await this.store.getBoard(projectId);
+      if (current.legacyDeployedBackfilledAt) {
+        return 0;
+      }
+      const legacy = current.tasks.filter(
+        (task) =>
+          task.column === "deployed" &&
+          task.deployedAt == null &&
+          task.deployedUrl == null &&
+          task.deployment?.state !== "deployed",
+      );
+      const stampedAt = new Date().toISOString();
+      const board = await this.store.mutate(projectId, (latest) => {
+        if (latest.legacyDeployedBackfilledAt) {
+          return latest;
+        }
+        const ids = new Set(legacy.map((task) => task.id));
+        return {
+          ...latest,
+          legacyDeployedBackfilledAt: stampedAt,
+          tasks: latest.tasks.map((task) =>
+            ids.has(task.id) && task.deployedAt == null
+              ? { ...task, deployedAt: task.completedAt ?? task.updatedAt }
+              : task,
+          ),
+        };
+      });
+      this.broadcast(board);
+      if (legacy.length > 0) {
+        this.logger.info(
+          { projectId, count: legacy.length },
+          "Legacy deployed cards stamped as live (publication queue migration)",
+        );
+      }
+      return legacy.length;
+    } catch (error) {
+      this.logger.warn({ err: error, projectId }, "Failed to backfill legacy deployed cards");
+      return 0;
+    }
+  }
+
+  /**
    * Boot-time housekeeping: a daemon that has just started IS running the
    * current code, so no already-published card is waiting on a restart any more.
    * Clearing those flags is what stops the card's "Redémarrer le moteur" bar

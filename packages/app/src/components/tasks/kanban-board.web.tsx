@@ -353,6 +353,16 @@ const DroppableColumn = memo(function DroppableColumn({
         ) : null}
       </View>
       <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
+      {/* Pinned at the HEAD of the queue column, outside the scrolling body, so
+          the publish control is the first thing the column says — on a phone a
+          button under the cards is a whole column of scrolling away. */}
+      <DeployAllButton
+        column={column}
+        tasks={tasks}
+        onDeployAll={onDeployAll}
+        offPeakEnabled={deployOffPeak?.enabled}
+        onToggleOffPeak={deployOffPeak?.onToggle}
+      />
       <div ref={setNodeRef} style={webColumnBodyStyle}>
         {/* One progress bar for the whole run, then the "voici ce qui vient
             d'être mis en ligne" recap — above the cards it is about. */}
@@ -387,15 +397,6 @@ const DroppableColumn = memo(function DroppableColumn({
         {tasks.length === 0 && !extras ? (
           <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
         ) : null}
-        {/* "Tout déployer" sits at the FOOT of the queue column: the button is
-            the last thing under the cards it is about to publish. */}
-        <DeployAllButton
-          column={column}
-          tasks={tasks}
-          onDeployAll={onDeployAll}
-          offPeakEnabled={deployOffPeak?.enabled}
-          onToggleOffPeak={deployOffPeak?.onToggle}
-        />
       </div>
     </View>
   );

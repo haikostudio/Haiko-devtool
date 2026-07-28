@@ -212,6 +212,16 @@ const BoardColumn = memo(function BoardColumn({
         ) : null}
       </View>
       <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
+      {/* Pinned at the HEAD of the queue column, outside the scroll: on a phone a
+          button under the cards is a whole column of scrolling away, which reads
+          as "the feature is missing". */}
+      <DeployAllButton
+        column={column}
+        tasks={tasks}
+        onDeployAll={onDeployAll}
+        offPeakEnabled={deployOffPeak?.enabled}
+        onToggleOffPeak={deployOffPeak?.onToggle}
+      />
       <ScrollView style={styles.columnScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.columnContent}>
           {/* One progress bar for the whole run, then the "voici ce qui vient
@@ -245,15 +255,6 @@ const BoardColumn = memo(function BoardColumn({
           {tasks.length === 0 && !extras ? (
             <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
           ) : null}
-          {/* "Tout déployer" sits at the FOOT of the queue column: the button is
-              the last thing under the cards it is about to publish. */}
-          <DeployAllButton
-            column={column}
-            tasks={tasks}
-            onDeployAll={onDeployAll}
-            offPeakEnabled={deployOffPeak?.enabled}
-            onToggleOffPeak={deployOffPeak?.onToggle}
-          />
         </View>
       </ScrollView>
     </View>

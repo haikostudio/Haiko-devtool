@@ -26,14 +26,20 @@ export function isDeployAllRunning(tasks: readonly KanbanTask[]): boolean {
  * "Tout déployer" — the one button that publishes.
  *
  * A finished card is parked in the last column ("À déployer") and waits there;
- * this pins the publication to a single, explicit press at the bottom of that
- * column instead of one build per card. The press hands the whole batch to the
- * daemon, which publishes it in one run and restarts the engine at the end.
+ * this pins the publication to a single, explicit press instead of one build per
+ * card. The press hands the whole batch to the daemon, which publishes it in one
+ * run and restarts the engine at the end.
  *
- * It only ever shows in the queue column, and only while something is actually
- * waiting: a column whose cards are all live shows nothing. While the run is on,
- * it turns into a non-clickable "Publication en cours…" so a second press can
- * never launch a duplicate build over the first one.
+ * It sits at the HEAD of the queue column, outside the scrolling list. It used to
+ * live under the cards, which reads fine on a wide screen and not at all on a
+ * phone: the button was one full column of scrolling away, so the feature looked
+ * missing. Pinned at the top it is the first thing the column says.
+ *
+ * It is ALWAYS shown in that column, even with nothing to publish — a control
+ * that vanishes when idle is indistinguishable from a control that was never
+ * built. Empty, it simply says so and cannot be pressed. While the run is on, it
+ * turns into a non-clickable "Publication en cours…" so a second press can never
+ * launch a duplicate build over the first one.
  */
 export const DeployAllButton = memo(function DeployAllButton({
   column,
@@ -52,15 +58,18 @@ export const DeployAllButton = memo(function DeployAllButton({
   const { t } = useTranslation();
   const pending = useMemo(() => countTasksAwaitingDeploy(tasks), [tasks]);
   const running = useMemo(() => isDeployAllRunning(tasks), [tasks]);
+  const idle = pending === 0;
+  const disabled = running || idle;
   const barStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
       styles.bar,
-      running && styles.barDisabled,
-      !running && (hovered || pressed) && styles.barHovered,
+      disabled && styles.barDisabled,
+      idle && styles.barIdle,
+      !disabled && (hovered || pressed) && styles.barHovered,
     ],
-    [running],
+    [disabled, idle],
   );
-  const a11yState = useMemo(() => ({ disabled: running }), [running]);
+  const a11yState = useMemo(() => ({ disabled }), [disabled]);
   const handleToggleOffPeak = useCallback(() => {
     onToggleOffPeak?.(!offPeakEnabled);
   }, [onToggleOffPeak, offPeakEnabled]);
@@ -71,17 +80,15 @@ export const DeployAllButton = memo(function DeployAllButton({
     ],
     [],
   );
-  if (column !== "deployed" || !onDeployAll || pending === 0) {
+  if (column !== "deployed" || !onDeployAll) {
     return null;
   }
-  const label = running
-    ? t("tasks.board.deployAllRunning")
-    : t("tasks.board.deployAll", { count: pending });
+  const label = deployAllLabel(t, { running, idle, pending });
   return (
-    <View style={styles.footer}>
+    <View style={styles.header}>
       <Pressable
         onPress={onDeployAll}
-        disabled={running}
+        disabled={disabled}
         style={barStyle}
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -93,7 +100,9 @@ export const DeployAllButton = memo(function DeployAllButton({
         ) : (
           <ThemedRocket size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />
         )}
-        <Text style={styles.text}>{label}</Text>
+        <Text style={styles.text} numberOfLines={1}>
+          {label}
+        </Text>
       </Pressable>
       {/* The opt-in twin of the button: same batch, same closing restart, fired
           on its own inside the quiet-hours window. Off unless asked for. */}
@@ -122,9 +131,23 @@ function offPeakA11yState(checked: boolean): { checked: boolean } {
   return { checked };
 }
 
+/** Publishing → waiting → nothing to do: three states, one line each. */
+function deployAllLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  state: { running: boolean; idle: boolean; pending: number },
+): string {
+  if (state.running) {
+    return t("tasks.board.deployAllRunning");
+  }
+  if (state.idle) {
+    return t("tasks.board.deployAllEmpty");
+  }
+  return t("tasks.board.deployAll", { count: state.pending });
+}
+
 const styles = StyleSheet.create((theme) => ({
-  footer: {
-    paddingTop: theme.spacing[2],
+  header: {
+    paddingBottom: theme.spacing[2],
   },
   bar: {
     flexDirection: "row",
@@ -143,6 +166,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   barDisabled: {
     opacity: 0.6,
+  },
+  // Nothing waiting: the control stays visible but reads as inert rather than
+  // like a live action that simply refuses to fire.
+  barIdle: {
+    opacity: 0.45,
   },
   text: {
     color: theme.colors.accentForeground,

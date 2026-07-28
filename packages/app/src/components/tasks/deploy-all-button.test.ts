@@ -38,6 +38,16 @@ describe("countTasksAwaitingDeploy", () => {
   });
 });
 
+describe("the queue button's own state", () => {
+  it("stays visible with nothing waiting — a control that vanishes reads as missing", () => {
+    // The count drives the label ("Rien à publier" at zero), never whether the
+    // button exists: it is pinned at the head of the column either way.
+    expect(
+      countTasksAwaitingDeploy([makeTask({ id: "a", deployedAt: "2026-07-28T12:00:00.000Z" })]),
+    ).toBe(0);
+  });
+});
+
 describe("isDeployAllRunning", () => {
   it("is true while the batch publication holds a card's deploy window open", () => {
     expect(

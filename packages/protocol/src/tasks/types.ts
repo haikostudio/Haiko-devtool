@@ -335,5 +335,12 @@ export const TaskBoardSchema = z.object({
   // Last/current batch publication. Additive + optional: old boards and old
   // clients simply omit it, and a board that never published carries nothing.
   deployBatch: TaskDeployBatchSchema.nullable().optional(),
+  // Stamped once, the first time a daemon carrying the publication QUEUE opens
+  // this board. Before that change the last column meant "already deployed", so
+  // every card sitting there was live; after it, the column is a waiting room.
+  // Without this one-time marker those legacy cards would be read as "waiting to
+  // be published" and the next batch would offer to re-publish the entire
+  // history. Additive + optional.
+  legacyDeployedBackfilledAt: z.string().nullable().optional(),
 });
 export type TaskBoard = z.infer<typeof TaskBoardSchema>;
