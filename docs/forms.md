@@ -71,6 +71,18 @@ complete`), keyed off the opened snapshot's serverId. Waiting for data is a
   exact string; validation errors are the exception. State a fact (like the
   timezone) once — never in a preview line AND a helper line.
 - `useUnistyles` is banned (see docs/unistyles.md); lint enforces.
+- **Text inputs are native-owned: `value` is silently dropped.** `FormTextInput`
+  forwards to `AdaptiveTextInput`, which destructures `value` away and renders
+  the text from `defaultValue`, because a controlled RN `TextInput` replays
+  stale JS values and cursor-jumps during fast input
+  ([RN #44157](https://github.com/facebook/react-native/issues/44157)). Seed with
+  `initialValue`, and remount with `resetKey` when the seed legitimately changes
+  (record loaded, fresh server data, another entity opened). A `value={draft}`
+  prop type-checks, lints clean, and renders a **blank field** — this shipped
+  twice (the task Facturation tab and the project hourly-rate field), so treat
+  any `value=` on a form input as a bug on sight.
+- `resetKey` keys off the **seed**, never the draft: keying it to the edited
+  value remounts the input on every keystroke.
 
 ## Data gating
 

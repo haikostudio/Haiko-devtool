@@ -261,7 +261,10 @@ export function ProjectBillingSection({
         <>
           <SettingsSection title={t("settings.project.billing.rate")} testID="billing-rate-section">
             <FormTextInput
-              value={rateDraft}
+              // Native-owned input: `value` is dropped, so seed with initialValue
+              // and remount when the stored rate changes (load, save, revert).
+              initialValue={rateDraft}
+              resetKey={`${link.clientId}:${link.hourlyRateChf ?? "default"}`}
               onChangeText={setRateDraft}
               onBlur={handleRateCommit}
               keyboardType="numeric"
