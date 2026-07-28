@@ -72,9 +72,7 @@ export function FolderBillingTotal({
     return null;
   }
   return (
-    <View
-      style={[styles.row, usesWideBoardGutter(isCompact) ? styles.rowWide : styles.rowTight]}
-    >
+    <View style={[styles.row, usesWideBoardGutter(isCompact) ? styles.rowWide : styles.rowTight]}>
       <ThemedReceipt size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       <Text style={styles.text}>{`≈ ${formatChf(computeManualBillingChf(totalHours, rate))}`}</Text>
     </View>

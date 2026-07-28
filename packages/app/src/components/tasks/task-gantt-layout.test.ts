@@ -4,6 +4,7 @@ import {
   ROW_GAP,
   ROW_HEIGHT,
   rowsAreaHeight,
+  usesWideBoardGutter,
 } from "@/components/tasks/task-gantt-layout";
 
 describe("rowsAreaHeight", () => {
@@ -31,5 +32,19 @@ describe("rowsAreaHeight", () => {
 
   it("never returns a negative height for nonsense input", () => {
     expect(rowsAreaHeight(-3)).toBe(ROW_HEIGHT);
+  });
+});
+
+describe("usesWideBoardGutter", () => {
+  // The test environment runs as web, which is where the desktop board's wide
+  // inset applies. Compact always falls back to the tight gutter, on every
+  // platform — the compact web board and the native scroller both inset by the
+  // smaller token.
+  it("uses the wide gutter only on the roomy web board", () => {
+    expect(usesWideBoardGutter(false)).toBe(true);
+  });
+
+  it("uses the tight gutter whenever the layout is compact", () => {
+    expect(usesWideBoardGutter(true)).toBe(false);
   });
 });

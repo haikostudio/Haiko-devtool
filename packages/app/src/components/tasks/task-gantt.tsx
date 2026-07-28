@@ -1,13 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  type LayoutChangeEvent,
-  type StyleProp,
-  Text,
-  View,
-  type ViewStyle,
-} from "react-native";
+import { Pressable, ScrollView, type LayoutChangeEvent, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { useIsCompactFormFactor } from "@/constants/layout";
@@ -81,11 +73,8 @@ interface AxisTick {
 interface TaskGanttProps {
   board: TaskBoard;
   onPressTask: (task: KanbanTask) => void;
-  // Extra container styling supplied by the host layout (e.g. the desktop board
-  // aligns the strip to the columns block; the mobile folder list lets it fill).
-  containerStyle?: StyleProp<ViewStyle>;
   // When true the panel expands to fill its parent (its own tab on compact)
-  // instead of capping the rows at a fixed strip height above the board.
+  // instead of sizing itself from its rows above the board.
   fill?: boolean;
 }
 
@@ -125,7 +114,6 @@ function formatDuration(ms: number): string {
 export const TaskGantt = memo(function TaskGantt({
   board,
   onPressTask,
-  containerStyle,
   fill = false,
 }: TaskGanttProps) {
   const { t } = useTranslation();
@@ -291,9 +279,8 @@ export const TaskGantt = memo(function TaskGantt({
       styles.container,
       usesWideBoardGutter(isCompact) ? styles.containerWideGutter : styles.containerTightGutter,
       fill && styles.containerFill,
-      containerStyle,
     ],
-    [fill, isCompact, containerStyle],
+    [fill, isCompact],
   );
   const bodyStyle = useMemo(() => [styles.timelineBody, fill && styles.timelineBodyFill], [fill]);
   // Content-derived height: the panel is exactly as tall as the rows it shows.

@@ -1,4 +1,4 @@
-import { View, type StyleProp, type ViewStyle } from "react-native";
+import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import type { KanbanTask, TaskBoard } from "@/data/tasks";
 import { TaskGantt } from "./task-gantt";
@@ -6,7 +6,6 @@ import { TaskGantt } from "./task-gantt";
 export interface TaskTimelineAreaProps {
   board: TaskBoard | null;
   onPressTask: (task: KanbanTask) => void;
-  containerStyle?: StyleProp<ViewStyle>;
   /** Compact shows the timeline as its own tab, where it takes the full area. */
   fill?: boolean;
 }
@@ -22,23 +21,13 @@ export interface TaskTimelineAreaProps {
  * Quotas used to sit on a permanent strip above it; they now live in the header
  * ring (see task-quota-menu.tsx).
  */
-export function TaskTimelineArea({
-  board,
-  onPressTask,
-  containerStyle,
-  fill = false,
-}: TaskTimelineAreaProps) {
+export function TaskTimelineArea({ board, onPressTask, fill = false }: TaskTimelineAreaProps) {
   if (!board) {
     return null;
   }
   return (
     <View style={fill ? styles.areaFill : undefined}>
-      <TaskGantt
-        board={board}
-        onPressTask={onPressTask}
-        containerStyle={containerStyle}
-        fill={fill}
-      />
+      <TaskGantt board={board} onPressTask={onPressTask} fill={fill} />
     </View>
   );
 }
