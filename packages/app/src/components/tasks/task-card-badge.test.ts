@@ -1,6 +1,6 @@
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import { describe, expect, it } from "vitest";
-import { getScheduleBadge } from "./task-card-badge";
+import { getScheduleBadge, showsRestartNotice } from "./task-card-badge";
 
 // Minimal in-progress task fixture; individual specs override the fields that
 // drive the badge (approval, schedule, executionHold, planReadyAt).
@@ -178,5 +178,33 @@ describe("getScheduleBadge", () => {
       null,
     );
     expect(badge).toEqual({ labelKey: "tasks.schedule.awaiting" });
+  });
+});
+
+describe("showsRestartNotice", () => {
+  it("warns a finished-but-unpublished card that the daemon will need a restart", () => {
+    expect(showsRestartNotice(makeTask({ column: "done", needsDaemonRestart: true }))).toBe(true);
+  });
+
+  it("stays silent on an app-only card", () => {
+    // No server-side change: publishing is enough, so the card says nothing.
+    expect(showsRestartNotice(makeTask({ column: "done" }))).toBe(false);
+    expect(showsRestartNotice(makeTask({ column: "done", needsDaemonRestart: false }))).toBe(false);
+  });
+
+  it("drops the warning once the work is live", () => {
+    // Both truths that mean "published": the column, and the server-stamped URL.
+    expect(showsRestartNotice(makeTask({ column: "deployed", needsDaemonRestart: true }))).toBe(
+      false,
+    );
+    expect(
+      showsRestartNotice(
+        makeTask({
+          column: "done",
+          needsDaemonRestart: true,
+          deployedUrl: "https://app.example.com",
+        }),
+      ),
+    ).toBe(false);
   });
 });

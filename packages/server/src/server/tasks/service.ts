@@ -15,6 +15,16 @@ import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 export type TaskBoardListener = (board: TaskBoard) => void;
 export type TaskCompletedListener = (projectId: string, task: KanbanTask) => void | Promise<void>;
 
+/**
+ * Answers "will publishing this card's work need a daemon restart?" — resolved
+ * from the files the next publication will carry (see restart-impact.ts).
+ * `null` means "cannot tell": the card's existing flag is then left alone.
+ */
+export type TaskRestartImpactResolver = (
+  projectId: string,
+  task: KanbanTask,
+) => Promise<boolean | null>;
+
 // Columns where the scheduler runs analysis + execution. "validated" is the
 // consent gate: dropping a task here starts the automated pipeline. "scheduled"
 // remains a valid direct-drop entry point (and the queued-for-launch state).
@@ -232,6 +242,7 @@ export class TaskBoardService {
   private onTaskScheduled: ((projectId: string, taskId: string) => void) | null = null;
   private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
   private onTaskCompleted: TaskCompletedListener | null = null;
+  private onResolveRestartImpact: TaskRestartImpactResolver | null = null;
   private onBacklogRefine: ((projectId: string, taskId: string) => void) | null = null;
   private onTaskCreated: ((projectId: string, task: KanbanTask) => void) | null = null;
 
@@ -251,6 +262,15 @@ export class TaskBoardService {
 
   setOnTaskCompleted(callback: TaskCompletedListener | null): void {
     this.onTaskCompleted = callback;
+  }
+
+  /**
+   * Wires the automatic "Redémarrage requis" verdict, computed the moment a card
+   * reaches "Terminée" so the user knows BEFORE publishing whether the daemon
+   * will have to be restarted. Wired at bootstrap; unset in tests.
+   */
+  setRestartImpactResolver(callback: TaskRestartImpactResolver | null): void {
+    this.onResolveRestartImpact = callback;
   }
 
   /**
@@ -741,6 +761,7 @@ export class TaskBoardService {
 
   async moveTask(projectId: string, input: MoveTaskInput): Promise<TaskBoard> {
     let scheduledTask: KanbanTask | null = null;
+    let completedTask: KanbanTask | null = null;
     const board = await this.store.mutate(projectId, (current) => {
       const task = current.tasks.find((entry) => entry.id === input.taskId);
       if (!task) {
@@ -750,6 +771,9 @@ export class TaskBoardService {
       const { moved, enteringPipeline } = applyColumnMove(task, input, now);
       if (enteringPipeline) {
         scheduledTask = moved;
+      }
+      if (input.column === "done" && task.column !== "done") {
+        completedTask = moved;
       }
 
       // Re-pack orders for the affected folder: target column gets the moved
@@ -788,7 +812,40 @@ export class TaskBoardService {
     if (scheduledTask) {
       this.notifyScheduled(projectId, scheduledTask);
     }
+    if (completedTask) {
+      // Fire-and-forget: the verdict costs a couple of git reads and must never
+      // delay (or fail) the move itself. It lands as a second board push.
+      void this.refreshRestartImpact(projectId, completedTask);
+    }
     return board;
+  }
+
+  /**
+   * Stamps the card's "Redémarrage requis" verdict once it reaches "Terminée".
+   * Deliberately best-effort: an unresolved verdict (`null`) leaves whatever the
+   * card already carried, so a flag an agent set by hand is never wiped.
+   */
+  private async refreshRestartImpact(projectId: string, task: KanbanTask): Promise<void> {
+    const resolve = this.onResolveRestartImpact;
+    if (!resolve) {
+      return;
+    }
+    try {
+      const needsDaemonRestart = await resolve(projectId, task);
+      if (needsDaemonRestart === null) {
+        return;
+      }
+      await this.patchTask(projectId, task.id, (current) =>
+        current.needsDaemonRestart === needsDaemonRestart
+          ? current
+          : { ...current, needsDaemonRestart },
+      );
+    } catch (error) {
+      this.logger.warn(
+        { err: error, projectId, taskId: task.id },
+        "Failed to resolve daemon-restart impact",
+      );
+    }
   }
 
   /**

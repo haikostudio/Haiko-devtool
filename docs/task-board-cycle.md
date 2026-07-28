@@ -139,13 +139,35 @@ sibling of the final-check bar:
 "running"` — the **third exception** in `move_task`: `deployed` is accepted
   while the window is open, for that card only. The window closes on
   `watchAgentIdle`, so a deploy can never leave the bar stuck.
-- The move to `deployed` carries an optional `needsDaemonRestart` argument. When
-  the shipped change only takes effect after a daemon/service restart (typically a
-  server-side change), the agent sets it, and the card shows a **"Redémarrage
-  requis" icon** (`KanbanTask.needsDaemonRestart`). It is **purely informative** —
-  it never triggers a restart; that stays the user's explicit call.
+- The move to `deployed` carries an optional `needsDaemonRestart` argument, which
+  an agent may still set by hand. It is **purely informative** — it never triggers
+  a restart; that stays the user's explicit call. See below for how the flag is
+  now resolved automatically, well before the deploy.
 - On a "Terminé" card the deploy bar takes the composer slot ahead of the archive
   bar, so the natural order is deploy, then archive.
+
+## "Redémarrage requis" — an advance warning, not a post-mortem
+
+`KanbanTask.needsDaemonRestart` is resolved **automatically the moment a card
+reaches "Terminé"**, so the user knows _before_ publishing whether the work will
+only take effect after a daemon restart — instead of discovering it afterwards.
+
+- **How.** `moveTask` fires a best-effort resolver (wired at bootstrap to
+  `resolveDaemonRestartImpact`) against the files the next publication will carry
+  (`getPendingDeployFiles` — the diff from `.deployed-sha` plus the working tree).
+  `needsDaemonRestartForFiles` (pure, unit-tested) answers yes for anything under
+  `packages/server|protocol|relay|highlight` — the code the daemon process loads —
+  and no for app/website work, for the CLI and desktop wrapper (separate processes),
+  and for tests/markdown. **Only Paseo's own checkout can require one**: a client
+  project's work never touches the Paseo daemon, so it resolves to `false`.
+- **Never a guess.** An unresolved verdict (`null`: git unavailable, no baseline)
+  leaves whatever the card already carried, so a flag an agent set by hand is
+  never wiped.
+- **On the card.** `showsRestartNotice` renders it as an amber `StatusBadge`
+  beside the live status badge — same tinted-frame family as "Publication en
+  cours" / "Contrôle final en cours". It rides the card for the whole wait and
+  **disappears once the work is live** (column `deployed`, or a stamped
+  `deployedUrl`): by then the user has already been told.
 
 ## Archiving a card — hide, never publish
 

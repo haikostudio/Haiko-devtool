@@ -133,6 +133,7 @@ import {
   ProviderUsageService,
 } from "../services/quota-fetcher/service.js";
 import { TaskBoardStore } from "./tasks/store.js";
+import { resolveDaemonRestartImpact } from "./tasks/restart-impact.js";
 import { TaskBoardService } from "./tasks/service.js";
 import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
 import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
@@ -1329,6 +1330,12 @@ export async function createPaseoDaemon(
   const providerUsageService = new ProviderUsageService({ logger });
   const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
   const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
+  // A card that reaches "Terminée" tells the user, before they publish, whether
+  // the work will only take effect after a daemon restart.
+  taskBoardService.setRestartImpactResolver(async (projectId) => {
+    const project = await projectRegistry.get(projectId);
+    return resolveDaemonRestartImpact(project?.rootPath ?? null);
+  });
   const conflictTaskCreationInFlight = new Set<string>();
   setPaseoDeployConflictTaskCreator(async ({ projectId, branch, worktreePath, reason }) => {
     // Automatic repair worktrees are implementation details. They must never

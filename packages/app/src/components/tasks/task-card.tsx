@@ -10,7 +10,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Bot, Clock, GitPullRequest, Globe, RefreshCw } from "lucide-react-native";
+import { Bot, Clock, GitPullRequest, Globe } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { KanbanTask } from "@/data/tasks";
@@ -24,7 +24,11 @@ import {
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
-import { getScheduleBadge } from "@/components/tasks/task-card-badge";
+import {
+  getScheduleBadge,
+  showsRestartNotice,
+  type ScheduleBadgeDescriptor,
+} from "@/components/tasks/task-card-badge";
 import {
   isQuietTime,
   nextQuietHoursStartMs,
@@ -42,7 +46,6 @@ const ThemedBot = withUnistyles(Bot);
 const ThemedClock = withUnistyles(Clock);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGlobe = withUnistyles(Globe);
-const ThemedRefreshCw = withUnistyles(RefreshCw);
 
 // The triage prefixes generated descriptions with a "Priorité : … — Date
 // objectif : …" line that only restates the chip + deadline already on the card.
@@ -180,6 +183,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const tone = useTaskTone(task);
   const scheduleBadge = useMemo(() => getScheduleBadge(task, tone), [task, tone]);
+  const restartNotice = showsRestartNotice(task);
 
   const isNote = task.column === "notes";
   // A note whose deadline is here (overdue or within two days) nudges itself, the
@@ -265,11 +269,7 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
             {task.title}
           </Text>
         </View>
-        {scheduleBadge ? (
-          <View style={styles.chipRow}>
-            <StatusBadge label={t(scheduleBadge.labelKey)} variant={scheduleBadge.variant} />
-          </View>
-        ) : null}
+        <CardStatusRow badge={scheduleBadge} restartNotice={restartNotice} />
         {task.analysis?.state === "failed" && task.analysis.reason ? (
           <Text style={styles.analysisReason} numberOfLines={2}>
             {t("tasks.analysis.reason", { reason: task.analysis.reason })}
@@ -311,6 +311,38 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
   );
 });
 
+/**
+ * The card's status pills, all in the same tinted-frame family so they read as
+ * one row of statuses rather than a badge plus some decoration.
+ *
+ * Two slots, in order: the live status ("Publication en cours", "Contrôle final
+ * en cours", "Déployé"…) and, beside it, the amber "Redémarrage requis" advance
+ * warning carried by a finished card whose publication won't take effect until
+ * the daemon is restarted. They coexist deliberately: a card can be publishing
+ * AND still need a restart afterwards. Split out of TaskCard to keep the card
+ * render under the complexity budget.
+ */
+const CardStatusRow = memo(function CardStatusRow({
+  badge,
+  restartNotice,
+}: {
+  badge: ScheduleBadgeDescriptor | null;
+  restartNotice: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!badge && !restartNotice) {
+    return null;
+  }
+  return (
+    <View style={styles.chipRow}>
+      {badge ? <StatusBadge label={t(badge.labelKey)} variant={badge.variant} /> : null}
+      {restartNotice ? (
+        <StatusBadge label={t("tasks.card.needsRestart")} variant="warning" />
+      ) : null}
+    </View>
+  );
+});
+
 // One muted footer line: deadline (colored) leads, then duration, then the
 // linked-agent icon and PR chip. Quota share and model live in the task detail,
 // not on the card — the card stays glanceable. Split out of TaskCard to keep the
@@ -329,12 +361,7 @@ const CardMetaRow = memo(function CardMetaRow({
       : null;
 
   const hasMetaRow = Boolean(
-    deadline ||
-    duration ||
-    task.links.primaryAgentId ||
-    task.links.prUrl ||
-    task.deployedUrl ||
-    task.needsDaemonRestart,
+    deadline || duration || task.links.primaryAgentId || task.links.prUrl || task.deployedUrl,
   );
   if (!hasMetaRow) {
     return null;
@@ -350,23 +377,6 @@ const CardMetaRow = memo(function CardMetaRow({
       ) : null}
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
       {task.deployedUrl ? <LiveChip url={task.deployedUrl} /> : null}
-      {task.needsDaemonRestart ? <RestartChip /> : null}
-    </View>
-  );
-});
-
-/**
- * "Redémarrage requis" chip on a deployed card: the shipped change only takes
- * effect once the daemon is restarted. Purely informative — it never triggers a
- * restart (that stays the user's call), it just makes the need visible at a
- * glance. Wears the warning color so it reads as "action pending".
- */
-const RestartChip = memo(function RestartChip() {
-  const { t } = useTranslation();
-  return (
-    <View style={styles.prChip} accessibilityLabel={t("tasks.card.needsRestart")}>
-      <ThemedRefreshCw size={ICON_SIZE.sm} uniProps={warningColorMapping} />
-      <Text style={styles.restartText}>{t("tasks.card.needsRestart")}</Text>
     </View>
   );
 });
@@ -690,10 +700,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   prText: {
     color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-  },
-  restartText: {
-    color: theme.colors.statusWarning,
     fontSize: theme.fontSize.xs,
   },
   errorText: {

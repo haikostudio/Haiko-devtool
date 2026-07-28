@@ -598,19 +598,18 @@ async function getUnshippedCommits(
 }
 
 /**
- * Count distinct files that differ from the deployed baseline — the real volume
- * of pending work. `git diff --name-only <deployedSha>` already merges
+ * Distinct files that differ from the deployed baseline — the real volume of
+ * pending work. `git diff --name-only <deployedSha>` already merges
  * committed-but-unshipped edits with uncommitted ones (deduplicated); we add
  * untracked new files on top. This is what stops the "60 changes → 3 commits"
  * shrinkage once work gets committed.
+ *
+ * Returns null when the baseline can't be used (unknown sha, git failure), so a
+ * caller can tell "nothing pending" apart from "cannot tell".
  */
-async function getChangedFileCount(
-  deployedSha: string | null,
-  uncommittedFiles: PaseoDeployPendingFile[],
-): Promise<number> {
-  // Without a known deployed baseline we can only trust the working-tree status.
+async function collectChangedFiles(deployedSha: string | null): Promise<string[] | null> {
   if (deployedSha === null) {
-    return uncommittedFiles.length;
+    return null;
   }
   try {
     const [tracked, untracked] = await Promise.all([
@@ -624,11 +623,28 @@ async function getChangedFileCount(
     for (const line of untracked.stdout.split("\n")) {
       if (line.length > 0) files.add(line);
     }
-    return files.size;
+    return [...files];
   } catch {
-    // Range failed (e.g. deployedSha unknown to git) — fall back to the working tree.
-    return uncommittedFiles.length;
+    return null;
   }
+}
+
+/**
+ * The files the next publication will carry, for callers that need to reason
+ * about WHAT is pending rather than how much (e.g. "does shipping this need a
+ * daemon restart?"). Null when the answer can't be established.
+ */
+export async function getPendingDeployFiles(): Promise<string[] | null> {
+  return collectChangedFiles(await readDeployedSha());
+}
+
+async function getChangedFileCount(
+  deployedSha: string | null,
+  uncommittedFiles: PaseoDeployPendingFile[],
+): Promise<number> {
+  const files = await collectChangedFiles(deployedSha);
+  // Without a usable deployed baseline we can only trust the working-tree status.
+  return files === null ? uncommittedFiles.length : files.length;
 }
 
 interface GitWorktree {

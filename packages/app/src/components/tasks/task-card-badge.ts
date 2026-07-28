@@ -30,6 +30,21 @@ export function isTaskDeployed(task: KanbanTask): boolean {
   return task.deployment?.state === "deployed" || Boolean(task.deployedUrl);
 }
 
+/**
+ * "Redémarrage requis": the card's work is finished but NOT live yet, and
+ * publishing it will only take effect once the daemon is restarted (a
+ * server-side change, as opposed to an app-only one that a plain republication
+ * carries). It is an advance warning, so it rides the card for the whole wait
+ * and goes away the moment the work is live — at that point the card says
+ * "Déployé" and the restart is a step the user has already been told about.
+ *
+ * The daemon resolves the flag automatically from the files the next
+ * publication will carry; an app-only card simply never gets it.
+ */
+export function showsRestartNotice(task: KanbanTask): boolean {
+  return task.needsDaemonRestart === true && task.column !== "deployed" && !isTaskDeployed(task);
+}
+
 function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (task.deployment?.state === "running") {
     return { labelKey: "tasks.card.deploying", variant: "success" };
