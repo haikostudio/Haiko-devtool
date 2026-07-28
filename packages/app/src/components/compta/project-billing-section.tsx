@@ -41,6 +41,15 @@ export function ProjectBillingSection({
   const [link, setLink] = useState<ComptaProjectLink | null>(null);
   const [documents, setDocuments] = useState<ComptaDocumentRef[]>([]);
   const [rateDraft, setRateDraft] = useState("");
+  // The rate input is native-owned (it ignores `value`), so every programmatic
+  // seed — initial load, successful save, revert of an invalid entry — has to
+  // remount it via resetKey. Bumping a counter is what makes the revert visible;
+  // keying on the stored rate alone would silently leave "abc" on screen.
+  const [rateSeed, setRateSeed] = useState(0);
+  const seedRate = useCallback((next: string) => {
+    setRateDraft(next);
+    setRateSeed((revision) => revision + 1);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +87,7 @@ export function ProjectBillingSection({
         }
         setClients(fetchedClients);
         setLink(fetchedLink);
-        setRateDraft(fetchedLink?.hourlyRateChf ? String(fetchedLink.hourlyRateChf) : "");
+        seedRate(fetchedLink?.hourlyRateChf ? String(fetchedLink.hourlyRateChf) : "");
         setError(null);
         await loadDocuments(fetchedLink?.clientId ?? null);
       } catch (err) {
@@ -99,7 +108,7 @@ export function ProjectBillingSection({
     return () => {
       cancelled = true;
     };
-  }, [supported, client, projectId, t, loadDocuments]);
+  }, [supported, client, projectId, t, loadDocuments, seedRate]);
 
   const clientOptions = useMemo<SelectFieldOption<string>[]>(() => {
     const entries = clients.map((entry) => ({
@@ -125,7 +134,7 @@ export function ProjectBillingSection({
         try {
           const updated = await client.setComptaProjectLink({ projectId, clientId: nextClientId });
           setLink(updated);
-          setRateDraft(updated?.hourlyRateChf ? String(updated.hourlyRateChf) : "");
+          seedRate(updated?.hourlyRateChf ? String(updated.hourlyRateChf) : "");
           await loadDocuments(updated?.clientId ?? null);
           setError(null);
         } catch {
@@ -135,7 +144,7 @@ export function ProjectBillingSection({
         }
       })();
     },
-    [client, projectId, t, loadDocuments],
+    [client, projectId, t, loadDocuments, seedRate],
   );
 
   // Commit the rate on blur: empty resets to the default, a valid positive
@@ -147,7 +156,7 @@ export function ProjectBillingSection({
     const trimmed = rateDraft.trim().replace(",", ".");
     const parsed = trimmed === "" ? null : Number(trimmed);
     if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) {
-      setRateDraft(link.hourlyRateChf ? String(link.hourlyRateChf) : "");
+      seedRate(link.hourlyRateChf ? String(link.hourlyRateChf) : "");
       return;
     }
     if ((parsed ?? undefined) === link.hourlyRateChf) {
@@ -162,7 +171,7 @@ export function ProjectBillingSection({
           hourlyRateChf: parsed,
         });
         setLink(updated);
-        setRateDraft(updated?.hourlyRateChf ? String(updated.hourlyRateChf) : "");
+        seedRate(updated?.hourlyRateChf ? String(updated.hourlyRateChf) : "");
         setError(null);
       } catch {
         setError(t("settings.project.billing.saveError"));
@@ -170,7 +179,7 @@ export function ProjectBillingSection({
         setSaving(false);
       }
     })();
-  }, [client, link, rateDraft, projectId, t]);
+  }, [client, link, rateDraft, projectId, t, seedRate]);
 
   const documentOptions = useMemo<SelectFieldOption<string>[]>(() => {
     const entries = documents.map((doc) => ({
@@ -264,7 +273,7 @@ export function ProjectBillingSection({
               // Native-owned input: `value` is dropped, so seed with initialValue
               // and remount when the stored rate changes (load, save, revert).
               initialValue={rateDraft}
-              resetKey={`${link.clientId}:${link.hourlyRateChf ?? "default"}`}
+              resetKey={rateSeed}
               onChangeText={setRateDraft}
               onBlur={handleRateCommit}
               keyboardType="numeric"
