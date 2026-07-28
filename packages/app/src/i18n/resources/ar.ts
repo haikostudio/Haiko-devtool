@@ -557,7 +557,6 @@ export const ar: TranslationResources = {
       done: "مكتمل",
     },
     triage: {
-      fieldFolder: "المجلد",
       fieldPriority: "الأولوية",
       fieldDeadline: "الموعد النهائي",
       fieldEstimate: "التقدير",

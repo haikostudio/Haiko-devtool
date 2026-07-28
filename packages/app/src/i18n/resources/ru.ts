@@ -564,7 +564,6 @@ export const ru: TranslationResources = {
       done: "Готово",
     },
     triage: {
-      fieldFolder: "Папка",
       fieldPriority: "Приоритет",
       fieldDeadline: "Срок",
       fieldEstimate: "Оценка",

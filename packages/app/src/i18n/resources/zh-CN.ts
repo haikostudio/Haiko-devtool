@@ -554,7 +554,6 @@ export const zhCN: TranslationResources = {
       done: "已完成",
     },
     triage: {
-      fieldFolder: "文件夹",
       fieldPriority: "优先级",
       fieldDeadline: "截止日期",
       fieldEstimate: "预估",

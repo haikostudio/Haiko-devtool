@@ -571,7 +571,6 @@ export const fr: TranslationResources = {
       done: "Terminé",
     },
     triage: {
-      fieldFolder: "Branche",
       fieldPriority: "Priorité",
       fieldDeadline: "Échéance",
       fieldEstimate: "Estimation",

@@ -570,7 +570,6 @@ export const ptBR: TranslationResources = {
       done: "Concluído",
     },
     triage: {
-      fieldFolder: "Pasta",
       fieldPriority: "Prioridade",
       fieldDeadline: "Prazo",
       fieldEstimate: "Estimativa",

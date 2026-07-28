@@ -324,8 +324,6 @@ function TaskProposalCard({
   const { t } = useTranslation();
   const taskId = proposal.taskId;
   const task = board.board?.tasks.find((entry) => entry.id === taskId) ?? null;
-  const folderName =
-    board.board?.folders.find((folder) => folder.id === task?.folderId)?.name ?? null;
 
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(task?.title ?? proposal.title);
@@ -420,7 +418,7 @@ function TaskProposalCard({
 
       <ExecSelects entries={entries} exec={exec} effective={effective} onChange={applyExec} />
 
-      <CardInfo task={task} effective={effective} folderName={folderName} />
+      <CardInfo task={task} effective={effective} />
 
       <View style={styles.actionsRow}>
         <Pressable
@@ -656,25 +654,12 @@ function ExecSelects({
   );
 }
 
-function CardInfo({
-  task,
-  effective,
-  folderName,
-}: {
-  task: KanbanTask | null;
-  effective: EffectiveExecution;
-  folderName: string | null;
-}) {
+function CardInfo({ task, effective }: { task: KanbanTask | null; effective: EffectiveExecution }) {
   const { t } = useTranslation();
   const estimateValue = buildEstimateValue(task?.estimate ?? null, t);
   const costValue = buildCostValue(task?.estimate ?? null, effective);
   return (
     <View style={styles.infoBlock}>
-      {folderName ? (
-        <Text style={styles.infoText} numberOfLines={1}>
-          {t("tasks.triage.fieldFolder")} : {folderName}
-        </Text>
-      ) : null}
       <Text style={styles.infoText} numberOfLines={1}>
         {t("tasks.triage.fieldEstimate")} : {estimateValue ?? t("tasks.triage.pendingEstimate")}
       </Text>

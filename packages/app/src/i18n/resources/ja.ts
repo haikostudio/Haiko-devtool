@@ -564,7 +564,6 @@ export const ja: TranslationResources = {
       done: "完了",
     },
     triage: {
-      fieldFolder: "フォルダー",
       fieldPriority: "優先度",
       fieldDeadline: "期限",
       fieldEstimate: "見積もり",

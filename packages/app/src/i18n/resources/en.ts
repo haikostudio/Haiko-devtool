@@ -561,7 +561,6 @@ export const en = {
       done: "Done",
     },
     triage: {
-      fieldFolder: "Folder",
       fieldPriority: "Priority",
       fieldDeadline: "Deadline",
       fieldEstimate: "Estimate",
