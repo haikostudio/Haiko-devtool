@@ -187,9 +187,9 @@ describe("shouldShowVoyant — the corner pip carries read/unread, opacity never
   });
 
   it("shows the scheduled pip regardless of viewedAt", () => {
-    expect(
-      shouldShowVoyant(makeTask({ column: "scheduled", viewedAt: null }), "scheduled"),
-    ).toBe(true);
+    expect(shouldShowVoyant(makeTask({ column: "scheduled", viewedAt: null }), "scheduled")).toBe(
+      true,
+    );
   });
 
   it("shows no pip when the card has no tone at all", () => {

@@ -82,11 +82,7 @@ function cardStyle({
   hovered?: boolean;
   selected?: boolean;
 }) {
-  return [
-    styles.card,
-    (hovered || pressed) && styles.cardHovered,
-    selected && styles.cardSelected,
-  ];
+  return [styles.card, (hovered || pressed) && styles.cardHovered, selected && styles.cardSelected];
 }
 
 // When a validated/planned task will actually launch: the scheduler holds
