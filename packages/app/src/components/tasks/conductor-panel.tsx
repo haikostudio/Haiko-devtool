@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { RotateCcw, Wand2 } from "lucide-react-native";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { TaskBottomDock, type TaskDockHeader } from "@/components/tasks/task-bottom-dock";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
+import { resolveConductorDockPresence } from "@/components/tasks/conductor-dock-presence";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
 import {
   TaskDetailInlineForm,
   type TaskDetailSaveInput,
 } from "@/components/tasks/task-detail-sheet";
+import { isNative } from "@/constants/platform";
 import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
@@ -133,6 +135,12 @@ export function ConductorPanel({
   );
 
   const [ensure, setEnsure] = useState<EnsureState>({ status: "loading" });
+  // True once this project's conductor has been resolved at least once. Gates the
+  // ensure effect below so that opening a task never re-runs it: the conductor
+  // chat stays mounted behind the task view and must NOT be torn down and
+  // re-bootstrapped, or an in-flight turn (the prompt the user just sent, the
+  // reply being streamed) disappears from the panel.
+  const [conductorResolved, setConductorResolved] = useState(false);
   // Bumped by « Réinitialiser » (and by the archived-conductor guard below):
   // re-runs the ensure effect, asking the daemon to retire the current conductor
   // and hand back an empty one.
@@ -143,6 +151,13 @@ export function ConductorPanel({
   const pendingResetRef = useRef(false);
   const inTaskMode = dockTask !== null;
   const dockTaskId = dockTask?.id ?? null;
+  // Who is mounted vs merely visible in the dock — the rule that keeps a live
+  // conductor conversation alive across a task selection.
+  const presence = resolveConductorDockPresence({
+    hasDockedTask: inTaskMode,
+    conductorResolved,
+  });
+  const { ensureSuspended } = presence;
 
   // Opening a task (or switching to another card) always lands on the chat tab.
   const [taskView, setTaskView] = useState<TaskView>("chat");
@@ -209,8 +224,8 @@ export function ConductorPanel({
   );
   useEffect(() => {
     // Task chat reads the task's own linked agent — skip the conductor ensure so
-    // opening a task never spins up the conductor agent unnecessarily.
-    if (inTaskMode) {
+    // opening a task on a board that never had a conductor does not spin one up.
+    if (ensureSuspended) {
       return;
     }
     if (!serverId || !projectId) {
@@ -253,6 +268,7 @@ export function ConductorPanel({
           workspaceId: payload.workspaceId ?? null,
           provider: conductorProvider,
         });
+        setConductorResolved(true);
       } catch (error) {
         if (!cancelled) {
           setEnsure({
@@ -268,8 +284,11 @@ export function ConductorPanel({
     };
     // `conductorProvider` is a dependency on purpose: flipping Claude ↔ Codex
     // re-runs the ensure (without reset) and hands back that provider's own
-    // conductor conversation.
-  }, [serverId, projectId, t, inTaskMode, resetNonce, conductorProvider]);
+    // conductor conversation. `ensureSuspended` (not `inTaskMode`) is the gate:
+    // once a conductor is resolved it stops changing, so opening or closing a
+    // task never re-runs the ensure — no "loading" flash, no remount of a chat
+    // that may be mid-turn.
+  }, [serverId, projectId, t, ensureSuspended, resetNonce, conductorProvider]);
 
   const renderTaskBody = (task: KanbanTask) => (
     <>
@@ -322,10 +341,13 @@ export function ConductorPanel({
     </>
   );
 
-  const renderBody = () => {
-    if (inTaskMode && dockTask) {
-      return renderTaskBody(dockTask);
-    }
+  // The conductor chat is NEVER unmounted by a task selection — it is hidden
+  // behind the task view. Tearing it down used to lose the live conversation:
+  // send a prompt, tap a card within the second, come back, and the panel had
+  // remounted onto a snapshot taken before the send — no prompt, no streaming
+  // reply, while the agent was in fact working. Same trick as the Chat/Details/
+  // Billing tabs below, one level up.
+  const renderConductorBody = () => {
     if (ensure.status === "loading") {
       return (
         <View style={styles.centered}>
@@ -361,6 +383,10 @@ export function ConductorPanel({
         agentId={ensure.agentId}
         workspaceId={ensure.workspaceId}
         provider={ensure.provider}
+        // Hidden behind a task view: still mounted and still receiving its
+        // stream, but no longer the focused pane — so it does not fight the task
+        // chat for the keyboard or clear its own attention badge while off-screen.
+        focused={presence.conductorFocused}
       />
     );
   };
@@ -434,7 +460,15 @@ export function ConductorPanel({
     >
       {/* No provider bar here: Claude vs Codex is chosen in Paseo's native menu
           under the prompt composer (see CONDUCTOR_PROVIDER). */}
-      <View style={styles.body}>{renderBody()}</View>
+      <View style={styles.body}>
+        {presence.showTaskView && dockTask ? (
+          <View style={styles.tabPane}>{renderTaskBody(dockTask)}</View>
+        ) : null}
+        {/* Kept mounted whatever the dock shows — see `renderConductorBody`. */}
+        <View style={presence.conductorVisible ? styles.tabPane : styles.tabPaneHidden}>
+          {renderConductorBody()}
+        </View>
+      </View>
     </TaskBottomDock>
   );
 }
@@ -452,12 +486,32 @@ function EmbeddedConductorPane({
   agentId,
   workspaceId,
   provider,
+  focused,
 }: {
   serverId: string;
   agentId: string;
   workspaceId: string | null;
   provider: ConductorProvider;
+  /**
+   * False while a task view covers the conductor. The pane stays mounted (its
+   * conversation, scroll and composer survive), it simply stops being the
+   * interactive pane. Focus coming back re-runs the panel's own history catch-up,
+   * which fills any gap without replacing what is already on screen.
+   */
+  focused: boolean;
 }) {
+  // The composer stays mounted while the pane is hidden, so an input that still
+  // held focus would leave the keyboard standing over the task view. Losing pane
+  // focus is the moment to put it away (native only — web has no soft keyboard
+  // to strand, and the user may still be typing in another field there).
+  const wasFocusedRef = useRef(focused);
+  useEffect(() => {
+    if (isNative && wasFocusedRef.current && !focused) {
+      Keyboard.dismiss();
+    }
+    wasFocusedRef.current = focused;
+  }, [focused]);
+
   const content = useMemo(() => {
     const openInNativeWorkspace = () => {
       if (workspaceId) {
@@ -483,7 +537,11 @@ function EmbeddedConductorPane({
 
   return (
     <View style={styles.paneHost}>
-      <WorkspacePaneContent content={content} isWorkspaceFocused isPaneFocused />
+      <WorkspacePaneContent
+        content={content}
+        isWorkspaceFocused={focused}
+        isPaneFocused={focused}
+      />
     </View>
   );
 }
