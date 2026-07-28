@@ -218,6 +218,33 @@ export class TaskScheduler {
         return next;
       });
     }
+    // Re-arm a card that got stuck mid-launch. The scheduler only launches cards
+    // whose schedule state is "awaiting_slot" (see isScheduledCandidate). If a
+    // prior attempt left the card in "launching" — e.g. the daemon restarted
+    // between reserving the slot and spawning the agent — or in "failed" (attempts
+    // exhausted), it would never become a candidate again and "Lancer maintenant"
+    // would stay stuck: the toast fires, runNow requeues, but the gate rejects it
+    // forever. An explicit run-now is the user's strongest "go", so reset the
+    // stuck state (attempts back to 0, drop the recorded error) to let this launch
+    // actually reach the launcher. A genuinely in-flight launch is still protected
+    // from double-spawning by the in-memory `inFlight` guard in tick().
+    if (
+      task.estimate &&
+      (task.schedule?.state === "launching" || task.schedule?.state === "failed")
+    ) {
+      await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
+        ...current,
+        schedule: {
+          state: "awaiting_slot" as const,
+          attempts: 0,
+          // Keep the cancel-requeue counter: it bounds a run that cancels
+          // instantly every time, and run-now must not reopen that loop.
+          ...(current.schedule?.cancelRequeues
+            ? { cancelRequeues: current.schedule.cancelRequeues }
+            : {}),
+        },
+      }));
+    }
     // Ensure the analysis agent is spawned even if this task entered the pipeline
     // without a notify (e.g. created directly in "Planifié", or after a restart).
     // No-op once the task already has an estimate/agent (guarded in the estimator).

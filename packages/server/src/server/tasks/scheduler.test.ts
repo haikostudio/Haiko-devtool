@@ -322,6 +322,40 @@ describe("TaskScheduler", () => {
     expect(createAgent).toHaveBeenCalledTimes(1);
   });
 
+  test("run-now re-arms a card stuck in 'launching' (e.g. after a daemon restart) so it actually launches", async () => {
+    const task = await seedScheduledTask({ quotaPercent: 10 });
+    // Simulate a launch that reserved the slot but never spawned the agent — the
+    // daemon restarted between the two, leaving the card frozen in "launching".
+    // Without a reset it can never be a candidate again (the gate wants
+    // "awaiting_slot"), so the button stays stuck.
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      schedule: { state: "launching" as const, attempts: 1, lastError: null },
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.runNow("proj-1", task.id);
+    await vi.waitFor(async () => {
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
+    });
+    expect(createAgent).toHaveBeenCalledTimes(1);
+  });
+
+  test("run-now re-arms a card that had exhausted its attempts ('failed'), clearing the error", async () => {
+    const task = await seedScheduledTask({ quotaPercent: 10 });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      schedule: { state: "failed" as const, attempts: 3, lastError: "boom" },
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.runNow("proj-1", task.id);
+    await vi.waitFor(async () => {
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
+    });
+    expect(createAgent).toHaveBeenCalledTimes(1);
+  });
+
   test("defers launch when remaining quota is below estimate + margin", async () => {
     await seedScheduledTask({ quotaPercent: 50 });
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 40 });
