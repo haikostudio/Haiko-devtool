@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { DEFAULT_EXPLORER_SIDEBAR_WIDTH } from "@/stores/panel-store";
+import { FILE_PREVIEW_WIDTH_UNSET } from "@/components/tasks/task-file-preview-layout";
 
 // Remembers the desktop tasks board's right-hand agent panel width so the size
 // the user dragged it to survives a reload / navigating away and back. Only the
@@ -99,6 +100,28 @@ interface TasksBoardUiState {
    */
   previewFilePath: string | null;
   setPreviewFilePath: (previewFilePath: string | null) => void;
+  /**
+   * Width (in px) the user dragged the desktop file preview overlay to.
+   * `FILE_PREVIEW_WIDTH_UNSET` (0) means "never dragged": the panel then opens at
+   * half the board area instead of freezing at a width some past viewport made
+   * half of. Persisted, like every other panel size.
+   */
+  previewWidth: number;
+  setPreviewWidth: (previewWidth: number) => void;
+  /**
+   * Ephemeral (not persisted): whether the project's attachments slide-over is
+   * open. The paperclip is an action ("show me the files"), not a layout the
+   * board should restore on its own at startup.
+   */
+  attachmentsOpen: boolean;
+  setAttachmentsOpen: (attachmentsOpen: boolean) => void;
+  /**
+   * Ephemeral (not persisted): id of the attachment the panel is previewing,
+   * `null` while it shows the list. Closing the panel clears it, so re-opening
+   * always lands on the list.
+   */
+  attachmentsEntryId: string | null;
+  setAttachmentsEntryId: (attachmentsEntryId: string | null) => void;
 }
 
 /**
@@ -192,6 +215,14 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setDetailsTaskId: (detailsTaskId) => set({ detailsTaskId }),
       previewFilePath: null,
       setPreviewFilePath: (previewFilePath) => set({ previewFilePath }),
+      previewWidth: FILE_PREVIEW_WIDTH_UNSET,
+      setPreviewWidth: (previewWidth) => set({ previewWidth }),
+      attachmentsOpen: false,
+      // Closing drops the selection too: the panel always re-opens on the list.
+      setAttachmentsOpen: (attachmentsOpen) =>
+        set(attachmentsOpen ? { attachmentsOpen } : { attachmentsOpen, attachmentsEntryId: null }),
+      attachmentsEntryId: null,
+      setAttachmentsEntryId: (attachmentsEntryId) => set({ attachmentsEntryId }),
     }),
     {
       name: "tasks-board-ui",
@@ -214,6 +245,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         explorerHeight: state.explorerHeight,
         explorerOffsetX: state.explorerOffsetX,
         explorerCollapsed: state.explorerCollapsed,
+        previewWidth: state.previewWidth,
         preferDeployThenRestart: state.preferDeployThenRestart,
       }),
       merge: (persisted, current) => {
