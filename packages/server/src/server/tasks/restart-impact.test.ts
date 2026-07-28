@@ -76,8 +76,19 @@ describe("settleDeployedRestartFlags", () => {
 
   it("clears the debt of a card whose work is already live", () => {
     // The daemon just booted on the current code: that restart has happened.
-    const [settled] = settleDeployedRestartFlags([task({ needsDaemonRestart: true })]);
+    const [settled] = settleDeployedRestartFlags([
+      task({ deployedAt: "2026-07-28T11:00:00.000Z", needsDaemonRestart: true }),
+    ]);
     expect(settled?.needsDaemonRestart).toBe(false);
+  });
+
+  it("keeps the forecast on a card merely QUEUED in « À déployer »", () => {
+    // The column is a queue, not a publication: wiping the flag here would lose
+    // the "Redémarrage requis" warning before the work has even gone out.
+    const [kept] = settleDeployedRestartFlags([
+      task({ column: "deployed", needsDaemonRestart: true }),
+    ]);
+    expect(kept?.needsDaemonRestart).toBe(true);
   });
 
   it("also clears a done card that was published (deployedUrl stamped)", () => {
@@ -95,7 +106,10 @@ describe("settleDeployedRestartFlags", () => {
 
   it("returns the very same array when nothing needed settling", () => {
     // Identity matters: the caller skips the disk write on an unchanged board.
-    const tasks = [task({ needsDaemonRestart: false }), task({ column: "done" })];
+    const tasks = [
+      task({ deployedAt: "2026-07-28T11:00:00.000Z", needsDaemonRestart: false }),
+      task({ column: "done" }),
+    ];
     expect(settleDeployedRestartFlags(tasks)).toBe(tasks);
   });
 });

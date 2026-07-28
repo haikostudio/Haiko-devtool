@@ -831,8 +831,28 @@ export class TaskBoardService {
       // Fire-and-forget: the verdict costs a couple of git reads and must never
       // delay (or fail) the move itself. It lands as a second board push.
       void this.refreshRestartImpact(projectId, completedTask);
+      // EVERY path into "Terminée" ends here — the user's drag, the final-check
+      // bar (the agent's move_task) and the scheduler alike — so this is the one
+      // place the completion listener can fire without missing a door. It used to
+      // live in transitionTask only, which the two gestures a human actually uses
+      // never go through: a card finished from the board simply never told anyone.
+      this.notifyCompleted(projectId, completedTask);
     }
     return board;
+  }
+
+  /** Runs the completion listener without ever letting it break the move. */
+  private notifyCompleted(projectId: string, task: KanbanTask): void {
+    const listener = this.onTaskCompleted;
+    if (!listener) {
+      return;
+    }
+    void Promise.resolve(listener(projectId, task)).catch((error) => {
+      this.logger.warn(
+        { err: error, projectId, taskId: task.id },
+        "onTaskCompleted callback failed",
+      );
+    });
   }
 
   /**
@@ -1108,14 +1128,8 @@ export class TaskBoardService {
       index: targetCount,
       manual: false,
     });
-    if (column === "done" && this.onTaskCompleted) {
-      const completed = moved.tasks.find((entry) => entry.id === taskId);
-      if (completed) {
-        void Promise.resolve(this.onTaskCompleted(projectId, completed)).catch((error) => {
-          this.logger.warn({ err: error, projectId, taskId }, "onTaskCompleted callback failed");
-        });
-      }
-    }
+    // The completion listener is fired by moveTask itself (every door goes
+    // through it), so there is nothing to do here.
     return moved;
   }
 

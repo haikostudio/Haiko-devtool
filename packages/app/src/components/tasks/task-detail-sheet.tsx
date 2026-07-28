@@ -56,7 +56,9 @@ function resolveTaskActions(task: KanbanTask): TaskActionAvailability {
   const scheduleState = task.schedule?.state ?? null;
   const isRunning =
     task.column === "in_progress" || scheduleState === "launching" || scheduleState === "running";
-  const isDone = task.column === "done";
+  // A finished card is "done" for a moment, then waits in "À déployer": both are
+  // finished, so neither may offer to run or re-estimate the work again.
+  const isDone = task.column === "done" || task.column === "deployed";
   const isActive = isRunning || isDone;
   return {
     // Launching bypasses the queue, so it only makes sense once validated/scheduled.

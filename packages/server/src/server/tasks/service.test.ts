@@ -191,6 +191,40 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([]);
   });
 
+  test("every door into « Terminée » fires the completion listener", async () => {
+    const completed: string[] = [];
+    service.setOnTaskCompleted((_projectId, task) => {
+      completed.push(task.id);
+    });
+    const folder = await service.createFolder("proj-1", "Auth");
+    const dragged = await service.createTask("proj-1", { folderId: folder.id, title: "Drag me" });
+    const transitioned = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Transition me",
+    });
+
+    // The user's drag / the agent's move_task — both land in moveTask.
+    await service.moveTask("proj-1", {
+      taskId: dragged.id,
+      column: "done",
+      index: 0,
+      manual: true,
+    });
+    // The scheduler / agent-sync path.
+    await service.transitionTask("proj-1", transitioned.id, "done");
+
+    expect(completed.sort()).toEqual([dragged.id, transitioned.id].sort());
+
+    // And it fires ONCE per card, not once per layer it went through.
+    await service.moveTask("proj-1", {
+      taskId: dragged.id,
+      column: "done",
+      index: 0,
+      manual: true,
+    });
+    expect(completed.filter((id) => id === dragged.id)).toHaveLength(1);
+  });
+
   test("moving straight to deployed backfills completedAt", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Hotfix live" });
@@ -737,6 +771,8 @@ describe("TaskBoardService", () => {
       index: 0,
       manual: true,
     });
+    // Live means the deploy stamp, not the column: "À déployer" is the queue.
+    await service.markTaskDeployed("proj-1", live.id, { url: "https://app.example.com" });
     await service.moveTask("proj-1", {
       taskId: pending.id,
       column: "done",

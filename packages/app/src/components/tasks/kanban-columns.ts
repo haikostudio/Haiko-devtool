@@ -4,9 +4,9 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { parseTaskTags, type TaskPriorityLevel } from "./task-tags";
 
 // Recency is the board's one and only ordering — there is no sort menu. Every
-// column shows the most recent activity first. "done" ranks by completedAt (the
-// moment a task actually finished, so the last task completed sits at the very
-// top); every other column ranks by updatedAt. A column the user has hand-
+// column shows the most recent activity first. "done" and "À déployer" rank by
+// completedAt (the moment a task actually finished, so the last task completed
+// sits at the very top); every other column ranks by updatedAt. A column the user has hand-
 // arranged by dragging switches to manual order — see ColumnControls.manualOrder.
 
 export const KANBAN_COLUMNS: TaskColumn[] = [
@@ -34,7 +34,9 @@ export interface KanbanColumnModel {
 // cards stamped before completedAt existed. Every other column ranks by last
 // touch (updatedAt).
 function recencyKey(task: KanbanTask, column: TaskColumn): string {
-  if (column === "done" && task.completedAt) {
+  // "done" and the "À déployer" queue both rank by the moment the work finished,
+  // so the last card completed sits at the top of the queue it waits in.
+  if ((column === "done" || column === "deployed") && task.completedAt) {
     return task.completedAt;
   }
   return task.updatedAt;

@@ -90,14 +90,17 @@ export async function resolveDaemonRestartImpact(
  *
  * Deliberately limited to cards that are LIVE. A card still waiting to be
  * published keeps its flag: that one is a forecast about the next publication,
- * which this boot says nothing about.
+ * which this boot says nothing about. "Live" is the deploy stamp, NEVER the
+ * column — "À déployer" is the queue a finished card waits in, so reading the
+ * column here would wipe the forecast of every card still waiting to go out.
  *
  * Pure, so the rule is unit-tested without a store, a clock or git.
  */
 export function settleDeployedRestartFlags<T extends KanbanTask>(tasks: T[]): T[] {
   let changed = false;
   const settled = tasks.map((task) => {
-    const isLive = task.column === "deployed" || task.deployedUrl != null;
+    const isLive =
+      task.deployedAt != null || task.deployedUrl != null || task.deployment?.state === "deployed";
     if (!isLive || task.needsDaemonRestart !== true) {
       return task;
     }
