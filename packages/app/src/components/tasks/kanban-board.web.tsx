@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
   DndContext,
@@ -421,7 +421,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   // happily read that pointerup as a tap — opening the task, or unfolding the
   // lot the card is the cover of. Capture-phase handlers run before the inner
   // Pressable's, so the verdict is ready by the time onPress fires.
-  const slop = useRef(createPressSlopTracker()).current;
+  const slop = useMemo(() => createPressSlopTracker(), []);
   useEffect(() => {
     if (isDragging) {
       slop.markDragging();
