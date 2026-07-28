@@ -307,6 +307,7 @@ export const en = {
     },
     panel: {
       evolutionCreateTask: "Create a task from this idea",
+      evolutionInsertPrompt: "Add this idea to the message",
       evolutionTaskCreated: "Task added to the board",
       chat: "Chat",
       details: "Details",

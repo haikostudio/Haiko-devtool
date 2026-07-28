@@ -310,6 +310,7 @@ export const ru: TranslationResources = {
     },
     panel: {
       evolutionCreateTask: "Создать задачу из этой идеи",
+      evolutionInsertPrompt: "Добавить эту идею в сообщение",
       evolutionTaskCreated: "Задача добавлена на доску",
       chat: "Чат",
       details: "Подробности",

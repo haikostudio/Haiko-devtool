@@ -54,6 +54,7 @@ import {
   ClipboardList,
   CircleDot,
   ListPlus,
+  Plus,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
@@ -82,7 +83,11 @@ import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
 import { resolveToolCallIcon } from "@/utils/tool-call-icon";
-import { getMarkdownListMarker, getMarkdownListSpacing } from "@/utils/markdown-list";
+import {
+  getMarkdownForcedOrderedMarker,
+  getMarkdownListMarker,
+  getMarkdownListSpacing,
+} from "@/utils/markdown-list";
 import { markdownNodeContainsType } from "@/utils/markdown-ast";
 import { useStableEvent } from "@/hooks/use-stable-event";
 import { HighlightedCodeBlock } from "@/components/highlighted-code-block";
@@ -121,6 +126,7 @@ import {
 } from "@/assistant-file-links";
 import { useToast } from "@/contexts/toast-context";
 import { useEvolutionTaskCreator } from "@/contexts/evolution-task-context";
+import { useComposerInsert } from "@/composer/insert-text-context";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
@@ -190,6 +196,7 @@ const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
 
 const ThemedMicVocal = withUnistyles(MicVocal);
 const ThemedListPlusIcon = withUnistyles(ListPlus);
+const ThemedPlusIcon = withUnistyles(Plus);
 const ThemedTodoCheckIcon = withUnistyles(Check);
 const ThemedFileSymlinkIcon = withUnistyles(FileSymlink);
 const ThemedTriangleAlertIcon = withUnistyles(TriangleAlertIcon);
@@ -1720,9 +1727,16 @@ function MarkdownListView({ baseStyle, spacing, children }: MarkdownListViewProp
   return <View style={style}>{children}</View>;
 }
 
-// Section-4 ("## N. Évolutions possibles") heading detector. Matches with or
-// without the accent so a model that drops it still triggers the affordance.
-const EVOLUTION_HEADING_PATTERN = /évolu|evolu/i;
+// "Évolutions possibles" heading detector. Leading numbering ("## 4. …",
+// "## 5) …") is stripped first, and the accent is optional so a model that
+// drops it still triggers the affordance. Anchored on the first word so a
+// heading that merely mentions an evolution further along ("Impact sur
+// l'évolution du build") keeps plain rendering.
+const EVOLUTION_HEADING_PATTERN = /^(?:\d+\s*[.)]\s*)?[ée]volution/i;
+
+function isEvolutionHeading(headingText: string): boolean {
+  return EVOLUTION_HEADING_PATTERN.test(headingText.trim().replace(/^[*_#\s]+/, ""));
+}
 
 // Flatten an AST node to its plain text — used to seed the task title from a
 // bullet without dragging along inline markdown markup.
@@ -1738,6 +1752,11 @@ function extractAstNodeText(node: ASTNode): string {
 }
 
 const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
+  row: {
+    // Hover target only (docs/hover.md): a plain View wrapping the row, with
+    // the pressables living inside it.
+    position: "relative",
+  },
   button: {
     marginLeft: theme.spacing[2],
     marginTop: theme.spacing[1],
@@ -1748,6 +1767,11 @@ const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
   },
   buttonBusy: {
     opacity: 0.5,
+  },
+  // Hidden buttons keep their slot so revealing one never shifts the row's
+  // geometry out from under the cursor (docs/hover.md, failure mode 2).
+  buttonHidden: {
+    opacity: 0,
   },
 }));
 
@@ -1761,10 +1785,13 @@ interface EvolutionListItemProps {
 }
 
 /**
- * A bullet inside the "Évolutions possibles" section, with a trailing button
- * that turns the proposal into a backlog task on the current project's board.
- * The button only appears when an EvolutionTaskProvider is in scope (i.e. the
- * chat is embedded in a task drawer) and the bullet has text.
+ * A bullet inside the "Évolutions possibles" section.
+ *
+ * It carries a "+" button that appends the proposal to the message composer
+ * (the draft is kept, the message is never sent), and — when the chat is
+ * embedded somewhere that knows the project board — a second button that turns
+ * the proposal into a backlog task. Buttons reveal on hover on web and stay
+ * visible on native/compact, where there is no hover.
  */
 function EvolutionListItem({
   listItemStyle,
@@ -1775,9 +1802,23 @@ function EvolutionListItem({
   children,
 }: EvolutionListItemProps) {
   const creator = useEvolutionTaskCreator();
+  const composerInsert = useComposerInsert();
   const toast = useToast();
   const { t } = useTranslation();
+  const isCompact = useIsCompactFormFactor();
+  const [isHovered, setIsHovered] = useState(false);
   const [status, setStatus] = useState<"idle" | "creating" | "done">("idle");
+
+  const handlePointerEnter = useCallback(() => setIsHovered(true), []);
+  const handlePointerLeave = useCallback(() => setIsHovered(false), []);
+  const actionsVisible = isHovered || isNative || isCompact;
+
+  const handleInsert = useStableEvent(() => {
+    if (!composerInsert || title.length === 0) {
+      return;
+    }
+    composerInsert.insertText(title);
+  });
 
   const handleCreate = useStableEvent(async () => {
     if (!creator || status !== "idle" || title.length === 0) {
@@ -1794,35 +1835,64 @@ function EvolutionListItem({
     }
   });
 
-  const buttonStyle = useMemo(
+  const insertButtonStyle = useMemo(
+    () => [
+      evolutionTaskButtonStyles.button,
+      actionsVisible ? null : evolutionTaskButtonStyles.buttonHidden,
+    ],
+    [actionsVisible],
+  );
+
+  const createButtonStyle = useMemo(
     () => [
       evolutionTaskButtonStyles.button,
       status !== "idle" ? evolutionTaskButtonStyles.buttonBusy : null,
+      actionsVisible ? null : evolutionTaskButtonStyles.buttonHidden,
     ],
-    [status],
+    [actionsVisible, status],
   );
 
+  const hasActionableTitle = title.length > 0;
+
   return (
-    <View style={listItemStyle}>
-      <Text style={markerStyle}>{marker}</Text>
-      <MarkdownListItemContent contentStyle={contentStyle}>{children}</MarkdownListItemContent>
-      {creator && title.length > 0 ? (
-        <Pressable
-          onPress={handleCreate}
-          disabled={status !== "idle"}
-          accessibilityRole="button"
-          accessibilityLabel={t("tasks.panel.evolutionCreateTask")}
-          hitSlop={8}
-          style={buttonStyle}
-          testID="evolution-create-task"
-        >
-          {status === "done" ? (
-            <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
-          ) : (
-            <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
-          )}
-        </Pressable>
-      ) : null}
+    <View
+      style={evolutionTaskButtonStyles.row}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+    >
+      <View style={listItemStyle}>
+        <Text style={markerStyle}>{marker}</Text>
+        <MarkdownListItemContent contentStyle={contentStyle}>{children}</MarkdownListItemContent>
+        {composerInsert && hasActionableTitle ? (
+          <Pressable
+            onPress={handleInsert}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.panel.evolutionInsertPrompt")}
+            hitSlop={8}
+            style={insertButtonStyle}
+            testID="evolution-insert-prompt"
+          >
+            <ThemedPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
+          </Pressable>
+        ) : null}
+        {creator && hasActionableTitle ? (
+          <Pressable
+            onPress={handleCreate}
+            disabled={status !== "idle"}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.panel.evolutionCreateTask")}
+            hitSlop={8}
+            style={createButtonStyle}
+            testID="evolution-create-task"
+          >
+            {status === "done" ? (
+              <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
+            ) : (
+              <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
+            )}
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -2189,7 +2259,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
 
   // Variant used only for the "Évolutions possibles" section: same rules, but
-  // each bullet gets a trailing "create task" button.
+  // top-level bullets are numbered and each one gets trailing action buttons.
   const evolutionMarkdownRules = useMemo<RenderRules>(
     () => ({
       ...markdownRules,
@@ -2199,7 +2269,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         parent: ASTNode[],
         styles: MarkdownStyles,
       ) => {
-        const { isOrdered, marker } = getMarkdownListMarker(node, parent);
+        const { isOrdered, marker } = getMarkdownForcedOrderedMarker(node, parent);
         const iconStyle = isOrdered ? styles.ordered_list_icon : styles.bullet_list_icon;
         const contentStyle = isOrdered ? styles.ordered_list_content : styles.bullet_list_content;
         return (
@@ -2222,20 +2292,33 @@ export const AssistantMessage = memo(function AssistantMessage({
   const blocks = useMemo(() => splitMarkdownBlocks(message), [message]);
   const keyedBlocks = useMemo(() => {
     // Blocks are split on blank lines, so the section heading and its bullet
-    // list are separate blocks. Track the active section as we walk them and
-    // flag every block under "Évolutions possibles".
+    // list are usually separate blocks. Track the active section as we walk
+    // them and flag every block under "Évolutions possibles". A heading glued
+    // to its list (no blank line in between) lands in a single block, hence
+    // scanning every line rather than just the first one.
     let sectionIsEvolutions = false;
     return blocks.map((block, index) => {
-      const firstLine = block.trimStart().split("\n", 1)[0] ?? "";
-      const headingMatch = /^#{1,6}\s+(.+)$/.exec(firstLine);
-      if (headingMatch) {
-        sectionIsEvolutions = EVOLUTION_HEADING_PATTERN.test(headingMatch[1]);
+      let blockIsEvolutions = sectionIsEvolutions;
+      let isFirstLine = true;
+      for (const line of block.trim().split("\n")) {
+        const headingMatch = /^#{1,6}\s+(.+)$/.exec(line.trim());
+        if (!headingMatch) {
+          isFirstLine = false;
+          continue;
+        }
+        sectionIsEvolutions = isEvolutionHeading(headingMatch[1]);
+        // Only a heading opening the block re-flags the block itself; a heading
+        // further down applies to what follows.
+        if (isFirstLine) {
+          blockIsEvolutions = sectionIsEvolutions;
+        }
+        isFirstLine = false;
       }
       return {
         key: `${index}:${block.slice(0, 32)}`,
         block,
         callout: parseCalloutBlock(block),
-        evolutions: sectionIsEvolutions,
+        evolutions: blockIsEvolutions,
       };
     });
   }, [blocks]);

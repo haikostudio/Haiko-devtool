@@ -1199,7 +1199,13 @@ export function Composer({
   );
 
   const focusInput = useCallback(() => {
-    if (isNative) return;
+    // Native has no focus race to retry around: focus directly so callers (e.g.
+    // inserting an "Évolutions possibles" bullet into the draft) also raise the
+    // keyboard on phones.
+    if (isNative) {
+      messageInputRef.current?.focus();
+      return;
+    }
     focusWithRetries({
       focus: () => messageInputRef.current?.focus(),
       isFocused: () => {

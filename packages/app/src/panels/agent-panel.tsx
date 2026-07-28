@@ -19,6 +19,7 @@ import { FileDropZone } from "@/components/file-drop/file-drop-zone";
 import { Composer } from "@/composer";
 import { useAboveComposerSlot } from "@/panels/above-composer-slot";
 import { RewindComposerRestoreProvider } from "@/components/rewind/composer-restore";
+import { ComposerInsertProvider, useComposerInsert } from "@/composer/insert-text-context";
 import { getProviderIcon } from "@/components/provider-icons";
 import {
   ToastViewport,
@@ -1294,44 +1295,52 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
-      <View style={styles.root}>
-        <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
-          {contentContainer}
+      <ComposerInsertProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
+        <View style={styles.root}>
+          <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
+            {contentContainer}
 
-          <AgentSynthesisScrim extent={synthesisBannerExtent} />
+            <AgentSynthesisScrim extent={synthesisBannerExtent} />
 
-          <AgentSynthesisBanner
-            serverId={serverId}
-            agentId={agentId}
-            onHeightChange={setSynthesisBannerExtent}
-          />
+            <AgentSynthesisBanner
+              serverId={serverId}
+              agentId={agentId}
+              onHeightChange={setSynthesisBannerExtent}
+            />
 
-          <View onLayout={handleComposerAreaLayout}>{composerSection}</View>
+            <View onLayout={handleComposerAreaLayout}>{composerSection}</View>
 
-          {/* Host for the magic scrollbar; box-none so only the rail itself
+            {/* Host for the magic scrollbar; box-none so only the rail itself
               (rendered into it) captures pointer events. On compact layouts it
               stops above the composer; otherwise it spans the full panel. */}
-          <View style={magicScrollbarPortalHostStyle} pointerEvents="box-none" collapsable={false}>
-            <PortalHost name={magicScrollbarPortalHostName} />
-          </View>
+            <View
+              style={magicScrollbarPortalHostStyle}
+              pointerEvents="box-none"
+              collapsable={false}
+            >
+              <PortalHost name={magicScrollbarPortalHostName} />
+            </View>
 
-          {showHistorySyncOverlay ? (
-            <View style={styles.historySyncOverlay} testID="agent-history-overlay">
-              <ThemedActivityIndicator size="large" uniProps={foregroundMutedColorMapping} />
+            {showHistorySyncOverlay ? (
+              <View style={styles.historySyncOverlay} testID="agent-history-overlay">
+                <ThemedActivityIndicator size="large" uniProps={foregroundMutedColorMapping} />
+              </View>
+            ) : null}
+
+            <ToastViewport toast={toast} onDismiss={dismiss} placement="panel" />
+          </FileDropZone>
+
+          {isArchivingCurrentAgent ? (
+            <View style={styles.archivingOverlay} testID="agent-archiving-overlay">
+              <ThemedActivityIndicator size="large" uniProps={foregroundColorMapping} />
+              <Text style={styles.archivingTitle}>{t("agentPanel.states.archivingTitle")}</Text>
+              <Text style={styles.archivingSubtitle}>
+                {t("agentPanel.states.archivingSubtitle")}
+              </Text>
             </View>
           ) : null}
-
-          <ToastViewport toast={toast} onDismiss={dismiss} placement="panel" />
-        </FileDropZone>
-
-        {isArchivingCurrentAgent ? (
-          <View style={styles.archivingOverlay} testID="agent-archiving-overlay">
-            <ThemedActivityIndicator size="large" uniProps={foregroundColorMapping} />
-            <Text style={styles.archivingTitle}>{t("agentPanel.states.archivingTitle")}</Text>
-            <Text style={styles.archivingSubtitle}>{t("agentPanel.states.archivingSubtitle")}</Text>
-          </View>
-        ) : null}
-      </View>
+        </View>
+      </ComposerInsertProvider>
     </RewindComposerRestoreProvider>
   );
 });
@@ -1486,6 +1495,10 @@ function ActiveAgentComposer({
 }) {
   const insets = useSafeAreaInsets();
   const isCompactFormFactor = useIsCompactFormFactor();
+  // Publishes the input's focus function so a chat affordance that inserts text
+  // into the draft (the "+" on an "Évolutions possibles" bullet) can hand focus
+  // back to the composer.
+  const registerComposerFocusInput = useComposerInsert()?.registerFocusInput;
   const { onLayout: onInputAreaLayout, isBelow: isCompactComposerLayout } = useContainerWidthBelow(
     COMPACT_FORM_FACTOR_WIDTH,
     { initialIsBelow: isCompactFormFactor },
@@ -1649,6 +1662,7 @@ function ActiveAgentComposer({
         onChangeAttachments={agentInputDraft.setAttachments}
         cwd={cwd}
         clearDraft={agentInputDraft.clear}
+        onFocusInput={registerComposerFocusInput}
         autoFocus={isPaneFocused}
         isSubmitLoading={isSubmitLoading}
         onInputFocusChange={agentInputDraft.notifyInputFocus}

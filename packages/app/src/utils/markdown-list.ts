@@ -118,6 +118,37 @@ export function getMarkdownListSpacing(
   };
 }
 
+/**
+ * Marker for a list rendered as numbered whatever the source markup was — used
+ * by the "Évolutions possibles" section, where models write `-` bullets but the
+ * proposals read as a ranked list ("1.", "2.", …).
+ *
+ * Nested lists keep their normal bullets: only the top level is numbered, so a
+ * sub-point under a proposal doesn't restart a competing numbering.
+ */
+export function getMarkdownForcedOrderedMarker(
+  node: MarkdownNode,
+  parent: unknown,
+): {
+  isOrdered: boolean;
+  marker: string;
+} {
+  const natural = getMarkdownListMarker(node, parent);
+  if (natural.isOrdered || hasListItemAncestor(parent)) {
+    return natural;
+  }
+
+  const listParent = getNearestListParent(parent);
+  if (!listParent) {
+    return natural;
+  }
+
+  return {
+    isOrdered: true,
+    marker: `${getOrderedListItemIndex(node, listParent) + 1}${DEFAULT_ORDERED_LIST_MARKUP}`,
+  };
+}
+
 export function getMarkdownListMarker(
   node: MarkdownNode,
   parent: unknown,

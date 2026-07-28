@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getMarkdownListMarker, getMarkdownListSpacing } from "./markdown-list";
+import {
+  getMarkdownForcedOrderedMarker,
+  getMarkdownListMarker,
+  getMarkdownListSpacing,
+} from "./markdown-list";
 
 describe("getMarkdownListMarker", () => {
   it("returns a bullet marker for unordered list items", () => {
@@ -36,6 +40,52 @@ describe("getMarkdownListMarker", () => {
     ).toEqual({
       isOrdered: true,
       marker: "1.",
+    });
+  });
+});
+
+describe("getMarkdownForcedOrderedMarker", () => {
+  it("numbers top-level bullets", () => {
+    const list = { type: "bullet_list" };
+    const markers = [0, 1, 2].map(
+      (index) => getMarkdownForcedOrderedMarker({ index }, [list]).marker,
+    );
+    expect(markers).toEqual(["1.", "2.", "3."]);
+  });
+
+  it("reports forced markers as ordered so ordered styles apply", () => {
+    expect(getMarkdownForcedOrderedMarker({ index: 0 }, [{ type: "bullet_list" }]).isOrdered).toBe(
+      true,
+    );
+  });
+
+  it("keeps plain bullets for nested lists", () => {
+    expect(
+      getMarkdownForcedOrderedMarker({ index: 1 }, [
+        { type: "list_item" },
+        { type: "bullet_list" },
+      ]),
+    ).toEqual({
+      isOrdered: false,
+      marker: "•",
+    });
+  });
+
+  it("leaves genuine ordered lists to the normal numbering", () => {
+    expect(
+      getMarkdownForcedOrderedMarker({ index: 0, markup: "." }, [
+        { type: "ordered_list", attributes: { start: 4 } },
+      ]),
+    ).toEqual({
+      isOrdered: true,
+      marker: "4.",
+    });
+  });
+
+  it("falls back to a bullet outside any list", () => {
+    expect(getMarkdownForcedOrderedMarker({ index: 0 }, [])).toEqual({
+      isOrdered: false,
+      marker: "•",
     });
   });
 });

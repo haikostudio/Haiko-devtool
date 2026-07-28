@@ -312,6 +312,7 @@ export const ptBR: TranslationResources = {
     },
     panel: {
       evolutionCreateTask: "Criar uma tarefa a partir desta ideia",
+      evolutionInsertPrompt: "Adicionar esta ideia à mensagem",
       evolutionTaskCreated: "Tarefa adicionada ao quadro",
       chat: "Conversa",
       details: "Detalhes",

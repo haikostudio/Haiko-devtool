@@ -311,6 +311,7 @@ export const ja: TranslationResources = {
     },
     panel: {
       evolutionCreateTask: "このアイデアからタスクを作成",
+      evolutionInsertPrompt: "このアイデアをメッセージに追加",
       evolutionTaskCreated: "タスクをボードに追加しました",
       chat: "チャット",
       details: "詳細",

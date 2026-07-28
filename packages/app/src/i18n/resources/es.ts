@@ -312,6 +312,7 @@ export const es: TranslationResources = {
     },
     panel: {
       evolutionCreateTask: "Crear una tarea a partir de esta idea",
+      evolutionInsertPrompt: "Añadir esta idea al mensaje",
       evolutionTaskCreated: "Tarea añadida al tablero",
       chat: "Chat",
       details: "Detalles",
