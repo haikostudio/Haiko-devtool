@@ -73,6 +73,11 @@ into a backlog card). The chain, in the app:
 Left untouched by step 4: headings, code fences, table rows, quotes/callouts and
 indented continuations.
 
+Pressing `+` marks the line as taken: it is struck through and faded to 50%, so
+a long list of proposals shows at a glance which ones already went to the
+composer. The struck line is redrawn as a single plain `Text` — `line-through`
+does not travel down to sibling `Text` nodes inside a `View` on native.
+
 The prompt side helps the render side: the `progress` template asks for **one
 self-contained proposal per line**, no sub-lists, no free paragraphs — a line
 inserted into the composer has to read as a standalone instruction.

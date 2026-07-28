@@ -1767,6 +1767,20 @@ const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
   buttonHidden: {
     opacity: 0,
   },
+  // A proposal already dropped into the composer recedes: half opacity on the
+  // whole row (marker + buttons included) so the remaining ones stand out.
+  rowInserted: {
+    opacity: 0.5,
+  },
+  // The struck-through text replaces the rendered markdown once inserted:
+  // line-through does not travel down to sibling <Text> nodes inside a <View>
+  // on native, so the line is redrawn as one plain Text instead.
+  insertedText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.base,
+    lineHeight: theme.fontSize.base * 1.5,
+    textDecorationLine: "line-through",
+  },
 }));
 
 interface EvolutionListItemProps {
@@ -1802,6 +1816,9 @@ function EvolutionListItem({
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
   const [status, setStatus] = useState<"idle" | "creating" | "done">("idle");
+  // Set once the proposal has been dropped into the composer, so the line reads
+  // as "already taken": struck through and faded, like a ticked-off todo.
+  const [isInserted, setIsInserted] = useState(false);
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
@@ -1812,6 +1829,7 @@ function EvolutionListItem({
       return;
     }
     composerInsert.insertText(title);
+    setIsInserted(true);
   });
 
   const handleCreate = useStableEvent(async () => {
@@ -1848,15 +1866,27 @@ function EvolutionListItem({
 
   const hasActionableTitle = title.length > 0;
 
+  const rowStyle = useMemo(
+    () => [
+      evolutionTaskButtonStyles.row,
+      isInserted ? evolutionTaskButtonStyles.rowInserted : null,
+    ],
+    [isInserted],
+  );
+
   return (
-    <View
-      style={evolutionTaskButtonStyles.row}
-      onPointerEnter={handlePointerEnter}
-      onPointerLeave={handlePointerLeave}
-    >
+    <View style={rowStyle} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
       <View style={listItemStyle}>
         <Text style={markerStyle}>{marker}</Text>
-        <MarkdownListItemContent contentStyle={contentStyle}>{children}</MarkdownListItemContent>
+        <MarkdownListItemContent contentStyle={contentStyle}>
+          {isInserted ? (
+            <Text style={evolutionTaskButtonStyles.insertedText} testID="evolution-inserted">
+              {title}
+            </Text>
+          ) : (
+            children
+          )}
+        </MarkdownListItemContent>
         {composerInsert && hasActionableTitle ? (
           <Pressable
             onPress={handleInsert}
