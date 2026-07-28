@@ -58,6 +58,11 @@ interface TaskCardProps {
   task: KanbanTask;
   onPress: (task: KanbanTask) => void;
   testID?: string;
+  /**
+   * Overrides the spoken label when the press does something other than open
+   * the task — the lead card of a folded lot unfolds the pile instead.
+   */
+  accessibilityLabel?: string;
 }
 
 // Cards carry no colored left edge: the user rejected that accent bar outright,
@@ -172,7 +177,12 @@ function useAttentionShake(active: boolean) {
  * surfaces only — a surface0 card with a hairline border sitting on the
  * folder-tinted column, generous padding so the board breathes.
  */
-export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCardProps) {
+export const TaskCard = memo(function TaskCard({
+  task,
+  onPress,
+  testID,
+  accessibilityLabel,
+}: TaskCardProps) {
   const { t, i18n } = useTranslation();
   const quietHours = useTaskQuietHours();
 
@@ -252,7 +262,9 @@ export const TaskCard = memo(function TaskCard({ task, onPress, testID }: TaskCa
         style={resolveCardStyle}
         testID={testID}
         accessibilityRole="button"
-        accessibilityLabel={priorityLabel ? `${priorityLabel} · ${task.title}` : task.title}
+        accessibilityLabel={
+          accessibilityLabel ?? (priorityLabel ? `${priorityLabel} · ${task.title}` : task.title)
+        }
       >
         <CardCornerPip
           isNote={isNote}

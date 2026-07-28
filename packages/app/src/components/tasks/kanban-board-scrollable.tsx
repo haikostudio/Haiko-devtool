@@ -8,7 +8,7 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
-import { TaskCardStack, useBatchExpansion } from "./task-card-stack";
+import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
 import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
@@ -145,12 +145,13 @@ const BoardColumn = memo(function BoardColumn({
     [onControlsChange, column],
   );
   const renderCard = useCallback(
-    (task: KanbanTask) => (
+    (task: KanbanTask, options?: RenderCardOptions) => (
       <BoardCardRow
         task={task}
         labels={labels}
         onMoveTask={onMoveTask}
-        onPressTask={onPressTask}
+        onPressTask={options?.onPress ?? onPressTask}
+        accessibilityLabel={options?.accessibilityLabel}
         onRunTask={onRunTask}
         onReanalyzeTask={onReanalyzeTask}
         onDeleteTask={onDeleteTask}
@@ -256,6 +257,7 @@ const BoardCardRow = memo(function BoardCardRow({
   labels,
   onMoveTask,
   onPressTask,
+  accessibilityLabel,
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
@@ -264,13 +266,19 @@ const BoardCardRow = memo(function BoardCardRow({
   labels: Record<TaskColumn, string>;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
+  accessibilityLabel?: string;
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
 }) {
   return (
     <View style={styles.cardRow}>
-      <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
+      <TaskCard
+        task={task}
+        onPress={onPressTask}
+        accessibilityLabel={accessibilityLabel}
+        testID={`tasks-card-${task.id}`}
+      />
       <View style={styles.moveTriggerOverlay}>
         <TaskCardMenu
           task={task}

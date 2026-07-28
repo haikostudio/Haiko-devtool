@@ -200,6 +200,23 @@ describe("agent task toast store — dismissMany", () => {
     expect(useAgentTaskToastStore.getState().finishedSince.has("done")).toBe(false);
   });
 
+  it("keeps the tracked pile untouched when only a clock changes", () => {
+    const existingKeys = new Set(["running", "done", "failed"]);
+    useAgentTaskToastStore.setState({ finishedSince: new Map() });
+    const before = useAgentTaskToastStore.getState().order;
+
+    useAgentTaskToastStore.getState().reconcile({
+      activeKeys: ["running", "failed"],
+      existingKeys,
+      finishedKeys: ["done"],
+      now: 4_000,
+    });
+
+    // A new clock must not hand back a fresh order map — that would re-render
+    // every card in the pile for nothing.
+    expect(useAgentTaskToastStore.getState().order).toBe(before);
+  });
+
   it("keeps an already-running clock instead of restarting it every tick", () => {
     const existingKeys = new Set(["running", "done", "failed"]);
     useAgentTaskToastStore.setState({ finishedSince: new Map() });

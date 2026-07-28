@@ -215,6 +215,9 @@ describe("ConductorAgentService", () => {
     expect(systemPrompt).toContain("CAS AMBIGU");
     expect(systemPrompt).toContain("Souhaitez-vous que j'en fasse une tâche ?");
     expect(systemPrompt).toContain("si l'utilisateur confirme");
+    // The app hangs a one-click confirm button on that sentence, which it can
+    // only find if the offer closes the answer on a line of its own.
+    expect(systemPrompt).toContain("Écris-la en DERNIER et sur sa propre ligne");
   });
 
   it("handles board upkeep with a tool call, not with a card about the card", async () => {

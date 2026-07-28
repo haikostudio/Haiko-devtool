@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
   DndContext,
@@ -25,7 +25,8 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
-import { TaskCardStack, useBatchExpansion } from "./task-card-stack";
+import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
+import { createPressSlopTracker } from "./card-press-slop";
 import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
@@ -284,11 +285,12 @@ const DroppableColumn = memo(function DroppableColumn({
     [onControlsChange, column],
   );
   const renderCard = useCallback(
-    (task: KanbanTask) => (
+    (task: KanbanTask, options?: RenderCardOptions) => (
       <SortableTaskCard
         task={task}
         labels={labels}
-        onPressTask={onPressTask}
+        onPressTask={options?.onPress ?? onPressTask}
+        accessibilityLabel={options?.accessibilityLabel}
         onMoveTask={onMoveTask}
         onRunTask={onRunTask}
         onReanalyzeTask={onReanalyzeTask}
@@ -397,6 +399,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   task,
   labels,
   onPressTask,
+  accessibilityLabel,
   onMoveTask,
   onRunTask,
   onReanalyzeTask,
@@ -405,6 +408,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
   onPressTask: (task: KanbanTask) => void;
+  accessibilityLabel?: string;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
@@ -413,6 +417,33 @@ const SortableTaskCard = memo(function SortableTaskCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
   });
+  // A drag ends on the card it started from, so RNW's press responder would
+  // happily read that pointerup as a tap — opening the task, or unfolding the
+  // lot the card is the cover of. Capture-phase handlers run before the inner
+  // Pressable's, so the verdict is ready by the time onPress fires.
+  const slop = useRef(createPressSlopTracker()).current;
+  useEffect(() => {
+    if (isDragging) {
+      slop.markDragging();
+    }
+  }, [isDragging, slop]);
+  const handlePointerDownCapture = useCallback(
+    (event: React.PointerEvent) => slop.down(event.clientX, event.clientY),
+    [slop],
+  );
+  const handlePointerUpCapture = useCallback(
+    (event: React.PointerEvent) => slop.up(event.clientX, event.clientY),
+    [slop],
+  );
+  const handlePress = useCallback(
+    (pressed: KanbanTask) => {
+      if (slop.shouldSuppressPress()) {
+        return;
+      }
+      onPressTask(pressed);
+    },
+    [slop, onPressTask],
+  );
   const wrapperStyle = useMemo(
     (): React.CSSProperties => ({
       transform: CSS.Transform.toString(transform),
@@ -446,9 +477,16 @@ const SortableTaskCard = memo(function SortableTaskCard({
       style={wrapperStyle}
       {...attributes}
       {...listeners}
+      onPointerDownCapture={handlePointerDownCapture}
+      onPointerUpCapture={handlePointerUpCapture}
       data-testid={`tasks-drag-${task.id}`}
     >
-      <TaskCard task={task} onPress={onPressTask} testID={`tasks-card-${task.id}`} />
+      <TaskCard
+        task={task}
+        onPress={handlePress}
+        accessibilityLabel={accessibilityLabel}
+        testID={`tasks-card-${task.id}`}
+      />
       {/* Overflow menu overlay: swallow the drag-start pointer/mouse/touch so
           opening the menu never lifts the card into a drag. */}
       <div

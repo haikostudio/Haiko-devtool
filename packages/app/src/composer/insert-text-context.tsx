@@ -9,6 +9,18 @@ interface ComposerInsertContextValue {
   insertText: (text: string) => void;
   /** Lets the composer publish its focus function to this provider. */
   registerFocusInput: (focus: (options?: ComposerFocusInputOptions) => void) => void;
+  /**
+   * Sends `text` to the agent right away, WITHOUT touching the draft — a
+   * one-click reply (today: accepting the conductor's offer to make a task)
+   * must not swallow a message the user is in the middle of writing, nor the
+   * attachments they already picked.
+   *
+   * Null until the composer publishes its send function, and when the chat is
+   * read-only (archived agent): callers render nothing in that case.
+   */
+  sendText: ((text: string) => Promise<void>) | null;
+  /** Lets the composer publish its send function to this provider. */
+  registerSendText: (send: ((text: string) => Promise<void>) | null) => void;
 }
 
 const ComposerInsertContext = createContext<ComposerInsertContextValue | null>(null);
@@ -57,9 +69,17 @@ export function ComposerInsertProvider({
     [setText],
   );
 
+  // The composer publishes its send function here. Kept in state (not a ref) so
+  // a button that depends on it appears as soon as the composer mounts.
+  const [send, setSend] = React.useState<((text: string) => Promise<void>) | null>(null);
+  const registerSendText = useCallback((next: ((text: string) => Promise<void>) | null) => {
+    // Wrapped in a thunk: React treats a bare function argument as an updater.
+    setSend(() => next);
+  }, []);
+
   const value = useMemo<ComposerInsertContextValue>(
-    () => ({ insertText, registerFocusInput }),
-    [insertText, registerFocusInput],
+    () => ({ insertText, registerFocusInput, sendText: send, registerSendText }),
+    [insertText, registerFocusInput, registerSendText, send],
   );
 
   return <ComposerInsertContext.Provider value={value}>{children}</ComposerInsertContext.Provider>;

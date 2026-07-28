@@ -1499,6 +1499,9 @@ function ActiveAgentComposer({
   // into the draft (the "+" on an "Évolutions possibles" bullet) can hand focus
   // back to the composer.
   const registerComposerFocusInput = useComposerInsert()?.registerFocusInput;
+  // Same channel, for affordances that reply in ONE click instead of typing:
+  // the "Oui, fais-en une tâche" button under the conductor's offer.
+  const registerComposerSendText = useComposerInsert()?.registerSendText;
   const { onLayout: onInputAreaLayout, isBelow: isCompactComposerLayout } = useContainerWidthBelow(
     COMPACT_FORM_FACTOR_WIDTH,
     { initialIsBelow: isCompactFormFactor },
@@ -1663,6 +1666,7 @@ function ActiveAgentComposer({
         cwd={cwd}
         clearDraft={agentInputDraft.clear}
         onFocusInput={registerComposerFocusInput}
+        onQuickSend={registerComposerSendText}
         autoFocus={isPaneFocused}
         isSubmitLoading={isSubmitLoading}
         onInputFocusChange={agentInputDraft.notifyInputFocus}

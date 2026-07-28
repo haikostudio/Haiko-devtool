@@ -804,6 +804,12 @@ interface ComposerProps {
    * pickers don't raise the keyboard on phones after a selection.
    */
   onFocusInput?: (focus: (options?: ComposerFocusInputOptions) => void) => void;
+  /**
+   * Exposes a "send this exact text now" function to parent components, for
+   * one-click replies rendered outside the composer. It bypasses the draft
+   * entirely — nothing the user typed is sent, cleared or overwritten.
+   */
+  onQuickSend?: (send: ((text: string) => Promise<void>) | null) => void;
   /** Optional draft context for listing commands before an agent exists. */
   commandDraftConfig?: DraftCommandConfig;
   /** Called when a message is about to be sent (any path: keyboard, dictation, queued). */
@@ -1019,6 +1025,7 @@ export function Composer({
   clearDraft,
   autoFocus = false,
   onFocusInput,
+  onQuickSend,
   commandDraftConfig,
   onMessageSent,
   onComposerHeightChange,
@@ -1239,6 +1246,21 @@ export function Composer({
     },
     [cwd, onMessageSent, t],
   );
+
+  // Publish the raw send to parents (one-click replies). `submitMessage` is the
+  // send WITHOUT the draft bookkeeping — submitAgentInput is what clears the
+  // input and the attachments, and a canned reply must leave both untouched.
+  const quickSend = useCallback(
+    async (text: string) => {
+      await submitMessage(text, []);
+    },
+    [submitMessage],
+  );
+
+  useEffect(() => {
+    onQuickSend?.(quickSend);
+    return () => onQuickSend?.(null);
+  }, [onQuickSend, quickSend]);
 
   useEffect(() => {
     agentIdRef.current = agentId;

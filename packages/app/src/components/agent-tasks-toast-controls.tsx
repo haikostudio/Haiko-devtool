@@ -88,10 +88,20 @@ export function useToastClearActions(tasks: readonly ClearableToast[]): ToastCle
   // fires first empties the list and the other finds nothing to do.
   useEffect(() => {
     const sweep = () => {
-      const { finishedSince, dismissMany: dismiss } = useAgentTaskToastStore.getState();
-      const due = selectAutoDismissibleKeys(finishedSince, Date.now(), AUTO_DISMISS_FINISHED_MS);
+      const state = useAgentTaskToastStore.getState();
+      // Never sweep while an undo is still on offer: a housekeeping batch would
+      // overwrite the snapshot and the user's "Undo" would put back the wrong
+      // cards. The sweep simply waits for the next tick.
+      if (state.lastDismissal !== null) {
+        return;
+      }
+      const due = selectAutoDismissibleKeys(
+        state.finishedSince,
+        Date.now(),
+        AUTO_DISMISS_FINISHED_MS,
+      );
       if (due.length > 0) {
-        dismiss(due);
+        state.dismissMany(due);
       }
     };
     const timer = setInterval(sweep, AUTO_DISMISS_TICK_MS);

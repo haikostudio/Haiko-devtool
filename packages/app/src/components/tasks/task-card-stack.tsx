@@ -29,13 +29,21 @@ export function useBatchExpansion() {
   return { isExpanded, toggleExpanded };
 }
 
+/** How a board should render one card of the lot when the pile overrides it. */
+export interface RenderCardOptions {
+  /** Folded pile: pressing the lead card unfolds the lot instead of opening the task. */
+  onPress?: (task: KanbanTask) => void;
+  /** Screen-reader label matching that overridden press. */
+  accessibilityLabel?: string;
+}
+
 interface TaskCardStackProps {
   batchKey: string;
   tasks: KanbanTask[];
   expanded: boolean;
   onToggle: (batchKey: string) => void;
   /** Each board injects its own card row (drag wrapper + overflow menu). */
-  renderCard: (task: KanbanTask) => React.ReactNode;
+  renderCard: (task: KanbanTask, options?: RenderCardOptions) => React.ReactNode;
 }
 
 function headerStyle({ pressed }: { pressed: boolean }) {
@@ -47,10 +55,13 @@ function pileStyle({ pressed }: { pressed: boolean }) {
 }
 
 /**
- * A lot of cards rendered as one compact pile. The two gestures never overlap:
- * the header strip (and the peeking sheet edges below the lead card) fold and
- * unfold the lot, while the card bodies keep their normal press — opening the
- * task. Collapsed, only the lead card is mounted, so the column stays short.
+ * A lot of cards rendered as one compact pile.
+ *
+ * Folded, the pile is one single target: header strip, lead card and the
+ * peeking sheet edges all unfold it — pressing a folded pile never opens a
+ * task, because the card you see is only the cover of the pile. Unfolded, every
+ * card gets its normal press back (opening the task) and the header folds it
+ * again. Collapsed, only the lead card is mounted, so the column stays short.
  */
 export const TaskCardStack = memo(function TaskCardStack({
   batchKey,
@@ -64,6 +75,12 @@ export const TaskCardStack = memo(function TaskCardStack({
   const toggleLabel = t(expanded ? "tasks.board.batch.collapse" : "tasks.board.batch.expand");
   const toggleState = useMemo(() => ({ expanded }), [expanded]);
   const peekingSheets = Math.min(tasks.length - 1, MAX_PEEKING_SHEETS);
+  // Folded: the lead card borrows the header's press. The board keeps rendering
+  // it (drag wrapper, overflow menu, voyant) — only the tap target changes.
+  const leadCardOptions = useMemo(
+    () => ({ onPress: handleToggle, accessibilityLabel: toggleLabel }),
+    [handleToggle, toggleLabel],
+  );
 
   return (
     <View style={styles.stack} testID={`tasks-batch-${batchKey}`}>
@@ -94,9 +111,9 @@ export const TaskCardStack = memo(function TaskCardStack({
         </Animated.View>
       ) : (
         <View>
-          {renderCard(tasks[0])}
+          {renderCard(tasks[0], leadCardOptions)}
           {/* The pile's own hit area: pressing the sheet edges unfolds the lot,
-              exactly like the header. Never the card body — that opens the task. */}
+              exactly like the header and the lead card above them. */}
           <Pressable
             onPress={handleToggle}
             style={pileStyle}

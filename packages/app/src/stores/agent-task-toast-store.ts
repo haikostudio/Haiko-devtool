@@ -103,6 +103,42 @@ export interface ToastPosition {
   y: number;
 }
 
+/**
+ * Start (or stop) the lingering clock of every tracked finished card. A card that
+ * goes back to work loses its clock, so a later finish starts a fresh one; a card
+ * that was already finished keeps the clock it had, or it would never age out.
+ */
+function reconcileFinishedClocks(input: {
+  current: ReadonlyMap<AgentTaskToastKey, number>;
+  finishedKeys: readonly string[];
+  tracked: ReadonlyMap<AgentTaskToastKey, number>;
+  now: number;
+}): { finishedSince: Map<AgentTaskToastKey, number>; changed: boolean } {
+  const { current, finishedKeys, tracked, now } = input;
+  const finished = new Set(finishedKeys);
+  const finishedSince = new Map(current);
+
+  for (const key of finished) {
+    if (tracked.has(key) && !finishedSince.has(key)) {
+      finishedSince.set(key, now);
+    }
+  }
+  // Deleting the current key mid-iteration is safe on a Map iterator.
+  for (const key of finishedSince.keys()) {
+    if (!finished.has(key) || !tracked.has(key)) {
+      finishedSince.delete(key);
+    }
+  }
+
+  // Compare key-by-key, not just by size: one card finishing while another goes
+  // back to work keeps the size identical but must still be recorded.
+  const changed =
+    finishedSince.size !== current.size ||
+    [...finishedSince.keys()].some((key) => !current.has(key));
+
+  return { finishedSince, changed };
+}
+
 export const useAgentTaskToastStore = create<AgentTaskToastState>()(
   persist(
     (set) => ({
@@ -146,31 +182,25 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
             }
           }
 
-          // Start (or stop) the lingering clock for finished cards. A card that
-          // goes back to work loses its clock, so a later finish starts a fresh one.
-          const finished = new Set(finishedKeys);
-          const finishedSince = new Map(state.finishedSince);
-          for (const key of finished) {
-            if (next.has(key) && !finishedSince.has(key)) {
-              finishedSince.set(key, now);
-            }
-          }
-          // Deleting the current key mid-iteration is safe on a Map iterator.
-          for (const key of finishedSince.keys()) {
-            if (!finished.has(key) || !next.has(key)) {
-              finishedSince.delete(key);
-            }
-          }
-          // Compare key-by-key, not just by size: one card finishing while another
-          // goes back to work keeps the size identical but must still be recorded.
-          const finishedChanged =
-            finishedSince.size !== state.finishedSince.size ||
-            [...finishedSince.keys()].some((key) => !state.finishedSince.has(key));
+          const { finishedSince, changed: finishedChanged } = reconcileFinishedClocks({
+            current: state.finishedSince,
+            finishedKeys,
+            tracked: next,
+            now,
+          });
 
           if (!changed && !suppressedChanged && !finishedChanged) {
             return state;
           }
-          return { order: next, seq, suppressed, finishedSince };
+          // Hand back the *same* map when a slice didn't move: the pile subscribes
+          // to `order`, and a fresh-but-identical map would re-render every card
+          // just because a lingering clock started somewhere.
+          return {
+            order: changed ? next : state.order,
+            seq,
+            suppressed: suppressedChanged ? suppressed : state.suppressed,
+            finishedSince: finishedChanged ? finishedSince : state.finishedSince,
+          };
         }),
       dismiss: (key) =>
         set((state) => {

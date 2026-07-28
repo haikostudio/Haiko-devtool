@@ -99,6 +99,7 @@ import {
   normalizeEvolutionBlock,
   splitBlocksAtHeadings,
 } from "@/utils/evolution-section";
+import { flagTaskOfferBlocks } from "@/utils/task-offer";
 import { parseCalloutBlock, type CalloutType, type ParsedCallout } from "@/utils/markdown-callout";
 import { formatDuration, formatMessageTimestamp } from "@/utils/time";
 import { writeMarkdownToRichClipboard } from "@/utils/rich-clipboard";
@@ -1745,6 +1746,104 @@ function extractAstNodeText(node: ASTNode): string {
   return "";
 }
 
+const taskOfferStyles = StyleSheet.create((theme) => ({
+  row: {
+    flexDirection: "row",
+    marginTop: theme.spacing[2],
+  },
+  button: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface1,
+  },
+  buttonBusy: {
+    opacity: 0.5,
+  },
+  label: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.ui,
+    fontWeight: theme.fontWeight.medium,
+  },
+  labelSent: {
+    color: theme.colors.foregroundMuted,
+  },
+}));
+
+/**
+ * One-click acceptance of the conductor's offer to turn the exchange into a
+ * task ("Souhaitez-vous que j'en fasse une tâche ?").
+ *
+ * Pressing it SENDS the confirmation as a message — it does not create the card
+ * itself. The conductor is the one holding the conversation, so it writes a
+ * proper title and description; the button only spares the user from typing
+ * "oui". The draft is left untouched (see `onQuickSend` on the composer).
+ *
+ * Renders nothing when no send channel is mounted (read-only transcript, chat
+ * outside an agent panel) — an offer with no way to answer needs no button.
+ */
+function TaskOfferConfirm() {
+  const sendText = useComposerInsert()?.sendText ?? null;
+  const toast = useToast();
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+
+  const handlePress = useStableEvent(async () => {
+    if (!sendText || status !== "idle") {
+      return;
+    }
+    setStatus("sending");
+    try {
+      await sendText(t("tasks.panel.taskOfferConfirmMessage"));
+      setStatus("sent");
+    } catch (error: unknown) {
+      setStatus("idle");
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  });
+
+  const buttonStyle = useMemo(
+    () => [taskOfferStyles.button, status === "sending" ? taskOfferStyles.buttonBusy : null],
+    [status],
+  );
+  const labelStyle = useMemo(
+    () => [taskOfferStyles.label, status === "sent" ? taskOfferStyles.labelSent : null],
+    [status],
+  );
+
+  if (!sendText) {
+    return null;
+  }
+
+  return (
+    <View style={taskOfferStyles.row}>
+      <Pressable
+        onPress={handlePress}
+        disabled={status !== "idle"}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.panel.taskOfferConfirm")}
+        style={buttonStyle}
+        testID="task-offer-confirm"
+      >
+        {status === "sent" ? (
+          <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
+        ) : (
+          <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
+        )}
+        <Text style={labelStyle}>
+          {status === "sent" ? t("tasks.panel.taskOfferSent") : t("tasks.panel.taskOfferConfirm")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
   row: {
     // Hover target only (docs/hover.md): a plain View wrapping the row, with
@@ -2318,6 +2417,9 @@ export const AssistantMessage = memo(function AssistantMessage({
   const blocks = useMemo(() => splitBlocksAtHeadings(splitMarkdownBlocks(message)), [message]);
   const keyedBlocks = useMemo(() => {
     const evolutionFlags = flagEvolutionBlocks(blocks);
+    // The conductor's closing "shall I make this a task?" gets a confirmation
+    // button, so accepting is one press instead of typing "oui".
+    const offerFlags = flagTaskOfferBlocks(blocks);
     return blocks.map((block, index) => {
       const evolutions = evolutionFlags[index] === true;
       // Inside that section every proposal is rendered as a list item, whatever
@@ -2328,6 +2430,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         block: text,
         callout: parseCalloutBlock(text),
         evolutions,
+        taskOffer: offerFlags[index] === true,
       };
     });
   }, [blocks]);
@@ -2345,7 +2448,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block, callout, evolutions }, index) => (
+      {keyedBlocks.map(({ key, block, callout, evolutions, taskOffer }, index) => (
         <AssistantMessageBlockContainer
           key={key}
           block={block}
@@ -2366,6 +2469,7 @@ export const AssistantMessage = memo(function AssistantMessage({
               onLinkPress={handleMarkdownLinkPress}
             />
           )}
+          {taskOffer ? <TaskOfferConfirm /> : null}
         </AssistantMessageBlockContainer>
       ))}
     </View>

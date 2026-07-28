@@ -94,6 +94,24 @@ conductor **never writes code** (its edit/shell/subagent tools are removed at th
 SDK level) and **never moves a card into "Validé"** (`move_task` refuses it — see
 invariant 3).
 
+### Accepting the offer in one click
+
+The ambiguous case ends with the offer on a line of its own ("Souhaitez-vous que
+j'en fasse une tâche ?"). The app detects that closing sentence
+(`utils/task-offer.ts` — a verb of creation + "une tâche"/"une carte" + a
+question mark, last offer only) and hangs an **"Oui, fais-en une tâche"** button
+under it, so accepting costs one press instead of typing "oui".
+
+The button **sends the confirmation as a message**; it does not create the card
+itself. The conductor still writes the title and the description, because it is
+the one holding the conversation — a client-side create would only have the
+offer's prose to name the card with.
+
+It sends through `onQuickSend`, the composer's raw send, deliberately NOT the
+normal submit path: `submitAgentInput` clears the draft and the attachments, and
+a one-click reply must never swallow a message the user is halfway through
+writing. No composer, no channel, no button (read-only transcripts stay clean).
+
 The shape of its answers follows the same split: the conductor gets the
 `conductor` response template (see [response-templates.md](response-templates.md))
 — no numbered sections, no estimate, no billing line — because it never executes

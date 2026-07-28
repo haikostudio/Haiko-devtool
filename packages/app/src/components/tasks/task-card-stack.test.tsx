@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { KanbanTask } from "@/data/tasks";
-import { TaskCardStack, useBatchExpansion } from "./task-card-stack";
+import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
 
 const { theme } = vi.hoisted(() => ({
   theme: {
@@ -95,18 +95,41 @@ const TASKS = [
 ];
 
 const openTask = vi.fn();
+const openMenu = vi.fn();
 
-// Stand-in for the board's card row: a plain button whose press opens the task.
-function CardStub({ task }: { task: KanbanTask }) {
-  const handlePress = useCallback(() => openTask(task.id), [task.id]);
+// Stand-in for the board's card row: the card button (whose press opens the
+// task unless the pile overrides it) plus the ⋮ menu sitting beside it, exactly
+// like the real boards wrap TaskCard + TaskCardMenu.
+function CardStub({ task, options }: { task: KanbanTask; options?: RenderCardOptions }) {
+  const overridePress = options?.onPress;
+  const handlePress = useCallback(() => {
+    if (overridePress) {
+      overridePress(task);
+      return;
+    }
+    openTask(task.id);
+  }, [overridePress, task]);
+  const handleMenu = useCallback(() => openMenu(task.id), [task.id]);
   return (
-    <button type="button" data-testid={`card-${task.id}`} onClick={handlePress}>
-      {task.title}
-    </button>
+    <div>
+      <button
+        type="button"
+        data-testid={`card-${task.id}`}
+        aria-label={options?.accessibilityLabel ?? task.title}
+        onClick={handlePress}
+      >
+        {task.title}
+      </button>
+      <button type="button" data-testid={`menu-${task.id}`} onClick={handleMenu}>
+        ⋮
+      </button>
+    </div>
   );
 }
 
-const renderCard = (task: KanbanTask) => <CardStub task={task} />;
+const renderCard = (task: KanbanTask, options?: RenderCardOptions) => (
+  <CardStub task={task} options={options} />
+);
 
 // Mirrors how a column uses the stack: expansion state on the column side, card
 // rendering injected by the board.
@@ -156,6 +179,7 @@ beforeEach(() => {
   dom.window.document.body.appendChild(container);
   root = createRoot(container);
   openTask.mockClear();
+  openMenu.mockClear();
 });
 
 afterEach(() => {
@@ -199,5 +223,48 @@ describe("TaskCardStack", () => {
     expect(openTask).toHaveBeenCalledWith("b");
     // The lot is still unfolded — opening a card did not toggle it.
     expect(has("card-c")).toBe(true);
+  });
+
+  it("unfolds the lot when the folded lead card is pressed, without opening it", () => {
+    act(() => {
+      root?.render(<Harness />);
+    });
+    click("card-a");
+    expect(openTask).not.toHaveBeenCalled();
+    expect(has("card-b")).toBe(true);
+    expect(has("card-c")).toBe(true);
+  });
+
+  it("gives the lead card its normal press back once the lot is unfolded", () => {
+    act(() => {
+      root?.render(<Harness />);
+    });
+    // First press unfolds…
+    click("card-a");
+    // …the second one opens the task, like any other card of the lot.
+    click("card-a");
+    expect(openTask).toHaveBeenCalledWith("a");
+    expect(has("card-c")).toBe(true);
+  });
+
+  it("says 'unfold' on the folded lead card, and names the task once unfolded", () => {
+    act(() => {
+      root?.render(<Harness />);
+    });
+    const label = () =>
+      container?.querySelector('[data-testid="card-a"]')?.getAttribute("aria-label");
+    expect(label()).toBe("tasks.board.batch.expand");
+    click("card-a");
+    expect(label()).toBe("Colonnes (1 sur 3)");
+  });
+
+  it("leaves the ⋮ menu alone: opening it neither unfolds the lot nor opens the card", () => {
+    act(() => {
+      root?.render(<Harness />);
+    });
+    click("menu-a");
+    expect(openMenu).toHaveBeenCalledWith("a");
+    expect(openTask).not.toHaveBeenCalled();
+    expect(has("card-b")).toBe(false);
   });
 });

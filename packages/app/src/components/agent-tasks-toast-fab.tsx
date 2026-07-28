@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import { GestureDetector } from "react-native-gesture-handler";
@@ -107,15 +107,14 @@ function AgentTasksToastDrawer({
     useToastClearActions(tasks);
   const hasFinished = finishedCount > 0;
 
-  // Clearing every card would empty the drawer, so close it in the same gesture
-  // rather than leaving the user staring at the "nothing in progress" line. When
-  // some cards survive the sweep, the drawer stays open on them.
-  const handleDismissFinished = useCallback(() => {
-    clearFinished();
-    if (finishedCount === tasks.length) {
+  // An emptied drawer closes itself rather than leaving the user staring at the
+  // "nothing in progress" line — but only once the undo offer has expired, or a
+  // clear that emptied the list would take its own undo off screen with it.
+  useEffect(() => {
+    if (visible && tasks.length === 0 && !canUndo) {
       onClose();
     }
-  }, [clearFinished, finishedCount, tasks.length, onClose]);
+  }, [visible, tasks.length, canUndo, onClose]);
 
   const header = useMemo(
     () => ({
@@ -124,7 +123,7 @@ function AgentTasksToastDrawer({
         tasks.length > 0 ? (
           <View style={styles.drawerActions}>
             <Pressable
-              onPress={handleDismissFinished}
+              onPress={clearFinished}
               disabled={!hasFinished}
               style={hasFinished ? drawerDismissFinishedStyle : drawerDismissFinishedDisabledStyle}
               hitSlop={8}
@@ -144,7 +143,7 @@ function AgentTasksToastDrawer({
           </View>
         ) : undefined,
     }),
-    [t, tasks.length, hasFinished, finishedCount, counts, clearCategory, handleDismissFinished],
+    [t, tasks.length, hasFinished, finishedCount, counts, clearCategory, clearFinished],
   );
 
   // The sheet's own bottom safe-area padding doesn't render on the standalone
