@@ -18,6 +18,7 @@ import {
   type ConductorPanelProps,
 } from "@/components/tasks/conductor-panel";
 import type { TaskDockHeader } from "@/components/tasks/task-bottom-dock";
+import { useReserveFloatingRightInset } from "@/hooks/use-floating-right-inset";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { HEADER_INNER_HEIGHT } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -85,6 +86,12 @@ export function ConductorSidePanel(props: ConductorPanelProps) {
         }),
     [availableWidth, resizeWidth, setWidth, visibleWidth],
   );
+
+  // Floating overlays mounted at the app root (the agent-tasks toast pile) are
+  // positioned against the window, so they'd sit on top of this panel. Publish the
+  // live width — the one the resize gesture writes on every frame — and they keep
+  // to the board's side of the row, following the drag in real time.
+  useReserveFloatingRightInset("tasksConductor", resizeWidth, true);
 
   const widthStyle = useAnimatedStyle(() => ({ width: resizeWidth.value }));
   const panelStyle = useMemo(() => [staticStyles.panel, widthStyle], [widthStyle]);

@@ -14,6 +14,7 @@ import { FolderTree, X } from "lucide-react-native";
 import { FileExplorerPane } from "@/components/file-explorer-pane";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { resolveDesktopExplorerWidth } from "@/components/desktop-sidebar-layout";
+import { useReserveFloatingRightInset } from "@/hooks/use-floating-right-inset";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { HEADER_INNER_HEIGHT } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -96,6 +97,11 @@ export function TaskExplorerSidePanel({
         }),
     [availableWidth, resizeWidth, setWidth, visibleWidth],
   );
+
+  // Same reservation as the conductor column: the root-mounted toast pile is
+  // positioned against the window, so it has to know how much of the right edge
+  // this panel eats — live, while the edge is being dragged.
+  useReserveFloatingRightInset("tasksExplorer", resizeWidth, open);
 
   const widthStyle = useAnimatedStyle(() => ({ width: resizeWidth.value }));
   const panelStyle = useMemo(() => [staticStyles.panel, widthStyle], [widthStyle]);

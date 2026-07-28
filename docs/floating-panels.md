@@ -236,6 +236,38 @@ vertical indent (`contentVerticalPaddingScale={0}`, used by the task dock) still
 gets the safe-area inset, because that indent is what keeps a composer off the
 home indicator.
 
+## Gotcha 8 — Root-mounted overlays don't know about in-row side panels
+
+Overlays mounted at the app root (`app/_layout.tsx`) — the agent-tasks toast
+pile, the download toast — are absolutely positioned against the **window**.
+An in-row side panel (`task-explorer-side-panel`, `conductor-side-panel`) takes
+its width out of the row, so the window's right edge and the _content pane's_
+right edge are no longer the same thing, and the overlay lands on top of the
+panel as soon as it opens.
+
+`hooks/use-floating-right-inset.ts` is the shared reservation:
+
+- **Publishers** (a right-hand side panel) call `useReserveFloatingRightInset(slot, width, enabled)`
+  with the same SharedValue their resize gesture writes. Adding a new panel means
+  adding a slot in that file — the sum has to stay a worklet, so it cannot loop
+  over a dynamic map.
+- **Consumers** read the total via `useFloatingRightInset()` and fold it into
+  their own transform. `useDraggableToast` already does this for the toast pile
+  and the compact FAB.
+
+Two rules make it work:
+
+1. **It is a module-level SharedValue, not React state.** The width is written on
+   every frame while the panel's edge is dragged; a store update per frame would
+   re-render the overlay and stutter the drag.
+2. **The reservation and the drag translate live in the same `useAnimatedStyle`.**
+   A second animated style would overwrite `transform`, not compose with it — and
+   the drag clamp has to shift with the inset too, otherwise a parked overlay gets
+   pushed off the left edge when the panel opens (`hooks/floating-toast-bounds.ts`).
+
+Nothing publishes on compact (side panels are desktop-only), so the inset is 0
+and the mobile behavior is unchanged for free.
+
 ## Recipe for a new anchored panel
 
 Before you write a new one, ask:

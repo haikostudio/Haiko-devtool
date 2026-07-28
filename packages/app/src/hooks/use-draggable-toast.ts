@@ -4,12 +4,15 @@ import { usePathname } from "expo-router";
 import { Gesture } from "react-native-gesture-handler";
 import {
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
   type AnimatedStyle,
 } from "react-native-reanimated";
 import { useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
+import { useFloatingRightInset } from "@/hooks/use-floating-right-inset";
+import { clampFloatingToastX, resolveFloatingToastSnapX } from "@/hooks/floating-toast-bounds";
 
 // A drag doesn't start until the finger travels this far, so a plain tap on the
 // button (to open the drawer) still registers instead of being eaten as a drag.
@@ -53,6 +56,14 @@ const EDGE_MARGIN = 12;
 // the element's default distances from the screen's bottom-right corner; we use
 // them, plus the element's measured size, to clamp the drag so it can never be
 // pushed off-screen.
+//
+// The element is also kept clear of whatever in-row side panel is open on the
+// right — the tasks board's explorer and conductor columns (see
+// use-floating-right-inset). Floating elements are mounted at the app root, so
+// their `right` is measured from the window; the reservation shifts them left by
+// the panel's live width and moves their clamp window with it, frame by frame
+// while the panel's edge is dragged. Nothing reserves anything on compact, so the
+// compact FAB keeps its full-window behavior for free.
 export function useDraggableToast({
   placement,
   section,
@@ -64,6 +75,7 @@ export function useDraggableToast({
   rightOffset: number;
   bottomOffset: number;
 }): DraggableToast {
+  const inset = useFloatingRightInset();
   const { width, height } = useWindowDimensions();
   // The on-screen keyboard shrinks the window height (Android adjustResize, web
   // visualViewport). If we clamped the parked position to that shrunken height,
@@ -121,13 +133,47 @@ export function useDraggableToast({
     // magnet already guarantees the same gap on the sides.
     minY.value = -top0 + EDGE_MARGIN;
     maxY.value = bottomOffset - EDGE_MARGIN;
-    tx.value = Math.min(Math.max(tx.value, minX.value), maxX.value);
+    tx.value = clampFloatingToastX({
+      x: tx.value,
+      minX: minX.value,
+      maxX: maxX.value,
+      rightInset: inset.value,
+    });
     ty.value = Math.min(Math.max(ty.value, minY.value), maxY.value);
-  }, [width, stableHeight, rightOffset, bottomOffset, boxW, boxH, minX, maxX, minY, maxY, tx, ty]);
+  }, [
+    width,
+    stableHeight,
+    rightOffset,
+    bottomOffset,
+    boxW,
+    boxH,
+    minX,
+    maxX,
+    minY,
+    maxY,
+    tx,
+    ty,
+    inset,
+  ]);
 
   useEffect(() => {
     recomputeBounds();
   }, [recomputeBounds]);
+
+  // A panel opening (or widening) shrinks the room left of it: pull a parked
+  // element back inside the new window right away, on the UI thread, so it tracks
+  // the resize instead of waiting for a re-render.
+  useAnimatedReaction(
+    () => inset.value,
+    (next) => {
+      tx.value = clampFloatingToastX({
+        x: tx.value,
+        minX: minX.value,
+        maxX: maxX.value,
+        rightInset: next,
+      });
+    },
+  );
 
   const onLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -147,27 +193,31 @@ export function useDraggableToast({
           startY.value = ty.value;
         })
         .onUpdate((event) => {
-          tx.value = Math.min(Math.max(startX.value + event.translationX, minX.value), maxX.value);
+          tx.value = clampFloatingToastX({
+            x: startX.value + event.translationX,
+            minX: minX.value,
+            maxX: maxX.value,
+            rightInset: inset.value,
+          });
           ty.value = Math.min(Math.max(startY.value + event.translationY, minY.value), maxY.value);
         })
         .onEnd(() => {
           // Light magnet: if released close to a side edge, glide to it (keeping a
           // margin); if dropped further out than SNAP_THRESHOLD, stay put so free
-          // placement wins. Vertical always stays where it was dropped.
-          const distLeft = tx.value - minX.value;
-          const distRight = maxX.value - tx.value;
-          const nearLeft = distLeft <= distRight;
-          const nearestDist = nearLeft ? distLeft : distRight;
-          let targetX = tx.value;
-          if (nearestDist <= SNAP_THRESHOLD) {
-            targetX = nearLeft
-              ? Math.min(minX.value + EDGE_MARGIN, maxX.value)
-              : Math.max(maxX.value - EDGE_MARGIN, minX.value);
-          }
+          // placement wins. The right edge is the side panel's border when one is
+          // open. Vertical always stays where it was dropped.
+          const targetX = resolveFloatingToastSnapX({
+            x: tx.value,
+            minX: minX.value,
+            maxX: maxX.value,
+            rightInset: inset.value,
+            threshold: SNAP_THRESHOLD,
+            margin: EDGE_MARGIN,
+          });
           tx.value = withTiming(targetX, { duration: SETTLE_DURATION_MS });
           runOnJS(setPosition)(key, { x: targetX, y: ty.value });
         }),
-    [key, setPosition, tx, ty, startX, startY, minX, maxX, minY, maxY],
+    [key, setPosition, tx, ty, startX, startY, minX, maxX, minY, maxY, inset],
   );
 
   // Long-press sends the button back to its default corner (offset 0,0). A press
@@ -187,8 +237,11 @@ export function useDraggableToast({
 
   const gesture = useMemo(() => Gesture.Race(reset, pan), [reset, pan]);
 
+  // The reserved right edge rides in the same transform as the drag: one style,
+  // so the two never fight over `transform` (a second animated style would just
+  // overwrite the first).
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }, { translateY: ty.value }],
+    transform: [{ translateX: tx.value - inset.value }, { translateY: ty.value }],
   }));
 
   return { gesture, animatedStyle, onLayout };
