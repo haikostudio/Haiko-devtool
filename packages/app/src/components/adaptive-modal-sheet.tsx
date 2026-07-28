@@ -519,6 +519,22 @@ export interface AdaptiveModalSheetProps {
    * indent under it.
    */
   contentVerticalPaddingScale?: number;
+  /**
+   * Compact only: extra space reserved above the sheet, stacked on the safe-area
+   * top inset. gorhom measures its container as `screen - topInset`, so this
+   * both lowers the sheet's ceiling and makes a `"100%"` snap point mean "every
+   * pixel below that band". Pass the app header height when the sheet should
+   * stop just under it (the task board drawers) instead of covering it.
+   */
+  compactTopInsetExtra?: number;
+}
+
+/**
+ * Ceiling of the compact sheet: the safe-area top, plus whatever band the caller
+ * wants left uncovered above it (the app header, for the task board drawers).
+ */
+function compactSheetTopInset(safeAreaTop: number, extra: number | undefined): number {
+  return safeAreaTop + (extra ?? 0);
 }
 
 /**
@@ -604,6 +620,7 @@ export function AdaptiveModalSheet({
   dynamicSizing = false,
   contentPaddingScale,
   contentVerticalPaddingScale,
+  compactTopInsetExtra,
 }: AdaptiveModalSheetProps) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -773,8 +790,9 @@ export function AdaptiveModalSheet({
         handleIndicatorStyle={handleIndicatorStyle}
         // Cap the sheet at the safe-area top so `keyboardBehavior="extend"` stops
         // below the status bar instead of sliding the header under the notch/clock
-        // when the keyboard opens.
-        topInset={insets.top}
+        // when the keyboard opens. `compactTopInsetExtra` pushes that ceiling
+        // further down (e.g. below the app header) for callers that ask for it.
+        topInset={compactSheetTopInset(insets.top, compactTopInsetExtra)}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
         accessible={false}

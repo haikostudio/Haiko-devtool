@@ -9,6 +9,10 @@ import { ChevronDown, ChevronLeft, ChevronUp, GripHorizontal, X } from "lucide-r
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import { AdaptiveModalSheet, type SheetHeader } from "@/components/adaptive-modal-sheet";
+import {
+  MOBILE_DOCK_SNAP_POINTS,
+  MOBILE_DOCK_TOP_GAP,
+} from "@/components/tasks/task-dock-geometry";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
@@ -18,15 +22,14 @@ const ThemedChevronLeft = withUnistyles(ChevronLeft);
 const ThemedChevronDown = withUnistyles(ChevronDown);
 const ThemedChevronUp = withUnistyles(ChevronUp);
 
-// Height bounds: never shorter than a usable chat, never taller than 90% of the
-// viewport (leaving the board peeking above so the dock reads as a drawer, not a
-// full-screen takeover). Width caps at 960px on desktop; full-width on mobile.
+// Desktop height bounds: never shorter than a usable chat, never taller than 90%
+// of the viewport (leaving the board peeking above so the dock reads as a drawer,
+// not a full-screen takeover). Width caps at 960px on desktop; full-width on
+// mobile, where the height comes from `task-dock-geometry` instead.
 const MIN_HEIGHT = 220;
 const MAX_HEIGHT_RATIO = 0.9;
 const DESKTOP_MAX_WIDTH = 960;
 const SCREEN_MARGIN = 16;
-// Mobile: the shared sheet handles height via its own pan/snap; cap at 90%.
-const MOBILE_SNAP_POINTS = ["90%"];
 
 // RN's ViewStyle `cursor` only types auto|pointer; the row/move cursors are
 // web-valid, so apply them as a web-only escape hatch outside stricter typing.
@@ -67,7 +70,8 @@ export interface TaskBottomDockProps {
 
 /**
  * The task board's shared drawer. On mobile it's the standard `AdaptiveModalSheet`
- * bottom sheet (full width, 90% tall). On desktop it's a drawer docked to the
+ * bottom sheet, full width and stretched to everything below the app header
+ * (status bar and header row stay visible). On desktop it's a drawer docked to the
  * bottom edge that the user can drag left/right, resize (drag the top edge, up to
  * 90% of the viewport), and collapse to a title bar — never a modal floating in
  * the middle of the screen. Geometry (height / horizontal offset / collapsed) is
@@ -110,7 +114,12 @@ function MobileDockSheet({ visible, header, children, onClose, testID }: TaskBot
       visible={visible}
       onClose={onClose}
       scrollable={false}
-      snapPoints={MOBILE_SNAP_POINTS}
+      // Full-height drawer: the sheet stops just under the app header (status
+      // bar + header row are reserved via `compactTopInsetExtra`) and takes
+      // every pixel below it, so the chat/details pane isn't squeezed into the
+      // bottom half of the phone. Drag-to-dismiss and the handle are unchanged.
+      snapPoints={MOBILE_DOCK_SNAP_POINTS}
+      compactTopInsetExtra={MOBILE_DOCK_TOP_GAP}
       // The dock's inner sections (tabs, chat, forms) each own their horizontal
       // padding, so drop the sheet's outer indent and let the content hug the
       // edges — otherwise it's doubly inset and reads as a fat margin. Same for
