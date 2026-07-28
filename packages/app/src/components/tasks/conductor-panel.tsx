@@ -5,6 +5,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { RotateCcw, Wand2 } from "lucide-react-native";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { TaskBottomDock, type TaskDockHeader } from "@/components/tasks/task-bottom-dock";
+import { ComposerFooterControlsProvider } from "@/composer/footer-controls-context";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { resolveConductorDockPresence } from "@/components/tasks/conductor-dock-presence";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
@@ -18,7 +19,11 @@ import { EvolutionTaskProvider } from "@/contexts/evolution-task-context";
 import type { KanbanTask } from "@/data/tasks";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
 import { useSessionStore } from "@/stores/session-store";
-import { useTasksBoardUiStore, type ConductorProviderChoice } from "@/stores/tasks-board-ui-store";
+import {
+  toConductorEnsureProvider,
+  useTasksBoardUiStore,
+  type ConductorProviderChoice,
+} from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { navigateToAgent } from "@/utils/navigate-to-agent";
 import {
@@ -226,6 +231,26 @@ export function useConductorController({
     setConductorProvider(nextConductorProvider);
   }, [nextConductorProvider, setConductorProvider]);
 
+  // « Réinitialiser » sits with the other input controls at the bottom of the
+  // composer (after the mic + « Parler » buttons) instead of in the header, so
+  // every input-control action lives in one place. Injected into the composer's
+  // footer slot for the conductor chat only (see ComposerFooterControlsProvider
+  // around the conductor pane below).
+  const conductorResetControl = useMemo(
+    () => (
+      <Pressable
+        onPress={handleReset}
+        style={resetButtonStyle}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.conductor.resetTitle")}
+        testID="conductor-reset"
+      >
+        <ThemedRotate size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+      </Pressable>
+    ),
+    [handleReset, t],
+  );
+
   // Watches the resolved conductor: if it turns out to be archived, we cannot
   // show its chat and must mint a new one.
   const ensuredAgentId = ensure.status === "ready" ? ensure.agentId : null;
@@ -277,7 +302,7 @@ export function useConductorController({
       }
       try {
         const payload = await client.tasksConductorEnsure(projectId, {
-          provider: conductorProvider,
+          provider: toConductorEnsureProvider(conductorProvider),
           ...(reset ? { reset: true } : {}),
         });
         if (cancelled) {
@@ -405,17 +430,21 @@ export function useConductorController({
       );
     }
     return (
-      <EmbeddedConductorPane
-        key={`conductor:${ensure.provider}:${ensure.agentId}`}
-        serverId={serverId}
-        agentId={ensure.agentId}
-        workspaceId={ensure.workspaceId}
-        provider={ensure.provider}
-        // Hidden behind a task view: still mounted and still receiving its
-        // stream, but no longer the focused pane — so it does not fight the task
-        // chat for the keyboard or clear its own attention badge while off-screen.
-        focused={presence.conductorFocused}
-      />
+      // Places « Réinitialiser » in the composer's footer button row (right of
+      // the mic + « Parler » controls) for the conductor chat only.
+      <ComposerFooterControlsProvider controls={conductorResetControl}>
+        <EmbeddedConductorPane
+          key={`conductor:${ensure.provider}:${ensure.agentId}`}
+          serverId={serverId}
+          agentId={ensure.agentId}
+          workspaceId={ensure.workspaceId}
+          provider={ensure.provider}
+          // Hidden behind a task view: still mounted and still receiving its
+          // stream, but no longer the focused pane — so it does not fight the task
+          // chat for the keyboard or clear its own attention badge while off-screen.
+          focused={presence.conductorFocused}
+        />
+      </ComposerFooterControlsProvider>
     );
   };
 
@@ -435,8 +464,9 @@ export function useConductorController({
     return {
       title: t("tasks.conductor.title"),
       leading: <ThemedWand size={ICON_SIZE.sm} uniProps={mutedColorMapping} />,
-      // Conductor mode only: pick the engine (Claude / Codex), and retire the
-      // current conversation so the context sent to the model stops growing.
+      // Conductor mode only: pick the engine (Claude / Codex). « Réinitialiser »
+      // is no longer here — it sits with the input controls at the bottom of the
+      // composer (see `conductorResetControl`).
       actions: (
         <View style={styles.headerActions}>
           <Pressable
@@ -450,15 +480,6 @@ export function useConductorController({
           >
             <Text style={styles.providerLabel}>{CONDUCTOR_PROVIDER_LABELS[conductorProvider]}</Text>
           </Pressable>
-          <Pressable
-            onPress={handleReset}
-            style={resetButtonStyle}
-            accessibilityRole="button"
-            accessibilityLabel={t("tasks.conductor.resetTitle")}
-            testID="conductor-reset"
-          >
-            <ThemedRotate size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          </Pressable>
         </View>
       ),
     };
@@ -466,7 +487,6 @@ export function useConductorController({
     inTaskMode,
     dockTask,
     onBackToConductor,
-    handleReset,
     handleToggleProvider,
     conductorProvider,
     nextConductorProvider,
