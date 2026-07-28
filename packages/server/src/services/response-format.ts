@@ -1,7 +1,7 @@
 /**
  * Server-side response-format directive.
  *
- * The user's fixed answer structure (six numbered sections + billing block)
+ * The user's fixed answer structure (five numbered sections + billing block)
  * used to live only in a per-session memory note, so only agents that happened
  * to carry that memory produced it — every other path (Codex admin tasks,
  * schedules, loops, MCP sends, other sessions) answered free-form. This module
@@ -23,15 +23,14 @@ const RESPONSE_FORMAT_BODY = [
   "son niveau (Claude : de « eau » à « ultra code » ; GPT : de « eau » à « très haut »),",
   "le temps estimé et le coût approximatif (tarif : 130 CHF/h).",
   "",
-  "Puis exactement ces six sections, titres numérotés en Markdown `## N.` :",
+  "Puis exactement ces cinq sections, titres numérotés en Markdown `## N.` :",
   "## 1. Ce qui est fait",
   "## 2. Ce qui change",
   "## 3. Impact",
-  "## 4. Expliqué simplement",
-  "## 5. Évolutions possibles",
-  "## 6. Activation & facturation",
+  "## 4. Évolutions possibles",
+  "## 5. Activation & facturation",
   "",
-  "Dans « 6. Activation & facturation », termine par un bloc récapitulatif : temps réel/estimé, taux (130 CHF/h) et coût.",
+  "Dans « 5. Activation & facturation », termine par un bloc récapitulatif : temps réel/estimé, taux (130 CHF/h) et coût.",
   "Si le travail se rattache à un projet client identifiable (site/app d'un client, pas l'outillage interne),",
   "ajoute après le bloc récapitulatif une proposition d'ajouter la prestation en ligne de facture brouillon",
   "via la compétence compta (client, libellé, heures × 130 CHF) — ne jamais créer/modifier une facture sans accord explicite.",

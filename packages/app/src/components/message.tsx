@@ -1720,7 +1720,7 @@ function MarkdownListView({ baseStyle, spacing, children }: MarkdownListViewProp
   return <View style={style}>{children}</View>;
 }
 
-// Section-5 ("## N. Évolutions possibles") heading detector. Matches with or
+// Section-4 ("## N. Évolutions possibles") heading detector. Matches with or
 // without the accent so a model that drops it still triggers the affordance.
 const EVOLUTION_HEADING_PATTERN = /évolu|evolu/i;
 

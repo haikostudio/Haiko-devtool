@@ -5,18 +5,13 @@
  *  - the markdown heading rule (renderer.tsx) prepends the icon to `## N. …`;
  *  - neutral callouts (message.tsx) reuse it for `> **Title**` blocks.
  *
- * Matching is keyword-based and loose on purpose — the fixed six sections
- * always resolve, and any other heading returns `null` (no icon).
+ * Matching is keyword-based and loose on purpose — the fixed five sections
+ * always resolve, and any other heading returns `null` (no icon). Because the
+ * lookup keys off words and not the leading number, renumbering the sections
+ * never disturbs the icons.
  */
 import type { ComponentType } from "react";
-import {
-  Wrench,
-  RefreshCw,
-  Target,
-  MessageSquare,
-  TrendingUp,
-  ReceiptText,
-} from "lucide-react-native";
+import { Wrench, RefreshCw, Target, TrendingUp, ReceiptText } from "lucide-react-native";
 
 export type SectionIcon = ComponentType<{ size?: number; color?: string }>;
 
@@ -28,7 +23,6 @@ const BY_KEYWORD: { match: RegExp; icon: SectionIcon }[] = [
   { match: /fait|réalis|realis/i, icon: Wrench },
   { match: /change|modif/i, icon: RefreshCw },
   { match: /impact/i, icon: Target },
-  { match: /expliqu|tiers|client|simplement|vulgaris/i, icon: MessageSquare },
   { match: /évolu|evolu|amélior|ameli|piste|prochaine/i, icon: TrendingUp },
   { match: /factur|temps|coût|cout|tarif|activ/i, icon: ReceiptText },
 ];
