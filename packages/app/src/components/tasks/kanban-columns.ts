@@ -244,7 +244,14 @@ export function buildColumnModels(
             // folderId is still carried by persisted tasks (and by older boards
             // that had several folders), so every task of the project shows up
             // here regardless of which folder it was filed under.
-            task.column === column && (needle === "" || matchesQuery(task, needle)),
+            task.column === column &&
+            // Agent-proposed tasks awaiting the user's validation NEVER surface
+            // in a column — they live only in the chat approval tray until the
+            // user approves them (which clears the pending state) or refuses
+            // them (which deletes them). This is the impérative rule: a proposal
+            // must never auto-land in "À faire".
+            task.approval?.state !== "pending" &&
+            (needle === "" || matchesQuery(task, needle)),
         )
         .sort(compare),
     };

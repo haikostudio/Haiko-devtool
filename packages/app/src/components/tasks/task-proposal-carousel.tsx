@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -82,6 +82,30 @@ export function TaskProposalCards({
 }) {
   const { t } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
+  // Multi-select for bulk approval. A card's per-card Approve/Refuse buttons
+  // still work independently; ticking cards here only feeds the "approve
+  // selected" bar. Card edits are saved on blur (updateTask), so a bulk approve
+  // simply approves the already-persisted proposals.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // Drop selections whose proposal has left the pending set (approved or
+  // refused elsewhere) so the count and the "approve selected" bar stay honest.
+  useEffect(() => {
+    const live = new Set(proposals.map((proposal) => proposal.taskId));
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (live.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [proposals]);
 
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const x = event.nativeEvent.contentOffset.x;
@@ -89,14 +113,81 @@ export function TaskProposalCards({
     setActiveIndex(index < 0 ? 0 : index);
   }, []);
 
+  const toggleSelect = useCallback((taskId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }, []);
+
+  const allSelected = proposals.length > 0 && selected.size === proposals.length;
+  const toggleAll = useCallback(() => {
+    setSelected((prev) =>
+      prev.size === proposals.length ? new Set() : new Set(proposals.map((p) => p.taskId)),
+    );
+  }, [proposals]);
+
+  const approveSelected = useCallback(() => {
+    const ids = proposals.map((p) => p.taskId).filter((id) => selected.has(id));
+    if (ids.length === 0) {
+      return;
+    }
+    setBulkBusy(true);
+    void (async () => {
+      try {
+        // Sequential so a mid-batch failure leaves the rest still pending in the
+        // tray rather than half-applying under a single rejected promise.
+        for (const id of ids) {
+          await board.approveTask(id);
+        }
+      } finally {
+        setBulkBusy(false);
+      }
+    })();
+  }, [board, proposals, selected]);
+
   return (
     <View style={styles.block} testID="task-proposal-carousel">
       <View style={styles.headerRow}>
-        <ListChecks size={15} color={styles.headerText.color as string} />
-        <Text style={styles.headerText}>
-          {t("tasks.triage.header", { count: proposals.length })}
-        </Text>
+        <View style={styles.headerLeft}>
+          <ListChecks size={15} color={styles.headerText.color as string} />
+          <Text style={styles.headerText}>
+            {t("tasks.triage.header", { count: proposals.length })}
+          </Text>
+        </View>
+        {proposals.length > 1 ? (
+          <Pressable
+            onPress={toggleAll}
+            accessibilityRole="button"
+            testID="task-proposal-select-all"
+          >
+            <Text style={styles.selectAllText}>
+              {allSelected ? t("tasks.triage.clearSelection") : t("tasks.triage.selectAll")}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
+      {selected.size > 0 ? (
+        <View style={styles.bulkRow}>
+          <Pressable
+            style={styles.approveBtn}
+            onPress={approveSelected}
+            disabled={bulkBusy}
+            accessibilityRole="button"
+            testID="task-proposal-approve-selected"
+          >
+            <Check size={15} color="#ffffff" />
+            <Text style={styles.actionText}>
+              {t("tasks.triage.approveSelected", { count: selected.size })}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -112,6 +203,8 @@ export function TaskProposalCards({
             proposal={proposal}
             board={board}
             entries={entries}
+            selected={selected.has(proposal.taskId)}
+            onToggleSelect={toggleSelect}
           />
         ))}
       </ScrollView>
@@ -219,10 +312,14 @@ function TaskProposalCard({
   proposal,
   board,
   entries,
+  selected,
+  onToggleSelect,
 }: {
   proposal: TaskTriageProposalRef;
   board: TaskBoardHandle;
   entries: ProviderSnapshotEntry[] | undefined;
+  selected: boolean;
+  onToggleSelect: (taskId: string) => void;
 }) {
   const { t } = useTranslation();
   const taskId = proposal.taskId;
@@ -291,6 +388,9 @@ function TaskProposalCard({
     void board.deleteTask(taskId).finally(() => setBusy(false));
   }, [board, taskId]);
 
+  const handleToggleSelect = useCallback(() => onToggleSelect(taskId), [onToggleSelect, taskId]);
+  const selectState = useMemo(() => ({ checked: selected }), [selected]);
+
   return (
     <View style={styles.card} testID={`task-proposal-${taskId}`}>
       <LabeledInput
@@ -323,6 +423,16 @@ function TaskProposalCard({
       <CardInfo task={task} effective={effective} folderName={folderName} />
 
       <View style={styles.actionsRow}>
+        <Pressable
+          style={selected ? styles.checkboxOn : styles.checkboxOff}
+          onPress={handleToggleSelect}
+          accessibilityRole="checkbox"
+          accessibilityState={selectState}
+          accessibilityLabel={t("tasks.triage.select")}
+          testID={`task-proposal-select-${taskId}`}
+        >
+          {selected ? <Check size={12} color="#ffffff" /> : null}
+        </Pressable>
         <Pressable
           style={styles.approveBtn}
           onPress={handleApprove}
@@ -591,13 +701,48 @@ const styles = StyleSheet.create((theme) => ({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     gap: theme.spacing[2],
     paddingRight: theme.spacing[3],
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    flexShrink: 1,
   },
   headerText: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.semibold,
+  },
+  selectAllText: {
+    color: theme.colors.accent,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  bulkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: theme.spacing[3],
+  },
+  checkboxOn: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.statusSuccess,
+  },
+  checkboxOff: {
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface2,
   },
   scrollContent: {
     gap: CARD_GAP,
