@@ -165,6 +165,24 @@ export function deriveTaskTone(
   return null;
 }
 
+// Whether a card lights its corner pip. The finished-card green pip is an
+// "unseen" flag: it shows until the user opens the card (which stamps
+// viewedAt), then goes quiet — but the card itself always stays at full
+// opacity. A running loader, an amber "waiting for you" light, or a blue
+// scheduled dot always show: they signal live or pending state, not
+// unread-ness, so a finished card whose agent comes back to life re-lights its
+// live badge regardless of viewedAt. Returns false only for a card with no
+// tone at all, or a finished card the user has already opened.
+export function shouldShowVoyant(task: KanbanTask, tone: TaskTone | null): boolean {
+  if (tone === null) {
+    return false;
+  }
+  if (tone === "done") {
+    return !task.viewedAt;
+  }
+  return true;
+}
+
 // Rolls a set of task tones up to a single aggregate tone for a folder/project
 // card. Returns the highest-precedence tone present, or null when nothing lights.
 export function aggregateTaskTones(tones: Iterable<TaskTone | null>): TaskTone | null {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceStateBucket } from "@getpaseo/protocol/agent-state-bucket";
 import type { KanbanTask } from "@/data/tasks";
-import { deriveTaskTone } from "./task-status-tone";
+import { deriveTaskTone, shouldShowVoyant } from "./task-status-tone";
 
 // Minimal valid KanbanTask; override only the fields a test cares about.
 function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
@@ -152,5 +152,47 @@ describe("deriveTaskTone — a question typed in prose still calls for the user"
     expect(
       deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), "done", true),
     ).toBe("running");
+  });
+});
+
+describe("shouldShowVoyant — the corner pip carries read/unread, opacity never fades", () => {
+  it("lights the green pip on a finished card the user has not opened yet", () => {
+    expect(shouldShowVoyant(makeTask({ column: "done", viewedAt: null }), "done")).toBe(true);
+  });
+
+  it("drops the pip once a finished card has been opened (read)", () => {
+    // The card stays at full opacity; only the green light goes away.
+    expect(
+      shouldShowVoyant(makeTask({ column: "done", viewedAt: "2026-07-24T11:00:00.000Z" }), "done"),
+    ).toBe(false);
+  });
+
+  it("always shows the amber attention pip, even on an already-read card", () => {
+    expect(
+      shouldShowVoyant(
+        makeTask({ column: "done", viewedAt: "2026-07-24T11:00:00.000Z" }),
+        "attention",
+      ),
+    ).toBe(true);
+  });
+
+  it("always shows the running loader, even after the card was read", () => {
+    // A finished card whose agent came back to life re-lights its live badge.
+    expect(
+      shouldShowVoyant(
+        makeTask({ column: "in_progress", viewedAt: "2026-07-24T11:00:00.000Z" }),
+        "running",
+      ),
+    ).toBe(true);
+  });
+
+  it("shows the scheduled pip regardless of viewedAt", () => {
+    expect(
+      shouldShowVoyant(makeTask({ column: "scheduled", viewedAt: null }), "scheduled"),
+    ).toBe(true);
+  });
+
+  it("shows no pip when the card has no tone at all", () => {
+    expect(shouldShowVoyant(makeTask({ column: "backlog", viewedAt: null }), null)).toBe(false);
   });
 });

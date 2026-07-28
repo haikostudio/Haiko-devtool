@@ -23,7 +23,7 @@ import {
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
-import type { TaskTone } from "@/components/tasks/task-status-tone";
+import { type TaskTone, shouldShowVoyant } from "@/components/tasks/task-status-tone";
 import {
   getPublishNotice,
   getScheduleBadge,
@@ -69,43 +69,24 @@ interface TaskCardProps {
 // so importance is signalled by the corner pip / inline dot only. Do not
 // reintroduce a borderLeft here in a future restyle.
 //
-// `selected` (the card open in the dock / Details drawer) comes last so its
-// violet outline wins over hover, and so it can undo the "already seen" dim —
-// opening a finished card marks it seen, which would otherwise fade the very
-// card the user is looking at. The dim comes back as soon as the card closes.
+// Cards never fade: opacity stays at 100% in every state. The read/unread
+// signal lives entirely in the corner pip (green while a finished card is
+// unseen, gone once opened), NOT in the card's opacity. `selected` (the card
+// open in the dock / Details drawer) still repaints the frame violet.
 function cardStyle({
   pressed,
   hovered,
-  dimmed,
   selected,
 }: {
   pressed: boolean;
   hovered?: boolean;
-  dimmed?: boolean;
   selected?: boolean;
 }) {
   return [
     styles.card,
     (hovered || pressed) && styles.cardHovered,
-    dimmed && styles.cardDimmed,
     selected && styles.cardSelected,
   ];
-}
-
-// A card the user has already opened recedes to half opacity so unseen work
-// (full opacity) still leads the eye. Two cases dim, but only once seen:
-//   - a card at rest showing the quiet green "done" light — including a card
-//     parked in "En cours" whose agent has gone idle, not just the done/deployed
-//     columns — and
-//   - a card that is merely *waiting on a reply* (amber "attention") after a
-//     relaunch — it stays dim, but its amber voyant still flags that it wants
-//     the user. A card that is actively *running* (loader) is never dimmed:
-//     the movement should catch the eye, so it stays at full opacity.
-function isCardDimmed(task: KanbanTask, tone: TaskTone | null): boolean {
-  if (!task.viewedAt || tone === "running") {
-    return false;
-  }
-  return tone === "done" || tone === "attention";
 }
 
 // When a validated/planned task will actually launch: the scheduler holds
@@ -238,21 +219,19 @@ export const TaskCard = memo(function TaskCard({
   const hiddenTagCount = tags.length - visibleTags.length;
 
   const priorityLabel = priority?.label;
-  // A task waiting on the user re-lights to full opacity even if it had been
-  // opened and dimmed — the amber signal must catch the eye above all else.
-  const dimmed = isCardDimmed(task, tone) && tone !== "attention";
-  // A card the user has opened and that is now at rest (dimmed) drops its voyant
-  // entirely: the click both halves the opacity and clears the light. An agent
-  // that comes back to life (running loader / amber attention) is never dimmed,
-  // so its voyant re-lights and un-dims the card — the relaunch stays visible.
-  const showVoyant = !dimmed;
+  // The card never fades — full opacity in every state. Only the corner pip
+  // carries the read/unread signal: a finished card shows its green light until
+  // opened (viewedAt), then drops it while staying at 100% opacity. A running
+  // loader or amber "waiting for you" light always shows, so an agent that
+  // comes back to life re-lights the card's live badge even after it was read.
+  const showVoyant = shouldShowVoyant(task, tone);
   // The card the user currently has open (dock chat or Details drawer) wears a
   // thin violet outline so the board says which card the panel belongs to.
   const selected = useOpenTaskId() === task.id;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
-      cardStyle({ pressed, hovered, dimmed, selected }),
-    [dimmed, selected],
+      cardStyle({ pressed, hovered, selected }),
+    [selected],
   );
 
   return (
@@ -573,16 +552,11 @@ const styles = StyleSheet.create((theme) => ({
   cardHovered: {
     backgroundColor: theme.colors.surface1,
   },
-  // Finished + already-seen: recede to half opacity so unseen finished work leads.
-  cardDimmed: {
-    opacity: 0.5,
-  },
   // The open card: same 1px frame, repainted violet. No fill, no shadow, no size
   // change — nothing that would shift the layout or fight the corner voyant.
   // `statusMerged` is the theme's violet in both light and dark.
   cardSelected: {
     borderColor: theme.colors.statusMerged,
-    opacity: 1,
   },
   chipRow: {
     flexDirection: "row",
