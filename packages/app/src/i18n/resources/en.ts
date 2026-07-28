@@ -671,7 +671,7 @@ export const en = {
     expand: "Show all ({{count}})",
     drag: "Drag to move",
     dismiss: "Dismiss",
-    dismissAll: "Dismiss all",
+    dismissFinished: "Clear finished",
     overflow: "+{{count}}",
   },
   agentList: {

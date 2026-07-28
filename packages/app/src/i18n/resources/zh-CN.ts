@@ -664,7 +664,7 @@ export const zhCN: TranslationResources = {
     expand: "显示全部 ({{count}})",
     drag: "拖动以移动",
     dismiss: "关闭",
-    dismissAll: "全部关闭",
+    dismissFinished: "清除已完成",
     overflow: "+{{count}}",
   },
   agentList: {

@@ -29,8 +29,13 @@ interface AgentTaskToastState {
   reconcile: (input: { activeKeys: readonly string[]; existingKeys: ReadonlySet<string> }) => void;
   /** Hide a toast (used once a finished task's agent is opened on screen). */
   dismiss: (key: AgentTaskToastKey) => void;
-  /** Clear the whole pile in one gesture (the trash button in the controls row). */
-  dismissAll: () => void;
+  /**
+   * Drop a batch of toasts in one gesture (the trash button in the controls row).
+   * Takes an explicit key list rather than clearing everything: the button only
+   * ever hands over the *finished* toasts, so a running or failed task keeps its
+   * card (see selectFinishedToastKeys).
+   */
+  dismissMany: (keys: readonly AgentTaskToastKey[]) => void;
   /**
    * Keys the user has explicitly dismissed while their agent was still active.
    * Without this, `reconcile` would re-add a running agent's toast on the very
@@ -120,16 +125,19 @@ export const useAgentTaskToastStore = create<AgentTaskToastState>()(
           next.delete(key);
           return { order: next, suppressed: new Set(state.suppressed).add(key) };
         }),
-      dismissAll: () =>
+      dismissMany: (keys) =>
         set((state) => {
-          if (state.order.size === 0) {
+          const removable = keys.filter((key) => state.order.has(key));
+          if (removable.length === 0) {
             return state;
           }
+          const next = new Map(state.order);
           const suppressed = new Set(state.suppressed);
-          for (const key of state.order.keys()) {
+          for (const key of removable) {
+            next.delete(key);
             suppressed.add(key);
           }
-          return { order: new Map(), suppressed };
+          return { order: next, suppressed };
         }),
     }),
     {

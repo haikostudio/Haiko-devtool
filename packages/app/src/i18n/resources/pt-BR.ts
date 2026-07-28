@@ -680,7 +680,7 @@ export const ptBR: TranslationResources = {
     expand: "Mostrar tudo ({{count}})",
     drag: "Arraste para mover",
     dismiss: "Dispensar",
-    dismissAll: "Fechar tudo",
+    dismissFinished: "Limpar concluídas",
     overflow: "+{{count}}",
   },
   agentList: {

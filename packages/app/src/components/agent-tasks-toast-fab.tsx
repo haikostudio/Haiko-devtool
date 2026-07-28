@@ -10,6 +10,7 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useDraggableToast, useToastSection } from "@/hooks/use-draggable-toast";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { TaskToast, useTrackedTasks } from "@/components/agent-tasks-toast-stack";
+import { selectFinishedToastKeys } from "@/components/agent-tasks-toast-dismissal";
 import { useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
@@ -96,14 +97,22 @@ function AgentTasksToastDrawer({
 }): ReactElement {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const dismissAll = useAgentTaskToastStore((state) => state.dismissAll);
+  const dismissMany = useAgentTaskToastStore((state) => state.dismissMany);
 
-  // Clearing the pile empties the drawer, so close it in the same gesture rather
-  // than leaving the user staring at the "nothing in progress" line.
-  const handleDismissAll = useCallback(() => {
-    dismissAll();
-    onClose();
-  }, [dismissAll, onClose]);
+  // Same rule as the desktop pile: the trash only clears finished tasks, never a
+  // run still in flight, still waiting on the user, or failed.
+  const finishedKeys = useMemo(() => selectFinishedToastKeys(tasks), [tasks]);
+  const hasFinished = finishedKeys.length > 0;
+
+  // Clearing every card empties the drawer, so close it in the same gesture rather
+  // than leaving the user staring at the "nothing in progress" line. When some
+  // cards survive the sweep the drawer stays open on them.
+  const handleDismissFinished = useCallback(() => {
+    dismissMany(finishedKeys);
+    if (finishedKeys.length === tasks.length) {
+      onClose();
+    }
+  }, [dismissMany, finishedKeys, tasks.length, onClose]);
 
   const header = useMemo(
     () => ({
@@ -111,18 +120,20 @@ function AgentTasksToastDrawer({
       actions:
         tasks.length > 0 ? (
           <Pressable
-            onPress={handleDismissAll}
-            style={drawerDismissAllStyle}
+            onPress={handleDismissFinished}
+            disabled={!hasFinished}
+            style={hasFinished ? drawerDismissFinishedStyle : drawerDismissFinishedDisabledStyle}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={t("agentTasksToast.dismissAll")}
-            testID="agent-tasks-toast-drawer-dismiss-all"
+            accessibilityLabel={t("agentTasksToast.dismissFinished")}
+            accessibilityState={hasFinished ? A11Y_ENABLED : A11Y_DISABLED}
+            testID="agent-tasks-toast-drawer-dismiss-finished"
           >
             <Trash2 size={16} color={styles.drawerDismissAllIcon.color} />
           </Pressable>
         ) : undefined,
     }),
-    [t, tasks.length, handleDismissAll],
+    [t, tasks.length, hasFinished, handleDismissFinished],
   );
 
   // The sheet's own bottom safe-area padding doesn't render on the standalone
@@ -159,6 +170,10 @@ function AgentTasksToastDrawer({
     </AdaptiveModalSheet>
   );
 }
+
+// Module-level so the prop identity stays stable across renders.
+const A11Y_ENABLED = { disabled: false } as const;
+const A11Y_DISABLED = { disabled: true } as const;
 
 const FAB_SIZE = 44;
 
@@ -206,6 +221,9 @@ const styles = StyleSheet.create((theme) => ({
   drawerDismissAllPressed: {
     backgroundColor: theme.colors.surface2,
   },
+  drawerDismissAllDisabled: {
+    opacity: 0.4,
+  },
   drawerDismissAllIcon: {
     color: theme.colors.foregroundMuted,
   },
@@ -220,6 +238,12 @@ function fabPressableStyle({ pressed }: { pressed: boolean }) {
   return [styles.fab, pressed && styles.fabPressed];
 }
 
-function drawerDismissAllStyle({ pressed }: { pressed: boolean }) {
+function drawerDismissFinishedStyle({ pressed }: { pressed: boolean }) {
   return [styles.drawerDismissAll, pressed && styles.drawerDismissAllPressed];
 }
+
+// Dimmed and inert while nothing in the drawer has finished.
+const drawerDismissFinishedDisabledStyle = [
+  styles.drawerDismissAll,
+  styles.drawerDismissAllDisabled,
+];

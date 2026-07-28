@@ -679,7 +679,7 @@ export const es: TranslationResources = {
     expand: "Mostrar todo ({{count}})",
     drag: "Arrastra para mover",
     dismiss: "Descartar",
-    dismissAll: "Cerrar todo",
+    dismissFinished: "Borrar completadas",
     overflow: "+{{count}}",
   },
   agentList: {

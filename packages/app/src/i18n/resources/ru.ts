@@ -674,7 +674,7 @@ export const ru: TranslationResources = {
     expand: "Показать все ({{count}})",
     drag: "Перетащите, чтобы переместить",
     dismiss: "Закрыть",
-    dismissAll: "Закрыть все",
+    dismissFinished: "Очистить завершённые",
     overflow: "+{{count}}",
   },
   agentList: {

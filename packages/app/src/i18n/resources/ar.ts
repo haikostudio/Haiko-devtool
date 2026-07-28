@@ -667,7 +667,7 @@ export const ar: TranslationResources = {
     expand: "عرض الكل ({{count}})",
     drag: "اسحب للتحريك",
     dismiss: "إغلاق",
-    dismissAll: "إغلاق الكل",
+    dismissFinished: "مسح المكتملة",
     overflow: "+{{count}}",
   },
   agentList: {

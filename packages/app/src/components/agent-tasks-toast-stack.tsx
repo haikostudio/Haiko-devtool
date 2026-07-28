@@ -34,6 +34,7 @@ import {
   selectRenderedToasts,
   toastStackSlot,
 } from "@/components/agent-tasks-toast-stack-geometry";
+import { selectFinishedToastKeys } from "@/components/agent-tasks-toast-dismissal";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -392,26 +393,37 @@ function CollapseToggle({
   );
 }
 
-// Clears the whole pile in one gesture. Sits with the drag handle and the fold
-// toggle so all three pile controls share one row.
-function DismissAllButton({ onPress }: { onPress: () => void }): ReactElement {
+// Clears the *finished* cards in one gesture — running, waiting and failed tasks
+// stay put. Sits with the drag handle and the fold toggle so all three pile
+// controls share one row. With nothing finished to clear it renders disabled and
+// dimmed rather than disappearing, so the control row keeps its shape.
+function DismissFinishedButton({
+  onPress,
+  disabled,
+}: {
+  onPress: () => void;
+  disabled: boolean;
+}): ReactElement {
   const { t } = useTranslation();
+  const label = t("agentTasksToast.dismissFinished");
   return (
     <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger asChild>
         <Pressable
           onPress={onPress}
-          style={dismissAllButtonStyle}
+          disabled={disabled}
+          style={disabled ? disabledDismissFinishedButtonStyle : dismissFinishedButtonStyle}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel={t("agentTasksToast.dismissAll")}
-          testID="agent-tasks-toast-dismiss-all"
+          accessibilityLabel={label}
+          accessibilityState={disabledAccessibilityState(disabled)}
+          testID="agent-tasks-toast-dismiss-finished"
         >
           <Trash2 size={13} color={styles.collapseToggleLabel.color} />
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center">
-        <Text style={styles.tooltipText}>{t("agentTasksToast.dismissAll")}</Text>
+        <Text style={styles.tooltipText}>{label}</Text>
       </TooltipContent>
     </Tooltip>
   );
@@ -501,8 +513,15 @@ export function AgentTasksToastStack(): ReactElement | null {
   const visible = useTrackedTasks();
   const collapsed = useAgentTaskToastStore((state) => state.collapsed);
   const setCollapsed = useAgentTaskToastStore((state) => state.setCollapsed);
-  const dismissAll = useAgentTaskToastStore((state) => state.dismissAll);
+  const dismissMany = useAgentTaskToastStore((state) => state.dismissMany);
   const section = useToastSection();
+  // The trash only ever targets the finished cards, so it is inert (and dimmed)
+  // while the pile holds nothing but running / waiting / failed tasks.
+  const finishedKeys = useMemo(() => selectFinishedToastKeys(visible), [visible]);
+  const handleDismissFinished = useCallback(
+    () => dismissMany(finishedKeys),
+    [dismissMany, finishedKeys],
+  );
   // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
   // can pull each card up over the one behind it and leave only a top sliver.
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -597,7 +616,10 @@ export function AgentTasksToastStack(): ReactElement | null {
         })}
         <View style={styles.controlsRow}>
           <DragHandle gesture={dragGesture} />
-          <DismissAllButton onPress={dismissAll} />
+          <DismissFinishedButton
+            onPress={handleDismissFinished}
+            disabled={finishedKeys.length === 0}
+          />
           {canCollapse ? (
             <CollapseToggle
               collapsed={stickyCollapsed}
@@ -817,6 +839,9 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     ...theme.shadow.sm,
   },
+  iconControlDisabled: {
+    opacity: 0.4,
+  },
   collapseToggleHovered: {
     borderColor: theme.colors.borderAccent,
     backgroundColor: theme.colors.surface1,
@@ -848,7 +873,7 @@ function closeButtonStyle({ hovered = false, pressed }: { hovered?: boolean; pre
 // Grab cursor on web signals the handle is draggable; native ignores the cast.
 const dragHandleStyle = [styles.iconControl, isWeb && ({ cursor: "grab" } as object)];
 
-function dismissAllButtonStyle({
+function dismissFinishedButtonStyle({
   hovered = false,
   pressed,
 }: {
@@ -860,6 +885,21 @@ function dismissAllButtonStyle({
     isWeb && ({ cursor: "pointer" } as object),
     (hovered || pressed) && styles.collapseToggleHovered,
   ];
+}
+
+// Nothing finished to clear: the button stays in place but reads as unavailable —
+// dimmed, default cursor, no hover response.
+const disabledDismissFinishedButtonStyle = [
+  styles.iconControl,
+  styles.iconControlDisabled,
+  isWeb && ({ cursor: "default" } as object),
+];
+
+// Frozen objects so the prop identity is stable across renders.
+const ACCESSIBILITY_STATE_DISABLED = { disabled: true } as const;
+const ACCESSIBILITY_STATE_ENABLED = { disabled: false } as const;
+function disabledAccessibilityState(disabled: boolean) {
+  return disabled ? ACCESSIBILITY_STATE_DISABLED : ACCESSIBILITY_STATE_ENABLED;
 }
 
 // Declared after `styles` so the referenced style identities exist. `done` maps to

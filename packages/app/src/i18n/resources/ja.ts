@@ -674,7 +674,7 @@ export const ja: TranslationResources = {
     expand: "すべて表示 ({{count}})",
     drag: "ドラッグして移動",
     dismiss: "閉じる",
-    dismissAll: "すべて閉じる",
+    dismissFinished: "完了したものを消去",
     overflow: "+{{count}}",
   },
   agentList: {

@@ -681,7 +681,7 @@ export const fr: TranslationResources = {
     expand: "Tout afficher ({{count}})",
     drag: "Glisser pour déplacer",
     dismiss: "Fermer",
-    dismissAll: "Tout fermer",
+    dismissFinished: "Effacer les terminées",
     overflow: "+{{count}}",
   },
   agentList: {
