@@ -27,7 +27,9 @@ export interface ScheduleBadgeDescriptor {
 // web app, or the project's dev instance). Derived from server truth, never from
 // a client flag, so a done card that was already published never lies about it.
 export function isTaskDeployed(task: KanbanTask): boolean {
-  return task.deployment?.state === "deployed" || Boolean(task.deployedUrl);
+  return (
+    task.deployedAt != null || task.deployment?.state === "deployed" || Boolean(task.deployedUrl)
+  );
 }
 
 /**
@@ -47,7 +49,7 @@ export function isTaskDeployed(task: KanbanTask): boolean {
  * carry; a card it could not settle carries no flag and shows nothing.
  */
 export function getPublishNotice(task: KanbanTask): ScheduleBadgeDescriptor | null {
-  if (task.needsDaemonRestart === undefined || task.column === "deployed" || isTaskDeployed(task)) {
+  if (task.needsDaemonRestart === undefined || isTaskDeployed(task)) {
     return null;
   }
   return task.needsDaemonRestart
@@ -62,7 +64,7 @@ export function getPublishNotice(task: KanbanTask): ScheduleBadgeDescriptor | nu
  * button would restart the daemon for a change that is not published yet.
  */
 export function offersDaemonRestart(task: KanbanTask): boolean {
-  return task.needsDaemonRestart === true && (task.column === "deployed" || isTaskDeployed(task));
+  return task.needsDaemonRestart === true && isTaskDeployed(task);
 }
 
 function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {

@@ -3106,15 +3106,16 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           index: args.index ?? 0,
           manual: true,
         });
-        // A move to "deployed" carries the one signal we cannot infer from the
-        // outside: whether the shipped change only takes effect after a daemon
-        // restart. Stamp it on the card so it can surface the informative icon.
+        // A move to "deployed" is the agent's confirmation that the work is LIVE.
+        // The column alone no longer says that — a finished card is parked in
+        // "À déployer" the moment it completes — so this stamps the live marker
+        // itself, along with the one signal we cannot infer from the outside:
+        // whether the shipped change only takes effect after a daemon restart.
         // Purely a flag — it never triggers a restart.
         if (args.column === "deployed") {
-          await taskBoardService.patchTask(args.projectId, args.taskId, (current) => ({
-            ...current,
+          await taskBoardService.markTaskDeployed(args.projectId, args.taskId, {
             needsDaemonRestart: args.needsDaemonRestart ?? false,
-          }));
+          });
         }
         return {
           content: [],

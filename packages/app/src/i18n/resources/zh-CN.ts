@@ -492,7 +492,7 @@ export const zhCN: TranslationResources = {
       scheduled: "已计划",
       inProgress: "进行中",
       done: "已完成",
-      deployed: "已部署",
+      deployed: "待部署",
       notes: "笔记",
     },
     notes: {
@@ -502,6 +502,12 @@ export const zhCN: TranslationResources = {
     },
     board: {
       emptyColumn: "暂无任务",
+      deployAll: "全部部署（{{count}}）",
+      deployAllRunning: "发布中…",
+      deployAllTitle: "全部部署",
+      deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
+      deployAllConfirm: "全部部署",
+      deployAllStarted: "已开始批量发布",
       pendingPublish: "{{count}} 张卡片待发布",
       pendingPublishWithRestart: "{{count}} 张卡片待发布，其中 {{restart}} 张需要重启",
       batch: {

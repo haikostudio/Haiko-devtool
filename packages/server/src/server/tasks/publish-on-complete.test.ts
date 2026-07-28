@@ -5,7 +5,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import { parseStartScriptDir, parseVhostHost } from "../../utils/project-dev-instance.js";
-import { type DeployRunSnapshot, TaskPublisher } from "./publish-on-complete.js";
+import { TaskPublisher } from "./publish-on-complete.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
 
@@ -37,13 +37,11 @@ describe("TaskPublisher", () => {
   let dir: string;
   let service: TaskBoardService;
   let notes: string[];
-  let triggered: { projectId: string; mergeBranches: string[] }[];
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "paseo-task-publish-"));
     service = new TaskBoardService({ store: new TaskBoardStore(dir), logger });
     notes = [];
-    triggered = [];
   });
 
   afterEach(async () => {
@@ -59,102 +57,45 @@ describe("TaskPublisher", () => {
     }));
   }
 
-  function buildPublisher(input: {
-    isSelfHost: boolean;
-    url: string | null;
-    runs?: DeployRunSnapshot[];
-    started?: boolean;
-  }) {
-    const runs = [...(input.runs ?? [])];
+  function buildPublisher() {
     return new TaskPublisher({
       taskBoardService: service,
-      projectRegistry: { get: async () => ({ projectId: "proj-1", rootPath: "/root/x" }) as never },
       agentManager: {
         appendTimelineItem: async (_agentId: string, item: { type: string; text?: string }) => {
           notes.push(item.text ?? "");
         },
       } as never,
-      isSelfHostRoot: () => input.isSelfHost,
-      resolveProjectUrl: async () => input.url,
-      triggerDeploy: async (trigger) => {
-        triggered.push(trigger);
-        return { started: input.started ?? true, error: "déjà en cours" };
-      },
-      readDeployRun: async () =>
-        runs.shift() ?? { deploying: false, phase: null, outcome: null, error: null },
-      sleep: async () => {},
       logger,
     });
   }
 
-  test("an ordinary project only records where its work went live", async () => {
+  test("a finished card is queued in À déployer, and nothing is published yet", async () => {
     const task = await seedTask();
-    const publisher = buildPublisher({
-      isSelfHost: false,
-      url: "https://etsigna-dev.haikostudio.cloud",
-    });
+    const board = await service.transitionTask("proj-1", task.id, "done");
+    const done = board.tasks.find((item) => item.id === task.id);
+    if (!done) throw new Error("task lost");
 
-    await publisher.handleCompleted("proj-1", task);
+    await buildPublisher().queueForDeployment("proj-1", done);
 
-    // The agent already deployed it during the check — no daemon publish here.
-    expect(triggered).toHaveLength(0);
+    const after = await service.getBoard("proj-1");
+    const queued = after.tasks.find((entry) => entry.id === task.id);
+    expect(queued?.column).toBe("deployed");
+    // Queued is NOT live: no deploy stamp until a publication actually succeeds.
+    expect(queued?.deployedAt ?? null).toBeNull();
+    expect(queued?.deployedUrl ?? null).toBeNull();
+    expect(notes.at(-1)).toContain("À déployer");
+  });
+
+  test("a card already in the queue is left alone", async () => {
+    const task = await seedTask();
+    await service.transitionTask("proj-1", task.id, "done");
+    await service.transitionTask("proj-1", task.id, "deployed");
+    const board = await service.getBoard("proj-1");
+    const queued = board.tasks.find((entry) => entry.id === task.id);
+    if (!queued) throw new Error("task lost");
+
+    await buildPublisher().queueForDeployment("proj-1", queued);
+
     expect(notes).toHaveLength(0);
-    const board = await service.getBoard("proj-1");
-    expect(board.tasks.find((entry) => entry.id === task.id)?.deployedUrl).toBe(
-      "https://etsigna-dev.haikostudio.cloud",
-    );
-  });
-
-  test("a Paseo card publishes, narrates its phases and links the live address", async () => {
-    const task = await seedTask();
-    const publisher = buildPublisher({
-      isSelfHost: true,
-      url: "https://app.haikostudio.cloud",
-      runs: [
-        { deploying: true, phase: "build", outcome: null, error: null },
-        { deploying: true, phase: "publish", outcome: null, error: null },
-        { deploying: false, phase: "done", outcome: "success", error: null },
-      ],
-    });
-
-    await publisher.handleCompleted("proj-1", task);
-
-    expect(triggered).toEqual([{ projectId: "proj-1", mergeBranches: ["task/add-login"] }]);
-    expect(notes[0]).toContain("mise en ligne de cette tâche en cours");
-    expect(notes.join("\n")).toContain("Construction de l'application");
-    expect(notes.join("\n")).toContain("Mise en ligne…");
-    expect(notes.at(-1)).toContain("https://app.haikostudio.cloud");
-    const board = await service.getBoard("proj-1");
-    expect(board.tasks.find((entry) => entry.id === task.id)?.deployedUrl).toBe(
-      "https://app.haikostudio.cloud",
-    );
-  });
-
-  test("a failed publish says so instead of claiming the card is live", async () => {
-    const task = await seedTask();
-    const publisher = buildPublisher({
-      isSelfHost: true,
-      url: "https://app.haikostudio.cloud",
-      runs: [{ deploying: false, phase: "error", outcome: "failed", error: "build cassé" }],
-    });
-
-    await publisher.handleCompleted("proj-1", task);
-
-    expect(notes.at(-1)).toContain("build cassé");
-    const board = await service.getBoard("proj-1");
-    expect(board.tasks.find((entry) => entry.id === task.id)?.deployedUrl ?? null).toBeNull();
-  });
-
-  test("a publish that never starts is reported, not swallowed", async () => {
-    const task = await seedTask();
-    const publisher = buildPublisher({
-      isSelfHost: true,
-      url: "https://app.haikostudio.cloud",
-      started: false,
-    });
-
-    await publisher.handleCompleted("proj-1", task);
-
-    expect(notes.at(-1)).toContain("déjà en cours");
   });
 });

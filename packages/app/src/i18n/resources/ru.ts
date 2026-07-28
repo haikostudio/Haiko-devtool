@@ -501,7 +501,7 @@ export const ru: TranslationResources = {
       scheduled: "Запланировано",
       inProgress: "В работе",
       done: "Готово",
-      deployed: "Развёрнуто",
+      deployed: "К развёртыванию",
       notes: "Заметки",
     },
     notes: {
@@ -511,6 +511,13 @@ export const ru: TranslationResources = {
     },
     board: {
       emptyColumn: "Нет задач",
+      deployAll: "Развернуть всё ({{count}})",
+      deployAllRunning: "Публикация…",
+      deployAllTitle: "Развернуть всё",
+      deployAllMessage:
+        "{{count}} задач(и) будут опубликованы одним запуском, затем движок перезапустится. Запущенные агенты будут прерваны.",
+      deployAllConfirm: "Развернуть всё",
+      deployAllStarted: "Групповая публикация запущена",
       pendingPublish: "Готово к публикации: {{count}}",
       pendingPublishWithRestart:
         "Готово к публикации: {{count}}, из них требуют перезапуска: {{restart}}",

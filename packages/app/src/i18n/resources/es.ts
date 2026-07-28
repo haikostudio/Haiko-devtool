@@ -506,7 +506,7 @@ export const es: TranslationResources = {
       scheduled: "Planificado",
       inProgress: "En curso",
       done: "Hecho",
-      deployed: "Desplegado",
+      deployed: "Por desplegar",
       notes: "Notas",
     },
     notes: {
@@ -516,6 +516,13 @@ export const es: TranslationResources = {
     },
     board: {
       emptyColumn: "Sin tareas",
+      deployAll: "Desplegar todo ({{count}})",
+      deployAllRunning: "Publicando…",
+      deployAllTitle: "Desplegar todo",
+      deployAllMessage:
+        "{{count}} tarea(s) se publicarán de una sola vez y luego el motor se reiniciará. Los agentes en curso se interrumpirán.",
+      deployAllConfirm: "Desplegar todo",
+      deployAllStarted: "Publicación en lote iniciada",
       pendingPublish: "{{count}} tarjeta(s) listas para publicar",
       pendingPublishWithRestart:
         "{{count}} tarjeta(s) listas para publicar, {{restart}} requieren reinicio",

@@ -495,7 +495,7 @@ export const ar: TranslationResources = {
       scheduled: "مُجدولة",
       inProgress: "قيد التنفيذ",
       done: "منجزة",
-      deployed: "منشورة",
+      deployed: "للنشر",
       notes: "ملاحظات",
     },
     notes: {
@@ -505,6 +505,13 @@ export const ar: TranslationResources = {
     },
     board: {
       emptyColumn: "لا مهام",
+      deployAll: "نشر الكل ({{count}})",
+      deployAllRunning: "جارٍ النشر…",
+      deployAllTitle: "نشر الكل",
+      deployAllMessage:
+        "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",
+      deployAllConfirm: "نشر الكل",
+      deployAllStarted: "بدأ النشر الجماعي",
       pendingPublish: "{{count}} بطاقة جاهزة للنشر",
       pendingPublishWithRestart: "{{count}} بطاقة جاهزة للنشر، منها {{restart}} تتطلب إعادة تشغيل",
       batch: {

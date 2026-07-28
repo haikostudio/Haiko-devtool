@@ -158,7 +158,7 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([]);
   });
 
-  test("deployed is terminal: entering it stamps deployedAt and never re-arms", async () => {
+  test("the deploy queue is terminal: entering it never stamps deployedAt nor re-arms", async () => {
     const scheduled: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
     const folder = await service.createFolder("proj-1", "Auth");
@@ -173,8 +173,11 @@ describe("TaskBoardService", () => {
       manual: true,
     });
     expect(deployedBoard.tasks[0]?.column).toBe("deployed");
-    expect(deployedBoard.tasks[0]?.deployedAt).toBeTruthy();
-    const deployedAt = deployedBoard.tasks[0]?.deployedAt;
+    // Queued is not live: only a publication that succeeded stamps deployedAt.
+    expect(deployedBoard.tasks[0]?.deployedAt ?? null).toBeNull();
+    const live = await service.markTaskDeployed("proj-1", task.id, { url: "https://x" });
+    expect(live.deployedAt).toBeTruthy();
+    const deployedAt = live.deployedAt;
 
     // Drag it back into the pipeline: it must NOT re-arm or notify the scheduler.
     const back = await service.moveTask("proj-1", {
@@ -198,7 +201,7 @@ describe("TaskBoardService", () => {
       index: 0,
       manual: true,
     });
-    expect(board.tasks[0]?.deployedAt).toBeTruthy();
+    expect(board.tasks[0]?.deployedAt ?? null).toBeNull();
     expect(board.tasks[0]?.completedAt).toBeTruthy();
   });
 

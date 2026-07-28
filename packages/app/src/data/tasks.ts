@@ -68,6 +68,12 @@ export interface TaskBoardHandle {
    */
   deployTask: (taskId: string) => Promise<{ dispatched: boolean; task: KanbanTask | null }>;
   /**
+   * "Tout déployer": publishes every not-yet-live card of the "À déployer"
+   * column in one run, then restarts the engine. Resolves as soon as the run has
+   * started — the rest plays out on the board and in the cards' conversations.
+   */
+  deployAllTasks: () => Promise<{ started: boolean; taskIds: string[] }>;
+  /**
    * Archive (hide) a finished card, or un-archive it. Stamps `archivedAt`
    * server-side; never moves or publishes the card.
    */
@@ -310,6 +316,15 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext],
   );
 
+  const deployAllTasks = useCallback(async () => {
+    const { client, projectId: project } = requireContext();
+    const payload = await client.tasksBoardDeployAll({ projectId: project });
+    if (payload.error) {
+      throw new Error(payload.error);
+    }
+    return { started: payload.started, taskIds: payload.taskIds ?? [] };
+  }, [requireContext]);
+
   const archiveTask = useCallback(
     async (taskId: string, archived = true) => {
       const { client, projectId: project } = requireContext();
@@ -346,6 +361,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       approveTask,
       validateTask,
       deployTask,
+      deployAllTasks,
       archiveTask,
     }),
     [
@@ -363,6 +379,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       approveTask,
       validateTask,
       deployTask,
+      deployAllTasks,
       archiveTask,
     ],
   );

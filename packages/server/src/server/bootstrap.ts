@@ -162,6 +162,7 @@ import { TaskScheduler } from "./tasks/scheduler.js";
 import { TaskPublisher } from "./tasks/publish-on-complete.js";
 import { TaskValidator, watchAgentIdle } from "./tasks/validator.js";
 import { TaskDeployer } from "./tasks/deployer.js";
+import { TaskBatchDeployer } from "./tasks/batch-deployer.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -1559,14 +1560,19 @@ export async function createPaseoDaemon(
   taskBoardService.setOnTaskCreated((projectId, task) => {
     taskAgentProvisioner.ensureInBackground(projectId, task.id);
   });
-  // Finishing a card IS the publish. There is no deploy button and no deploy
-  // sheet any more: the user presses the final-check bar, the card's agent
-  // verifies and fixes, and the move to "Terminée" ships that card's work.
-  // Paseo itself publishes through the local build script (narrated into the
-  // card's conversation by the publisher below); every other project is deployed
-  // by the agent onto its dev instance on the VPS (see tasks/validator.ts), and
-  // only its address is stamped here.
+  // Finishing a card QUEUES it: it moves into the last column ("À déployer") and
+  // says so in its own conversation. Nothing goes online until the user presses
+  // "Tout déployer" at the bottom of that column.
   const taskPublisher = new TaskPublisher({
+    taskBoardService,
+    agentManager,
+    logger,
+  });
+  // "Tout déployer": one publication for the whole queue, then the daemon
+  // restart. Paseo's own batch goes through the local build (triggerDeploy, which
+  // supervises the build with its own agent); any other project is deployed card
+  // by card by each card's own agent.
+  const taskBatchDeployer = new TaskBatchDeployer({
     taskBoardService,
     projectRegistry,
     agentManager,
@@ -1575,8 +1581,26 @@ export async function createPaseoDaemon(
       isPaseoDeployRoot(rootPath) ? getPaseoAppUrl() : await resolveProjectDevInstanceUrl(rootPath),
     triggerDeploy: (input) => triggerPaseoDeploy(input),
     readDeployRun: () => getPaseoDeployRunSnapshot(),
+    deployTask: (projectId, taskId) => taskDeployer.deploy(projectId, taskId),
+    // The user's press IS the authorization: the batch ends by restarting the
+    // engine so the code that was just published is the code that runs.
+    requestDaemonRestart: (reason) => {
+      config.onLifecycleIntent?.({
+        type: "restart",
+        clientId: "task-batch-deploy",
+        requestId: `batch-deploy-${Date.now()}`,
+        reason,
+      });
+    },
     logger,
   });
+  // Finishing a card no longer publishes it: it QUEUES it. The card moves itself
+  // into the last column ("À déployer") and waits there for the user's "Tout
+  // déployer", which publishes the whole batch in one run and then restarts the
+  // daemon (see TaskBatchDeployer). One run per batch instead of one per card is
+  // the whole point: concurrent per-card builds on the shared checkout produced
+  // torn bundles. A deploy-conflict repair card keeps its own express lane — the
+  // publication it unblocks is already waiting on it.
   taskBoardService.setOnTaskCompleted(async (projectId, task) => {
     const repairBranch = task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)
       ? task.tags
@@ -1593,7 +1617,7 @@ export async function createPaseoDaemon(
       }
       return;
     }
-    await taskPublisher.handleCompleted(projectId, task);
+    await taskPublisher.queueForDeployment(projectId, task);
   });
   // Light analysis tidies manual backlog cards without running cost estimation.
   taskBoardService.setOnBacklogRefine((projectId, taskId) => {
@@ -1995,6 +2019,7 @@ export async function createPaseoDaemon(
               conductorService,
               taskValidator,
               taskDeployer,
+              taskBatchDeployer,
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);

@@ -5057,6 +5057,14 @@ export class DaemonClient {
     });
   }
 
+  /** "Tout déployer": publish every not-yet-live card of the "À déployer" column. */
+  async tasksBoardDeployAll(input: { projectId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.deploy_all.response">({
+      requestId,
+      message: { type: "tasks.board.deploy_all.request", ...input },
+    });
+  }
+
   async tasksConductorEnsure(
     projectId: string,
     optionsOrRequestId?: { provider?: string; reset?: boolean } | string,

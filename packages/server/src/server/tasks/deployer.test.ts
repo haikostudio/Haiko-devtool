@@ -118,10 +118,12 @@ describe("TaskDeployer", () => {
     expect(task?.deployment ?? null).toBeNull();
   });
 
-  test("closing window: a card moved to « Déployée » records a successful deploy", async () => {
+  test("closing window: a card stamped live records a successful deploy", async () => {
     const taskId = await doneTask({ taskAgentId: "agent-7" });
     await deployer.deploy("proj-1", taskId);
-    await service.transitionTask("proj-1", taskId, "deployed");
+    // What the agent's move_task(…, "deployed") does under the hood: the column
+    // alone no longer means "live" — a finished card waits in "À déployer".
+    await service.markTaskDeployed("proj-1", taskId);
 
     idleCallbacks.forEach((callback) => callback());
     await settled(taskId);
@@ -148,9 +150,10 @@ describe("TaskDeployer", () => {
     expect(board.tasks.find((entry) => entry.id === taskId)?.deployment?.state).toBe("deployed");
   });
 
-  test("an already deployed card is a no-op", async () => {
+  test("a card whose work is already live is a no-op", async () => {
     const taskId = await doneTask({ taskAgentId: "agent-7" });
     await service.transitionTask("proj-1", taskId, "deployed");
+    await service.markTaskDeployed("proj-1", taskId);
 
     const outcome = await deployer.deploy("proj-1", taskId);
 

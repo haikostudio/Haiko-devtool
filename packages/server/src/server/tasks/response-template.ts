@@ -21,18 +21,20 @@ import type { AgentManager } from "../agent/agent-manager.js";
 import type { WorkspaceRegistry } from "../workspace-registry.js";
 import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import type { TaskBoardService } from "./service.js";
+import { isTaskLive } from "./batch-deployer.js";
 
 /**
- * Column → template. Two refinements on top of the plain column reading:
- *  - a deployment in flight wins over the column, because a finished card is
- *    still in "Terminée" while its publication runs, and that turn IS the
- *    publication log;
+ * Column → template. Three refinements on top of the plain column reading:
+ *  - a deployment in flight, or work already live, wins over the column: that
+ *    turn IS the publication log;
+ *  - "À déployer" alone does NOT mean published — it is the queue a finished
+ *    card waits in — so a card sitting there still reports its work;
  *  - "Planifié" reads like "Validé" (analysis already produced, execution not
  *    started) and "Terminée" like "En cours" (the work report), so a card never
  *    falls back to the generic five-section shape mid-cycle.
  */
 export function resolveTaskResponseTemplate(task: KanbanTask): ResponseFormatTemplate {
-  if (task.deployment?.state === "running" || task.column === "deployed") {
+  if (task.deployment?.state === "running" || isTaskLive(task)) {
     return "publication";
   }
   switch (task.column) {
@@ -41,6 +43,7 @@ export function resolveTaskResponseTemplate(task: KanbanTask): ResponseFormatTem
       return "analysis";
     case "in_progress":
     case "done":
+    case "deployed":
       return "progress";
     default:
       // "backlog" and "notes" are inert columns: nothing runs there, and a

@@ -507,7 +507,7 @@ export const ptBR: TranslationResources = {
       scheduled: "Planejado",
       inProgress: "Em andamento",
       done: "Concluído",
-      deployed: "Implantado",
+      deployed: "A implantar",
       notes: "Notas",
     },
     notes: {
@@ -517,6 +517,13 @@ export const ptBR: TranslationResources = {
     },
     board: {
       emptyColumn: "Sem tarefas",
+      deployAll: "Implantar tudo ({{count}})",
+      deployAllRunning: "Publicando…",
+      deployAllTitle: "Implantar tudo",
+      deployAllMessage:
+        "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",
+      deployAllConfirm: "Implantar tudo",
+      deployAllStarted: "Publicação em lote iniciada",
       pendingPublish: "{{count}} cartão(ões) prontos para publicar",
       pendingPublishWithRestart:
         "{{count}} cartão(ões) prontos para publicar, {{restart}} exigem reinício",

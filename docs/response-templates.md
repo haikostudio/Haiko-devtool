@@ -30,8 +30,8 @@ One template for all three produced answers that padded an analysis with fake
 | Template      | When                                                                  | Sections                                                                                                        |
 | ------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `analysis`    | card in **Validé** or **Planifié**                                    | 1. Objectif · 2. Approche retenue · 3. Fichiers & points de vigilance · 4. Estimation                           |
-| `progress`    | card in **En cours** or **Terminée**                                  | 1. Ce qui est fait · 2. Ce qui change · 3. Impact · 4. Évolutions possibles                                     |
-| `publication` | card in **Déployé**, or a deployment in flight (`deployment.state`)   | 1. Ce qui a été publié · 2. Déroulé de la publication · 3. Vérification · 4. Suites éventuelles                 |
+| `progress`    | card in **En cours**, **Terminée** or queued in **À déployer**        | 1. Ce qui est fait · 2. Ce qui change · 3. Impact · 4. Évolutions possibles                                     |
+| `publication` | work already live (`deployedAt`/URL), or a deploy in flight           | 1. Ce qui a été publié · 2. Déroulé de la publication · 3. Vérification · 4. Suites éventuelles                 |
 | `conductor`   | the board's chef d'orchestre agent                                    | none — it never executes anything, so it never reports (see `conductor-agent.ts`)                               |
 | `default`     | anything that is not a card (plain chat, schedules, MCP, **backlog**) | the historical five: Ce qui est fait · Ce qui change · Impact · Évolutions possibles · Activation & facturation |
 

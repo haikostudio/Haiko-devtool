@@ -158,6 +158,7 @@ export default function CarouselDemoScreen() {
       retryTaskAnalysis: async () => {},
       validateTask: async () => ({ passed: false, task: null }),
       deployTask: async () => ({ dispatched: false, task: null }),
+      deployAllTasks: async () => ({ started: false, taskIds: [] }),
       archiveTask: noop,
     }),
     [board, updateTask, deleteTask, approveTask],

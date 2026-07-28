@@ -3,14 +3,21 @@
 The kanban board has seven columns, in order:
 
 ```
-Notes → À faire (backlog) → Validé → Planifié → En cours → Terminé → Déployé
+Notes → À faire (backlog) → Validé → Planifié → En cours → Terminé → À déployer
 ```
 
+The last column is the publication **queue**, not a claim that the work is
+online. Its wire key is still `deployed` (the protocol never renames a column
+value — an old client must keep parsing the board), but its label and its meaning
+are "waiting to be published". What says a card is actually live is its own
+`deployedAt` stamp, never the column.
+
 **The board is moved by hand.** A card changes column because the user dragged
-it. Three machine-made moves survive, and only three: the analysis promotion
+it. Four machine-made moves survive, and only four: the analysis promotion
 ("Validé" → "Planifié", the instant a card's cost analysis succeeds), the launch
-stamp ("Planifié" → "En cours", at the instant the agent really starts) and the
-final-check bar ("En cours" → "Terminé"). Nothing else — no agent activity, no
+stamp ("Planifié" → "En cours", at the instant the agent really starts), the
+final-check bar ("En cours" → "Terminé") and the queueing that immediately
+follows it ("Terminé" → "À déployer"). Nothing else — no agent activity, no
 heuristic — may move a card.
 
 **One project, one board.** Folders (classeurs) are gone from the product: a
@@ -25,14 +32,14 @@ in the project's single list.
 
 ## Ownership of each transition
 
-| Transition          | Who performs it               | Notes                                                                                                                                                                          |
-| ------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| → Notes / → À faire | user **or** an agent          | The only two columns an agent may write to.                                                                                                                                    |
-| À faire → Validé    | **user only**                 | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                                         |
-| Validé → Planifié   | estimator                     | Auto, the instant the card's cost analysis succeeds (see below).                                                                                                               |
-| Planifié → En cours | scheduler                     | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                                             |
-| En cours → Terminé  | **user-initiated**            | The final-check bar — the card's own agent checks, deploys, finishes it.                                                                                                       |
-| Terminé → Déployé   | publish **or** user-initiated | Auto-stamped when the card's branch is confirmed merged + published; also reachable by hand via the "Lancer le déploiement" bar (the card's own agent deploys, then moves it). |
+| Transition           | Who performs it      | Notes                                                                                                                                                            |
+| -------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| → Notes / → À faire  | user **or** an agent | The only two columns an agent may write to.                                                                                                                      |
+| À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                           |
+| Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                                 |
+| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                               |
+| En cours → Terminé   | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it.                                                                                         |
+| Terminé → À déployer | daemon               | Automatic: a finished card is queued for publication the instant it completes (`TaskPublisher.queueForDeployment`). Publishing it is a separate, explicit press. |
 
 ## The invariants
 
@@ -157,27 +164,16 @@ re-reads the request, runs the project's checks, **fixes what it finds**,
 the card itself once everything is green. The user reads the whole thing live
 instead of a dumped report.
 
-**Finishing a card is what publishes it.** There is no deploy button and no
-deploy sheet in the app any more (both were deleted); the whole publication path
-now hangs off the card reaching "Terminée":
+**Finishing a card QUEUES it — it does not publish it.** `setOnTaskCompleted` in
+`bootstrap.ts` hands the card to `TaskPublisher.queueForDeployment`, which moves
+it into "À déployer" and says so in the card's own conversation. Nothing is built
+at that moment.
 
-- **An ordinary project** is deployed by the agent itself, inside the check: its
-  dev server runs as the `autoproject-<slug>` systemd unit behind Caddy on
-  `<slug>.haikostudio.cloud`, so the agent merges its branch into the project's
-  main checkout, restarts the unit and checks the URL answers.
-- **Paseo itself** is published by the daemon: `setOnTaskCompleted` in
-  `bootstrap.ts` hands the card to `TaskPublisher`, which fires
-  `triggerPaseoDeploy` with the card's branch the instant it lands in "Terminée"
-  (local build → Caddy webroot). The agent must NOT run a publish script by
-  hand, and never restarts `paseo.service`.
-
-Because there is no progress sheet any more, `TaskPublisher` narrates the
-publication into the card's OWN conversation ("Construction…", "Mise en ligne…",
-"c'est en ligne : <url>", or the failure reason). It also stamps
-`KanbanTask.deployedUrl` — the address the work went live at, resolved from the
-host's `autoproject` layout (`run/<slug>/start.sh` → checkout,
-`project-autostart.d/<slug>.caddy` → hostname) — so a finished card shows an
-"En ligne" chip one tap from the thing it changed.
+Publication used to fire right there, once per card. On the shared checkout that
+raced itself: several builds reading the same files while other agents were still
+writing them, which is how a torn bundle (a mix of two versions of the same file,
+crashing in the browser with no visible cause) gets published. One press, one
+build, one batch is the fix — see the next section.
 
 That press opens a consent window on that one card — `validation.state ===
 "running"` — and it is the second exception in `move_task`: `done` is accepted
@@ -185,19 +181,44 @@ while the window is open, for that card only. The window closes as soon as the
 agent stops working (`watchAgentIdle`), whether or not it completed the card, so
 a check can never leave the bar stuck.
 
-## Deploying a finished card — the "Lancer le déploiement" bar
+## Publishing — the "Tout déployer" button
 
-The automatic publish above only stamps `deployed` for cards it actually ships —
-Paseo's own cards, or a project whose branch is confirmed merged. Every other
-finished card used to sit in "Terminé" for good. The **"Lancer le déploiement"**
-bar (offered above the prompt on a "Terminé" card) closes that gap, as the exact
-sibling of the final-check bar:
+The **only** gesture that puts work online is the button at the FOOT of the
+"À déployer" column (`deploy-all-button.tsx` → `tasks.board.deploy_all` →
+`TaskBatchDeployer`). It publishes every card of that column whose work is not
+live yet, in ONE run, and restarts the daemon at the end.
+
+- **What it takes.** `selectPendingDeployTasks`: column `deployed`, not archived,
+  not live (`deployedAt` / `deployment.state === "deployed"` / `deployedUrl`). A
+  column whose cards are all online shows no button at all.
+- **Two shapes.** Paseo's own batch goes through `triggerPaseoDeploy` (which
+  merges the cards' branches and hands the build to its own supervising agent);
+  the daemon watches the run, narrates each phase into every card's conversation,
+  stamps the cards live (`markTaskDeployed`) and then restarts itself. Any other
+  project is deployed card by card by each card's own agent (the per-card path
+  below), and no daemon restart follows — that project's own service was
+  restarted by the agent that deployed it.
+- **It refuses to start** while a card is still in "En cours" (a build taken from
+  a checkout other agents are writing into is the torn-bundle bug), while a batch
+  is already running, and when there is nothing left to publish. Each refusal
+  says which case it is.
+- **The restart is part of the deal.** The confirmation dialog says so before
+  anything starts: the daemon is running the code from BEFORE the publication, so
+  the batch ends by restarting it. That press is the explicit, informed consent —
+  nothing else in the daemon ever restarts it on its own.
+- **A failed run marks nothing live**, sets each card's `deployment.state` to
+  `failed`, and says why in the conversations. Silence is never taken for success.
+
+## Deploying one finished card — the "Lancer le déploiement" bar
+
+A single card can still be published on its own, which is how an ordinary project
+(one dev instance, one systemd unit) is deployed:
 
 - It is served by `TaskDeployer` (`deployer.ts`), symmetric to `TaskValidator`.
   Pressing it hands the card's OWN agent a deploy-then-confirm prompt
   (`buildDeployPrompt`): verify the work still runs, deploy it (dev instance for a
-  project; for Paseo, only confirm — the daemon already published at "Terminé"),
-  then move the card to "Déployé" itself.
+  project; for Paseo, only confirm — its publication belongs to "Tout déployer"),
+  then confirm it with `move_task(…, "deployed")`, which stamps the card live.
 - The press opens a consent window on that one card — `deployment.state ===
 "running"` — the **third exception** in `move_task`: `deployed` is accepted
   while the window is open, for that card only. The window closes on
@@ -206,8 +227,9 @@ sibling of the final-check bar:
   an agent may still set by hand. It is **purely informative** — it never triggers
   a restart; that stays the user's explicit call. See below for how the flag is
   now resolved automatically, well before the deploy.
-- On a "Terminé" card the deploy bar takes the composer slot ahead of the archive
-  bar, so the natural order is deploy, then archive.
+- The bar is offered on a finished card that is not live yet — whether it is
+  still in "Terminé" or already waiting in "À déployer" — and takes the composer
+  slot ahead of the archive bar, so the natural order is deploy, then archive.
 
 ## "Redémarrage requis" — an advance warning, not a post-mortem
 
@@ -305,12 +327,12 @@ only take effect after a daemon restart — instead of discovering it afterwards
 
 ## Archiving a card — hide, never publish
 
-A finished card (in "Terminé" or "Déployé") can be **archived** by hand from the
-"Archiver" bar above its prompt. Archiving is deliberately **orthogonal to the
-seven columns**: it does not move the card, does not publish it, and does not
-touch the automatic `done → deployed` publication that `TaskPublisher` already
-runs (`publish-on-complete.ts`). It only sets an optional `archivedAt` stamp and
-the board **hides** the card from view.
+A finished card (in "Terminé" or "À déployer") can be **archived** by hand from
+the "Archiver" bar above its prompt. Archiving is deliberately **orthogonal to
+the seven columns**: it does not move the card and does not publish it. It only
+sets an optional `archivedAt` stamp and the board **hides** the card from view —
+which also drops it out of the next batch (`selectPendingDeployTasks` skips
+archived cards), so filing a card away is a way to say "not this one".
 
 Two behaviours were considered:
 
@@ -319,21 +341,20 @@ Two behaviours were considered:
 - **(b) hide the card from the board** — remove it from view without publishing.
 
 We chose **(b)**. Archiving is a filing gesture, not a publishing one: the user
-is saying "I'm done looking at this", not "put this live". Publication already
-happens on its own the instant a card reaches "Terminé" (Paseo by the daemon,
-ordinary projects by the card's own agent inside the final check), so an archive
-that also published would either double the work or race it. Keeping archive
-purely additive means it can never break invariant 4 below.
+is saying "I'm done looking at this", not "put this live". Publication has its
+own explicit button ("Tout déployer"), so an archive that also published would
+either double the work or race it. Keeping archive purely additive means it can
+never break invariant 4 below.
 
 The mechanics:
 
 - `archivedAt` is an **optional, additive** field on the task (old boards/clients
-  simply omit it). Setting it never changes the card's `column`, so the pipeline,
-  the scheduler and `TaskPublisher` all keep seeing the card exactly as before.
+  simply omit it). Setting it never changes the card's `column`, so the pipeline
+  and the scheduler keep seeing the card exactly as before.
 - The **board hides** archived cards on the display side; the daemon still stores
   them, so a future "archived" view can list and un-archive them. Nothing on the
   server drops an archived task from the pipeline.
-- The bar is offered **only** in "Terminé"/"Déployé" — the two terminal columns —
+- The bar is offered **only** in "Terminé"/"À déployer" — the two terminal columns —
   because archiving mid-flight would hide live work.
 
 ## The other exception

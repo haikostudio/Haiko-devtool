@@ -11,6 +11,7 @@ import { TaskCardMenu } from "./task-card-menu";
 import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
 import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
+import { DeployAllButton } from "./deploy-all-button";
 import {
   buildColumnModels,
   EMPTY_COLUMN_CONTROLS,
@@ -46,6 +47,7 @@ export function ScrollableKanbanBoard({
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
+  onDeployAll,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -85,6 +87,7 @@ export function ScrollableKanbanBoard({
             onRunTask={onRunTask}
             onReanalyzeTask={onReanalyzeTask}
             onDeleteTask={onDeleteTask}
+            onDeployAll={onDeployAll}
           />
         ))}
       </View>
@@ -109,6 +112,7 @@ const BoardColumn = memo(function BoardColumn({
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
+  onDeployAll,
 }: {
   board: TaskBoard | null;
   column: TaskColumn;
@@ -124,6 +128,7 @@ const BoardColumn = memo(function BoardColumn({
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
+  onDeployAll: KanbanBoardProps["onDeployAll"];
 }) {
   const { t } = useTranslation();
   // Cards of one lot ("N sur M", shared lot tag) collapse into a single pile
@@ -228,6 +233,9 @@ const BoardColumn = memo(function BoardColumn({
           {tasks.length === 0 && !extras ? (
             <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
           ) : null}
+          {/* "Tout déployer" sits at the FOOT of the queue column: the button is
+              the last thing under the cards it is about to publish. */}
+          <DeployAllButton column={column} tasks={tasks} onDeployAll={onDeployAll} />
         </View>
       </ScrollView>
     </View>

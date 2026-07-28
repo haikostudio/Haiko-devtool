@@ -193,6 +193,15 @@ export const TasksTaskDeployRequestSchema = z.object({
   taskId: z.string(),
 });
 
+// "Tout déployer": publish EVERY card sitting in the last column ("À déployer")
+// whose work is not live yet, in one run, then restart the daemon. The batch is
+// what a finished card now waits in — see docs/task-board-cycle.md.
+export const TasksBoardDeployAllRequestSchema = z.object({
+  type: z.literal("tasks.board.deploy_all.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+});
+
 export const TasksConductorEnsureRequestSchema = z.object({
   type: z.literal("tasks.conductor.ensure.request"),
   requestId: z.string(),
@@ -364,6 +373,19 @@ export const TasksTaskDeployResponseSchema = z.object({
     // re-deploy of a card already flagged). The authoritative value lands on the
     // task once the agent finishes. Additive + optional.
     needsDaemonRestart: z.boolean().optional(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksBoardDeployAllResponseSchema = z.object({
+  type: z.literal("tasks.board.deploy_all.response"),
+  payload: z.object({
+    requestId: z.string(),
+    // True when the batch publication really started. The run then plays out in
+    // the cards' own conversations (and on the board), not in this response.
+    started: z.boolean(),
+    // The cards this run is taking online. Additive + optional.
+    taskIds: z.array(z.string()).optional(),
     error: z.string().nullable(),
   }),
 });

@@ -1,0 +1,351 @@
+import type pino from "pino";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
+import type { AgentManager } from "../agent/agent-manager.js";
+import type { ProjectRegistry } from "../workspace-registry.js";
+import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
+import { resolveTaskAgentId } from "./validator.js";
+
+export interface DeployTriggerResult {
+  started: boolean;
+  error?: string | null;
+}
+
+export interface DeployRunSnapshot {
+  deploying: boolean;
+  phase: string | null;
+  outcome: "success" | "failed" | null;
+  error: string | null;
+}
+
+/** How often the publication is polled while it runs. */
+const POLL_INTERVAL_MS = 5_000;
+/** Hard stop for the watcher, slightly above the deploy's own 30 min ceiling. */
+const MAX_WATCH_MS = 35 * 60 * 1000;
+/**
+ * Breathing room between "everything is live" and the daemon restart, so the
+ * board update and the closing note reach the clients before the socket drops.
+ */
+const RESTART_GRACE_MS = 5_000;
+
+/** Human phase labels, in the order the build script writes them. */
+const PHASE_LABELS: Record<string, string> = {
+  save: "Sauvegarde du travail…",
+  build: "Construction de l'application…",
+  publish: "Mise en ligne…",
+};
+
+export interface TaskBatchDeployResult {
+  /** True when the batch publication really started. */
+  started: boolean;
+  /** The cards this run is taking online. */
+  taskIds: string[];
+}
+
+export interface TaskBatchDeployerOptions {
+  taskBoardService: TaskBoardService;
+  projectRegistry: Pick<ProjectRegistry, "get">;
+  agentManager: Pick<AgentManager, "appendTimelineItem">;
+  /** True when this project's checkout is the Paseo repo (daemon-published). */
+  isSelfHostRoot: (rootPath: string | null | undefined) => boolean;
+  /** Public address serving this project, or null when it has no instance. */
+  resolveProjectUrl: (rootPath: string | null) => Promise<string | null>;
+  /** Starts the publication (merges the cards' branches, builds, puts online). */
+  triggerDeploy: (input: {
+    projectId: string;
+    mergeBranches: string[];
+  }) => Promise<DeployTriggerResult>;
+  readDeployRun: () => Promise<DeployRunSnapshot>;
+  /** Hands a deploy-then-confirm prompt to one card's own agent. */
+  deployTask: (projectId: string, taskId: string) => Promise<unknown>;
+  /** Restarts the daemon — the last step of a successful self-host batch. */
+  requestDaemonRestart: (reason: string) => void;
+  /** Injected so tests don't wait on real time. */
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+  logger: pino.Logger;
+}
+
+/** True once a card's work is actually live (mirrors the app's isTaskDeployed). */
+export function isTaskLive(task: KanbanTask): boolean {
+  return (
+    task.deployedAt != null || task.deployment?.state === "deployed" || Boolean(task.deployedUrl)
+  );
+}
+
+/** The cards a "Tout déployer" press would take online, in board order. */
+export function selectPendingDeployTasks(tasks: readonly KanbanTask[]): KanbanTask[] {
+  return tasks.filter(
+    (task) => task.column === "deployed" && !task.archivedAt && !isTaskLive(task),
+  );
+}
+
+/**
+ * "Tout déployer" — the button at the bottom of the "À déployer" column.
+ *
+ * Finishing a card no longer publishes it: it parks the card in the last column,
+ * which is a QUEUE. This publishes everything waiting there in ONE run, and
+ * restarts the daemon at the end so the freshly published code is the code that
+ * runs. One run for the whole batch is the point — the old per-card publication
+ * raced itself on the shared checkout and produced torn builds.
+ *
+ * Two shapes, one gesture:
+ * - **Paseo itself** is published by the daemon (`triggerDeploy` merges the
+ *   cards' branches and hands the build to its own supervising agent). We watch
+ *   the run, narrate each phase into every card's conversation, stamp the cards
+ *   live, then restart the daemon.
+ * - **Any other project** is deployed card by card by each card's OWN agent (the
+ *   existing "Lancer le déploiement" path), because the agent is the only one who
+ *   knows that project's dev instance. No daemon restart there: the project's own
+ *   service is restarted by the agent.
+ *
+ * It refuses to start while cards are still running ("En cours"): a build taken
+ * from a checkout other agents are writing into is the torn-bundle bug.
+ */
+export class TaskBatchDeployer {
+  private readonly options: TaskBatchDeployerOptions;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly now: () => number;
+  private readonly logger: pino.Logger;
+  private readonly running = new Set<string>();
+
+  constructor(options: TaskBatchDeployerOptions) {
+    this.options = options;
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.now = options.now ?? (() => Date.now());
+    this.logger = options.logger.child({ module: "task-batch-deployer" });
+  }
+
+  async deployAll(projectId: string): Promise<TaskBatchDeployResult> {
+    if (this.running.has(projectId)) {
+      throw new TaskBoardServiceError(
+        "batch_deploy_running",
+        "Une publication groupée est déjà en cours pour ce projet.",
+      );
+    }
+    const board = await this.options.taskBoardService.getBoard(projectId);
+    const pending = selectPendingDeployTasks(board.tasks);
+    if (pending.length === 0) {
+      throw new TaskBoardServiceError(
+        "batch_deploy_empty",
+        "Aucune tâche à déployer : tout ce qui attend dans cette colonne est déjà en ligne.",
+      );
+    }
+    const busy = board.tasks.filter((task) => task.column === "in_progress" && !task.archivedAt);
+    if (busy.length > 0) {
+      throw new TaskBoardServiceError(
+        "batch_deploy_workshop_busy",
+        `${busy.length} tâche(s) sont encore en cours : attendez qu'elles se terminent avant de publier, sinon la construction embarquerait du code inachevé.`,
+      );
+    }
+
+    this.running.add(projectId);
+    const startedAt = new Date().toISOString();
+    // Open the deploy window on every card of the batch BEFORE anything starts:
+    // that is what the board shows as "Publication en cours", and — on an ordinary
+    // project — what authorizes each card's agent to confirm its own deployment.
+    for (const task of pending) {
+      await this.options.taskBoardService.patchTask(projectId, task.id, (current) => ({
+        ...current,
+        deployment: { state: "running" as const, startedAt },
+      }));
+    }
+    const taskIds = pending.map((task) => task.id);
+    void this.run(projectId, pending)
+      .catch((error) => {
+        this.logger.error({ err: error, projectId }, "Batch deployment failed");
+      })
+      .finally(() => {
+        this.running.delete(projectId);
+      });
+    return { started: true, taskIds };
+  }
+
+  private async run(projectId: string, pending: KanbanTask[]): Promise<void> {
+    const project = await this.options.projectRegistry.get(projectId);
+    const rootPath = project?.rootPath ?? null;
+    await this.sayAll(pending, `🚀 **Publication groupée** — ${pending.length} tâche(s) en file.`);
+
+    if (!this.options.isSelfHostRoot(rootPath)) {
+      await this.runPerCard(projectId, pending);
+      return;
+    }
+
+    const branches = [
+      ...new Set(pending.map((task) => task.links.branch).filter((b): b is string => Boolean(b))),
+    ];
+    const result = await this.options.triggerDeploy({ projectId, mergeBranches: branches });
+    if (!result.started) {
+      await this.fail(projectId, pending, result.error ?? "raison inconnue");
+      return;
+    }
+    const url = await this.options.resolveProjectUrl(rootPath);
+    await this.watch({ projectId, pending, url });
+  }
+
+  /**
+   * An ordinary project: each card's own agent deploys its own work, one after
+   * the other. Sequential on purpose — two agents deploying the same project at
+   * once would restart its service under each other's feet.
+   */
+  private async runPerCard(projectId: string, pending: KanbanTask[]): Promise<void> {
+    for (const task of pending) {
+      try {
+        await this.options.deployTask(projectId, task.id);
+      } catch (error) {
+        this.logger.warn(
+          { err: error, projectId, taskId: task.id },
+          "Per-card deploy dispatch failed",
+        );
+        await this.say(
+          task,
+          `⚠️ **Publication groupée** — cette carte n'a pas pu être déployée : ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        await this.closeWindow(projectId, task.id);
+      }
+    }
+  }
+
+  /** Follows the running publication, narrating each phase change once. */
+  private async watch(input: {
+    projectId: string;
+    pending: KanbanTask[];
+    url: string | null;
+  }): Promise<void> {
+    const deadline = this.now() + MAX_WATCH_MS;
+    let lastPhase: string | null = null;
+    while (this.now() < deadline) {
+      await this.sleep(POLL_INTERVAL_MS);
+      let run: DeployRunSnapshot;
+      try {
+        run = await this.options.readDeployRun();
+      } catch (error) {
+        this.logger.debug({ err: error }, "Publication status read failed");
+        continue;
+      }
+      if (run.phase && run.phase !== lastPhase) {
+        lastPhase = run.phase;
+        const label = PHASE_LABELS[run.phase];
+        if (label) {
+          await this.sayAll(input.pending, `⏳ **Publication groupée** — ${label}`);
+        }
+      }
+      if (run.deploying) {
+        continue;
+      }
+      if (run.outcome === "success") {
+        await this.succeed(input.projectId, input.pending, input.url);
+        return;
+      }
+      if (run.outcome === "failed") {
+        await this.fail(input.projectId, input.pending, run.error ?? "raison inconnue");
+        return;
+      }
+      // No run known any more (retention expired): stop quietly rather than
+      // claiming an outcome we can't vouch for. The windows still close.
+      await this.closeAll(input.projectId, input.pending);
+      return;
+    }
+    await this.sayAll(
+      input.pending,
+      "⚠️ **Publication groupée** — toujours en cours après 35 minutes, je cesse de la suivre.",
+    );
+    await this.closeAll(input.projectId, input.pending);
+  }
+
+  /** Everything is online: stamp the cards, then restart the engine. */
+  private async succeed(
+    projectId: string,
+    pending: KanbanTask[],
+    url: string | null,
+  ): Promise<void> {
+    for (const task of pending) {
+      try {
+        await this.options.taskBoardService.markTaskDeployed(projectId, task.id, { url });
+      } catch (error) {
+        this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
+      }
+    }
+    await this.sayAll(
+      pending,
+      url
+        ? `✅ **Publication groupée** — c'est en ligne : ${url}`
+        : "✅ **Publication groupée** — c'est en ligne.",
+    );
+    // The daemon is still running the code from BEFORE this publication, so the
+    // last step of the batch is restarting it. That is exactly what the user
+    // authorized by pressing the button — nothing else ever restarts it on its own.
+    await this.sayAll(
+      pending,
+      "🔄 **Publication groupée** — redémarrage du moteur pour appliquer les changements…",
+    );
+    await this.sleep(RESTART_GRACE_MS);
+    try {
+      this.options.requestDaemonRestart("task_batch_deploy");
+    } catch (error) {
+      this.logger.error({ err: error, projectId }, "Daemon restart request failed");
+    }
+  }
+
+  private async fail(projectId: string, pending: KanbanTask[], reason: string): Promise<void> {
+    await this.sayAll(pending, `❌ **Publication groupée** — échec : ${reason}`);
+    for (const task of pending) {
+      await this.markFailed(projectId, task.id);
+    }
+  }
+
+  private async closeAll(projectId: string, pending: KanbanTask[]): Promise<void> {
+    for (const task of pending) {
+      await this.closeWindow(projectId, task.id);
+    }
+  }
+
+  /** Reopens the button for this card: the window closes without a verdict. */
+  private async closeWindow(projectId: string, taskId: string): Promise<void> {
+    try {
+      await this.options.taskBoardService.patchTask(projectId, taskId, (current) =>
+        current.deployment?.state === "running" ? { ...current, deployment: null } : current,
+      );
+    } catch (error) {
+      this.logger.debug({ err: error, projectId, taskId }, "Failed to close a deploy window");
+    }
+  }
+
+  private async markFailed(projectId: string, taskId: string): Promise<void> {
+    try {
+      await this.options.taskBoardService.patchTask(projectId, taskId, (current) =>
+        current.deployment?.state === "running"
+          ? {
+              ...current,
+              deployment: { state: "failed" as const, startedAt: current.deployment?.startedAt },
+            }
+          : current,
+      );
+    } catch (error) {
+      this.logger.debug({ err: error, projectId, taskId }, "Failed to mark a deploy as failed");
+    }
+  }
+
+  private async sayAll(tasks: KanbanTask[], text: string): Promise<void> {
+    for (const task of tasks) {
+      await this.say(task, text);
+    }
+  }
+
+  /** Posts a note into a card's conversation; never throws. */
+  private async say(task: KanbanTask, text: string): Promise<void> {
+    const agentId = resolveTaskAgentId(task);
+    if (!agentId) {
+      return;
+    }
+    try {
+      await this.options.agentManager.appendTimelineItem(agentId, {
+        type: "assistant_message",
+        text,
+      });
+    } catch (error) {
+      this.logger.debug({ err: error, agentId }, "Publication note not delivered");
+    }
+  }
+}

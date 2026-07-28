@@ -29,6 +29,7 @@ import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task
 import { createPressSlopTracker } from "./card-press-slop";
 import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
+import { DeployAllButton } from "./deploy-all-button";
 import {
   buildColumnModels,
   EMPTY_COLUMN_CONTROLS,
@@ -85,6 +86,7 @@ export function KanbanBoard({
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
+  onDeployAll,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -205,6 +207,7 @@ export function KanbanBoard({
               onRunTask={onRunTask}
               onReanalyzeTask={onReanalyzeTask}
               onDeleteTask={onDeleteTask}
+              onDeployAll={onDeployAll}
             />
           ))}
         </View>
@@ -237,6 +240,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
+  onDeployAll,
 }: {
   board: TaskBoard | null;
   column: TaskColumn;
@@ -253,6 +257,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
+  onDeployAll: KanbanBoardProps["onDeployAll"];
 }) {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({ id: `${COLUMN_DROPPABLE_PREFIX}${column}` });
@@ -369,6 +374,9 @@ const DroppableColumn = memo(function DroppableColumn({
         {tasks.length === 0 && !extras ? (
           <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
         ) : null}
+        {/* "Tout déployer" sits at the FOOT of the queue column: the button is
+            the last thing under the cards it is about to publish. */}
+        <DeployAllButton column={column} tasks={tasks} onDeployAll={onDeployAll} />
       </div>
     </View>
   );

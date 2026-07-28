@@ -4,6 +4,7 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
 import { resolveTaskAgentId } from "./validator.js";
+import { isTaskLive } from "./batch-deployer.js";
 
 export interface TaskDeploymentOutcome {
   task: KanbanTask;
@@ -68,15 +69,17 @@ export class TaskDeployer {
     if (!task) {
       throw new TaskBoardServiceError("task_not_found", `Task not found: ${taskId}`);
     }
-    // Already deployed: nothing to do.
-    if (task.column === "deployed") {
+    // Already online: nothing to do. The column alone does not say that any more
+    // — "À déployer" is the queue a finished card waits in — so the truth is the
+    // live stamp itself.
+    if (isTaskLive(task)) {
       return { task, dispatched: false, needsDaemonRestart: task.needsDaemonRestart ?? false };
     }
-    // "Terminée" is the only column a card may leave for "Déployée": deployment is
-    // the confirmation that finished work is actually live. Without this the
-    // consent window could be opened on a card whose work never finished, and the
-    // agent would then be allowed to deploy it.
-    if (task.column !== "done") {
+    // A card may only be deployed once its work is finished: either it just
+    // reached "Terminée", or it is already waiting in the "À déployer" queue.
+    // Without this the consent window could be opened on a card whose work never
+    // finished, and the agent would then be allowed to deploy it.
+    if (task.column !== "done" && task.column !== "deployed") {
       throw new TaskBoardServiceError(
         "task_deploy_not_done",
         "Cette tâche n'est pas terminée : terminez-la avant de lancer le déploiement.",
@@ -134,7 +137,7 @@ export class TaskDeployer {
     // when the work is demonstrably live (a deployedUrl was stamped). Treating a
     // live URL as success keeps the window from resetting to a fresh, clickable
     // "Lancer le déploiement" on a card whose work is already published.
-    const deployed = task.column === "deployed" || Boolean(task.deployedUrl);
+    const deployed = isTaskLive(task);
     await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       deployment: deployed
@@ -187,9 +190,9 @@ export function buildDeployPrompt(input: {
     "   • Installe les dépendances si le lockfile a changé, puis redémarre : `sudo systemctl restart autoproject-<slug>`.",
     "   • VÉRIFIE que c'est réellement en ligne : `systemctl is-active autoproject-<slug>`, puis `curl -sI https://<slug>.haikostudio.cloud` (réponse 200/3xx attendue). En cas d'échec : `journalctl -u autoproject-<slug> -n 80 --no-pager`, corrige, recommence.",
     "   • Si ce projet n'a AUCUNE instance dev sur le VPS, ne l'invente pas : dis-le en une phrase et passe à l'étape 3.",
-    "   • Cas particulier — si ce projet est Paseo lui-même : NE lance aucun script de publication et NE redémarre PAS `paseo.service`. La publication est déjà partie toute seule quand la carte a été terminée. Contente-toi de confirmer qu'elle est en ligne.",
+    "   • Cas particulier — si ce projet est Paseo lui-même : NE lance aucun script de publication et NE redémarre PAS `paseo.service`. Sa publication passe par le bouton « Tout déployer » de la colonne « À déployer », qui publie tout le lot d'un coup. Contente-toi de vérifier/confirmer l'état en ligne.",
     "   • INTERDIT dans tous les cas : toucher à un autre projet que celui de cette tâche.",
-    "3. Une fois le déploiement confirmé en ligne, marque la tâche comme déployée avec l'outil move_task. Renseigne `needsDaemonRestart` :",
+    "3. Une fois le déploiement confirmé en ligne, marque la tâche comme déployée avec l'outil move_task (colonne « deployed » : la carte y est peut-être déjà — l'appel l'estampille alors « en ligne »). Renseigne `needsDaemonRestart` :",
     "   • `true` si la modification ne prend effet qu'après un redémarrage du démon/service (typiquement un changement côté serveur). Le redémarrage reste à la décision de l'utilisateur : ne le déclenche PAS toi-même, la carte affichera simplement un indicateur.",
     "   • `false` si le déploiement suffit (changement côté interface uniquement, déjà pris en compte au redémarrage du service ci-dessus).",
     `   move_task(projectId: "${projectId}", taskId: "${task.id}", column: "deployed", needsDaemonRestart: <true|false>)`,

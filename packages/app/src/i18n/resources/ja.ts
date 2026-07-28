@@ -501,7 +501,7 @@ export const ja: TranslationResources = {
       scheduled: "予定",
       inProgress: "進行中",
       done: "完了",
-      deployed: "デプロイ済み",
+      deployed: "デプロイ待ち",
       notes: "メモ",
     },
     notes: {
@@ -511,6 +511,13 @@ export const ja: TranslationResources = {
     },
     board: {
       emptyColumn: "タスクなし",
+      deployAll: "すべてデプロイ ({{count}})",
+      deployAllRunning: "公開中…",
+      deployAllTitle: "すべてデプロイ",
+      deployAllMessage:
+        "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",
+      deployAllConfirm: "すべてデプロイ",
+      deployAllStarted: "一括公開を開始しました",
       pendingPublish: "公開待ちのカード {{count}} 件",
       pendingPublishWithRestart:
         "公開待ちのカード {{count}} 件（うち {{restart}} 件は再起動が必要）",

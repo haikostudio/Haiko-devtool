@@ -189,16 +189,18 @@ export function TaskAgentChat({
   // card away by hiding it from the board. It never publishes or moves the card —
   // publication already happened on its own when the card reached "Terminé".
   const showArchive = Boolean(onArchive) && (task.column === "done" || task.column === "deployed");
-  // The deploy bar sits on a finished card ("Terminé") only: it hands the card's
+  // The deploy bar publishes THIS card on its own — the sibling of the column's
+  // "Tout déployer", for when only one card has to go out. It hands the card's
   // own agent a deploy-then-confirm prompt, which verifies the work, publishes it
-  // and moves the card to "Déployé". It takes the composer slot ahead of the
-  // archive bar on a "done" card, so the natural order is deploy, then archive.
-  // Only offer the deploy bar while the work is NOT yet live. Once the server
-  // confirms it is published (deployment reached "deployed", or a deployedUrl was
-  // stamped by the auto-publish that fires the instant a card reaches "Terminé"),
-  // the button must not linger as if nothing shipped: it steps aside — the card
-  // wears a "Déployé" badge and the archive bar takes the slot instead.
-  const showDeploy = Boolean(onDeploy) && task.column === "done" && !isTaskDeployed(task);
+  // and stamps the card live. It is offered on a finished card ("Terminé") and on
+  // one already waiting in the publication queue ("À déployer"), and takes the
+  // composer slot ahead of the archive bar, so the natural order is deploy, then
+  // archive. Once the work IS live it steps aside — the card wears a "Déployé"
+  // badge and the archive bar takes the slot instead.
+  const showDeploy =
+    Boolean(onDeploy) &&
+    (task.column === "done" || task.column === "deployed") &&
+    !isTaskDeployed(task);
   // The restart bar is the other side of the publication: the work IS live, and
   // a daemon restart is the only thing left between the user and their feature.
   // It takes the slot ahead of the archive bar, so the natural order stays

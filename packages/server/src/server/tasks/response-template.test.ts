@@ -72,7 +72,8 @@ describe("resolveTaskResponseTemplate", () => {
     ["scheduled", "analysis"],
     ["in_progress", "progress"],
     ["done", "progress"],
-    ["deployed", "publication"],
+    // "À déployer" is the publication QUEUE: the card still reports its work.
+    ["deployed", "progress"],
     ["backlog", "default"],
     ["notes", "default"],
   ];
@@ -88,9 +89,15 @@ describe("resolveTaskResponseTemplate", () => {
     expect(resolveTaskResponseTemplate(task)).toBe("publication");
   });
 
-  it("a finished publication leaves the column in charge again", () => {
-    const task = makeTask({ column: "done", deployment: { state: "deployed" } });
-    expect(resolveTaskResponseTemplate(task)).toBe("progress");
+  it("work that is live reports a publication, whatever the column says", () => {
+    expect(
+      resolveTaskResponseTemplate(
+        makeTask({ column: "deployed", deployedAt: "2026-07-28T12:00:00.000Z" }),
+      ),
+    ).toBe("publication");
+    expect(
+      resolveTaskResponseTemplate(makeTask({ column: "done", deployment: { state: "deployed" } })),
+    ).toBe("publication");
   });
 });
 
@@ -128,7 +135,9 @@ describe("createTaskResponseTemplateHook", () => {
   });
 
   it("re-reads the board every time, so moving the card changes the next answer", async () => {
-    const { hook, boardReads } = makeHook({ task: makeTask({ column: "deployed" }) });
+    const { hook, boardReads } = makeHook({
+      task: makeTask({ column: "deployed", deployedAt: "2026-07-28T12:00:00.000Z" }),
+    });
     expect(await hook({ agentId: "agent-1" })).toBe("publication");
     expect(await hook({ agentId: "agent-1" })).toBe("publication");
     expect(boardReads()).toBe(2);
@@ -145,8 +154,10 @@ describe("column → sections, end to end", () => {
     expect(body).not.toContain("## 1. Ce qui est fait");
   });
 
-  it("sends the publication sections for a deployed card", async () => {
-    const { hook } = makeHook({ task: makeTask({ column: "deployed" }) });
+  it("sends the publication sections for a card whose work is live", async () => {
+    const { hook } = makeHook({
+      task: makeTask({ column: "deployed", deployedAt: "2026-07-28T12:00:00.000Z" }),
+    });
     const template = await hook({ agentId: "agent-1" });
     const body = responseFormatBody(template ?? "default");
     expect(body).toContain("## 1. Ce qui a été publié");

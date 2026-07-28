@@ -498,7 +498,7 @@ export const en = {
       scheduled: "Planned",
       inProgress: "In progress",
       done: "Done",
-      deployed: "Deployed",
+      deployed: "To deploy",
       notes: "Notes",
     },
     notes: {
@@ -508,6 +508,13 @@ export const en = {
     },
     board: {
       emptyColumn: "No tasks",
+      deployAll: "Deploy all ({{count}})",
+      deployAllRunning: "Publishing…",
+      deployAllTitle: "Deploy all",
+      deployAllMessage:
+        "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",
+      deployAllConfirm: "Deploy all",
+      deployAllStarted: "Batch publication started",
       pendingPublish: "{{count}} card(s) ready to publish",
       pendingPublishWithRestart:
         "{{count}} card(s) ready to publish, {{restart}} needing a restart",

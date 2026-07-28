@@ -202,8 +202,21 @@ describe("getPublishNotice", () => {
   });
 
   it("drops the notice once the work is live", () => {
-    // Both truths that mean "published": the column, and the server-stamped URL.
-    expect(getPublishNotice(makeTask({ column: "deployed", needsDaemonRestart: true }))).toBeNull();
+    // The truths that mean "published": the deploy stamp and the stamped URL.
+    // The column is NOT one of them — "À déployer" is where a card waits.
+    expect(
+      getPublishNotice(
+        makeTask({
+          column: "deployed",
+          needsDaemonRestart: true,
+          deployedAt: "2026-07-28T12:00:00.000Z",
+        }),
+      ),
+    ).toBeNull();
+    expect(getPublishNotice(makeTask({ column: "deployed", needsDaemonRestart: true }))).toEqual({
+      labelKey: "tasks.card.needsRestart",
+      variant: "warning",
+    });
     expect(
       getPublishNotice(
         makeTask({
@@ -218,8 +231,18 @@ describe("getPublishNotice", () => {
 
 describe("offersDaemonRestart", () => {
   it("offers the restart once the work is live and needs one", () => {
+    expect(
+      offersDaemonRestart(
+        makeTask({
+          column: "deployed",
+          needsDaemonRestart: true,
+          deployedAt: "2026-07-28T12:00:00.000Z",
+        }),
+      ),
+    ).toBe(true);
+    // Queued but not published yet: restarting would prove nothing.
     expect(offersDaemonRestart(makeTask({ column: "deployed", needsDaemonRestart: true }))).toBe(
-      true,
+      false,
     );
     expect(
       offersDaemonRestart(

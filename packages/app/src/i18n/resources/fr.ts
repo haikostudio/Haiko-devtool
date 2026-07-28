@@ -508,7 +508,7 @@ export const fr: TranslationResources = {
       scheduled: "Planifié",
       inProgress: "En cours",
       done: "Terminé",
-      deployed: "Déployé",
+      deployed: "À déployer",
       notes: "Notes",
     },
     notes: {
@@ -518,6 +518,13 @@ export const fr: TranslationResources = {
     },
     board: {
       emptyColumn: "Aucune tâche",
+      deployAll: "Tout déployer ({{count}})",
+      deployAllRunning: "Publication en cours…",
+      deployAllTitle: "Tout déployer",
+      deployAllMessage:
+        "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",
+      deployAllConfirm: "Tout déployer",
+      deployAllStarted: "Publication groupée lancée",
       pendingPublish: "{{count}} carte(s) prête(s) à publier",
       pendingPublishWithRestart:
         "{{count}} carte(s) prête(s) à publier, dont {{restart}} nécessitant un redémarrage",

@@ -6,6 +6,7 @@ import type { TaskScheduler } from "../../tasks/scheduler.js";
 import type { ConductorAgentService } from "../../tasks/conductor-agent.js";
 import type { TaskValidator } from "../../tasks/validator.js";
 import type { TaskDeployer } from "../../tasks/deployer.js";
+import type { TaskBatchDeployer } from "../../tasks/batch-deployer.js";
 
 export interface TasksSessionHost {
   emit(msg: SessionOutboundMessage): void;
@@ -19,6 +20,7 @@ export interface TasksSessionOptions {
   conductorService: ConductorAgentService | null;
   taskValidator: TaskValidator | null;
   taskDeployer: TaskDeployer | null;
+  taskBatchDeployer: TaskBatchDeployer | null;
   logger: pino.Logger;
 }
 
@@ -34,6 +36,7 @@ export class TasksSession {
   private readonly conductorService: ConductorAgentService | null;
   private readonly taskValidator: TaskValidator | null;
   private readonly taskDeployer: TaskDeployer | null;
+  private readonly taskBatchDeployer: TaskBatchDeployer | null;
   private readonly logger: pino.Logger;
   private readonly subscriptions = new Map<string, () => void>();
 
@@ -45,6 +48,7 @@ export class TasksSession {
     this.conductorService = options.conductorService;
     this.taskValidator = options.taskValidator;
     this.taskDeployer = options.taskDeployer;
+    this.taskBatchDeployer = options.taskBatchDeployer;
     this.logger = options.logger;
   }
 
@@ -452,6 +456,39 @@ export class TasksSession {
       this.host.emit({
         type: "tasks.task.deploy.response",
         payload: { requestId: request.requestId, task: null, error: message },
+      });
+    }
+  }
+
+  /**
+   * "Tout déployer": publish every not-yet-live card of the "À déployer" column
+   * in one run, then restart the daemon. The run plays out in the cards' own
+   * conversations; this resolves as soon as it has started.
+   */
+  async handleBoardDeployAllRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.board.deploy_all.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.taskBatchDeployer) {
+        throw new TaskBoardServiceError(
+          "batch_deployer_unavailable",
+          "Task batch deployer is not available",
+        );
+      }
+      const { started, taskIds } = await this.taskBatchDeployer.deployAll(request.projectId);
+      this.host.emit({
+        type: "tasks.board.deploy_all.response",
+        payload: { requestId: request.requestId, started, taskIds, error: null },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        { err: error, projectId: request.projectId },
+        "Batch deploy request failed",
+      );
+      this.host.emit({
+        type: "tasks.board.deploy_all.response",
+        payload: { requestId: request.requestId, started: false, taskIds: [], error: message },
       });
     }
   }

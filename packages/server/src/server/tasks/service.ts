@@ -50,18 +50,23 @@ const INERT_COLUMNS = new Set<TaskColumn>(["notes", "backlog"]);
  * - `billing`, which records that this task's line was already added to an
  *   invoice. Clearing it would invite invoicing the same work twice.
  */
-/** Stamps completedAt / deployedAt the first time a card reaches a terminal column. */
+/**
+ * Stamps completedAt the first time a card reaches a terminal column.
+ *
+ * The last column is the publication QUEUE ("À déployer"), not a claim that the
+ * work is live: a finished card lands there on its own and waits for the batch
+ * publication. So entering it never stamps `deployedAt` — that stamp means "this
+ * is online" and is written by {@link TaskBoardService.markTaskDeployed} once a
+ * publication actually succeeded. A card that jumped straight there still gets
+ * its missing completion stamp.
+ */
 function stampTerminalDates(
   task: KanbanTask,
   column: TaskColumn,
   now: string,
 ): Partial<KanbanTask> {
-  if (column === "done" && task.completedAt == null) {
+  if ((column === "done" || column === "deployed") && task.completedAt == null) {
     return { completedAt: now };
-  }
-  if (column === "deployed" && task.deployedAt == null) {
-    // A card that jumped straight to "deployed" never got its completion stamp.
-    return { deployedAt: now, ...(task.completedAt == null ? { completedAt: now } : {}) };
   }
   return {};
 }
@@ -107,8 +112,9 @@ const COLUMN_ORDER = [
  *   arms the schedule (the scheduler/estimator then pick it up); leaving disarms
  *   it. A task that already reached "done" is terminal — never re-arm it, even if
  *   dragged back into a pipeline column (kills the "done keeps relaunching" loop).
- * - "done" stamps completedAt; "deployed" (terminal, post-"done") stamps
- *   deployedAt and backfills completedAt if the task jumped straight there.
+ * - "done" stamps completedAt; "deployed" (the publication queue, post-"done")
+ *   backfills completedAt if the task jumped straight there. It never stamps
+ *   deployedAt — being queued is not being live.
  * - dragging a card back into an INERT column ("À faire"/"Notes") RESETS it: see
  *   {@link resetToDraft}. That is the user's "start this one over" gesture.
  */
@@ -877,13 +883,38 @@ export class TaskBoardService {
   }
 
   /**
-   * After a successful publish, promote every finished ("done") card whose work
-   * just went live to the terminal "deployed" column. When `branches` is a set,
-   * only cards belonging to a folder (or task) on one of those merged branches
-   * move — the precise "these branches were shipped" case. When `branches` is
-   * null (a plain publish with no branch merges) nothing is promoted: we cannot
-   * attribute the ship to specific cards, so the user still drags those by hand.
-   * Reuses transitionTask so each move stamps deployedAt and broadcasts.
+   * The one place that records "this card's work is LIVE": stamps `deployedAt`
+   * (once), the address it went live at, and closes any open deploy window.
+   *
+   * Deliberately separate from the column: a card sits in "À déployer" from the
+   * moment it is finished, so the column says "queued", not "shipped". Only a
+   * publication that actually succeeded calls this.
+   */
+  async markTaskDeployed(
+    projectId: string,
+    taskId: string,
+    input: { url?: string | null; needsDaemonRestart?: boolean } = {},
+  ): Promise<KanbanTask> {
+    const now = new Date().toISOString();
+    return await this.patchTask(projectId, taskId, (current) => ({
+      ...current,
+      deployedAt: current.deployedAt ?? now,
+      ...(input.url ? { deployedUrl: input.url } : {}),
+      ...(input.needsDaemonRestart !== undefined
+        ? { needsDaemonRestart: input.needsDaemonRestart }
+        : {}),
+      deployment: { state: "deployed" as const, startedAt: current.deployment?.startedAt },
+    }));
+  }
+
+  /**
+   * After a successful publish, mark every card whose work just went live as
+   * deployed — promoting the finished ("done") ones into the "À déployer" column
+   * on the way, and stamping the ones already queued there. When `branches` is a
+   * set, only cards belonging to a folder (or task) on one of those merged
+   * branches are touched — the precise "these branches were shipped" case. When
+   * `branches` is null (a plain publish with no branch merges) nothing happens:
+   * we cannot attribute the ship to specific cards.
    */
   async promoteDoneTasksToDeployed(input: {
     projectId: string;
@@ -898,16 +929,20 @@ export class TaskBoardService {
         .filter((folder) => folder.branch != null && input.branches?.has(folder.branch))
         .map((folder) => folder.id),
     );
-    const doneToDeploy = board.tasks.filter(
+    const shipped = board.tasks.filter(
       (task) =>
-        task.column === "done" &&
+        (task.column === "done" || (task.column === "deployed" && task.deployedAt == null)) &&
+        !task.archivedAt &&
         (branchFolderIds.has(task.folderId) ||
           (task.links.branch != null && input.branches?.has(task.links.branch))),
     );
-    for (const task of doneToDeploy) {
-      await this.transitionTask(input.projectId, task.id, "deployed");
+    for (const task of shipped) {
+      if (task.column !== "deployed") {
+        await this.transitionTask(input.projectId, task.id, "deployed");
+      }
+      await this.markTaskDeployed(input.projectId, task.id);
     }
-    return doneToDeploy.length;
+    return shipped.length;
   }
 
   async deleteTask(projectId: string, taskId: string): Promise<void> {

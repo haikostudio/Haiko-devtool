@@ -31,11 +31,19 @@ describe("countPendingPublish", () => {
 
   it("ignores cards that are already live", () => {
     const counts = countPendingPublish([
-      makeTask({ id: "a", column: "deployed", needsDaemonRestart: true }),
+      makeTask({ id: "a", column: "deployed", deployedAt: "2026-07-28T12:00:00.000Z" }),
       makeTask({ id: "b", deployedUrl: "https://app.example.com", needsDaemonRestart: true }),
       makeTask({ id: "c", deployment: { state: "deployed" } }),
     ]);
     expect(counts).toEqual({ pending: 0, needingRestart: 0 });
+  });
+
+  it("counts the cards queued in « À déployer » — queued is not published", () => {
+    const counts = countPendingPublish([
+      makeTask({ id: "a", column: "deployed", needsDaemonRestart: true }),
+      makeTask({ id: "b", column: "deployed", needsDaemonRestart: false }),
+    ]);
+    expect(counts).toEqual({ pending: 2, needingRestart: 1 });
   });
 
   it("ignores cards that are not finished", () => {

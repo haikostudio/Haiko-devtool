@@ -303,6 +303,9 @@ export interface KanbanBoardProps {
   onRunTask: (taskId: string) => void;
   onReanalyzeTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  // "Tout déployer": publishes every not-yet-live card of the "À déployer"
+  // column in one run. Rendered at the bottom of that column only.
+  onDeployAll?: (() => void) | undefined;
   // Node rendered at the top of one column's body (inline new-task draft).
   columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
 }

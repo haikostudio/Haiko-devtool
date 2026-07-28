@@ -2,7 +2,7 @@ import type { KanbanTask } from "@/data/tasks";
 import { isTaskDeployed } from "@/components/tasks/task-card-badge";
 
 export interface PendingPublishCounts {
-  /** Finished cards whose work is not live yet. */
+  /** Finished/queued cards whose work is not live yet. */
   pending: number;
   /** Of those, the ones whose publication will need a daemon restart. */
   needingRestart: number;
@@ -19,7 +19,8 @@ export function countPendingPublish(tasks: readonly KanbanTask[]): PendingPublis
   let pending = 0;
   let needingRestart = 0;
   for (const task of tasks) {
-    if (task.column !== "done" || task.archivedAt || isTaskDeployed(task)) {
+    const finished = task.column === "done" || task.column === "deployed";
+    if (!finished || task.archivedAt || isTaskDeployed(task)) {
       continue;
     }
     pending += 1;

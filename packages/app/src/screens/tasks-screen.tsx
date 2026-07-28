@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectBillingTotal } from "@/components/tasks/project-billing-total";
 import { PendingPublishSummary } from "@/components/tasks/pending-publish-summary";
+import { countPendingPublish } from "@/components/tasks/pending-publish-count";
 import { DeployRestartChain } from "@/components/tasks/deploy-restart-chain";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
 import { useDaemonRestartStore } from "@/stores/daemon-restart-store";
@@ -957,6 +958,30 @@ function BoardContent({
     [boardHandle, toast, t],
   );
 
+  // "Tout déployer": the single publishing gesture. It always confirms first,
+  // because the run ends by restarting the engine — every running agent stops
+  // with it, so this is never something that happens on a stray tap.
+  const handleDeployAll = useCallback(() => {
+    const pending = countPendingPublish(projectTasks).pending;
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("tasks.board.deployAllTitle"),
+        message: t("tasks.board.deployAllMessage", { count: pending }),
+        confirmLabel: t("tasks.board.deployAllConfirm"),
+        cancelLabel: t("common.actions.cancel"),
+      });
+      if (!confirmed) {
+        return;
+      }
+      try {
+        await boardHandle.deployAllTasks();
+        toast.show(t("tasks.board.deployAllStarted"));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    })();
+  }, [boardHandle, projectTasks, toast, t]);
+
   // The card menu already confirmed the deletion; here we just perform it. The
   // card leaves the board on its own via the live task sync.
   const handleDeleteTask = useCallback(
@@ -1005,6 +1030,7 @@ function BoardContent({
           onRunTask={handleRunTaskNow}
           onReanalyzeTask={handleEstimateTask}
           onDeleteTask={handleDeleteTask}
+          onDeployAll={handleDeployAll}
           columnExtras={columnExtras}
         />
       ) : null}

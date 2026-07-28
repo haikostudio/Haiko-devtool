@@ -42,7 +42,9 @@ export function DeployRestartChain({
       setRestartAfterDeploy(null);
       return;
     }
-    if (!isTaskDeployed(task) && task.column !== "deployed") {
+    // Live means live: the "À déployer" column is only a queue, so a card
+    // sitting there has not shipped anything yet and must not fire the restart.
+    if (!isTaskDeployed(task)) {
       return;
     }
     setRestartAfterDeploy(null);
