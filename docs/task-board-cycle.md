@@ -69,6 +69,41 @@ in the project's single list.
    disarms anything). The move goes through `transitionTask`, never the agent's
    `move_task` — the analysis agent is still confined to "Notes"/"À faire".
 
+## Ce qui crée une carte — the conductor's triage
+
+The "chef d'orchestre" used to read every message as an intention to add work:
+one message, one card. Asking it "combien de cartes sont en attente ?" created a
+card about counting the cards. Its system prompt
+(`packages/server/src/server/tasks/conductor-agent.ts`) now starts with a triage
+into four families, and only one of them mints anything:
+
+| Message                                                                                    | What the conductor does                                                    |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **Question / information** — "comment ça marche ?", "où en est X ?", "combien de cartes ?" | Answers in the conversation. **No card.** May read the board and the code. |
+| **Action** — "corrige le graphe", "ajoute un bouton", or a reported bug                    | `create_task`, straight into "À faire", exactly as before.                 |
+| **Ambiguous** — "le chargement est lent, non ?"                                            | Answers, then offers in one sentence to make it a task. Card only on yes.  |
+| **Board upkeep** — "renomme la carte X", "supprime la carte Y", "liste les cartes"         | Calls `update_task` / `move_task` / `delete_task` / `list_tasks` directly. |
+
+Reading is not acting: the conductor keeps `Read`/`Grep`/`Glob` and the read-only
+board tools so it can answer a question accurately without inventing a card as a
+pretext. Hesitation resolves to _ambiguous_, not to _action_ — offering a card
+costs a sentence, minting one costs a column.
+
+Two bans are unchanged by the triage and restated in the same prompt: the
+conductor **never writes code** (its edit/shell/subagent tools are removed at the
+SDK level) and **never moves a card into "Validé"** (`move_task` refuses it — see
+invariant 3).
+
+The shape of its answers follows the same split: the conductor gets the
+`conductor` response template (see [response-templates.md](response-templates.md))
+— no numbered sections, no estimate, no billing line — because it never executes
+anything and so has nothing to report. A question gets a couple of sentences; a
+handled request gets a bullet per card touched.
+
+> The prompt is stored with the agent record, so an existing conductor is
+> re-locked onto the new wording on the next ensure, and the new behaviour takes
+> effect **after a daemon restart** — not at publication time.
+
 ## Auto-promotion after analysis — the third exception
 
 The consent that used to live in the "Validé" → "Planifié" _drag_ now lives one

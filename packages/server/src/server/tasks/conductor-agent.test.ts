@@ -102,6 +102,21 @@ function makeReuseService(
   });
 }
 
+/**
+ * The conductor's system prompt is hard-wrapped for readability, so a sentence
+ * of it straddles line breaks. Tests assert on the SENSE of the instruction, not
+ * on where it happens to wrap: read it back as one flat, single-spaced string.
+ */
+async function conductorSystemPromptText(): Promise<string> {
+  let captured: CreateAgentCommandInput | null = null;
+  const service = makeService((input) => {
+    captured = input;
+  });
+  await service.ensureConductorAgent("project-1");
+  const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+  return (input.config?.systemPrompt ?? "").replace(/\s+/g, " ");
+}
+
 describe("ConductorAgentService", () => {
   it("hard-blocks every code-acting tool so the conductor can never execute code", async () => {
     let captured: CreateAgentCommandInput | null = null;
@@ -154,6 +169,72 @@ describe("ConductorAgentService", () => {
     const systemPrompt = input.config?.systemPrompt ?? "";
     expect(systemPrompt).toContain("TU NE TOUCHES JAMAIS AU CODE");
     expect(systemPrompt).toContain("UNE TÂCHE, JAMAIS UNE EXÉCUTION");
+  });
+
+  it("answers a question in conversation instead of minting a card", async () => {
+    const systemPrompt = await conductorSystemPromptText();
+
+    // The old rule — every message becomes a task — is gone, replaced by a triage.
+    expect(systemPrompt).not.toContain("Interprète CHAQUE message de l'utilisateur");
+    expect(systemPrompt).toContain("TOUT MESSAGE NE DEVIENT PAS UNE CARTE");
+    expect(systemPrompt).toContain("QUESTION ou DEMANDE D'INFORMATION");
+    expect(systemPrompt).toContain("tu ne crées AUCUNE carte");
+    // Worked examples, so the model recognises the shape of a question.
+    for (const example of [
+      "comment ça marche ?",
+      "où en est la tâche X ?",
+      "combien de cartes sont en attente ?",
+      "pourquoi ce",
+    ]) {
+      expect(systemPrompt).toContain(example);
+    }
+    // Reading the board or the code to answer is explicitly allowed.
+    expect(systemPrompt).toContain("lire n'est pas agir");
+  });
+
+  it("still turns an action request into a card created straight in « À faire »", async () => {
+    const systemPrompt = await conductorSystemPromptText();
+
+    expect(systemPrompt).toContain("DEMANDE D'ACTION");
+    expect(systemPrompt).toContain("create_task");
+    expect(systemPrompt).toContain("proposeRun à false");
+    // Worked examples of the action family, including a reported bug.
+    for (const example of [
+      "corrige le graphe",
+      "ajoute un bouton d'export",
+      "supprime la section",
+      "un bug signalé est une demande de",
+    ]) {
+      expect(systemPrompt).toContain(example);
+    }
+  });
+
+  it("offers a card on an ambiguous message instead of creating one", async () => {
+    const systemPrompt = await conductorSystemPromptText();
+
+    expect(systemPrompt).toContain("CAS AMBIGU");
+    expect(systemPrompt).toContain("Souhaitez-vous que j'en fasse une tâche ?");
+    expect(systemPrompt).toContain("si l'utilisateur confirme");
+  });
+
+  it("handles board upkeep with a tool call, not with a card about the card", async () => {
+    const systemPrompt = await conductorSystemPromptText();
+
+    expect(systemPrompt).toContain("GESTION DU TABLEAU LUI-MÊME");
+    expect(systemPrompt).toContain("renomme la carte X");
+    expect(systemPrompt).toContain("update_task / move_task / delete_task / list_tasks");
+  });
+
+  it("keeps the conductor out of the long report template, and off « Validé »", async () => {
+    const systemPrompt = await conductorSystemPromptText();
+
+    // A plain answer must not be dressed up as a work report: the five-section
+    // template is injected on every dispatch, so the prompt overrides it here too.
+    expect(systemPrompt).toContain("ne s'applique JAMAIS à toi");
+    expect(systemPrompt).toContain("sans estimation et sans facturation");
+    // The two standing bans survive the triage rewrite.
+    expect(systemPrompt).toContain("LA VALIDATION APPARTIENT À L'UTILISATEUR");
+    expect(systemPrompt).toContain("jamais passer une carte en « Validé »");
   });
 
   it("starts a Claude conductor on high thinking effort, not the catalog's low", async () => {
