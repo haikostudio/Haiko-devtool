@@ -57,15 +57,21 @@ Everything lives in `ops/selfhost-auth/`:
    sudo nano /etc/paseo-selfhost-auth.env   # paste the real values
    ```
 
-4. **Install and start the service:**
+4. **Install and start the service.** The runtime copy lives in `/opt` (not the
+   `/root` checkout) because the unit's `ProtectHome=true` hides `/root`:
 
    ```bash
+   sudo install -d -m 755 /opt/paseo-selfhost-auth
+   sudo install -m 644 ops/selfhost-auth/auth-server.mjs /opt/paseo-selfhost-auth/
    sudo cp ops/selfhost-auth/paseo-selfhost-auth.service.example \
      /etc/systemd/system/paseo-selfhost-auth.service
    sudo systemctl daemon-reload
    sudo systemctl enable --now paseo-selfhost-auth
    curl -s localhost:17790/auth/health   # → ok
    ```
+
+   > When you change `auth-server.mjs`, copy it to `/opt` again and
+   > `sudo systemctl restart paseo-selfhost-auth`.
 
 5. **Wire Caddy.** Back up the current block, replace it with the gated version,
    validate, reload:
@@ -82,6 +88,14 @@ Everything lives in `ops/selfhost-auth/`:
 6. **Verify:** open `https://app.haikostudio.cloud/` in a private window → the
    login page should appear; a wrong password shows an error; the right one lets
    the app load and stays logged in on reload.
+
+## The in-app logout button
+
+The app shows a "Déconnexion" row in Settings → General **only** when the web
+build is produced with `EXPO_PUBLIC_SELFHOST_AUTH=1` (the self-host build script
+sets it). It navigates the browser to `/auth/logout`. The public web app, dev
+builds, and native never show it. Logout is always reachable directly at
+`https://app.haikostudio.cloud/auth/logout` regardless of the button.
 
 ## Changing the username or password
 
