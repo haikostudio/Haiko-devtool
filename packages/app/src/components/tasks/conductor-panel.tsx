@@ -9,6 +9,7 @@ import { ComposerFooterControlsProvider } from "@/composer/footer-controls-conte
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { resolveConductorDockPresence } from "@/components/tasks/conductor-dock-presence";
 import { TaskAgentChat } from "@/components/tasks/task-agent-chat";
+import type { RestartProgress } from "@/components/tasks/daemon-restart-progress";
 import { TaskBillingView } from "@/components/tasks/task-billing-view";
 import {
   TaskDetailInlineForm,
@@ -95,8 +96,8 @@ export interface ConductorPanelProps {
    * a restart. Confirms (and counts the agents it will cut) before firing.
    */
   onRestartDaemon?: (taskId: string) => void;
-  /** True while a restart is under way, so the bar can't be pressed twice. */
-  restartingDaemon?: boolean;
+  /** Live restart state, so the card's bar can count down to the reconnection. */
+  restartProgress?: RestartProgress;
   onSetHold?: (taskId: string, hold: boolean) => void;
   onClose: () => void;
 }
@@ -168,7 +169,7 @@ export function useConductorController({
   onArchive,
   onDeploy,
   onRestartDaemon,
-  restartingDaemon,
+  restartProgress,
   onSetHold,
 }: ConductorPanelProps): { header: TaskDockHeader; body: ReactNode } {
   const { t } = useTranslation();
@@ -377,7 +378,7 @@ export function useConductorController({
           onArchive={onArchive}
           onDeploy={onDeploy}
           onRestartDaemon={onRestartDaemon}
-          restartingDaemon={restartingDaemon}
+          restartProgress={restartProgress}
         />
       </View>
       {taskView === "chat" ? null : (

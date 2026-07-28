@@ -346,6 +346,16 @@ export const ru: TranslationResources = {
       restartDaemonBusyMessage:
         "Сейчас работают агентов: {{count}}. Перезапуск прервёт их работу. Всё равно перезапустить?",
       restartDaemonStarted: "Перезапуск начат — переподключение через несколько секунд.",
+      restartDaemonCountdown: "Переподключение через {{seconds}} с…",
+      restartDaemonReconnecting: "Переподключение…",
+      restartDaemonTimeout: "Движок не вернулся",
+      restartDaemonDone: "Движок перезапущен ✅",
+      deployThenRestart: "Опубликовать и перезапустить",
+      deployThenRestartMessage:
+        "Для этой работы потребуется перезапуск движка. Его можно выполнить автоматически, как только публикация будет в сети.",
+      deployThenRestartDispatched:
+        "Публикация запущена — движок перезапустится, как только она будет в сети.",
+      restartAfterDeployFiring: "Публикация в сети — перезапуск движка…",
       collapse: "Свернуть панель",
       expand: "Развернуть панель",
       billing: "Счёт",

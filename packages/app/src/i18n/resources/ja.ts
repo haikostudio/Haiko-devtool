@@ -347,6 +347,15 @@ export const ja: TranslationResources = {
       restartDaemonBusyMessage:
         "現在 {{count}} 件のエージェントが作業中です。再起動すると作業が中断されます。それでも再起動しますか？",
       restartDaemonStarted: "再起動を開始しました — 数秒で再接続します。",
+      restartDaemonCountdown: "{{seconds}} 秒後に再接続…",
+      restartDaemonReconnecting: "再接続中…",
+      restartDaemonTimeout: "エンジンが戻りませんでした",
+      restartDaemonDone: "エンジンを再起動しました ✅",
+      deployThenRestart: "公開して再起動",
+      deployThenRestartMessage:
+        "この作業にはエンジンの再起動が必要です。公開が反映され次第、自動で続けて実行できます。",
+      deployThenRestartDispatched: "公開を開始しました — 反映され次第エンジンを再起動します。",
+      restartAfterDeployFiring: "公開が反映されました — エンジンを再起動しています…",
       collapse: "パネルを折りたたむ",
       expand: "パネルを展開",
       billing: "請求",

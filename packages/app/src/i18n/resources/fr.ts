@@ -351,6 +351,16 @@ export const fr: TranslationResources = {
       restartDaemonBusyMessage:
         "{{count}} agent(s) travaillent en ce moment : le redémarrage interrompra leur travail en cours. Redémarrer quand même ?",
       restartDaemonStarted: "Redémarrage lancé — reconnexion dans quelques secondes.",
+      restartDaemonCountdown: "Reconnexion dans {{seconds}} s…",
+      restartDaemonReconnecting: "Reconnexion…",
+      restartDaemonTimeout: "Le moteur n'est pas revenu",
+      restartDaemonDone: "Moteur redémarré ✅",
+      deployThenRestart: "Publier puis redémarrer",
+      deployThenRestartMessage:
+        "Ce travail nécessitera un redémarrage du moteur. Vous pouvez l'enchaîner automatiquement dès que la publication est en ligne.",
+      deployThenRestartDispatched:
+        "Publication lancée — le moteur redémarrera dès qu'elle sera en ligne.",
+      restartAfterDeployFiring: "Publication en ligne — redémarrage du moteur…",
       collapse: "Réduire le panneau",
       expand: "Développer le panneau",
       billing: "Facturation",

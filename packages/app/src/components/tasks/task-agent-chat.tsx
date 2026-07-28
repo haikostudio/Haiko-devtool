@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
 import { resolveRunNowState } from "@/components/tasks/task-run-now-state";
 import { isTaskDeployed, offersDaemonRestart } from "@/components/tasks/task-card-badge";
+import type { RestartProgress } from "@/components/tasks/daemon-restart-progress";
 import { useSessionStore } from "@/stores/session-store";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -50,6 +52,9 @@ const warningForegroundMapping = (theme: Theme) => ({ color: theme.colors.status
 const ThemedPower = withUnistyles(Power);
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
+
+/** No restart in flight — the bar simply offers the gesture. */
+const IDLE_RESTART: RestartProgress = { state: "idle" };
 
 export interface TaskAgentChatProps {
   serverId: string | null;
@@ -98,8 +103,8 @@ export interface TaskAgentChatProps {
    * this fires only once the user has said yes.
    */
   onRestartDaemon?: (taskId: string) => void;
-  /** True while a restart this card asked for is under way. */
-  restartingDaemon?: boolean;
+  /** Live restart state, so the bar can count down to the reconnection. */
+  restartProgress?: RestartProgress;
 }
 
 /**
@@ -119,7 +124,7 @@ export function TaskAgentChat({
   onArchive,
   onDeploy,
   onRestartDaemon,
-  restartingDaemon = false,
+  restartProgress = IDLE_RESTART,
 }: TaskAgentChatProps) {
   const { t } = useTranslation();
   // Prefer the pipeline agent: analysis AND execution live in that one
@@ -226,7 +231,7 @@ export function TaskAgentChat({
       return <DeployTaskBar onPress={handleDeploy} deployment={task.deployment} />;
     }
     if (showRestartDaemon) {
-      return <RestartDaemonBar onPress={handleRestartDaemon} running={restartingDaemon} />;
+      return <RestartDaemonBar onPress={handleRestartDaemon} progress={restartProgress} />;
     }
     if (showArchive) {
       return <ArchiveTaskBar onPress={handleArchive} />;
@@ -245,7 +250,7 @@ export function TaskAgentChat({
     handleDeploy,
     handleRestartDaemon,
     handleArchive,
-    restartingDaemon,
+    restartProgress,
     task.progress,
     task.validation,
     task.deployment,
@@ -613,15 +618,22 @@ function archiveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
  * thing. Restarting drops every running agent, which is why the caller confirms
  * first (and says how many agents are working) rather than firing on the press.
  */
-function RestartDaemonBar({ onPress, running }: { onPress: () => void; running: boolean }) {
+function RestartDaemonBar({
+  onPress,
+  progress,
+}: {
+  onPress: () => void;
+  progress: RestartProgress;
+}) {
   const { t } = useTranslation();
+  const running = progress.state !== "idle";
   const barStyle = useCallback(
     (state: { pressed: boolean; hovered?: boolean }) =>
       restartDaemonBarStyle({ ...state, disabled: running }),
     [running],
   );
   const a11yState = useMemo(() => ({ disabled: running }), [running]);
-  const label = running ? t("tasks.panel.restartDaemonStarted") : t("tasks.panel.restartDaemon");
+  const label = restartBarLabel(progress, t);
   return (
     <View style={styles.validateOuter}>
       <View style={styles.validateInner}>
@@ -644,6 +656,26 @@ function RestartDaemonBar({ onPress, running }: { onPress: () => void; running: 
       </View>
     </View>
   );
+}
+
+/**
+ * What the bar reads during a restart. The countdown is the whole point: an
+ * unqualified "Redémarrage en cours…" gives the user no idea whether to wait
+ * two seconds or go make coffee. When the estimate runs out the wording drops
+ * the number rather than counting into negatives, and a daemon that never comes
+ * back says so instead of pretending.
+ */
+function restartBarLabel(progress: RestartProgress, t: TFunction): string {
+  if (progress.state === "counting") {
+    return t("tasks.panel.restartDaemonCountdown", { seconds: progress.secondsLeft });
+  }
+  if (progress.state === "reconnecting") {
+    return t("tasks.panel.restartDaemonReconnecting");
+  }
+  if (progress.state === "timeout") {
+    return t("tasks.panel.restartDaemonTimeout");
+  }
+  return t("tasks.panel.restartDaemon");
 }
 
 function restartDaemonBarStyle({

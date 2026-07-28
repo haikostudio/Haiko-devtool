@@ -343,6 +343,15 @@ export const ar: TranslationResources = {
       restartDaemonBusyMessage:
         "يعمل {{count}} من الوكلاء الآن: ستؤدي إعادة التشغيل إلى مقاطعة عملهم. إعادة التشغيل على أي حال؟",
       restartDaemonStarted: "بدأت إعادة التشغيل — إعادة الاتصال خلال ثوانٍ.",
+      restartDaemonCountdown: "إعادة الاتصال خلال {{seconds}} ث…",
+      restartDaemonReconnecting: "جارٍ إعادة الاتصال…",
+      restartDaemonTimeout: "لم يعد المحرك",
+      restartDaemonDone: "أُعيد تشغيل المحرك ✅",
+      deployThenRestart: "انشر ثم أعد التشغيل",
+      deployThenRestartMessage:
+        "سيتطلب هذا العمل إعادة تشغيل المحرك. يمكنك ربط الخطوتين تلقائيًا بمجرد أن يصبح النشر مباشرًا.",
+      deployThenRestartDispatched: "بدأ النشر — سيُعاد تشغيل المحرك بمجرد أن يصبح مباشرًا.",
+      restartAfterDeployFiring: "النشر مباشر — جارٍ إعادة تشغيل المحرك…",
       collapse: "طي اللوحة",
       expand: "توسيع اللوحة",
       billing: "الفوترة",

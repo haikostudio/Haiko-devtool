@@ -40,7 +40,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FolderBillingTotal } from "@/components/tasks/folder-billing-total";
 import { PendingPublishSummary } from "@/components/tasks/pending-publish-summary";
+import { DaemonRestartWatcher } from "@/components/tasks/daemon-restart-watcher";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
+import { useDaemonRestartStore } from "@/stores/daemon-restart-store";
+import { showAppDialog } from "@/stores/app-dialog-store";
 import { KanbanBoard } from "@/components/tasks/kanban-board";
 import {
   type QuotaMenuModel,
@@ -515,6 +518,9 @@ export function TasksScreen() {
   return (
     <AgentBucketProvider>
       <View style={styles.container}>
+        {/* Renders nothing: owns the restart clock and the "publier puis
+            redémarrer" chain, mounted exactly once for the whole screen. */}
+        <DaemonRestartWatcher serverId={serverId} tasks={boardHandle.board?.tasks ?? EMPTY_TASKS} />
         <TasksHeader
           title={title}
           isCompact={isCompact}
@@ -1088,6 +1094,55 @@ function BoardContent({
 
 // Task actions bound to a board handle, shared by the conductor dock (its
 // Details tab) and the standalone Details/Billing drawer so the two never drift.
+/** Stable empty list, so a board-less screen doesn't remount the watcher's effects. */
+const EMPTY_TASKS: KanbanTask[] = [];
+
+type DeployChoice = "cancel" | "deploy" | "deploy_restart";
+
+/**
+ * The deploy confirmation for a card that will need a daemon restart: three
+ * doors instead of two. "Publier" leaves the restart for later (the card keeps
+ * its bar); "Publier puis redémarrer" chains both so the errand is one gesture.
+ * Cancelling — including dismissing the sheet — is always the safe default.
+ */
+/**
+ * Two doors for an app-only card, three when a restart will be needed. Kept as
+ * one call so the deploy handler reads as a single decision.
+ */
+async function askDeployChoice(
+  needsRestart: boolean,
+  message: string,
+  t: (key: string) => string,
+): Promise<DeployChoice> {
+  if (needsRestart) {
+    return confirmDeployWithRestart(message, t);
+  }
+  const confirmed = await confirmDialog({
+    title: t("tasks.panel.deployTask"),
+    message,
+    confirmLabel: t("tasks.panel.deployTask"),
+    cancelLabel: t("common.actions.cancel"),
+  });
+  return confirmed ? "deploy" : "cancel";
+}
+
+async function confirmDeployWithRestart(
+  message: string,
+  t: (key: string) => string,
+): Promise<DeployChoice> {
+  const actionId = await showAppDialog({
+    title: t("tasks.panel.deployTask"),
+    message: `${message}\n\n${t("tasks.panel.deployThenRestartMessage")}`,
+    actions: [
+      { id: "cancel", label: t("common.actions.cancel"), variant: "secondary" },
+      { id: "deploy", label: t("tasks.panel.deployTask"), variant: "secondary" },
+      { id: "deploy_restart", label: t("tasks.panel.deployThenRestart") },
+    ],
+    dismissActionId: "cancel",
+  });
+  return actionId === "deploy" || actionId === "deploy_restart" ? actionId : "cancel";
+}
+
 function useBoardTaskActions(boardHandle: BoardHandle) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -1222,32 +1277,39 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
   // prompt, in the card's own conversation: it verifies the work, publishes it and
   // moves the card to "Déployé" itself, reporting whether a daemon restart is
   // needed. The user reads all of it live.
+  const setRestartAfterDeploy = useDaemonRestartStore((state) => state.setRestartAfterDeploy);
   const handleDeploy = useCallback(
     (taskId: string) => {
       void (async () => {
-        const alreadyRunning =
-          boardHandle.board?.tasks.find((entry) => entry.id === taskId)?.deployment?.state ===
-          "running";
-        const confirmed = await confirmDialog({
-          title: t("tasks.panel.deployTask"),
-          message: alreadyRunning
-            ? t("tasks.panel.deployRestartMessage")
-            : t("tasks.panel.deployTaskMessage"),
-          confirmLabel: t("tasks.panel.deployTask"),
-          cancelLabel: t("common.actions.cancel"),
-        });
-        if (!confirmed) {
+        const task = boardHandle.board?.tasks.find((entry) => entry.id === taskId);
+        const alreadyRunning = task?.deployment?.state === "running";
+        const message = alreadyRunning
+          ? t("tasks.panel.deployRestartMessage")
+          : t("tasks.panel.deployTaskMessage");
+        // A card that will need a daemon restart gets a third choice, so the
+        // whole "publier puis redémarrer" errand is one decision instead of two
+        // trips: publish, wait, come back, press restart.
+        const choice = await askDeployChoice(task?.needsDaemonRestart === true, message, t);
+        if (choice === "cancel") {
           return;
         }
+        // Armed BEFORE the deploy so a publication that lands fast can never
+        // slip past the watcher.
+        setRestartAfterDeploy(choice === "deploy_restart" ? taskId : null);
         try {
           await boardHandle.deployTask(taskId);
-          toast.show(t("tasks.panel.deployDispatched"));
+          toast.show(
+            choice === "deploy_restart"
+              ? t("tasks.panel.deployThenRestartDispatched")
+              : t("tasks.panel.deployDispatched"),
+          );
         } catch (error) {
+          setRestartAfterDeploy(null);
           toast.error(error instanceof Error ? error.message : String(error));
         }
       })();
     },
-    [boardHandle, toast, t],
+    [boardHandle, toast, t, setRestartAfterDeploy],
   );
   return {
     handleSave,
@@ -1319,7 +1381,7 @@ function useConductorPanelProps(
       onArchive: taskActions.handleArchive,
       onDeploy: taskActions.handleDeploy,
       onRestartDaemon: handleRestartDaemon,
-      restartingDaemon: daemonRestart.restarting,
+      restartProgress: daemonRestart.progress,
       onSetHold: taskActions.handleSetHold,
       onClose: handleClose,
     }),
@@ -1331,7 +1393,7 @@ function useConductorPanelProps(
       handleClose,
       taskActions,
       handleRestartDaemon,
-      daemonRestart.restarting,
+      daemonRestart.progress,
     ],
   );
 }

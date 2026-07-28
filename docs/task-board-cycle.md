@@ -187,6 +187,23 @@ only take effect after a daemon restart — instead of discovering it afterwards
   gesture as Settings → host), so nothing new was added to the protocol.
   **It always confirms first, and says how many agents the restart will cut** —
   the daemon is only ever restarted on an explicit, informed go.
+- **The countdown.** Once fired, the bar counts down ("Reconnexion dans 7 s…"),
+  then falls back to a quiet "Reconnexion…" past the estimate and to "Le moteur
+  n'est pas revenu" past a minute. The wording rule (`describeRestartProgress`)
+  is pure and unit-tested. Reconnection is only believed once the connection has
+  been seen to **drop and come back**: the old socket survives the request by a
+  moment, so a naive "connected?" check would end the countdown before the daemon
+  had even stopped.
+- **One gesture, not two.** On a card that will need a restart, the deploy
+  confirmation offers a third door — "Publier puis redémarrer". Choosing it arms
+  `restartAfterDeployTaskId`; the watcher fires the restart the instant that
+  card's work is live, **without asking again** (one decision, already made).
+  A card that turns out not to need a restart drops the promise silently.
+- **One owner for all of it.** `DaemonRestartWatcher` is mounted exactly once at
+  the tasks screen root and owns the clock, the reconnection detection, the
+  timeout and the chained restart; `useDaemonRestartStore` holds the state.
+  Putting those effects in the shared hook would give every mounted reader
+  (side panel + dock) its own timer and its own "moteur redémarré" toast.
 - **The reminder.** `DaemonRestartReminder` polls the daemon's restart debt
   (`getDaemonRestartDebt`: daemon-side commits since the boot SHA) and, if
   published work stays dormant past a two-hour grace period, sends **one** push

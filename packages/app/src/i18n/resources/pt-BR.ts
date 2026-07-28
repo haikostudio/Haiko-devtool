@@ -350,6 +350,16 @@ export const ptBR: TranslationResources = {
       restartDaemonBusyMessage:
         "{{count}} agente(s) estão trabalhando agora: o reinício vai interromper o trabalho deles. Reiniciar mesmo assim?",
       restartDaemonStarted: "Reinício iniciado — reconectando em alguns segundos.",
+      restartDaemonCountdown: "Reconectando em {{seconds}} s…",
+      restartDaemonReconnecting: "Reconectando…",
+      restartDaemonTimeout: "O motor não voltou",
+      restartDaemonDone: "Motor reiniciado ✅",
+      deployThenRestart: "Publicar e reiniciar",
+      deployThenRestartMessage:
+        "Este trabalho exigirá reiniciar o motor. Você pode encadear isso automaticamente assim que a publicação estiver no ar.",
+      deployThenRestartDispatched:
+        "Publicação iniciada — o motor reiniciará assim que estiver no ar.",
+      restartAfterDeployFiring: "Publicação no ar — reiniciando o motor…",
       collapse: "Recolher painel",
       expand: "Expandir painel",
       billing: "Faturamento",

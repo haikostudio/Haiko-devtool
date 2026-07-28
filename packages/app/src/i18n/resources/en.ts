@@ -345,6 +345,15 @@ export const en = {
       restartDaemonBusyMessage:
         "{{count}} agent(s) are working right now: restarting will interrupt them. Restart anyway?",
       restartDaemonStarted: "Restart started — reconnecting in a few seconds.",
+      restartDaemonCountdown: "Reconnecting in {{seconds}} s…",
+      restartDaemonReconnecting: "Reconnecting…",
+      restartDaemonTimeout: "The engine did not come back",
+      restartDaemonDone: "Engine restarted ✅",
+      deployThenRestart: "Publish, then restart",
+      deployThenRestartMessage:
+        "This work will need an engine restart. You can chain it automatically as soon as the publication is live.",
+      deployThenRestartDispatched: "Publication started — the engine will restart once it is live.",
+      restartAfterDeployFiring: "Publication is live — restarting the engine…",
       collapse: "Collapse panel",
       expand: "Expand panel",
       billing: "Billing",
