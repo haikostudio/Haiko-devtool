@@ -10,8 +10,11 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { useDraggableToast, useToastSection } from "@/hooks/use-draggable-toast";
 import { AdaptiveModalSheet } from "@/components/adaptive-modal-sheet";
 import { TaskToast, useTrackedTasks } from "@/components/agent-tasks-toast-stack";
-import { selectFinishedToastKeys } from "@/components/agent-tasks-toast-dismissal";
-import { useAgentTaskToastStore } from "@/stores/agent-task-toast-store";
+import {
+  ToastClearMenu,
+  ToastUndoPill,
+  useToastClearActions,
+} from "@/components/agent-tasks-toast-controls";
 import { inlineUnistylesStyle } from "@/styles/unistyles-inline-style";
 
 // Matches theme.spacing[4]; kept a literal so the container can add the safe-area
@@ -97,43 +100,51 @@ function AgentTasksToastDrawer({
 }): ReactElement {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const dismissMany = useAgentTaskToastStore((state) => state.dismissMany);
+  // Same rules as the desktop pile, straight from the shared hook: the trash
+  // clears only finished tasks, the menu clears one category at a time, and any
+  // clear can be taken back for a few seconds.
+  const { counts, finishedCount, clearFinished, clearCategory, canUndo, undoCount, undo } =
+    useToastClearActions(tasks);
+  const hasFinished = finishedCount > 0;
 
-  // Same rule as the desktop pile: the trash only clears finished tasks, never a
-  // run still in flight, still waiting on the user, or failed.
-  const finishedKeys = useMemo(() => selectFinishedToastKeys(tasks), [tasks]);
-  const hasFinished = finishedKeys.length > 0;
-
-  // Clearing every card empties the drawer, so close it in the same gesture rather
-  // than leaving the user staring at the "nothing in progress" line. When some
-  // cards survive the sweep the drawer stays open on them.
+  // Clearing every card would empty the drawer, so close it in the same gesture
+  // rather than leaving the user staring at the "nothing in progress" line. When
+  // some cards survive the sweep, the drawer stays open on them.
   const handleDismissFinished = useCallback(() => {
-    dismissMany(finishedKeys);
-    if (finishedKeys.length === tasks.length) {
+    clearFinished();
+    if (finishedCount === tasks.length) {
       onClose();
     }
-  }, [dismissMany, finishedKeys, tasks.length, onClose]);
+  }, [clearFinished, finishedCount, tasks.length, onClose]);
 
   const header = useMemo(
     () => ({
       title: t("agentTasks.drawerTitle"),
       actions:
         tasks.length > 0 ? (
-          <Pressable
-            onPress={handleDismissFinished}
-            disabled={!hasFinished}
-            style={hasFinished ? drawerDismissFinishedStyle : drawerDismissFinishedDisabledStyle}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t("agentTasksToast.dismissFinished")}
-            accessibilityState={hasFinished ? A11Y_ENABLED : A11Y_DISABLED}
-            testID="agent-tasks-toast-drawer-dismiss-finished"
-          >
-            <Trash2 size={16} color={styles.drawerDismissAllIcon.color} />
-          </Pressable>
+          <View style={styles.drawerActions}>
+            <Pressable
+              onPress={handleDismissFinished}
+              disabled={!hasFinished}
+              style={hasFinished ? drawerDismissFinishedStyle : drawerDismissFinishedDisabledStyle}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                hasFinished
+                  ? t("agentTasksToast.dismissFinished", { count: finishedCount })
+                  : t("agentTasksToast.dismissFinishedEmpty")
+              }
+              accessibilityState={hasFinished ? A11Y_ENABLED : A11Y_DISABLED}
+              testID="agent-tasks-toast-drawer-dismiss-finished"
+            >
+              <Trash2 size={16} color={styles.drawerDismissAllIcon.color} />
+              {hasFinished ? <Text style={styles.drawerDismissCount}>{finishedCount}</Text> : null}
+            </Pressable>
+            <ToastClearMenu counts={counts} onClear={clearCategory} compact />
+          </View>
         ) : undefined,
     }),
-    [t, tasks.length, hasFinished, handleDismissFinished],
+    [t, tasks.length, hasFinished, finishedCount, counts, clearCategory, handleDismissFinished],
   );
 
   // The sheet's own bottom safe-area padding doesn't render on the standalone
@@ -159,6 +170,7 @@ function AgentTasksToastDrawer({
       testID="agent-tasks-toast-drawer"
     >
       <View style={listStyle}>
+        {canUndo ? <ToastUndoPill count={undoCount} onUndo={undo} stretch /> : null}
         {tasks.length === 0 ? (
           <Text style={styles.emptyText}>{t("agentTasks.drawerEmpty")}</Text>
         ) : (
@@ -210,13 +222,26 @@ const styles = StyleSheet.create((theme) => ({
     // so give the list a little headroom or the badge gets clipped by the sheet.
     paddingTop: theme.spacing[2],
   },
+  // Trash + category menu share the sheet header actions slot.
+  drawerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+  },
   // Icon-only trash sitting in the sheet header actions slot.
   drawerDismissAll: {
-    width: 30,
+    flexDirection: "row",
+    minWidth: 30,
     height: 30,
+    paddingHorizontal: theme.spacing[1],
     alignItems: "center",
     justifyContent: "center",
+    gap: theme.spacing[1],
     borderRadius: theme.borderRadius.full,
+  },
+  drawerDismissCount: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
   },
   drawerDismissAllPressed: {
     backgroundColor: theme.colors.surface2,

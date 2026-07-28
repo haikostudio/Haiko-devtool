@@ -34,7 +34,12 @@ import {
   selectRenderedToasts,
   toastStackSlot,
 } from "@/components/agent-tasks-toast-stack-geometry";
-import { selectFinishedToastKeys } from "@/components/agent-tasks-toast-dismissal";
+import { isFinishedToastBucket } from "@/components/agent-tasks-toast-dismissal";
+import {
+  ToastClearMenu,
+  ToastUndoPill,
+  useToastClearActions,
+} from "@/components/agent-tasks-toast-controls";
 import { getProviderIcon } from "@/components/provider-icons";
 import { SyncedLoader } from "@/components/synced-loader";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -171,10 +176,19 @@ export function useTrackedTasks(): TrackedTask[] {
     [buckets],
   );
   const existingKeys = useMemo(() => new Set(buckets.keys()), [buckets]);
+  // Finished (green-pip) keys start each card's lingering clock in the store, so
+  // the pile can tidy old ones away without any component owning that state.
+  const finishedKeys = useMemo(
+    () =>
+      [...buckets.values()]
+        .filter((task) => isFinishedToastBucket(task.bucket))
+        .map((task) => task.key),
+    [buckets],
+  );
 
   useEffect(() => {
-    reconcile({ activeKeys, existingKeys });
-  }, [reconcile, activeKeys, existingKeys]);
+    reconcile({ activeKeys, existingKeys, finishedKeys, now: Date.now() });
+  }, [reconcile, activeKeys, existingKeys, finishedKeys]);
 
   // Strict recency order: oldest first, newest last. The stack renders top-to-
   // bottom, so the newest notification lands at the bottom of the pile — nearest
@@ -399,13 +413,18 @@ function CollapseToggle({
 // dimmed rather than disappearing, so the control row keeps its shape.
 function DismissFinishedButton({
   onPress,
-  disabled,
+  count,
 }: {
   onPress: () => void;
-  disabled: boolean;
+  /** How many cards the click would clear — shown next to the icon. */
+  count: number;
 }): ReactElement {
   const { t } = useTranslation();
-  const label = t("agentTasksToast.dismissFinished");
+  const disabled = count === 0;
+  // The label carries the count too, so the tooltip says exactly what will go.
+  const label = disabled
+    ? t("agentTasksToast.dismissFinishedEmpty")
+    : t("agentTasksToast.dismissFinished", { count });
   return (
     <Tooltip delayDuration={400} enabledOnDesktop enabledOnMobile={false}>
       <TooltipTrigger asChild>
@@ -420,6 +439,11 @@ function DismissFinishedButton({
           testID="agent-tasks-toast-dismiss-finished"
         >
           <Trash2 size={13} color={styles.collapseToggleLabel.color} />
+          {count > 0 ? (
+            <Text style={styles.controlCount} testID="agent-tasks-toast-dismiss-finished-count">
+              {count}
+            </Text>
+          ) : null}
         </Pressable>
       </TooltipTrigger>
       <TooltipContent side="top" align="center">
@@ -513,15 +537,13 @@ export function AgentTasksToastStack(): ReactElement | null {
   const visible = useTrackedTasks();
   const collapsed = useAgentTaskToastStore((state) => state.collapsed);
   const setCollapsed = useAgentTaskToastStore((state) => state.setCollapsed);
-  const dismissMany = useAgentTaskToastStore((state) => state.dismissMany);
   const section = useToastSection();
   // The trash only ever targets the finished cards, so it is inert (and dimmed)
-  // while the pile holds nothing but running / waiting / failed tasks.
-  const finishedKeys = useMemo(() => selectFinishedToastKeys(visible), [visible]);
-  const handleDismissFinished = useCallback(
-    () => dismissMany(finishedKeys),
-    [dismissMany, finishedKeys],
-  );
+  // while the pile holds nothing but running / waiting / failed tasks. The menu
+  // beside it clears one category at a time, and every clear can be taken back
+  // for a few seconds.
+  const { counts, finishedCount, clearFinished, clearCategory, canUndo, undoCount, undo } =
+    useToastClearActions(visible);
   // Natural (unfolded) height of each card, keyed by task, so the collapsed pile
   // can pull each card up over the one behind it and leave only a top sliver.
   const [heights, setHeights] = useState<Record<string, number>>({});
@@ -572,8 +594,25 @@ export function AgentTasksToastStack(): ReactElement | null {
     [setCollapsed, stickyCollapsed],
   );
 
-  if (isCompact || visible.length === 0) {
+  // An empty pile normally disappears — except right after a clear, where the
+  // undo pill has to survive the cards it just removed, or there would be no way
+  // back from a mis-click that emptied the corner.
+  if (isCompact || (visible.length === 0 && !canUndo)) {
     return null;
+  }
+
+  if (visible.length === 0) {
+    return (
+      <Animated.View
+        style={animatedContainerStyle}
+        pointerEvents="box-none"
+        onLayout={onDragLayout}
+      >
+        <View style={styles.hoverWrapper}>
+          <ToastUndoPill count={undoCount} onUndo={undo} />
+        </View>
+      </Animated.View>
+    );
   }
 
   // Saturation guard: only the most recent cards are mounted. The rest stay
@@ -616,10 +655,8 @@ export function AgentTasksToastStack(): ReactElement | null {
         })}
         <View style={styles.controlsRow}>
           <DragHandle gesture={dragGesture} />
-          <DismissFinishedButton
-            onPress={handleDismissFinished}
-            disabled={finishedKeys.length === 0}
-          />
+          <DismissFinishedButton onPress={clearFinished} count={finishedCount} />
+          <ToastClearMenu counts={counts} onClear={clearCategory} />
           {canCollapse ? (
             <CollapseToggle
               collapsed={stickyCollapsed}
@@ -628,6 +665,7 @@ export function AgentTasksToastStack(): ReactElement | null {
             />
           ) : null}
         </View>
+        {canUndo ? <ToastUndoPill count={undoCount} onUndo={undo} /> : null}
       </View>
     </Animated.View>
   );
@@ -829,6 +867,7 @@ const styles = StyleSheet.create((theme) => ({
   // Square icon-only control shared by the drag handle and the trash button, so
   // the three pile controls read as one set.
   iconControl: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: theme.spacing[1],
@@ -841,6 +880,12 @@ const styles = StyleSheet.create((theme) => ({
   },
   iconControlDisabled: {
     opacity: 0.4,
+  },
+  // Count riding next to the trash icon: "how many cards this click will clear".
+  controlCount: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.foregroundMuted,
+    marginLeft: theme.spacing[1],
   },
   collapseToggleHovered: {
     borderColor: theme.colors.borderAccent,
