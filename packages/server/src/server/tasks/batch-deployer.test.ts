@@ -41,6 +41,8 @@ describe("selectPendingDeployTasks", () => {
       task({ id: "archived", archivedAt: "2026-07-28T11:00:00.000Z" }),
       task({ id: "still-running", column: "in_progress" }),
       task({ id: "just-done", column: "done" }),
+      // "Retirer du prochain lot": still on the board, skipped by the batch.
+      task({ id: "held", deployHold: true }),
     ]);
     expect(pending.map((entry) => entry.id)).toEqual(["queued"]);
   });
@@ -154,6 +156,31 @@ describe("TaskBatchDeployer", () => {
     }
     expect(notes.join("\n")).toContain("Construction de l'application");
     expect(restarts).toEqual(["task_batch_deploy"]);
+    // The board carries the run, so the column can show one progress bar and
+    // then the "voici ce qui vient d'être mis en ligne" recap.
+    expect(board.deployBatch?.state).toBe("success");
+    expect(board.deployBatch?.taskIds).toEqual([first.id, second.id]);
+    expect(board.deployBatch?.titles).toEqual(["Login", "Signup"]);
+    expect(board.deployBatch?.url).toBe("https://app.haikostudio.cloud");
+    expect(board.deployBatch?.finishedAt).toBeTruthy();
+  });
+
+  test("a held-back card is left out of the run", async () => {
+    const shipped = await seedQueued("Login", "task/login");
+    const held = await seedQueued("Signup", "task/signup");
+    await service.updateTask("proj-1", held.id, { deployHold: true });
+    const deployer = buildDeployer({
+      url: "https://app.haikostudio.cloud",
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+    });
+
+    const result = await deployer.deployAll("proj-1");
+    expect(result.taskIds).toEqual([shipped.id]);
+    await settle(() => restarts.length > 0);
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === shipped.id)?.deployedAt).toBeTruthy();
+    expect(board.tasks.find((entry) => entry.id === held.id)?.deployedAt ?? null).toBeNull();
   });
 
   test("a failed publication marks nothing live and says why", async () => {
@@ -172,6 +199,8 @@ describe("TaskBatchDeployer", () => {
     expect(notes.join("\n")).toContain("build cassé");
     // The engine is only ever restarted after a publication that succeeded.
     expect(restarts).toEqual([]);
+    expect(board.deployBatch?.state).toBe("failed");
+    expect(board.deployBatch?.error).toContain("build cassé");
   });
 
   test("a publication that never starts is reported, not swallowed", async () => {
@@ -219,6 +248,8 @@ describe("TaskBatchDeployer", () => {
 
     expect(triggered).toHaveLength(0);
     expect(perCard).toEqual([first.id, second.id]);
+    // No single run to follow: each card carries its own publication state.
+    expect((await service.getBoard("proj-1")).deployBatch ?? null).toBeNull();
     // No daemon restart on a client project: its own service is restarted by the
     // agent that deployed it.
     expect(restarts).toEqual([]);

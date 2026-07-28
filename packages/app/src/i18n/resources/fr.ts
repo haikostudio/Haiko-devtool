@@ -525,6 +525,20 @@ export const fr: TranslationResources = {
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",
       deployAllConfirm: "Tout déployer",
       deployAllStarted: "Publication groupée lancée",
+      deployOffPeak: "Publier automatiquement en heures creuses",
+      deployOffPeakMessage:
+        "Le lot en attente partira tout seul pendant les heures creuses, et le moteur redémarrera à la fin. Vous pourrez désactiver l'option à tout moment.",
+      batchRunning: "Publication en cours — {{count}} tâche(s)",
+      batchDone: "{{count}} tâche(s) mises en ligne",
+      batchFailed: "La publication a échoué",
+      batchAuto: "lancée automatiquement",
+      batchPhase: {
+        start: "Préparation…",
+        save: "Sauvegarde du travail…",
+        build: "Construction de l'application…",
+        publish: "Mise en ligne…",
+        done: "Terminé",
+      },
       pendingPublish: "{{count}} carte(s) prête(s) à publier",
       pendingPublishWithRestart:
         "{{count}} carte(s) prête(s) à publier, dont {{restart}} nécessitant un redémarrage",
@@ -658,6 +672,8 @@ export const fr: TranslationResources = {
       hold: "Mettre en attente",
       resumeAuto: "Reprendre l'auto",
       taskActions: "Actions de la tâche",
+      deployHold: "Retirer du prochain lot",
+      deployUnhold: "Remettre dans le lot",
       add: "Ajouter",
       save: "Enregistrer",
       edit: "Modifier",
@@ -669,6 +685,8 @@ export const fr: TranslationResources = {
       launching: "Lancement de la tâche…",
       reanalyzing: "Analyse relancée…",
       archived: "Tâche archivée.",
+      deployHeld: "Carte retirée du prochain lot",
+      deployUnheld: "Carte remise dans le lot",
     },
     confirmDelete: {
       title: "Supprimer la tâche ?",

@@ -47,6 +47,8 @@ export interface TaskBoardHandle {
     runConfig?: TaskRunConfig | null;
     schedulePreference?: TaskSchedulePreference | null;
     executionHold?: boolean | null;
+    /** "Retirer du prochain lot": held back from the batch publication. */
+    deployHold?: boolean | null;
   }) => Promise<void>;
   moveTask: (input: { taskId: string; column: TaskColumn; index: number }) => Promise<void>;
   markTaskViewed: (taskId: string) => Promise<void>;
@@ -196,6 +198,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
       executionHold?: boolean | null;
+      deployHold?: boolean | null;
     }) => {
       const { client, projectId: project } = requireContext();
       await client.tasksTaskUpdate({ projectId: project, ...input });

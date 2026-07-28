@@ -163,6 +163,7 @@ import { TaskPublisher } from "./tasks/publish-on-complete.js";
 import { TaskValidator, watchAgentIdle } from "./tasks/validator.js";
 import { TaskDeployer } from "./tasks/deployer.js";
 import { TaskBatchDeployer } from "./tasks/batch-deployer.js";
+import { AutoDeployWatcher } from "./tasks/auto-deploy.js";
 import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-store.js";
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
@@ -1601,6 +1602,20 @@ export async function createPaseoDaemon(
   // the whole point: concurrent per-card builds on the shared checkout produced
   // torn bundles. A deploy-conflict repair card keeps its own express lane — the
   // publication it unblocks is already waiting on it.
+  // "Publier automatiquement en heures creuses": opt-in twin of the button. Off
+  // unless the user turns it on, in which case the same batch (and the same
+  // closing restart) fires inside the quiet-hours window.
+  const autoDeployWatcher = new AutoDeployWatcher({
+    taskBoardService,
+    taskBatchDeployer,
+    projectRegistry,
+    getSettings: () => ({
+      enabled: daemonConfigStore.get().tasks?.autoDeployOffPeak === true,
+      quietHours: daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,
+    }),
+    logger,
+  });
+  autoDeployWatcher.start();
   taskBoardService.setOnTaskCompleted(async (projectId, task) => {
     const repairBranch = task.tags.includes(PASEO_DEPLOY_CONFLICT_TAG)
       ? task.tags
@@ -2115,6 +2130,7 @@ export async function createPaseoDaemon(
     await scheduleService.stop().catch(() => undefined);
     quotaResetWatcher.stop();
     taskScheduler.stop();
+    autoDeployWatcher.stop();
     agentTaskSync.stop();
     activityLogService.stop();
     await relayTransport?.stop().catch(() => undefined);

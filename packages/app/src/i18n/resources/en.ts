@@ -515,6 +515,20 @@ export const en = {
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",
       deployAllConfirm: "Deploy all",
       deployAllStarted: "Batch publication started",
+      deployOffPeak: "Publish automatically off-peak",
+      deployOffPeakMessage:
+        "The waiting batch will go out on its own during quiet hours, and the engine restarts afterwards. You can turn the option off at any time.",
+      batchRunning: "Publishing — {{count}} task(s)",
+      batchDone: "{{count}} task(s) went live",
+      batchFailed: "The publication failed",
+      batchAuto: "started automatically",
+      batchPhase: {
+        start: "Preparing…",
+        save: "Saving the work…",
+        build: "Building the app…",
+        publish: "Going live…",
+        done: "Done",
+      },
       pendingPublish: "{{count}} card(s) ready to publish",
       pendingPublishWithRestart:
         "{{count}} card(s) ready to publish, {{restart}} needing a restart",
@@ -648,6 +662,8 @@ export const en = {
       hold: "Hold for my go",
       resumeAuto: "Resume auto-run",
       taskActions: "Task actions",
+      deployHold: "Hold back from next batch",
+      deployUnhold: "Put back in the batch",
       add: "Add",
       save: "Save",
       edit: "Edit",
@@ -659,6 +675,8 @@ export const en = {
       launching: "Launching task…",
       reanalyzing: "Re-analyzing task…",
       archived: "Task archived.",
+      deployHeld: "Card held back from the next batch",
+      deployUnheld: "Card back in the batch",
     },
     confirmDelete: {
       title: "Delete task?",

@@ -30,6 +30,7 @@ import { createPressSlopTracker } from "./card-press-slop";
 import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import { DeployAllButton } from "./deploy-all-button";
+import { DeployBatchBanner } from "./deploy-batch-banner";
 import {
   buildColumnModels,
   EMPTY_COLUMN_CONTROLS,
@@ -87,6 +88,8 @@ export function KanbanBoard({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
+  onToggleDeployHold,
+  deployOffPeak,
   columnExtras,
 }: KanbanBoardProps) {
   const labels = useColumnLabels();
@@ -208,6 +211,8 @@ export function KanbanBoard({
               onReanalyzeTask={onReanalyzeTask}
               onDeleteTask={onDeleteTask}
               onDeployAll={onDeployAll}
+              onToggleDeployHold={onToggleDeployHold}
+              deployOffPeak={deployOffPeak}
             />
           ))}
         </View>
@@ -224,8 +229,7 @@ export function KanbanBoard({
 }
 
 const DroppableColumn = memo(function DroppableColumn({
-  // Same as the native board: `board` stays in the type (the parent spreads it)
-  // but the column itself no longer reads it.
+  board,
   column,
   label,
   labels,
@@ -241,6 +245,8 @@ const DroppableColumn = memo(function DroppableColumn({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
+  onToggleDeployHold,
+  deployOffPeak,
 }: {
   board: TaskBoard | null;
   column: TaskColumn;
@@ -258,6 +264,8 @@ const DroppableColumn = memo(function DroppableColumn({
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
   onDeployAll: KanbanBoardProps["onDeployAll"];
+  onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
+  deployOffPeak: KanbanBoardProps["deployOffPeak"];
 }) {
   const { t } = useTranslation();
   const { setNodeRef, isOver } = useDroppable({ id: `${COLUMN_DROPPABLE_PREFIX}${column}` });
@@ -300,9 +308,10 @@ const DroppableColumn = memo(function DroppableColumn({
         onRunTask={onRunTask}
         onReanalyzeTask={onReanalyzeTask}
         onDeleteTask={onDeleteTask}
+        onToggleDeployHold={onToggleDeployHold}
       />
     ),
-    [labels, onPressTask, onMoveTask, onRunTask, onReanalyzeTask, onDeleteTask],
+    [labels, onPressTask, onMoveTask, onRunTask, onReanalyzeTask, onDeleteTask, onToggleDeployHold],
   );
 
   return (
@@ -345,6 +354,9 @@ const DroppableColumn = memo(function DroppableColumn({
       </View>
       <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
       <div ref={setNodeRef} style={webColumnBodyStyle}>
+        {/* One progress bar for the whole run, then the "voici ce qui vient
+            d'être mis en ligne" recap — above the cards it is about. */}
+        <DeployBatchBanner column={column} batch={board?.deployBatch ?? null} />
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
           {rows.map((row) =>
@@ -358,6 +370,7 @@ const DroppableColumn = memo(function DroppableColumn({
                 onRunTask={onRunTask}
                 onReanalyzeTask={onReanalyzeTask}
                 onDeleteTask={onDeleteTask}
+                onToggleDeployHold={onToggleDeployHold}
               />
             ) : (
               <TaskCardStack
@@ -376,7 +389,13 @@ const DroppableColumn = memo(function DroppableColumn({
         ) : null}
         {/* "Tout déployer" sits at the FOOT of the queue column: the button is
             the last thing under the cards it is about to publish. */}
-        <DeployAllButton column={column} tasks={tasks} onDeployAll={onDeployAll} />
+        <DeployAllButton
+          column={column}
+          tasks={tasks}
+          onDeployAll={onDeployAll}
+          offPeakEnabled={deployOffPeak?.enabled}
+          onToggleOffPeak={deployOffPeak?.onToggle}
+        />
       </div>
     </View>
   );
@@ -412,6 +431,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
+  onToggleDeployHold,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
@@ -421,6 +441,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   onRunTask: KanbanBoardProps["onRunTask"];
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
+  onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -510,6 +531,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
           onRunTask={onRunTask}
           onReanalyzeTask={onReanalyzeTask}
           onDeleteTask={onDeleteTask}
+          onToggleDeployHold={onToggleDeployHold}
         />
       </div>
     </div>

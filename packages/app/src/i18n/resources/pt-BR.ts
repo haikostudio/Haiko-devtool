@@ -524,6 +524,20 @@ export const ptBR: TranslationResources = {
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",
       deployAllConfirm: "Implantar tudo",
       deployAllStarted: "Publicação em lote iniciada",
+      deployOffPeak: "Publicar automaticamente fora de pico",
+      deployOffPeakMessage:
+        "O lote em espera será publicado sozinho durante o horário de silêncio, e o motor reinicia ao final. Você pode desativar a opção quando quiser.",
+      batchRunning: "Publicando — {{count}} tarefa(s)",
+      batchDone: "{{count}} tarefa(s) no ar",
+      batchFailed: "A publicação falhou",
+      batchAuto: "iniciada automaticamente",
+      batchPhase: {
+        start: "Preparando…",
+        save: "Salvando o trabalho…",
+        build: "Construindo o aplicativo…",
+        publish: "Publicando…",
+        done: "Concluído",
+      },
       pendingPublish: "{{count}} cartão(ões) prontos para publicar",
       pendingPublishWithRestart:
         "{{count}} cartão(ões) prontos para publicar, {{restart}} exigem reinício",
@@ -657,6 +671,8 @@ export const ptBR: TranslationResources = {
       hold: "Aguardar meu aval",
       resumeAuto: "Retomar automático",
       taskActions: "Ações da tarefa",
+      deployHold: "Tirar do próximo lote",
+      deployUnhold: "Voltar ao lote",
       add: "Adicionar",
       save: "Salvar",
       edit: "Editar",
@@ -668,6 +684,8 @@ export const ptBR: TranslationResources = {
       launching: "Iniciando a tarefa…",
       reanalyzing: "Reanalisando a tarefa…",
       archived: "Tarefa arquivada.",
+      deployHeld: "Cartão retirado do próximo lote",
+      deployUnheld: "Cartão de volta ao lote",
     },
     confirmDelete: {
       title: "Excluir tarefa?",

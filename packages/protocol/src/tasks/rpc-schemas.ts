@@ -102,6 +102,9 @@ export const TasksTaskUpdateRequestSchema = z.object({
   // "Pause au choix": true holds execution after analysis until the user's go;
   // false/null returns the task to automatic execution.
   executionHold: z.boolean().nullable().optional(),
+  // "Retirer du prochain lot" / "Remettre dans le lot" on a card waiting in
+  // "À déployer". Additive + optional: old daemons ignore it.
+  deployHold: z.boolean().nullable().optional(),
 });
 
 export const TasksTaskMoveRequestSchema = z.object({

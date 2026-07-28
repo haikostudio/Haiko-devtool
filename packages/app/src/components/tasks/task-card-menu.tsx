@@ -1,5 +1,12 @@
 import { memo, useCallback } from "react";
-import { MoreVertical, Play, RefreshCw, Trash2 } from "lucide-react-native";
+import {
+  MoreVertical,
+  PauseCircle,
+  Play,
+  PlayCircle,
+  RefreshCw,
+  Trash2,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import {
@@ -10,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { KANBAN_COLUMNS } from "@/components/tasks/kanban-columns";
+import { isTaskDeployed } from "@/components/tasks/task-card-badge";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -20,17 +28,23 @@ const ThemedKebab = withUnistyles(MoreVertical);
 const ThemedPlay = withUnistyles(Play);
 const ThemedRefresh = withUnistyles(RefreshCw);
 const ThemedTrash = withUnistyles(Trash2);
+const ThemedPause = withUnistyles(PauseCircle);
+const ThemedResume = withUnistyles(PlayCircle);
 
 const MENU_ICON_SIZE = 16;
 const runLeading = <ThemedPlay size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const reanalyzeLeading = <ThemedRefresh size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const deleteLeading = <ThemedTrash size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
+const holdLeading = <ThemedPause size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
+const unholdLeading = <ThemedResume size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 
 export interface TaskCardMenuHandlers {
   onMoveTask: (input: { taskId: string; column: TaskColumn; index: number }) => void;
   onRunTask: (taskId: string) => void;
   onReanalyzeTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  /** "Retirer du prochain lot" / "Remettre dans le lot" on a queued card. */
+  onToggleDeployHold?: ((taskId: string, hold: boolean) => void) | undefined;
 }
 
 /**
@@ -49,12 +63,21 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   onRunTask,
   onReanalyzeTask,
   onDeleteTask,
+  onToggleDeployHold,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
 } & TaskCardMenuHandlers) {
   const { t } = useTranslation();
   const canLaunch = task.column === "validated" || task.column === "scheduled";
+  // Holding a card back only means something while it is still waiting to be
+  // published: a live card has nothing left to be excluded from.
+  const canHold =
+    Boolean(onToggleDeployHold) && task.column === "deployed" && !isTaskDeployed(task);
+  const held = task.deployHold === true;
+  const handleToggleHold = useCallback(() => {
+    onToggleDeployHold?.(task.id, !held);
+  }, [onToggleDeployHold, task.id, held]);
 
   const handleRun = useCallback(() => {
     onRunTask(task.id);
@@ -111,7 +134,16 @@ export const TaskCardMenu = memo(function TaskCardMenu({
             {t("tasks.actions.reanalyze")}
           </DropdownMenuItem>
         ) : null}
-        {canLaunch ? <DropdownMenuSeparator /> : null}
+        {canHold ? (
+          <DropdownMenuItem
+            leading={held ? unholdLeading : holdLeading}
+            onSelect={handleToggleHold}
+            testID={`tasks-deploy-hold-${task.id}`}
+          >
+            {t(held ? "tasks.actions.deployUnhold" : "tasks.actions.deployHold")}
+          </DropdownMenuItem>
+        ) : null}
+        {canLaunch || canHold ? <DropdownMenuSeparator /> : null}
         {KANBAN_COLUMNS.filter((column) => column !== task.column).map((column) => (
           <MoveTaskMenuItem
             key={column}

@@ -776,8 +776,9 @@ function BoardContent({
   const { t } = useTranslation();
   const toast = useToast();
   const isCompact = useIsCompactFormFactor();
-  const { config } = useDaemonConfig(serverId);
+  const { config, patchConfig } = useDaemonConfig(serverId);
   const quietHours = config?.tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS;
+  const offPeakEnabled = config?.tasks?.autoDeployOffPeak === true;
 
   // Tapping a task on a host without the conductor opens its Details+Billing
   // drawer directly. The drawer itself lives at the screen root (TasksDetailDock)
@@ -982,6 +983,55 @@ function BoardContent({
     })();
   }, [boardHandle, projectTasks, toast, t]);
 
+  // "Retirer du prochain lot" / "Remettre dans le lot": the card keeps its place
+  // in "À déployer" and stays visible — the batch simply skips it. A pause, not
+  // an archive, so putting it back is the same single gesture.
+  const handleToggleDeployHold = useCallback(
+    (taskId: string, hold: boolean) => {
+      void (async () => {
+        try {
+          await boardHandle.updateTask({ taskId, deployHold: hold });
+          toast.show(t(hold ? "tasks.toast.deployHeld" : "tasks.toast.deployUnheld"));
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
+      })();
+    },
+    [boardHandle, toast, t],
+  );
+
+  // "Publier automatiquement en heures creuses": one switch on the daemon, since
+  // the batch it fires ends by restarting that same daemon. Turning it ON is the
+  // standing authorization — the confirmation says so.
+  const handleToggleOffPeak = useCallback(
+    (next: boolean) => {
+      void (async () => {
+        if (next) {
+          const confirmed = await confirmDialog({
+            title: t("tasks.board.deployOffPeak"),
+            message: t("tasks.board.deployOffPeakMessage"),
+            confirmLabel: t("common.actions.confirm"),
+            cancelLabel: t("common.actions.cancel"),
+          });
+          if (!confirmed) {
+            return;
+          }
+        }
+        try {
+          await patchConfig({ tasks: { ...config?.tasks, autoDeployOffPeak: next } });
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error));
+        }
+      })();
+    },
+    [patchConfig, config, toast, t],
+  );
+
+  const deployOffPeak = useMemo(
+    () => ({ enabled: offPeakEnabled, onToggle: handleToggleOffPeak }),
+    [offPeakEnabled, handleToggleOffPeak],
+  );
+
   // The card menu already confirmed the deletion; here we just perform it. The
   // card leaves the board on its own via the live task sync.
   const handleDeleteTask = useCallback(
@@ -1031,6 +1081,8 @@ function BoardContent({
           onReanalyzeTask={handleEstimateTask}
           onDeleteTask={handleDeleteTask}
           onDeployAll={handleDeployAll}
+          onToggleDeployHold={handleToggleDeployHold}
+          deployOffPeak={deployOffPeak}
           columnExtras={columnExtras}
         />
       ) : null}

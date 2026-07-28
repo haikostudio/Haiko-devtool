@@ -5,6 +5,7 @@ import type {
   TaskBilling,
   TaskBoard,
   TaskColumn,
+  TaskDeployBatch,
   TaskFolder,
   TaskRunConfig,
   TaskSchedulePreference,
@@ -633,6 +634,7 @@ export class TaskBoardService {
       schedulePreference?: TaskSchedulePreference | null;
       billing?: TaskBilling | null;
       executionHold?: boolean | null;
+      deployHold?: boolean | null;
     },
   ): Promise<KanbanTask> {
     const board = await this.mutateTask(projectId, taskId, (task) => {
@@ -668,6 +670,12 @@ export class TaskBoardService {
         delete updated.executionHold;
       } else if (changes.executionHold === true) {
         updated.executionHold = true;
+      }
+      // "Retirer du prochain lot": held back from the batch, still on the board.
+      if (changes.deployHold === null || changes.deployHold === false) {
+        delete updated.deployHold;
+      } else if (changes.deployHold === true) {
+        updated.deployHold = true;
       }
       return updated;
     });
@@ -905,6 +913,43 @@ export class TaskBoardService {
         : {}),
       deployment: { state: "deployed" as const, startedAt: current.deployment?.startedAt },
     }));
+  }
+
+  /**
+   * Records where the project's batch publication stands, on the BOARD rather
+   * than on a card: it is one run covering several cards, and the column shows
+   * it as a single progress bar, then as a "voici ce qui vient d'être mis en
+   * ligne" recap. Passing null clears the record.
+   */
+  async setDeployBatch(projectId: string, batch: TaskDeployBatch | null): Promise<TaskBoard> {
+    const board = await this.store.mutate(projectId, (current) => {
+      if (batch === null) {
+        const { deployBatch: _dropped, ...rest } = current;
+        return rest;
+      }
+      return { ...current, deployBatch: batch };
+    });
+    this.broadcast(board);
+    return board;
+  }
+
+  /** Merges a patch into the current batch record; no-op when none is running. */
+  async patchDeployBatch(
+    projectId: string,
+    patch: Partial<TaskDeployBatch>,
+  ): Promise<TaskDeployBatch | null> {
+    let result: TaskDeployBatch | null = null;
+    const board = await this.store.mutate(projectId, (current) => {
+      if (!current.deployBatch) {
+        return current;
+      }
+      result = { ...current.deployBatch, ...patch };
+      return { ...current, deployBatch: result };
+    });
+    if (result) {
+      this.broadcast(board);
+    }
+    return result;
   }
 
   /**

@@ -4959,6 +4959,8 @@ export class DaemonClient {
       runConfig?: TaskRunConfig | null;
       schedulePreference?: TaskSchedulePreference | null;
       billing?: TaskBilling | null;
+      executionHold?: boolean | null;
+      deployHold?: boolean | null;
     },
     requestId?: string,
   ) {

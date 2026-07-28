@@ -518,6 +518,20 @@ export const ru: TranslationResources = {
         "{{count}} задач(и) будут опубликованы одним запуском, затем движок перезапустится. Запущенные агенты будут прерваны.",
       deployAllConfirm: "Развернуть всё",
       deployAllStarted: "Групповая публикация запущена",
+      deployOffPeak: "Публиковать автоматически в тихие часы",
+      deployOffPeakMessage:
+        "Ожидающая партия опубликуется сама в тихие часы, после чего движок перезапустится. Опцию можно отключить в любой момент.",
+      batchRunning: "Публикация — {{count}} задач(и)",
+      batchDone: "Опубликовано задач: {{count}}",
+      batchFailed: "Публикация не удалась",
+      batchAuto: "запущена автоматически",
+      batchPhase: {
+        start: "Подготовка…",
+        save: "Сохранение работы…",
+        build: "Сборка приложения…",
+        publish: "Публикация…",
+        done: "Готово",
+      },
       pendingPublish: "Готово к публикации: {{count}}",
       pendingPublishWithRestart:
         "Готово к публикации: {{count}}, из них требуют перезапуска: {{restart}}",
@@ -651,6 +665,8 @@ export const ru: TranslationResources = {
       hold: "Отложить до согласия",
       resumeAuto: "Возобновить авто",
       taskActions: "Действия задачи",
+      deployHold: "Исключить из следующей партии",
+      deployUnhold: "Вернуть в партию",
       add: "Добавить",
       save: "Сохранить",
       edit: "Изменить",
@@ -662,6 +678,8 @@ export const ru: TranslationResources = {
       launching: "Запуск задачи…",
       reanalyzing: "Повторный анализ задачи…",
       archived: "Задача архивирована.",
+      deployHeld: "Карточка исключена из следующей партии",
+      deployUnheld: "Карточка возвращена в партию",
     },
     confirmDelete: {
       title: "Delete task?",

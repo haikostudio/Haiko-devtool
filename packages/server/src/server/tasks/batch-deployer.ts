@@ -72,10 +72,17 @@ export function isTaskLive(task: KanbanTask): boolean {
   );
 }
 
-/** The cards a "Tout déployer" press would take online, in board order. */
+/**
+ * The cards a "Tout déployer" press would take online, in board order: queued,
+ * not archived, not live, and not held back by "Retirer du prochain lot".
+ */
 export function selectPendingDeployTasks(tasks: readonly KanbanTask[]): KanbanTask[] {
   return tasks.filter(
-    (task) => task.column === "deployed" && !task.archivedAt && !isTaskLive(task),
+    (task) =>
+      task.column === "deployed" &&
+      !task.archivedAt &&
+      task.deployHold !== true &&
+      !isTaskLive(task),
   );
 }
 
@@ -115,7 +122,10 @@ export class TaskBatchDeployer {
     this.logger = options.logger.child({ module: "task-batch-deployer" });
   }
 
-  async deployAll(projectId: string): Promise<TaskBatchDeployResult> {
+  async deployAll(
+    projectId: string,
+    options: { auto?: boolean } = {},
+  ): Promise<TaskBatchDeployResult> {
     if (this.running.has(projectId)) {
       throw new TaskBoardServiceError(
         "batch_deploy_running",
@@ -150,6 +160,20 @@ export class TaskBatchDeployer {
       }));
     }
     const taskIds = pending.map((task) => task.id);
+    // The board carries the run itself: the column turns it into one progress
+    // bar for the whole batch, then into the "voici ce qui vient d'être mis en
+    // ligne" recap. Titles are snapshotted so the recap survives a rename.
+    await this.options.taskBoardService.setDeployBatch(projectId, {
+      state: "running",
+      phase: null,
+      startedAt,
+      finishedAt: null,
+      taskIds,
+      titles: pending.map((task) => task.title),
+      url: null,
+      error: null,
+      ...(options.auto ? { auto: true } : {}),
+    });
     void this.run(projectId, pending)
       .catch((error) => {
         this.logger.error({ err: error, projectId }, "Batch deployment failed");
@@ -205,6 +229,11 @@ export class TaskBatchDeployer {
         await this.closeWindow(projectId, task.id);
       }
     }
+    // Every card is now in the hands of its own agent, each publishing at its
+    // own pace: there is no single run left to show a progress bar for. The
+    // board-level record steps aside and each card carries its own "Publication
+    // en cours" badge until its agent confirms it live.
+    await this.options.taskBoardService.setDeployBatch(projectId, null);
   }
 
   /** Follows the running publication, narrating each phase change once. */
@@ -226,6 +255,9 @@ export class TaskBatchDeployer {
       }
       if (run.phase && run.phase !== lastPhase) {
         lastPhase = run.phase;
+        await this.options.taskBoardService.patchDeployBatch(input.projectId, {
+          phase: run.phase,
+        });
         const label = PHASE_LABELS[run.phase];
         if (label) {
           await this.sayAll(input.pending, `⏳ **Publication groupée** — ${label}`);
@@ -267,6 +299,13 @@ export class TaskBatchDeployer {
         this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
       }
     }
+    await this.options.taskBoardService.patchDeployBatch(projectId, {
+      state: "success",
+      phase: "done",
+      finishedAt: new Date().toISOString(),
+      url,
+      error: null,
+    });
     await this.sayAll(
       pending,
       url
@@ -289,6 +328,11 @@ export class TaskBatchDeployer {
   }
 
   private async fail(projectId: string, pending: KanbanTask[], reason: string): Promise<void> {
+    await this.options.taskBoardService.patchDeployBatch(projectId, {
+      state: "failed",
+      finishedAt: new Date().toISOString(),
+      error: reason,
+    });
     await this.sayAll(pending, `❌ **Publication groupée** — échec : ${reason}`);
     for (const task of pending) {
       await this.markFailed(projectId, task.id);
@@ -296,6 +340,11 @@ export class TaskBatchDeployer {
   }
 
   private async closeAll(projectId: string, pending: KanbanTask[]): Promise<void> {
+    await this.options.taskBoardService.patchDeployBatch(projectId, {
+      state: "failed",
+      finishedAt: new Date().toISOString(),
+      error: "Publication interrompue : issue inconnue.",
+    });
     for (const task of pending) {
       await this.closeWindow(projectId, task.id);
     }

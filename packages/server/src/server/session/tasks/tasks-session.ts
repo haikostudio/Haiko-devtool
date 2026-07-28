@@ -243,6 +243,7 @@ export class TasksSession {
           : {}),
         ...(request.billing !== undefined ? { billing: request.billing } : {}),
         ...(request.executionHold !== undefined ? { executionHold: request.executionHold } : {}),
+        ...(request.deployHold !== undefined ? { deployHold: request.deployHold } : {}),
       });
       this.host.emit({
         type: "tasks.task.update.response",

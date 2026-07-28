@@ -508,6 +508,20 @@ export const zhCN: TranslationResources = {
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",
       deployAllStarted: "已开始批量发布",
+      deployOffPeak: "在空闲时段自动发布",
+      deployOffPeakMessage:
+        "待发布的批次会在空闲时段自动上线，随后引擎会重启。你可以随时关闭该选项。",
+      batchRunning: "发布中 — {{count}} 个任务",
+      batchDone: "已上线 {{count}} 个任务",
+      batchFailed: "发布失败",
+      batchAuto: "自动启动",
+      batchPhase: {
+        start: "准备中…",
+        save: "保存工作…",
+        build: "构建应用…",
+        publish: "上线中…",
+        done: "完成",
+      },
       pendingPublish: "{{count}} 张卡片待发布",
       pendingPublishWithRestart: "{{count}} 张卡片待发布，其中 {{restart}} 张需要重启",
       batch: {
@@ -640,6 +654,8 @@ export const zhCN: TranslationResources = {
       hold: "保留待我确认",
       resumeAuto: "恢复自动执行",
       taskActions: "任务操作",
+      deployHold: "从下一批中移除",
+      deployUnhold: "放回批次",
       add: "添加",
       save: "保存",
       edit: "编辑",
@@ -651,6 +667,8 @@ export const zhCN: TranslationResources = {
       launching: "正在启动任务…",
       reanalyzing: "正在重新分析任务…",
       archived: "任务已归档。",
+      deployHeld: "卡片已移出下一批",
+      deployUnheld: "卡片已放回批次",
     },
     confirmDelete: {
       title: "Delete task?",

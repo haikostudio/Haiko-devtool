@@ -122,6 +122,13 @@ interface TasksBoardUiState {
    */
   attachmentsEntryId: string | null;
   setAttachmentsEntryId: (attachmentsEntryId: string | null) => void;
+  /**
+   * `startedAt` of the finished batch publication whose recap the user closed.
+   * Persisted, so a recap dismissed on this device stays closed across reloads;
+   * the next publication carries a new `startedAt` and shows again on its own.
+   */
+  dismissedDeployBatchAt: string | null;
+  dismissDeployBatch: (startedAt: string) => void;
 }
 
 /**
@@ -231,6 +238,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         ),
       attachmentsEntryId: null,
       setAttachmentsEntryId: (attachmentsEntryId) => set({ attachmentsEntryId }),
+      dismissedDeployBatchAt: null,
+      dismissDeployBatch: (startedAt) => set({ dismissedDeployBatchAt: startedAt }),
     }),
     {
       name: "tasks-board-ui",
@@ -255,6 +264,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         explorerCollapsed: state.explorerCollapsed,
         previewWidth: state.previewWidth,
         preferDeployThenRestart: state.preferDeployThenRestart,
+        dismissedDeployBatchAt: state.dismissedDeployBatchAt,
       }),
       merge: (persisted, current) => {
         const stored = (persisted ?? {}) as Partial<TasksBoardUiState>;

@@ -512,6 +512,20 @@ export const ar: TranslationResources = {
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",
       deployAllConfirm: "نشر الكل",
       deployAllStarted: "بدأ النشر الجماعي",
+      deployOffPeak: "النشر تلقائيًا في ساعات الهدوء",
+      deployOffPeakMessage:
+        "ستُنشر الدفعة المنتظرة تلقائيًا خلال ساعات الهدوء، ثم يُعاد تشغيل المحرك. يمكنك إيقاف الخيار في أي وقت.",
+      batchRunning: "جارٍ النشر — {{count}} مهمة",
+      batchDone: "تم نشر {{count}} مهمة",
+      batchFailed: "فشل النشر",
+      batchAuto: "بدأت تلقائيًا",
+      batchPhase: {
+        start: "قيد التحضير…",
+        save: "حفظ العمل…",
+        build: "بناء التطبيق…",
+        publish: "جارٍ النشر…",
+        done: "تم",
+      },
       pendingPublish: "{{count}} بطاقة جاهزة للنشر",
       pendingPublishWithRestart: "{{count}} بطاقة جاهزة للنشر، منها {{restart}} تتطلب إعادة تشغيل",
       batch: {
@@ -644,6 +658,8 @@ export const ar: TranslationResources = {
       hold: "إبقاء بانتظار موافقتي",
       resumeAuto: "استئناف تلقائي",
       taskActions: "إجراءات المهمة",
+      deployHold: "استبعاد من الدفعة القادمة",
+      deployUnhold: "إعادة إلى الدفعة",
       add: "إضافة",
       save: "حفظ",
       edit: "تعديل",
@@ -655,6 +671,8 @@ export const ar: TranslationResources = {
       launching: "جارٍ تشغيل المهمة…",
       reanalyzing: "جارٍ إعادة تحليل المهمة…",
       archived: "تمت أرشفة المهمة.",
+      deployHeld: "تم استبعاد البطاقة من الدفعة القادمة",
+      deployUnheld: "أُعيدت البطاقة إلى الدفعة",
     },
     confirmDelete: {
       title: "Delete task?",

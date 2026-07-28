@@ -306,6 +306,12 @@ export interface KanbanBoardProps {
   // "Tout déployer": publishes every not-yet-live card of the "À déployer"
   // column in one run. Rendered at the bottom of that column only.
   onDeployAll?: (() => void) | undefined;
+  // "Retirer du prochain lot" / "Remettre dans le lot" on a queued card: the
+  // card stays on the board, the batch skips it.
+  onToggleDeployHold?: ((taskId: string, hold: boolean) => void) | undefined;
+  // "Publier automatiquement en heures creuses" — the opt-in twin of the button,
+  // rendered right under it. Absent when the host does not expose the option.
+  deployOffPeak?: { enabled: boolean; onToggle: (next: boolean) => void } | undefined;
   // Node rendered at the top of one column's body (inline new-task draft).
   columnExtras?: { column: TaskColumn; node: React.ReactNode } | null;
 }

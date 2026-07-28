@@ -209,6 +209,51 @@ live yet, in ONE run, and restarts the daemon at the end.
 - **A failed run marks nothing live**, sets each card's `deployment.state` to
   `failed`, and says why in the conversations. Silence is never taken for success.
 
+### What the column shows while (and after) it runs
+
+The run is recorded on the BOARD, not on a card (`TaskBoard.deployBatch`, written
+by `setDeployBatch`/`patchDeployBatch`): it is one build covering several cards,
+so it gets one bar, not N spinners.
+
+- **During**: `DeployBatchBanner` sits above the cards with a single progress bar
+  fed by the build script's own phases (sauvegarde → construction → mise en
+  ligne). It is server truth, not a local animation guessing at the daemon.
+- **After**: the same banner becomes the "voici ce qui vient d'être mis en ligne"
+  recap — the card titles it took out (snapshotted at start, so a rename or an
+  archive afterwards cannot rewrite history), the address, or the failure reason.
+  One tap dismisses it (remembered per run, `dismissedDeployBatchAt`), and a recap
+  older than a day hides itself.
+- A project deployed card-by-card (not the self-host) clears the record once every
+  card has been handed to its own agent: there is no single run left to follow, and
+  each card carries its own "Publication en cours" badge.
+
+### Holding one card back — "Retirer du prochain lot"
+
+A queued card can be taken out of the next batch from its ⋮ menu, without
+archiving it: `deployHold` (additive, optional) keeps the card exactly where it
+is, visible and finished, and `selectPendingDeployTasks` skips it. The button's
+counter drops accordingly. "Remettre dans le lot" is the same single gesture the
+other way. It is a pause, not a filing gesture — the difference from archiving is
+that a held card is still on the board asking to be published one day.
+
+### Publishing on its own — "Publier automatiquement en heures creuses"
+
+Opt-in, off by default, one switch under the button (`tasks.autoDeployOffPeak` in
+the daemon config). When it is on, `AutoDeployWatcher` checks every few minutes
+whether the clock is inside the tasks quiet-hours window and, if cards are
+waiting, starts exactly the same batch the button would — closing restart
+included. That is the whole point of off-peak: the restart lands when nobody is
+working.
+
+- Turning it ON is the standing authorization for that restart, and the
+  confirmation dialog says so in as many words. Nothing else in the daemon ever
+  restarts it unattended.
+- The watcher forces nothing: `deployAll` keeps every refusal it has (a card still
+  running, a batch already going, an empty queue), and each one simply means "not
+  this tick".
+- A run it started is flagged `auto` on the board record, so the banner and the
+  recap say the publication went out on its own.
+
 ## Deploying one finished card — the "Lancer le déploiement" bar
 
 A single card can still be published on its own, which is how an ordinary project

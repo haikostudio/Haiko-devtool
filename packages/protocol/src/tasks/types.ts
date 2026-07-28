@@ -258,6 +258,11 @@ export const KanbanTaskSchema = z.object({
   // Consent window + outcome of the "Lancer le déploiement" action, which moves a
   // finished card to "deployed" through its own agent. Additive + optional.
   deployment: TaskDeploymentSchema.nullable().optional(),
+  // "Retirer du prochain lot": the card stays in "À déployer" but the batch
+  // publication skips it. A pause, not an archive — the card is still visible,
+  // still finished, simply held back until the user puts it back in. Additive +
+  // optional: old boards/clients simply omit it.
+  deployHold: z.boolean().optional(),
   // Set when the deployed work only takes effect after the daemon is restarted
   // (e.g. a server-side change). Purely informative: it is surfaced as an icon on
   // the card and NEVER triggers a restart on its own — that stays the user's call.
@@ -301,10 +306,34 @@ export const TaskFolderSchema = z.object({
 });
 export type TaskFolder = z.infer<typeof TaskFolderSchema>;
 
+// The last "Tout déployer" run of a project: what it is publishing, where it
+// stands, and how it ended. It is what the column shows as a progress bar while
+// the batch runs, and as a "voici ce qui vient d'être mis en ligne" recap once
+// it is over. Titles are snapshotted so the recap still reads correctly if a
+// card is renamed, archived or deleted afterwards.
+export const TaskDeployBatchSchema = z.object({
+  state: z.enum(["running", "success", "failed"]),
+  // Coarse step written by the build script: "save" → "build" → "publish".
+  phase: z.string().nullable().optional(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable().optional(),
+  taskIds: z.array(z.string()),
+  titles: z.array(z.string()).optional(),
+  // Address the batch went live at, when the project has one.
+  url: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+  // True when the off-peak option started this run instead of a user press.
+  auto: z.boolean().optional(),
+});
+export type TaskDeployBatch = z.infer<typeof TaskDeployBatchSchema>;
+
 export const TaskBoardSchema = z.object({
   version: z.literal(1),
   projectId: z.string(),
   folders: z.array(TaskFolderSchema),
   tasks: z.array(KanbanTaskSchema),
+  // Last/current batch publication. Additive + optional: old boards and old
+  // clients simply omit it, and a board that never published carries nothing.
+  deployBatch: TaskDeployBatchSchema.nullable().optional(),
 });
 export type TaskBoard = z.infer<typeof TaskBoardSchema>;

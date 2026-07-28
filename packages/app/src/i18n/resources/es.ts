@@ -523,6 +523,20 @@ export const es: TranslationResources = {
         "{{count}} tarea(s) se publicarán de una sola vez y luego el motor se reiniciará. Los agentes en curso se interrumpirán.",
       deployAllConfirm: "Desplegar todo",
       deployAllStarted: "Publicación en lote iniciada",
+      deployOffPeak: "Publicar automáticamente en horas valle",
+      deployOffPeakMessage:
+        "El lote en espera saldrá solo durante las horas valle y el motor se reiniciará al terminar. Puedes desactivar la opción cuando quieras.",
+      batchRunning: "Publicando — {{count}} tarea(s)",
+      batchDone: "{{count}} tarea(s) publicadas",
+      batchFailed: "La publicación falló",
+      batchAuto: "iniciada automáticamente",
+      batchPhase: {
+        start: "Preparando…",
+        save: "Guardando el trabajo…",
+        build: "Construyendo la aplicación…",
+        publish: "Publicando…",
+        done: "Listo",
+      },
       pendingPublish: "{{count}} tarjeta(s) listas para publicar",
       pendingPublishWithRestart:
         "{{count}} tarjeta(s) listas para publicar, {{restart}} requieren reinicio",
@@ -656,6 +670,8 @@ export const es: TranslationResources = {
       hold: "Poner en espera",
       resumeAuto: "Reanudar automático",
       taskActions: "Acciones de la tarea",
+      deployHold: "Excluir del próximo lote",
+      deployUnhold: "Volver a incluir en el lote",
       add: "Añadir",
       save: "Guardar",
       edit: "Editar",
@@ -667,6 +683,8 @@ export const es: TranslationResources = {
       launching: "Iniciando la tarea…",
       reanalyzing: "Reanalizando la tarea…",
       archived: "Tarea archivada.",
+      deployHeld: "Tarjeta excluida del próximo lote",
+      deployUnheld: "Tarjeta de vuelta en el lote",
     },
     confirmDelete: {
       title: "¿Eliminar tarea?",

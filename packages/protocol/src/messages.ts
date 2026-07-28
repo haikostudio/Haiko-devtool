@@ -228,6 +228,11 @@ export const MutableDaemonConfigSchema = z
             timeZone: z.string().min(1),
           })
           .optional(),
+        // "Publier automatiquement en heures creuses": when true, the daemon
+        // starts the "Tout déployer" batch on its own inside the quiet-hours
+        // window (and restarts itself afterwards, exactly as the button does).
+        // Off by default — turning it on IS the standing authorization.
+        autoDeployOffPeak: z.boolean().optional(),
       })
       .passthrough()
       .optional(),

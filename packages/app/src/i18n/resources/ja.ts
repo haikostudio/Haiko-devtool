@@ -518,6 +518,20 @@ export const ja: TranslationResources = {
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",
       deployAllConfirm: "すべてデプロイ",
       deployAllStarted: "一括公開を開始しました",
+      deployOffPeak: "オフピークに自動公開",
+      deployOffPeakMessage:
+        "待機中の一括が静音時間帯に自動で公開され、その後エンジンが再起動します。オプションはいつでも解除できます。",
+      batchRunning: "公開中 — {{count}} 件",
+      batchDone: "{{count}} 件を公開しました",
+      batchFailed: "公開に失敗しました",
+      batchAuto: "自動実行",
+      batchPhase: {
+        start: "準備中…",
+        save: "作業を保存中…",
+        build: "アプリを構築中…",
+        publish: "公開中…",
+        done: "完了",
+      },
       pendingPublish: "公開待ちのカード {{count}} 件",
       pendingPublishWithRestart:
         "公開待ちのカード {{count}} 件（うち {{restart}} 件は再起動が必要）",
@@ -651,6 +665,8 @@ export const ja: TranslationResources = {
       hold: "承認まで保留",
       resumeAuto: "自動実行を再開",
       taskActions: "タスク操作",
+      deployHold: "次の一括から外す",
+      deployUnhold: "一括に戻す",
       add: "追加",
       save: "保存",
       edit: "編集",
@@ -662,6 +678,8 @@ export const ja: TranslationResources = {
       launching: "タスクを開始しています…",
       reanalyzing: "タスクを再分析しています…",
       archived: "タスクをアーカイブしました。",
+      deployHeld: "カードを次の一括から外しました",
+      deployUnheld: "カードを一括に戻しました",
     },
     confirmDelete: {
       title: "Delete task?",
