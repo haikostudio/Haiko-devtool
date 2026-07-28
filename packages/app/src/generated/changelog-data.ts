@@ -547,6 +547,13 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
 
 export const CHANGELOG_COMMITS: ChangelogCommit[] = [
   {
+    "hash": "43edcf44b2043a9935875974d8be80a305b79a18",
+    "shortHash": "43edcf44b",
+    "date": "2026-07-28T16:06:20+02:00",
+    "author": "haikostudio",
+    "subject": "chore: sauvegarde avant build local"
+  },
+  {
     "hash": "43c9cdf643bedd9348b2ce7ec19bae8c57ad79ac",
     "shortHash": "43c9cdf64",
     "date": "2026-07-28T15:59:34+02:00",
@@ -2638,15 +2645,8 @@ export const CHANGELOG_COMMITS: ChangelogCommit[] = [
     "date": "2026-07-23T21:34:07+02:00",
     "author": "Mohamed Boudra",
     "subject": "fix(app): keep grouped tool-call shimmers full speed (#2369)"
-  },
-  {
-    "hash": "b73592ccac74420750f7de691af4abad12b9f179",
-    "shortHash": "b73592cca",
-    "date": "2026-07-23T21:08:12+02:00",
-    "author": "Mohamed Boudra",
-    "subject": "Fix web chat stickiness at non-default zoom (#2368)"
   }
 ];
 
 /** Newest known change date (ISO), or null when nothing is available. */
-export const CHANGELOG_GENERATED_AT: string | null = "2026-07-28T15:59:34+02:00";
+export const CHANGELOG_GENERATED_AT: string | null = "2026-07-28T16:06:20+02:00";
