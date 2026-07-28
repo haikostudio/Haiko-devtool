@@ -126,3 +126,31 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     expect(deriveTaskTone(makeTask({ column: "backlog" }), undefined)).toBeNull();
   });
 });
+
+describe("deriveTaskTone — a question typed in prose still calls for the user", () => {
+  it("reads a finished agent whose last message asks something as attention", () => {
+    // The daemon detected a question in the closing lines: no permission prompt
+    // exists, the lifecycle only says "finished", yet the user does owe a reply.
+    const attention: WorkspaceStateBucket = "attention";
+    expect(deriveTaskTone(makeTask({ column: "in_progress" }), attention, true)).toBe("attention");
+    expect(deriveTaskTone(makeTask({ column: "done" }), "done", true)).toBe("attention");
+  });
+
+  it("ignores the flag once the agent is running again", () => {
+    // A question already superseded by a fresh run must not freeze the card on
+    // amber — the loader is the truer signal.
+    expect(deriveTaskTone(makeTask({ column: "in_progress" }), "running", true)).toBe("running");
+  });
+
+  it("still reads a finished agent with no question as done", () => {
+    const attention: WorkspaceStateBucket = "attention";
+    expect(deriveTaskTone(makeTask({ column: "in_progress" }), attention, false)).toBe("done");
+    expect(deriveTaskTone(makeTask({ column: "in_progress" }), attention, undefined)).toBe("done");
+  });
+
+  it("keeps a running final check ahead of a pending question", () => {
+    expect(
+      deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), "done", true),
+    ).toBe("running");
+  });
+});

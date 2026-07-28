@@ -1,4 +1,5 @@
 import type { AgentSynthesis } from "@getpaseo/protocol/messages";
+import { detectPendingUserQuestion } from "./agent-pending-question.js";
 
 /**
  * One conversation turn, role-tagged. Contiguous same-role chunks (Claude
@@ -33,6 +34,13 @@ const OBJECTIVE_MAX = 140;
  *   so the block changes on every interaction.
  * - `objective` — the first user message: the running through-line / original ask.
  * - `state`     — where things stand, from the live lifecycle status.
+ * - `awaitsUser`— whether that last agent message asks the user something.
+ *
+ * `awaitsUser` reads the FULL last message, not the trimmed `summary`: a
+ * question lands at the END of a reply and `summary` keeps the first ~240
+ * characters, so the condensed text is exactly where a question goes missing.
+ * It is only ever true when the agent spoke last — the moment the user replies,
+ * the ball is back in the agent's court and the flag clears on its own.
  *
  * Returns null when there is nothing to summarize yet (empty transcript).
  */
@@ -57,6 +65,7 @@ export function buildAgentSynthesis(options: BuildAgentSynthesisOptions): AgentS
     // conversations), so the expanded card doesn't show the same line twice.
     objective: objective && objective !== summary ? objective : null,
     state: describeState(options.status, last.role),
+    awaitsUser: last.role === "assistant" && detectPendingUserQuestion(last.text),
     updatedAt: options.now,
   };
 }

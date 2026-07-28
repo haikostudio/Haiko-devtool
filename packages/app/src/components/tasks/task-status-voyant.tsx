@@ -31,10 +31,19 @@ import { SyncedLoader } from "@/components/synced-loader";
 import type { KanbanTask } from "@/data/tasks";
 import { aggregateTaskTones, deriveTaskTone, taskAgentId, type TaskTone } from "./task-status-tone";
 
-// Live agentId → status-bucket lookup shared across the tasks screen. Built once
-// at the screen root so the project rail, folder rail, and every task card read
-// the same up-to-date agent state without each subscribing to the agent list.
-const AgentBucketContext = createContext<Map<string, WorkspaceStateBucket>>(new Map());
+// Everything a card needs to know about its live agent: the coarse status
+// bucket, plus whether the agent's last message actually asks the user
+// something (the daemon's deterministic read of the transcript). Kept together
+// so a card never has to guess a pending question from a lifecycle flag.
+interface AgentSignal {
+  bucket: WorkspaceStateBucket;
+  awaitsUser: boolean;
+}
+
+// Live agentId → signal lookup shared across the tasks screen. Built once at the
+// screen root so the project rail, folder rail, and every task card read the
+// same up-to-date agent state without each subscribing to the agent list.
+const AgentBucketContext = createContext<Map<string, AgentSignal>>(new Map());
 
 /**
  * Provides the agentId → bucket map to the tasks screen. Rebuilds only when the
@@ -44,24 +53,24 @@ const AgentBucketContext = createContext<Map<string, WorkspaceStateBucket>>(new 
 export function AgentBucketProvider({ children }: { children: ReactNode }): ReactElement {
   const { agents } = useAggregatedAgents();
   const map = useMemo(() => {
-    const next = new Map<string, WorkspaceStateBucket>();
+    const next = new Map<string, AgentSignal>();
     for (const agent of agents) {
-      next.set(
-        agent.id,
-        deriveAgentStateBucket({
+      next.set(agent.id, {
+        bucket: deriveAgentStateBucket({
           status: agent.status,
           pendingPermissionCount: agent.pendingPermissionCount,
           requiresAttention: agent.requiresAttention,
           attentionReason: agent.attentionReason,
         }),
-      );
+        awaitsUser: agent.awaitsUser === true,
+      });
     }
     return next;
   }, [agents]);
   return <AgentBucketContext.Provider value={map}>{children}</AgentBucketContext.Provider>;
 }
 
-function useAgentBucketMap(): Map<string, WorkspaceStateBucket> {
+function useAgentBucketMap(): Map<string, AgentSignal> {
   return useContext(AgentBucketContext);
 }
 
@@ -69,25 +78,24 @@ function useAgentBucketMap(): Map<string, WorkspaceStateBucket> {
 export function useTaskTone(task: KanbanTask): TaskTone | null {
   const map = useAgentBucketMap();
   const agentId = taskAgentId(task);
-  const bucket = agentId ? map.get(agentId) : undefined;
-  return useMemo(() => deriveTaskTone(task, bucket), [task, bucket]);
+  const signal = agentId ? map.get(agentId) : undefined;
+  // Depend on the primitives, not the signal object: the map is rebuilt whenever
+  // the agent list changes, and re-deriving on an unchanged state is pure waste.
+  const bucket = signal?.bucket;
+  const awaitsUser = signal?.awaitsUser;
+  return useMemo(() => deriveTaskTone(task, bucket, awaitsUser), [task, bucket, awaitsUser]);
 }
 
 // Aggregate tone for a folder/project card, rolled up from its tasks' live tones.
 export function useAggregateTone(tasks: KanbanTask[]): TaskTone | null {
   const map = useAgentBucketMap();
-  return useMemo(() => {
-    const tones = tasks.map((task) => {
-      const agentId = taskAgentId(task);
-      return deriveTaskTone(task, agentId ? map.get(agentId) : undefined);
-    });
-    return aggregateTaskTones(tones);
-  }, [tasks, map]);
+  return useMemo(() => aggregateTaskTones(tasks.map((task) => toneOf(task, map))), [tasks, map]);
 }
 
-function toneOf(task: KanbanTask, map: Map<string, WorkspaceStateBucket>): TaskTone | null {
+function toneOf(task: KanbanTask, map: Map<string, AgentSignal>): TaskTone | null {
   const agentId = taskAgentId(task);
-  return deriveTaskTone(task, agentId ? map.get(agentId) : undefined);
+  const signal = agentId ? map.get(agentId) : undefined;
+  return deriveTaskTone(task, signal?.bucket, signal?.awaitsUser);
 }
 
 // Groups a project's live tasks by folder and rolls each folder up to one tone.

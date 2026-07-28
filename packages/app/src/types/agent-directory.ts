@@ -20,4 +20,9 @@ export type AgentDirectoryEntry = Pick<
   | "projectPlacement"
 > & {
   pendingPermissionCount?: number;
+  // Flattened from the agent's synthesis: its last message asks the user
+  // something (a question or an explicit hand-back). Kept as a flat boolean so
+  // list consumers never carry the whole synthesis block around. Absent on old
+  // daemons — read it as "no question detected".
+  awaitsUser?: boolean;
 };

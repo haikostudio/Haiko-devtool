@@ -26,24 +26,35 @@ export function taskAgentId(task: KanbanTask): string | null {
 }
 
 // Wants the user: proposed-but-unapproved, paused for an explicit go, a
-// plan-mode result ready to review, a failed run, or a live agent actually
-// blocked on a permission / question prompt.
+// plan-mode result ready to review, a failed run, a live agent blocked on a
+// permission prompt, or an agent whose last message actually asks something.
 //
 // It deliberately does NOT include the `attention` bucket. That bucket is the
 // agent's "I finished my turn, come look" flag (`requiresAttention` with an
 // attentionReason of "finished") — a *notification*, not a pending question. A
 // permission prompt or an explicit input request lands in `needs_input`, and an
-// error lands in `failed`; those are the only live-agent states where the user
-// genuinely has something to do. Treating "finished" as attention is what made
-// every completed card claim it was waiting for a reply nobody owed it.
-function wantsUser(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefined): boolean {
+// error lands in `failed`. Treating "finished" as attention is what made every
+// completed card claim it was waiting for a reply nobody owed it.
+//
+// `agentAwaitsUser` covers the case no lifecycle flag can express: a question
+// typed in plain prose at the end of a reply, with no permission prompt behind
+// it. The daemon detects it deterministically from the transcript (see the
+// server's agent-pending-question) and it clears by itself the moment the user
+// answers, since the agent then spoke second-to-last. It is ignored while the
+// agent is running again — a fresh run outranks a question already superseded.
+function wantsUser(
+  task: KanbanTask,
+  agentBucket: WorkspaceStateBucket | undefined,
+  agentAwaitsUser: boolean | undefined,
+): boolean {
   return (
     task.approval?.state === "pending" ||
     task.executionHold === true ||
     Boolean(task.planReadyAt) ||
     task.schedule?.state === "failed" ||
     agentBucket === "needs_input" ||
-    agentBucket === "failed"
+    agentBucket === "failed" ||
+    (agentAwaitsUser === true && agentBucket !== "running")
   );
 }
 
@@ -107,10 +118,13 @@ function isActionRunning(task: KanbanTask): boolean {
  *
  * `agentBucket` is the derived live state of the task's linked agent, or
  * undefined when the task has no agent (or its agent is gone).
+ * `agentAwaitsUser` is that agent's "my last message asks you something" flag,
+ * absent on older daemons (read as "no question detected").
  */
 export function deriveTaskTone(
   task: KanbanTask,
   agentBucket: WorkspaceStateBucket | undefined,
+  agentAwaitsUser?: boolean,
 ): TaskTone | null {
   // An action the user just launched from the card (final check / deploy) is
   // running: show the working loader immediately, ahead of any stale amber
@@ -124,7 +138,7 @@ export function deriveTaskTone(
   // "done" light. Surface the live running / wants-a-reply signal first so the
   // amber "waiting" light (and the card's dim) survive a relaunch; only fall to
   // the terminal "done" tone once the agent is idle or gone.
-  if (wantsUser(task, agentBucket)) {
+  if (wantsUser(task, agentBucket, agentAwaitsUser)) {
     return "attention";
   }
   if (isRunning(task, agentBucket)) {

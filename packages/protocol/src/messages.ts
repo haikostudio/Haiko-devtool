@@ -827,6 +827,13 @@ export const AgentSynthesisSchema = z.object({
   // Longer than the tab title (which stays short); LLM-generated per turn from
   // the agent's response and preserved across the deterministic summary rebuilds.
   headline: z.string().nullable().optional(),
+  // COMPAT(synthesisAwaitsUser): added in v0.2.3, drop the gate when floor >= v0.2.3.
+  // True when the agent's last message hands the conversation back to the user —
+  // a question or an explicit ask, detected deterministically from the closing
+  // lines of the transcript. Distinguishes "j'ai fini" from "je te demande
+  // quelque chose", which no lifecycle flag can express. Absent on old daemons;
+  // consumers must read it as "no question detected".
+  awaitsUser: z.boolean().optional(),
   // ISO timestamp of when this synthesis was generated.
   updatedAt: z.string(),
 });

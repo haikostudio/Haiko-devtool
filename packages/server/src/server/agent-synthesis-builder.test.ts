@@ -78,3 +78,49 @@ describe("buildAgentSynthesis", () => {
     expect(result?.summary).toBe("Partie deux.");
   });
 });
+
+describe("buildAgentSynthesis — awaitsUser", () => {
+  it("flags a closing question from the agent", () => {
+    const synthesis = buildAgentSynthesis({
+      turns: [
+        { role: "user", text: "Corrige le badge." },
+        { role: "assistant", text: "C'est corrigé.\n\nJe publie tout de suite ?" },
+      ],
+      now: "2026-07-28T10:00:00.000Z",
+    });
+    expect(synthesis?.awaitsUser).toBe(true);
+  });
+
+  it("stays false when the agent simply reports finished work", () => {
+    const synthesis = buildAgentSynthesis({
+      turns: [
+        { role: "user", text: "Corrige le badge." },
+        { role: "assistant", text: "C'est corrigé, testé et enregistré." },
+      ],
+      now: "2026-07-28T10:00:00.000Z",
+    });
+    expect(synthesis?.awaitsUser).toBe(false);
+  });
+
+  it("clears itself as soon as the user answers", () => {
+    const synthesis = buildAgentSynthesis({
+      turns: [
+        { role: "assistant", text: "Je publie tout de suite ?" },
+        { role: "user", text: "Oui, vas-y." },
+      ],
+      now: "2026-07-28T10:00:00.000Z",
+    });
+    expect(synthesis?.awaitsUser).toBe(false);
+  });
+
+  it("looks past the trimmed summary to the end of a long reply", () => {
+    // The summary keeps the first ~240 characters; the question lives at the end.
+    const long = `${"Compte rendu détaillé de la correction appliquée. ".repeat(20)}\nTu valides ?`;
+    const synthesis = buildAgentSynthesis({
+      turns: [{ role: "assistant", text: long }],
+      now: "2026-07-28T10:00:00.000Z",
+    });
+    expect(synthesis?.summary.includes("Tu valides")).toBe(false);
+    expect(synthesis?.awaitsUser).toBe(true);
+  });
+});
