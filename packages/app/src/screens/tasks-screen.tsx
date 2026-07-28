@@ -64,7 +64,8 @@ import {
 import type { TaskTone } from "@/components/tasks/task-status-tone";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
-import { ConductorPanel } from "@/components/tasks/conductor-panel";
+import { ConductorPanel, type ConductorPanelProps } from "@/components/tasks/conductor-panel";
+import { ConductorSidePanel } from "@/components/tasks/conductor-side-panel";
 import { TaskExplorerDock } from "@/components/tasks/task-explorer-dock";
 import { TaskExplorerSidePanel } from "@/components/tasks/task-explorer-side-panel";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
@@ -625,6 +626,9 @@ function DesktopLayout({
         workspaceId={selectedProject?.workspaceId || null}
         projectRootPath={selectedProject?.rootPath ?? null}
       />
+      {/* The conductor/agents chat is a sibling of the board too — same concept as
+          the explorer: it splits the row rather than floating over the board. */}
+      <ConductorSidePanelHost serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
     </View>
   );
 }
@@ -1266,6 +1270,79 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
 // centers across the full tasks area (including rails), not just the board. The
 // dock shows the conductor agent by default and, when a task is tapped on the
 // board, that task's Chat / Details / Billing tabs.
+// The full set of props both conductor shells need — the dockTask resolved from
+// the selection plus every task action. Shared by the compact bottom sheet
+// (`ConductorDock`) and the desktop in-row side panel (`ConductorSidePanelHost`)
+// so the two surfaces stay in lockstep.
+function useConductorPanelProps(
+  serverId: string | null,
+  projectId: string | null,
+  boardHandle: BoardHandle,
+): ConductorPanelProps {
+  const dockTaskId = useTasksBoardUiStore((state) => state.dockTaskId);
+  const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
+  const taskActions = useBoardTaskActions(boardHandle);
+
+  const dockTask = useMemo(
+    () =>
+      dockTaskId ? (boardHandle.board?.tasks.find((task) => task.id === dockTaskId) ?? null) : null,
+    [dockTaskId, boardHandle.board],
+  );
+
+  // Closing the panel also drops the task selection so it never reopens pointed at
+  // a task that has since gone away.
+  const handleClose = useCallback(() => {
+    setConductorOpen(false);
+    setDockTaskId(null);
+  }, [setConductorOpen, setDockTaskId]);
+  const handleBack = useCallback(() => setDockTaskId(null), [setDockTaskId]);
+
+  return useMemo(
+    () => ({
+      serverId,
+      projectId,
+      dockTask,
+      onBackToConductor: handleBack,
+      onRunNow: taskActions.handleRunNow,
+      onSave: taskActions.handleSave,
+      onDelete: taskActions.handleDelete,
+      onEstimate: taskActions.handleEstimate,
+      onApprove: taskActions.handleApprove,
+      onApproveTask: taskActions.handleApproveTask,
+      onValidate: taskActions.handleValidate,
+      onArchive: taskActions.handleArchive,
+      onDeploy: taskActions.handleDeploy,
+      onSetHold: taskActions.handleSetHold,
+      onClose: handleClose,
+    }),
+    [serverId, projectId, dockTask, handleBack, handleClose, taskActions],
+  );
+}
+
+// Desktop: the conductor chat as a right-hand side panel that splits the row with
+// the board — the same concept as the file explorer's side panel. Rendered inside
+// the board row (not at the screen root) so it takes its width out of the row
+// instead of floating over it. Mounted only while open so its ensure/bootstrap
+// never runs behind a closed panel.
+function ConductorSidePanelHost({
+  serverId,
+  projectId,
+  boardHandle,
+}: {
+  serverId: string | null;
+  projectId: string | null;
+  boardHandle: BoardHandle;
+}) {
+  const supportsConductor = useHostFeature(serverId, "tasksConductor");
+  const conductorOpen = useTasksBoardUiStore((state) => state.conductorOpen);
+  const panelProps = useConductorPanelProps(serverId, projectId, boardHandle);
+  if (!supportsConductor || !projectId || !conductorOpen) {
+    return null;
+  }
+  return <ConductorSidePanel {...panelProps} />;
+}
+
 function ConductorDock({
   serverId,
   projectId,
@@ -1280,24 +1357,8 @@ function ConductorDock({
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const conductorOpen = useTasksBoardUiStore((state) => state.conductorOpen);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
-  const dockTaskId = useTasksBoardUiStore((state) => state.dockTaskId);
-  const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
-  const taskActions = useBoardTaskActions(boardHandle);
-
-  const dockTask = useMemo(
-    () =>
-      dockTaskId ? (boardHandle.board?.tasks.find((task) => task.id === dockTaskId) ?? null) : null,
-    [dockTaskId, boardHandle.board],
-  );
-
-  // Closing the dock also drops the task selection so it never reopens pointed at
-  // a task that has since gone away.
-  const handleClose = useCallback(() => {
-    setConductorOpen(false);
-    setDockTaskId(null);
-  }, [setConductorOpen, setDockTaskId]);
+  const panelProps = useConductorPanelProps(serverId, projectId, boardHandle);
   const handleOpen = useCallback(() => setConductorOpen(true), [setConductorOpen]);
-  const handleBack = useCallback(() => setDockTaskId(null), [setDockTaskId]);
 
   // Proximity animation (desktop web only): the toggle fades in and grows as the
   // cursor approaches, then springs back to dormant when it moves away. On touch
@@ -1350,25 +1411,10 @@ function ConductorDock({
     return null;
   }
   if (conductorOpen) {
-    return (
-      <ConductorPanel
-        serverId={serverId}
-        projectId={projectId}
-        dockTask={dockTask}
-        onBackToConductor={handleBack}
-        onRunNow={taskActions.handleRunNow}
-        onSave={taskActions.handleSave}
-        onDelete={taskActions.handleDelete}
-        onEstimate={taskActions.handleEstimate}
-        onApprove={taskActions.handleApprove}
-        onApproveTask={taskActions.handleApproveTask}
-        onValidate={taskActions.handleValidate}
-        onArchive={taskActions.handleArchive}
-        onDeploy={taskActions.handleDeploy}
-        onSetHold={taskActions.handleSetHold}
-        onClose={handleClose}
-      />
-    );
+    // Desktop renders the conductor as an in-row side panel (ConductorSidePanelHost);
+    // at the screen root we only own the compact bottom sheet. Either way the open
+    // toggle is hidden while the panel is up.
+    return isCompact ? <ConductorPanel {...panelProps} /> : null;
   }
   return (
     <Animated.View ref={wrapperRef} style={wrapperAnimStyle}>
