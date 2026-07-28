@@ -1,12 +1,21 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { Archive, BadgeCheck, Bot, CheckCircle2, Play, Rocket } from "lucide-react-native";
+import {
+  Archive,
+  BadgeCheck,
+  Bot,
+  CheckCircle2,
+  Play,
+  Rocket,
+  RotateCw,
+} from "lucide-react-native";
 import { AboveComposerSlotProvider } from "@/panels/above-composer-slot";
 import { HostOwnsComposerSafeAreaProvider } from "@/panels/embedded-composer-context";
 import { Button } from "@/components/ui/button";
 import type { KanbanTask } from "@/data/tasks";
+import { resolveRunNowState } from "@/components/tasks/task-run-now-state";
 import { useSessionStore } from "@/stores/session-store";
 import { MAX_CONTENT_WIDTH } from "@/constants/layout";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
@@ -31,6 +40,7 @@ const primaryForegroundMapping = (theme: Theme) => ({ color: theme.colors.primar
 const ThemedCheck = withUnistyles(CheckCircle2);
 const ThemedBadgeCheck = withUnistyles(BadgeCheck);
 const ThemedPlay = withUnistyles(Play);
+const ThemedRotate = withUnistyles(RotateCw);
 const ThemedArchive = withUnistyles(Archive);
 const ThemedRocket = withUnistyles(Rocket);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
@@ -169,7 +179,7 @@ export function TaskAgentChat({
       return <ApproveTaskBar onPress={handleApprove} />;
     }
     if (showRunNow) {
-      return <RunNowTaskBar onPress={handleRun} />;
+      return <RunNowTaskBar onPress={handleRun} schedule={task.schedule} />;
     }
     if (showValidate) {
       return (
@@ -202,6 +212,7 @@ export function TaskAgentChat({
     task.progress,
     task.validation,
     task.deployment,
+    task.schedule,
     agentBusy,
   ]);
 
@@ -220,11 +231,7 @@ export function TaskAgentChat({
     <View style={styles.emptyState}>
       <ThemedBot size={ICON_SIZE.lg} uniProps={mutedColorMapping} />
       <Text style={styles.emptyText}>{t("tasks.panel.noAgent")}</Text>
-      {serverId ? (
-        <Button onPress={handleRun} testID="task-panel-launch-agent">
-          {t("tasks.panel.launchAgent")}
-        </Button>
-      ) : null}
+      {serverId ? <LaunchAgentButton onPress={handleRun} schedule={task.schedule} /> : null}
     </View>
   );
 }
@@ -319,35 +326,168 @@ function validateBarStyle({
 }
 
 /**
+ * The empty-state launch action, for a card whose agent does not exist yet. It
+ * shares the run-now bar's honesty: a spinner while the launch is in flight, and
+ * a retry wording once the attempts are spent — the button used to fire and then
+ * look untouched whether or not anything actually started.
+ */
+function LaunchAgentButton({
+  onPress,
+  schedule,
+}: {
+  onPress: () => void;
+  schedule: KanbanTask["schedule"];
+}) {
+  const { t } = useTranslation();
+  const { pending, press } = useRunNowPending(onPress, schedule);
+  const { labelKey, busy } = resolveRunNowState(schedule, pending);
+  // The default wording stays "Lancer l'agent" here: this button is the empty
+  // state's own call to action, not the scheduled card's bar. Every other state
+  // explains an absence of progress, so it wins over the generic label.
+  const label = labelKey === "tasks.actions.runNow" ? "tasks.panel.launchAgent" : labelKey;
+  return (
+    <Button onPress={press} loading={busy} testID="task-panel-launch-agent">
+      {t(label)}
+    </Button>
+  );
+}
+
+/**
+ * How long an optimistic "launching" spinner may survive without the server
+ * confirming it. The daemon stamps `schedule.state = "launching"` at the very
+ * top of a launch, so confirmation normally lands in well under a second; this
+ * ceiling only exists so a rejected RPC (or a dropped socket) can never leave
+ * the bar spinning forever. A stuck launch indicator is exactly the bug this
+ * bar is meant to make impossible, so it must always be able to clear itself.
+ */
+const RUN_NOW_PENDING_TIMEOUT_MS = 10_000;
+
+/**
  * Full-width accent bar carrying the single "Lancer maintenant" action, shown on
  * a scheduled card right above the prompt composer. It mirrors ValidateTaskBar's
  * geometry (same outer/inner alignment to the composer) so the two control bars
  * feel like one family, but wears the accent color to stay distinct from the
  * green "finish" control. Pressing it forces the "Planifié" → "En cours"
  * transition immediately, bypassing the off-peak window and the 5h-quota gate.
+ *
+ * The bar reports the launch instead of merely requesting it. A press used to
+ * produce nothing but a transient toast, so a launch that never happened looked
+ * identical to one still starting — the button just sat there. Now it spins
+ * while the launch is in flight, names the reason a queued card has not started
+ * (quota, quiet hours, analysis pending), and turns into an explicit
+ * "Échec du lancement — réessayer" once the attempts are spent, which is also
+ * the gesture that re-arms the card server-side.
+ *
+ * The optimistic spinner is deliberately self-clearing (see
+ * RUN_NOW_PENDING_TIMEOUT_MS): the whole point of this bar is that no launch
+ * indicator may ever get stuck.
  */
-function RunNowTaskBar({ onPress }: { onPress: () => void }) {
+function useRunNowPending(
+  onPress: () => void,
+  schedule: KanbanTask["schedule"],
+): { pending: boolean; press: () => void } {
+  const [pending, setPending] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const serverState = schedule?.state;
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  // The daemon has answered — it either took the launch ("launching"/"running")
+  // or recorded that it failed. Either way its own state now drives the control,
+  // so drop the optimistic one rather than letting the two compete.
+  useEffect(() => {
+    if (
+      pending &&
+      (serverState === "launching" || serverState === "running" || serverState === "failed")
+    ) {
+      clearTimer();
+      setPending(false);
+    }
+  }, [pending, serverState, clearTimer]);
+
+  useEffect(() => clearTimer, [clearTimer]);
+
+  const press = useCallback(() => {
+    setPending(true);
+    clearTimer();
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      setPending(false);
+    }, RUN_NOW_PENDING_TIMEOUT_MS);
+    onPress();
+  }, [onPress, clearTimer]);
+
+  return { pending, press };
+}
+
+/** Spinner while a launch is in flight, retry glyph after a failure, play otherwise. */
+function RunNowIcon({ busy, retry }: { busy: boolean; retry: boolean }) {
+  if (busy) {
+    return <ThemedActivityIndicator size="small" uniProps={accentForegroundMapping} />;
+  }
+  if (retry) {
+    return <ThemedRotate size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />;
+  }
+  return <ThemedPlay size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />;
+}
+
+function RunNowTaskBar({
+  onPress,
+  schedule,
+}: {
+  onPress: () => void;
+  schedule: KanbanTask["schedule"];
+}) {
   const { t } = useTranslation();
+  const { pending, press: handlePress } = useRunNowPending(onPress, schedule);
+  const { labelKey, busy, retry } = resolveRunNowState(schedule, pending);
+  const label = t(labelKey);
+  const barStyle = useCallback(
+    (state: { pressed: boolean; hovered?: boolean }) =>
+      runNowBarStyle({ ...state, disabled: busy }),
+    [busy],
+  );
+  const a11yState = useMemo(() => ({ disabled: busy, busy }), [busy]);
+
   return (
     <View style={styles.validateOuter}>
       <View style={styles.validateInner}>
         <Pressable
-          onPress={onPress}
-          style={runNowBarStyle}
+          onPress={handlePress}
+          disabled={busy}
+          style={barStyle}
           accessibilityRole="button"
-          accessibilityLabel={t("tasks.actions.runNow")}
+          accessibilityLabel={label}
+          accessibilityState={a11yState}
           testID="task-run-now-bar"
         >
-          <ThemedPlay size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />
-          <Text style={styles.runNowText}>{t("tasks.actions.runNow")}</Text>
+          <RunNowIcon busy={busy} retry={retry} />
+          <Text style={styles.runNowText}>{label}</Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
-function runNowBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
-  return [styles.runNowBar, (hovered || pressed) && styles.runNowBarHovered];
+function runNowBarStyle({
+  pressed,
+  hovered,
+  disabled,
+}: {
+  pressed: boolean;
+  hovered?: boolean;
+  disabled?: boolean;
+}) {
+  return [
+    styles.runNowBar,
+    disabled && styles.barDisabled,
+    !disabled && (hovered || pressed) && styles.runNowBarHovered,
+  ];
 }
 
 /**
