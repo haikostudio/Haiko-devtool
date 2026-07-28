@@ -57,6 +57,30 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.card.awaitingReply", variant: "warning" });
   });
 
+  it("shows the deploying badge the instant the deploy window opens, over a stale waiting badge", () => {
+    // The user pressed "Lancer le déploiement": the server opened a running deploy
+    // window, but the live bucket may still read attention until the agent streams.
+    // The explicit action must win so the card says "Publication en cours".
+    const badge = getScheduleBadge(makeTask({ deployment: { state: "running" } }), "attention");
+    expect(badge).toEqual({ labelKey: "tasks.card.deploying", variant: "success" });
+  });
+
+  it("shows the final-check badge while the validation window is running", () => {
+    const badge = getScheduleBadge(makeTask({ validation: { state: "running" } }), "attention");
+    expect(badge).toEqual({ labelKey: "tasks.card.finalCheck", variant: "success" });
+  });
+
+  it("surfaces a failed deploy / final check as an error badge", () => {
+    expect(getScheduleBadge(makeTask({ deployment: { state: "failed" } }), null)).toEqual({
+      labelKey: "tasks.card.deployFailed",
+      variant: "error",
+    });
+    expect(getScheduleBadge(makeTask({ validation: { state: "failed" } }), null)).toEqual({
+      labelKey: "tasks.card.finalCheckFailed",
+      variant: "error",
+    });
+  });
+
   it("shows the green running badge when the agent is actually working", () => {
     const badge = getScheduleBadge(
       makeTask({ schedule: { state: "running", attempts: 1 } }),

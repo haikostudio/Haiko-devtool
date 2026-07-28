@@ -83,6 +83,16 @@ function isScheduled(task: KanbanTask): boolean {
   return task.schedule?.state === "awaiting_slot";
 }
 
+// An explicit action the user just launched from the card — the final check
+// ("Valider la tâche") or the deploy ("Lancer le déploiement"). The server sets
+// `validation.state` / `deployment.state` to "running" the instant the action
+// starts, so it is the freshest, most reliable truth about what the agent is
+// doing. It must win over a stale "waiting for you" bucket that hasn't caught up
+// yet, so the card's light spins instead of staying frozen on amber.
+function isActionRunning(task: KanbanTask): boolean {
+  return task.validation?.state === "running" || task.deployment?.state === "running";
+}
+
 /**
  * Maps one task to its status tone. Reads the board fields (column, completion,
  * approval, hold, plan, schedule) first, then the live agent bucket so a running
@@ -95,6 +105,12 @@ export function deriveTaskTone(
   task: KanbanTask,
   agentBucket: WorkspaceStateBucket | undefined,
 ): TaskTone | null {
+  // An action the user just launched from the card (final check / deploy) is
+  // running: show the working loader immediately, ahead of any stale amber
+  // "waiting for you" signal left over from before the action started.
+  if (isActionRunning(task)) {
+    return "running";
+  }
   // A finished/shipped card whose linked agent has come back to life — the user
   // relaunched a prompt, so the agent is running again or now waiting on a reply
   // — must reflect that renewed activity instead of staying a static green

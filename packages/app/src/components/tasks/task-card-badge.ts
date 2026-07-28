@@ -14,10 +14,38 @@ export interface ScheduleBadgeDescriptor {
 // without pulling in the React Native render tree. `tone` carries the live agent
 // state so a task whose agent is blocked on a question gets an explicit amber
 // badge even when no board field explains the pause.
+// The final check ("Valider la tâche") and the deploy ("Lancer le déploiement")
+// each open a "running" window the instant they start and close it the moment
+// the agent stops, so this reflects the agent's REAL current action — it can
+// never stick. It is the freshest truth about what the card is doing, so it wins
+// over every other status, including a stale "waiting for your reply" that
+// lingers until the agent starts streaming. Kept as its own function so
+// getScheduleBadge stays under the branch-complexity budget.
+function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
+  if (task.deployment?.state === "running") {
+    return { labelKey: "tasks.card.deploying", variant: "success" };
+  }
+  if (task.validation?.state === "running") {
+    return { labelKey: "tasks.card.finalCheck", variant: "success" };
+  }
+  if (task.deployment?.state === "failed") {
+    return { labelKey: "tasks.card.deployFailed", variant: "error" };
+  }
+  if (task.validation?.state === "failed") {
+    return { labelKey: "tasks.card.finalCheckFailed", variant: "error" };
+  }
+  return null;
+}
+
 export function getScheduleBadge(
   task: KanbanTask,
   tone: TaskTone | null,
 ): ScheduleBadgeDescriptor | null {
+  // An action the user launched right from the card wins over everything below.
+  const actionBadge = actionWindowBadge(task);
+  if (actionBadge) {
+    return actionBadge;
+  }
   // Board-field reasons that carry precise wording win first.
   if (task.approval?.state === "pending") {
     return { labelKey: "tasks.approval.pending", variant: "warning" };

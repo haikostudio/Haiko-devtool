@@ -87,6 +87,19 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     expect(deriveTaskTone(task, needsInput)).toBe("attention");
   });
 
+  it("spins the loader while the final check / deploy window is running, over a stale amber bucket", () => {
+    // The user launched the final check or the deploy from a finished card. The
+    // live bucket may still read needs_input until the agent starts streaming, but
+    // the explicit running action must surface immediately as the working loader.
+    const needsInput: WorkspaceStateBucket = "needs_input";
+    expect(
+      deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), needsInput),
+    ).toBe("running");
+    expect(
+      deriveTaskTone(makeTask({ column: "done", deployment: { state: "running" } }), needsInput),
+    ).toBe("running");
+  });
+
   it("reads a queued (awaiting-slot) task as scheduled blue, not running", () => {
     const task = makeTask({
       column: "scheduled",
