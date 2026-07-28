@@ -8,6 +8,8 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
+import { TaskCardStack, useBatchExpansion } from "./task-card-stack";
+import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
   buildColumnModels,
@@ -38,7 +40,6 @@ function addButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?: bool
  */
 export function ScrollableKanbanBoard({
   board,
-  folderId,
   onMoveTask,
   onPressTask,
   onAddTask,
@@ -53,10 +54,7 @@ export function ScrollableKanbanBoard({
   const setColumnControls = useCallback((column: TaskColumn, next: ColumnControls) => {
     setControls((prev) => ({ ...prev, [column]: next }));
   }, []);
-  const columns = useMemo(
-    () => buildColumnModels(board, folderId, controls),
-    [board, folderId, controls],
-  );
+  const columns = useMemo(() => buildColumnModels(board, controls), [board, controls]);
 
   return (
     // Board padding/gap live on an inner View, NOT on contentContainerStyle —
@@ -74,7 +72,6 @@ export function ScrollableKanbanBoard({
           <BoardColumn
             key={column}
             board={board}
-            folderId={folderId}
             column={column}
             label={labels[column]}
             labels={labels}
@@ -96,9 +93,9 @@ export function ScrollableKanbanBoard({
 }
 
 const BoardColumn = memo(function BoardColumn({
-  // `board` / `folderId` stay in the props type (the parent still spreads them)
-  // but the column stopped reading them when "Lancer maintenant" moved to the
-  // task detail — destructuring them here would just be an unused binding.
+  // `board` stays in the props type (the parent still spreads it) but the column
+  // stopped reading it when "Lancer maintenant" moved to the task detail —
+  // destructuring it here would just be an unused binding.
   column,
   label,
   labels,
@@ -114,7 +111,6 @@ const BoardColumn = memo(function BoardColumn({
   onDeleteTask,
 }: {
   board: TaskBoard | null;
-  folderId: string;
   column: TaskColumn;
   label: string;
   labels: Record<TaskColumn, string>;
@@ -130,6 +126,10 @@ const BoardColumn = memo(function BoardColumn({
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
 }) {
   const { t } = useTranslation();
+  // Cards of one lot ("N sur M", shared lot tag) collapse into a single pile
+  // that the user unfolds on demand — see task-batch-grouping.ts.
+  const { isExpanded, toggleExpanded } = useBatchExpansion();
+  const rows = useMemo(() => groupTasksIntoBoardRows(tasks), [tasks]);
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
@@ -143,6 +143,20 @@ const BoardColumn = memo(function BoardColumn({
   const handleControlsChange = useCallback(
     (next: ColumnControls) => onControlsChange(column, next),
     [onControlsChange, column],
+  );
+  const renderCard = useCallback(
+    (task: KanbanTask) => (
+      <BoardCardRow
+        task={task}
+        labels={labels}
+        onMoveTask={onMoveTask}
+        onPressTask={onPressTask}
+        onRunTask={onRunTask}
+        onReanalyzeTask={onReanalyzeTask}
+        onDeleteTask={onDeleteTask}
+      />
+    ),
+    [labels, onMoveTask, onPressTask, onRunTask, onReanalyzeTask, onDeleteTask],
   );
 
   return (
@@ -187,18 +201,29 @@ const BoardColumn = memo(function BoardColumn({
       <ScrollView style={styles.columnScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.columnContent}>
           {extras}
-          {tasks.map((task) => (
-            <BoardCardRow
-              key={task.id}
-              task={task}
-              labels={labels}
-              onMoveTask={onMoveTask}
-              onPressTask={onPressTask}
-              onRunTask={onRunTask}
-              onReanalyzeTask={onReanalyzeTask}
-              onDeleteTask={onDeleteTask}
-            />
-          ))}
+          {rows.map((row) =>
+            row.kind === "task" ? (
+              <BoardCardRow
+                key={row.key}
+                task={row.task}
+                labels={labels}
+                onMoveTask={onMoveTask}
+                onPressTask={onPressTask}
+                onRunTask={onRunTask}
+                onReanalyzeTask={onReanalyzeTask}
+                onDeleteTask={onDeleteTask}
+              />
+            ) : (
+              <TaskCardStack
+                key={row.key}
+                batchKey={row.key}
+                tasks={row.tasks}
+                expanded={isExpanded(row.key)}
+                onToggle={toggleExpanded}
+                renderCard={renderCard}
+              />
+            ),
+          )}
           {tasks.length === 0 && !extras ? (
             <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
           ) : null}

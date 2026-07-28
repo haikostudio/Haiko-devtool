@@ -25,6 +25,8 @@ import type { KanbanTask, TaskBoard, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, SPACING, type Theme } from "@/styles/theme";
 import { TaskCard } from "./task-card";
 import { TaskCardMenu } from "./task-card-menu";
+import { TaskCardStack, useBatchExpansion } from "./task-card-stack";
+import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import {
   buildColumnModels,
@@ -76,7 +78,6 @@ const collideByPointerFirst: CollisionDetection = (args) => {
  */
 export function KanbanBoard({
   board,
-  folderId,
   onMoveTask,
   onPressTask,
   onAddTask,
@@ -103,10 +104,7 @@ export function KanbanBoard({
       return { ...prev, [column]: { ...current, manualOrder: true } };
     });
   }, []);
-  const columns = useMemo(
-    () => buildColumnModels(board, folderId, controls),
-    [board, folderId, controls],
-  );
+  const columns = useMemo(() => buildColumnModels(board, controls), [board, controls]);
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 
   const sensors = useSensors(
@@ -192,7 +190,6 @@ export function KanbanBoard({
             <DroppableColumn
               key={column}
               board={board}
-              folderId={folderId}
               column={column}
               label={labels[column]}
               labels={labels}
@@ -223,8 +220,8 @@ export function KanbanBoard({
 }
 
 const DroppableColumn = memo(function DroppableColumn({
-  // Same as the native board: both props stay in the type (the parent spreads
-  // them) but the column itself no longer reads them.
+  // Same as the native board: `board` stays in the type (the parent spreads it)
+  // but the column itself no longer reads it.
   column,
   label,
   labels,
@@ -241,7 +238,6 @@ const DroppableColumn = memo(function DroppableColumn({
   onDeleteTask,
 }: {
   board: TaskBoard | null;
-  folderId: string;
   column: TaskColumn;
   label: string;
   labels: Record<TaskColumn, string>;
@@ -267,7 +263,13 @@ const DroppableColumn = memo(function DroppableColumn({
     ],
     [compact, isOver],
   );
-  const sortableItems = useMemo(() => tasks.map((task) => task.id), [tasks]);
+  // Cards of one lot ("N sur M", shared lot tag) collapse into a single pile —
+  // see task-batch-grouping.ts. A collapsed pile only mounts its lead card, so
+  // dnd-kit must only ever know about the ids actually on screen: a folded-away
+  // card that stayed in `items` would swallow drops into a hole in the column.
+  const { isExpanded, toggleExpanded } = useBatchExpansion();
+  const rows = useMemo(() => groupTasksIntoBoardRows(tasks), [tasks]);
+  const sortableItems = useMemo(() => visibleTaskIds(rows, isExpanded), [rows, isExpanded]);
   const handleAddTask = useCallback(() => {
     onAddTask(column);
   }, [onAddTask, column]);
@@ -280,6 +282,20 @@ const DroppableColumn = memo(function DroppableColumn({
   const handleControlsChange = useCallback(
     (next: ColumnControls) => onControlsChange(column, next),
     [onControlsChange, column],
+  );
+  const renderCard = useCallback(
+    (task: KanbanTask) => (
+      <SortableTaskCard
+        task={task}
+        labels={labels}
+        onPressTask={onPressTask}
+        onMoveTask={onMoveTask}
+        onRunTask={onRunTask}
+        onReanalyzeTask={onReanalyzeTask}
+        onDeleteTask={onDeleteTask}
+      />
+    ),
+    [labels, onPressTask, onMoveTask, onRunTask, onReanalyzeTask, onDeleteTask],
   );
 
   return (
@@ -324,18 +340,29 @@ const DroppableColumn = memo(function DroppableColumn({
       <div ref={setNodeRef} style={webColumnBodyStyle}>
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <SortableTaskCard
-              key={task.id}
-              task={task}
-              labels={labels}
-              onPressTask={onPressTask}
-              onMoveTask={onMoveTask}
-              onRunTask={onRunTask}
-              onReanalyzeTask={onReanalyzeTask}
-              onDeleteTask={onDeleteTask}
-            />
-          ))}
+          {rows.map((row) =>
+            row.kind === "task" ? (
+              <SortableTaskCard
+                key={row.key}
+                task={row.task}
+                labels={labels}
+                onPressTask={onPressTask}
+                onMoveTask={onMoveTask}
+                onRunTask={onRunTask}
+                onReanalyzeTask={onReanalyzeTask}
+                onDeleteTask={onDeleteTask}
+              />
+            ) : (
+              <TaskCardStack
+                key={row.key}
+                batchKey={row.key}
+                tasks={row.tasks}
+                expanded={isExpanded(row.key)}
+                onToggle={toggleExpanded}
+                renderCard={renderCard}
+              />
+            ),
+          )}
         </SortableContext>
         {tasks.length === 0 && !extras ? (
           <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
