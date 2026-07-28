@@ -63,6 +63,7 @@ import { ConductorSidePanel } from "@/components/tasks/conductor-side-panel";
 import { TaskExplorerDock } from "@/components/tasks/task-explorer-dock";
 import { TaskExplorerSidePanel } from "@/components/tasks/task-explorer-side-panel";
 import { TaskFilePreviewPanel } from "@/components/tasks/task-file-preview-panel";
+import { TaskAttachmentsSidePanel } from "@/components/tasks/task-attachments-side-panel";
 import { DEFAULT_TASKS_QUIET_HOURS } from "@/components/tasks/task-schedule";
 import { TaskScheduleProvider } from "@/components/tasks/task-schedule-context";
 import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
@@ -72,10 +73,6 @@ import { useIsCompactFormFactor } from "@/constants/layout";
 import { isWeb } from "@/constants/platform";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskBoard, type TaskColumn } from "@/data/tasks";
-import {
-  AttachmentLibraryButton,
-  AttachmentLibrarySheet,
-} from "@/attachments/attachment-library-button";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
 import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
@@ -472,6 +469,12 @@ export function TasksScreen() {
               serverId={serverId}
               projectRootPath={selectedProject?.rootPath ?? null}
             />
+            {/* Same story for the attachments library: a full-height sheet on a
+                phone, the right-hand slide-over on desktop. */}
+            <TaskAttachmentsSidePanel
+              serverId={serverId}
+              workspaceId={selectedProject?.workspaceId || null}
+            />
           </>
         ) : null}
         <ConductorDock serverId={serverId} projectId={projectId} boardHandle={boardHandle} />
@@ -543,6 +546,12 @@ function DesktopLayout({
         <TaskFilePreviewPanel
           serverId={serverId}
           projectRootPath={selectedProject?.rootPath ?? null}
+        />
+        {/* The attachments library shares that stage — and the same slide-over
+            width — so the paperclip opens where a file preview would. */}
+        <TaskAttachmentsSidePanel
+          serverId={serverId}
+          workspaceId={selectedProject?.workspaceId || null}
         />
       </View>
       {/* The explorer is a sibling of the board, not an overlay: it takes its
@@ -1540,24 +1549,40 @@ function clearTasksSelection() {
 // Picks the right header. On mobile the header owns navigation — it switches
 // projects in place; everywhere else it's the plain menu header.
 /**
- * "Pièces jointes" button for the task manager header — sits right beside the
- * quota ring. Same gate as the workspace header: only when the host
- * advertises the `attachmentLibrary` capability and the project has a live
- * workspace to scope the library to.
+ * True when this project can show an attachments library: the host advertises
+ * the `attachmentLibrary` capability and the project has a live workspace to
+ * scope the library to.
  */
-function TasksAttachmentLibraryButton({ project }: { project: ProjectEntry | null }) {
+function useAttachmentsSupported(project: ProjectEntry | null): boolean {
   const supported = useSessionStore((s) =>
     project
       ? s.sessions[project.serverId]?.serverInfo?.features?.attachmentLibrary === true
       : false,
   );
-  if (!project || !supported || project.workspaceId.length === 0) return null;
+  return Boolean(project && supported && project.workspaceId.length > 0);
+}
+
+/**
+ * "Pièces jointes" button for the task manager header — sits right beside the
+ * quota ring and toggles the project's attachments slide-over, exactly like the
+ * explorer button toggles the file tree.
+ */
+function TasksAttachmentLibraryButton({ project }: { project: ProjectEntry | null }) {
+  const supported = useAttachmentsSupported(project);
+  const open = useTasksBoardUiStore((state) => state.attachmentsOpen);
+  const setOpen = useTasksBoardUiStore((state) => state.setAttachmentsOpen);
+  const handleToggle = useCallback(() => setOpen(!open), [open, setOpen]);
+  if (!supported) return null;
   return (
-    <AttachmentLibraryButton
-      serverId={project.serverId}
-      workspaceId={project.workspaceId}
-      compact
-    />
+    <Pressable
+      onPress={handleToggle}
+      style={headerIconButtonStyle}
+      accessibilityRole="button"
+      accessibilityLabel="Pièces jointes du projet"
+      testID="attachment-library-button"
+    >
+      <ThemedPaperclip size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+    </Pressable>
   );
 }
 
@@ -1592,7 +1617,7 @@ function headerIconButtonStyle({ pressed, hovered }: { pressed: boolean; hovered
   return [styles.headerIconButton, (hovered || pressed) && styles.headerIconButtonHovered];
 }
 
-type HeaderMenuSheet = "quota" | "attachments" | null;
+type HeaderMenuSheet = "quota" | null;
 
 // Static leading icons for the compact header menu — no props, so they are built
 // once at module scope instead of memoized in every render pass.
@@ -1617,17 +1642,19 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
   const explorerOpen = useTasksBoardUiStore((state) => state.explorerOpen);
   const setExplorerOpen = useTasksBoardUiStore((state) => state.setExplorerOpen);
 
-  const attachmentsSupported = useSessionStore((s) =>
-    project
-      ? s.sessions[project.serverId]?.serverInfo?.features?.attachmentLibrary === true
-      : false,
-  );
+  const canAttach = useAttachmentsSupported(project);
+  const attachmentsOpen = useTasksBoardUiStore((state) => state.attachmentsOpen);
+  const setAttachmentsOpen = useTasksBoardUiStore((state) => state.setAttachmentsOpen);
   const quota = useQuotaMenuModel(project?.serverId ?? null);
-  const canAttach = Boolean(project && attachmentsSupported && project.workspaceId.length > 0);
 
   const closeSheet = useCallback(() => setSheet(null), []);
   const openQuota = useCallback(() => setSheet("quota"), []);
-  const openAttachments = useCallback(() => setSheet("attachments"), []);
+  // The panel lives outside the menu (it is mounted by the screen), so picking
+  // this item only flips the board's state and lets the menu close behind it.
+  const toggleAttachments = useCallback(
+    () => setAttachmentsOpen(!attachmentsOpen),
+    [attachmentsOpen, setAttachmentsOpen],
+  );
   const toggleExplorer = useCallback(
     () => setExplorerOpen(!explorerOpen),
     [explorerOpen, setExplorerOpen],
@@ -1691,7 +1718,8 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
           {canAttach ? (
             <DropdownMenuItem
               leading={HEADER_MENU_ICONS.attachments}
-              onSelect={openAttachments}
+              selected={attachmentsOpen}
+              onSelect={toggleAttachments}
               testID="tasks-header-menu-attachments"
             >
               {t("tasks.headerMenu.attachments")}
@@ -1708,13 +1736,7 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      <TasksHeaderMenuSheets
-        project={project}
-        quota={quota}
-        openSheet={sheet}
-        canAttach={canAttach}
-        onClose={closeSheet}
-      />
+      <TasksHeaderMenuSheets quota={quota} openSheet={sheet} onClose={closeSheet} />
     </>
   );
 }
@@ -1722,36 +1744,22 @@ function TasksHeaderOverflowMenu({ project }: { project: ProjectEntry | null }) 
 /**
  * The drawers the compact header menu opens, mounted outside the menu itself:
  * a sheet rendered inside `DropdownMenuContent` would unmount with the menu the
- * moment the item is picked.
+ * moment the item is picked. (The attachments panel is not one of them — it is
+ * mounted by the screen and only toggled from here.)
  */
 function TasksHeaderMenuSheets({
-  project,
   quota,
   openSheet,
-  canAttach,
   onClose,
 }: {
-  project: ProjectEntry | null;
   quota: QuotaMenuModel;
   openSheet: HeaderMenuSheet;
-  canAttach: boolean;
   onClose: () => void;
 }) {
-  return (
-    <>
-      {quota.canFetch ? (
-        <TaskQuotaSheet model={quota} visible={openSheet === "quota"} onClose={onClose} />
-      ) : null}
-      {project && canAttach ? (
-        <AttachmentLibrarySheet
-          serverId={project.serverId}
-          workspaceId={project.workspaceId}
-          visible={openSheet === "attachments"}
-          onClose={onClose}
-        />
-      ) : null}
-    </>
-  );
+  if (!quota.canFetch) {
+    return null;
+  }
+  return <TaskQuotaSheet model={quota} visible={openSheet === "quota"} onClose={onClose} />;
 }
 
 function TasksHeader({

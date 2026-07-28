@@ -214,13 +214,21 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       detailsTaskId: null,
       setDetailsTaskId: (detailsTaskId) => set({ detailsTaskId }),
       previewFilePath: null,
-      setPreviewFilePath: (previewFilePath) => set({ previewFilePath }),
+      // The two slide-overs share one stage, so opening a file puts the
+      // attachments panel away rather than stacking on top of it.
+      setPreviewFilePath: (previewFilePath) =>
+        set(previewFilePath ? { previewFilePath, attachmentsOpen: false } : { previewFilePath }),
       previewWidth: FILE_PREVIEW_WIDTH_UNSET,
       setPreviewWidth: (previewWidth) => set({ previewWidth }),
       attachmentsOpen: false,
-      // Closing drops the selection too: the panel always re-opens on the list.
+      // Symmetrically: opening the library puts a file preview away. Closing
+      // drops the selection too, so the panel always re-opens on the list.
       setAttachmentsOpen: (attachmentsOpen) =>
-        set(attachmentsOpen ? { attachmentsOpen } : { attachmentsOpen, attachmentsEntryId: null }),
+        set(
+          attachmentsOpen
+            ? { attachmentsOpen, previewFilePath: null }
+            : { attachmentsOpen, attachmentsEntryId: null },
+        ),
       attachmentsEntryId: null,
       setAttachmentsEntryId: (attachmentsEntryId) => set({ attachmentsEntryId }),
     }),
