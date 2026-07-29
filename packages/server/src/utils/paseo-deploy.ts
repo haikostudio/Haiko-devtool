@@ -1329,10 +1329,70 @@ async function isPublicationLive(): Promise<boolean> {
 const AGENT_FAILURE_REASON_MAX_LENGTH = 300;
 
 /**
+ * Generic last-resort cause, when neither the build log nor the agent's own
+ * words carry anything readable.
+ */
+const GENERIC_FAILURE_REASON =
+  "La publication s'est arrêtée sans mettre la nouvelle version en ligne.";
+
+/** Words that make a line read as an actual cause worth surfacing. */
+const CAUSE_KEYWORDS =
+  /(échou|échec|erreur|conflit|redémarr|construction|build|impossible|introuvable|disque|plein|full|interromp|timeout|refus|cassé|manqu)/i;
+
+/**
+ * Lines an agent writes that are NOT the failure cause and must never end up in
+ * the red banner: the imposed header (model / level / time / cost), and the
+ * running-commentary an agent leaves while it works ("le moniteur est en place,
+ * je serai notifié…"). Before this filter the banner showed "Codex très haut,
+ * 12 min, coût…" as the reason — the header, not the error.
+ */
+const NOISE_LINE =
+  /(\bchf\b|coût|tarif|\bopus\b|\bcodex\b|\bsonnet\b|\bhaiku\b|\bgpt\b|niveau\s|moniteur|je serai notifié|notifié dès|j'attends|suivi est en place|je surveille|je vous préviens|en place, je)/i;
+
+/** Strip markdown noise (headings, bold, list markers) from a candidate line. */
+function stripMarkdown(line: string): string {
+  return line
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*]\s+/, "")
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .trim();
+}
+
+/**
+ * The readable cause hidden in an agent's closing message: drop the header and
+ * the progress chatter, then prefer the last line that actually names a failure,
+ * falling back to the last meaningful line. Returns null when nothing survives,
+ * so the caller can reach for a generic sentence rather than echoing noise.
+ *
+ * Exported for the same reason as extractShipFailureReason: this is pure text
+ * triage and deserves its own tests, independent of the filesystem.
+ */
+export function sanitizeAgentFailureReason(summary: string | null): string | null {
+  const candidates = (summary ?? "")
+    .split("\n")
+    .map(stripMarkdown)
+    .filter((line) => line.length > 0 && !NOISE_LINE.test(line));
+  if (candidates.length === 0) {
+    return null;
+  }
+  const cause =
+    candidates.toReversed().find((line) => CAUSE_KEYWORDS.test(line)) ??
+    candidates[candidates.length - 1];
+  if (!cause) {
+    return null;
+  }
+  return cause.length > AGENT_FAILURE_REASON_MAX_LENGTH
+    ? `${cause.slice(0, AGENT_FAILURE_REASON_MAX_LENGTH)}…`
+    : cause;
+}
+
+/**
  * Why nothing went live, in the most concrete words available: the build
- * script's own fatal line first, then the agent's closing words, then a generic
- * sentence. Never silence — a publication that stops without a reason is exactly
- * the "j'ai cliqué et il ne s'est rien passé" report.
+ * script's own fatal line first, then the agent's closing words (stripped of the
+ * header and progress chatter), then a generic sentence. Never silence — a
+ * publication that stops without a reason is exactly the "j'ai cliqué et il ne
+ * s'est rien passé" report.
  */
 async function describeAgentFailure(summary: string | null): Promise<string> {
   try {
@@ -1343,13 +1403,7 @@ async function describeAgentFailure(summary: string | null): Promise<string> {
   } catch {
     // Log unreadable — fall back to what the agent said.
   }
-  const trimmed = summary?.trim() ?? "";
-  if (trimmed.length > 0) {
-    return trimmed.length > AGENT_FAILURE_REASON_MAX_LENGTH
-      ? `${trimmed.slice(0, AGENT_FAILURE_REASON_MAX_LENGTH)}…`
-      : trimmed;
-  }
-  return "La publication s'est arrêtée sans mettre la nouvelle version en ligne.";
+  return sanitizeAgentFailureReason(summary) ?? GENERIC_FAILURE_REASON;
 }
 
 /** Close a run carried out by an agent, on the evidence rather than its word. */

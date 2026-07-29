@@ -135,6 +135,11 @@ describe("TaskBatchDeployer", () => {
     }
   }
 
+  /** True once any note posted so far contains the given fragment. */
+  function noteContains(fragment: string): boolean {
+    return notes.some((note) => note.includes(fragment));
+  }
+
   test("publishes the whole queue in one run, stamps the cards and restarts the engine", async () => {
     const first = await seedQueued("Login", "task/login");
     const second = await seedQueued("Signup", "task/signup");
@@ -188,7 +193,9 @@ describe("TaskBatchDeployer", () => {
     });
 
     await deployer.deployAll("proj-1");
-    await settle(() => idleCalls.length > 0);
+    // The "c'est en ligne" note is posted right after the cards are stamped and
+    // just before succeed() blocks on the agent's rest — a reliable midway marker.
+    await settle(() => noteContains("en ligne"));
 
     // The publication is live: the card is already stamped and archived, the batch
     // reads "success" — but the engine has NOT restarted, because the deploy agent
@@ -241,6 +248,55 @@ describe("TaskBatchDeployer", () => {
     expect(restarts).toEqual([]);
     expect(board.deployBatch?.state).toBe("failed");
     expect(board.deployBatch?.error).toContain("build cassé");
+  });
+
+  test("fails fast when the deploy agent stops at rest without a live verdict", async () => {
+    const task = await seedQueued("Login", "task/login");
+    const deployer = buildDeployer({
+      agentId: "deploy-agent-1",
+      // The run never concludes — the agent paused to ask a question and is now
+      // idle. Without the stall guard this would hang until the 35 min ceiling.
+      runs: [
+        { deploying: true, phase: "build", outcome: null, error: null },
+        { deploying: true, phase: "build", outcome: null, error: null },
+        { deploying: true, phase: "build", outcome: null, error: null },
+        { deploying: true, phase: "build", outcome: null, error: null },
+      ],
+      awaitDeployAgentIdle: async () => {},
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(() => restarts.length > 0 || noteContains("attend"));
+    await settle();
+
+    const board = await service.getBoard("proj-1");
+    const card = board.tasks.find((entry) => entry.id === task.id);
+    expect(card?.deployedAt ?? null).toBeNull();
+    expect(card?.deployment?.state).toBe("failed");
+    expect(board.deployBatch?.state).toBe("failed");
+    expect(board.deployBatch?.error).toContain("arrêté");
+    // A stall is never mistaken for a reason to restart the engine.
+    expect(restarts).toEqual([]);
+  });
+
+  test("clears « Redémarrage requis » on the cards it publishes", async () => {
+    const card = await seedQueued("Login", "task/login");
+    await service.patchTask("proj-1", card.id, (current) => ({
+      ...current,
+      needsDaemonRestart: true,
+    }));
+    const deployer = buildDeployer({
+      url: "https://app.haikostudio.cloud",
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(() => restarts.length > 0);
+
+    // The batch restarts the daemon itself, so the flag that offered a manual
+    // restart must be gone — no stale amber badge left on the archived card.
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === card.id)?.needsDaemonRestart).toBe(false);
   });
 
   test("a publication that never starts is reported, not swallowed", async () => {

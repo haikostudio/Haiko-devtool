@@ -24,6 +24,15 @@ const POLL_INTERVAL_MS = 5_000;
 /** Hard stop for the watcher, slightly above the deploy's own 30 min ceiling. */
 const MAX_WATCH_MS = 35 * 60 * 1000;
 /**
+ * How many consecutive polls the grouped deploy agent may sit at rest while the
+ * run still reports "deploying" before we call it a stall. One poll of grace
+ * absorbs the tiny window between the agent finishing and the run recording its
+ * outcome; beyond that, an agent at rest with no verdict has stopped for good —
+ * almost always because it paused to ask a question — and will never finish on
+ * its own. Concluding here is what stops the batch from hanging the full 35 min.
+ */
+const IDLE_STALL_POLLS = 2;
+/**
  * Breathing room between "everything is live" and the daemon restart, so the
  * board update and the closing note reach the clients before the socket drops.
  */
@@ -264,6 +273,30 @@ export class TaskBatchDeployer {
   }): Promise<void> {
     const deadline = this.now() + MAX_WATCH_MS;
     let lastPhase: string | null = null;
+    // A grouped deploy agent that returns to rest WITHOUT the run reaching a live
+    // outcome has stopped mid-publication — the classic cause is a question it
+    // asked and is now waiting on. We watch for that in parallel so the batch can
+    // fail fast with a clear reason instead of freezing the cards for 35 minutes.
+    // Subscribe to the agent's rest ONCE and share it: the stall check below reads
+    // it, and succeed() awaits the same promise before the restart. Calling
+    // awaitDeployAgentIdle twice would double-subscribe and confuse the ordering.
+    let agentAtRest = false;
+    const idle =
+      input.agentId && this.options.awaitDeployAgentIdle
+        ? this.options.awaitDeployAgentIdle(input.agentId)
+        : null;
+    if (idle) {
+      void (async () => {
+        try {
+          await idle;
+          agentAtRest = true;
+        } catch {
+          // Idle wait failed — the stall check simply never fires; the 35 min
+          // ceiling and the run's own outcome still close the batch.
+        }
+      })();
+    }
+    let stalledPolls = 0;
     while (this.now() < deadline) {
       await this.sleep(POLL_INTERVAL_MS);
       let run: DeployRunSnapshot;
@@ -283,16 +316,30 @@ export class TaskBatchDeployer {
           await this.sayAll(input.pending, `⏳ **Publication groupée** — ${label}`);
         }
       }
-      if (run.deploying) {
-        continue;
-      }
+      // Outcome first: a run that concluded (success or failed) is authoritative
+      // even if the agent has just gone to rest, so the stall check never fires
+      // on a publication that actually finished.
       if (run.outcome === "success") {
-        await this.succeed(input.projectId, input.pending, input.url, input.agentId);
+        await this.succeed(input.projectId, input.pending, input.url, idle);
         return;
       }
       if (run.outcome === "failed") {
         await this.fail(input.projectId, input.pending, run.error ?? "raison inconnue");
         return;
+      }
+      if (run.deploying) {
+        // The agent is idle but the run never concluded: after a poll of grace
+        // (in case the outcome is a beat behind), call it a stall and fail with a
+        // reason the user can act on, rather than hanging until the ceiling.
+        if (agentAtRest && ++stalledPolls >= IDLE_STALL_POLLS) {
+          await this.fail(
+            input.projectId,
+            input.pending,
+            "L'agent de publication s'est arrêté avant d'avoir mis la nouvelle version en ligne (il attend peut-être une réponse de votre part). Rien n'a été publié.",
+          );
+          return;
+        }
+        continue;
       }
       // No run known any more (retention expired): stop quietly rather than
       // claiming an outcome we can't vouch for. The windows still close.
@@ -311,11 +358,19 @@ export class TaskBatchDeployer {
     projectId: string,
     pending: KanbanTask[],
     url: string | null,
-    agentId: string | null,
+    /** The agent's shared rest promise, awaited so the restart never cuts it off. */
+    idle: Promise<void> | null,
   ): Promise<void> {
     for (const task of pending) {
       try {
-        await this.options.taskBoardService.markTaskDeployed(projectId, task.id, { url });
+        // Clear "Redémarrage requis" as we stamp: this batch restarts the daemon
+        // itself as its last step, so the change is about to take effect — leaving
+        // the flag on would strand a stale amber badge / "Redémarrer le moteur"
+        // button on a card whose restart is already handled.
+        await this.options.taskBoardService.markTaskDeployed(projectId, task.id, {
+          url,
+          needsDaemonRestart: false,
+        });
       } catch (error) {
         this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
       }
@@ -338,11 +393,11 @@ export class TaskBatchDeployer {
     // kill it mid-sentence and leave its chat frozen on "j'attends la fin…". So
     // wait for it to reach rest first — the restart is genuinely the LAST step,
     // after every card is stamped AND the agent has had its final say.
-    if (agentId && this.options.awaitDeployAgentIdle) {
+    if (idle) {
       try {
-        await this.options.awaitDeployAgentIdle(agentId);
+        await idle;
       } catch (error) {
-        this.logger.debug({ err: error, agentId }, "Wait for deploy agent to finish failed");
+        this.logger.debug({ err: error }, "Wait for deploy agent to finish failed");
       }
     }
     // The daemon is still running the code from BEFORE this publication, so the
