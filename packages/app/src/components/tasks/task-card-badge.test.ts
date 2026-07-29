@@ -154,6 +154,22 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.schedule.launchingSoon", variant: "success" });
   });
 
+  it("says « Analyse en cours » for a queued card whose agent is still finishing its analysis", () => {
+    // The estimate landed and moved the card to "Planifié" (awaiting_slot), but
+    // the single agent hasn't released its analysis run yet (tone "running"), so
+    // the scheduler keeps re-queuing the launch. The card must read as still
+    // analysing — one coherent state — not a premature green "Démarrage imminent".
+    const badge = getScheduleBadge(
+      makeTask({
+        column: "scheduled",
+        schedule: { state: "awaiting_slot", attempts: 0 },
+        estimate: { quotaPercent: 5, estimatedMinutes: 10 } as KanbanTask["estimate"],
+      }),
+      "running",
+    );
+    expect(badge).toEqual({ labelKey: "tasks.schedule.estimating" });
+  });
+
   it("names the quota wait when the scheduler held the task back for quota", () => {
     const badge = getScheduleBadge(
       makeTask({

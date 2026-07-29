@@ -617,7 +617,7 @@ export class TaskScheduler {
   private async requeueWithoutPenalty(
     projectId: string,
     taskId: string,
-    reason: string,
+    reason?: string,
   ): Promise<void> {
     await this.taskBoardService
       .patchTask(projectId, taskId, (current) => ({
@@ -629,7 +629,10 @@ export class TaskScheduler {
           ...(current.schedule?.cancelRequeues
             ? { cancelRequeues: current.schedule.cancelRequeues }
             : {}),
-          lastError: reason,
+          // A benign transient (agent still finishing its analysis) passes no
+          // reason: it must NOT paint a red error line on the card. Only a
+          // reason worth showing (e.g. a lost agent being replaced) is stamped.
+          ...(reason ? { lastError: reason } : {}),
           lastAttemptAt: new Date().toISOString(),
         },
       }))
@@ -866,7 +869,12 @@ export class TaskScheduler {
   ): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     if (isAgentBusyError(message)) {
-      await this.requeueWithoutPenalty(projectId, taskId, "agent occupé par son analyse");
+      // The card's single agent is still finishing its analysis turn — a benign,
+      // sub-tick handoff, not a failure. Re-queue QUIETLY (no red `lastError`):
+      // the card keeps one coherent "Analyse en cours" badge, driven by the live
+      // running agent (see getScheduleBadge), instead of flashing a green
+      // "Démarrage imminent" next to a red "agent occupé". Retries next tick.
+      await this.requeueWithoutPenalty(projectId, taskId);
       this.logger.info({ taskId }, "Task agent still busy; re-queued for next slot");
       return;
     }

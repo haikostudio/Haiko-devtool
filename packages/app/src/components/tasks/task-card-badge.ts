@@ -154,14 +154,26 @@ export function getScheduleBadge(
   if (state === "pending_estimate") {
     return { labelKey: "tasks.schedule.estimating" };
   }
-  return queuedBadge(task);
+  return queuedBadge(task, tone);
 }
 
 // A card sitting in "awaiting_slot": say WHEN/WHY it is queued instead of a flat
 // "en attente de créneau". The scheduler records why it last held the task back;
 // a task it never held (light "auto"/"asap") carries no reason and launches on
 // the next tick.
-function queuedBadge(task: KanbanTask): ScheduleBadgeDescriptor {
+function queuedBadge(task: KanbanTask, tone: TaskTone | null): ScheduleBadgeDescriptor {
+  // A card parked in "awaiting_slot" whose linked agent is STILL running is
+  // finishing its analysis turn: the estimate has landed and moved the card to
+  // "Planifié", but the single agent hasn't released yet, so the scheduler keeps
+  // re-queuing the launch each tick until it does. Show the one coherent
+  // "Analyse en cours" — matching the spinning voyant — instead of a premature
+  // green "Démarrage imminent". Tied to the live running agent, so the badge
+  // flips to "launching soon" the instant the analysis agent truly stops, never
+  // before. `tone === "running"` on a queued card can only mean an active agent
+  // (a merely-queued card has no live run), so this never masks a real wait.
+  if (tone === "running") {
+    return { labelKey: "tasks.schedule.estimating" };
+  }
   if (task.schedule?.waitingReason === "quiet_hours") {
     return { labelKey: "tasks.schedule.awaitingWindow" };
   }
