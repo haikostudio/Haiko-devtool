@@ -840,7 +840,12 @@ function BoardContent({
           return;
         }
         if (from === "done" && to === "deployed") {
-          taskActions.handleDeploy(input.taskId);
+          // Dragging a finished card into "À déployer" QUEUES it — the same effect
+          // as its "Mettre dans À déployer" button. It must not publish: entering
+          // the queue never marks a card live (that stays the batch's job). This is
+          // the queue button, not the per-card deploy button, so the drag=button
+          // rule maps to the gesture the card actually offers in that column.
+          taskActions.handleQueueDeploy(input.taskId);
           return;
         }
       }
