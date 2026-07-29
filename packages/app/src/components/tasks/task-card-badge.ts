@@ -67,6 +67,28 @@ export function offersDaemonRestart(task: KanbanTask): boolean {
   return task.needsDaemonRestart === true && isTaskDeployed(task);
 }
 
+// A failed analysis is the loudest thing a card can say: it produced no estimate,
+// no billing data, and it will not move on its own. It used to be completely
+// silent — the card simply sat in "Validé" forever wearing a made-up estimate —
+// so it wins over every softer status below.
+//
+// Defensive twin of the server-side reconciliation (estimator.recordFailure): a
+// stale failure record must NEVER shout over a card that actually carries an
+// estimate. If two analyses raced on the card's agent and a real estimate landed,
+// the card succeeded — show the result, not "Analyse impossible". Kept as its own
+// function so getScheduleBadge stays under the branch-complexity budget.
+function analysisFailureBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
+  if (task.analysis?.state !== "failed" || task.estimate) {
+    return null;
+  }
+  return {
+    labelKey: task.analysis.exhausted
+      ? "tasks.analysis.failedExhausted"
+      : "tasks.analysis.failedRetrying",
+    variant: "error",
+  };
+}
+
 function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (task.deployment?.state === "running") {
     return { labelKey: "tasks.card.deploying", variant: "success" };
@@ -106,17 +128,11 @@ export function getScheduleBadge(
   if (task.planReadyAt) {
     return { labelKey: "tasks.card.planReady", variant: "success" };
   }
-  // A failed analysis is the loudest thing a card can say: it produced no
-  // estimate, no billing data, and it will not move on its own. It used to be
-  // completely silent — the card simply sat in "Validé" forever wearing a
-  // made-up estimate — so it wins over every softer status below.
-  if (task.analysis?.state === "failed") {
-    return {
-      labelKey: task.analysis.exhausted
-        ? "tasks.analysis.failedExhausted"
-        : "tasks.analysis.failedRetrying",
-      variant: "error",
-    };
+  // A failed analysis (with no estimate to override it) wins over every softer
+  // status below. See analysisFailureBadge for the reconciliation rule.
+  const failureBadge = analysisFailureBadge(task);
+  if (failureBadge) {
+    return failureBadge;
   }
   if (task.refinement === "pending") {
     return { labelKey: "tasks.schedule.estimating" };
@@ -154,26 +170,20 @@ export function getScheduleBadge(
   if (state === "pending_estimate") {
     return { labelKey: "tasks.schedule.estimating" };
   }
-  return queuedBadge(task, tone);
+  return queuedBadge(task);
 }
 
 // A card sitting in "awaiting_slot": say WHEN/WHY it is queued instead of a flat
 // "en attente de créneau". The scheduler records why it last held the task back;
 // a task it never held (light "auto"/"asap") carries no reason and launches on
 // the next tick.
-function queuedBadge(task: KanbanTask, tone: TaskTone | null): ScheduleBadgeDescriptor {
-  // A card parked in "awaiting_slot" whose linked agent is STILL running is
-  // finishing its analysis turn: the estimate has landed and moved the card to
-  // "Planifié", but the single agent hasn't released yet, so the scheduler keeps
-  // re-queuing the launch each tick until it does. Show the one coherent
-  // "Analyse en cours" — matching the spinning voyant — instead of a premature
-  // green "Démarrage imminent". Tied to the live running agent, so the badge
-  // flips to "launching soon" the instant the analysis agent truly stops, never
-  // before. `tone === "running"` on a queued card can only mean an active agent
-  // (a merely-queued card has no live run), so this never masks a real wait.
-  if (tone === "running") {
-    return { labelKey: "tasks.schedule.estimating" };
-  }
+function queuedBadge(task: KanbanTask): ScheduleBadgeDescriptor {
+  // A card in "Planifié" (awaiting_slot) never claims "Analyse en cours": analysis
+  // belongs to "Validé", and a card is only promoted here once its agent has
+  // actually released its analysis turn (see the estimator's waitForAgentAtRest).
+  // So a running agent on a queued card means the launch is starting — let it fall
+  // through to the launch/awaiting wording, never back to an analysis badge that
+  // would contradict the column.
   if (task.schedule?.waitingReason === "quiet_hours") {
     return { labelKey: "tasks.schedule.awaitingWindow" };
   }

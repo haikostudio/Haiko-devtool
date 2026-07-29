@@ -73,7 +73,12 @@ describe("TaskEstimator", () => {
     return task;
   }
 
-  function buildEstimator(options: { finalText: string | Error; hold?: Promise<unknown> }) {
+  function buildEstimator(options: {
+    finalText: string | Error;
+    hold?: Promise<unknown>;
+    hasInFlightRun?: () => boolean;
+    restPollIntervalMs?: number;
+  }) {
     const runAgent = vi.fn(async () => {
       // Optional gate: block the analysis turn so a test can observe the card
       // before a successful estimate lands (and, now, auto-promotes it).
@@ -85,12 +90,16 @@ describe("TaskEstimator", () => {
       }
       return { canceled: false, finalText: options.finalText, timeline: [] };
     });
+    // Default: the analysis agent is at rest the moment its turn resolves, so the
+    // promotion into "Planifié" happens immediately. A test can inject a stub that
+    // reports the agent still in-flight to exercise the wait-for-rest gate.
+    const hasInFlightRun = vi.fn(options.hasInFlightRun ?? (() => false));
     const createAgent = vi.fn(async () => ({
       snapshot: { id: "estimator-agent-1" },
       initialPromptError: null,
     }));
     const estimator = new TaskEstimator({
-      agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
+      agentManager: { runAgent, hasInFlightRun, archiveAgent: vi.fn(async () => {}) } as never,
       agentProvisioner: new TaskAgentProvisioner({
         createAgent: createAgent as never,
         taskBoardService: service,
@@ -100,8 +109,9 @@ describe("TaskEstimator", () => {
       taskBoardService: service,
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       logger,
+      restPollIntervalMs: options.restPollIntervalMs ?? 5,
     });
-    return { estimator, runAgent, createAgent };
+    return { estimator, runAgent, createAgent, hasInFlightRun };
   }
 
   const okEstimate = JSON.stringify({
@@ -134,7 +144,11 @@ describe("TaskEstimator", () => {
       return { snapshot: { id: `estimator-agent-${agentSeq}` }, initialPromptError: null };
     });
     const estimator = new TaskEstimator({
-      agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
+      agentManager: {
+        runAgent,
+        hasInFlightRun: vi.fn(() => false),
+        archiveAgent: vi.fn(async () => {}),
+      } as never,
       agentProvisioner: new TaskAgentProvisioner({
         createAgent: createAgent as never,
         taskBoardService: service,
@@ -144,6 +158,7 @@ describe("TaskEstimator", () => {
       taskBoardService: service,
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       logger,
+      restPollIntervalMs: 5,
       ...(maxConcurrent != null ? { maxConcurrent } : {}),
     });
     return { estimator, runAgent, peak: () => peak };
@@ -261,7 +276,11 @@ describe("TaskEstimator", () => {
       return { canceled: false, finalText: okEstimate, timeline: [] };
     });
     const estimator = new TaskEstimator({
-      agentManager: { runAgent, archiveAgent: vi.fn(async () => {}) } as never,
+      agentManager: {
+        runAgent,
+        hasInFlightRun: vi.fn(() => false),
+        archiveAgent: vi.fn(async () => {}),
+      } as never,
       agentProvisioner: new TaskAgentProvisioner({
         createAgent: vi.fn(async () => ({
           snapshot: { id: "estimator-agent-1" },
@@ -290,6 +309,51 @@ describe("TaskEstimator", () => {
     expect(runAgent).toHaveBeenCalledTimes(3);
     expect(estimated?.analysis).toBeUndefined();
     expect(estimated?.estimate?.estimatedMinutes).toBe(10);
+  });
+
+  // Regression: two analyses of the same card race on its single visible agent.
+  // The winner lands a real estimate; the loser is rejected with "already has an
+  // active run" and, once its busy-retries are spent, falls through to
+  // recordFailure. That failure used to paint "Analyse impossible" over a card
+  // whose Facturation tab was fully filled — the exact "l'analyse a réussi mais
+  // la carte dit échec" bug. A valid estimate must ALWAYS win: the collision
+  // failure is dropped, the estimate and its clean status are preserved.
+  test("a valid estimate on the card wins over a late collision failure", async () => {
+    const task = await seedScheduledTask();
+    // The card already carries a successful estimate (the winning run landed it).
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 10_000,
+        quotaPercent: 6,
+        estimatedMinutes: 8,
+        confidence: "high" as const,
+        model: "claude",
+        estimatedAt: "2026-07-29T00:00:00.000Z",
+      },
+    }));
+
+    // recordFailure is the collision loser's terminal step; call it directly so
+    // the reconciliation is exercised deterministically, without racing the
+    // scheduler. (estimate() would early-return on the existing estimate before
+    // ever reaching here, which is why the guard lives in recordFailure.)
+    const { estimator } = buildEstimator({ finalText: okEstimate });
+    const reconcile = (
+      estimator as unknown as {
+        recordFailure(projectId: string, taskId: string, error: unknown): Promise<void>;
+      }
+    ).recordFailure.bind(estimator);
+    await reconcile(
+      "proj-1",
+      task.id,
+      new Error("Agent estimator-agent-1 already has an active run"),
+    );
+
+    const board = await service.getBoard("proj-1");
+    const reconciled = board.tasks[0];
+    // The estimate is untouched and NO failure was stamped over it.
+    expect(reconciled?.estimate?.estimatedMinutes).toBe(8);
+    expect(reconciled?.analysis).toBeUndefined();
   });
 
   test("an agent reply with no parseable estimate is a failure, not a made-up cost", async () => {
@@ -358,6 +422,47 @@ describe("TaskEstimator", () => {
     expect(promoted?.estimate).toBeTruthy();
     // The move between pipeline columns preserves the armed schedule.
     expect(promoted?.schedule?.state).toBe("awaiting_slot");
+  });
+
+  test('holds a card in "Validé" until its analysis agent is at rest, then promotes it', async () => {
+    // The estimate lands while the shared agent is STILL finishing its analysis
+    // turn: promoting now would park the card in "Planifié" showing "Analyse en
+    // cours…" — the contradiction this guards. The card must stay in "Validé"
+    // (its analysis column) until the agent releases, then move to "Planifié".
+    const folder = await service.createFolder("proj-1", "Auth");
+    const created = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Add password reset",
+    });
+    await service.transitionTask("proj-1", created.id, "validated");
+
+    let atRest = false;
+    // A generous poll interval keeps the bounded "promote anyway" fallback
+    // (MAX_REST_POLLS * interval) far out of reach, so the held-in-"Validé"
+    // assertion below observes the gate, not the fallback.
+    const { estimator } = buildEstimator({
+      finalText: okEstimate,
+      hasInFlightRun: () => !atRest,
+      restPollIntervalMs: 40,
+    });
+
+    estimator.requestEstimate("proj-1", created.id);
+
+    // The estimate is stamped, but while the agent reports in-flight the card is
+    // held back in "Validé" — it never appears in "Planifié" mid-analysis.
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.estimate).toBeTruthy();
+    });
+    expect((await service.getBoard("proj-1")).tasks[0]?.column).toBe("validated");
+
+    // The agent releases: the card is now free to promote into "Planifié".
+    atRest = true;
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks[0]?.column).toBe("scheduled");
+    });
+    expect((await service.getBoard("proj-1")).tasks[0]?.schedule?.state).toBe("awaiting_slot");
   });
 
   test('a failed analysis leaves a "Validé" card in "Validé"', async () => {

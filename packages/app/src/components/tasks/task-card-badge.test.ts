@@ -154,11 +154,12 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.schedule.launchingSoon", variant: "success" });
   });
 
-  it("says « Analyse en cours » for a queued card whose agent is still finishing its analysis", () => {
-    // The estimate landed and moved the card to "Planifié" (awaiting_slot), but
-    // the single agent hasn't released its analysis run yet (tone "running"), so
-    // the scheduler keeps re-queuing the launch. The card must read as still
-    // analysing — one coherent state — not a premature green "Démarrage imminent".
+  it("never says « Analyse en cours » for a card already in « Planifié », even with a live agent", () => {
+    // Analysis belongs to "Validé": a card is only promoted to "Planifié" once its
+    // agent has released its analysis turn (the estimator waits for that). So a
+    // running agent on a queued card means the launch is starting, and the badge
+    // must read as launching — never fall back to an analysis label that
+    // contradicts the column.
     const badge = getScheduleBadge(
       makeTask({
         column: "scheduled",
@@ -167,7 +168,7 @@ describe("getScheduleBadge", () => {
       }),
       "running",
     );
-    expect(badge).toEqual({ labelKey: "tasks.schedule.estimating" });
+    expect(badge).toEqual({ labelKey: "tasks.schedule.launchingSoon", variant: "success" });
   });
 
   it("names the quota wait when the scheduler held the task back for quota", () => {
