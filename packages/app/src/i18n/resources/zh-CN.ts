@@ -335,6 +335,7 @@ export const zhCN: TranslationResources = {
       archiveTask: "归档",
       archiveTaskMessage: "此卡片将从看板中隐藏。它仍会保存，且不会发布。",
       deployTask: "开始部署",
+      queueDeploy: "加入待部署队列",
       deployTaskMessage:
         "该任务的智能体会确认功能正常，将改动上线，然后把卡片移到「已部署」，并标记是否需要重启守护进程。你可在对话中全程跟进。",
       deployRunning: "正在对话中部署…",
@@ -672,6 +673,7 @@ export const zhCN: TranslationResources = {
       archived: "任务已归档。",
       deployHeld: "卡片已移出下一批",
       deployUnheld: "卡片已放回批次",
+      queuedForDeploy: "卡片已加入「待部署」",
     },
     confirmDelete: {
       title: "Delete task?",

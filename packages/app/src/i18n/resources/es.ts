@@ -341,6 +341,7 @@ export const es: TranslationResources = {
       archiveTaskMessage:
         "Esta tarjeta se ocultará del tablero. Permanece guardada y no se publica.",
       deployTask: "Iniciar el despliegue",
+      queueDeploy: "Poner en cola para desplegar",
       deployTaskMessage:
         "El agente de esta tarea comprueba que funciona, publica el cambio en línea, luego pasa la tarjeta a «Desplegada» e indica si hace falta reiniciar el demonio. Lo sigues todo en la conversación.",
       deployRunning: "Desplegando en la conversación…",
@@ -688,6 +689,7 @@ export const es: TranslationResources = {
       archived: "Tarea archivada.",
       deployHeld: "Tarjeta excluida del próximo lote",
       deployUnheld: "Tarjeta de vuelta en el lote",
+      queuedForDeploy: "Tarjeta añadida a «Por desplegar»",
     },
     confirmDelete: {
       title: "¿Eliminar tarea?",

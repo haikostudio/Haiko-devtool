@@ -338,6 +338,7 @@ export const ru: TranslationResources = {
       archiveTaskMessage:
         "Эта карточка будет скрыта с доски. Она останется сохранённой и не будет опубликована.",
       deployTask: "Запустить развёртывание",
+      queueDeploy: "В очередь на публикацию",
       deployTaskMessage:
         "Агент этой задачи проверяет работу, публикует изменение, затем переводит карточку в «Развёрнуто» и сообщает, нужен ли перезапуск демона. Вы следите за всем в разговоре.",
       deployRunning: "Развёртывание в разговоре…",
@@ -683,6 +684,7 @@ export const ru: TranslationResources = {
       archived: "Задача архивирована.",
       deployHeld: "Карточка исключена из следующей партии",
       deployUnheld: "Карточка возвращена в партию",
+      queuedForDeploy: "Карточка добавлена в «На публикацию»",
     },
     confirmDelete: {
       title: "Delete task?",

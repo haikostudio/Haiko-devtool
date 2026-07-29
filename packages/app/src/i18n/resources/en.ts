@@ -336,6 +336,7 @@ export const en = {
       archiveTaskMessage:
         "This card will be hidden from the board. It stays saved and is not published.",
       deployTask: "Deploy",
+      queueDeploy: "Queue for deploy",
       deployTaskMessage:
         "The task’s own agent checks that it works, puts the change online, then moves the card to “Deployed” and flags whether a daemon restart is needed. You follow all of it in the conversation.",
       deployRunning: "Deploying in the conversation…",
@@ -680,6 +681,7 @@ export const en = {
       archived: "Task archived.",
       deployHeld: "Card held back from the next batch",
       deployUnheld: "Card back in the batch",
+      queuedForDeploy: "Card queued in “To deploy”",
     },
     confirmDelete: {
       title: "Delete task?",

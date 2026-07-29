@@ -339,6 +339,7 @@ export const ja: TranslationResources = {
       archiveTaskMessage:
         "このカードはボードから非表示になります。保存されたままで、公開はされません。",
       deployTask: "デプロイを開始",
+      queueDeploy: "デプロイ待ちに追加",
       deployTaskMessage:
         "このタスクのエージェントが動作を確認し、変更を公開してから、カードを「デプロイ済み」に移動し、デーモンの再起動が必要かどうかを知らせます。すべて会話の中で確認できます。",
       deployRunning: "会話でデプロイ中…",
@@ -683,6 +684,7 @@ export const ja: TranslationResources = {
       archived: "タスクをアーカイブしました。",
       deployHeld: "カードを次の一括から外しました",
       deployUnheld: "カードを一括に戻しました",
+      queuedForDeploy: "カードを「デプロイ待ち」に追加しました",
     },
     confirmDelete: {
       title: "Delete task?",

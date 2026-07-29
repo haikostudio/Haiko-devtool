@@ -61,6 +61,32 @@ const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 /** No restart in flight — the bar simply offers the gesture. */
 const IDLE_RESTART: RestartProgress = { state: "idle" };
 
+/**
+ * Which of the two finished-card bars a card offers, resolved together so their
+ * branches stay off the render function's complexity budget. The publication flow
+ * is finish → queue → publish: a "Terminé" (`done`) card is queued into the
+ * "À déployer" column (the button twin of the drag), and a card already waiting
+ * there (`deployed`) is published on its own by the per-card deploy bar. Once the
+ * work is live neither bar shows — the card wears a "Déployé" badge instead.
+ * Entering the column never marks a card live, and neither does either bar; the
+ * single stamp of "this is online" stays the column's "Tout déployer" batch.
+ */
+function resolveFinishedCardBars(
+  task: KanbanTask,
+  handlers: {
+    onQueueDeploy?: ((taskId: string) => void) | undefined;
+    onDeploy?: ((taskId: string) => void) | undefined;
+  },
+): { showQueueDeploy: boolean; showDeploy: boolean } {
+  if (isTaskDeployed(task)) {
+    return { showQueueDeploy: false, showDeploy: false };
+  }
+  return {
+    showQueueDeploy: Boolean(handlers.onQueueDeploy) && task.column === "done",
+    showDeploy: Boolean(handlers.onDeploy) && task.column === "deployed",
+  };
+}
+
 export interface TaskAgentChatProps {
   serverId: string | null;
   task: KanbanTask;
@@ -102,6 +128,14 @@ export interface TaskAgentChatProps {
    */
   onDeploy?: (taskId: string) => void;
   /**
+   * Queue a finished ("Terminé") card into the "À déployer" column — the button
+   * twin of dragging the card there. It only ENQUEUES (moves the column); it
+   * never marks the card live. Publication happens later, in one run, via the
+   * column's "Tout déployer". Shown on a "Terminé" card, ahead of the per-card
+   * deploy bar, so the natural flow is: finish → queue → publish the batch.
+   */
+  onQueueDeploy?: (taskId: string) => void;
+  /**
    * Restart the Paseo daemon. Offered on a card whose work is live but only
    * takes effect after a restart, so the publication can be finished without a
    * terminal. The host confirms first (a restart drops every running agent) —
@@ -130,6 +164,7 @@ export function TaskAgentChat({
   onApproveTask,
   onArchive,
   onDeploy,
+  onQueueDeploy,
   onRestartDaemon,
   onCancelRestartDaemon,
   restartProgress = IDLE_RESTART,
@@ -189,18 +224,16 @@ export function TaskAgentChat({
   // card away by hiding it from the board. It never publishes or moves the card —
   // publication already happened on its own when the card reached "Terminé".
   const showArchive = Boolean(onArchive) && (task.column === "done" || task.column === "deployed");
-  // The deploy bar publishes THIS card on its own — the sibling of the column's
-  // "Tout déployer", for when only one card has to go out. It hands the card's
-  // own agent a deploy-then-confirm prompt, which verifies the work, publishes it
-  // and stamps the card live. It is offered on a finished card ("Terminé") and on
-  // one already waiting in the publication queue ("À déployer"), and takes the
-  // composer slot ahead of the archive bar, so the natural order is deploy, then
-  // archive. Once the work IS live it steps aside — the card wears a "Déployé"
-  // badge and the archive bar takes the slot instead.
-  const showDeploy =
-    Boolean(onDeploy) &&
-    (task.column === "done" || task.column === "deployed") &&
-    !isTaskDeployed(task);
+  // The queue and per-card-deploy bars for a finished card, resolved together in
+  // a module helper so their branches stay off this render function's complexity
+  // budget. A "Terminé" card is queued into "À déployer" (button twin of the
+  // drag); a card already waiting there is published on its own by the per-card
+  // deploy bar. Neither entering the column nor either bar ever stamps the card
+  // live — that stays the batch's job.
+  const { showQueueDeploy, showDeploy } = resolveFinishedCardBars(task, {
+    onQueueDeploy,
+    onDeploy,
+  });
   // The restart bar is the other side of the publication: the work IS live, and
   // a daemon restart is the only thing left between the user and their feature.
   // It takes the slot ahead of the archive bar, so the natural order stays
@@ -212,6 +245,7 @@ export function TaskAgentChat({
   const handleApprove = useCallback(() => onApproveTask?.(task.id), [onApproveTask, task.id]);
   const handleArchive = useCallback(() => onArchive?.(task.id), [onArchive, task.id]);
   const handleDeploy = useCallback(() => onDeploy?.(task.id), [onDeploy, task.id]);
+  const handleQueueDeploy = useCallback(() => onQueueDeploy?.(task.id), [onQueueDeploy, task.id]);
   const handleRestartDaemon = useCallback(
     () => onRestartDaemon?.(task.id),
     [onRestartDaemon, task.id],
@@ -241,6 +275,9 @@ export function TaskAgentChat({
         />
       );
     }
+    if (showQueueDeploy) {
+      return <QueueDeployBar onPress={handleQueueDeploy} />;
+    }
     if (showDeploy) {
       return <DeployTaskBar onPress={handleDeploy} deployment={task.deployment} />;
     }
@@ -261,12 +298,14 @@ export function TaskAgentChat({
     showApprove,
     showRunNow,
     showValidate,
+    showQueueDeploy,
     showDeploy,
     showRestartDaemon,
     showArchive,
     handleApprove,
     handleRun,
     handleValidate,
+    handleQueueDeploy,
     handleDeploy,
     handleRestartDaemon,
     handleCancelRestartDaemon,
@@ -604,6 +643,32 @@ function approveBarStyle({ pressed, hovered }: { pressed: boolean; hovered?: boo
  * not a publishing or launching one, so it should never shout. Pressing it hides
  * the card from the board without moving or publishing it.
  */
+/**
+ * Full-width accent bar carrying "Mettre dans À déployer" — the button twin of
+ * dragging a finished card into the publication queue. Pressing it only moves
+ * the card into the "À déployer" column; it never publishes and never stamps the
+ * card live. The single publish gesture stays the column's "Tout déployer".
+ */
+function QueueDeployBar({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.validateOuter}>
+      <View style={styles.validateInner}>
+        <Pressable
+          onPress={onPress}
+          style={runNowBarStyle}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.queueDeploy")}
+          testID="task-queue-deploy-bar"
+        >
+          <ThemedRocket size={ICON_SIZE.sm} uniProps={accentForegroundMapping} />
+          <Text style={styles.runNowText}>{t("tasks.panel.queueDeploy")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function ArchiveTaskBar({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation();
   return (

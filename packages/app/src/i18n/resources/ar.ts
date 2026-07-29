@@ -335,6 +335,7 @@ export const ar: TranslationResources = {
       archiveTask: "أرشفة",
       archiveTaskMessage: "ستُخفى هذه البطاقة من اللوحة. تبقى محفوظة ولا تُنشر.",
       deployTask: "بدء النشر",
+      queueDeploy: "إضافة إلى قائمة النشر",
       deployTaskMessage:
         "يتحقق وكيل هذه المهمة من أنها تعمل، ثم ينشر التغيير، وينقل البطاقة إلى «منشورة» ويشير إلى ما إذا كان يلزم إعادة تشغيل الخدمة. تتابع كل ذلك في المحادثة.",
       deployRunning: "جارٍ النشر في المحادثة…",
@@ -676,6 +677,7 @@ export const ar: TranslationResources = {
       archived: "تمت أرشفة المهمة.",
       deployHeld: "تم استبعاد البطاقة من الدفعة القادمة",
       deployUnheld: "أُعيدت البطاقة إلى الدفعة",
+      queuedForDeploy: "تمت إضافة البطاقة إلى «قائمة النشر»",
     },
     confirmDelete: {
       title: "Delete task?",

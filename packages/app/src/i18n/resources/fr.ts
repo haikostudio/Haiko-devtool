@@ -342,6 +342,7 @@ export const fr: TranslationResources = {
       archiveTaskMessage:
         "Cette carte sera masquée du tableau. Elle reste enregistrée et n'est pas publiée.",
       deployTask: "Lancer le déploiement",
+      queueDeploy: "Mettre dans À déployer",
       deployTaskMessage:
         "L’agent de cette tâche vérifie le fonctionnement, met la modification en ligne, puis passe la carte en « Déployé » et signale si un redémarrage du démon est nécessaire. Vous suivez tout dans la discussion.",
       deployRunning: "Déploiement en cours dans la discussion…",
@@ -690,6 +691,7 @@ export const fr: TranslationResources = {
       archived: "Tâche archivée.",
       deployHeld: "Carte retirée du prochain lot",
       deployUnheld: "Carte remise dans le lot",
+      queuedForDeploy: "Carte mise dans « À déployer »",
     },
     confirmDelete: {
       title: "Supprimer la tâche ?",

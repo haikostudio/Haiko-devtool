@@ -341,6 +341,7 @@ export const ptBR: TranslationResources = {
       archiveTaskMessage:
         "Este cartão será ocultado do quadro. Ele permanece salvo e não é publicado.",
       deployTask: "Iniciar a implantação",
+      queueDeploy: "Colocar na fila de publicação",
       deployTaskMessage:
         "O agente desta tarefa verifica se funciona, coloca a alteração no ar, depois move o cartão para «Implantado» e sinaliza se é preciso reiniciar o daemon. Você acompanha tudo na conversa.",
       deployRunning: "Implantando na conversa…",
@@ -689,6 +690,7 @@ export const ptBR: TranslationResources = {
       archived: "Tarefa arquivada.",
       deployHeld: "Cartão retirado do próximo lote",
       deployUnheld: "Cartão de volta ao lote",
+      queuedForDeploy: "Cartão colocado em «A publicar»",
     },
     confirmDelete: {
       title: "Excluir tarefa?",

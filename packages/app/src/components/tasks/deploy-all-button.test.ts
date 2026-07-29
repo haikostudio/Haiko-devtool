@@ -41,10 +41,7 @@ describe("countTasksAwaitingDeploy", () => {
     // A held card ("Retirer du prochain lot") stays in the column but the batch
     // skips it, so it must not inflate the button's promise.
     expect(
-      countTasksAwaitingDeploy([
-        makeTask({ id: "a" }),
-        makeTask({ id: "b", deployHold: true }),
-      ]),
+      countTasksAwaitingDeploy([makeTask({ id: "a" }), makeTask({ id: "b", deployHold: true })]),
     ).toBe(1);
   });
 

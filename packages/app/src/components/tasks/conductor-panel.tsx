@@ -91,6 +91,8 @@ export interface ConductorPanelProps {
   onArchive: (taskId: string) => void;
   /** Deploy a finished ("Terminé") card: hand its agent a deploy-then-confirm prompt. */
   onDeploy: (taskId: string) => void;
+  /** Queue a finished ("Terminé") card into "À déployer" — the button twin of the drag. */
+  onQueueDeploy: (taskId: string) => void;
   /**
    * Restart the daemon from a published card whose work only takes effect after
    * a restart. Confirms (and counts the agents it will cut) before firing.
@@ -170,6 +172,7 @@ export function useConductorController({
   onValidate,
   onArchive,
   onDeploy,
+  onQueueDeploy,
   onRestartDaemon,
   onCancelRestartDaemon,
   restartProgress,
@@ -380,6 +383,7 @@ export function useConductorController({
           onApproveTask={onApproveTask}
           onArchive={onArchive}
           onDeploy={onDeploy}
+          onQueueDeploy={onQueueDeploy}
           onRestartDaemon={onRestartDaemon}
           onCancelRestartDaemon={onCancelRestartDaemon}
           restartProgress={restartProgress}
