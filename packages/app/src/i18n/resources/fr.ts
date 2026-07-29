@@ -558,9 +558,6 @@ export const fr: TranslationResources = {
         publish: "Mise en ligne…",
         done: "Terminé",
       },
-      pendingPublish: "{{count}} carte(s) prête(s) à publier",
-      pendingPublishWithRestart:
-        "{{count}} carte(s) prête(s) à publier, dont {{restart}} nécessitant un redémarrage",
       batch: {
         label: "Lot · {{count}} cartes",
         expand: "Déplier le lot",

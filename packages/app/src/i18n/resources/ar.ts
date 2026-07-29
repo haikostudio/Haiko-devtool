@@ -545,8 +545,6 @@ export const ar: TranslationResources = {
         publish: "جارٍ النشر…",
         done: "تم",
       },
-      pendingPublish: "{{count}} بطاقة جاهزة للنشر",
-      pendingPublishWithRestart: "{{count}} بطاقة جاهزة للنشر، منها {{restart}} تتطلب إعادة تشغيل",
       batch: {
         label: "دفعة · {{count}} بطاقة",
         expand: "توسيع الدفعة",

@@ -548,9 +548,6 @@ export const en = {
         publish: "Going live…",
         done: "Done",
       },
-      pendingPublish: "{{count}} card(s) ready to publish",
-      pendingPublishWithRestart:
-        "{{count}} card(s) ready to publish, {{restart}} needing a restart",
       batch: {
         label: "Batch · {{count}} cards",
         expand: "Unfold the batch",

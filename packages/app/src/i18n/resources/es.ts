@@ -556,9 +556,6 @@ export const es: TranslationResources = {
         publish: "Publicando…",
         done: "Listo",
       },
-      pendingPublish: "{{count}} tarjeta(s) listas para publicar",
-      pendingPublishWithRestart:
-        "{{count}} tarjeta(s) listas para publicar, {{restart}} requieren reinicio",
       batch: {
         label: "Lote · {{count}} tarjetas",
         expand: "Desplegar el lote",

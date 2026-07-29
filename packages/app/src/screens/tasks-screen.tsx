@@ -28,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectBillingTotal } from "@/components/tasks/project-billing-total";
-import { PendingPublishSummary } from "@/components/tasks/pending-publish-summary";
 import { countPendingPublish } from "@/components/tasks/pending-publish-count";
 import { DeployRestartChain } from "@/components/tasks/deploy-restart-chain";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
@@ -1156,7 +1155,6 @@ function BoardContent({
       {/* Gestures the board refused, which are silent by design and therefore
           indistinguishable from a broken board when they repeat. */}
       <RefusedMovesNotice />
-      <PendingPublishSummary tasks={projectTasks} />
       {showTimeline ? (
         <TaskTimelineArea
           board={boardHandle.board}

@@ -551,9 +551,6 @@ export const ru: TranslationResources = {
         publish: "Публикация…",
         done: "Готово",
       },
-      pendingPublish: "Готово к публикации: {{count}}",
-      pendingPublishWithRestart:
-        "Готово к публикации: {{count}}, из них требуют перезапуска: {{restart}}",
       batch: {
         label: "Пакет · карточек: {{count}}",
         expand: "Развернуть пакет",

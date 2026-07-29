@@ -541,8 +541,6 @@ export const zhCN: TranslationResources = {
         publish: "上线中…",
         done: "完成",
       },
-      pendingPublish: "{{count}} 张卡片待发布",
-      pendingPublishWithRestart: "{{count}} 张卡片待发布，其中 {{restart}} 张需要重启",
       batch: {
         label: "批次 · {{count}} 张卡片",
         expand: "展开批次",

@@ -557,9 +557,6 @@ export const ptBR: TranslationResources = {
         publish: "Publicando…",
         done: "Concluído",
       },
-      pendingPublish: "{{count}} cartão(ões) prontos para publicar",
-      pendingPublishWithRestart:
-        "{{count}} cartão(ões) prontos para publicar, {{restart}} exigem reinício",
       batch: {
         label: "Lote · {{count}} cartões",
         expand: "Expandir o lote",
