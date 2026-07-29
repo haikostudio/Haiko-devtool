@@ -42,6 +42,8 @@ import {
   type QuietHours,
 } from "@/components/tasks/task-schedule";
 import { useOpenTaskId } from "@/stores/tasks-board-ui-store";
+import { Checkbox } from "@/components/ui/checkbox";
+import type { CardSelection } from "@/components/tasks/archive-selection";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { openExternalUrl } from "@/utils/open-external-url";
 
@@ -70,6 +72,12 @@ interface TaskCardProps {
    * the task — the lead card of a folded lot unfolds the pile instead.
    */
   accessibilityLabel?: string;
+  /**
+   * Bulk-archive selection slice. When `active`, the card grows a checkbox to the
+   * left of its title and a press toggles the selection instead of opening the
+   * task. Absent (the norm) leaves the card unchanged.
+   */
+  selection?: CardSelection;
 }
 
 // Cards carry no colored left edge: the user rejected that accent bar outright,
@@ -166,13 +174,21 @@ export const TaskCard = memo(function TaskCard({
   onPress,
   testID,
   accessibilityLabel,
+  selection,
 }: TaskCardProps) {
   const { t, i18n } = useTranslation();
   const quietHours = useTaskQuietHours();
 
+  // In bulk-archive selection mode a press toggles the card's checkbox rather
+  // than opening it; otherwise it opens the task as usual.
+  const selectionActive = selection?.active ?? false;
   const handlePress = useCallback(() => {
+    if (selection?.active) {
+      selection.onToggle();
+      return;
+    }
     onPress(task);
-  }, [onPress, task]);
+  }, [selection, onPress, task]);
 
   const { priority, deadline, tags } = useMemo(() => parseTaskTags(task.tags), [task.tags]);
   const tone = useTaskTone(task);
@@ -236,6 +252,15 @@ export const TaskCard = memo(function TaskCard({
       cardStyle({ pressed, hovered, selected }),
     [selected],
   );
+  // Selection mode repaints the press as a checkbox toggle, so the card
+  // announces itself as a checkbox with its checked state rather than a button.
+  const selectionA11y = useMemo(
+    () =>
+      selectionActive
+        ? { role: "checkbox" as const, state: { checked: selection?.checked ?? false } }
+        : { role: "button" as const, state: undefined },
+    [selectionActive, selection?.checked],
+  );
 
   return (
     <Animated.View style={shakeStyle}>
@@ -243,7 +268,8 @@ export const TaskCard = memo(function TaskCard({
         onPress={handlePress}
         style={resolveCardStyle}
         testID={testID}
-        accessibilityRole="button"
+        accessibilityRole={selectionA11y.role}
+        accessibilityState={selectionA11y.state}
         accessibilityLabel={
           accessibilityLabel ?? (priorityLabel ? `${priorityLabel} · ${task.title}` : task.title)
         }
@@ -255,14 +281,13 @@ export const TaskCard = memo(function TaskCard({
           level={priority?.level}
           label={priorityLabel}
         />
-        <View style={styles.titleRow}>
-          {priority && !isNote ? (
-            <PriorityDot level={priority.level} label={priorityLabel} />
-          ) : null}
-          <Text style={styles.title} numberOfLines={3}>
-            {task.title}
-          </Text>
-        </View>
+        <CardTitleRow
+          title={task.title}
+          priority={priority}
+          isNote={isNote}
+          priorityLabel={priorityLabel}
+          selection={selection}
+        />
         <CardStatusRow
           badge={scheduleBadge}
           publishNotice={publishNotice}
@@ -307,6 +332,37 @@ export const TaskCard = memo(function TaskCard({
         ) : null}
       </Pressable>
     </Animated.View>
+  );
+});
+
+// The title line: an optional bulk-archive checkbox, then the priority dot, then
+// the title itself. Split out of TaskCard so the selection branch lives here and
+// the card render stays under the complexity budget.
+const CardTitleRow = memo(function CardTitleRow({
+  title,
+  priority,
+  isNote,
+  priorityLabel,
+  selection,
+}: {
+  title: string;
+  priority: ParsedPriority | null;
+  isNote: boolean;
+  priorityLabel?: string;
+  selection?: CardSelection;
+}) {
+  return (
+    <View style={styles.titleRow}>
+      {selection?.active ? (
+        <View style={styles.selectionCheckbox}>
+          <Checkbox checked={selection.checked} />
+        </View>
+      ) : null}
+      {priority && !isNote ? <PriorityDot level={priority.level} label={priorityLabel} /> : null}
+      <Text style={styles.title} numberOfLines={3}>
+        {title}
+      </Text>
+    </View>
   );
 });
 
@@ -617,6 +673,11 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[2],
     // Clears the absolute move-to trigger the touch board overlays top-right.
     paddingRight: theme.spacing[4],
+  },
+  // Nudge the bulk-archive checkbox down so it optically centers on the first
+  // line of the title, the same way the priority dot is offset.
+  selectionCheckbox: {
+    marginTop: 2,
   },
   title: {
     flex: 1,

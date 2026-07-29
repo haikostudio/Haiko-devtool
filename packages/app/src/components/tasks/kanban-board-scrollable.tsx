@@ -13,6 +13,8 @@ import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import { DeployAllButton } from "./deploy-all-button";
 import { DeployBatchBanner } from "./deploy-batch-banner";
+import { ArchiveSelectionControls } from "./archive-selection-controls";
+import { useDeployArchiveSelection, type ArchiveSelectionColumnProps } from "./archive-selection";
 import {
   buildColumnModels,
   EMPTY_COLUMN_CONTROLS,
@@ -61,6 +63,7 @@ export function ScrollableKanbanBoard({
     setControls((prev) => ({ ...prev, [column]: next }));
   }, []);
   const columns = useMemo(() => buildColumnModels(board, controls), [board, controls]);
+  const archiveSelection = useDeployArchiveSelection(columns, onMoveTask);
 
   return (
     // Board padding/gap live on an inner View, NOT on contentContainerStyle —
@@ -84,6 +87,7 @@ export function ScrollableKanbanBoard({
             tasks={tasks}
             controls={controls[column] ?? EMPTY_COLUMN_CONTROLS}
             onControlsChange={setColumnControls}
+            archiveSelection={column === "deployed" ? archiveSelection : undefined}
             extras={columnExtras?.column === column ? columnExtras.node : null}
             onMoveTask={onMoveTask}
             onPressTask={onPressTask}
@@ -110,6 +114,7 @@ const BoardColumn = memo(function BoardColumn({
   tasks,
   controls,
   onControlsChange,
+  archiveSelection,
   extras,
   onMoveTask,
   onPressTask,
@@ -129,6 +134,7 @@ const BoardColumn = memo(function BoardColumn({
   tasks: KanbanTask[];
   controls: ColumnControls;
   onControlsChange: (column: TaskColumn, next: ColumnControls) => void;
+  archiveSelection: ArchiveSelectionColumnProps | undefined;
   extras: React.ReactNode;
   onMoveTask: KanbanBoardProps["onMoveTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -172,9 +178,19 @@ const BoardColumn = memo(function BoardColumn({
         onReanalyzeTask={onReanalyzeTask}
         onDeleteTask={onDeleteTask}
         onToggleDeployHold={onToggleDeployHold}
+        selection={archiveSelection}
       />
     ),
-    [labels, onMoveTask, onPressTask, onRunTask, onReanalyzeTask, onDeleteTask, onToggleDeployHold],
+    [
+      labels,
+      onMoveTask,
+      onPressTask,
+      onRunTask,
+      onReanalyzeTask,
+      onDeleteTask,
+      onToggleDeployHold,
+      archiveSelection,
+    ],
   );
 
   return (
@@ -248,6 +264,7 @@ const BoardColumn = memo(function BoardColumn({
                 onReanalyzeTask={onReanalyzeTask}
                 onDeleteTask={onDeleteTask}
                 onToggleDeployHold={onToggleDeployHold}
+                selection={archiveSelection}
               />
             ) : (
               <TaskCardStack
@@ -265,6 +282,14 @@ const BoardColumn = memo(function BoardColumn({
           ) : null}
         </View>
       </ScrollView>
+      {/* Bulk-archive control, pinned at the FOOT of the "À déployer" column
+          (the deploy button owns the head). Files checked cards into "Archivé"
+          with no publication. */}
+      <ArchiveSelectionControls
+        column={column}
+        taskCount={tasks.length}
+        selection={archiveSelection}
+      />
     </View>
   );
 });
@@ -297,6 +322,7 @@ const BoardCardRow = memo(function BoardCardRow({
   onReanalyzeTask,
   onDeleteTask,
   onToggleDeployHold,
+  selection,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
@@ -307,7 +333,22 @@ const BoardCardRow = memo(function BoardCardRow({
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
+  selection: ArchiveSelectionColumnProps | undefined;
 }) {
+  // In selection mode the card carries a checkbox and its press toggles the
+  // selection; the ⋮ menu steps aside so a bulk gesture can't fire a single-card
+  // move by accident.
+  const cardSelection = useMemo(
+    () =>
+      selection?.active
+        ? {
+            active: true,
+            checked: selection.isSelected(task.id),
+            onToggle: () => selection.onToggle(task),
+          }
+        : undefined,
+    [selection, task],
+  );
   return (
     <View style={styles.cardRow}>
       <TaskCard
@@ -315,18 +356,21 @@ const BoardCardRow = memo(function BoardCardRow({
         onPress={onPressTask}
         accessibilityLabel={accessibilityLabel}
         testID={`tasks-card-${task.id}`}
+        selection={cardSelection}
       />
-      <View style={styles.moveTriggerOverlay}>
-        <TaskCardMenu
-          task={task}
-          labels={labels}
-          onMoveTask={onMoveTask}
-          onRunTask={onRunTask}
-          onReanalyzeTask={onReanalyzeTask}
-          onDeleteTask={onDeleteTask}
-          onToggleDeployHold={onToggleDeployHold}
-        />
-      </View>
+      {selection?.active ? null : (
+        <View style={styles.moveTriggerOverlay}>
+          <TaskCardMenu
+            task={task}
+            labels={labels}
+            onMoveTask={onMoveTask}
+            onRunTask={onRunTask}
+            onReanalyzeTask={onReanalyzeTask}
+            onDeleteTask={onDeleteTask}
+            onToggleDeployHold={onToggleDeployHold}
+          />
+        </View>
+      )}
     </View>
   );
 });

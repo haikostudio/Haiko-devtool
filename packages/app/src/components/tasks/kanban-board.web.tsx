@@ -31,6 +31,8 @@ import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import { DeployAllButton } from "./deploy-all-button";
 import { DeployBatchBanner } from "./deploy-batch-banner";
+import { ArchiveSelectionControls } from "./archive-selection-controls";
+import { useDeployArchiveSelection, type ArchiveSelectionColumnProps } from "./archive-selection";
 import { isTaskMoveAllowed } from "./task-move-guard";
 import {
   buildColumnModels,
@@ -113,6 +115,7 @@ export function KanbanBoard({
     });
   }, []);
   const columns = useMemo(() => buildColumnModels(board, controls), [board, controls]);
+  const archiveSelection = useDeployArchiveSelection(columns, onMoveTask);
   const [activeTask, setActiveTask] = useState<KanbanTask | null>(null);
 
   const sensors = useSensors(
@@ -217,6 +220,7 @@ export function KanbanBoard({
               compact={isCompact}
               controls={controls[column] ?? EMPTY_COLUMN_CONTROLS}
               onControlsChange={setColumnControls}
+              archiveSelection={column === "deployed" ? archiveSelection : undefined}
               extras={columnExtras?.column === column ? columnExtras.node : null}
               onAddTask={onAddTask}
               onPressTask={onPressTask}
@@ -252,6 +256,7 @@ const DroppableColumn = memo(function DroppableColumn({
   compact,
   controls,
   onControlsChange,
+  archiveSelection,
   extras,
   onAddTask,
   onPressTask,
@@ -272,6 +277,7 @@ const DroppableColumn = memo(function DroppableColumn({
   compact: boolean;
   controls: ColumnControls;
   onControlsChange: (column: TaskColumn, next: ColumnControls) => void;
+  archiveSelection: ArchiveSelectionColumnProps | undefined;
   extras: React.ReactNode;
   onAddTask: KanbanBoardProps["onAddTask"];
   onPressTask: KanbanBoardProps["onPressTask"];
@@ -326,9 +332,19 @@ const DroppableColumn = memo(function DroppableColumn({
         onReanalyzeTask={onReanalyzeTask}
         onDeleteTask={onDeleteTask}
         onToggleDeployHold={onToggleDeployHold}
+        selection={archiveSelection}
       />
     ),
-    [labels, onPressTask, onMoveTask, onRunTask, onReanalyzeTask, onDeleteTask, onToggleDeployHold],
+    [
+      labels,
+      onPressTask,
+      onMoveTask,
+      onRunTask,
+      onReanalyzeTask,
+      onDeleteTask,
+      onToggleDeployHold,
+      archiveSelection,
+    ],
   );
 
   return (
@@ -402,6 +418,7 @@ const DroppableColumn = memo(function DroppableColumn({
                 onReanalyzeTask={onReanalyzeTask}
                 onDeleteTask={onDeleteTask}
                 onToggleDeployHold={onToggleDeployHold}
+                selection={archiveSelection}
               />
             ) : (
               <TaskCardStack
@@ -419,6 +436,13 @@ const DroppableColumn = memo(function DroppableColumn({
           <Text style={styles.emptyColumnText}>{t("tasks.board.emptyColumn")}</Text>
         ) : null}
       </div>
+      {/* Bulk-archive control at the FOOT of "À déployer" (the deploy button owns
+          the head). Files checked cards into "Archivé" — a plain move, no build. */}
+      <ArchiveSelectionControls
+        column={column}
+        taskCount={tasks.length}
+        selection={archiveSelection}
+      />
     </View>
   );
 });
@@ -454,6 +478,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   onReanalyzeTask,
   onDeleteTask,
   onToggleDeployHold,
+  selection,
 }: {
   task: KanbanTask;
   labels: Record<TaskColumn, string>;
@@ -464,6 +489,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
+  selection: ArchiveSelectionColumnProps | undefined;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
@@ -471,6 +497,21 @@ const SortableTaskCard = memo(function SortableTaskCard({
   // "Archivé" cards are frozen: no drag out, no overflow menu. They stay
   // pressable so the user can still open and read them.
   const isArchived = task.column === "archived";
+  // Bulk-archive selection mode turns the card into a checkbox: a tap toggles it
+  // (TaskCard intercepts the press), so the card must not drag and its ⋮ menu
+  // steps aside, exactly like a frozen card but for a different reason.
+  const selecting = selection?.active ?? false;
+  const cardSelection = useMemo(
+    () =>
+      selecting
+        ? {
+            active: true,
+            checked: selection?.isSelected(task.id) ?? false,
+            onToggle: () => selection?.onToggle(task),
+          }
+        : undefined,
+    [selecting, selection, task],
+  );
   // A drag ends on the card it started from, so RNW's press responder would
   // happily read that pointerup as a tap — opening the task, or unfolding the
   // lot the card is the cover of. Capture-phase handlers run before the inner
@@ -503,7 +544,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
       transform: CSS.Transform.toString(transform),
       transition: transition ?? undefined,
       opacity: isDragging ? 0.4 : 1,
-      cursor: isArchived ? "default" : "grab",
+      cursor: isArchived || selecting ? "default" : "grab",
       // Anchor for the absolutely-positioned overflow-menu overlay below.
       position: "relative",
       // TaskCard renders as a real <button>, and button width:auto is
@@ -521,10 +562,11 @@ const SortableTaskCard = memo(function SortableTaskCard({
       WebkitUserSelect: "none",
       WebkitTouchCallout: "none",
     }),
-    [transform, transition, isDragging, isArchived],
+    [transform, transition, isDragging, isArchived, selecting],
   );
-  // Frozen cards carry no dnd listeners at all, so a drag never even starts.
-  const dragHandlers = isArchived ? {} : { ...attributes, ...listeners };
+  // Frozen cards — and cards in selection mode — carry no dnd listeners at all,
+  // so a drag never even starts and the tap lands as a checkbox toggle.
+  const dragHandlers = isArchived || selecting ? {} : { ...attributes, ...listeners };
   return (
     // RNW's Pressable inside must not own the pointerdown, so the dnd
     // listeners live on this wrapper.
@@ -541,11 +583,13 @@ const SortableTaskCard = memo(function SortableTaskCard({
         onPress={handlePress}
         accessibilityLabel={accessibilityLabel}
         testID={`tasks-card-${task.id}`}
+        selection={cardSelection}
       />
       {/* Overflow menu overlay: swallow the drag-start pointer/mouse/touch so
           opening the menu never lifts the card into a drag. Frozen archived
-          cards have no menu, so the overlay is dropped entirely. */}
-      {isArchived ? null : (
+          cards — and cards mid bulk-selection — have no menu, so the overlay is
+          dropped entirely. */}
+      {isArchived || selecting ? null : (
         <div
           style={cardMenuOverlayStyle}
           onPointerDown={stopDragActivation}
