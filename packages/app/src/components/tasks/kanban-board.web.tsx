@@ -583,6 +583,11 @@ const cardMenuOverlayStyle: React.CSSProperties = {
 const boardScrollStyle: React.CSSProperties = {
   flex: 1,
   minHeight: 0,
+  // minWidth:0 (plus a hard 100% cap) makes this the element that actually
+  // absorbs the columns' overflow: it may shrink below their min-content and
+  // scroll them internally instead of widening every ancestor up to the page.
+  minWidth: 0,
+  maxWidth: "100%",
   display: "flex",
   overflowX: "auto",
 };

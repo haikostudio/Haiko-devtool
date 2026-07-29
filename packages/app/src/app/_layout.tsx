@@ -415,7 +415,11 @@ function QueryProvider({ children }: { children: ReactNode }) {
 }
 
 const rowStyle = { flex: 1, flexDirection: "row" } as const;
-const flexStyle = { flex: 1 } as const;
+// minWidth:0 lets the screen wrapper shrink below its content's min-content
+// width inside the row. Without it a wide child (the kanban's columns row)
+// forces the whole app-row wider than the window, pushing the sidebar off
+// screen and adding a stray horizontal scrollbar on the page.
+const flexStyle = { flex: 1, minWidth: 0 } as const;
 const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
 
 interface AppContainerProps {

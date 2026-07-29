@@ -2199,6 +2199,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   rail: {
     width: 264,
+    // Pin the rail's width so it is never squeezed by a wide neighbour: the
+    // menu/task list must stay fully readable at every window size.
+    flexShrink: 0,
     borderRightWidth: 1,
     borderRightColor: theme.colors.border,
     backgroundColor: theme.colors.surfaceSidebar,
@@ -2329,11 +2332,20 @@ const styles = StyleSheet.create((theme) => ({
   // very top. The board's own breathing room lives on boardContainer instead.
   boardArea: {
     flex: 1,
+    // minWidth:0 keeps the central board pane from being sized by the
+    // min-content of its kanban columns. Without it the columns' combined
+    // minimum width pushes the whole three-pane row past the window edge,
+    // decaling the sidebar and turning the board's own horizontal scroll into
+    // a page-wide one. overflow:hidden clips anything that still spills so the
+    // legitimate column scroll stays confined to the board itself.
+    minWidth: 0,
+    overflow: "hidden",
   },
   // Tight vertical rhythm: the timeline sizes itself from its rows now, so the
   // space this used to reserve above the board goes back to the columns.
   boardContainer: {
     flex: 1,
+    minWidth: 0,
     gap: theme.spacing[2],
     paddingTop: theme.spacing[3],
   },
