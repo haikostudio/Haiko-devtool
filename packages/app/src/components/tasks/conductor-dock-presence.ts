@@ -18,6 +18,12 @@
 export interface ConductorDockPresenceInput {
   /** A task is docked (its Chat/Details/Billing view is showing). */
   hasDockedTask: boolean;
+  /**
+   * The grouped batch-publication agent is docked (its chat covers the dock),
+   * opened from the "Publication en cours" banner. Takes the same slot as a task
+   * view: it hides the conductor without unmounting it.
+   */
+  hasDeployAgent: boolean;
   /** This project's conductor agent has been resolved at least once. */
   conductorResolved: boolean;
 }
@@ -25,6 +31,8 @@ export interface ConductorDockPresenceInput {
 export interface ConductorDockPresence {
   /** Render the docked task's view. */
   showTaskView: boolean;
+  /** Render the docked deploy agent's chat. */
+  showDeployView: boolean;
   /** The conductor pane is on screen (never hide-by-unmount). */
   conductorVisible: boolean;
   /**
@@ -44,12 +52,18 @@ export interface ConductorDockPresence {
 
 export function resolveConductorDockPresence({
   hasDockedTask,
+  hasDeployAgent,
   conductorResolved,
 }: ConductorDockPresenceInput): ConductorDockPresence {
+  // A docked deploy agent covers the dock just like a task view: either one hides
+  // the conductor (without unmounting it) and holds the ensure round-trip until a
+  // conductor already exists.
+  const covered = hasDockedTask || hasDeployAgent;
   return {
     showTaskView: hasDockedTask,
-    conductorVisible: !hasDockedTask,
-    conductorFocused: !hasDockedTask,
-    ensureSuspended: hasDockedTask && !conductorResolved,
+    showDeployView: hasDeployAgent,
+    conductorVisible: !covered,
+    conductorFocused: !covered,
+    ensureSuspended: covered && !conductorResolved,
   };
 }

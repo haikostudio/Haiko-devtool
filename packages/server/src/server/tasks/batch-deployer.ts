@@ -61,6 +61,14 @@ export interface TaskBatchDeployerOptions {
   deployTask: (projectId: string, taskId: string) => Promise<unknown>;
   /** Restarts the daemon — the last step of a successful self-host batch. */
   requestDaemonRestart: (reason: string) => void;
+  /**
+   * Resolves once the grouped deploy agent has gone back to rest (posted its own
+   * final verdict), or after a guard timeout. Awaited before the daemon restart
+   * so the restart never cuts the agent off mid-sentence — the frozen "le suivi
+   * est en place, j'attends la fin…" message the user used to be left with.
+   * Absent on the per-card path (no grouped agent to wait for).
+   */
+  awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
   /** Injected so tests don't wait on real time. */
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -213,7 +221,7 @@ export class TaskBatchDeployer {
       });
     }
     const url = await this.options.resolveProjectUrl(rootPath);
-    await this.watch({ projectId, pending, url });
+    await this.watch({ projectId, pending, url, agentId: result.agentId ?? null });
   }
 
   /**
@@ -251,6 +259,8 @@ export class TaskBatchDeployer {
     projectId: string;
     pending: KanbanTask[];
     url: string | null;
+    /** The grouped deploy agent to let finish before the restart, if any. */
+    agentId: string | null;
   }): Promise<void> {
     const deadline = this.now() + MAX_WATCH_MS;
     let lastPhase: string | null = null;
@@ -277,7 +287,7 @@ export class TaskBatchDeployer {
         continue;
       }
       if (run.outcome === "success") {
-        await this.succeed(input.projectId, input.pending, input.url);
+        await this.succeed(input.projectId, input.pending, input.url, input.agentId);
         return;
       }
       if (run.outcome === "failed") {
@@ -301,6 +311,7 @@ export class TaskBatchDeployer {
     projectId: string,
     pending: KanbanTask[],
     url: string | null,
+    agentId: string | null,
   ): Promise<void> {
     for (const task of pending) {
       try {
@@ -322,6 +333,18 @@ export class TaskBatchDeployer {
         ? `✅ **Publication groupée** — c'est en ligne : ${url}`
         : "✅ **Publication groupée** — c'est en ligne.",
     );
+    // The publication is live, but the grouped deploy agent may still be checking
+    // the served version and writing its own closing verdict. Restarting now would
+    // kill it mid-sentence and leave its chat frozen on "j'attends la fin…". So
+    // wait for it to reach rest first — the restart is genuinely the LAST step,
+    // after every card is stamped AND the agent has had its final say.
+    if (agentId && this.options.awaitDeployAgentIdle) {
+      try {
+        await this.options.awaitDeployAgentIdle(agentId);
+      } catch (error) {
+        this.logger.debug({ err: error, agentId }, "Wait for deploy agent to finish failed");
+      }
+    }
     // The daemon is still running the code from BEFORE this publication, so the
     // last step of the batch is restarting it. That is exactly what the user
     // authorized by pressing the button — nothing else ever restarts it on its own.
@@ -343,18 +366,31 @@ export class TaskBatchDeployer {
       finishedAt: new Date().toISOString(),
       error: reason,
     });
-    await this.sayAll(pending, `❌ **Publication groupée** — échec : ${reason}`);
+    // Say plainly what broke AND that nothing shipped: no card was marked live or
+    // archived, so the queue is intact and the user can fix the cause and retry.
+    await this.sayAll(
+      pending,
+      `❌ **Publication groupée** — échec : ${reason}\n\nRien n'a été mis en ligne et aucune carte n'a été archivée. Corrigez la cause ci-dessus, puis relancez « Tout déployer ».`,
+    );
     for (const task of pending) {
       await this.markFailed(projectId, task.id);
     }
   }
 
   private async closeAll(projectId: string, pending: KanbanTask[]): Promise<void> {
+    const reason =
+      "Publication interrompue avant la fin : impossible de confirmer que la mise en ligne a abouti.";
     await this.options.taskBoardService.patchDeployBatch(projectId, {
       state: "failed",
       finishedAt: new Date().toISOString(),
-      error: "Publication interrompue : issue inconnue.",
+      error: reason,
     });
+    // We could not vouch for a live result, so nothing is stamped or archived: the
+    // cards stay in « À déployer », ready for a fresh « Tout déployer ».
+    await this.sayAll(
+      pending,
+      `⚠️ **Publication groupée** — ${reason}\n\nAucune carte n'a été archivée ; la file reste en place. Vérifiez l'état du site, puis relancez la publication si besoin.`,
+    );
     for (const task of pending) {
       await this.closeWindow(projectId, task.id);
     }

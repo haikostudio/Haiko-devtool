@@ -381,12 +381,14 @@ export function TasksScreen() {
   // project; drop it whenever the project changes so a stale chat/drawer never
   // lingers from another project. These store fields are ephemeral (not persisted).
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const setDockDeployAgentId = useTasksBoardUiStore((state) => state.setDockDeployAgentId);
   const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   useEffect(() => {
     setDockTaskId(null);
+    setDockDeployAgentId(null);
     setDetailsTaskId(null);
-  }, [serverId, projectId, setDockTaskId, setDetailsTaskId]);
+  }, [serverId, projectId, setDockTaskId, setDockDeployAgentId, setDetailsTaskId]);
 
   // While the board is on screen, teach the global agent-task toast stack to open
   // a task's drawer instead of navigating to its raw agent — the same thing a card
@@ -788,6 +790,7 @@ function BoardContent({
   const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
   // Tapping a task points the shared bottom dock at its agent chat.
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const setDockDeployAgentId = useTasksBoardUiStore((state) => state.setDockDeployAgentId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
@@ -1037,16 +1040,25 @@ function BoardContent({
   }, [boardHandle, projectTasks, toast, t]);
 
   // Tapping the "À déployer" progress banner opens the single grouped deploy
-  // agent's conversation, so the build → publish → verdict can be watched live.
-  // The banner only offers this when the batch actually carries an agent id.
+  // agent's conversation in the bottom dock — the same drawer that hosts the chef
+  // d'orchestre and every task chat — so the build → publish → verdict is watched
+  // live in place, never in a separate full-screen agent tab. The banner only
+  // offers this when the batch actually carries an agent id.
   const handleOpenDeployAgent = useCallback(
     (agentId: string) => {
       if (!serverId) {
         return;
       }
-      navigateToAgent({ serverId, agentId });
+      // Hosts without the conductor dock fall back to the raw agent tab — there is
+      // no bottom dock to show it in.
+      if (!supportsConductor) {
+        navigateToAgent({ serverId, agentId });
+        return;
+      }
+      setDockDeployAgentId(agentId);
+      setConductorOpen(true);
     },
-    [serverId],
+    [serverId, supportsConductor, setDockDeployAgentId, setConductorOpen],
   );
 
   // "Retirer du prochain lot" / "Remettre dans le lot": the card keeps its place
@@ -1443,6 +1455,8 @@ function useConductorPanelProps(
 ): ConductorPanelProps {
   const dockTaskId = useTasksBoardUiStore((state) => state.dockTaskId);
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
+  const dockDeployAgentId = useTasksBoardUiStore((state) => state.dockDeployAgentId);
+  const setDockDeployAgentId = useTasksBoardUiStore((state) => state.setDockDeployAgentId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const taskActions = useBoardTaskActions(boardHandle);
   // "Redémarrer le moteur", offered on a published card whose work only takes
@@ -1460,19 +1474,26 @@ function useConductorPanelProps(
     [dockTaskId, boardHandle.board],
   );
 
-  // Closing the panel also drops the task selection so it never reopens pointed at
-  // a task that has since gone away.
+  // Closing the panel also drops the task/deploy selection so it never reopens
+  // pointed at a task that has since gone away, or at a finished publication.
   const handleClose = useCallback(() => {
     setConductorOpen(false);
     setDockTaskId(null);
-  }, [setConductorOpen, setDockTaskId]);
-  const handleBack = useCallback(() => setDockTaskId(null), [setDockTaskId]);
+    setDockDeployAgentId(null);
+  }, [setConductorOpen, setDockTaskId, setDockDeployAgentId]);
+  // "Back to conductor" leaves whichever view covered the dock — a task chat or
+  // the deploy agent.
+  const handleBack = useCallback(() => {
+    setDockTaskId(null);
+    setDockDeployAgentId(null);
+  }, [setDockTaskId, setDockDeployAgentId]);
 
   return useMemo(
     () => ({
       serverId,
       projectId,
       dockTask,
+      dockDeployAgentId,
       onBackToConductor: handleBack,
       onRunNow: taskActions.handleRunNow,
       onSave: taskActions.handleSave,
@@ -1494,6 +1515,7 @@ function useConductorPanelProps(
       serverId,
       projectId,
       dockTask,
+      dockDeployAgentId,
       handleBack,
       handleClose,
       taskActions,

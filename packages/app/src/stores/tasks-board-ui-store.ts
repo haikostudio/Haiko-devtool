@@ -86,6 +86,16 @@ interface TasksBoardUiState {
   dockTaskId: string | null;
   setDockTaskId: (dockTaskId: string | null) => void;
   /**
+   * Ephemeral (not persisted): the id of the grouped batch-publication agent
+   * whose chat the bottom dock shows. `null` means the dock is not showing the
+   * deploy agent. Set when the "Publication en cours" banner is tapped, cleared
+   * by the dock's "back to conductor" control and on close. Mutually exclusive
+   * with `dockTaskId`: showing one drops the other, so the dock never tries to
+   * present a task chat and the deploy chat at the same time.
+   */
+  dockDeployAgentId: string | null;
+  setDockDeployAgentId: (dockDeployAgentId: string | null) => void;
+  /**
    * Ephemeral (not persisted): the task whose Details+Billing drawer is open
    * (desktop right panel or the compact full-screen sheet). `null` means closed.
    * Opened by the dock header's "Details" button, independent of `dockTaskId`.
@@ -217,7 +227,13 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       preferDeployThenRestart: false,
       setPreferDeployThenRestart: (preferDeployThenRestart) => set({ preferDeployThenRestart }),
       dockTaskId: null,
-      setDockTaskId: (dockTaskId) => set({ dockTaskId }),
+      // Selecting a task chat drops the deploy-agent view, and vice versa: the
+      // dock shows exactly one of them.
+      setDockTaskId: (dockTaskId) =>
+        set(dockTaskId ? { dockTaskId, dockDeployAgentId: null } : { dockTaskId }),
+      dockDeployAgentId: null,
+      setDockDeployAgentId: (dockDeployAgentId) =>
+        set(dockDeployAgentId ? { dockDeployAgentId, dockTaskId: null } : { dockDeployAgentId }),
       detailsTaskId: null,
       setDetailsTaskId: (detailsTaskId) => set({ detailsTaskId }),
       previewFilePath: null,

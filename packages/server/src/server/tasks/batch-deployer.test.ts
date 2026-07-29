@@ -91,6 +91,8 @@ describe("TaskBatchDeployer", () => {
     url?: string | null;
     runs?: DeployRunSnapshot[];
     started?: boolean;
+    agentId?: string | null;
+    awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
   }) {
     const runs = [...(input.runs ?? [])];
     return new TaskBatchDeployer({
@@ -105,7 +107,11 @@ describe("TaskBatchDeployer", () => {
       resolveProjectUrl: async () => input.url ?? null,
       triggerDeploy: async (trigger) => {
         triggered.push(trigger);
-        return { started: input.started ?? true, error: "déjà en cours" };
+        return {
+          started: input.started ?? true,
+          error: "déjà en cours",
+          agentId: input.agentId ?? null,
+        };
       },
       readDeployRun: async () =>
         runs.shift() ?? { deploying: false, phase: null, outcome: null, error: null },
@@ -113,6 +119,7 @@ describe("TaskBatchDeployer", () => {
         perCard.push(taskId);
       },
       requestDaemonRestart: (reason) => restarts.push(reason),
+      awaitDeployAgentIdle: input.awaitDeployAgentIdle,
       sleep: async () => {},
       logger,
     });
@@ -162,6 +169,40 @@ describe("TaskBatchDeployer", () => {
     expect(board.deployBatch?.titles).toEqual(["Login", "Signup"]);
     expect(board.deployBatch?.url).toBe("https://app.haikostudio.cloud");
     expect(board.deployBatch?.finishedAt).toBeTruthy();
+  });
+
+  test("stamps the cards but holds the restart until the deploy agent has finished", async () => {
+    const card = await seedQueued("Login", "task/login");
+    let releaseAgent: (() => void) | null = null;
+    const idleCalls: string[] = [];
+    const deployer = buildDeployer({
+      url: "https://app.haikostudio.cloud",
+      agentId: "deploy-agent-1",
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+      awaitDeployAgentIdle: (agentId) => {
+        idleCalls.push(agentId);
+        return new Promise<void>((resolve) => {
+          releaseAgent = resolve;
+        });
+      },
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(() => idleCalls.length > 0);
+
+    // The publication is live: the card is already stamped and archived, the batch
+    // reads "success" — but the engine has NOT restarted, because the deploy agent
+    // is still writing its verdict. Restarting now would freeze its chat.
+    expect(idleCalls).toEqual(["deploy-agent-1"]);
+    const midway = await service.getBoard("proj-1");
+    expect(midway.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
+    expect(midway.deployBatch?.state).toBe("success");
+    expect(restarts).toEqual([]);
+
+    // The agent reaches rest → now, and only now, the restart fires.
+    releaseAgent?.();
+    await settle(() => restarts.length > 0);
+    expect(restarts).toEqual(["task_batch_deploy"]);
   });
 
   test("a held-back card is left out of the run", async () => {

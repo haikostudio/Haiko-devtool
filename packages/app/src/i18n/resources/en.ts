@@ -518,6 +518,7 @@ export const en = {
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",
       deployAllConfirm: "Deploy all",
       deployAllStarted: "Batch publication started",
+      deployAgentTitle: "Batch publication",
       deployMenu: "Publish options",
       deployOffPeak: "Publish automatically off-peak",
       deployOffPeakMessage:

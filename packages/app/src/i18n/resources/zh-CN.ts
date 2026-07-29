@@ -511,6 +511,7 @@ export const zhCN: TranslationResources = {
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",
       deployAllStarted: "已开始批量发布",
+      deployAgentTitle: "批量发布",
       deployMenu: "发布选项",
       deployOffPeak: "在空闲时段自动发布",
       deployOffPeakMessage:

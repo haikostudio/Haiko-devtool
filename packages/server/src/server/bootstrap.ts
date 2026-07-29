@@ -1602,6 +1602,32 @@ export async function createPaseoDaemon(
         reason,
       });
     },
+    // Let the grouped deploy agent finish its own verdict before the restart cuts
+    // it off. Guarded by a timeout so a stuck agent never blocks the restart
+    // forever — five minutes is far longer than a post-publish verification takes.
+    awaitDeployAgentIdle: (agentId) =>
+      new Promise<void>((resolve) => {
+        let settled = false;
+        let stop: (() => void) | null = null;
+        const done = () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve();
+        };
+        const timeout = setTimeout(
+          () => {
+            stop?.();
+            done();
+          },
+          5 * 60 * 1000,
+        );
+        stop = watchAgentIdle(agentManager, agentId, () => {
+          clearTimeout(timeout);
+          done();
+        });
+      }),
     logger,
   });
   // Finishing a card no longer publishes it, and no longer queues it either: it

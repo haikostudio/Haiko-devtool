@@ -70,7 +70,14 @@ export interface ConductorPanelProps {
    * the persistent conductor agent. `null` = conductor mode.
    */
   dockTask: KanbanTask | null;
-  /** Reset the dock back to the conductor agent (clears the task chat). */
+  /**
+   * When set, the dock shows the grouped batch-publication agent's live chat
+   * (opened from the "Publication en cours" banner) instead of the conductor or a
+   * task. Mutually exclusive with `dockTask`. `null` = not showing the deploy
+   * agent.
+   */
+  dockDeployAgentId: string | null;
+  /** Reset the dock back to the conductor agent (clears the task/deploy chat). */
   onBackToConductor: () => void;
   /** Launch an agent for a task that has none yet (empty-state button). */
   onRunNow: (taskId: string) => void;
@@ -162,6 +169,7 @@ export function useConductorController({
   serverId,
   projectId,
   dockTask,
+  dockDeployAgentId,
   onBackToConductor,
   onRunNow,
   onSave,
@@ -198,12 +206,14 @@ export function useConductorController({
   // effect reads it without becoming a dependency — the nonce alone drives re-runs,
   // and a re-render for any other reason must not resend a destructive reset.
   const pendingResetRef = useRef(false);
-  const inTaskMode = dockTask !== null;
+  const inDeployMode = dockDeployAgentId !== null;
+  const inTaskMode = dockTask !== null && !inDeployMode;
   const dockTaskId = dockTask?.id ?? null;
   // Who is mounted vs merely visible in the dock — the rule that keeps a live
-  // conductor conversation alive across a task selection.
+  // conductor conversation alive across a task or deploy-agent selection.
   const presence = resolveConductorDockPresence({
     hasDockedTask: inTaskMode,
+    hasDeployAgent: inDeployMode,
     conductorResolved,
   });
   const { ensureSuspended } = presence;
@@ -276,12 +286,12 @@ export function useConductorController({
       : false,
   );
   useEffect(() => {
-    if (!conductorIsArchived || inTaskMode) {
+    if (!conductorIsArchived || inTaskMode || inDeployMode) {
       return;
     }
     pendingResetRef.current = true;
     setResetNonce((nonce) => nonce + 1);
-  }, [conductorIsArchived, inTaskMode]);
+  }, [conductorIsArchived, inTaskMode, inDeployMode]);
 
   const taskViewOptions = useMemo<SegmentedControlOption<TaskView>[]>(
     () => [
@@ -453,12 +463,12 @@ export function useConductorController({
       // Places « Réinitialiser » in the composer's footer button row (right of
       // the mic + « Parler » controls) for the conductor chat only.
       <ComposerFooterControlsProvider controls={conductorResetControl}>
-        <EmbeddedConductorPane
+        <EmbeddedAgentPane
           key={`conductor:${ensure.provider}:${ensure.agentId}`}
           serverId={serverId}
           agentId={ensure.agentId}
           workspaceId={ensure.workspaceId}
-          provider={ensure.provider}
+          paneKey={`tasks:conductor:${ensure.provider}`}
           // Hidden behind a task view: still mounted and still receiving its
           // stream, but no longer the focused pane — so it does not fight the task
           // chat for the keyboard or clear its own attention badge while off-screen.
@@ -472,6 +482,15 @@ export function useConductorController({
   // leading icon. Details/Billing are tabs in the body now, not a header action.
   // The dock owns close/collapse/drag.
   const header = useMemo<TaskDockHeader>(() => {
+    if (inDeployMode) {
+      return {
+        title: t("tasks.board.deployAgentTitle"),
+        back: {
+          onPress: onBackToConductor,
+          accessibilityLabel: t("tasks.conductor.backToConductor"),
+        },
+      };
+    }
     if (inTaskMode && dockTask) {
       return {
         title: dockTask.title,
@@ -504,6 +523,7 @@ export function useConductorController({
       ),
     };
   }, [
+    inDeployMode,
     inTaskMode,
     dockTask,
     onBackToConductor,
@@ -519,6 +539,21 @@ export function useConductorController({
     <View style={styles.body}>
       {presence.showTaskView && dockTask ? (
         <View style={styles.tabPane}>{renderTaskBody(dockTask)}</View>
+      ) : null}
+      {/* The grouped batch-publication agent: same slot as a task view, so its
+          build → publish → verdict is watched live in the dock instead of a full
+          agent tab. Mounted only while shown — it is not the always-alive pane. */}
+      {presence.showDeployView && serverId && dockDeployAgentId ? (
+        <View style={styles.tabPane}>
+          <EmbeddedAgentPane
+            key={`deploy:${dockDeployAgentId}`}
+            serverId={serverId}
+            agentId={dockDeployAgentId}
+            workspaceId={null}
+            paneKey="tasks:deploy"
+            focused
+          />
+        </View>
       ) : null}
       {/* Kept mounted whatever the dock shows — see `renderConductorBody`. */}
       <View style={presence.conductorVisible ? styles.tabPane : styles.tabPaneHidden}>
@@ -538,17 +573,22 @@ function providerButtonStyle({ pressed, hovered }: { pressed: boolean; hovered?:
   return [styles.providerButton, (hovered || pressed) && styles.resetButtonHovered];
 }
 
-function EmbeddedConductorPane({
+function EmbeddedAgentPane({
   serverId,
   agentId,
   workspaceId,
-  provider,
+  paneKey,
   focused,
 }: {
   serverId: string;
   agentId: string;
   workspaceId: string | null;
-  provider: ConductorProvider;
+  /**
+   * Stable namespace for this pane's tab identity (e.g. the conductor's provider,
+   * or the deploy agent). The agent id is appended to it, so switching agents
+   * hands the workspace pane a fresh tab instead of leaking scroll/terminal state.
+   */
+  paneKey: string;
   /**
    * False while a task view covers the conductor. The pane stays mounted (its
    * conversation, scroll and composer survive), it simply stops being the
@@ -577,8 +617,8 @@ function EmbeddedConductorPane({
     };
     return buildWorkspacePaneContentModel({
       tab: {
-        key: `tasks:conductor:${provider}:${agentId}`,
-        tabId: `tasks:conductor:${provider}:${agentId}`,
+        key: `${paneKey}:${agentId}`,
+        tabId: `${paneKey}:${agentId}`,
         kind: "agent",
         target: { kind: "agent", agentId },
       },
@@ -590,7 +630,7 @@ function EmbeddedConductorPane({
       onOpenWorkspaceFile: openInNativeWorkspace,
       onOpenImportSheet: openInNativeWorkspace,
     });
-  }, [serverId, agentId, workspaceId, provider]);
+  }, [serverId, agentId, workspaceId, paneKey]);
 
   return (
     <View style={styles.paneHost}>

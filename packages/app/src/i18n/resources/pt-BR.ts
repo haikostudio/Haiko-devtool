@@ -527,6 +527,7 @@ export const ptBR: TranslationResources = {
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",
       deployAllConfirm: "Implantar tudo",
       deployAllStarted: "Publicação em lote iniciada",
+      deployAgentTitle: "Publicação em lote",
       deployMenu: "Opções de publicação",
       deployOffPeak: "Publicar automaticamente fora de pico",
       deployOffPeakMessage:
