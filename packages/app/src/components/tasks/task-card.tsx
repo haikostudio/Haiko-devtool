@@ -288,7 +288,9 @@ export const TaskCard = memo(function TaskCard({
           <View style={styles.tagsRow}>
             {visibleTags.map((tag) => (
               <View key={tag} style={styles.tagChip}>
-                <Text style={styles.tagText}>{tag}</Text>
+                <Text style={styles.tagText} numberOfLines={1}>
+                  {tag}
+                </Text>
               </View>
             ))}
             {hiddenTagCount > 0 ? (
@@ -585,6 +587,12 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.border,
     padding: theme.spacing[3],
     gap: theme.spacing[1.5],
+    // Pin the card to its column width: an unbreakable branch name or technical
+    // tag must be clipped, never widen the card and open a horizontal scroll.
+    // `minWidth: 0` lets the card shrink inside the flex column (react-native-web
+    // defaults flex items to `minWidth: auto`), `overflow: hidden` clips the rest.
+    minWidth: 0,
+    overflow: "hidden",
   },
   cardHovered: {
     backgroundColor: theme.colors.surface1,
@@ -612,6 +620,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   title: {
     flex: 1,
+    // Without this the flex text can grow to its unbreakable content on web and
+    // push the card wider than the column; `minWidth: 0` lets it clamp instead.
+    minWidth: 0,
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
     lineHeight: 20,
@@ -636,6 +647,8 @@ const styles = StyleSheet.create((theme) => ({
   tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
+    // Let the row shrink so a wrapped chip can't push past the card edge.
+    minWidth: 0,
     gap: theme.spacing[1],
     marginTop: theme.spacing[1],
   },
@@ -706,6 +719,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface2,
     paddingHorizontal: theme.spacing[2],
     paddingVertical: theme.spacing[1],
+    // A single technical tag (branch name, "paseo:deploy-branch:task/…") must be
+    // capped to the card width and clipped, never stretch the card sideways.
+    maxWidth: "100%",
+    flexShrink: 1,
+    overflow: "hidden",
   },
   tagText: {
     color: theme.colors.foregroundMuted,
