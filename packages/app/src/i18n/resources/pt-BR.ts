@@ -595,6 +595,7 @@ export const ptBR: TranslationResources = {
     status: {
       attention: "Precisa de uma ação sua",
       running: "Em andamento",
+      pending: "Aguardando execução",
       scheduled: "Agendada",
       done: "Concluído",
     },

@@ -255,6 +255,52 @@ function useAttentionBounce() {
   }));
 }
 
+// How dim the pending light dips at the bottom of its breath, and how long one
+// half-breath lasts — a slow, calm pulse that reads as "warming up" without the
+// urgency of the running spinner or the attention bounce.
+const PENDING_MIN_OPACITY = 0.35;
+const PENDING_BREATH_MS = 850;
+
+/**
+ * Drives the slow breathing pulse on the "En attente d'exécution" light: opacity
+ * eases down to `PENDING_MIN_OPACITY` and back, looping. Returns an animated
+ * style to spread on the dot. Disabled (full opacity, no motion) when the OS asks
+ * for reduced motion. Only mounted for the `pending` tone.
+ */
+function usePendingPulse() {
+  const opacity = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.value = 1;
+      return;
+    }
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(PENDING_MIN_OPACITY, { duration: PENDING_BREATH_MS }),
+        withTiming(1, { duration: PENDING_BREATH_MS }),
+      ),
+      -1,
+      false,
+    );
+    return () => {
+      cancelAnimation(opacity);
+      opacity.value = 1;
+    };
+  }, [reduceMotion, opacity]);
+
+  return useAnimatedStyle(() => ({ opacity: opacity.value }));
+}
+
+// The teal "spinning up" light, isolated so the pulse hooks only run while a
+// pending light is actually on screen (the parent bails out early otherwise).
+function PendingLight({ variant, label }: { variant: "dot" | "pip"; label: string }): ReactElement {
+  const pulseStyle = usePendingPulse();
+  const style = useMemo(() => [VOYANT_STYLE[variant].pending, pulseStyle], [variant, pulseStyle]);
+  return <Animated.View style={style} accessibilityLabel={label} />;
+}
+
 // The amber "wants you" light, isolated into its own component so the bounce
 // hooks only run while an attention light is actually on screen (the parent bails
 // out early for the null / running / static tones).
@@ -304,6 +350,10 @@ export function TaskStatusVoyant({
         <SyncedLoader size={LOADER_SIZE[variant]} color={styles.loaderColor.color} />
       </View>
     );
+  }
+  // Launched, agent spinning up: a slow teal breath — "En attente d'exécution".
+  if (tone === "pending") {
+    return <PendingLight variant={variant} label={label} />;
   }
   // Waiting for a reply: the amber light bounces, echoing the card's shake.
   if (tone === "attention") {
@@ -357,6 +407,9 @@ const styles = StyleSheet.create((theme) => ({
   toneAttention: {
     backgroundColor: theme.colors.palette.amber[500],
   },
+  tonePending: {
+    backgroundColor: theme.colors.palette.teal[500],
+  },
   toneScheduled: {
     backgroundColor: theme.colors.palette.blue[500],
   },
@@ -381,6 +434,7 @@ type StaticTone = Exclude<TaskTone, "running">;
 
 const TONE_STYLE: Record<StaticTone, object> = {
   attention: styles.toneAttention,
+  pending: styles.tonePending,
   scheduled: styles.toneScheduled,
   done: styles.toneDone,
 };
@@ -390,11 +444,13 @@ const TONE_STYLE: Record<StaticTone, object> = {
 const VOYANT_STYLE: Record<"dot" | "pip", Record<StaticTone, object[]>> = {
   dot: {
     attention: [styles.dot, TONE_STYLE.attention],
+    pending: [styles.dot, TONE_STYLE.pending],
     scheduled: [styles.dot, TONE_STYLE.scheduled],
     done: [styles.dot, TONE_STYLE.done],
   },
   pip: {
     attention: [styles.pip, TONE_STYLE.attention],
+    pending: [styles.pip, TONE_STYLE.pending],
     scheduled: [styles.pip, TONE_STYLE.scheduled],
     done: [styles.pip, TONE_STYLE.done],
   },

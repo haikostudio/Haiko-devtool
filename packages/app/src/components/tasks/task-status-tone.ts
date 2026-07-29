@@ -4,18 +4,21 @@ import type { KanbanTask } from "@/data/tasks";
 // The "voyant" tones a task (or an aggregate of tasks) can signal, mirroring the
 // agent toast badge: amber = the task wants the user (a question, a permission, a
 // paused go, a ready plan, a failure), a spinning square loader = an agent is
-// actively working, blue = queued/planned and waiting for its slot, green =
+// actively working, a soft pulsing dot = launched but the agent is still spinning
+// up (waiting to execute), blue = queued/planned and waiting for its slot, green =
 // finished. `null` = nothing worth a light (an untouched backlog task).
-export type TaskTone = "attention" | "running" | "scheduled" | "done";
+export type TaskTone = "attention" | "running" | "pending" | "scheduled" | "done";
 
 // Aggregate precedence: surface the most action-needing signal first. A project
 // that needs you (amber) outranks one actively working (loader), which outranks
-// one merely scheduled (blue), which outranks one simply finished (green).
+// one launched-but-still-starting (pending), which outranks one merely scheduled
+// (blue), which outranks one simply finished (green).
 const AGGREGATE_RANK: Record<TaskTone, number> = {
   attention: 0,
   running: 1,
-  scheduled: 2,
-  done: 3,
+  pending: 2,
+  scheduled: 3,
+  done: 4,
 };
 
 // The agent Paseo runs a task through. primaryAgentId is what agent-sync points
@@ -95,6 +98,31 @@ function isRunning(task: KanbanTask, agentBucket: WorkspaceStateBucket | undefin
   return agentBucket === "running";
 }
 
+// Launched into "En cours" but not yet actually working. When the scheduler moves
+// a card into the in-progress column it sets `schedule.state` to "running" and is
+// about to stream the prompt, but the freshly (re)used agent sits in
+// `initializing`/`idle` for a beat — which `deriveAgentStateBucket` reports as the
+// `done` bucket (initializing and finished-idle are indistinguishable there).
+// Without this state the card would fall straight through to the terminal branch
+// and flash a premature green "Terminé" the instant it enters "En cours" — the
+// exact bug this guards. So while the run is armed (`schedule.state === "running"`)
+// and no live agent reports `running` yet, show the honest "En attente
+// d'exécution" light.
+//
+// The tiebreaker is the schedule flag, not the column: on completion the server
+// clears `schedule` to null (see scheduler.launch's finish patch), so a genuinely
+// finished card — same idle `done` bucket — no longer matches here and correctly
+// reads as terminal green. And once the agent reports `agentBucket === "running"`,
+// `isRunning` wins ahead of this check and the light becomes the working loader.
+function isPendingExecution(
+  task: KanbanTask,
+  agentBucket: WorkspaceStateBucket | undefined,
+): boolean {
+  return (
+    task.column === "in_progress" && task.schedule?.state === "running" && agentBucket !== "running"
+  );
+}
+
 // Queued/planned but not yet working: validated and parked waiting for its slot
 // (a quiet-hours window, an available agent quota). Reads as a static blue light.
 function isScheduled(task: KanbanTask): boolean {
@@ -144,16 +172,24 @@ export function deriveTaskTone(
   if (isRunning(task, agentBucket)) {
     return "running";
   }
+  // Launched, agent still spinning up: a warming-up "En attente d'exécution"
+  // light, never a premature green "Terminé". Sits between the live loader and
+  // the queued/finished states so the sequence reads pending → running → done.
+  if (isPendingExecution(task, agentBucket)) {
+    return "pending";
+  }
   if (isScheduled(task)) {
     return "scheduled";
   }
   // "done" and "deployed" are terminal in the board model — a completed or
   // shipped task with no live agent activity stays a quiet green light. An
-  // "in_progress" card that reaches here is no longer actually running: the
-  // checks above ruled out live activity, a pending question, and a queued slot,
-  // so its agent finished, went idle, was cut, or died without the server moving
-  // the card. Read it as a quiet green "done" light rather than leaving a stale
-  // spinner (or, worse, no light at all).
+  // "in_progress" card that reaches here has genuinely finished its run: the
+  // checks above ruled out live activity, a pending question, an armed run still
+  // spinning up (`isPendingExecution`), and a queued slot — and the server clears
+  // `schedule` to null on completion, so an armed run can never fall through to
+  // here. What's left is an agent that finished (awaiting the user's final
+  // check), went idle, was cut, or died. Read it as a quiet green "done" light
+  // rather than leaving a stale spinner (or, worse, no light at all).
   if (
     task.completedAt ||
     task.column === "done" ||

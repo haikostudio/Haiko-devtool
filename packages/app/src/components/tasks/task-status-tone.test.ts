@@ -42,28 +42,37 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     ).toBe("running");
   });
 
-  it("stops the loader once the agent has gone idle, even if the card is still in the in-progress column", () => {
-    // Agent finished its turn → live bucket is "done". A stale "running" schedule
-    // flag and the in_progress column must NOT keep the spinner turning.
+  it("shows the pending light while the run is armed but the agent is still spinning up", () => {
+    // The scheduler moved the card into "En cours" and set schedule.state to
+    // "running", but the (re)used agent is still initializing → its live bucket
+    // reads "done" (or it isn't in the agent list yet → undefined). This must
+    // surface the warming-up "En attente d'exécution" light, NEVER a premature
+    // green "Terminé".
     const task = makeTask({ column: "in_progress", schedule: { state: "running", attempts: 1 } });
-    expect(deriveTaskTone(task, "done")).toBe("done");
+    expect(deriveTaskTone(task, "done")).toBe("pending");
+    expect(deriveTaskTone(task, undefined)).toBe("pending");
   });
 
-  it("stops the loader when the agent was cut / died (no live agent at all)", () => {
-    // The task agent's process is gone → the card has no live bucket. It must read
-    // as a finished green light, not a loader spinning in the void.
-    const task = makeTask({
+  it("reads a finished run (schedule cleared) as done, not a spinner", () => {
+    // On completion the server clears schedule to null and marks the card
+    // ready_for_review; the card stays in in_progress awaiting the user's final
+    // check. Same idle "done" bucket, but with no armed schedule it reads as the
+    // quiet green terminal light.
+    const finished = makeTask({
       column: "in_progress",
-      schedule: { state: "running", attempts: 1 },
-      links: { agentIds: ["a1"], taskAgentId: "a1" },
+      schedule: null,
+      progress: "ready_for_review",
     });
-    expect(deriveTaskTone(task, undefined)).toBe("done");
+    expect(deriveTaskTone(finished, "done")).toBe("done");
+    expect(deriveTaskTone(finished, undefined)).toBe("done");
   });
 
-  it("ignores a stale spin-up flag once the card is already in progress", () => {
-    // A "launching"/"pending_estimate" flag that lingers after the card reached
-    // the in-progress column is a leftover the server can no longer clear. With
-    // no live running agent it must NOT resurrect the loader.
+  it("ignores a stale non-execution spin-up flag once the card is already in progress", () => {
+    // A "launching"/"pending_estimate" flag or a "refinement: pending" that
+    // lingers after the card reached the in-progress column is a leftover the
+    // server can no longer clear. Only the execution arm (schedule.state
+    // "running") reads as pending; these analysis leftovers must NOT resurrect a
+    // loader — they fall through to the terminal green.
     expect(
       deriveTaskTone(
         makeTask({ column: "in_progress", schedule: { state: "launching", attempts: 1 } }),
@@ -79,6 +88,13 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     expect(
       deriveTaskTone(makeTask({ column: "in_progress", refinement: "pending" }), undefined),
     ).toBe("done");
+  });
+
+  it("hands off pending → running the instant the agent reports live", () => {
+    // The armed run's agent starts streaming: the live bucket flips to "running"
+    // and the working loader takes over from the warming-up pending light.
+    const task = makeTask({ column: "in_progress", schedule: { state: "running", attempts: 1 } });
+    expect(deriveTaskTone(task, "running")).toBe("running");
   });
 
   it("keeps amber priority when the agent is waiting on the user", () => {
@@ -182,6 +198,15 @@ describe("shouldShowVoyant — the corner pip carries read/unread, opacity never
       shouldShowVoyant(
         makeTask({ column: "in_progress", viewedAt: "2026-07-24T11:00:00.000Z" }),
         "running",
+      ),
+    ).toBe(true);
+  });
+
+  it("always shows the pending pip regardless of viewedAt", () => {
+    expect(
+      shouldShowVoyant(
+        makeTask({ column: "in_progress", viewedAt: "2026-07-24T11:00:00.000Z" }),
+        "pending",
       ),
     ).toBe(true);
   });

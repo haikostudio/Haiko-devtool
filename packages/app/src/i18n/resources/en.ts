@@ -586,6 +586,7 @@ export const en = {
     status: {
       attention: "Needs an action from you",
       running: "In progress",
+      pending: "Waiting to run",
       scheduled: "Scheduled",
       done: "Done",
     },

@@ -596,6 +596,7 @@ export const fr: TranslationResources = {
     status: {
       attention: "Nécessite une action de votre part",
       running: "En cours",
+      pending: "En attente d'exécution",
       scheduled: "Planifiée",
       done: "Terminé",
     },
