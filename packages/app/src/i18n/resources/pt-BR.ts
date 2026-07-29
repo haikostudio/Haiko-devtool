@@ -510,6 +510,7 @@ export const ptBR: TranslationResources = {
       done: "Concluído",
       deployed: "A implantar",
       notes: "Notas",
+      archived: "Arquivado",
     },
     notes: {
       addNote: "Adicionar nota",
@@ -534,6 +535,7 @@ export const ptBR: TranslationResources = {
       batchDone: "{{count}} tarefa(s) no ar",
       batchFailed: "A publicação falhou",
       batchAuto: "iniciada automaticamente",
+      batchOpenAgent: "Ver o agente de publicação",
       batchPhase: {
         start: "Preparando…",
         save: "Salvando o trabalho…",

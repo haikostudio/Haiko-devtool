@@ -1,5 +1,5 @@
-import { memo, useCallback, useMemo } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { memo, type ReactNode, useCallback, useMemo } from "react";
+import { ActivityIndicator, type GestureResponderEvent, Pressable, Text, View } from "react-native";
 import { CheckCircle2, TriangleAlert, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -62,18 +62,29 @@ export function isRecapWorthShowing(
 export const DeployBatchBanner = memo(function DeployBatchBanner({
   column,
   batch,
+  onOpenAgent,
 }: {
   column: TaskColumn;
   batch: TaskDeployBatch | null | undefined;
+  // Opens the single grouped deploy agent's conversation. The banner is the
+  // window onto the live build/publish — tapping it shows the agent at work.
+  onOpenAgent?: ((agentId: string) => void) | undefined;
 }) {
   const { t } = useTranslation();
   const dismissedAt = useTasksBoardUiStore((state) => state.dismissedDeployBatchAt);
   const dismiss = useTasksBoardUiStore((state) => state.dismissDeployBatch);
-  const handleDismiss = useCallback(() => {
-    if (batch) {
-      dismiss(batch.startedAt);
-    }
-  }, [batch, dismiss]);
+  const agentId = batch?.agentId ?? null;
+  const handleDismiss = useCallback(
+    (event?: GestureResponderEvent) => {
+      // Don't let the dismiss tap also open the agent when the whole card is
+      // pressable (web bubbles the click up to the outer Pressable).
+      event?.stopPropagation?.();
+      if (batch) {
+        dismiss(batch.startedAt);
+      }
+    },
+    [batch, dismiss],
+  );
   const ratio = useMemo(() => (batch ? batchProgressRatio(batch) : 0), [batch]);
   const fillStyle = useMemo(
     () => [styles.progressFill, { width: `${Math.round(ratio * 100)}%` as const }],
@@ -91,7 +102,7 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
   const count = batch.taskIds.length;
   const titles = batch.titles ?? [];
   return (
-    <View style={styles.card} testID="tasks-deploy-batch-banner">
+    <BatchCard openAgentId={onOpenAgent ? agentId : null} onOpenAgent={onOpenAgent}>
       <View style={styles.header}>
         <BatchIcon state={batch.state} />
         <Text style={styles.title}>{batchTitle(t, batch.state, count)}</Text>
@@ -138,9 +149,49 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
           ) : null}
         </>
       )}
-    </View>
+    </BatchCard>
   );
 });
+
+/**
+ * The banner's outer surface. When the run carries a deploy agent, the whole
+ * card is a Pressable that opens its conversation (watch the build/publish
+ * live); otherwise it is a plain, non-interactive View — exactly as before.
+ */
+function BatchCard({
+  openAgentId,
+  onOpenAgent,
+  children,
+}: {
+  openAgentId: string | null;
+  onOpenAgent?: ((agentId: string) => void) | undefined;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const handleOpen = useCallback(() => {
+    if (onOpenAgent && openAgentId) {
+      onOpenAgent(openAgentId);
+    }
+  }, [onOpenAgent, openAgentId]);
+  if (!openAgentId) {
+    return (
+      <View style={styles.card} testID="tasks-deploy-batch-banner">
+        {children}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      style={styles.card}
+      testID="tasks-deploy-batch-banner"
+      onPress={handleOpen}
+      accessibilityRole="button"
+      accessibilityLabel={t("tasks.board.batchOpenAgent")}
+    >
+      {children}
+    </Pressable>
+  );
+}
 
 /** Spinner while it runs, then the verdict: a check or a warning. */
 function BatchIcon({ state }: { state: TaskDeployBatch["state"] }) {

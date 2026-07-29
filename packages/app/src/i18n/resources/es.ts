@@ -509,6 +509,7 @@ export const es: TranslationResources = {
       done: "Hecho",
       deployed: "Por desplegar",
       notes: "Notas",
+      archived: "Archivado",
     },
     notes: {
       addNote: "Añadir nota",
@@ -533,6 +534,7 @@ export const es: TranslationResources = {
       batchDone: "{{count}} tarea(s) publicadas",
       batchFailed: "La publicación falló",
       batchAuto: "iniciada automáticamente",
+      batchOpenAgent: "Ver el agente de publicación",
       batchPhase: {
         start: "Preparando…",
         save: "Guardando el trabajo…",

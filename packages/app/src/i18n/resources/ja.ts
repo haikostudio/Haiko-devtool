@@ -504,6 +504,7 @@ export const ja: TranslationResources = {
       done: "完了",
       deployed: "デプロイ待ち",
       notes: "メモ",
+      archived: "アーカイブ",
     },
     notes: {
       addNote: "メモを追加",
@@ -528,6 +529,7 @@ export const ja: TranslationResources = {
       batchDone: "{{count}} 件を公開しました",
       batchFailed: "公開に失敗しました",
       batchAuto: "自動実行",
+      batchOpenAgent: "公開エージェントを表示",
       batchPhase: {
         start: "準備中…",
         save: "作業を保存中…",

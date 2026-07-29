@@ -501,6 +501,7 @@ export const en = {
       done: "Done",
       deployed: "To deploy",
       notes: "Notes",
+      archived: "Archived",
     },
     notes: {
       addNote: "Add note",
@@ -525,6 +526,7 @@ export const en = {
       batchDone: "{{count}} task(s) went live",
       batchFailed: "The publication failed",
       batchAuto: "started automatically",
+      batchOpenAgent: "View the publication agent",
       batchPhase: {
         start: "Preparing…",
         save: "Saving the work…",

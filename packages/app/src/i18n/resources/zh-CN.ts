@@ -495,6 +495,7 @@ export const zhCN: TranslationResources = {
       done: "已完成",
       deployed: "待部署",
       notes: "笔记",
+      archived: "已归档",
     },
     notes: {
       addNote: "添加笔记",
@@ -518,6 +519,7 @@ export const zhCN: TranslationResources = {
       batchDone: "已上线 {{count}} 个任务",
       batchFailed: "发布失败",
       batchAuto: "自动启动",
+      batchOpenAgent: "查看发布代理",
       batchPhase: {
         start: "准备中…",
         save: "保存工作…",

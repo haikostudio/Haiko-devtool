@@ -10,8 +10,14 @@ import { AgentAttachmentSchema } from "../attachments.js";
 // cycle). It is NOT a pipeline column, so the scheduler never touches it.
 // "validated": user-validated tasks. This is the consent gate — analysis
 // (estimation) and execution only ever start here, never from "backlog".
-// "deployed": terminal, post-"done" column. A task lands here once the
-// conductor has confirmed its work is actually live (merged + published).
+// "deployed": post-"done" publication QUEUE. A task lands here once it is
+// finished and waits for the batch publication; being here means "queued", not
+// "live".
+// "archived": terminal resting column at the very end of the cycle. A card
+// reaches it AUTOMATICALLY the moment its work actually goes live (see
+// TaskBoardService.markTaskDeployed), so the "À déployer" queue only ever shows
+// what still needs publishing. It is read-only: nothing runs, re-deploys or
+// re-analyses from here — archived cards are frozen, only consulted.
 // Appending new values keeps the wire enum backward-compatible: an old daemon
 // simply never emits it, and an old client that receives it is one release away.
 export const TaskColumnSchema = z.enum([
@@ -22,6 +28,7 @@ export const TaskColumnSchema = z.enum([
   "done",
   "deployed",
   "notes",
+  "archived",
 ]);
 export type TaskColumn = z.infer<typeof TaskColumnSchema>;
 
@@ -324,6 +331,11 @@ export const TaskDeployBatchSchema = z.object({
   error: z.string().nullable().optional(),
   // True when the off-peak option started this run instead of a user press.
   auto: z.boolean().optional(),
+  // The single grouped deploy agent carrying out this run (Paseo self-host).
+  // Lets the progress banner open its conversation so the build/publish can be
+  // watched live. Absent on ordinary projects (deployed card-by-card) and on
+  // older daemons that predate the field.
+  agentId: z.string().nullable().optional(),
 });
 export type TaskDeployBatch = z.infer<typeof TaskDeployBatchSchema>;
 

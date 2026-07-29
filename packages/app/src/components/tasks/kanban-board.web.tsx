@@ -88,6 +88,7 @@ export function KanbanBoard({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
+  onOpenDeployAgent,
   onToggleDeployHold,
   deployOffPeak,
   columnExtras,
@@ -169,6 +170,12 @@ export function KanbanBoard({
       if (!task || !targetColumn) {
         return;
       }
+      // "Archivé" is read-only and auto-only: its cards are frozen (never dragged
+      // out) and nothing is ever dragged into it (a card lands there only when its
+      // work goes live).
+      if (task.column === "archived" || targetColumn === "archived") {
+        return;
+      }
       if (task.column === targetColumn && overId === taskId) {
         return;
       }
@@ -211,6 +218,7 @@ export function KanbanBoard({
               onReanalyzeTask={onReanalyzeTask}
               onDeleteTask={onDeleteTask}
               onDeployAll={onDeployAll}
+              onOpenDeployAgent={onOpenDeployAgent}
               onToggleDeployHold={onToggleDeployHold}
               deployOffPeak={deployOffPeak}
             />
@@ -245,6 +253,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
+  onOpenDeployAgent,
   onToggleDeployHold,
   deployOffPeak,
 }: {
@@ -264,6 +273,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
   onDeployAll: KanbanBoardProps["onDeployAll"];
+  onOpenDeployAgent: KanbanBoardProps["onOpenDeployAgent"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
   deployOffPeak: KanbanBoardProps["deployOffPeak"];
 }) {
@@ -366,7 +376,11 @@ const DroppableColumn = memo(function DroppableColumn({
       <div ref={setNodeRef} style={webColumnBodyStyle}>
         {/* One progress bar for the whole run, then the "voici ce qui vient
             d'être mis en ligne" recap — above the cards it is about. */}
-        <DeployBatchBanner column={column} batch={board?.deployBatch ?? null} />
+        <DeployBatchBanner
+          column={column}
+          batch={board?.deployBatch ?? null}
+          onOpenAgent={onOpenDeployAgent}
+        />
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
           {rows.map((row) =>
@@ -447,6 +461,9 @@ const SortableTaskCard = memo(function SortableTaskCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
   });
+  // "Archivé" cards are frozen: no drag out, no overflow menu. They stay
+  // pressable so the user can still open and read them.
+  const isArchived = task.column === "archived";
   // A drag ends on the card it started from, so RNW's press responder would
   // happily read that pointerup as a tap — opening the task, or unfolding the
   // lot the card is the cover of. Capture-phase handlers run before the inner
@@ -479,7 +496,7 @@ const SortableTaskCard = memo(function SortableTaskCard({
       transform: CSS.Transform.toString(transform),
       transition: transition ?? undefined,
       opacity: isDragging ? 0.4 : 1,
-      cursor: "grab",
+      cursor: isArchived ? "default" : "grab",
       // Anchor for the absolutely-positioned overflow-menu overlay below.
       position: "relative",
       // TaskCard renders as a real <button>, and button width:auto is
@@ -497,16 +514,17 @@ const SortableTaskCard = memo(function SortableTaskCard({
       WebkitUserSelect: "none",
       WebkitTouchCallout: "none",
     }),
-    [transform, transition, isDragging],
+    [transform, transition, isDragging, isArchived],
   );
+  // Frozen cards carry no dnd listeners at all, so a drag never even starts.
+  const dragHandlers = isArchived ? {} : { ...attributes, ...listeners };
   return (
     // RNW's Pressable inside must not own the pointerdown, so the dnd
     // listeners live on this wrapper.
     <div
       ref={setNodeRef}
       style={wrapperStyle}
-      {...attributes}
-      {...listeners}
+      {...dragHandlers}
       onPointerDownCapture={handlePointerDownCapture}
       onPointerUpCapture={handlePointerUpCapture}
       data-testid={`tasks-drag-${task.id}`}
@@ -518,23 +536,26 @@ const SortableTaskCard = memo(function SortableTaskCard({
         testID={`tasks-card-${task.id}`}
       />
       {/* Overflow menu overlay: swallow the drag-start pointer/mouse/touch so
-          opening the menu never lifts the card into a drag. */}
-      <div
-        style={cardMenuOverlayStyle}
-        onPointerDown={stopDragActivation}
-        onMouseDown={stopDragActivation}
-        onTouchStart={stopDragActivation}
-      >
-        <TaskCardMenu
-          task={task}
-          labels={labels}
-          onMoveTask={onMoveTask}
-          onRunTask={onRunTask}
-          onReanalyzeTask={onReanalyzeTask}
-          onDeleteTask={onDeleteTask}
-          onToggleDeployHold={onToggleDeployHold}
-        />
-      </div>
+          opening the menu never lifts the card into a drag. Frozen archived
+          cards have no menu, so the overlay is dropped entirely. */}
+      {isArchived ? null : (
+        <div
+          style={cardMenuOverlayStyle}
+          onPointerDown={stopDragActivation}
+          onMouseDown={stopDragActivation}
+          onTouchStart={stopDragActivation}
+        >
+          <TaskCardMenu
+            task={task}
+            labels={labels}
+            onMoveTask={onMoveTask}
+            onRunTask={onRunTask}
+            onReanalyzeTask={onReanalyzeTask}
+            onDeleteTask={onDeleteTask}
+            onToggleDeployHold={onToggleDeployHold}
+          />
+        </div>
+      )}
     </div>
   );
 });

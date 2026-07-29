@@ -498,6 +498,7 @@ export const ar: TranslationResources = {
       done: "منجزة",
       deployed: "للنشر",
       notes: "ملاحظات",
+      archived: "مؤرشف",
     },
     notes: {
       addNote: "إضافة ملاحظة",
@@ -522,6 +523,7 @@ export const ar: TranslationResources = {
       batchDone: "تم نشر {{count}} مهمة",
       batchFailed: "فشل النشر",
       batchAuto: "بدأت تلقائيًا",
+      batchOpenAgent: "عرض وكيل النشر",
       batchPhase: {
         start: "قيد التحضير…",
         save: "حفظ العمل…",

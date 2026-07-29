@@ -8,6 +8,8 @@ import { resolveTaskAgentId } from "./validator.js";
 export interface DeployTriggerResult {
   started: boolean;
   error?: string | null;
+  /** The grouped deploy agent launched for this run, when there is one. */
+  agentId?: string | null;
 }
 
 export interface DeployRunSnapshot {
@@ -201,6 +203,14 @@ export class TaskBatchDeployer {
     if (!result.started) {
       await this.fail(projectId, pending, result.error ?? "raison inconnue");
       return;
+    }
+    // Point the board's progress banner at the single grouped deploy agent, so a
+    // tap on the bar opens its conversation and the build/publish can be watched
+    // live. Only when the launcher gave us one (self-host, real build).
+    if (result.agentId) {
+      await this.options.taskBoardService.patchDeployBatch(projectId, {
+        agentId: result.agentId,
+      });
     }
     const url = await this.options.resolveProjectUrl(rootPath);
     await this.watch({ projectId, pending, url });

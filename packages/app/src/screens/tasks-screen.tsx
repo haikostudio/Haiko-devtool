@@ -83,6 +83,7 @@ import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
+import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedChevronRight = withUnistyles(ChevronRight);
@@ -1017,6 +1018,19 @@ function BoardContent({
     })();
   }, [boardHandle, projectTasks, toast, t]);
 
+  // Tapping the "À déployer" progress banner opens the single grouped deploy
+  // agent's conversation, so the build → publish → verdict can be watched live.
+  // The banner only offers this when the batch actually carries an agent id.
+  const handleOpenDeployAgent = useCallback(
+    (agentId: string) => {
+      if (!serverId) {
+        return;
+      }
+      navigateToAgent({ serverId, agentId });
+    },
+    [serverId],
+  );
+
   // "Retirer du prochain lot" / "Remettre dans le lot": the card keeps its place
   // in "À déployer" and stays visible — the batch simply skips it. A pause, not
   // an archive, so putting it back is the same single gesture.
@@ -1115,6 +1129,7 @@ function BoardContent({
           onReanalyzeTask={handleEstimateTask}
           onDeleteTask={handleDeleteTask}
           onDeployAll={handleDeployAll}
+          onOpenDeployAgent={handleOpenDeployAgent}
           onToggleDeployHold={handleToggleDeployHold}
           deployOffPeak={deployOffPeak}
           columnExtras={columnExtras}

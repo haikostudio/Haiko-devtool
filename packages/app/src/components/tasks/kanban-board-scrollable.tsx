@@ -49,6 +49,7 @@ export function ScrollableKanbanBoard({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
+  onOpenDeployAgent,
   onToggleDeployHold,
   deployOffPeak,
   columnExtras,
@@ -91,6 +92,7 @@ export function ScrollableKanbanBoard({
             onReanalyzeTask={onReanalyzeTask}
             onDeleteTask={onDeleteTask}
             onDeployAll={onDeployAll}
+            onOpenDeployAgent={onOpenDeployAgent}
             onToggleDeployHold={onToggleDeployHold}
             deployOffPeak={deployOffPeak}
           />
@@ -116,6 +118,7 @@ const BoardColumn = memo(function BoardColumn({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
+  onOpenDeployAgent,
   onToggleDeployHold,
   deployOffPeak,
 }: {
@@ -134,6 +137,7 @@ const BoardColumn = memo(function BoardColumn({
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
   onDeployAll: KanbanBoardProps["onDeployAll"];
+  onOpenDeployAgent: KanbanBoardProps["onOpenDeployAgent"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
   deployOffPeak: KanbanBoardProps["deployOffPeak"];
 }) {
@@ -226,7 +230,11 @@ const BoardColumn = memo(function BoardColumn({
         <View style={styles.columnContent}>
           {/* One progress bar for the whole run, then the "voici ce qui vient
               d'être mis en ligne" recap — above the cards it is about. */}
-          <DeployBatchBanner column={column} batch={board?.deployBatch ?? null} />
+          <DeployBatchBanner
+            column={column}
+            batch={board?.deployBatch ?? null}
+            onOpenAgent={onOpenDeployAgent}
+          />
           {extras}
           {rows.map((row) =>
             row.kind === "task" ? (

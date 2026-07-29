@@ -17,6 +17,9 @@ export const KANBAN_COLUMNS: TaskColumn[] = [
   "in_progress",
   "done",
   "deployed",
+  // Terminal resting column: cards land here automatically once their work goes
+  // live, so "À déployer" only ever shows what still needs publishing. Read-only.
+  "archived",
 ];
 
 // Per-column cap on the desktop board (columns grow to fill, then stop here and
@@ -34,9 +37,9 @@ export interface KanbanColumnModel {
 // cards stamped before completedAt existed. Every other column ranks by last
 // touch (updatedAt).
 function recencyKey(task: KanbanTask, column: TaskColumn): string {
-  // "done" and the "À déployer" queue both rank by the moment the work finished,
-  // so the last card completed sits at the top of the queue it waits in.
-  if ((column === "done" || column === "deployed") && task.completedAt) {
+  // "done", the "À déployer" queue and the "Archivé" resting column all rank by
+  // the moment the work finished, so the last card completed sits at the top.
+  if ((column === "done" || column === "deployed" || column === "archived") && task.completedAt) {
     return task.completedAt;
   }
   return task.updatedAt;
@@ -290,6 +293,7 @@ export function useColumnLabels(): Record<TaskColumn, string> {
       in_progress: t("tasks.columns.inProgress"),
       done: t("tasks.columns.done"),
       deployed: t("tasks.columns.deployed"),
+      archived: t("tasks.columns.archived"),
     }),
     [t],
   );
@@ -308,6 +312,9 @@ export interface KanbanBoardProps {
   // "Tout déployer": publishes every not-yet-live card of the "À déployer"
   // column in one run. Rendered at the bottom of that column only.
   onDeployAll?: (() => void) | undefined;
+  // Opens the single grouped deploy agent's conversation from the progress
+  // banner — the live view onto the running (or last) build/publish.
+  onOpenDeployAgent?: ((agentId: string) => void) | undefined;
   // "Retirer du prochain lot" / "Remettre dans le lot" on a queued card: the
   // card stays on the board, the batch skips it.
   onToggleDeployHold?: ((taskId: string, hold: boolean) => void) | undefined;

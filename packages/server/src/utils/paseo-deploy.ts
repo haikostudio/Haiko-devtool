@@ -273,6 +273,12 @@ export interface PaseoDeployStatus {
 export interface PaseoDeployTriggerResult {
   started: boolean;
   error: string | null;
+  /**
+   * The agent launched to carry out this publication, when one was (a real
+   * build handed to a supervising agent). Null for save-only or direct-spawn
+   * runs. Lets the batch record point the progress banner at the live agent.
+   */
+  agentId?: string | null;
 }
 
 /** Tag used for tasks opened automatically when a selected branch conflicts. */
@@ -1468,7 +1474,7 @@ export async function triggerPaseoDeploy(input: {
         (summary) => finishAgentRun(run, { summary, mergedBranches }),
         (error) => finishAgentRun(run, { summary: getErrorMessage(error), mergedBranches }),
       );
-      return { started: true, error: null };
+      return { started: true, error: null, agentId: launched.agentId };
     }
 
     const logFd = openSync(SHIP_LOG_FILE, "a");

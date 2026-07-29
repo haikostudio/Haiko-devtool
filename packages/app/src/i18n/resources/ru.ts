@@ -504,6 +504,7 @@ export const ru: TranslationResources = {
       done: "Готово",
       deployed: "К развёртыванию",
       notes: "Заметки",
+      archived: "Архив",
     },
     notes: {
       addNote: "Добавить заметку",
@@ -528,6 +529,7 @@ export const ru: TranslationResources = {
       batchDone: "Опубликовано задач: {{count}}",
       batchFailed: "Публикация не удалась",
       batchAuto: "запущена автоматически",
+      batchOpenAgent: "Открыть агента публикации",
       batchPhase: {
         start: "Подготовка…",
         save: "Сохранение работы…",
