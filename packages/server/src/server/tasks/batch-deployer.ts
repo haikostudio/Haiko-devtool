@@ -98,10 +98,11 @@ export function selectPendingDeployTasks(tasks: readonly KanbanTask[]): KanbanTa
  * raced itself on the shared checkout and produced torn builds.
  *
  * Two shapes, one gesture:
- * - **Paseo itself** is published by the daemon (`triggerDeploy` merges the
- *   cards' branches and hands the build to its own supervising agent). We watch
- *   the run, narrate each phase into every card's conversation, stamp the cards
- *   live, then restart the daemon.
+ * - **Paseo itself** is published by the daemon (`triggerDeploy` builds the
+ *   project's main branch and hands it to its own supervising agent). Tasks work
+ *   in place on main, so there is nothing to merge — the deploy just builds what
+ *   is already there. We watch the run, narrate each phase into every card's
+ *   conversation, stamp the cards live, then restart the daemon.
  * - **Any other project** is deployed card by card by each card's OWN agent (the
  *   existing "Lancer le déploiement" path), because the agent is the only one who
  *   knows that project's dev instance. No daemon restart there: the project's own
@@ -196,10 +197,9 @@ export class TaskBatchDeployer {
       return;
     }
 
-    const branches = [
-      ...new Set(pending.map((task) => task.links.branch).filter((b): b is string => Boolean(b))),
-    ];
-    const result = await this.options.triggerDeploy({ projectId, mergeBranches: branches });
+    // Tasks run in place on main — there are no per-task branches to merge. The
+    // deploy just builds the project's main branch as it already stands.
+    const result = await this.options.triggerDeploy({ projectId, mergeBranches: [] });
     if (!result.started) {
       await this.fail(projectId, pending, result.error ?? "raison inconnue");
       return;

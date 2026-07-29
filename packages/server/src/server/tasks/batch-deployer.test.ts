@@ -143,10 +143,9 @@ describe("TaskBatchDeployer", () => {
     expect(result).toEqual({ started: true, taskIds: [first.id, second.id] });
     await settle(() => restarts.length > 0);
 
-    // ONE publication for the whole batch, carrying both branches.
-    expect(triggered).toEqual([
-      { projectId: "proj-1", mergeBranches: ["task/login", "task/signup"] },
-    ]);
+    // ONE publication for the whole batch. Tasks run in place on main, so there
+    // are no per-task branches to merge — the deploy just builds main.
+    expect(triggered).toEqual([{ projectId: "proj-1", mergeBranches: [] }]);
     const board = await service.getBoard("proj-1");
     for (const id of [first.id, second.id]) {
       const card = board.tasks.find((entry) => entry.id === id);

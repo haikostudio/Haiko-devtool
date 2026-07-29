@@ -713,24 +713,25 @@ export class TaskScheduler {
 
     try {
       const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-      const plan = resolveTaskWorktreePlan({ task, folder: candidate.folder, planMode });
-      // The analysis phase already spawned the task's visible agent in its
-      // worktree and ran the read-only analysis turn. Execution CONTINUES that
-      // same conversation — reuse the agent instead of creating a new one, so
-      // the analysis is the task's starting point. Only the legacy path (no
-      // analysis agent, e.g. pre-upgrade tasks) creates the agent here.
+      // Every task runs in place, on the project's main branch — no branch, no
+      // separate worktree, for any project. See resolveTaskWorktreePlan.
+      resolveTaskWorktreePlan({ task, folder: candidate.folder, planMode });
+      // The analysis phase already spawned the task's visible agent and ran the
+      // read-only analysis turn. Execution CONTINUES that same conversation —
+      // reuse the agent instead of creating a new one, so the analysis is the
+      // task's starting point. Only the legacy path (no analysis agent, e.g.
+      // pre-upgrade tasks) creates the agent here.
       let agentId = task.links.taskAgentId ?? null;
-      let branch = task.links.branch ?? plan.branch;
+      const branch = task.links.branch ?? null;
       let workspaceId = task.links.workspaceId ?? null;
 
       if (!agentId) {
-        // Legacy path (no analysis agent yet). A branch-folder reuses its shared
-        // worktree; otherwise cut a fresh worktree off the project checkout.
-        // Plan-mode runs make no changes, so they run in place — no worktree.
+        // Legacy path (no analysis agent yet): run directly in the project
+        // checkout on its main branch. No worktree, no branch is ever created.
         const created = await this.createAgent({
           kind: "mcp",
           provider,
-          cwd: plan.kind === "reuse" ? plan.cwd : project.rootPath,
+          cwd: project.rootPath,
           title: `Tâche : ${task.title}`,
           labels: { [TASK_AGENT_LABEL]: task.id },
           unattended: true,
@@ -741,24 +742,12 @@ export class TaskScheduler {
             ? { thinking: task.runConfig.thinkingOptionId }
             : {}),
           mode: launchMode,
-          ...(plan.kind === "reuse" ? { workspaceId: plan.workspaceId } : {}),
-          ...(plan.kind === "create"
-            ? { worktree: { action: "branch-off" as const, branchName: plan.branchName } }
-            : {}),
         });
         if (created.initialPromptError) {
           throw created.initialPromptError;
         }
         agentId = created.snapshot.id;
-        branch = plan.branch;
         workspaceId = created.snapshot.workspaceId ?? workspaceId;
-        if (plan.kind === "create" && plan.recordFolderId && created.snapshot.workspaceId) {
-          await this.taskBoardService.setFolderWorkspace(projectId, plan.recordFolderId, {
-            branch: plan.branch,
-            workspaceId: created.snapshot.workspaceId,
-            worktreeCwd: created.snapshot.cwd,
-          });
-        }
       }
 
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({

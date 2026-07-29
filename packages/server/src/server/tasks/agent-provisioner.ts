@@ -105,11 +105,13 @@ export class TaskAgentProvisioner {
     folder: TaskFolder | undefined,
   ): Promise<ProvisionedTaskAgent> {
     const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-    const plan = resolveTaskWorktreePlan({ task, folder, planMode });
+    // Every task runs in place, on the project's main branch — no branch, no
+    // separate worktree, for any project. See resolveTaskWorktreePlan.
+    resolveTaskWorktreePlan({ task, folder, planMode });
     const created = await this.createAgent({
       kind: "mcp",
       provider,
-      cwd: plan.kind === "reuse" ? plan.cwd : projectRoot,
+      cwd: projectRoot,
       title: `Tâche : ${task.title}`,
       labels: { [TASK_AGENT_LABEL]: task.id },
       unattended: true,
@@ -118,27 +120,13 @@ export class TaskAgentProvisioner {
       notifyOnFinish: false,
       ...(task.runConfig?.thinkingOptionId ? { thinking: task.runConfig.thinkingOptionId } : {}),
       mode: launchMode,
-      ...(plan.kind === "reuse" ? { workspaceId: plan.workspaceId } : {}),
-      ...(plan.kind === "create"
-        ? { worktree: { action: "branch-off" as const, branchName: plan.branchName } }
-        : {}),
     });
     if (created.initialPromptError) {
       throw created.initialPromptError;
     }
     const agentId = created.snapshot.id;
     const workspaceId = created.snapshot.workspaceId ?? null;
-    const branch = plan.branch;
-
-    // First task of a branch-folder: remember the shared worktree so the
-    // folder's other tasks land on the same branch.
-    if (plan.kind === "create" && plan.recordFolderId && workspaceId) {
-      await this.taskBoardService.setFolderWorkspace(projectId, plan.recordFolderId, {
-        branch: plan.branch,
-        workspaceId,
-        worktreeCwd: created.snapshot.cwd,
-      });
-    }
+    const branch = null;
 
     // Link immediately so the card's chat binds to this conversation from the
     // very first second, before any prompt is sent into it.
@@ -152,7 +140,6 @@ export class TaskAgentProvisioner {
           ? current.links.agentIds
           : [...current.links.agentIds, agentId],
         ...(workspaceId ? { workspaceId } : {}),
-        ...(branch ? { branch } : {}),
       },
     }));
 

@@ -157,8 +157,8 @@ export function backfillTaskBilling(task: KanbanTask): KanbanTask {
 }
 
 // Turns free-form text into the branch-safe slug portion of a git ref: lowercase,
-// accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Shared
-// by task-branch naming and folder-branch derivation.
+// accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Kept
+// for folder-path derivation; task launches no longer cut a branch of their own.
 export function slugifyBranch(text: string): string {
   return text
     .toLowerCase()
@@ -168,14 +168,6 @@ export function slugifyBranch(text: string): string {
     .replace(/(^-+)|(-+$)/g, "")
     .slice(0, 40)
     .replace(/-+$/g, "");
-}
-
-// Branch (and worktree slug) for a task launch: stable, readable, unique via a
-// short task-id suffix so two similarly-titled tasks never collide.
-export function taskBranchName(task: KanbanTask): string {
-  const slug = slugifyBranch(task.title);
-  const suffix = task.id.slice(0, 6);
-  return slug ? `task/${slug}-${suffix}` : `task/${suffix}`;
 }
 
 export interface ResolvedTaskLaunch {
@@ -189,8 +181,6 @@ export interface ResolvedTaskLaunch {
    * and must never block on a permission prompt). Plan-mode keeps "plan".
    */
   launchMode: string;
-  /** Worktree branch for direct-mode runs; null for plan-mode (runs in place). */
-  branchName: string | null;
 }
 
 /**
@@ -211,29 +201,26 @@ export function resolveTaskLaunch(task: KanbanTask): ResolvedTaskLaunch {
   } else if (providerId === "codex") {
     launchMode = "full-access";
   }
-  const branchName = planMode ? null : taskBranchName(task);
-  return { provider, providerId, planMode, launchMode, branchName };
+  return { provider, providerId, planMode, launchMode };
 }
 
 /**
  * How a task's agent should get its working tree.
  *
- * Every task now runs IN PLACE, on the project's main branch. Cutting a branch
+ * Every task runs IN PLACE, on the project's main branch. Cutting a branch
  * (and a worktree) per task produced exactly the problems it was meant to avoid:
  * conflicts between branches, painful merges, agents working from divergent
  * contexts, and a deploy step that had to reconcile all of it. One branch, one
- * context, one deploy.
+ * context, one deploy — for every project, without exception.
  *
- * The "create"/"reuse" shapes are kept because older boards may still carry a
- * folder branch and its worktree; nothing produces them any more.
+ * There is deliberately only one shape: a task never gets a branch or a separate
+ * worktree. This is the single, permanent guarantee — no code path can opt back
+ * into a per-task branch.
  */
-export type TaskWorktreePlan =
-  | { kind: "in-place"; branch: null }
-  // First task of a branch-folder (or a legacy task): cut a fresh worktree.
-  // recordFolderId set => stamp the resulting workspace back on that folder.
-  | { kind: "create"; branchName: string; branch: string; recordFolderId: string | null }
-  // Later task of a branch-folder: run inside the folder's shared worktree.
-  | { kind: "reuse"; branch: string; workspaceId: string; cwd: string };
+export interface TaskWorktreePlan {
+  kind: "in-place";
+  branch: null;
+}
 
 export function resolveTaskWorktreePlan(_input: {
   task: KanbanTask;
