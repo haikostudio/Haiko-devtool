@@ -95,6 +95,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -152,6 +153,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {
           gemini: {},
           claude: { enabled: false },
@@ -203,6 +205,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: { gemini: {} },
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -257,6 +260,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {
           gemini: {},
           claude: { enabled: false },
@@ -316,6 +320,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -342,6 +347,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -368,6 +374,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -382,6 +389,31 @@ describe("DaemonConfigStore", () => {
     expect(persisted.daemon?.browserTools).toEqual({ enabled: true });
   });
 
+  test("patch persists brain memory opt-in into config.json", () => {
+    const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
+    tempDirs.push(paseoHome);
+
+    const store = new DaemonConfigStore(
+      paseoHome,
+      {
+        mcp: { injectIntoAgents: false },
+        browserTools: { enabled: false },
+        brainMemory: { enabled: false },
+        providers: {},
+        metadataGeneration: { providers: [] },
+        autoArchiveAfterMerge: false,
+        enableTerminalAgentHooks: false,
+        appendSystemPrompt: "",
+      },
+      undefined,
+    );
+
+    store.patch({ brainMemory: { enabled: true } });
+
+    const persisted = loadPersistedConfig(paseoHome);
+    expect(persisted.features?.brainMemory).toEqual({ enabled: true });
+  });
+
   test("patch persists provider additional models into config.json", () => {
     const paseoHome = mkdtempSync(path.join(tmpdir(), "paseo-daemon-config-store-"));
     tempDirs.push(paseoHome);
@@ -391,6 +423,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -433,6 +466,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -458,6 +492,7 @@ describe("DaemonConfigStore", () => {
       paseoHome,
       {
         mcp: { injectIntoAgents: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -482,6 +517,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         metadataGeneration: { providers: [] },
         autoArchiveAfterMerge: false,
@@ -535,6 +571,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         autoArchiveAfterMerge: false,
         enableTerminalAgentHooks: false,
@@ -559,6 +596,7 @@ describe("DaemonConfigStore", () => {
       {
         mcp: { injectIntoAgents: false },
         browserTools: { enabled: false },
+        brainMemory: { enabled: false },
         providers: {},
         autoArchiveAfterMerge: false,
         enableTerminalAgentHooks: false,

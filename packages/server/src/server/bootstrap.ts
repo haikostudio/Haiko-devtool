@@ -529,6 +529,16 @@ function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | stri
   return config.trustedProxies ?? ["loopback"];
 }
 
+function readMutableBrainMemoryEnabled(config: MutableDaemonConfig): boolean {
+  const brainMemory = config.brainMemory;
+  return (
+    typeof brainMemory === "object" &&
+    brainMemory !== null &&
+    "enabled" in brainMemory &&
+    brainMemory.enabled === true
+  );
+}
+
 /**
  * Cerveau long-term memory: REST client + curation layer (librarian recall
  * filter and scribe distillation, both short-lived internal Haiku agents).
@@ -553,7 +563,7 @@ function createBrainMemoryServices(input: {
         enabled: brainConfig?.enabled ?? false,
         hasApiKey: Boolean(brainConfig?.apiKey),
       },
-      "Cerveau: OFF (brainMemory not created — check features.brainMemory.enabled + apiKey)",
+      "Cerveau: OFF (brainMemory client not created — missing apiKey)",
     );
     return null;
   }
@@ -611,6 +621,7 @@ function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDae
   const initialConfig: MutableDaemonConfig = {
     mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
     browserTools: { enabled: config.browserToolsEnabled ?? false },
+    brainMemory: { enabled: config.brainMemory?.enabled ?? false },
     providers,
     metadataGeneration: {
       providers: config.metadataGeneration?.providers ?? [],
@@ -1284,12 +1295,14 @@ export async function createPaseoDaemon(
     createAgent,
     logger,
   });
+  const isBrainMemoryEnabled = () => readMutableBrainMemoryEnabled(daemonConfigStore.get());
   if (brainMemoryServices && workspaceRegistry) {
     agentManager.setBrainRecallHook(
       createBrainRecallHook({
         brain: brainMemoryServices.client,
         curator: brainMemoryServices.curator,
         recentFacts: brainMemoryServices.recentFacts,
+        isEnabled: isBrainMemoryEnabled,
         agentManager,
         agentStorage,
         workspaceRegistry,
@@ -1304,6 +1317,7 @@ export async function createPaseoDaemon(
       createBrainCaptureHook({
         brain: brainMemoryServices.client,
         curator: brainMemoryServices.curator,
+        isEnabled: isBrainMemoryEnabled,
         agentManager,
         agentStorage,
         workspaceRegistry,
@@ -1984,6 +1998,15 @@ export async function createPaseoDaemon(
             daemonConfigStore.onFieldChange("mcp.injectIntoAgents", (value) => {
               agentManager.setMcpBaseUrl(value ? mcpBaseUrl : null);
               agentManager.setPaseoToolsEnabled(value !== false);
+            });
+            daemonConfigStore.onFieldChange("brainMemory.enabled", (value) => {
+              const enabled = value === true;
+              logger.info(
+                { module: "brain-memory", enabled },
+                enabled
+                  ? "Cerveau: ON (dynamic toggle enabled)"
+                  : "Cerveau: OFF (dynamic toggle disabled)",
+              );
             });
             daemonConfigStore.onFieldChange("appendSystemPrompt", (value) => {
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");

@@ -45,6 +45,8 @@ function createStore(paseoHome: string, enableTerminalAgentHooks: boolean): Daem
     paseoHome,
     {
       mcp: { injectIntoAgents: false },
+      browserTools: { enabled: false },
+      brainMemory: { enabled: false },
       providers: {},
       metadataGeneration: { providers: [] },
       autoArchiveAfterMerge: false,

@@ -11,6 +11,7 @@ function makeConfig(browserToolsEnabled = false): MutableDaemonConfig {
   return {
     mcp: { injectIntoAgents: false },
     browserTools: { enabled: browserToolsEnabled },
+    brainMemory: { enabled: false },
     providers: {},
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,

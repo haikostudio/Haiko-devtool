@@ -25,6 +25,7 @@ export interface BrainRecallDeps {
   brain: BrainMemoryClient | null;
   curator: BrainCurator | null;
   recentFacts?: RecentFactsStore | null;
+  isEnabled?: () => boolean;
   agentManager: Pick<AgentManager, "appendTimelineItem" | "getLastAssistantMessage">;
   logger: BrainRecallLogger;
 }
@@ -125,9 +126,9 @@ export async function recallAndInjectBrainContext(
   deps: BrainRecallDeps,
   input: { agentId: string; text: string; scope: BrainScope },
 ): Promise<string> {
-  const { brain, curator, recentFacts, agentManager, logger } = deps;
+  const { brain, curator, recentFacts, agentManager, logger, isEnabled } = deps;
   const { agentId, text, scope } = input;
-  if (!brain || !text.trim()) {
+  if (!brain || shouldSkipBrainRecall({ text, isEnabled })) {
     return text;
   }
   // Recall fires on every non-empty prompt (no substance gate): each turn
@@ -152,25 +153,7 @@ export async function recallAndInjectBrainContext(
   }
   const brief = curator && scope.projet ? await curator.loadBrief(scope.projet) : null;
   let kept = recall.resultats;
-  // Fresh local facts (ev4): distilled this session but still `pending_synthesis`
-  // on the Cerveau (not yet searchable). Prepend them as recall candidates so a
-  // just-learned decision is available immediately, deduped by folded text
-  // against what the search already returned. The librarian below still filters
-  // them for relevance, so off-topic fresh facts drop out like any other.
-  if (recentFacts && scope.projet) {
-    try {
-      const fresh = await recentFacts.load(scope.projet);
-      if (fresh.length > 0) {
-        const seen = new Set(kept.map((memory) => foldText((memory.texte ?? "").trim())));
-        const extras = fresh
-          .filter((texte) => !seen.has(foldText(texte.trim())))
-          .map((texte) => ({ texte }));
-        kept = [...extras, ...kept];
-      }
-    } catch (err) {
-      logger.debug({ err, agentId }, "brain: recent-facts load failed");
-    }
-  }
+  kept = await prependRecentFacts({ recentFacts, kept, projet: scope.projet, agentId, logger });
   if (curator && scope.cwd && kept.length > 0) {
     const filtered = await curator.filterRecall({
       prompt: text,
@@ -189,24 +172,74 @@ export async function recallAndInjectBrainContext(
   // Always surface the pill — even with 0 memories — so the user sees the
   // Cerveau was queried on this prompt (the client renders "aucune info
   // complémentaire" for an empty recall).
+  await emitBrainContextPill({
+    agentManager,
+    agentId,
+    text,
+    recallPortee: recall.portee,
+    kept,
+    logger,
+  });
+  if (kept.length === 0) {
+    return text;
+  }
+  return injectBrainContext(formatRecall(kept), recall.portee, text);
+}
+
+function shouldSkipBrainRecall(input: { text: string; isEnabled?: () => boolean }): boolean {
+  return !input.text.trim() || input.isEnabled?.() === false;
+}
+
+async function prependRecentFacts(input: {
+  recentFacts: RecentFactsStore | null | undefined;
+  kept: Awaited<ReturnType<BrainMemoryClient["recall"]>>["resultats"];
+  projet: string | undefined;
+  agentId: string;
+  logger: BrainRecallLogger;
+}): Promise<Awaited<ReturnType<BrainMemoryClient["recall"]>>["resultats"]> {
+  const { recentFacts, kept, projet, agentId, logger } = input;
+  if (!recentFacts || !projet) {
+    return kept;
+  }
+  try {
+    const fresh = await recentFacts.load(projet);
+    if (fresh.length === 0) {
+      return kept;
+    }
+    const seen = new Set(kept.map((memory) => foldText((memory.texte ?? "").trim())));
+    const extras = fresh
+      .filter((texte) => !seen.has(foldText(texte.trim())))
+      .map((texte) => ({ texte }));
+    return [...extras, ...kept];
+  } catch (err) {
+    logger.debug({ err, agentId }, "brain: recent-facts load failed");
+    return kept;
+  }
+}
+
+async function emitBrainContextPill(input: {
+  agentManager: Pick<AgentManager, "appendTimelineItem">;
+  agentId: string;
+  text: string;
+  recallPortee: "projet" | "global" | "apercu";
+  kept: Awaited<ReturnType<BrainMemoryClient["recall"]>>["resultats"];
+  logger: BrainRecallLogger;
+}): Promise<void> {
+  const { agentManager, agentId, text, recallPortee, kept, logger } = input;
   try {
     await agentManager.appendTimelineItem(agentId, {
       type: "brain_context",
       query: text.slice(0, 500),
-      portee: recall.portee,
+      portee: recallPortee,
       count: kept.length,
       memories: toTimelineMemories(kept),
       status: "done",
     });
     logger.info(
-      { module: "brain-memory", agentId, count: kept.length, portee: recall.portee },
+      { module: "brain-memory", agentId, count: kept.length, portee: recallPortee },
       "Cerveau: pill emitted",
     );
   } catch (err) {
     logger.debug({ err, agentId }, "brain: timeline emit failed");
   }
-  if (kept.length === 0) {
-    return text;
-  }
-  return injectBrainContext(formatRecall(kept), recall.portee, text);
 }

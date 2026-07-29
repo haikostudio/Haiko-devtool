@@ -13,6 +13,7 @@ interface BrainCaptureLogger {
 export interface BrainCaptureDeps {
   brain: BrainMemoryClient | null;
   curator: BrainCurator | null;
+  isEnabled?: () => boolean;
   agentManager: Pick<AgentManager, "subscribe" | "getTimeline" | "getLastAssistantMessage">;
   logger: BrainCaptureLogger;
 }
@@ -55,8 +56,8 @@ function scheduleBrainCapture(
   agentId: string,
   userText: string,
 ): void {
-  const { brain, curator, agentManager, logger } = deps;
-  if (!brain || !userText.trim()) {
+  const { brain, curator, agentManager, logger, isEnabled } = deps;
+  if (!brain || !userText.trim() || isEnabled?.() === false) {
     return;
   }
   // Snapshot now so we can isolate THIS turn's items at completion and distill
@@ -83,6 +84,9 @@ function scheduleBrainCapture(
       unsubscribe();
       void (async () => {
         try {
+          if (isEnabled?.() === false) {
+            return;
+          }
           const scope = await resolveBrainScope(deps, agentId);
           const finalText =
             eventType === "turn_completed"

@@ -264,6 +264,7 @@ function mergeMutableConfigIntoPersistedConfig(params: {
 }): PersistedConfig {
   const { persisted, mutable, removeProviders } = params;
   const browserToolsEnabled = readBrowserToolsEnabled(mutable);
+  const brainMemoryEnabled = readBrainMemoryEnabled(mutable);
   const metadataGenerationProviders = readMetadataGenerationProviders(mutable);
   const persistedProviderOverrides = omitProvidersFromOverrides(
     persisted.agents?.providers as Record<string, ProviderOverride> | undefined,
@@ -298,6 +299,13 @@ function mergeMutableConfigIntoPersistedConfig(params: {
 
   return {
     ...persisted,
+    features: {
+      ...persisted.features,
+      brainMemory: {
+        ...persisted.features?.brainMemory,
+        enabled: brainMemoryEnabled,
+      },
+    },
     daemon: {
       ...persisted.daemon,
       mcp: {
@@ -326,6 +334,14 @@ function readBrowserToolsEnabled(mutable: MutableDaemonConfig): boolean {
     return false;
   }
   return browserTools["enabled"] === true;
+}
+
+function readBrainMemoryEnabled(mutable: MutableDaemonConfig): boolean {
+  const brainMemory = mutable.brainMemory;
+  if (!isRecord(brainMemory)) {
+    return false;
+  }
+  return brainMemory["enabled"] === true;
 }
 
 function readMetadataGenerationProviders(

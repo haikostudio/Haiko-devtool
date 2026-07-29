@@ -204,6 +204,12 @@ const MutableBrowserToolsConfigSchema = z
     enabled: z.boolean().default(false),
   })
   .passthrough();
+
+const MutableBrainMemoryConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+  })
+  .passthrough();
 export const MutableDaemonConfigSchema = z
   .object({
     mcp: z
@@ -212,6 +218,7 @@ export const MutableDaemonConfigSchema = z
       })
       .passthrough(),
     browserTools: MutableBrowserToolsConfigSchema.default({ enabled: false }),
+    brainMemory: MutableBrainMemoryConfigSchema.default({ enabled: false }),
     providers: z.record(z.string(), MutableDaemonProviderConfigSchema).default({}),
     metadataGeneration: MutableMetadataGenerationConfigSchema.default({ providers: [] }),
     autoArchiveAfterMerge: z.boolean().default(false),
@@ -243,6 +250,7 @@ export const MutableDaemonConfigPatchSchema = z
   .object({
     mcp: MutableDaemonConfigSchema.shape.mcp.partial().optional(),
     browserTools: MutableBrowserToolsConfigSchema.partial().optional(),
+    brainMemory: MutableBrainMemoryConfigSchema.partial().optional(),
     providers: z
       .record(z.string(), MutableDaemonProviderConfigSchema.partial().passthrough())
       .optional(),

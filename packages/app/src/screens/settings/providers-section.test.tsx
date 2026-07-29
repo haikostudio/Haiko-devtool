@@ -306,6 +306,7 @@ function makeConfig(providers: MutableDaemonConfig["providers"] = {}): MutableDa
   return {
     mcp: { injectIntoAgents: false },
     browserTools: { enabled: false },
+    brainMemory: { enabled: false },
     providers,
     metadataGeneration: { providers: [] },
     autoArchiveAfterMerge: false,

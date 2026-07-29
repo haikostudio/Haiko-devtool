@@ -342,6 +342,16 @@ function buildServerCapabilities(params: {
   };
 }
 
+function readMutableBrainMemoryEnabled(config: MutableDaemonConfig): boolean {
+  const brainMemory = config.brainMemory;
+  return (
+    typeof brainMemory === "object" &&
+    brainMemory !== null &&
+    "enabled" in brainMemory &&
+    brainMemory.enabled === true
+  );
+}
+
 function areServerCapabilitiesEqual(
   current: ServerCapabilities | undefined,
   next: ServerCapabilities | undefined,
@@ -1463,7 +1473,8 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(sessionUiStateSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
         sessionUiStateSync: true,
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
-        brainMemory: !!this.brainMemory,
+        brainMemory:
+          readMutableBrainMemoryEnabled(this.daemonConfigStore.get()) && !!this.brainMemory,
         // COMPAT(messageTriage): added in v0.1.X, drop the gate when floor >= v0.1.X.
         messageTriage: !!this.messageTriage,
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.

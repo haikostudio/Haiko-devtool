@@ -69,6 +69,7 @@ import { ICON_SIZE } from "@/styles/theme";
 import type { Theme } from "@/styles/theme";
 import { getProviderIcon } from "@/components/provider-icons";
 import { BrowserToolsOptInCard } from "./browser-tools-card";
+import { BrainMemoryOptInCard } from "./brain-memory-card";
 import { hasDaemonReconnectedAfter, type DaemonConnectionMarker } from "./daemon-reconnect";
 import { restartDaemonFromSettings } from "./daemon-restart";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
@@ -274,6 +275,7 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title={t("settings.hostSections.agents")}>
           <InjectPaseoToolsCard serverId={serverId} />
+          <BrainMemoryOptInCard serverId={serverId} />
           <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
