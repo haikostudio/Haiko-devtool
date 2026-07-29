@@ -518,6 +518,13 @@ export const ja: TranslationResources = {
       deployAllRunning: "公開中…",
       deployAllEmpty: "公開するものはありません",
       awaitingQueue: "{{count}} 件の完了カードがデプロイ待ちに未追加です",
+      queueAll: "すべてデプロイ待ちに追加",
+      staleEngineTitle: "エンジンが最新ではありません",
+      staleEngineDetail:
+        "エンジンはビルド {{built}} を実行中ですが、公開済みは {{deployed}} です。再公開して再ビルドしてください。",
+      refusedMoves: "拒否された移動 {{count}} 件",
+      refusedMovesClear: "消去",
+      refusedMoveLine: "「{{title}}」: {{from}} → {{to}} は拒否されました",
       deployAllTitle: "すべてデプロイ",
       deployAllMessage:
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",

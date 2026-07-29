@@ -87,14 +87,24 @@ export function decideRestartReminder(input: {
  * unknown answer must never look like a diagnosis.
  */
 export function describeStaleDaemonBuild(freshness: DaemonBuildFreshness): string | null {
-  if (!freshness.stale) {
-    return null;
+  if (freshness.stale) {
+    return (
+      "Le moteur en service n'est pas la version publiée " +
+      `(moteur ${short(freshness.builtSha)}, publié ${short(freshness.deployedSha)}). ` +
+      "Relancez une publication pour le reconstruire."
+    );
   }
-  return (
-    "Le moteur en service n'est pas la version publiée " +
-    `(moteur ${short(freshness.builtSha)}, publié ${short(freshness.deployedSha)}). ` +
-    "Relancez une publication pour le reconstruire."
-  );
+  // The other half of the same question: the site itself. A run that copied the
+  // bundle but not its version marker (or the reverse) leaves the app announcing
+  // one version while another is served — the "recharger en boucle" report.
+  if (freshness.siteMismatch) {
+    return (
+      "Le site en ligne n'annonce pas la version publiée " +
+      `(site ${short(freshness.servedSha)}, publié ${short(freshness.deployedSha)}). ` +
+      "Relancez une publication."
+    );
+  }
+  return null;
 }
 
 function short(sha: string | null): string {
@@ -164,8 +174,12 @@ export class DaemonRestartReminder {
       return;
     }
     this.logger.warn(
-      { builtSha: freshness.builtSha, deployedSha: freshness.deployedSha },
-      "Daemon is running a build older than the published code",
+      {
+        builtSha: freshness.builtSha,
+        deployedSha: freshness.deployedSha,
+        servedSha: freshness.servedSha,
+      },
+      "Published version, served site and running engine do not agree",
     );
     this.sendPush({
       title: "Moteur pas à jour",

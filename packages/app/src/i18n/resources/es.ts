@@ -523,6 +523,13 @@ export const es: TranslationResources = {
       deployAllRunning: "Publicando…",
       deployAllEmpty: "Nada que publicar",
       awaitingQueue: "{{count}} tarjeta(s) terminada(s) esperando la cola",
+      queueAll: "Poner todo en cola",
+      staleEngineTitle: "Motor desactualizado",
+      staleEngineDetail:
+        "El motor ejecuta la versión {{built}}, pero la publicada es {{deployed}}. Publica de nuevo para reconstruirlo.",
+      refusedMoves: "{{count}} movimiento(s) rechazado(s)",
+      refusedMovesClear: "Descartar",
+      refusedMoveLine: "«{{title}}»: {{from}} → {{to}} rechazado",
       deployAllTitle: "Desplegar todo",
       deployAllMessage:
         "{{count}} tarea(s) se publicarán de una sola vez y luego el motor se reiniciará. Los agentes en curso se interrumpirán.",

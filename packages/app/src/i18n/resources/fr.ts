@@ -525,6 +525,13 @@ export const fr: TranslationResources = {
       deployAllRunning: "Publication en cours…",
       deployAllEmpty: "Rien à publier",
       awaitingQueue: "{{count}} carte(s) terminée(s) en attente de mise en file",
+      queueAll: "Tout mettre en file",
+      staleEngineTitle: "Moteur pas à jour",
+      staleEngineDetail:
+        "Le moteur exécute la version {{built}}, alors que {{deployed}} est publiée. Relancez une publication pour le reconstruire.",
+      refusedMoves: "{{count}} déplacement(s) refusé(s)",
+      refusedMovesClear: "Effacer",
+      refusedMoveLine: "« {{title}} » : {{from}} → {{to}} refusé",
       deployAllTitle: "Tout déployer",
       deployAllMessage:
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",

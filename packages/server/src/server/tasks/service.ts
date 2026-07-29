@@ -965,13 +965,17 @@ export class TaskBoardService {
   async markTaskDeployed(
     projectId: string,
     taskId: string,
-    input: { url?: string | null; needsDaemonRestart?: boolean } = {},
+    input: { url?: string | null; needsDaemonRestart?: boolean; sha?: string | null } = {},
   ): Promise<KanbanTask> {
     const now = new Date().toISOString();
     const stamped = await this.patchTask(projectId, taskId, (current) => ({
       ...current,
       deployedAt: current.deployedAt ?? now,
       ...(input.url ? { deployedUrl: input.url } : {}),
+      // The exact version this card's work went online in. Recorded because
+      // "Déployé" alone leaves the honest question "yes, but WHICH build?"
+      // unanswerable once a second publication has followed.
+      ...(input.sha ? { deployedSha: input.sha } : {}),
       ...(input.needsDaemonRestart !== undefined
         ? { needsDaemonRestart: input.needsDaemonRestart }
         : {}),

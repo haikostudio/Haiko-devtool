@@ -73,6 +73,12 @@ export interface TaskBatchDeployerOptions {
     mergeBranches: string[];
   }) => Promise<DeployTriggerResult>;
   readDeployRun: () => Promise<DeployRunSnapshot>;
+  /**
+   * The version that is now online, read once the run succeeded. Stamped on each
+   * published card so "Déployé" can name the exact build it refers to, instead of
+   * becoming unanswerable as soon as a second publication follows.
+   */
+  readPublishedSha?: () => Promise<string | null>;
   /** Hands a deploy-then-confirm prompt to one card's own agent. */
   deployTask: (projectId: string, taskId: string) => Promise<unknown>;
   /** Restarts the daemon — the last step of a successful self-host batch. */
@@ -471,6 +477,16 @@ export class TaskBatchDeployer {
     await this.closeAll(input.projectId, input.pending);
   }
 
+  /** Never lets an unreadable version marker break a successful publication. */
+  private async readPublishedSha(): Promise<string | null> {
+    try {
+      return (await this.options.readPublishedSha?.()) ?? null;
+    } catch (error) {
+      this.logger.debug({ err: error }, "Published version could not be read");
+      return null;
+    }
+  }
+
   /** Everything is online: stamp the cards, then restart the engine. */
   private async succeed(
     projectId: string,
@@ -479,6 +495,9 @@ export class TaskBatchDeployer {
     /** The agent's shared rest promise, awaited so the restart never cuts it off. */
     idle: Promise<void> | null,
   ): Promise<void> {
+    // Read once for the whole batch: every card of a run goes live in the same
+    // build, and a per-card read would only invite them to disagree.
+    const publishedSha = await this.readPublishedSha();
     for (const task of pending) {
       try {
         // Clear "Redémarrage requis" as we stamp: this batch restarts the daemon
@@ -488,6 +507,7 @@ export class TaskBatchDeployer {
         await this.options.taskBoardService.markTaskDeployed(projectId, task.id, {
           url,
           needsDaemonRestart: false,
+          sha: publishedSha,
         });
       } catch (error) {
         this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");

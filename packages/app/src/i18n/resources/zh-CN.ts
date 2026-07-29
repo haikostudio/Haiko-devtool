@@ -509,6 +509,13 @@ export const zhCN: TranslationResources = {
       deployAllRunning: "发布中…",
       deployAllEmpty: "没有待发布内容",
       awaitingQueue: "{{count}} 张已完成的卡片尚未加入队列",
+      queueAll: "全部加入队列",
+      staleEngineTitle: "引擎版本过旧",
+      staleEngineDetail:
+        "引擎运行的是 {{built}}，但已发布的是 {{deployed}}。请重新发布以重建引擎。",
+      refusedMoves: "{{count}} 次被拒绝的移动",
+      refusedMovesClear: "清除",
+      refusedMoveLine: "“{{title}}”：{{from}} → {{to}} 被拒绝",
       deployAllTitle: "全部部署",
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",

@@ -287,6 +287,10 @@ export const KanbanTaskSchema = z.object({
   // completion listener, so it never survives the run it was armed for.
   // Additive + optional: old boards/clients simply omit it.
   queueOnComplete: z.boolean().optional(),
+  // Exact version this card's work went online in, stamped by the publication
+  // that shipped it. "Déployé" alone cannot answer "which build?" once a second
+  // publication has followed. Additive + optional: old boards/clients omit it.
+  deployedSha: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

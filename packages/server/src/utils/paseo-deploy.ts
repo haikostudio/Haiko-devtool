@@ -26,6 +26,12 @@ const REPO_ROOT = "/root/paseo";
  */
 const SHIP_SCRIPT = `${REPO_ROOT}/ops/paseo-build-local.sh`;
 const DEPLOYED_SHA_FILE = "/var/www/paseo-app/.deployed-sha";
+/**
+ * Version the SERVED site declares — the same file the app polls to offer
+ * "Nouvelle version — Recharger". Read alongside the deploy marker so a
+ * publication that copied only half of itself is caught instead of trusted.
+ */
+const SERVED_VERSION_FILE = "/var/www/paseo-app/version.json";
 const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
 /**
  * Coarse progress phase written by the local build script at each step
@@ -249,11 +255,42 @@ export interface DaemonBuildFreshness {
   /** Commit that is published (live), read from the deployed marker. */
   deployedSha: string | null;
   /**
+   * Version the SERVED site actually carries (`version.json`, the file the app
+   * itself polls to offer "Nouvelle version — Recharger"). Null when unreadable.
+   */
+  servedSha: string | null;
+  /**
    * True when the daemon runs code OLDER than what is published — the exact
    * "published, restarted, still the old behaviour" trap. Never true without
    * both markers: an unknown answer must not raise an alarm.
    */
   stale: boolean;
+  /**
+   * True when the SITE and its own deploy marker disagree — a publication that
+   * copied the bundle but left the marker behind (or the reverse). Same rule:
+   * never true on a missing file.
+   */
+  siteMismatch: boolean;
+}
+
+/** The version the served site declares, from the webroot's `version.json`. */
+async function readServedSha(): Promise<string | null> {
+  try {
+    const raw = await readFile(SERVED_VERSION_FILE, "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed === "object" && parsed !== null && "sha" in parsed) {
+      const sha = (parsed as { sha?: unknown }).sha;
+      return typeof sha === "string" && sha.trim().length > 0 ? sha.trim() : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** The version currently published (the site's own marker), or null if unknown. */
+export async function getPublishedSha(): Promise<string | null> {
+  return await readDeployedSha();
 }
 
 /**
@@ -262,11 +299,17 @@ export interface DaemonBuildFreshness {
  * "did the publication I just did actually reach the engine?".
  */
 export async function getDaemonBuildFreshness(): Promise<DaemonBuildFreshness> {
-  const [builtSha, deployedSha] = await Promise.all([readDaemonBuildSha(), readDeployedSha()]);
+  const [builtSha, deployedSha, servedSha] = await Promise.all([
+    readDaemonBuildSha(),
+    readDeployedSha(),
+    readServedSha(),
+  ]);
   return {
     builtSha,
     deployedSha,
+    servedSha,
     stale: builtSha !== null && deployedSha !== null && builtSha !== deployedSha,
+    siteMismatch: servedSha !== null && deployedSha !== null && servedSha !== deployedSha,
   };
 }
 

@@ -512,6 +512,13 @@ export const ar: TranslationResources = {
       deployAllRunning: "جارٍ النشر…",
       deployAllEmpty: "لا شيء للنشر",
       awaitingQueue: "{{count}} بطاقة منتهية في انتظار الإضافة إلى القائمة",
+      queueAll: "إضافة الكل إلى القائمة",
+      staleEngineTitle: "المحرك غير محدث",
+      staleEngineDetail:
+        "يشغّل المحرك الإصدار {{built}} بينما المنشور هو {{deployed}}. أعد النشر لإعادة بنائه.",
+      refusedMoves: "{{count}} نقلة مرفوضة",
+      refusedMovesClear: "إخفاء",
+      refusedMoveLine: "«{{title}}»: {{from}} ← {{to}} مرفوضة",
       deployAllTitle: "نشر الكل",
       deployAllMessage:
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",

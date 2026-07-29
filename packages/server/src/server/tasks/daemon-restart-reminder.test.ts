@@ -109,7 +109,9 @@ describe("describeStaleDaemonBuild", () => {
     const message = describeStaleDaemonBuild({
       builtSha: "1111111111",
       deployedSha: "2222222222",
+      servedSha: "2222222222",
       stale: true,
+      siteMismatch: false,
     });
     expect(message).toContain("11111111");
     expect(message).toContain("22222222");
@@ -117,7 +119,13 @@ describe("describeStaleDaemonBuild", () => {
 
   it("says nothing when the engine runs the published build", () => {
     expect(
-      describeStaleDaemonBuild({ builtSha: "abc", deployedSha: "abc", stale: false }),
+      describeStaleDaemonBuild({
+        builtSha: "abc",
+        deployedSha: "abc",
+        servedSha: "abc",
+        stale: false,
+        siteMismatch: false,
+      }),
     ).toBeNull();
   });
 
@@ -125,7 +133,27 @@ describe("describeStaleDaemonBuild", () => {
     // No marker (old install, dev run from source): an unknown answer must never
     // be dressed up as a diagnosis.
     expect(
-      describeStaleDaemonBuild({ builtSha: null, deployedSha: "abc", stale: false }),
+      describeStaleDaemonBuild({
+        builtSha: null,
+        deployedSha: "abc",
+        servedSha: null,
+        stale: false,
+        siteMismatch: false,
+      }),
     ).toBeNull();
+  });
+
+  it("also raises the alarm when the served site is not the published version", () => {
+    // The other half: the engine may be right while the site serves an older
+    // bundle (or announces a version it does not carry).
+    const message = describeStaleDaemonBuild({
+      builtSha: "2222222222",
+      deployedSha: "2222222222",
+      servedSha: "3333333333",
+      stale: false,
+      siteMismatch: true,
+    });
+    expect(message).toContain("33333333");
+    expect(message).toContain("22222222");
   });
 });

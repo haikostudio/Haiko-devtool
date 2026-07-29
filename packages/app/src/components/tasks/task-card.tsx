@@ -469,7 +469,12 @@ const CardMetaRow = memo(function CardMetaRow({
       : null;
 
   const hasMetaRow = Boolean(
-    deadline || duration || task.links.primaryAgentId || task.links.prUrl || task.deployedUrl,
+    deadline ||
+    duration ||
+    task.links.primaryAgentId ||
+    task.links.prUrl ||
+    task.deployedUrl ||
+    task.deployedSha,
   );
   if (!hasMetaRow) {
     return null;
@@ -485,6 +490,10 @@ const CardMetaRow = memo(function CardMetaRow({
       ) : null}
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
       {task.deployedUrl ? <LiveChip url={task.deployedUrl} /> : null}
+      {/* The build this card's work actually went online in. "Déployé" alone
+          stops answering "which version?" the moment a second publication
+          follows, which is how doubt creeps back in. */}
+      {task.deployedSha ? <VersionChip sha={task.deployedSha} /> : null}
     </View>
   );
 });
@@ -649,6 +658,19 @@ const LiveChip = memo(function LiveChip({ url }: { url: string }) {
       <ThemedGlobe size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       <Text style={styles.prText}>{t("tasks.card.live")}</Text>
     </Pressable>
+  );
+});
+
+/**
+ * The exact version a published card went online in, shown short (8 characters,
+ * the length everything else in this repo quotes a commit at). Read-only: it is
+ * a receipt, not a link — there is nothing useful to open from a phone.
+ */
+const VersionChip = memo(function VersionChip({ sha }: { sha: string }) {
+  return (
+    <View style={styles.prChip}>
+      <Text style={styles.prText}>{sha.slice(0, 8)}</Text>
+    </View>
   );
 });
 

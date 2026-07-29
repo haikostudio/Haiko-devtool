@@ -197,6 +197,7 @@ import {
   isPaseoDeployRoot,
   getPaseoDeployRoots,
   getPaseoDeployRunSnapshot,
+  getPublishedSha,
   recordDaemonBootSha,
   setPaseoDeployAgentLauncher,
   setPaseoDeployConflictTaskCreator,
@@ -1602,6 +1603,7 @@ export async function createPaseoDaemon(
       isPaseoDeployRoot(rootPath) ? getPaseoAppUrl() : await resolveProjectDevInstanceUrl(rootPath),
     triggerDeploy: (input) => triggerPaseoDeploy(input),
     readDeployRun: () => getPaseoDeployRunSnapshot(),
+    readPublishedSha: () => getPublishedSha(),
     deployTask: (projectId, taskId) => taskDeployer.deploy(projectId, taskId),
     // The user's press IS the authorization: the batch ends by restarting the
     // engine so the code that was just published is the code that runs.

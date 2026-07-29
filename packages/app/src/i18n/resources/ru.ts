@@ -518,6 +518,13 @@ export const ru: TranslationResources = {
       deployAllRunning: "Публикация…",
       deployAllEmpty: "Нечего публиковать",
       awaitingQueue: "{{count}} завершённых карточек ждут очереди",
+      queueAll: "Все в очередь",
+      staleEngineTitle: "Движок устарел",
+      staleEngineDetail:
+        "Движок работает на сборке {{built}}, а опубликована {{deployed}}. Опубликуйте снова, чтобы пересобрать его.",
+      refusedMoves: "Отклонённых перемещений: {{count}}",
+      refusedMovesClear: "Скрыть",
+      refusedMoveLine: "«{{title}}»: {{from}} → {{to}} отклонено",
       deployAllTitle: "Развернуть всё",
       deployAllMessage:
         "{{count}} задач(и) будут опубликованы одним запуском, затем движок перезапустится. Запущенные агенты будут прерваны.",

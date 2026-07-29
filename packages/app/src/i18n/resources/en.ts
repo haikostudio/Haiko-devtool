@@ -515,6 +515,13 @@ export const en = {
       deployAllRunning: "Publishing…",
       deployAllEmpty: "Nothing to publish",
       awaitingQueue: "{{count}} finished card(s) waiting to be queued",
+      queueAll: "Queue all",
+      staleEngineTitle: "Engine out of date",
+      staleEngineDetail:
+        "The engine is running build {{built}}, but {{deployed}} is published. Publish again to rebuild it.",
+      refusedMoves: "{{count}} refused move(s)",
+      refusedMovesClear: "Dismiss",
+      refusedMoveLine: "“{{title}}”: {{from}} → {{to}} refused",
       deployAllTitle: "Deploy all",
       deployAllMessage:
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",

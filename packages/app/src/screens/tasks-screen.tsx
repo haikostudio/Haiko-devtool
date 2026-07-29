@@ -58,6 +58,9 @@ import {
 } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
 import { logRefusedMove } from "@/components/tasks/board-move-log";
+import { RefusedMovesNotice } from "@/components/tasks/refused-moves-notice";
+import { StaleEngineBanner } from "@/components/tasks/stale-engine-banner";
+import { useDaemonBuildFreshness } from "@/components/tasks/use-daemon-build-freshness";
 import { isTaskMoveAllowed } from "@/components/tasks/task-move-guard";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
@@ -1128,6 +1131,9 @@ function BoardContent({
   const showTimeline = !isCompact || compactView === "timeline";
   const showBoard = !isCompact || compactView === "board";
 
+  // Does the running engine match what is published? Null unless they diverge.
+  const staleEngine = useDaemonBuildFreshness(serverId);
+
   const boardStack = (
     <View style={isCompact ? styles.boardContainerCompact : styles.boardContainer}>
       {isCompact ? (
@@ -1143,6 +1149,13 @@ function BoardContent({
         </View>
       ) : null}
       <ProjectBillingTotal serverId={serverId} projectId={projectId} tasks={projectTasks} />
+      {/* The engine running an older build than what is online is invisible by
+          definition — everything looks published. Said here, above the work it
+          silently affects. */}
+      <StaleEngineBanner freshness={staleEngine} />
+      {/* Gestures the board refused, which are silent by design and therefore
+          indistinguishable from a broken board when they repeat. */}
+      <RefusedMovesNotice />
       <PendingPublishSummary tasks={projectTasks} />
       {showTimeline ? (
         <TaskTimelineArea

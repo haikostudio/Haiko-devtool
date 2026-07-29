@@ -94,7 +94,13 @@ in the project's single list.
    honoured, so it can never re-arm a later run.
 
    Refused moves are logged rather than swallowed: `Refused task move` in the
-   daemon log, `[paseo:board-move]` in the client console.
+   daemon log, `[paseo:board-move]` in the client console, plus a bounded
+   in-memory history surfaced on the board (`RefusedMovesNotice`) — one silent
+   no-op is right, three in a row look like a broken board.
+
+   Queueing itself can be done in bulk: the "Terminé" column header counts the
+   cards waiting (`AwaitingQueueNotice`) and offers "Tout mettre en file", which
+   moves them all into the queue. It still publishes nothing.
 
 ## The stale-daemon trap
 
@@ -116,12 +122,19 @@ daemon predates the fix.
 
 The daemon now answers that question itself. The publish script stamps the commit
 it compiled into `/home/paseo/paseo-daemon-built.sha`; at every boot
-`DaemonRestartReminder.checkBuildFreshness()` compares that marker with the
-published SHA and, when they differ, logs a warning and pushes "Moteur pas à
-jour". The same marker makes the restart-debt count honest (it is measured from
+`DaemonRestartReminder.checkBuildFreshness()` compares three facts — the compiled
+engine, the deploy marker (`.deployed-sha`) and the version the SITE declares
+(`version.json`) — and warns when any two disagree, in the log and as a push
+notification. The board shows the same verdict as a banner
+(`StaleEngineBanner`, fed by `useDaemonBuildFreshness` over the deploy-status
+RPC). The compiled marker also makes the restart-debt count honest (measured from
 the COMPILED commit, not from HEAD at boot) and rides on the deploy status as
-`daemonBuiltSha`. No marker (dev runs, older installs) means no claim: an unknown
-answer must never look like a diagnosis.
+`daemonBuiltSha`. A missing marker (dev runs, older installs) means no claim: an
+unknown answer must never look like a diagnosis.
+
+Each published card also carries `deployedSha`, stamped by the batch publisher
+from the version that actually went online, and shown on the card. "Déployé"
+alone stops answering "which build?" as soon as a second publication follows.
 
 ## Ce qui crée une carte — the conductor's triage
 

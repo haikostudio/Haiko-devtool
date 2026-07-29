@@ -524,6 +524,13 @@ export const ptBR: TranslationResources = {
       deployAllRunning: "Publicando…",
       deployAllEmpty: "Nada a publicar",
       awaitingQueue: "{{count}} cartão(ões) concluído(s) aguardando a fila",
+      queueAll: "Colocar tudo na fila",
+      staleEngineTitle: "Motor desatualizado",
+      staleEngineDetail:
+        "O motor executa a versão {{built}}, mas {{deployed}} está publicada. Publique novamente para reconstruí-lo.",
+      refusedMoves: "{{count}} movimento(s) recusado(s)",
+      refusedMovesClear: "Dispensar",
+      refusedMoveLine: "“{{title}}”: {{from}} → {{to}} recusado",
       deployAllTitle: "Implantar tudo",
       deployAllMessage:
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",
