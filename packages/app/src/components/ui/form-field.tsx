@@ -71,11 +71,15 @@ type FormTextInputProps = AdaptiveTextInputProps & {
   size?: FieldControlSize;
 };
 
-type FlatFormTextInputStyle = ViewStyle & TextStyle;
+// `resize` is a web-only CSS property (not in RN's TextStyle) used to give a
+// multiline field a native drag-to-resize handle. It must land on the <textarea>
+// itself (the input), not the chrome wrapper, so we route it explicitly below.
+type WebResizeStyle = { resize?: "none" | "vertical" | "horizontal" | "both" };
+type FlatFormTextInputStyle = ViewStyle & TextStyle & WebResizeStyle;
 
 interface SplitFormTextInputStyle {
   chromeStyle?: ViewStyle;
-  inputStyle?: TextStyle;
+  inputStyle?: TextStyle & WebResizeStyle;
 }
 
 function splitFormTextInputStyle(style: AdaptiveTextInputProps["style"]): SplitFormTextInputStyle {
@@ -104,10 +108,11 @@ function splitFormTextInputStyle(style: AdaptiveTextInputProps["style"]): SplitF
     textShadowRadius,
     textTransform,
     writingDirection,
+    resize,
     ...chromeStyle
   } = flattened;
 
-  const inputStyle: TextStyle = {
+  const inputStyle: TextStyle & WebResizeStyle = {
     color,
     fontFamily,
     fontSize,
@@ -127,6 +132,7 @@ function splitFormTextInputStyle(style: AdaptiveTextInputProps["style"]): SplitF
     textShadowRadius,
     textTransform,
     writingDirection,
+    resize,
   };
 
   return {

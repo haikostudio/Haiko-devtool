@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, type TextStyle, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { CheckCircle2, Receipt } from "lucide-react-native";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FormTextInput } from "@/components/ui/form-field";
 import { TaskBillingAddSheet } from "@/components/compta/task-billing-add-sheet";
 import { ComptaClientPickerSheet } from "@/components/compta/compta-client-picker-sheet";
+import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import { useHostFeature } from "@/runtime/host-features";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -23,6 +24,11 @@ import {
   computeManualBillingChf,
   formatChf,
 } from "@/components/tasks/task-cost";
+
+// Web-only drag handle for the Description textarea (RN's TextStyle has no
+// `resize`, so we cast). `vertical` + no max height lets the user pull the field
+// as tall as they like; on native this is null and content-driven growth applies.
+const DESCRIPTION_RESIZE_STYLE = (isWeb ? { resize: "vertical" } : null) as TextStyle | null;
 
 // Conservative human-effort seed when a task was analyzed but the agent omitted
 // billingHours (e.g. an estimate persisted before the server-side backfill).
@@ -263,7 +269,8 @@ export function TaskBillingView({
             resetKey={seedKey}
             onChangeText={setDescDraft}
             multiline
-            style={styles.field}
+            numberOfLines={6}
+            style={[styles.descriptionField, DESCRIPTION_RESIZE_STYLE]}
             testID="task-billing-description"
           />
         </Field>
@@ -442,6 +449,17 @@ const styles = StyleSheet.create((theme) => ({
   // color. foreground text stays readable on it in either mode.
   field: {
     backgroundColor: theme.colors.surface3,
+  },
+  // The billing Description often holds a full 3–4 line deliverable summary. The
+  // shared field is a one-line control by default, so we top-align the text and
+  // give it a ~6-line floor (numberOfLines + minHeight, mirroring the schedule
+  // form's multiline field). On web the textarea also gets a native drag handle
+  // (resize: vertical) with no max height so the user can pull it taller; native
+  // multiline grows with content.
+  descriptionField: {
+    backgroundColor: theme.colors.surface3,
+    minHeight: 132,
+    textAlignVertical: "top",
   },
   cardTitle: {
     color: theme.colors.foregroundMuted,
