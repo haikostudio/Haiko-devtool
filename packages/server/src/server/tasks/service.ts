@@ -103,6 +103,7 @@ const COLUMN_ORDER = [
   "in_progress",
   "done",
   "deployed",
+  "archived",
 ] as const satisfies readonly TaskColumn[];
 
 /**
@@ -914,9 +915,12 @@ export class TaskBoardService {
    * The one place that records "this card's work is LIVE": stamps `deployedAt`
    * (once), the address it went live at, and closes any open deploy window.
    *
-   * Deliberately separate from the column: a card sits in "À déployer" from the
-   * moment it is finished, so the column says "queued", not "shipped". Only a
-   * publication that actually succeeded calls this.
+   * A card only reaches this once a publication actually succeeded. Because that
+   * is also the moment its work stops belonging in the "À déployer" queue, this
+   * is the SINGLE, automatic, one-way door into the terminal "archived" column —
+   * the card is stamped live and then filed away so the queue only ever shows
+   * what still needs publishing. Nothing else moves a card to "archived", and
+   * archived cards are frozen (read-only) from there on.
    */
   async markTaskDeployed(
     projectId: string,
@@ -924,7 +928,7 @@ export class TaskBoardService {
     input: { url?: string | null; needsDaemonRestart?: boolean } = {},
   ): Promise<KanbanTask> {
     const now = new Date().toISOString();
-    return await this.patchTask(projectId, taskId, (current) => ({
+    const stamped = await this.patchTask(projectId, taskId, (current) => ({
       ...current,
       deployedAt: current.deployedAt ?? now,
       ...(input.url ? { deployedUrl: input.url } : {}),
@@ -933,6 +937,13 @@ export class TaskBoardService {
         : {}),
       deployment: { state: "deployed" as const, startedAt: current.deployment?.startedAt },
     }));
+    // Its work is live: file it in the terminal "archived" column so it no longer
+    // clutters the publication queue. Idempotent — a card already archived stays put.
+    if (stamped.column !== "archived") {
+      const board = await this.transitionTask(projectId, taskId, "archived");
+      return this.requireTask(board, taskId);
+    }
+    return stamped;
   }
 
   /**

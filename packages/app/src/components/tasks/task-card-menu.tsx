@@ -69,6 +69,10 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   labels: Record<TaskColumn, string>;
 } & TaskCardMenuHandlers) {
   const { t } = useTranslation();
+  // "Archivé" is the terminal resting column: cards there are frozen. No menu at
+  // all — no launch, re-analyse, hold, move or delete. The card can still be
+  // opened for consultation, but nothing runs from it.
+  const isArchived = task.column === "archived";
   const canLaunch = task.column === "validated" || task.column === "scheduled";
   // Holding a card back only means something while it is still waiting to be
   // published: a live card has nothing left to be excluded from.
@@ -104,6 +108,10 @@ export const TaskCardMenu = memo(function TaskCardMenu({
       }
     })();
   }, [onDeleteTask, task.id, t]);
+
+  if (isArchived) {
+    return null;
+  }
 
   return (
     <DropdownMenu>
@@ -144,15 +152,19 @@ export const TaskCardMenu = memo(function TaskCardMenu({
           </DropdownMenuItem>
         ) : null}
         {canLaunch || canHold ? <DropdownMenuSeparator /> : null}
-        {KANBAN_COLUMNS.filter((column) => column !== task.column).map((column) => (
-          <MoveTaskMenuItem
-            key={column}
-            taskId={task.id}
-            column={column}
-            label={t("tasks.actions.moveToColumn", { column: labels[column] })}
-            onMoveTask={onMoveTask}
-          />
-        ))}
+        {/* "Archivé" is never a manual move target — a card only ever reaches it
+            automatically once its work goes live. */}
+        {KANBAN_COLUMNS.filter((column) => column !== task.column && column !== "archived").map(
+          (column) => (
+            <MoveTaskMenuItem
+              key={column}
+              taskId={task.id}
+              column={column}
+              label={t("tasks.actions.moveToColumn", { column: labels[column] })}
+              onMoveTask={onMoveTask}
+            />
+          ),
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           leading={deleteLeading}

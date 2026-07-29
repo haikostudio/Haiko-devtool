@@ -739,12 +739,35 @@ describe("TaskBoardService", () => {
 
     const board = await service.getBoard("proj-1");
     const find = (id: string) => board.tasks.find((entry) => entry.id === id);
-    // The done card on feat/auth ships to "deployed" and gets a deployedAt stamp.
-    expect(find(shipped.id)?.column).toBe("deployed");
+    // The done card on feat/auth is stamped live and filed straight into the
+    // terminal "archived" column — its work shipped, so it leaves the queue.
+    expect(find(shipped.id)?.column).toBe("archived");
     expect(find(shipped.id)?.deployedAt).toBeTruthy();
     // A done card on another branch is untouched; an in-flight card never moves.
     expect(find(otherDone.id)?.column).toBe("done");
     expect(find(stillOpen.id)?.column).toBe("backlog");
+  });
+
+  test("markTaskDeployed files a live card into the terminal « Archivé » column", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Ship it" });
+    await service.moveTask("proj-1", { taskId: task.id, column: "done", index: 0, manual: false });
+    await service.transitionTask("proj-1", task.id, "deployed");
+
+    // Queued, not live: still in the publication column.
+    let board = await service.getBoard("proj-1");
+    expect(board.tasks.find((t) => t.id === task.id)?.column).toBe("deployed");
+
+    const live = await service.markTaskDeployed("proj-1", task.id, { url: "https://x" });
+    // Going live is the ONLY door into "archived" — automatic and one-way.
+    expect(live.column).toBe("archived");
+    expect(live.deployedAt).toBeTruthy();
+    // A card archived this way is NOT hidden (archivedAt is the separate hide
+    // marker): it stays visible in the read-only Archivé column.
+    expect(live.archivedAt ?? null).toBeNull();
+
+    board = await service.getBoard("proj-1");
+    expect(board.tasks.find((t) => t.id === task.id)?.column).toBe("archived");
   });
 
   test("promoteDoneTasksToDeployed is a no-op when no branches were merged", async () => {
