@@ -22,11 +22,17 @@ import type { WorkspaceRegistry } from "../workspace-registry.js";
 import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import type { TaskBoardService } from "./service.js";
 import { isTaskLive } from "./batch-deployer.js";
+import { isValidationWindowOpen } from "./validator.js";
 
 /**
- * Column → template. Three refinements on top of the plain column reading:
+ * Column → template. Four refinements on top of the plain column reading:
  *  - a deployment in flight, or work already live, wins over the column: that
  *    turn IS the publication log;
+ *  - the final-check window being open ("Lancer le contrôle") wins over the
+ *    column too: the card is still in "En cours" while the check runs, so
+ *    without this it would borrow the work-report shape instead of a check
+ *    report. It sits BELOW the publication check because a card under check has
+ *    no deployment in flight yet, so the two never conflict;
  *  - "À déployer" alone does NOT mean published — it is the queue a finished
  *    card waits in — so a card sitting there still reports its work;
  *  - "Planifié" reads like "Validé" (analysis already produced, execution not
@@ -36,6 +42,9 @@ import { isTaskLive } from "./batch-deployer.js";
 export function resolveTaskResponseTemplate(task: KanbanTask): ResponseFormatTemplate {
   if (task.deployment?.state === "running" || isTaskLive(task)) {
     return "publication";
+  }
+  if (isValidationWindowOpen(task)) {
+    return "verification";
   }
   switch (task.column) {
     case "validated":

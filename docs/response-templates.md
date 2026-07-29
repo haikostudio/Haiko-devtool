@@ -20,27 +20,35 @@ A card's answer means a different thing depending on where the card sits:
 - in **En cours**, the answer is a work report, and its evolutions are meant to
   be clickable;
 - in **Déployé**, the answer is a publication log — billing and next steps
-  belong elsewhere.
+  belong elsewhere;
+- during the **final check** ("Lancer le contrôle"), the answer is a check
+  report — what was verified, the verdict, what it changes — not a work report,
+  even though the card is still in **En cours** while the check runs.
 
-One template for all three produced answers that padded an analysis with fake
+One template for all of these produced answers that padded an analysis with fake
 "impact" sections and closed a deployment log with an invoice line.
 
 ## The templates
 
-| Template      | When                                                                  | Sections                                                                                                        |
-| ------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `analysis`    | card in **Validé** or **Planifié**                                    | 1. Objectif · 2. Approche retenue · 3. Fichiers & points de vigilance · 4. Estimation                           |
-| `progress`    | card in **En cours**, **Terminée** or queued in **À déployer**        | 1. Ce qui est fait · 2. Ce qui change · 3. Impact · 4. Évolutions possibles                                     |
-| `publication` | work already live (`deployedAt`/URL), or a deploy in flight           | 1. Ce qui a été publié · 2. Déroulé de la publication · 3. Vérification · 4. Suites éventuelles                 |
-| `conductor`   | the board's chef d'orchestre agent                                    | none — it never executes anything, so it never reports (see `conductor-agent.ts`)                               |
-| `default`     | anything that is not a card (plain chat, schedules, MCP, **backlog**) | the historical five: Ce qui est fait · Ce qui change · Impact · Évolutions possibles · Activation & facturation |
+| Template       | When                                                                         | Sections                                                                                                        |
+| -------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `analysis`     | card in **Validé** or **Planifié**                                           | 1. Objectif · 2. Approche retenue · 3. Fichiers & points de vigilance · 4. Estimation                           |
+| `progress`     | card in **En cours**, **Terminée** or queued in **À déployer**               | 1. Ce qui est fait · 2. Ce qui change · 3. Impact · 4. Évolutions possibles                                     |
+| `publication`  | work already live (`deployedAt`/URL), or a deploy in flight                  | 1. Ce qui a été publié · 2. Déroulé de la publication · 3. Vérification · 4. Suites éventuelles                 |
+| `verification` | final check running (`validation.state === "running"`), card in **En cours** | 1. Ce qui a été vérifié · 2. Résultat du contrôle · 3. Ce que ça change                                         |
+| `conductor`    | the board's chef d'orchestre agent                                           | none — it never executes anything, so it never reports (see `conductor-agent.ts`)                               |
+| `default`      | anything that is not a card (plain chat, schedules, MCP, **backlog**)        | the historical five: Ce qui est fait · Ce qui change · Impact · Évolutions possibles · Activation & facturation |
 
 Exclusions are stated in the templates themselves, not merely implied:
 
 - `analysis` bans "Ce qui est fait", "Ce qui change", "Impact", "Évolutions
   possibles" and "Activation & facturation";
 - `progress` bans "Activation & facturation", analysis and estimates;
-- `publication` bans analysis, estimates, billing and evolutions.
+- `publication` bans analysis, estimates, billing and evolutions;
+- `verification` bans analysis, estimates, billing and evolutions — it wins over
+  the `progress` reading of **En cours** whenever the check window is open, and
+  yields to `publication` when a deploy is in flight (the two never overlap in
+  practice: a card under check has nothing live yet).
 
 ## Rules that apply to every template
 

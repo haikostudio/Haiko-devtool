@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { resolveSectionIcon } from "./section-icons";
 
 /**
- * Every heading of the three column templates (docs/response-templates.md)
- * must resolve an icon — a missing one is immediately visible in the chat.
+ * Every heading of the column templates (docs/response-templates.md) must
+ * resolve an icon — a missing one is immediately visible in the chat.
  */
 const TEMPLATE_HEADINGS: Record<string, string[]> = {
   analysis: [
@@ -19,6 +19,7 @@ const TEMPLATE_HEADINGS: Record<string, string[]> = {
     "3. Vérification",
     "4. Suites éventuelles",
   ],
+  verification: ["1. Ce qui a été vérifié", "2. Résultat du contrôle", "3. Ce que ça change"],
   default: [
     "1. Ce qui est fait",
     "2. Ce qui change",

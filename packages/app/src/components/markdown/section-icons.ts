@@ -22,6 +22,7 @@ import {
   ListChecks,
   Rocket,
   BadgeCheck,
+  ClipboardCheck,
   ArrowRight,
 } from "lucide-react-native";
 
@@ -48,6 +49,10 @@ const BY_KEYWORD: { match: RegExp; icon: SectionIcon }[] = [
   // Publication sections (colonne « Déployé »).
   { match: /déroul|deroul|étape|etape|journal/i, icon: ListChecks },
   { match: /publi|mise en ligne|déploie|deploie/i, icon: Rocket },
+  // Verification sections (contrôle final) — the "résultat/verdict" wording sits
+  // ahead of the wide "contrôl" match so the verdict gets its own glyph rather
+  // than reusing the BadgeCheck of "Ce qui a été vérifié".
+  { match: /verdict|résultat|resultat|bilan/i, icon: ClipboardCheck },
   { match: /vérif|verif|contrôl|control/i, icon: BadgeCheck },
   { match: /suite|surveill|à venir|a venir/i, icon: ArrowRight },
 ];

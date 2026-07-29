@@ -8,7 +8,7 @@
  * injected at the AgentManager choke point, exactly like the Cerveau recall
  * block, so EVERY non-internal agent gets it for free.
  *
- * There is not ONE structure but four, because a card's answer means a
+ * There is not ONE structure but several, because a card's answer means a
  * different thing depending on where the card sits on the board (see
  * docs/response-templates.md, the single reference for the three card
  * templates):
@@ -19,6 +19,9 @@
  *                    "+" button on it).
  *  - "publication" — a running deployment, or "Déployé": what went online, how
  *                    it went, and how it was verified.
+ *  - "verification" — the final-check turn ("Lancer le contrôle"): what was
+ *                    verified, the verdict, and what it changes for the card now
+ *                    that it is finished. A report of a CHECK, not of the work.
  *  - "conductor"   — the board's chef d'orchestre: it never executes anything,
  *                    so it never reports — a short answer, or a bullet list of
  *                    the cards it touched.
@@ -39,6 +42,7 @@ export type ResponseFormatTemplate =
   | "analysis"
   | "progress"
   | "publication"
+  | "verification"
   | "conductor";
 
 /**
@@ -166,6 +170,34 @@ const PUBLICATION_BODY = [
 ].join("\n");
 
 /**
+ * The final-check turn behind "Lancer le contrôle". The card is still in "En
+ * cours" while the check runs (its agent moves it to "Terminée" as the last
+ * step), so without this template the check would borrow the "progress" work
+ * report — the wrong shape. A check answers three questions instead: what was
+ * verified, what the check found, and what it changes now that the card is done.
+ * Billing, estimates and evolutions belong to the other moments of the card's
+ * life, so they are excluded here too.
+ */
+const VERIFICATION_BODY = [
+  "Cette carte passe son CONTRÔLE FINAL : tu viens de vérifier le travail avant de la marquer « Terminée ».",
+  "Ta réponse est un compte rendu de CONTRÔLE, pas un point d'avancement.",
+  "Réponds TOUJOURS en suivant exactement cette structure.",
+  ...COMMON_HEADER,
+  "",
+  "Puis exactement ces trois sections, titres numérotés en Markdown `## N.` :",
+  "## 1. Ce qui a été vérifié",
+  "## 2. Résultat du contrôle",
+  "## 3. Ce que ça change",
+  "",
+  "« 1. Ce qui a été vérifié » : les contrôles que tu as réellement menés (relecture, tests, typecheck/lint, cohérence, régressions).",
+  "« 2. Résultat du contrôle » : le verdict, en clair — tout est bon / des corrections ont été apportées (lesquelles) / points d'attention relevés.",
+  "« 3. Ce que ça change » : ce que cela implique maintenant que la carte est « Terminée » (prête à être mise en file de publication, ou ce qui reste à surveiller).",
+  "",
+  "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
+  ...COMMON_FOOTER,
+].join("\n");
+
+/**
  * The board's "chef d'orchestre". It never executes anything, so it has nothing
  * to report: dressing its answers in the work-report sections turned a plain
  * "combien de cartes en attente ?" into a fake chantier with an invoice line at
@@ -194,6 +226,7 @@ const RESPONSE_FORMAT_BODIES: Record<ResponseFormatTemplate, string> = {
   analysis: ANALYSIS_BODY,
   progress: PROGRESS_BODY,
   publication: PUBLICATION_BODY,
+  verification: VERIFICATION_BODY,
   conductor: CONDUCTOR_BODY,
 };
 

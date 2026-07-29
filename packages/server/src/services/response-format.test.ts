@@ -8,7 +8,13 @@ import {
   type ResponseFormatTemplate,
 } from "./response-format.js";
 
-const ALL_TEMPLATES: ResponseFormatTemplate[] = ["default", "analysis", "progress", "publication"];
+const ALL_TEMPLATES: ResponseFormatTemplate[] = [
+  "default",
+  "analysis",
+  "progress",
+  "publication",
+  "verification",
+];
 
 describe("response-format directive", () => {
   it("prepends the directive envelope to a plain prompt", () => {
@@ -94,6 +100,18 @@ describe("response-format templates", () => {
     expect(body).not.toContain("## 1. Ce qui est fait");
     expect(body).not.toContain("Évolutions possibles");
     expect(body).not.toContain("facture");
+  });
+
+  it("verification asks for the three check sections only", () => {
+    const body = responseFormatBody("verification");
+    expect(body).toContain("## 1. Ce qui a été vérifié");
+    expect(body).toContain("## 2. Résultat du contrôle");
+    expect(body).toContain("## 3. Ce que ça change");
+    expect(body).toContain("CONTRÔLE FINAL");
+    expect(body).not.toContain("## 1. Ce qui est fait");
+    expect(body).not.toContain("Évolutions possibles");
+    expect(body).not.toContain("Activation & facturation");
+    expect(body).not.toContain("Estimation");
   });
 
   it("every template keeps the numbered `## N.` headings and the icon rule", () => {
