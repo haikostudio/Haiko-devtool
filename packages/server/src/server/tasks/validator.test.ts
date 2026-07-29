@@ -74,13 +74,14 @@ describe("TaskValidator", () => {
     expect(sent[0]?.agentId).toBe("agent-7");
     expect(sent[0]?.prompt).toContain("CONTRÔLE FINAL");
     expect(sent[0]?.prompt).toContain(`taskId: "${taskId}"`);
-    // The check is also the deploy — there is no deploy button any more: it must
-    // name the project's dev instance on the VPS, and say that finishing the
-    // card is what publishes it.
+    // The check is also the deploy onto the project's dev instance — so the
+    // prompt must name that instance on the VPS. What it must NOT promise any
+    // more is publication: finishing stops the card in "Terminé", and the queue
+    // is the user's own press (see docs/task-board-cycle.md).
     expect(sent[0]?.prompt).toContain("haikostudio.cloud");
     expect(sent[0]?.prompt).toContain("autoproject-");
     expect(sent[0]?.prompt).toContain("/root/etsigna");
-    expect(sent[0]?.prompt).toContain("c'est ce geste qui publie la tâche");
+    expect(sent[0]?.prompt).toContain("elle ne se publie pas toute seule");
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === taskId)?.validation?.state).toBe("running");

@@ -171,6 +171,10 @@ export const TasksTaskValidateRequestSchema = z.object({
   requestId: z.string(),
   projectId: z.string(),
   taskId: z.string(),
+  // "Terminer et mettre en file": same check, but the card continues into
+  // "À déployer" the instant it completes instead of stopping in "Terminé".
+  // The user's press IS the consent for that second hop. Additive + optional.
+  queueOnComplete: z.boolean().optional(),
 });
 
 // "Archiver": hide a finished (done/deployed) card from the board. Orthogonal to

@@ -62,7 +62,15 @@ export interface TaskBoardHandle {
    * Runs the final check and, only if it passes, completes the task. Resolves
    * with passed=false plus the task carrying the report when it rejects.
    */
-  validateTask: (taskId: string) => Promise<{ passed: boolean; task: KanbanTask | null }>;
+  /**
+   * Runs the final check. `queueOnComplete` is the "Terminer et mettre en file"
+   * press: the card continues into "À déployer" the instant it completes instead
+   * of resting in "Terminé".
+   */
+  validateTask: (
+    taskId: string,
+    options?: { queueOnComplete?: boolean },
+  ) => Promise<{ passed: boolean; task: KanbanTask | null }>;
   /**
    * Hands the finished card's agent a deploy-then-confirm prompt. The deploy, the
    * move to "Déployée" and the daemon-restart flag all play out in the card's
@@ -296,9 +304,13 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   );
 
   const validateTask = useCallback(
-    async (taskId: string) => {
+    async (taskId: string, options?: { queueOnComplete?: boolean }) => {
       const { client, projectId: project } = requireContext();
-      const payload = await client.tasksTaskValidate({ projectId: project, taskId });
+      const payload = await client.tasksTaskValidate({
+        projectId: project,
+        taskId,
+        queueOnComplete: options?.queueOnComplete === true,
+      });
       if (payload.error) {
         throw new Error(payload.error);
       }

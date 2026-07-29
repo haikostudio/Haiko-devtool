@@ -102,7 +102,7 @@ export interface TaskAgentChatProps {
    * composer as soon as the agent has spoken once — the user, not the agent,
    * decides a task is finished.
    */
-  onValidate?: (taskId: string) => void;
+  onValidate?: (taskId: string, options?: { queueOnComplete?: boolean }) => void;
   /**
    * Validate a "À faire" (backlog) card: move it into "Validé" and arm the
    * analysis. Shown as a full-width bar above the prompt composer while the card
@@ -251,6 +251,12 @@ export function TaskAgentChat({
 
   const handleRun = useCallback(() => onRunNow(task.id), [onRunNow, task.id]);
   const handleValidate = useCallback(() => onValidate?.(task.id), [onValidate, task.id]);
+  // "Terminer et mettre en file": the same check, plus the consent for the card
+  // to continue into "À déployer" the moment it completes.
+  const handleValidateAndQueue = useCallback(
+    () => onValidate?.(task.id, { queueOnComplete: true }),
+    [onValidate, task.id],
+  );
   const handleApprove = useCallback(() => onApproveTask?.(task.id), [onApproveTask, task.id]);
   const handleArchive = useCallback(() => onArchive?.(task.id), [onArchive, task.id]);
   const handleDeploy = useCallback(() => onDeploy?.(task.id), [onDeploy, task.id]);
@@ -278,6 +284,7 @@ export function TaskAgentChat({
       return (
         <ValidateTaskBar
           onPress={handleValidate}
+          onPressAndQueue={handleValidateAndQueue}
           ready={task.progress === "ready_for_review"}
           validation={task.validation}
           agentReady={agentReady}
@@ -314,6 +321,7 @@ export function TaskAgentChat({
     handleApprove,
     handleRun,
     handleValidate,
+    handleValidateAndQueue,
     handleQueueDeploy,
     handleDeploy,
     handleRestartDaemon,
@@ -368,11 +376,14 @@ export function TaskAgentChat({
  */
 function ValidateTaskBar({
   onPress,
+  onPressAndQueue,
   ready,
   validation,
   agentReady,
 }: {
   onPress: () => void;
+  /** Same check, and the card continues into "À déployer" once it completes. */
+  onPressAndQueue: () => void;
   ready: boolean;
   validation: KanbanTask["validation"];
   agentReady: boolean;
@@ -415,9 +426,28 @@ function ValidateTaskBar({
             {label}
           </Text>
         </Pressable>
+        {/* The chaining variant, deliberately quieter than the bar above it: the
+            default remains "the card stops in Terminé and you decide". Offered
+            only while the check is actually startable — a second, inert control
+            under an inert bar says nothing. */}
+        {disabled ? null : (
+          <Pressable
+            onPress={onPressAndQueue}
+            style={validateSecondaryStyle}
+            accessibilityRole="button"
+            accessibilityLabel={t("tasks.panel.validateAndQueue")}
+            testID="task-validate-and-queue"
+          >
+            <Text style={styles.validateSecondaryText}>{t("tasks.panel.validateAndQueue")}</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
+}
+
+function validateSecondaryStyle({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) {
+  return [styles.validateSecondary, (hovered || pressed) && styles.validateSecondaryHovered];
 }
 
 function validateBarStyle({
@@ -969,6 +999,20 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.successForeground,
     fontSize: theme.fontSize.sm,
     fontWeight: "500",
+  },
+  validateSecondary: {
+    alignSelf: "center",
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    marginBottom: theme.spacing[1],
+    borderRadius: theme.borderRadius.md,
+  },
+  validateSecondaryHovered: {
+    backgroundColor: theme.colors.surface1,
+  },
+  validateSecondaryText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
   },
   // Same geometry as validateBar, filled with the accent color so the launch
   // control stays visually distinct from the green finish control.

@@ -342,6 +342,7 @@ export const es: TranslationResources = {
         "Esta tarjeta se ocultará del tablero. Permanece guardada y no se publica.",
       deployTask: "Iniciar el despliegue",
       queueDeploy: "Poner en cola para desplegar",
+      validateAndQueue: "Finalizar y poner en cola",
       deployTaskMessage:
         "El agente de esta tarea comprueba que funciona, publica el cambio en línea, luego pasa la tarjeta a «Desplegada» e indica si hace falta reiniciar el demonio. Lo sigues todo en la conversación.",
       deployRunning: "Desplegando en la conversación…",
@@ -521,6 +522,7 @@ export const es: TranslationResources = {
       deployAll: "Desplegar todo ({{count}})",
       deployAllRunning: "Publicando…",
       deployAllEmpty: "Nada que publicar",
+      awaitingQueue: "{{count}} tarjeta(s) terminada(s) esperando la cola",
       deployAllTitle: "Desplegar todo",
       deployAllMessage:
         "{{count}} tarea(s) se publicarán de una sola vez y luego el motor se reiniciará. Los agentes en curso se interrumpirán.",

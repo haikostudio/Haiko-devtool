@@ -336,6 +336,7 @@ export const ar: TranslationResources = {
       archiveTaskMessage: "ستُخفى هذه البطاقة من اللوحة. تبقى محفوظة ولا تُنشر.",
       deployTask: "بدء النشر",
       queueDeploy: "إضافة إلى قائمة النشر",
+      validateAndQueue: "إنهاء وإضافة إلى القائمة",
       deployTaskMessage:
         "يتحقق وكيل هذه المهمة من أنها تعمل، ثم ينشر التغيير، وينقل البطاقة إلى «منشورة» ويشير إلى ما إذا كان يلزم إعادة تشغيل الخدمة. تتابع كل ذلك في المحادثة.",
       deployRunning: "جارٍ النشر في المحادثة…",
@@ -510,6 +511,7 @@ export const ar: TranslationResources = {
       deployAll: "نشر الكل ({{count}})",
       deployAllRunning: "جارٍ النشر…",
       deployAllEmpty: "لا شيء للنشر",
+      awaitingQueue: "{{count}} بطاقة منتهية في انتظار الإضافة إلى القائمة",
       deployAllTitle: "نشر الكل",
       deployAllMessage:
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",

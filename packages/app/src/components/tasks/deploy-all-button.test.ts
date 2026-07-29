@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { KanbanTask } from "@/data/tasks";
-import { countTasksAwaitingDeploy, isDeployAllRunning } from "./deploy-queue";
+import {
+  countTasksAwaitingDeploy,
+  countTasksAwaitingQueue,
+  isDeployAllRunning,
+} from "./deploy-queue";
 
 function makeTask(overrides: Partial<KanbanTask> & { id: string }): KanbanTask {
   return {
@@ -79,5 +83,28 @@ describe("isDeployAllRunning", () => {
 
   it("is false when no card is publishing", () => {
     expect(isDeployAllRunning([makeTask({ id: "a" }), makeTask({ id: "b" })])).toBe(false);
+  });
+});
+
+describe("countTasksAwaitingQueue", () => {
+  it("counts the finished cards nobody has queued yet", () => {
+    // "Terminé" holds finished work until the user queues it, so the header count
+    // is the only thing that says the column is not idle.
+    expect(
+      countTasksAwaitingQueue([
+        makeTask({ id: "a", column: "done" }),
+        makeTask({ id: "b", column: "done" }),
+        makeTask({ id: "c", column: "deployed" }),
+        makeTask({ id: "d", column: "in_progress" }),
+      ]),
+    ).toBe(2);
+  });
+
+  it("ignores archived cards — filing one away IS the decision not to publish", () => {
+    expect(
+      countTasksAwaitingQueue([
+        makeTask({ id: "a", column: "done", archivedAt: "2026-07-28T12:00:00.000Z" }),
+      ]),
+    ).toBe(0);
   });
 });

@@ -337,6 +337,7 @@ export const en = {
         "This card will be hidden from the board. It stays saved and is not published.",
       deployTask: "Deploy",
       queueDeploy: "Queue for deploy",
+      validateAndQueue: "Finish and queue",
       deployTaskMessage:
         "The task’s own agent checks that it works, puts the change online, then moves the card to “Deployed” and flags whether a daemon restart is needed. You follow all of it in the conversation.",
       deployRunning: "Deploying in the conversation…",
@@ -513,6 +514,7 @@ export const en = {
       deployAll: "Deploy all ({{count}})",
       deployAllRunning: "Publishing…",
       deployAllEmpty: "Nothing to publish",
+      awaitingQueue: "{{count}} finished card(s) waiting to be queued",
       deployAllTitle: "Deploy all",
       deployAllMessage:
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",

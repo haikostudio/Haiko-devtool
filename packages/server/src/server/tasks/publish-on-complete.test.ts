@@ -65,6 +65,15 @@ describe("TaskPublisher", () => {
         },
       } as never,
       logger,
+      queueForDeployment: async (projectId, taskId) => {
+        await service.transitionTask(projectId, taskId, "deployed");
+      },
+      clearQueueOnComplete: async (projectId, taskId) => {
+        await service.patchTask(projectId, taskId, (current) => ({
+          ...current,
+          queueOnComplete: false,
+        }));
+      },
     });
   }
 
@@ -74,7 +83,7 @@ describe("TaskPublisher", () => {
     const done = board.tasks.find((item) => item.id === task.id);
     if (!done) throw new Error("task lost");
 
-    await buildPublisher().announceReady(done);
+    await buildPublisher().announceReady("proj-1", done);
 
     const after = await service.getBoard("proj-1");
     const resting = after.tasks.find((entry) => entry.id === task.id);
@@ -93,8 +102,30 @@ describe("TaskPublisher", () => {
     const queued = board.tasks.find((entry) => entry.id === task.id);
     if (!queued) throw new Error("task lost");
 
-    await buildPublisher().announceReady(queued);
+    await buildPublisher().announceReady("proj-1", queued);
 
     expect(notes).toHaveLength(0);
+  });
+
+  test("a card armed with « Terminer et mettre en file » continues into the queue", async () => {
+    const task = await seedTask();
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      queueOnComplete: true,
+    }));
+    const board = await service.transitionTask("proj-1", task.id, "done");
+    const done = board.tasks.find((item) => item.id === task.id);
+    if (!done) throw new Error("task lost");
+
+    await buildPublisher().announceReady("proj-1", done);
+
+    const after = await service.getBoard("proj-1");
+    const queued = after.tasks.find((entry) => entry.id === task.id);
+    expect(queued?.column).toBe("deployed");
+    // Queued is not live, and the one-shot flag is spent so the next run of this
+    // card starts from the default "stop in Terminé" behaviour.
+    expect(queued?.deployedAt ?? null).toBeNull();
+    expect(queued?.queueOnComplete).toBe(false);
+    expect(notes.at(-1)).toContain("mis en file");
   });
 });

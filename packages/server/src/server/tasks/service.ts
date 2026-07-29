@@ -811,6 +811,13 @@ export class TaskBoardService {
         throw new TaskBoardServiceError("task_not_found", `Task not found: ${input.taskId}`);
       }
       if (input.column === "deployed" && !isDeployedReachableFrom(task)) {
+        // Logged, not just thrown: a refused move is invisible on the board (the
+        // card stays put), so without this line "j'ai déplacé la carte et rien
+        // ne s'est passé" leaves no trace at all. Grep: "Refused task move".
+        this.logger.warn(
+          { projectId, taskId: input.taskId, from: task.column, to: input.column },
+          "Refused task move: the publication queue is reachable from « Terminé » only",
+        );
         throw new TaskBoardServiceError(
           "invalid_transition",
           `Task ${input.taskId} cannot enter "deployed" from "${task.column}": a card reaches the publication queue through "done" only.`,

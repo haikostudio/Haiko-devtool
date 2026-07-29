@@ -1,5 +1,10 @@
 import type pino from "pino";
-import { getDaemonRestartDebt, type DaemonRestartDebt } from "../../utils/paseo-deploy.js";
+import {
+  getDaemonBuildFreshness,
+  getDaemonRestartDebt,
+  type DaemonBuildFreshness,
+  type DaemonRestartDebt,
+} from "../../utils/paseo-deploy.js";
 
 /** How often the debt is re-read. Cheap (two git calls), so a slow poll is fine. */
 const DEFAULT_POLL_INTERVAL_MS = 15 * 60 * 1000;
@@ -73,6 +78,29 @@ export function decideRestartReminder(input: {
   };
 }
 
+/**
+ * The message to raise about a compiled daemon that does not match what is
+ * published, or null when the engine really is running the published code.
+ *
+ * Pure so the wording — and the "say nothing when we cannot know" rule — is
+ * testable without a filesystem. Silence on a missing marker is deliberate: an
+ * unknown answer must never look like a diagnosis.
+ */
+export function describeStaleDaemonBuild(freshness: DaemonBuildFreshness): string | null {
+  if (!freshness.stale) {
+    return null;
+  }
+  return (
+    "Le moteur en service n'est pas la version publiée " +
+    `(moteur ${short(freshness.builtSha)}, publié ${short(freshness.deployedSha)}). ` +
+    "Relancez une publication pour le reconstruire."
+  );
+}
+
+function short(sha: string | null): string {
+  return sha ? sha.slice(0, 8) : "inconnu";
+}
+
 export interface DaemonRestartReminderOptions {
   sendPush: (payload: { title: string; body: string; data?: Record<string, unknown> }) => void;
   logger: pino.Logger;
@@ -80,6 +108,7 @@ export interface DaemonRestartReminderOptions {
   graceMs?: number;
   now?: () => number;
   readDebt?: () => Promise<DaemonRestartDebt>;
+  readFreshness?: () => Promise<DaemonBuildFreshness>;
 }
 
 /**
@@ -97,6 +126,7 @@ export class DaemonRestartReminder {
   private readonly graceMs: number;
   private readonly now: () => number;
   private readonly readDebt: () => Promise<DaemonRestartDebt>;
+  private readonly readFreshness: () => Promise<DaemonBuildFreshness>;
   private state: RestartReminderState = NO_RESTART_DEBT;
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -107,9 +137,51 @@ export class DaemonRestartReminder {
     this.graceMs = options.graceMs ?? DEFAULT_GRACE_MS;
     this.now = options.now ?? Date.now;
     this.readDebt = options.readDebt ?? getDaemonRestartDebt;
+    this.readFreshness = options.readFreshness ?? getDaemonBuildFreshness;
+  }
+
+  /**
+   * Post-publication check, run once at startup: a publication restarts the
+   * daemon as its very last step, so this boot IS the moment to verify that the
+   * engine now running was built from the code that just went online. When it
+   * was not, the publication succeeded on the surface and changed nothing in the
+   * engine — the failure that reads as "the fix doesn't work".
+   */
+  async checkBuildFreshness(): Promise<void> {
+    let freshness: DaemonBuildFreshness;
+    try {
+      freshness = await this.readFreshness();
+    } catch (err) {
+      this.logger.debug({ err }, "Daemon build freshness check failed");
+      return;
+    }
+    const message = describeStaleDaemonBuild(freshness);
+    if (!message) {
+      this.logger.debug(
+        { builtSha: freshness.builtSha, deployedSha: freshness.deployedSha },
+        "Daemon runs the published build",
+      );
+      return;
+    }
+    this.logger.warn(
+      { builtSha: freshness.builtSha, deployedSha: freshness.deployedSha },
+      "Daemon is running a build older than the published code",
+    );
+    this.sendPush({
+      title: "Moteur pas à jour",
+      body: message,
+      data: {
+        type: "daemon_build_stale",
+        builtSha: freshness.builtSha,
+        deployedSha: freshness.deployedSha,
+      },
+    });
   }
 
   start(): void {
+    // The freshness verdict belongs to THIS boot, so it is taken immediately
+    // rather than on the first poll fifteen minutes later.
+    void this.checkBuildFreshness();
     if (this.timer) {
       return;
     }

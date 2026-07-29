@@ -87,6 +87,15 @@ in the project's single list.
    deliberate auto-hop (removed), and once because the **compiled daemon was
    stale**. Which leads to the trap below.
 
+   The one sanctioned exception is `queueOnComplete`, armed by the card's
+   "Terminer et mettre en file" press: the card completes and continues into the
+   queue in one gesture. It still passes THROUGH "Terminé" (the completion
+   listener fires first), and the flag is one-shot — cleared as soon as it is
+   honoured, so it can never re-arm a later run.
+
+   Refused moves are logged rather than swallowed: `Refused task move` in the
+   daemon log, `[paseo:board-move]` in the client console.
+
 ## The stale-daemon trap
 
 The daemon does not run the source — it runs `packages/*/dist`. Publication used
@@ -104,6 +113,15 @@ Diagnosing a suspected stale daemon: compare a distinctive string from the sourc
 against the built file (`grep` in `packages/server/dist/server/server/…`), or the
 `dist` mtimes against the commit time. Same source, absent string ⇒ the running
 daemon predates the fix.
+
+The daemon now answers that question itself. The publish script stamps the commit
+it compiled into `/home/paseo/paseo-daemon-built.sha`; at every boot
+`DaemonRestartReminder.checkBuildFreshness()` compares that marker with the
+published SHA and, when they differ, logs a warning and pushes "Moteur pas à
+jour". The same marker makes the restart-debt count honest (it is measured from
+the COMPILED commit, not from HEAD at boot) and rides on the deploy status as
+`daemonBuiltSha`. No marker (dev runs, older installs) means no claim: an unknown
+answer must never look like a diagnosis.
 
 ## Ce qui crée une carte — the conductor's triage
 

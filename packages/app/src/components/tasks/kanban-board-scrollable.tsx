@@ -11,6 +11,7 @@ import { TaskCardMenu } from "./task-card-menu";
 import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
 import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
+import { AwaitingQueueNotice } from "./awaiting-queue-notice";
 import { DeployAllButton } from "./deploy-all-button";
 import { DeployBatchBanner } from "./deploy-batch-banner";
 import { ArchiveSelectionControls } from "./archive-selection-controls";
@@ -235,6 +236,9 @@ const BoardColumn = memo(function BoardColumn({
       {/* Pinned at the HEAD of the queue column, outside the scroll: on a phone a
           button under the cards is a whole column of scrolling away, which reads
           as "the feature is missing". */}
+      {/* Finished work resting in "Terminé" is otherwise invisible: the column
+          holds it until the user queues it by hand. */}
+      <AwaitingQueueNotice column={column} tasks={tasks} />
       <DeployAllButton
         column={column}
         tasks={tasks}

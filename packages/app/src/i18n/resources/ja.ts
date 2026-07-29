@@ -340,6 +340,7 @@ export const ja: TranslationResources = {
         "このカードはボードから非表示になります。保存されたままで、公開はされません。",
       deployTask: "デプロイを開始",
       queueDeploy: "デプロイ待ちに追加",
+      validateAndQueue: "完了してデプロイ待ちに追加",
       deployTaskMessage:
         "このタスクのエージェントが動作を確認し、変更を公開してから、カードを「デプロイ済み」に移動し、デーモンの再起動が必要かどうかを知らせます。すべて会話の中で確認できます。",
       deployRunning: "会話でデプロイ中…",
@@ -516,6 +517,7 @@ export const ja: TranslationResources = {
       deployAll: "すべてデプロイ ({{count}})",
       deployAllRunning: "公開中…",
       deployAllEmpty: "公開するものはありません",
+      awaitingQueue: "{{count}} 件の完了カードがデプロイ待ちに未追加です",
       deployAllTitle: "すべてデプロイ",
       deployAllMessage:
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",

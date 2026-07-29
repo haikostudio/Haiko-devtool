@@ -34,6 +34,18 @@ const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
  */
 const PHASE_FILE = "/home/paseo/paseo-build-local.phase";
 /**
+ * Commit the running daemon's COMPILED code was built from, written by
+ * `ops/paseo-build-local.sh` when it installs a fresh `dist`.
+ *
+ * The daemon executes `packages/*\/dist`, not the source, so "which commit was
+ * HEAD when I booted" is not the same question as "which commit am I running".
+ * Publication used to build the web app only: a server-side fix could be
+ * committed, published and followed by a restart while the daemon reloaded the
+ * exact same old compiled code — the fix looked deployed and did nothing. This
+ * marker is what makes the difference observable.
+ */
+const DAEMON_BUILD_MARKER = "/home/paseo/paseo-daemon-built.sha";
+/**
  * How long a finished run's outcome stays visible in the status after it ends.
  * Without this the progress block vanished the instant the build stopped, so a
  * publish that went live — or one that failed — left no trace at all and the
@@ -167,9 +179,16 @@ export function setPaseoDeployAgentLauncher(launcher: PaseoDeployAgentLauncher |
  */
 let daemonBootSha: string | null = null;
 
+/** Commit the running daemon's compiled code came from, read once at startup. */
+let daemonBuiltSha: string | null = null;
+
 /**
  * Record the commit the daemon is running. Call once from bootstrap at startup,
  * before any git work advances HEAD, so the "engine is behind" hint is honest.
+ *
+ * Two facts, not one: HEAD at boot, and the commit the compiled `dist` was built
+ * from. They differ exactly when a publication shipped source the daemon never
+ * compiled — the silent failure this pair exists to expose.
  */
 export async function recordDaemonBootSha(): Promise<void> {
   try {
@@ -178,20 +197,42 @@ export async function recordDaemonBootSha(): Promise<void> {
   } catch {
     daemonBootSha = null;
   }
+  daemonBuiltSha = await readDaemonBuildSha();
+}
+
+/** The marker written by the publish script, or null when it was never written. */
+async function readDaemonBuildSha(): Promise<string | null> {
+  try {
+    const raw = await readFile(DAEMON_BUILD_MARKER, "utf8");
+    return raw.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Count commits since the daemon booted that touch daemon-side code — the real
- * number of shipped-but-dormant features waiting for a restart. Returns 0 when
- * the boot SHA is unknown or equals HEAD.
+ * The commit whose code the daemon is ACTUALLY executing: the compiled marker
+ * when there is one, the boot HEAD otherwise (older installs, dev runs from
+ * source). Everything that answers "is the engine behind?" must start here — the
+ * boot HEAD alone silently assumes the build was up to date.
+ */
+function getDaemonRunningSha(): string | null {
+  return daemonBuiltSha ?? daemonBootSha;
+}
+
+/**
+ * Count commits since the daemon's code was compiled that touch daemon-side code
+ * — the real number of shipped-but-dormant features waiting for a restart.
+ * Returns 0 when the running SHA is unknown or equals HEAD.
  */
 async function getDaemonBehindCount(headSha: string | null): Promise<number> {
-  if (daemonBootSha === null || daemonBootSha === headSha) {
+  const runningSha = getDaemonRunningSha();
+  if (runningSha === null || runningSha === headSha) {
     return 0;
   }
   try {
     const result = await runGitCommand(
-      ["log", "--format=%h", `${daemonBootSha}..HEAD`, "--", ...DAEMON_CODE_PATHS],
+      ["log", "--format=%h", `${runningSha}..HEAD`, "--", ...DAEMON_CODE_PATHS],
       { cwd: REPO_ROOT },
     );
     return result.stdout.split("\n").filter((line) => line.length > 0).length;
@@ -199,6 +240,34 @@ async function getDaemonBehindCount(headSha: string | null): Promise<number> {
     // Range failed (e.g. boot SHA unknown to git after a rebase) — no honest count.
     return 0;
   }
+}
+
+/** What the freshness check found about the compiled daemon. */
+export interface DaemonBuildFreshness {
+  /** Commit the compiled daemon came from; null when no marker was ever written. */
+  builtSha: string | null;
+  /** Commit that is published (live), read from the deployed marker. */
+  deployedSha: string | null;
+  /**
+   * True when the daemon runs code OLDER than what is published — the exact
+   * "published, restarted, still the old behaviour" trap. Never true without
+   * both markers: an unknown answer must not raise an alarm.
+   */
+  stale: boolean;
+}
+
+/**
+ * Compare the compiled daemon against what is published. Called right after a
+ * boot (a publication restarts the daemon as its very last step), so it answers
+ * "did the publication I just did actually reach the engine?".
+ */
+export async function getDaemonBuildFreshness(): Promise<DaemonBuildFreshness> {
+  const [builtSha, deployedSha] = await Promise.all([readDaemonBuildSha(), readDeployedSha()]);
+  return {
+    builtSha,
+    deployedSha,
+    stale: builtSha !== null && deployedSha !== null && builtSha !== deployedSha,
+  };
 }
 
 /** What the running daemon is missing: how many daemon-side commits, at which HEAD. */
@@ -264,6 +333,12 @@ export interface PaseoDeployStatus {
   deployedSha: string | null;
   /** Commit the running daemon booted from (null if unknown). */
   daemonSha: string | null;
+  /**
+   * Commit the running daemon's COMPILED code was built from. Differs from
+   * {@link PaseoDeployStatus.daemonSha} when a publication shipped source that
+   * was never compiled into the engine — a restart would change nothing there.
+   */
+  daemonBuiltSha: string | null;
   /** Daemon-side commits landed since boot, dormant until a restart. */
   daemonBehindCount: number;
   branch: string | null;
@@ -1033,6 +1108,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       headSha,
       deployedSha,
       daemonSha: daemonBootSha,
+      daemonBuiltSha,
       daemonBehindCount,
       branch,
       worktrees,
@@ -1050,6 +1126,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       headSha: null,
       deployedSha: null,
       daemonSha: daemonBootSha,
+      daemonBuiltSha,
       daemonBehindCount: 0,
       branch: null,
       worktrees: [],

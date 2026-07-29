@@ -409,6 +409,7 @@ export class TasksSession {
       const { task, passed, dispatched } = await this.taskValidator.validate(
         request.projectId,
         request.taskId,
+        request.queueOnComplete === true,
       );
       this.host.emit({
         type: "tasks.task.validate.response",

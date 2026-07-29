@@ -281,6 +281,12 @@ export const KanbanTaskSchema = z.object({
   // the card and NEVER triggers a restart on its own — that stays the user's call.
   // Additive + optional: old boards/clients simply omit it.
   needsDaemonRestart: z.boolean().optional(),
+  // Set when the user started the final check with "Terminer et mettre en file":
+  // the card is to be queued into "À déployer" the moment it completes, instead
+  // of resting in "Terminé" for a second press. Consumed and cleared by the
+  // completion listener, so it never survives the run it was armed for.
+  // Additive + optional: old boards/clients simply omit it.
+  queueOnComplete: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

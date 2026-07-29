@@ -5121,6 +5121,13 @@ export const PaseoDeployStatusResponseSchema = z.object({
      */
     daemonSha: z.string().nullable().optional(),
     /**
+     * Commit the daemon's COMPILED code was built from. Differs from `daemonSha`
+     * when a publication shipped source that never made it into the engine — the
+     * case where restarting changes nothing and only a rebuild helps. Optional so
+     * older daemons (which never wrote the marker) still parse.
+     */
+    daemonBuiltSha: z.string().nullable().optional(),
+    /**
      * Number of commits since the daemon started that touch daemon-side code
      * (server / protocol / cli / relay / highlight) — i.e. real work that stays
      * dormant until the daemon is restarted. Optional for older daemons.

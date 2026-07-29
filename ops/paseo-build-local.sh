@@ -31,6 +31,9 @@ set -uo pipefail
 REPO_ROOT="/root/paseo"
 WWW="/var/www/paseo-app"
 PHASE_FILE="/home/paseo/paseo-build-local.phase"
+# Commit à partir duquel le démon en service a été compilé (écrit à l'installation
+# du dist, lu par le démon au démarrage — voir paseo-deploy.ts).
+DAEMON_BUILD_MARKER="/home/paseo/paseo-daemon-built.sha"
 REMOTE="fork"
 # Isole le build du démon/agents sans le faire mourir de faim : CPU un peu bas
 # (nice 10) mais I/O en classe best-effort PRIORITAIRE (-c2 -n0). L'ancienne
@@ -316,6 +319,10 @@ echo "==> Installation du démon compilé dans le checkout vivant…"
 if ! install_daemon_dist; then
   fail "Impossible d'installer le démon compilé — rien n'est publié."
 fi
+# Carte d'identité du démon compilé : le démon la lit au démarrage pour savoir
+# quelle version il exécute VRAIMENT. Sans elle il ne connaît que le commit
+# présent au démarrage, ce qui ment dès que le dist est plus vieux que le code.
+printf '%s\n' "$SHA" > "$DAEMON_BUILD_MARKER" 2>/dev/null || true
 
 # --- Publication : copie dans le dossier servi par Caddy ----------------------
 phase "publish"

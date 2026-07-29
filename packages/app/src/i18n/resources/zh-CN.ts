@@ -336,6 +336,7 @@ export const zhCN: TranslationResources = {
       archiveTaskMessage: "此卡片将从看板中隐藏。它仍会保存，且不会发布。",
       deployTask: "开始部署",
       queueDeploy: "加入待部署队列",
+      validateAndQueue: "完成并加入队列",
       deployTaskMessage:
         "该任务的智能体会确认功能正常，将改动上线，然后把卡片移到「已部署」，并标记是否需要重启守护进程。你可在对话中全程跟进。",
       deployRunning: "正在对话中部署…",
@@ -507,6 +508,7 @@ export const zhCN: TranslationResources = {
       deployAll: "全部部署（{{count}}）",
       deployAllRunning: "发布中…",
       deployAllEmpty: "没有待发布内容",
+      awaitingQueue: "{{count}} 张已完成的卡片尚未加入队列",
       deployAllTitle: "全部部署",
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",

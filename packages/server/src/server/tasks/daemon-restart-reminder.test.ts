@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decideRestartReminder,
+  describeStaleDaemonBuild,
   NO_RESTART_DEBT,
   type RestartReminderState,
 } from "./daemon-restart-reminder.js";
@@ -98,5 +99,33 @@ describe("decideRestartReminder", () => {
       graceMs: GRACE,
     });
     expect(result.notify).toBeNull();
+  });
+});
+
+describe("describeStaleDaemonBuild", () => {
+  it("raises the alarm when the engine runs a build older than what is published", () => {
+    // The exact trap: the publication succeeded, the daemon restarted, and the
+    // code it reloaded was compiled from an earlier commit.
+    const message = describeStaleDaemonBuild({
+      builtSha: "1111111111",
+      deployedSha: "2222222222",
+      stale: true,
+    });
+    expect(message).toContain("11111111");
+    expect(message).toContain("22222222");
+  });
+
+  it("says nothing when the engine runs the published build", () => {
+    expect(
+      describeStaleDaemonBuild({ builtSha: "abc", deployedSha: "abc", stale: false }),
+    ).toBeNull();
+  });
+
+  it("says nothing when the answer is unknown", () => {
+    // No marker (old install, dev run from source): an unknown answer must never
+    // be dressed up as a diagnosis.
+    expect(
+      describeStaleDaemonBuild({ builtSha: null, deployedSha: "abc", stale: false }),
+    ).toBeNull();
   });
 });

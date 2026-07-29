@@ -33,6 +33,8 @@ import { DeployAllButton } from "./deploy-all-button";
 import { DeployBatchBanner } from "./deploy-batch-banner";
 import { ArchiveSelectionControls } from "./archive-selection-controls";
 import { useDeployArchiveSelection, type ArchiveSelectionColumnProps } from "./archive-selection";
+import { AwaitingQueueNotice } from "./awaiting-queue-notice";
+import { logRefusedMove } from "./board-move-log";
 import { isTaskMoveAllowed } from "./task-move-guard";
 import {
   buildColumnModels,
@@ -187,6 +189,7 @@ export function KanbanBoard({
       // card snaps straight back instead of flashing through the forbidden
       // column, and so a rejected gesture never pins the column to manual order.
       if (!isTaskMoveAllowed(task, targetColumn)) {
+        logRefusedMove(task, targetColumn, "drag");
         return;
       }
       // A reorder within the same column is a manual arrangement — pin it so the
@@ -389,6 +392,9 @@ const DroppableColumn = memo(function DroppableColumn({
       {/* Pinned at the HEAD of the queue column, outside the scrolling body, so
           the publish control is the first thing the column says — on a phone a
           button under the cards is a whole column of scrolling away. */}
+      {/* Finished work resting in "Terminé" is otherwise invisible: the column
+          holds it until the user queues it by hand. */}
+      <AwaitingQueueNotice column={column} tasks={tasks} />
       <DeployAllButton
         column={column}
         tasks={tasks}

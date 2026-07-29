@@ -342,6 +342,7 @@ export const ptBR: TranslationResources = {
         "Este cartão será ocultado do quadro. Ele permanece salvo e não é publicado.",
       deployTask: "Iniciar a implantação",
       queueDeploy: "Colocar na fila de publicação",
+      validateAndQueue: "Concluir e colocar na fila",
       deployTaskMessage:
         "O agente desta tarefa verifica se funciona, coloca a alteração no ar, depois move o cartão para «Implantado» e sinaliza se é preciso reiniciar o daemon. Você acompanha tudo na conversa.",
       deployRunning: "Implantando na conversa…",
@@ -522,6 +523,7 @@ export const ptBR: TranslationResources = {
       deployAll: "Implantar tudo ({{count}})",
       deployAllRunning: "Publicando…",
       deployAllEmpty: "Nada a publicar",
+      awaitingQueue: "{{count}} cartão(ões) concluído(s) aguardando a fila",
       deployAllTitle: "Implantar tudo",
       deployAllMessage:
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",

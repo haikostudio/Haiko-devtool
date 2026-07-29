@@ -343,6 +343,7 @@ export const fr: TranslationResources = {
         "Cette carte sera masquée du tableau. Elle reste enregistrée et n'est pas publiée.",
       deployTask: "Lancer le déploiement",
       queueDeploy: "Mettre dans À déployer",
+      validateAndQueue: "Terminer et mettre en file",
       deployTaskMessage:
         "L’agent de cette tâche vérifie le fonctionnement, met la modification en ligne, puis passe la carte en « Déployé » et signale si un redémarrage du démon est nécessaire. Vous suivez tout dans la discussion.",
       deployRunning: "Déploiement en cours dans la discussion…",
@@ -523,6 +524,7 @@ export const fr: TranslationResources = {
       deployAll: "Tout déployer ({{count}})",
       deployAllRunning: "Publication en cours…",
       deployAllEmpty: "Rien à publier",
+      awaitingQueue: "{{count}} carte(s) terminée(s) en attente de mise en file",
       deployAllTitle: "Tout déployer",
       deployAllMessage:
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",

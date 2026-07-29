@@ -1571,12 +1571,23 @@ export async function createPaseoDaemon(
   taskBoardService.setOnTaskCreated((projectId, task) => {
     taskAgentProvisioner.ensureInBackground(projectId, task.id);
   });
-  // Finishing a card QUEUES it: it moves into the last column ("À déployer") and
-  // says so in its own conversation. Nothing goes online until the user presses
-  // "Tout déployer" at the bottom of that column.
+  // Finishing a card STOPS it in "Terminé": it rests there and says so in its own
+  // conversation. Nothing moves and nothing goes online until the user queues it
+  // into "À déployer" and presses "Tout déployer" — with one exception, the
+  // "Terminer et mettre en file" press, which arms the card to continue on its
+  // own (queueForDeployment below).
   const taskPublisher = new TaskPublisher({
     agentManager,
     logger,
+    queueForDeployment: async (projectId, taskId) => {
+      await taskBoardService.transitionTask(projectId, taskId, "deployed");
+    },
+    clearQueueOnComplete: async (projectId, taskId) => {
+      await taskBoardService.patchTask(projectId, taskId, (current) => ({
+        ...current,
+        queueOnComplete: false,
+      }));
+    },
   });
   // "Tout déployer": one publication for the whole queue, then the daemon
   // restart. Paseo's own batch goes through the local build (triggerDeploy, which
@@ -1669,7 +1680,7 @@ export async function createPaseoDaemon(
       }
       return;
     }
-    await taskPublisher.announceReady(task);
+    await taskPublisher.announceReady(projectId, task);
   });
   // Light analysis tidies manual backlog cards without running cost estimation.
   taskBoardService.setOnBacklogRefine((projectId, taskId) => {

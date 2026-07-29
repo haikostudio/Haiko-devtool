@@ -57,6 +57,7 @@ import {
   useProjectToneMap,
 } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
+import { logRefusedMove } from "@/components/tasks/board-move-log";
 import { isTaskMoveAllowed } from "@/components/tasks/task-move-guard";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
@@ -846,6 +847,7 @@ function BoardContent({
       // silence and the card stays where it is. This is the choke point every
       // manual path goes through (drag, "Déplacer vers…", chevrons).
       if (task && !isTaskMoveAllowed(task, to)) {
+        logRefusedMove(task, to, "board");
         return;
       }
       if (from && from !== to) {
@@ -1303,7 +1305,7 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
   // the request, runs the project's checks, fixes what it finds, and completes
   // the card itself once everything is green. The user reads all of it live.
   const handleValidate = useCallback(
-    (taskId: string) => {
+    (taskId: string, options?: { queueOnComplete?: boolean }) => {
       void (async () => {
         const alreadyRunning =
           boardHandle.board?.tasks.find((entry) => entry.id === taskId)?.validation?.state ===
@@ -1320,7 +1322,9 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
           return;
         }
         try {
-          const { passed } = await boardHandle.validateTask(taskId);
+          const { passed } = await boardHandle.validateTask(taskId, {
+            queueOnComplete: options?.queueOnComplete === true,
+          });
           // `passed` here only means "the card was already finished" — the real
           // verdict now plays out in the conversation.
           toast.show(

@@ -63,7 +63,17 @@ export class TaskValidator {
     this.logger = options.logger.child({ module: "task-validator" });
   }
 
-  async validate(projectId: string, taskId: string): Promise<TaskValidationOutcome> {
+  /**
+   * @param queueOnComplete "Terminer et mettre en file": arm the card so that
+   * completing it also queues it into "À déployer", instead of stopping in
+   * "Terminé" and waiting for a second press. Armed here, honoured (and cleared)
+   * by the completion listener, so it can never outlive this run.
+   */
+  async validate(
+    projectId: string,
+    taskId: string,
+    queueOnComplete = false,
+  ): Promise<TaskValidationOutcome> {
     const board = await this.taskBoardService.getBoard(projectId);
     const task = board.tasks.find((entry) => entry.id === taskId);
     if (!task) {
@@ -98,6 +108,7 @@ export class TaskValidator {
     const patched = await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       validation: { state: "running" as const, checkedAt: new Date().toISOString() },
+      queueOnComplete,
     }));
 
     // Watch before sending: the agent may finish its turn faster than we could

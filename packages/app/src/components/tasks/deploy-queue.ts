@@ -23,6 +23,20 @@ export function countTasksAwaitingDeploy(tasks: readonly KanbanTask[]): number {
   ).length;
 }
 
+/**
+ * The finished cards resting in "Terminé" that nobody has queued yet — the work
+ * that is done and going nowhere until the user presses "Mettre dans À déployer".
+ *
+ * A finished card stops in "Terminé" on purpose (the daemon no longer queues it
+ * on its own), which means the column quietly accumulates: without a figure on
+ * the header, three finished cards waiting to be published look exactly like an
+ * empty board. Archived cards are excluded — filing one away IS the decision not
+ * to publish it.
+ */
+export function countTasksAwaitingQueue(tasks: readonly KanbanTask[]): number {
+  return tasks.filter((task) => task.column === "done" && !task.archivedAt).length;
+}
+
 /** True while the batch publication is running on at least one of these cards. */
 export function isDeployAllRunning(tasks: readonly KanbanTask[]): boolean {
   return tasks.some((task) => task.deployment?.state === "running");

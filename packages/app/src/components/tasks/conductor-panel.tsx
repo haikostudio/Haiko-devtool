@@ -93,7 +93,7 @@ export interface ConductorPanelProps {
    */
   onApproveTask: (taskId: string) => void;
   /** User validation of a task: the only path from "En cours" to "Terminée". */
-  onValidate: (taskId: string) => void;
+  onValidate: (taskId: string, options?: { queueOnComplete?: boolean }) => void;
   /** Archive (hide) a finished ("Terminé"/"Déployé") card from the board. */
   onArchive: (taskId: string) => void;
   /** Deploy a finished ("Terminé") card: hand its agent a deploy-then-confirm prompt. */
