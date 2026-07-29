@@ -77,7 +77,7 @@ export function matchesTaskIntent(text: string): boolean {
 }
 
 interface MessageTriageOptions {
-  agentManager: Pick<AgentManager, "runAgent" | "archiveAgent" | "appendTimelineItem">;
+  agentManager: Pick<AgentManager, "runAgent" | "archiveAgent" | "appendTimelineItem" | "getAgent">;
   createAgent: BoundCreateAgentCommand;
   taskBoardService: TaskBoardService;
   // Resolves the project a chat message belongs to (null = no board, skip triage).
@@ -99,7 +99,7 @@ interface MessageTriageOptions {
 export class MessageTriage {
   private readonly agentManager: Pick<
     AgentManager,
-    "runAgent" | "archiveAgent" | "appendTimelineItem"
+    "runAgent" | "archiveAgent" | "appendTimelineItem" | "getAgent"
   >;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly taskBoardService: TaskBoardService;
@@ -185,7 +185,10 @@ export class MessageTriage {
           projectId,
           task.folderName?.trim() || DEFAULT_TRIAGE_FOLDER,
         );
-        const runConfig = sanitizeRunConfig(task.runConfig);
+        // Same rule as the conductor's create_task: a task born from a chat
+        // message runs on the engine the user was talking to, unless the triage
+        // layer proposed an explicit one.
+        const runConfig = sanitizeRunConfig(task.runConfig) ?? this.sourceAgentRunConfig(agentId);
         const created = await this.taskBoardService.createTask(projectId, {
           folderId,
           title: task.title,
@@ -304,6 +307,26 @@ export class MessageTriage {
         }
       }
     }
+  }
+
+  /**
+   * Provider/model/effort of the agent whose message triggered the triage, so a
+   * proposed task defaults to that same engine. Returns undefined when the agent
+   * is no longer live — there is simply nothing to inherit.
+   */
+  private sourceAgentRunConfig(agentId: string): TaskRunConfig | undefined {
+    const sourceAgent = this.agentManager.getAgent(agentId);
+    const provider = sourceAgent?.provider.trim();
+    if (!sourceAgent || !provider) {
+      return undefined;
+    }
+    return {
+      provider,
+      ...(sourceAgent.config.model ? { model: sourceAgent.config.model } : {}),
+      ...(sourceAgent.config.thinkingOptionId
+        ? { thinkingOptionId: sourceAgent.config.thinkingOptionId }
+        : {}),
+    };
   }
 }
 

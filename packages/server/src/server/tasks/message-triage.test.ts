@@ -47,7 +47,10 @@ describe("MessageTriage", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  function buildTriage(options: { finalText: string | Error }) {
+  function buildTriage(options: {
+    finalText: string | Error;
+    sourceAgent?: { provider: string; config: { model?: string; thinkingOptionId?: string } };
+  }) {
     const runAgent = vi.fn(async () => {
       if (options.finalText instanceof Error) {
         throw options.finalText;
@@ -64,6 +67,7 @@ describe("MessageTriage", () => {
         runAgent,
         archiveAgent: vi.fn(async () => {}),
         appendTimelineItem,
+        getAgent: vi.fn(() => options.sourceAgent ?? null),
       } as never,
       createAgent: createAgent as never,
       taskBoardService: service,
@@ -115,6 +119,32 @@ describe("MessageTriage", () => {
     for (const entry of proposedTasks) {
       expect(board.tasks.some((task) => task.id === entry.taskId)).toBe(true);
     }
+  });
+
+  test("a proposed task inherits the chatting agent's provider, model and effort", async () => {
+    const { triage } = buildTriage({
+      finalText: JSON.stringify({
+        kind: "tasks",
+        tasks: [{ title: "Ajouter le mode sombre", tags: [] }],
+      }),
+      sourceAgent: {
+        provider: "codex",
+        config: { model: "gpt-5.4", thinkingOptionId: "high" },
+      },
+    });
+
+    triage.triage({ agentId: "agent-1", text: "il faudrait ajouter ça aux tâches" });
+
+    await vi.waitFor(async () => {
+      const board = await service.getBoard("proj-1");
+      expect(board.tasks.length).toBe(1);
+    });
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks[0]?.runConfig).toEqual({
+      provider: "codex",
+      model: "gpt-5.4",
+      thinkingOptionId: "high",
+    });
   });
 
   test("surfaces clarifying questions without creating tasks", async () => {

@@ -2762,6 +2762,33 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           '"plan": the agent only produces an implementation plan for the user to review. Default: "direct" (implement + PR).',
         ),
     });
+    /**
+     * Run config a new task inherits when the creating agent did not spell one
+     * out. A task born in the conductor panel must run on the SAME engine the
+     * user is talking to: a Codex conductor creates Codex tasks, a Claude
+     * conductor creates Claude tasks — instead of every blank task silently
+     * falling back to Claude at launch time.
+     *
+     * Only fills the blank: an explicit `runConfig` from the caller always wins,
+     * and the user can still change provider/model/effort in the task details.
+     */
+    const inheritedTaskRunConfig = (): z.infer<typeof taskRunConfigToolSchema> | undefined => {
+      // Deliberately not `resolveCallerAgent()`: a missing caller must not turn
+      // a perfectly valid task creation into a tool error — it just means there
+      // is nothing to inherit from.
+      const callerAgent = callerAgentId ? agentManager.getAgent(callerAgentId) : null;
+      const provider = callerAgent?.provider.trim();
+      if (!callerAgent || !provider) {
+        return undefined;
+      }
+      return {
+        provider,
+        ...(callerAgent.config.model ? { model: callerAgent.config.model } : {}),
+        ...(callerAgent.config.thinkingOptionId
+          ? { thinkingOptionId: callerAgent.config.thinkingOptionId }
+          : {}),
+      };
+    };
     const schedulePreferenceToolSchema = z
       .enum(["auto", "asap", "off_peak"])
       .describe(
@@ -2919,7 +2946,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
       {
         title: "Create task",
         description:
-          "Create a kanban task in a project's board. Every new task lands in the backlog (À faire) — creation never enters the pipeline. Set runConfig (provider/model, thinkingOptionId, mode) to propose how it should run. " +
+          "Create a kanban task in a project's board. Every new task lands in the backlog (À faire) — creation never enters the pipeline. Set runConfig (provider/model, thinkingOptionId, mode) to propose how it should run; omit it and the task inherits YOUR provider, model and reasoning effort. " +
           "With proposeRun=true the task is flagged AWAITING EXPLICIT USER VALIDATION: it still waits in backlog, and only the user can move it into the pipeline (Validé/Planifié) — you cannot schedule or approve it yourself.",
         inputSchema: {
           projectId: z.string(),
@@ -2960,12 +2987,13 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         const folderId =
           args.folderId ??
           (await taskBoardService.ensureFolder(args.projectId, args.folderName ?? "Agent"));
+        const runConfig = args.runConfig ?? inheritedTaskRunConfig();
         const task = await taskBoardService.createTask(args.projectId, {
           folderId,
           title: args.title,
           ...(args.description !== undefined ? { description: args.description } : {}),
           ...(args.tags !== undefined ? { tags: args.tags } : {}),
-          ...(args.runConfig !== undefined ? { runConfig: args.runConfig } : {}),
+          ...(runConfig !== undefined ? { runConfig } : {}),
           ...(args.schedulePreference !== undefined
             ? { schedulePreference: args.schedulePreference }
             : {}),

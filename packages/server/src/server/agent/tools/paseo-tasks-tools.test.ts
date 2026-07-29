@@ -36,18 +36,22 @@ function structured(result: { structuredContent?: unknown }): Record<string, unk
   return result.structuredContent as Record<string, unknown>;
 }
 
+interface FakeCallerAgent {
+  provider: string;
+  config: { model?: string; thinkingOptionId?: string };
+}
+
 describe("paseo task board tools", () => {
   let dir: string;
   let service: TaskBoardService;
   let catalog: PaseoToolCatalog;
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), "paseo-task-tools-"));
-    service = new TaskBoardService({ store: new TaskBoardStore(dir), logger });
-    catalog = createPaseoToolCatalog({
-      // Task tools only touch taskBoardService/projectRegistry; the remaining
-      // dependencies are inert stubs (their tools are never executed here).
-      agentManager: { listAgents: () => [] } as never,
+  function buildCatalog(callerAgent: FakeCallerAgent | null): PaseoToolCatalog {
+    return createPaseoToolCatalog({
+      // Task tools only touch taskBoardService/projectRegistry plus the caller
+      // lookup used to inherit its run config; the remaining dependencies are
+      // inert stubs (their tools are never executed here).
+      agentManager: { listAgents: () => [], getAgent: () => callerAgent } as never,
       agentStorage: {} as never,
       providerSnapshotManager: {} as never,
       taskBoardService: service,
@@ -55,6 +59,12 @@ describe("paseo task board tools", () => {
       callerAgentId: "agent-42",
       logger,
     });
+  }
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "paseo-task-tools-"));
+    service = new TaskBoardService({ store: new TaskBoardStore(dir), logger });
+    catalog = buildCatalog(null);
   });
 
   afterEach(async () => {
@@ -134,6 +144,61 @@ describe("paseo task board tools", () => {
     expect(result.approvalState).toBeUndefined();
     const board = await service.getBoard("proj-1");
     expect(board.folders.some((folder) => folder.name === "Agent")).toBe(true);
+  });
+
+  test("create_task without runConfig inherits the calling agent's engine", async () => {
+    // A Codex conductor must produce Codex tasks — not tasks that silently fall
+    // back to Claude at launch time.
+    const codexCatalog = buildCatalog({
+      provider: "codex",
+      config: { model: "gpt-5.4", thinkingOptionId: "high" },
+    });
+
+    const result = structured(
+      await codexCatalog.executeTool("create_task", {
+        projectId: "proj-1",
+        title: "Corriger le bandeau",
+      }),
+    );
+
+    const board = await service.getBoard("proj-1");
+    const task = board.tasks.find((entry) => entry.id === result.taskId);
+    expect(task?.runConfig).toEqual({
+      provider: "codex",
+      model: "gpt-5.4",
+      thinkingOptionId: "high",
+    });
+  });
+
+  test("an explicit runConfig always wins over the calling agent's engine", async () => {
+    const codexCatalog = buildCatalog({
+      provider: "codex",
+      config: { model: "gpt-5.4", thinkingOptionId: "high" },
+    });
+
+    const result = structured(
+      await codexCatalog.executeTool("create_task", {
+        projectId: "proj-1",
+        title: "Tâche de code",
+        runConfig: { provider: "claude", model: "claude-opus-4-8" },
+      }),
+    );
+
+    const board = await service.getBoard("proj-1");
+    const task = board.tasks.find((entry) => entry.id === result.taskId);
+    expect(task?.runConfig).toEqual({ provider: "claude", model: "claude-opus-4-8" });
+  });
+
+  test("create_task stays valid when the calling agent is gone", async () => {
+    const result = structured(
+      await catalog.executeTool("create_task", {
+        projectId: "proj-1",
+        title: "Sans agent appelant",
+      }),
+    );
+    const board = await service.getBoard("proj-1");
+    const task = board.tasks.find((entry) => entry.id === result.taskId);
+    expect(task?.runConfig).toBeUndefined();
   });
 
   test("list_tasks filters by column and update_task patches runConfig", async () => {
