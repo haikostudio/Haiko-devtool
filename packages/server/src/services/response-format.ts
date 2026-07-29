@@ -18,7 +18,12 @@
  *                    next (each proposal on its own line, so the app can hang a
  *                    "+" button on it).
  *  - "publication" — a running deployment, or "Déployé": what went online, how
- *                    it went, and how it was verified.
+ *                    it went, and how it was verified (one card).
+ *  - "batchPublication" — the single grouped-deployment agent that publishes
+ *                    every queued card of "À déployer" in one batch: the list of
+ *                    cards it shipped, what actually went live, the verdict, and
+ *                    the final state. Routed by the agent's deployment role
+ *                    label, not by a card's column.
  *  - "verification" — the final-check turn ("Lancer le contrôle"): what was
  *                    verified, the verdict, and what it changes for the card now
  *                    that it is finished. A report of a CHECK, not of the work.
@@ -42,6 +47,7 @@ export type ResponseFormatTemplate =
   | "analysis"
   | "progress"
   | "publication"
+  | "batchPublication"
   | "verification"
   | "conductor";
 
@@ -170,6 +176,36 @@ const PUBLICATION_BODY = [
 ].join("\n");
 
 /**
+ * The single grouped-deployment agent. It gathers EVERY card queued in "À
+ * déployer" and publishes them in one batch, so its answer is a batch
+ * publication log — the list of cards it shipped, what actually went live, the
+ * verdict (the live version matching the last saved one), and the final state.
+ * It is routed by the agent's deployment role label, not by a card column, since
+ * one run spans several cards. Billing, estimates, analysis and evolutions
+ * belong elsewhere, so they are excluded here too.
+ */
+const BATCH_PUBLICATION_BODY = [
+  "Tu es l'agent de PUBLICATION GROUPÉE : tu as ramassé toutes les tâches en file « À déployer » et tu les mets en ligne EN UN SEUL LOT.",
+  "Ta réponse est un compte rendu de MISE EN LIGNE GROUPÉE — pas le compte rendu d'une seule carte.",
+  "Réponds TOUJOURS en suivant exactement cette structure.",
+  ...COMMON_HEADER,
+  "",
+  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "## 1. Tâches publiées",
+  "## 2. Ce qui est en ligne",
+  "## 3. Résultat de la publication",
+  "## 4. État final",
+  "",
+  "« 1. Tâches publiées » : la liste des cartes du lot, une par ligne, avec en une phrase ce que chacune apporte.",
+  "« 2. Ce qui est en ligne » : ce que le public voit réellement maintenant — le changement concret mis à disposition, pas l'intention.",
+  "« 3. Résultat de la publication » : réussi ou échoué, avec ta vérification que la version réellement en ligne correspond bien à la dernière version enregistrée (et, en cas d'échec, la raison précise).",
+  "« 4. État final » : ce que ça implique pour l'utilisateur — cartes prêtes à passer en « Archivé », redémarrage du moteur nécessaire ou non, points à surveiller. « Rien à signaler » si c'est le cas.",
+  "",
+  "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
+  ...COMMON_FOOTER,
+].join("\n");
+
+/**
  * The final-check turn behind "Lancer le contrôle". The card is still in "En
  * cours" while the check runs (its agent moves it to "Terminée" as the last
  * step), so without this template the check would borrow the "progress" work
@@ -226,6 +262,7 @@ const RESPONSE_FORMAT_BODIES: Record<ResponseFormatTemplate, string> = {
   analysis: ANALYSIS_BODY,
   progress: PROGRESS_BODY,
   publication: PUBLICATION_BODY,
+  batchPublication: BATCH_PUBLICATION_BODY,
   verification: VERIFICATION_BODY,
   conductor: CONDUCTOR_BODY,
 };

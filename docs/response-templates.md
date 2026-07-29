@@ -30,14 +30,15 @@ One template for all of these produced answers that padded an analysis with fake
 
 ## The templates
 
-| Template       | When                                                                         | Sections                                                                                                        |
-| -------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `analysis`     | card in **Validé** or **Planifié**                                           | 1. Objectif · 2. Approche retenue · 3. Fichiers & points de vigilance · 4. Estimation                           |
-| `progress`     | card in **En cours**, **Terminée** or queued in **À déployer**               | 1. Ce qui est fait · 2. Ce qui change · 3. Impact · 4. Évolutions possibles                                     |
-| `publication`  | work already live (`deployedAt`/URL), or a deploy in flight                  | 1. Ce qui a été publié · 2. Déroulé de la publication · 3. Vérification · 4. Suites éventuelles                 |
-| `verification` | final check running (`validation.state === "running"`), card in **En cours** | 1. Ce qui a été vérifié · 2. Résultat du contrôle · 3. Ce que ça change                                         |
-| `conductor`    | the board's chef d'orchestre agent                                           | none — it never executes anything, so it never reports (see `conductor-agent.ts`)                               |
-| `default`      | anything that is not a card (plain chat, schedules, MCP, **backlog**)        | the historical five: Ce qui est fait · Ce qui change · Impact · Évolutions possibles · Activation & facturation |
+| Template           | When                                                                                                                     | Sections                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `analysis`         | card in **Validé** or **Planifié**                                                                                       | 1. Objectif · 2. Approche retenue · 3. Fichiers & points de vigilance · 4. Estimation                           |
+| `progress`         | card in **En cours**, **Terminée** or queued in **À déployer**                                                           | 1. Ce qui est fait · 2. Ce qui change · 3. Impact · 4. Évolutions possibles                                     |
+| `publication`      | work already live (`deployedAt`/URL), or a deploy in flight                                                              | 1. Ce qui a été publié · 2. Déroulé de la publication · 3. Vérification · 4. Suites éventuelles                 |
+| `batchPublication` | the single grouped-deployment agent (deployment role label), publishing every queued card of **À déployer** in one batch | 1. Tâches publiées · 2. Ce qui est en ligne · 3. Résultat de la publication · 4. État final                     |
+| `verification`     | final check running (`validation.state === "running"`), card in **En cours**                                             | 1. Ce qui a été vérifié · 2. Résultat du contrôle · 3. Ce que ça change                                         |
+| `conductor`        | the board's chef d'orchestre agent                                                                                       | none — it never executes anything, so it never reports (see `conductor-agent.ts`)                               |
+| `default`          | anything that is not a card (plain chat, schedules, MCP, **backlog**)                                                    | the historical five: Ce qui est fait · Ce qui change · Impact · Évolutions possibles · Activation & facturation |
 
 Exclusions are stated in the templates themselves, not merely implied:
 
@@ -45,6 +46,10 @@ Exclusions are stated in the templates themselves, not merely implied:
   possibles" and "Activation & facturation";
 - `progress` bans "Activation & facturation", analysis and estimates;
 - `publication` bans analysis, estimates, billing and evolutions;
+- `batchPublication` bans analysis, estimates, billing and evolutions too — it is
+  the grouped-deployment agent's log, routed by the agent's deployment role label
+  rather than by a card column (one run covers many cards), so it never reaches
+  `resolveTaskResponseTemplate`'s column switch;
 - `verification` bans analysis, estimates, billing and evolutions — it wins over
   the `progress` reading of **En cours** whenever the check window is open, and
   yields to `publication` when a deploy is in flight (the two never overlap in

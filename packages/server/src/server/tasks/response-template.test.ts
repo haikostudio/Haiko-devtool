@@ -1,6 +1,10 @@
 import pino from "pino";
 import { describe, expect, it } from "vitest";
-import { CONDUCTOR_ROLE_LABEL, CONDUCTOR_ROLE_VALUE } from "@getpaseo/protocol/agent-labels";
+import {
+  CONDUCTOR_ROLE_LABEL,
+  CONDUCTOR_ROLE_VALUE,
+  DEPLOYMENT_ROLE_VALUE,
+} from "@getpaseo/protocol/agent-labels";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@getpaseo/protocol/tasks/types";
 import { responseFormatBody } from "../../services/response-format.js";
 import { TASK_AGENT_LABEL } from "./agent-launch.js";
@@ -164,6 +168,17 @@ describe("createTaskResponseTemplateHook", () => {
     });
     expect(await hook({ agentId: "agent-1" })).toBe("conductor");
     // Decided from the label alone — no board read, no card lookup.
+    expect(boardReads()).toBe(0);
+  });
+
+  it("gives the grouped-deployment agent the batch publication shape", async () => {
+    // It spans several cards, so it carries no card label and would otherwise
+    // fall through to the generic report. Its deployment role label routes it
+    // straight to the batch publication log — no board read needed.
+    const { hook, boardReads } = makeHook({
+      labels: { [CONDUCTOR_ROLE_LABEL]: DEPLOYMENT_ROLE_VALUE },
+    });
+    expect(await hook({ agentId: "agent-1" })).toBe("batchPublication");
     expect(boardReads()).toBe(0);
   });
 

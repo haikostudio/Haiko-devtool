@@ -13,6 +13,7 @@ const ALL_TEMPLATES: ResponseFormatTemplate[] = [
   "analysis",
   "progress",
   "publication",
+  "batchPublication",
   "verification",
 ];
 
@@ -100,6 +101,21 @@ describe("response-format templates", () => {
     expect(body).not.toContain("## 1. Ce qui est fait");
     expect(body).not.toContain("Évolutions possibles");
     expect(body).not.toContain("facture");
+  });
+
+  it("batchPublication asks for the four grouped-publication sections only", () => {
+    const body = responseFormatBody("batchPublication");
+    expect(body).toContain("## 1. Tâches publiées");
+    expect(body).toContain("## 2. Ce qui est en ligne");
+    expect(body).toContain("## 3. Résultat de la publication");
+    expect(body).toContain("## 4. État final");
+    expect(body).toContain("PUBLICATION GROUPÉE");
+    expect(body).not.toContain("## 1. Ce qui est fait");
+    expect(body).not.toContain("Évolutions possibles");
+    // "facture" (the billing section wording) — not "facturation", which the
+    // exclusion line legitimately contains.
+    expect(body).not.toContain("facture");
+    expect(body).not.toContain("Estimation");
   });
 
   it("verification asks for the three check sections only", () => {

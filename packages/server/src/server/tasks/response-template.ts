@@ -2,16 +2,17 @@
  * Picks the answer structure a card's agent must follow, from where the card
  * currently sits on the board.
  *
- * The three card templates (analysis / progress / publication) are described in
- * docs/response-templates.md — this module is only the column → template map
- * plus the plumbing that finds a card from an agent id.
+ * The card templates (analysis / progress / publication / verification) are
+ * described in docs/response-templates.md — this module is the column → template
+ * map plus the plumbing that finds a card (or the grouped-deployment agent) from
+ * an agent id.
  *
  * The mapping is deliberately a pure function of the task, so the rule is
  * testable without a board, a registry or an agent.
  */
 
 import type pino from "pino";
-import { isConductorAgent } from "@getpaseo/protocol/agent-labels";
+import { isConductorAgent, isDeploymentAgent } from "@getpaseo/protocol/agent-labels";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type {
   ResponseFormatTemplate,
@@ -109,11 +110,18 @@ export function createTaskResponseTemplateHook(
 
   return async ({ agentId }) => {
     try {
+      const labels = options.agentManager.getAgent(agentId)?.labels ?? null;
       // The conductor is not a card agent, so it would otherwise fall through to
       // the generic five-section report — and answer a plain question with a
       // work report and an invoice line. It has its own shape.
-      if (isConductorAgent({ labels: options.agentManager.getAgent(agentId)?.labels ?? null })) {
+      if (isConductorAgent({ labels })) {
         return "conductor";
+      }
+      // The grouped-deployment agent spans several cards, so it has no single
+      // column to read: it is routed by its deployment role label straight to
+      // the batch publication log.
+      if (isDeploymentAgent({ labels })) {
+        return "batchPublication";
       }
       const link = await resolveLink(agentId);
       if (!link) {

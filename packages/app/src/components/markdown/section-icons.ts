@@ -24,6 +24,7 @@ import {
   BadgeCheck,
   ClipboardCheck,
   ArrowRight,
+  Flag,
 } from "lucide-react-native";
 
 export type SectionIcon = ComponentType<{ size?: number; color?: string }>;
@@ -46,9 +47,14 @@ const BY_KEYWORD: { match: RegExp; icon: SectionIcon }[] = [
   { match: /approche|méthode|methode|plan/i, icon: Route },
   { match: /fichier|vigilance|risque/i, icon: FileText },
   { match: /estimation|temps|coût|cout|devis/i, icon: ReceiptText },
+  // Batch publication sections (grouped-deployment agent). Sit ahead of the wide
+  // publication wordings so each gets its own glyph instead of the shared Rocket.
+  { match: /tâches publi|taches publi|cartes publi|lot publi/i, icon: ListChecks },
+  { match: /résultat de la publi|resultat de la publi/i, icon: ClipboardCheck },
+  { match: /état final|etat final/i, icon: Flag },
   // Publication sections (colonne « Déployé »).
   { match: /déroul|deroul|étape|etape|journal/i, icon: ListChecks },
-  { match: /publi|mise en ligne|déploie|deploie/i, icon: Rocket },
+  { match: /publi|mise en ligne|en ligne|déploie|deploie/i, icon: Rocket },
   // Verification sections (contrôle final) — the "résultat/verdict" wording sits
   // ahead of the wide "contrôl" match so the verdict gets its own glyph rather
   // than reusing the BadgeCheck of "Ce qui a été vérifié".

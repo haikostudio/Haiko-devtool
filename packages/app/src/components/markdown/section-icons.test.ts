@@ -19,6 +19,12 @@ const TEMPLATE_HEADINGS: Record<string, string[]> = {
     "3. Vérification",
     "4. Suites éventuelles",
   ],
+  batchPublication: [
+    "1. Tâches publiées",
+    "2. Ce qui est en ligne",
+    "3. Résultat de la publication",
+    "4. État final",
+  ],
   verification: ["1. Ce qui a été vérifié", "2. Résultat du contrôle", "3. Ce que ça change"],
   default: [
     "1. Ce qui est fait",
