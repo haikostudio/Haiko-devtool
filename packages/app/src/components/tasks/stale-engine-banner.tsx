@@ -1,13 +1,8 @@
-import { memo } from "react";
-import { Text, View } from "react-native";
-import { TriangleAlert } from "lucide-react-native";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import type { DaemonBuildFreshness } from "@/components/tasks/use-daemon-build-freshness";
-
-const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
-const ThemedWarning = withUnistyles(TriangleAlert);
 
 /**
  * The board's own warning that the engine is not running the published version.
@@ -23,52 +18,40 @@ const ThemedWarning = withUnistyles(TriangleAlert);
  */
 export const StaleEngineBanner = memo(function StaleEngineBanner({
   freshness,
+  onUpdate,
 }: {
   freshness: DaemonBuildFreshness | null;
+  onUpdate: () => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleUpdate = useCallback(() => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    void onUpdate().finally(() => setIsUpdating(false));
+  }, [isUpdating, onUpdate]);
+
   if (!freshness) {
     return null;
   }
+
   return (
-    <View style={styles.card} testID="tasks-stale-engine-banner">
-      <View style={styles.header}>
-        <ThemedWarning size={ICON_SIZE.sm} uniProps={warningColorMapping} />
-        <Text style={styles.title}>{t("tasks.board.staleEngineTitle")}</Text>
-      </View>
-      <Text style={styles.detail}>
-        {t("tasks.board.staleEngineDetail", {
-          built: freshness.builtSha.slice(0, 8),
-          deployed: freshness.deployedSha.slice(0, 8),
-        })}
-      </Text>
-    </View>
+    <Alert
+      title={t("tasks.board.staleEngineTitle")}
+      variant="warning"
+      testID="tasks-stale-engine-banner"
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        loading={isUpdating}
+        disabled={isUpdating}
+        onPress={handleUpdate}
+        testID="tasks-stale-engine-update"
+      >
+        {isUpdating ? t("tasks.board.staleEngineUpdating") : t("tasks.board.staleEngineAction")}
+      </Button>
+    </Alert>
   );
 });
-
-const styles = StyleSheet.create((theme) => ({
-  card: {
-    gap: theme.spacing[1],
-    padding: theme.spacing[3],
-    marginBottom: theme.spacing[2],
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.statusWarning,
-    backgroundColor: theme.colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing[2],
-  },
-  title: {
-    flex: 1,
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: "500",
-  },
-  detail: {
-    color: theme.colors.foregroundMuted,
-    fontSize: theme.fontSize.xs,
-  },
-}));

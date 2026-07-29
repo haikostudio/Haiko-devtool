@@ -79,7 +79,7 @@ import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskBoard, type TaskColumn } from "@/data/tasks";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import { getHostRuntimeStore, useHosts } from "@/runtime/host-runtime";
+import { getHostRuntimeStore, useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
@@ -1131,6 +1131,24 @@ function BoardContent({
 
   // Does the running engine match what is published? Null unless they diverge.
   const staleEngine = useDaemonBuildFreshness(serverId);
+  const daemonClient = useHostRuntimeClient(serverId ?? "");
+  const handleUpdateStaleEngine = useCallback(async () => {
+    if (!daemonClient) {
+      toast.error(t("tasks.board.staleEngineFailed"));
+      return;
+    }
+    try {
+      const result = await daemonClient.paseoDeployTrigger({
+        projectId: projectId ?? undefined,
+      });
+      if (!result.started) {
+        throw new Error(result.error ?? "Engine update did not start");
+      }
+      toast.show(t("tasks.board.staleEngineStarted"));
+    } catch {
+      toast.error(t("tasks.board.staleEngineFailed"));
+    }
+  }, [daemonClient, projectId, t, toast]);
 
   const boardStack = (
     <View style={isCompact ? styles.boardContainerCompact : styles.boardContainer}>
@@ -1149,7 +1167,7 @@ function BoardContent({
       {/* The engine running an older build than what is online is invisible by
           definition — everything looks published. Said here, above the work it
           silently affects. */}
-      <StaleEngineBanner freshness={staleEngine} />
+      <StaleEngineBanner freshness={staleEngine} onUpdate={handleUpdateStaleEngine} />
       {/* Gestures the board refused, which are silent by design and therefore
           indistinguishable from a broken board when they repeat. */}
       <RefusedMovesNotice />
