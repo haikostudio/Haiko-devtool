@@ -11,7 +11,6 @@ import { TaskCardMenu } from "./task-card-menu";
 import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
 import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
-import { AwaitingQueueNotice } from "./awaiting-queue-notice";
 import { DeployAllButton } from "./deploy-all-button";
 import { DeployBatchBanner } from "./deploy-batch-banner";
 import { ArchiveSelectionControls } from "./archive-selection-controls";
@@ -167,18 +166,6 @@ const BoardColumn = memo(function BoardColumn({
     (next: ColumnControls) => onControlsChange(column, next),
     [onControlsChange, column],
   );
-  // "Tout mettre en file": the button twin of dragging each finished card into
-  // the queue. Appends them (MAX_SAFE_INTEGER index) so the queue keeps the order
-  // they were finished in, and publishes nothing — that stays one explicit press
-  // on the queue column's own button.
-  const handleQueueAll = useCallback(
-    (taskIds: string[]) => {
-      for (const taskId of taskIds) {
-        onMoveTask({ taskId, column: "deployed", index: Number.MAX_SAFE_INTEGER });
-      }
-    },
-    [onMoveTask],
-  );
   const renderCard = useCallback(
     (task: KanbanTask, options?: RenderCardOptions) => (
       <BoardCardRow
@@ -245,13 +232,6 @@ const BoardColumn = memo(function BoardColumn({
         ) : null}
       </View>
       <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
-      {/* Pinned at the HEAD of the queue column, outside the scroll: on a phone a
-          button under the cards is a whole column of scrolling away, which reads
-          as "the feature is missing". */}
-      {/* Finished work resting in "Terminé" is otherwise invisible: the column
-          holds it until the user queues it by hand — one card at a time, or the
-          whole waiting set at once. */}
-      <AwaitingQueueNotice column={column} tasks={tasks} onQueueAll={handleQueueAll} />
       <DeployAllButton
         column={column}
         tasks={tasks}

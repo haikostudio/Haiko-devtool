@@ -98,10 +98,6 @@ in the project's single list.
    in-memory history surfaced on the board (`RefusedMovesNotice`) — one silent
    no-op is right, three in a row look like a broken board.
 
-   Queueing itself can be done in bulk: the "Terminé" column header counts the
-   cards waiting (`AwaitingQueueNotice`) and offers "Tout mettre en file", which
-   moves them all into the queue. It still publishes nothing.
-
 ## The stale-daemon trap
 
 The daemon does not run the source — it runs `packages/*/dist`. Publication used

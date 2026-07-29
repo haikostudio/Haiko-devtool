@@ -27,7 +27,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ProjectBillingTotal } from "@/components/tasks/project-billing-total";
 import { countPendingPublish } from "@/components/tasks/pending-publish-count";
 import { DeployRestartChain } from "@/components/tasks/deploy-restart-chain";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
@@ -1147,7 +1146,6 @@ function BoardContent({
           />
         </View>
       ) : null}
-      <ProjectBillingTotal serverId={serverId} projectId={projectId} tasks={projectTasks} />
       {/* The engine running an older build than what is online is invisible by
           definition — everything looks published. Said here, above the work it
           silently affects. */}

@@ -162,11 +162,17 @@ export function useQuotaMenuModel(serverId: string | null): QuotaMenuModel {
 }
 
 /** The per-model breakdown, both windows each — menu body and sheet body alike. */
-export function QuotaMenuBody({ model }: { model: QuotaMenuModel }) {
+export function QuotaMenuBody({
+  model,
+  variant = "menu",
+}: {
+  model: QuotaMenuModel;
+  variant?: "menu" | "sheet";
+}) {
   const { t } = useTranslation();
   return (
-    <View style={styles.menu}>
-      <Text style={styles.menuTitle}>{t("tasks.quota.title")}</Text>
+    <View style={[styles.menu, variant === "sheet" && styles.menuSheet]}>
+      {variant === "menu" ? <Text style={styles.menuTitle}>{t("tasks.quota.title")}</Text> : null}
       {model.isLoading ? <Text style={styles.hint}>{t("common.loading")}</Text> : null}
       {model.summary.providers.length === 0 && !model.isLoading ? (
         <Text style={styles.hint}>{t("tasks.quota.unavailable")}</Text>
@@ -213,7 +219,7 @@ export function TaskQuotaSheet({
       scrollable
       testID="tasks-quota-sheet"
     >
-      <QuotaMenuBody model={model} />
+      <QuotaMenuBody model={model} variant="sheet" />
     </AdaptiveModalSheet>
   );
 }
@@ -560,6 +566,10 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[3],
     paddingHorizontal: theme.spacing[3],
     paddingVertical: theme.spacing[3],
+  },
+  menuSheet: {
+    gap: theme.spacing[2],
+    padding: 0,
   },
   menuTitle: {
     color: theme.colors.foreground,
