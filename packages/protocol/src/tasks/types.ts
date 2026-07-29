@@ -164,7 +164,7 @@ export type TaskValidation = z.infer<typeof TaskValidationSchema>;
 // Symmetric to TaskValidationSchema: pressing the deploy bar on a finished ("done")
 // card opens a "running" window that is the user's consent for the card's own
 // agent to move it to "deployed" once the deployment is verified live. The window
-// closes on its own the moment the agent stops, so the bar can never get stuck.
+// stays open across pauses and questions, and closes only on a verified outcome.
 export const TaskDeploymentSchema = z.object({
   state: z.enum(["running", "deployed", "failed"]),
   // Human-readable report shown next to the deploy bar (what was deployed, where).

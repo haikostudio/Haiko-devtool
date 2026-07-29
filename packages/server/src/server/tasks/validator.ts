@@ -15,6 +15,7 @@ export interface TaskValidationOutcome {
 
 /** Minimal slice of AgentManager the idle watcher needs. */
 export type ValidationAgentWatcher = Pick<AgentManager, "subscribe" | "getAgent">;
+export type AgentStopReason = "idle" | "error" | "closed";
 
 export interface TaskValidatorOptions {
   taskBoardService: TaskBoardService;
@@ -23,7 +24,7 @@ export interface TaskValidatorOptions {
   /** Sends the check prompt into the task agent's own conversation. */
   sendPrompt: (input: { agentId: string; prompt: string }) => Promise<void>;
   /** Calls back once the agent stops working; returns an unsubscribe function. */
-  watchAgentIdle: (agentId: string, onIdle: () => void) => () => void;
+  watchAgentIdle: (agentId: string, onIdle: (reason?: AgentStopReason) => void) => () => void;
   logger: pino.Logger;
 }
 
@@ -45,8 +46,8 @@ export interface TaskValidatorOptions {
  * this one card (see AGENT_WRITABLE_TASK_COLUMNS in paseo-tools.ts). Outside
  * that window an agent still may not finish a task.
  *
- * If the agent stops without completing the card, the window closes on its own
- * so the bar is immediately pressable again — a check can never get stuck.
+ * The window stays open while the agent works or waits for an answer. It closes
+ * only after the card itself confirms that the check passed.
  */
 export class TaskValidator {
   private readonly taskBoardService: TaskBoardService;
@@ -113,9 +114,9 @@ export class TaskValidator {
 
     // Watch before sending: the agent may finish its turn faster than we could
     // subscribe afterwards.
-    this.watchAgentIdle(agentId, () => {
-      void this.closeWindow(projectId, taskId).catch((error) => {
-        this.logger.error({ err: error, projectId, taskId }, "Failed to close validation window");
+    this.watchAgentIdle(agentId, (reason = "idle") => {
+      void this.settleWindow(projectId, taskId, reason).catch((error) => {
+        this.logger.error({ err: error, projectId, taskId }, "Failed to confirm validation window");
       });
     });
 
@@ -129,22 +130,36 @@ export class TaskValidator {
   }
 
   /**
-   * The agent stopped talking. Either it completed the card — in which case the
-   * check passed — or it did not, and the window must close so the user can
-   * press again without waiting on anything.
+   * The agent stopped talking. Close the window only when the card itself proves
+   * the check passed. Otherwise it may be waiting for the user, so the progress
+   * indicator remains visible.
    */
-  private async closeWindow(projectId: string, taskId: string): Promise<void> {
+  private async settleWindow(
+    projectId: string,
+    taskId: string,
+    reason: AgentStopReason,
+  ): Promise<void> {
     const board = await this.taskBoardService.getBoard(projectId);
     const task = board.tasks.find((entry) => entry.id === taskId);
     if (!task || task.validation?.state !== "running") {
       return;
     }
     const finished = task.column === "done" || task.column === "deployed";
+    if (!finished && reason === "idle") {
+      return;
+    }
     await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       validation: finished
         ? { state: "passed" as const, checkedAt: new Date().toISOString() }
-        : null,
+        : {
+            state: "failed" as const,
+            checkedAt: new Date().toISOString(),
+            summary:
+              reason === "error"
+                ? "Le contrôle s'est arrêté sur une erreur confirmée."
+                : "Le contrôle s'est arrêté avant de pouvoir confirmer le résultat.",
+          },
     }));
   }
 }
@@ -220,19 +235,19 @@ export function buildValidationPrompt(input: {
 export function watchAgentIdle(
   agentManager: ValidationAgentWatcher,
   agentId: string,
-  onIdle: () => void,
+  onIdle: (reason: AgentStopReason) => void,
 ): () => void {
   let sawRunning = agentManager.getAgent(agentId)?.lifecycle === "running";
   let fired = false;
   let unsubscribe: (() => void) | null = null;
 
-  function finish(): void {
+  function finish(reason: AgentStopReason): void {
     if (fired) {
       return;
     }
     fired = true;
     unsubscribe?.();
-    onIdle();
+    onIdle(reason);
   }
 
   unsubscribe = agentManager.subscribe(
@@ -245,11 +260,11 @@ export function watchAgentIdle(
         return;
       }
       if (event.agent.lifecycle === "closed" || event.agent.lifecycle === "error") {
-        finish();
+        finish(event.agent.lifecycle);
         return;
       }
       if (event.agent.lifecycle === "idle" && sawRunning) {
-        finish();
+        finish("idle");
       }
     },
     { agentId, replayState: false },

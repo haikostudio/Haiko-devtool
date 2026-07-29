@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { TaskDeployer } from "./deployer.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
+import type { AgentStopReason } from "./validator.js";
 
 const logger = pino({ level: "silent" });
 
@@ -13,7 +14,7 @@ describe("TaskDeployer", () => {
   let dir: string;
   let service: TaskBoardService;
   let sent: Array<{ agentId: string; prompt: string }>;
-  let idleCallbacks: Array<() => void>;
+  let idleCallbacks: Array<(reason?: AgentStopReason) => void>;
   let deployer: TaskDeployer;
 
   beforeEach(async () => {
@@ -41,7 +42,7 @@ describe("TaskDeployer", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  /** The window closes on a floating promise; wait until it actually landed. */
+  /** Wait until a confirmed deployment state has landed. */
   async function settled(taskId: string): Promise<void> {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const board = await service.getBoard("proj-1");
@@ -105,17 +106,17 @@ describe("TaskDeployer", () => {
     expect(board.tasks.find((entry) => entry.id === task.id)?.deployment ?? null).toBeNull();
   });
 
-  test("closing window: an agent that stops without deploying reopens the bar", async () => {
+  test("an agent that pauses without deploying keeps the progress window open", async () => {
     const taskId = await doneTask({ taskAgentId: "agent-7" });
     await deployer.deploy("proj-1", taskId);
 
     idleCallbacks.forEach((callback) => callback());
-    await settled(taskId);
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const board = await service.getBoard("proj-1");
     const task = board.tasks.find((entry) => entry.id === taskId);
     expect(task?.column).toBe("done");
-    expect(task?.deployment ?? null).toBeNull();
+    expect(task?.deployment?.state).toBe("running");
   });
 
   test("closing window: a card stamped live records a successful deploy", async () => {
@@ -148,6 +149,19 @@ describe("TaskDeployer", () => {
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === taskId)?.deployment?.state).toBe("deployed");
+  });
+
+  test("a terminal agent error records one confirmed deployment failure", async () => {
+    const taskId = await doneTask({ taskAgentId: "agent-7" });
+    await deployer.deploy("proj-1", taskId);
+
+    idleCallbacks.forEach((callback) => callback("error"));
+    await settled(taskId);
+
+    const board = await service.getBoard("proj-1");
+    const deployment = board.tasks.find((entry) => entry.id === taskId)?.deployment;
+    expect(deployment?.state).toBe("failed");
+    expect(deployment?.summary).toContain("erreur confirmée");
   });
 
   test("a card whose work is already live is a no-op", async () => {

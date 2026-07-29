@@ -131,10 +131,10 @@ describe("TaskBatchDeployer", () => {
   }
 
   /** Lets the fire-and-forget run finish before assertions read the board. */
-  async function settle(check?: () => boolean): Promise<void> {
+  async function settle(check?: () => boolean | Promise<boolean>): Promise<void> {
     for (let index = 0; index < 200; index += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2));
-      if (check?.()) {
+      if (await check?.()) {
         return;
       }
     }
@@ -148,6 +148,10 @@ describe("TaskBatchDeployer", () => {
   test("publishes the whole queue in one run, stamps the cards and restarts the engine", async () => {
     const first = await seedQueued("Login", "task/login");
     const second = await seedQueued("Signup", "task/signup");
+    await service.patchTask("proj-1", first.id, (current) => ({
+      ...current,
+      needsDaemonRestart: true,
+    }));
     const deployer = buildDeployer({
       url: "https://app.haikostudio.cloud",
       runs: [
@@ -183,6 +187,10 @@ describe("TaskBatchDeployer", () => {
 
   test("stamps the cards but holds the restart until the deploy agent has finished", async () => {
     const card = await seedQueued("Login", "task/login");
+    await service.patchTask("proj-1", card.id, (current) => ({
+      ...current,
+      needsDaemonRestart: true,
+    }));
     let releaseAgent: (() => void) | null = null;
     const idleCalls: string[] = [];
     const deployer = buildDeployer({
@@ -228,7 +236,7 @@ describe("TaskBatchDeployer", () => {
 
     const result = await deployer.deployAll("proj-1");
     expect(result.taskIds).toEqual([shipped.id]);
-    await settle(() => restarts.length > 0);
+    await settle(() => noteContains("en ligne"));
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === shipped.id)?.deployedAt).toBeTruthy();
@@ -255,32 +263,43 @@ describe("TaskBatchDeployer", () => {
     expect(board.deployBatch?.error).toContain("build cassé");
   });
 
-  test("fails fast when the deploy agent stops at rest without a live verdict", async () => {
+  test("keeps progress open when the deploy agent pauses without a live verdict", async () => {
     const task = await seedQueued("Login", "task/login");
     const deployer = buildDeployer({
       agentId: "deploy-agent-1",
-      // The run never concludes — the agent paused to ask a question and is now
-      // idle. Without the stall guard this would hang until the 35 min ceiling.
+      // The run pauses once, then resumes and reaches a verified live outcome.
       runs: [
         { deploying: true, phase: "build", outcome: null, error: null },
         { deploying: true, phase: "build", outcome: null, error: null },
-        { deploying: true, phase: "build", outcome: null, error: null },
-        { deploying: true, phase: "build", outcome: null, error: null },
+        { deploying: false, phase: "done", outcome: "success", error: null },
       ],
       awaitDeployAgentIdle: async () => {},
     });
 
     await deployer.deployAll("proj-1");
-    await settle(() => restarts.length > 0 || noteContains("attend"));
-    await settle();
+    await settle(() => noteContains("en ligne"));
 
     const board = await service.getBoard("proj-1");
     const card = board.tasks.find((entry) => entry.id === task.id);
-    expect(card?.deployedAt ?? null).toBeNull();
-    expect(card?.deployment?.state).toBe("failed");
-    expect(board.deployBatch?.state).toBe("failed");
-    expect(board.deployBatch?.error).toContain("arrêté");
-    // A stall is never mistaken for a reason to restart the engine.
+    expect(card?.deployedAt).toBeTruthy();
+    expect(card?.deployment?.state).toBe("deployed");
+    expect(board.deployBatch?.state).toBe("success");
+    expect(board.deployBatch?.error ?? null).toBeNull();
+    // This batch only changed the interface, so no restart is needed.
+    expect(restarts).toEqual([]);
+  });
+
+  test("does not restart the daemon for interface-only work", async () => {
+    const card = await seedQueued("Interface", "task/interface");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(() => noteContains("en ligne"));
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
     expect(restarts).toEqual([]);
   });
 
@@ -388,9 +407,7 @@ describe("TaskBatchDeployer", () => {
     // nothing left to publish — it is dropped cleanly, never run empty, and the
     // "en attente" marker is cleared.
     release?.();
-    await settle(() => restarts.length > 0);
-    // Let the queue drain (the stale-drop clears the marker) before asserting.
-    await settle();
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.queued === false);
     expect(triggered).toHaveLength(1);
     const board = await service.getBoard("proj-1");
     expect(board.deployBatch?.state).toBe("success");
@@ -424,7 +441,20 @@ describe("TaskBatchDeployer", () => {
     // Releasing the first lets it finish, then the queued run starts on its own
     // and publishes the card that was still waiting. Two runs, one after another.
     release?.();
-    await settle(() => triggered.length === 2 && restarts.length === 2);
+    await settle(async () => {
+      const board = await service.getBoard("proj-1");
+      let lateIsLive = false;
+      for (const task of board.tasks) {
+        if (task.id === late.id) {
+          lateIsLive = Boolean(task.deployedAt);
+          break;
+        }
+      }
+      return triggered.length === 2 && lateIsLive;
+    });
+    // Let the fire-and-forget cycle release its lock and finish its final write
+    // before the temporary board store is removed by afterEach.
+    await settle();
     expect(triggered).toHaveLength(2);
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === late.id)?.deployedAt).toBeTruthy();

@@ -3,7 +3,7 @@ import type pino from "pino";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
-import { resolveTaskAgentId } from "./validator.js";
+import { type AgentStopReason, resolveTaskAgentId } from "./validator.js";
 import { isTaskLive } from "./batch-deployer.js";
 
 export interface TaskDeploymentOutcome {
@@ -21,7 +21,7 @@ export interface TaskDeployerOptions {
   /** Sends the deploy prompt into the task agent's own conversation. */
   sendPrompt: (input: { agentId: string; prompt: string }) => Promise<void>;
   /** Calls back once the agent stops working; returns an unsubscribe function. */
-  watchAgentIdle: (agentId: string, onIdle: () => void) => () => void;
+  watchAgentIdle: (agentId: string, onIdle: (reason?: AgentStopReason) => void) => () => void;
   logger: pino.Logger;
 }
 
@@ -45,8 +45,8 @@ export interface TaskDeployerOptions {
  * card (see AGENT_WRITABLE_TASK_COLUMNS in paseo-tools.ts). Outside that window an
  * agent still may not deploy a card.
  *
- * If the agent stops without moving the card, the window closes on its own so the
- * bar is immediately pressable again — a deploy can never get stuck.
+ * The window stays open while the agent works or waits for an answer. It closes
+ * only after the card carries proof that the result is live.
  */
 export class TaskDeployer {
   private readonly taskBoardService: TaskBoardService;
@@ -103,9 +103,9 @@ export class TaskDeployer {
 
     // Watch before sending: the agent may finish its turn faster than we could
     // subscribe afterwards.
-    this.watchAgentIdle(agentId, () => {
-      void this.closeWindow(projectId, taskId).catch((error) => {
-        this.logger.error({ err: error, projectId, taskId }, "Failed to close deployment window");
+    this.watchAgentIdle(agentId, (reason = "idle") => {
+      void this.settleWindow(projectId, taskId, reason).catch((error) => {
+        this.logger.error({ err: error, projectId, taskId }, "Failed to confirm deployment window");
       });
     });
 
@@ -123,11 +123,15 @@ export class TaskDeployer {
   }
 
   /**
-   * The agent stopped talking. Either it moved the card to "deployed" — in which
-   * case the deployment succeeded — or it did not, and the window must close so
-   * the user can press again without waiting on anything.
+   * The agent stopped talking. Close the window only when the card itself proves
+   * the work is live. Otherwise it may simply be waiting for the user, so the
+   * progress indicator must remain visible.
    */
-  private async closeWindow(projectId: string, taskId: string): Promise<void> {
+  private async settleWindow(
+    projectId: string,
+    taskId: string,
+    reason: AgentStopReason,
+  ): Promise<void> {
     const board = await this.taskBoardService.getBoard(projectId);
     const task = board.tasks.find((entry) => entry.id === taskId);
     if (!task || task.deployment?.state !== "running") {
@@ -138,11 +142,21 @@ export class TaskDeployer {
     // live URL as success keeps the window from resetting to a fresh, clickable
     // "Lancer le déploiement" on a card whose work is already published.
     const deployed = isTaskLive(task);
+    if (!deployed && reason === "idle") {
+      return;
+    }
     await this.taskBoardService.patchTask(projectId, taskId, (current) => ({
       ...current,
       deployment: deployed
         ? { state: "deployed" as const, startedAt: current.deployment?.startedAt }
-        : null,
+        : {
+            state: "failed" as const,
+            startedAt: current.deployment?.startedAt,
+            summary:
+              reason === "error"
+                ? "La publication s'est arrêtée sur une erreur confirmée."
+                : "La publication s'est arrêtée avant de pouvoir confirmer la mise en ligne.",
+          },
     }));
   }
 }

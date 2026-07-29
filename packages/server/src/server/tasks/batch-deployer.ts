@@ -21,17 +21,6 @@ export interface DeployRunSnapshot {
 
 /** How often the publication is polled while it runs. */
 const POLL_INTERVAL_MS = 5_000;
-/** Hard stop for the watcher, slightly above the deploy's own 30 min ceiling. */
-const MAX_WATCH_MS = 35 * 60 * 1000;
-/**
- * How many consecutive polls the grouped deploy agent may sit at rest while the
- * run still reports "deploying" before we call it a stall. One poll of grace
- * absorbs the tiny window between the agent finishing and the run recording its
- * outcome; beyond that, an agent at rest with no verdict has stopped for good —
- * almost always because it paused to ask a question — and will never finish on
- * its own. Concluding here is what stops the batch from hanging the full 35 min.
- */
-const IDLE_STALL_POLLS = 2;
 /**
  * Breathing room between "everything is live" and the daemon restart, so the
  * board update and the closing note reach the clients before the socket drops.
@@ -81,7 +70,7 @@ export interface TaskBatchDeployerOptions {
   readPublishedSha?: () => Promise<string | null>;
   /** Hands a deploy-then-confirm prompt to one card's own agent. */
   deployTask: (projectId: string, taskId: string) => Promise<unknown>;
-  /** Restarts the daemon — the last step of a successful self-host batch. */
+  /** Restarts the daemon — the last step of a successful self-host batch, when needed. */
   requestDaemonRestart: (reason: string) => void;
   /**
    * Resolves once the grouped deploy agent has gone back to rest (posted its own
@@ -93,7 +82,6 @@ export interface TaskBatchDeployerOptions {
   awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
   /** Injected so tests don't wait on real time. */
   sleep?: (ms: number) => Promise<void>;
-  now?: () => number;
   logger: pino.Logger;
 }
 
@@ -154,7 +142,6 @@ export function selectPendingDeployTasks(tasks: readonly KanbanTask[]): KanbanTa
 export class TaskBatchDeployer {
   private readonly options: TaskBatchDeployerOptions;
   private readonly sleep: (ms: number) => Promise<void>;
-  private readonly now: () => number;
   private readonly logger: pino.Logger;
   /** Projects with a publication running right now — the one active slot. */
   private readonly running = new Set<string>();
@@ -169,7 +156,6 @@ export class TaskBatchDeployer {
   constructor(options: TaskBatchDeployerOptions) {
     this.options = options;
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    this.now = options.now ?? (() => Date.now());
     this.logger = options.logger.child({ module: "task-batch-deployer" });
   }
 
@@ -395,33 +381,16 @@ export class TaskBatchDeployer {
     /** The grouped deploy agent to let finish before the restart, if any. */
     agentId: string | null;
   }): Promise<void> {
-    const deadline = this.now() + MAX_WATCH_MS;
     let lastPhase: string | null = null;
-    // A grouped deploy agent that returns to rest WITHOUT the run reaching a live
-    // outcome has stopped mid-publication — the classic cause is a question it
-    // asked and is now waiting on. We watch for that in parallel so the batch can
-    // fail fast with a clear reason instead of freezing the cards for 35 minutes.
-    // Subscribe to the agent's rest ONCE and share it: the stall check below reads
-    // it, and succeed() awaits the same promise before the restart. Calling
-    // awaitDeployAgentIdle twice would double-subscribe and confuse the ordering.
-    let agentAtRest = false;
+    // Subscribe once and share the promise with succeed(). An idle agent is not
+    // a failed agent: it may be waiting for the user, a permission or an external
+    // operation. Only the deploy run's verified outcome is allowed to close the
+    // progress window or produce an error.
     const idle =
       input.agentId && this.options.awaitDeployAgentIdle
         ? this.options.awaitDeployAgentIdle(input.agentId)
         : null;
-    if (idle) {
-      void (async () => {
-        try {
-          await idle;
-          agentAtRest = true;
-        } catch {
-          // Idle wait failed — the stall check simply never fires; the 35 min
-          // ceiling and the run's own outcome still close the batch.
-        }
-      })();
-    }
-    let stalledPolls = 0;
-    while (this.now() < deadline) {
+    while (true) {
       await this.sleep(POLL_INTERVAL_MS);
       let run: DeployRunSnapshot;
       try {
@@ -452,29 +421,12 @@ export class TaskBatchDeployer {
         return;
       }
       if (run.deploying) {
-        // The agent is idle but the run never concluded: after a poll of grace
-        // (in case the outcome is a beat behind), call it a stall and fail with a
-        // reason the user can act on, rather than hanging until the ceiling.
-        if (agentAtRest && ++stalledPolls >= IDLE_STALL_POLLS) {
-          await this.fail(
-            input.projectId,
-            input.pending,
-            "L'agent de publication s'est arrêté avant d'avoir mis la nouvelle version en ligne (il attend peut-être une réponse de votre part). Rien n'a été publié.",
-          );
-          return;
-        }
         continue;
       }
-      // No run known any more (retention expired): stop quietly rather than
-      // claiming an outcome we can't vouch for. The windows still close.
-      await this.closeAll(input.projectId, input.pending);
-      return;
+      // A temporarily unreadable/unknown run is not evidence of failure. Keep
+      // the shared progress visible and poll again until the live check records
+      // a definitive success or failure.
     }
-    await this.sayAll(
-      input.pending,
-      "⚠️ **Publication groupée** — toujours en cours après 35 minutes, je cesse de la suivre.",
-    );
-    await this.closeAll(input.projectId, input.pending);
   }
 
   /** Never lets an unreadable version marker break a successful publication. */
@@ -487,7 +439,7 @@ export class TaskBatchDeployer {
     }
   }
 
-  /** Everything is online: stamp the cards, then restart the engine. */
+  /** Everything is online: stamp the cards, then restart the engine if needed. */
   private async succeed(
     projectId: string,
     pending: KanbanTask[],
@@ -498,6 +450,7 @@ export class TaskBatchDeployer {
     // Read once for the whole batch: every card of a run goes live in the same
     // build, and a per-card read would only invite them to disagree.
     const publishedSha = await this.readPublishedSha();
+    const needsDaemonRestart = pending.some((task) => task.needsDaemonRestart === true);
     for (const task of pending) {
       try {
         // Clear "Redémarrage requis" as we stamp: this batch restarts the daemon
@@ -526,6 +479,11 @@ export class TaskBatchDeployer {
         ? `✅ **Publication groupée** — c'est en ligne : ${url}`
         : "✅ **Publication groupée** — c'est en ligne.",
     );
+    // Interface-only work is already operational once the published files are
+    // served. Do not bounce the daemon just for ceremony.
+    if (!needsDaemonRestart) {
+      return;
+    }
     // The publication is live, but the grouped deploy agent may still be checking
     // the served version and writing its own closing verdict. Restarting now would
     // kill it mid-sentence and leave its chat frozen on "j'attends la fin…". So
@@ -538,9 +496,8 @@ export class TaskBatchDeployer {
         this.logger.debug({ err: error }, "Wait for deploy agent to finish failed");
       }
     }
-    // The daemon is still running the code from BEFORE this publication, so the
-    // last step of the batch is restarting it. That is exactly what the user
-    // authorized by pressing the button — nothing else ever restarts it on its own.
+    // Daemon code changed, so the last step is restarting it. Nothing else ever
+    // restarts it on its own.
     await this.sayAll(
       pending,
       "🔄 **Publication groupée** — redémarrage du moteur pour appliquer les changements…",
@@ -567,25 +524,6 @@ export class TaskBatchDeployer {
     );
     for (const task of pending) {
       await this.markFailed(projectId, task.id);
-    }
-  }
-
-  private async closeAll(projectId: string, pending: KanbanTask[]): Promise<void> {
-    const reason =
-      "Publication interrompue avant la fin : impossible de confirmer que la mise en ligne a abouti.";
-    await this.options.taskBoardService.patchDeployBatch(projectId, {
-      state: "failed",
-      finishedAt: new Date().toISOString(),
-      error: reason,
-    });
-    // We could not vouch for a live result, so nothing is stamped or archived: the
-    // cards stay in « À déployer », ready for a fresh « Tout déployer ».
-    await this.sayAll(
-      pending,
-      `⚠️ **Publication groupée** — ${reason}\n\nAucune carte n'a été archivée ; la file reste en place. Vérifiez l'état du site, puis relancez la publication si besoin.`,
-    );
-    for (const task of pending) {
-      await this.closeWindow(projectId, task.id);
     }
   }
 

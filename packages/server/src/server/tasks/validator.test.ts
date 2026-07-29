@@ -5,7 +5,7 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
-import { TaskValidator } from "./validator.js";
+import { type AgentStopReason, TaskValidator } from "./validator.js";
 
 const logger = pino({ level: "silent" });
 
@@ -13,7 +13,7 @@ describe("TaskValidator", () => {
   let dir: string;
   let service: TaskBoardService;
   let sent: Array<{ agentId: string; prompt: string }>;
-  let idleCallbacks: Array<() => void>;
+  let idleCallbacks: Array<(reason?: AgentStopReason) => void>;
   let validator: TaskValidator;
 
   beforeEach(async () => {
@@ -41,7 +41,7 @@ describe("TaskValidator", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  /** The window closes on a floating promise; wait until it actually landed. */
+  /** Wait until a confirmed validation state has landed. */
   async function settled(taskId: string): Promise<void> {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const board = await service.getBoard("proj-1");
@@ -109,17 +109,17 @@ describe("TaskValidator", () => {
     expect(board.tasks.find((entry) => entry.id === task.id)?.validation ?? null).toBeNull();
   });
 
-  test("closing window: an agent that stops without completing reopens the bar", async () => {
+  test("an agent that pauses without completing keeps the progress window open", async () => {
     const taskId = await inProgressTask({ taskAgentId: "agent-7" });
     await validator.validate("proj-1", taskId);
 
     idleCallbacks.forEach((callback) => callback());
-    await settled(taskId);
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const board = await service.getBoard("proj-1");
     const task = board.tasks.find((entry) => entry.id === taskId);
     expect(task?.column).toBe("in_progress");
-    expect(task?.validation ?? null).toBeNull();
+    expect(task?.validation?.state).toBe("running");
   });
 
   test("closing window: a completed card records a passed check", async () => {
@@ -132,6 +132,19 @@ describe("TaskValidator", () => {
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === taskId)?.validation?.state).toBe("passed");
+  });
+
+  test("a terminal agent error records one confirmed validation failure", async () => {
+    const taskId = await inProgressTask({ taskAgentId: "agent-7" });
+    await validator.validate("proj-1", taskId);
+
+    idleCallbacks.forEach((callback) => callback("error"));
+    await settled(taskId);
+
+    const board = await service.getBoard("proj-1");
+    const validation = board.tasks.find((entry) => entry.id === taskId)?.validation;
+    expect(validation?.state).toBe("failed");
+    expect(validation?.summary).toContain("erreur confirmée");
   });
 
   test("an already finished card is a no-op", async () => {
