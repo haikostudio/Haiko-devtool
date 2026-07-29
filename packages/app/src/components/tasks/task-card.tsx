@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import Animated, {
   cancelAnimation,
@@ -10,7 +10,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { Bot, Clock, GitPullRequest, Globe } from "lucide-react-native";
+import { Bot, CircleHelp, Clock, GitPullRequest, Globe } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { KanbanTask } from "@/data/tasks";
@@ -30,6 +30,12 @@ import {
   type ScheduleBadgeDescriptor,
 } from "@/components/tasks/task-card-badge";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuHint,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   isQuietTime,
   nextQuietHoursStartMs,
   waitsForOffPeak,
@@ -43,6 +49,7 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
 const warningColorMapping = (theme: Theme) => ({ color: theme.colors.statusWarning });
 const ThemedBot = withUnistyles(Bot);
+const ThemedCircleHelp = withUnistyles(CircleHelp);
 const ThemedClock = withUnistyles(Clock);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedGlobe = withUnistyles(Globe);
@@ -256,12 +263,15 @@ export const TaskCard = memo(function TaskCard({
             {task.title}
           </Text>
         </View>
-        <CardStatusRow badge={scheduleBadge} publishNotice={publishNotice} />
-        {task.analysis?.state === "failed" && task.analysis.reason ? (
-          <Text style={styles.analysisReason} numberOfLines={2}>
-            {t("tasks.analysis.reason", { reason: task.analysis.reason })}
-          </Text>
-        ) : null}
+        <CardStatusRow
+          badge={scheduleBadge}
+          publishNotice={publishNotice}
+          errorReason={
+            task.analysis?.state === "failed" && task.analysis.reason && !task.estimate
+              ? task.analysis.reason
+              : null
+          }
+        />
         {nextRunLabel ? (
           <View style={styles.nextRunRow}>
             <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
@@ -312,12 +322,14 @@ export const TaskCard = memo(function TaskCard({
 const CardStatusRow = memo(function CardStatusRow({
   badge,
   publishNotice,
+  errorReason,
 }: {
   badge: ScheduleBadgeDescriptor | null;
   publishNotice: ScheduleBadgeDescriptor | null;
+  errorReason: string | null;
 }) {
   const { t } = useTranslation();
-  if (!badge && !publishNotice) {
+  if (!badge && !publishNotice && !errorReason) {
     return null;
   }
   return (
@@ -326,7 +338,36 @@ const CardStatusRow = memo(function CardStatusRow({
       {publishNotice ? (
         <StatusBadge label={t(publishNotice.labelKey)} variant={publishNotice.variant} />
       ) : null}
+      {errorReason ? <AnalysisReasonHint reason={errorReason} /> : null}
     </View>
+  );
+});
+
+/**
+ * The "?" beside an error badge. The card stays clean — no red wall of text —
+ * and the full failure reason lives one tap away in a popover that reads in both
+ * light and dark themes and dismisses on outside tap or a second tap. Only tasks
+ * carrying a reason (failed analysis) render it; healthy statuses stay bare.
+ */
+const AnalysisReasonHint = memo(function AnalysisReasonHint({ reason }: { reason: string }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger
+        style={styles.reasonTrigger}
+        testID="task-card-error-reason"
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.analysis.reasonHint")}
+      >
+        <ThemedCircleHelp size={ICON_SIZE.sm} uniProps={dangerColorMapping} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" offset={6} maxWidth={280}>
+        <DropdownMenuHint style={styles.reasonHint}>
+          {t("tasks.analysis.reason", { reason })}
+        </DropdownMenuHint>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 });
 
@@ -580,12 +621,17 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     lineHeight: 17,
   },
-  // Plain-language "why the analysis failed" line under the error badge, so a
-  // card wearing "Analyse impossible" explains itself instead of staying silent.
-  analysisReason: {
-    color: theme.colors.destructive,
-    fontSize: theme.fontSize.xs,
-    lineHeight: 17,
+  // The small "?" that sits beside an error badge. Kept compact so the row still
+  // reads as one line of status; tapping it opens the full reason in a popover.
+  reasonTrigger: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // The failure reason inside the popover — muted popover text, wraps freely.
+  reasonHint: {
+    paddingVertical: theme.spacing[1],
   },
   tagsRow: {
     flexDirection: "row",

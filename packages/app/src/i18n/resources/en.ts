@@ -548,6 +548,7 @@ export const en = {
       failedExhausted: "Analysis failed",
       retry: "Analyse again",
       reason: "Reason: {{reason}}",
+      reasonHint: "Show the failure reason",
     },
     schedule: {
       failed: "Failed",
