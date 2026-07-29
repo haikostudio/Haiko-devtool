@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-banner";
+import { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
 
 describe("batchProgressRatio", () => {
   it("never reads as empty before the first phase lands", () => {

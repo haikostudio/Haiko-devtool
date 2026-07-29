@@ -1,5 +1,12 @@
 import { memo, type ReactNode, useCallback, useMemo } from "react";
-import { ActivityIndicator, type GestureResponderEvent, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  type GestureResponderEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { CheckCircle2, TriangleAlert, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -7,6 +14,10 @@ import type { TaskColumn } from "@/data/tasks";
 import type { TaskDeployBatch } from "@getpaseo/protocol/tasks/types";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
+import { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
+
+// Re-exported so existing importers (and tests) keep their entry points.
+export { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
@@ -16,37 +27,6 @@ const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCheck = withUnistyles(CheckCircle2);
 const ThemedWarning = withUnistyles(TriangleAlert);
 const ThemedClose = withUnistyles(X);
-
-/** The build script's coarse steps, in the order it writes them. */
-const PHASES = ["save", "build", "publish"] as const;
-
-/** A finished recap stops being news after a day; it hides itself then. */
-const RECAP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-
-/** How far along the run is, as a 0→1 ratio, from the phase it reports. */
-export function batchProgressRatio(batch: Pick<TaskDeployBatch, "state" | "phase">): number {
-  if (batch.state !== "running") {
-    return 1;
-  }
-  const index = PHASES.indexOf((batch.phase ?? "") as (typeof PHASES)[number]);
-  // Before the first phase lands, show a sliver so the bar never reads as empty.
-  return index < 0 ? 0.08 : (index + 1) / (PHASES.length + 1);
-}
-
-/** True when a finished batch is still recent enough to be worth reporting. */
-export function isRecapWorthShowing(
-  batch: Pick<TaskDeployBatch, "state" | "finishedAt">,
-  nowMs: number,
-): boolean {
-  if (batch.state === "running") {
-    return false;
-  }
-  if (!batch.finishedAt) {
-    return true;
-  }
-  const finishedMs = Date.parse(batch.finishedAt);
-  return Number.isNaN(finishedMs) || nowMs - finishedMs < RECAP_MAX_AGE_MS;
-}
 
 /**
  * What the "À déployer" column shows above its cards:
@@ -132,11 +112,7 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
         </>
       ) : (
         <>
-          {titles.length > 0 ? (
-            <Text style={styles.detail} numberOfLines={4}>
-              {titles.map((title) => `• ${title}`).join("\n")}
-            </Text>
-          ) : null}
+          {titles.length > 0 ? <BatchTitleList titles={titles} /> : null}
           {batch.state === "failed" && batch.error ? (
             <Text style={styles.error} numberOfLines={3}>
               {batch.error}
@@ -190,6 +166,34 @@ function BatchCard({
     >
       {children}
     </Pressable>
+  );
+}
+
+/**
+ * The full list of what went out — one line per task, never truncated. The
+ * count in the banner title and the number of lines here come from the same
+ * batch record, so "11 mises en ligne" always shows 11 rows. Long batches get a
+ * bounded, scrollable box so the recap can't push the real cards off-screen,
+ * but nothing is hidden: every title is present and reachable by scrolling.
+ */
+function BatchTitleList({ titles }: { titles: string[] }) {
+  return (
+    <ScrollView
+      style={styles.titleList}
+      contentContainerStyle={styles.titleListContent}
+      nestedScrollEnabled
+      showsVerticalScrollIndicator
+      testID="tasks-deploy-batch-titles"
+    >
+      {titles.map((title, index) => (
+        // Static, render-once recap that is never reordered or filtered, so the
+        // index is a stable key and titles alone would collide on duplicates.
+        // oxlint-disable-next-line no-array-index-key
+        <Text key={`${index}-${title}`} style={styles.detail} numberOfLines={1}>
+          {`• ${title}`}
+        </Text>
+      ))}
+    </ScrollView>
   );
 }
 
@@ -249,6 +253,14 @@ const styles = StyleSheet.create((theme) => ({
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.accent,
+  },
+  // Bounded so a big batch scrolls instead of shoving the real cards down;
+  // roughly eight lines fit before the box starts scrolling.
+  titleList: {
+    maxHeight: 132,
+  },
+  titleListContent: {
+    gap: theme.spacing[1] / 2,
   },
   detail: {
     color: theme.colors.foregroundMuted,
