@@ -26,10 +26,20 @@ describe("buildPaseoDeployAgentPrompt", () => {
     expect(prompt).toContain("git rev-parse HEAD");
   });
 
-  it("forbids the two shortcuts that would hurt: patching the app, restarting the engine", () => {
+  it("keeps the agent on the batch until success or a proven non-repairable failure", () => {
     const prompt = buildPaseoDeployAgentPrompt(LAUNCH);
     expect(prompt).toContain("Ne modifie jamais le code de l'application");
-    expect(prompt).toContain("Ne redémarre pas le moteur");
+    expect(prompt).toContain("Après chaque correction ciblée, relance le script");
+    expect(prompt).toContain("Ne fais jamais de relance aveugle");
+    expect(prompt).toContain("Ne quitte jamais sur un simple délai d'attente");
+  });
+
+  it("keeps the session alive and leaves the final restart to the batch orchestrator", () => {
+    const prompt = buildPaseoDeployAgentPrompt(LAUNCH);
+    expect(prompt).toContain('wait "$publication_pid"');
+    expect(prompt).toContain("archive les cartes publiées");
+    expect(prompt).toContain("déclenche le redémarrage final automatiquement");
+    expect(prompt).toContain("Si au moins une carte du lot demande un redémarrage");
   });
 
   it("names the ateliers folded into this publication, and says so when there are none", () => {

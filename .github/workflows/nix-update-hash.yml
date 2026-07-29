@@ -22,6 +22,8 @@ permissions:
 
 jobs:
   update-hash:
+    # Keep the automatic Nix maintenance on upstream, never on the self-host fork.
+    if: github.repository == "getpaseo/paseo"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v1

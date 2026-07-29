@@ -58,6 +58,8 @@ env:
 
 jobs:
   setup:
+    # The Haiko Studio fork is self-hosted; Docker checks there only waste minutes.
+    if: github.repository == "getpaseo/paseo"
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.values.outputs.image }}
