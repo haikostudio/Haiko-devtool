@@ -207,6 +207,7 @@ import { buildPaseoDeployAgentPrompt } from "../utils/paseo-deploy-agent-prompt.
 import { getPaseoAppUrl, resolveProjectDevInstanceUrl } from "../utils/project-dev-instance.js";
 import { sendPromptToAgent } from "./agent/agent-prompt.js";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
+import { CONDUCTOR_ROLE_LABEL, DEPLOYMENT_ROLE_VALUE } from "@getpaseo/protocol/agent-labels";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@getpaseo/protocol/messages";
 import type {
@@ -1459,6 +1460,11 @@ export async function createPaseoDaemon(
       promptFailure: "return-error",
       background: true,
       notifyOnFinish: true,
+      // Marks this as THE grouped-deployment agent so its answer follows the
+      // batch publication template (response-template.ts routes on this label).
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: DEPLOYMENT_ROLE_VALUE,
+      },
     });
     const agentId = created.snapshot.id;
     if (created.initialPromptError) {
