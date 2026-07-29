@@ -1,5 +1,6 @@
 import { memo, useCallback } from "react";
 import {
+  ArchiveRestore,
   MoreVertical,
   PauseCircle,
   Play,
@@ -31,10 +32,12 @@ const ThemedRefresh = withUnistyles(RefreshCw);
 const ThemedTrash = withUnistyles(Trash2);
 const ThemedPause = withUnistyles(PauseCircle);
 const ThemedResume = withUnistyles(PlayCircle);
+const ThemedUnarchive = withUnistyles(ArchiveRestore);
 
 const MENU_ICON_SIZE = 16;
 const runLeading = <ThemedPlay size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const reanalyzeLeading = <ThemedRefresh size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
+const unarchiveLeading = <ThemedUnarchive size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const deleteLeading = <ThemedTrash size={MENU_ICON_SIZE} uniProps={destructiveColorMapping} />;
 const holdLeading = <ThemedPause size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
 const unholdLeading = <ThemedResume size={MENU_ICON_SIZE} uniProps={mutedColorMapping} />;
@@ -70,10 +73,16 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   labels: Record<TaskColumn, string>;
 } & TaskCardMenuHandlers) {
   const { t } = useTranslation();
-  // "Archivé" is the terminal resting column: cards there are frozen. No menu at
-  // all — no launch, re-analyse, hold, move or delete. The card can still be
-  // opened for consultation, but nothing runs from it.
+  // "Archivé" is the terminal resting column: cards there are frozen — no launch,
+  // re-analyse, hold or free move. The one escape hatch is "Désarchiver", which
+  // undoes a misfiled card straight back to where it came from.
   const isArchived = task.column === "archived";
+  // Where "Désarchiver" sends the card: back to the column it left, or "Terminé"
+  // as a safe fallback for older cards that never recorded an origin.
+  const restoreColumn: TaskColumn = task.preArchiveColumn ?? "done";
+  const handleUnarchive = useCallback(() => {
+    onMoveTask({ taskId: task.id, column: restoreColumn, index: Number.MAX_SAFE_INTEGER });
+  }, [onMoveTask, task.id, restoreColumn]);
   const canLaunch = task.column === "validated" || task.column === "scheduled";
   // Holding a card back only means something while it is still waiting to be
   // published: a live card has nothing left to be excluded from.
@@ -111,7 +120,35 @@ export const TaskCardMenu = memo(function TaskCardMenu({
   }, [onDeleteTask, task.id, t]);
 
   if (isArchived) {
-    return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          style={styles.trigger}
+          accessibilityLabel={t("tasks.actions.taskActions")}
+          testID={`tasks-card-menu-${task.id}`}
+        >
+          <ThemedKebab size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem
+            leading={unarchiveLeading}
+            onSelect={handleUnarchive}
+            testID={`tasks-unarchive-${task.id}`}
+          >
+            {t("tasks.actions.unarchive")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            leading={deleteLeading}
+            destructive
+            onSelect={handleDelete}
+            testID={`tasks-delete-${task.id}`}
+          >
+            {t("tasks.actions.deleteTask")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   }
 
   return (

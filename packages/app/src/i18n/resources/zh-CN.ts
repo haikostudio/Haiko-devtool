@@ -658,6 +658,7 @@ export const zhCN: TranslationResources = {
       reEstimate: "重新估算",
       runNow: "立即运行",
       reanalyze: "重新分析",
+      unarchive: "取消归档",
       hold: "保留待我确认",
       resumeAuto: "恢复自动执行",
       taskActions: "任务操作",

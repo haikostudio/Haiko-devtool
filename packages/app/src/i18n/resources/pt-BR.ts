@@ -675,6 +675,7 @@ export const ptBR: TranslationResources = {
       reEstimate: "Re-estimar",
       runNow: "Executar agora",
       reanalyze: "Reanalisar",
+      unarchive: "Desarquivar",
       hold: "Aguardar meu aval",
       resumeAuto: "Retomar automático",
       taskActions: "Ações da tarefa",

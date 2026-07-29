@@ -829,6 +829,14 @@ function BoardContent({
       const task = projectTasks.find((entry) => entry.id === input.taskId);
       const from = task?.column;
       const to = input.column;
+      // "Désarchiver": the one deliberate way out of the terminal "Archivé"
+      // column. The board never lets a card be dragged out (kanban-board.web
+      // blocks it, the guard freezes it), so the only move that reaches here from
+      // "archived" is the explicit menu action — let it through untouched.
+      if (from === "archived" && to !== "archived") {
+        void boardHandle.moveTask(input);
+        return;
+      }
       // Work in flight never walks backward. A card whose agent is executing (or
       // whose final check / publication is running) offers no backward button,
       // so no gesture may take it backward either — the move is dropped in

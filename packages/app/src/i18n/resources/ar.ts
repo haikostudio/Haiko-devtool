@@ -662,6 +662,7 @@ export const ar: TranslationResources = {
       reEstimate: "إعادة التقدير",
       runNow: "تشغيل الآن",
       reanalyze: "إعادة التحليل",
+      unarchive: "إلغاء الأرشفة",
       hold: "إبقاء بانتظار موافقتي",
       resumeAuto: "استئناف تلقائي",
       taskActions: "إجراءات المهمة",

@@ -669,6 +669,7 @@ export const ru: TranslationResources = {
       reEstimate: "Пересчитать",
       runNow: "Запустить сейчас",
       reanalyze: "Повторный анализ",
+      unarchive: "Разархивировать",
       hold: "Отложить до согласия",
       resumeAuto: "Возобновить авто",
       taskActions: "Действия задачи",

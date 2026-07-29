@@ -674,6 +674,7 @@ export const es: TranslationResources = {
       reEstimate: "Re-estimar",
       runNow: "Ejecutar ahora",
       reanalyze: "Reanalizar",
+      unarchive: "Desarchivar",
       hold: "Poner en espera",
       resumeAuto: "Reanudar automático",
       taskActions: "Acciones de la tarea",

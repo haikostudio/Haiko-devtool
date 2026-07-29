@@ -669,6 +669,7 @@ export const ja: TranslationResources = {
       reEstimate: "再見積もり",
       runNow: "今すぐ実行",
       reanalyze: "再分析",
+      unarchive: "アーカイブ解除",
       hold: "承認まで保留",
       resumeAuto: "自動実行を再開",
       taskActions: "タスク操作",

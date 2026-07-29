@@ -765,9 +765,36 @@ describe("TaskBoardService", () => {
     // A card archived this way is NOT hidden (archivedAt is the separate hide
     // marker): it stays visible in the read-only Archivé column.
     expect(live.archivedAt ?? null).toBeNull();
+    // It remembers it came from "deployed", so "Désarchiver" can undo it there.
+    expect(live.preArchiveColumn).toBe("deployed");
 
     board = await service.getBoard("proj-1");
     expect(board.tasks.find((t) => t.id === task.id)?.column).toBe("archived");
+  });
+
+  test("a hand-filed card archives and « Désarchiver » restores its origin column", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Idée" });
+    // Manually filed straight from the backlog into the terminal column.
+    const archived = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "archived",
+      index: 0,
+      manual: true,
+    });
+    expect(archived.tasks.find((t) => t.id === task.id)?.column).toBe("archived");
+    expect(archived.tasks.find((t) => t.id === task.id)?.preArchiveColumn).toBe("backlog");
+
+    // "Désarchiver" walks it back exactly where it came from and forgets the origin.
+    const restored = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "backlog",
+      index: 0,
+      manual: true,
+    });
+    const card = restored.tasks.find((t) => t.id === task.id);
+    expect(card?.column).toBe("backlog");
+    expect(card?.preArchiveColumn ?? null).toBeNull();
   });
 
   test("promoteDoneTasksToDeployed is a no-op when no branches were merged", async () => {

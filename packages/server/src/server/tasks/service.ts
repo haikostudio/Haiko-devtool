@@ -130,11 +130,17 @@ function applyColumnMove(
     !alreadyCompleted && PIPELINE_COLUMNS.has(input.column) && !PIPELINE_COLUMNS.has(task.column);
   const leavingPipeline = !PIPELINE_COLUMNS.has(input.column) && PIPELINE_COLUMNS.has(task.column);
   const returningToDraft = INERT_COLUMNS.has(input.column) && !INERT_COLUMNS.has(task.column);
+  const enteringArchive = input.column === "archived" && task.column !== "archived";
+  const leavingArchive = task.column === "archived" && input.column !== "archived";
   const moved: KanbanTask = {
     ...task,
     ...(returningToDraft ? resetToDraft(task) : {}),
     column: input.column,
     updatedAt: now,
+    // Remember where a card came from as it enters "Archivé", so "Désarchiver"
+    // can put it back exactly there. Cleared once it leaves the archive again.
+    ...(enteringArchive ? { preArchiveColumn: task.column } : {}),
+    ...(leavingArchive ? { preArchiveColumn: null } : {}),
     ...stampTerminalDates(task, input.column, now),
     ...(input.manual ? { manualOverrideAt: now } : {}),
     // A user drag into a pipeline column is an implicit approval of the proposal.

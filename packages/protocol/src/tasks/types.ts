@@ -258,6 +258,12 @@ export const KanbanTaskSchema = z.object({
   // docs/task-board-cycle.md). Additive + optional: old boards/clients simply
   // omit it, and un-archiving clears it back to absent.
   archivedAt: z.string().nullable().optional(),
+  // The column the card sat in just before it entered the terminal "archived"
+  // column, so an accidental archive can be undone straight back to where it
+  // came from ("Désarchiver"). Auto-archived cards (published → archived) record
+  // "deployed"; a hand-filed card records whatever it was dragged from. Additive
+  // + optional: old boards/clients omit it, and un-archiving clears it.
+  preArchiveColumn: TaskColumnSchema.nullable().optional(),
   // Set once the task's line has been added to a billing document.
   billing: TaskBillingSchema.nullable().optional(),
   // Result of the final check behind "Valider la tâche". Additive + optional.

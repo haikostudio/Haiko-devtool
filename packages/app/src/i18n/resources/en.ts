@@ -666,6 +666,7 @@ export const en = {
       reEstimate: "Re-estimate",
       runNow: "Run now",
       reanalyze: "Re-analyze",
+      unarchive: "Unarchive",
       hold: "Hold for my go",
       resumeAuto: "Resume auto-run",
       taskActions: "Task actions",
