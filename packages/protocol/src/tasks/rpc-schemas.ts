@@ -387,6 +387,10 @@ export const TasksBoardDeployAllResponseSchema = z.object({
     // True when the batch publication really started. The run then plays out in
     // the cards' own conversations (and on the board), not in this response.
     started: z.boolean(),
+    // True when a publication was already running and this request was placed in
+    // the queue instead of started. The board then shows "une publication en
+    // attente". Additive + optional: old daemons never set it.
+    queued: z.boolean().optional(),
     // The cards this run is taking online. Additive + optional.
     taskIds: z.array(z.string()).optional(),
     error: z.string().nullable(),

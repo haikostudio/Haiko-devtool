@@ -539,6 +539,7 @@ export const ptBR: TranslationResources = {
       batchDone: "{{count}} tarefa(s) no ar",
       batchFailed: "A publicação falhou",
       batchAuto: "iniciada automaticamente",
+      batchQueued: "Uma publicação em espera — começará assim que esta terminar",
       batchOpenAgent: "Ver o agente de publicação",
       batchPhase: {
         start: "Preparando…",

@@ -523,6 +523,7 @@ export const zhCN: TranslationResources = {
       batchDone: "已上线 {{count}} 个任务",
       batchFailed: "发布失败",
       batchAuto: "自动启动",
+      batchQueued: "有一个发布在排队 — 当前发布结束后即开始",
       batchOpenAgent: "查看发布代理",
       batchPhase: {
         start: "准备中…",

@@ -527,6 +527,7 @@ export const ar: TranslationResources = {
       batchDone: "تم نشر {{count}} مهمة",
       batchFailed: "فشل النشر",
       batchAuto: "بدأت تلقائيًا",
+      batchQueued: "نشرة واحدة في الانتظار — ستبدأ فور انتهاء هذه",
       batchOpenAgent: "عرض وكيل النشر",
       batchPhase: {
         start: "قيد التحضير…",

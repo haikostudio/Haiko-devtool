@@ -109,6 +109,11 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
             })}
             {batch.auto ? ` · ${t("tasks.board.batchAuto")}` : ""}
           </Text>
+          {batch.queued ? (
+            <Text style={styles.detail} testID="tasks-deploy-batch-queued">
+              {t("tasks.board.batchQueued")}
+            </Text>
+          ) : null}
         </>
       ) : (
         <>

@@ -533,6 +533,7 @@ export const ru: TranslationResources = {
       batchDone: "Опубликовано задач: {{count}}",
       batchFailed: "Публикация не удалась",
       batchAuto: "запущена автоматически",
+      batchQueued: "Одна публикация в очереди — начнётся, как только завершится текущая",
       batchOpenAgent: "Открыть агента публикации",
       batchPhase: {
         start: "Подготовка…",

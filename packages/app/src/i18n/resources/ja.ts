@@ -533,6 +533,7 @@ export const ja: TranslationResources = {
       batchDone: "{{count}} 件を公開しました",
       batchFailed: "公開に失敗しました",
       batchAuto: "自動実行",
+      batchQueued: "公開待ちが1件 — これが終わり次第に開始します",
       batchOpenAgent: "公開エージェントを表示",
       batchPhase: {
         start: "準備中…",

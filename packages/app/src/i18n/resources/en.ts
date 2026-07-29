@@ -530,6 +530,7 @@ export const en = {
       batchDone: "{{count}} task(s) went live",
       batchFailed: "The publication failed",
       batchAuto: "started automatically",
+      batchQueued: "One publication waiting — it starts as soon as this one ends",
       batchOpenAgent: "View the publication agent",
       batchPhase: {
         start: "Preparing…",

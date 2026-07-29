@@ -93,6 +93,8 @@ describe("TaskBatchDeployer", () => {
     started?: boolean;
     agentId?: string | null;
     awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
+    /** Blocks each triggerDeploy until resolved — holds a run active on purpose. */
+    holdTrigger?: Promise<void>;
   }) {
     const runs = [...(input.runs ?? [])];
     return new TaskBatchDeployer({
@@ -107,6 +109,9 @@ describe("TaskBatchDeployer", () => {
       resolveProjectUrl: async () => input.url ?? null,
       triggerDeploy: async (trigger) => {
         triggered.push(trigger);
+        if (input.holdTrigger) {
+          await input.holdTrigger;
+        }
         return {
           started: input.started ?? true,
           error: "déjà en cours",
@@ -152,7 +157,7 @@ describe("TaskBatchDeployer", () => {
     });
 
     const result = await deployer.deployAll("proj-1");
-    expect(result).toEqual({ started: true, taskIds: [first.id, second.id] });
+    expect(result).toEqual({ started: true, queued: false, taskIds: [first.id, second.id] });
     await settle(() => restarts.length > 0);
 
     // ONE publication for the whole batch. Tasks run in place on main, so there
@@ -349,5 +354,79 @@ describe("TaskBatchDeployer", () => {
     // No daemon restart on a client project: its own service is restarted by the
     // agent that deployed it.
     expect(restarts).toEqual([]);
+  });
+
+  test("a second request while one is running is queued, not run in parallel", async () => {
+    await seedQueued("Login", "task/login");
+    let release: (() => void) | null = null;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const deployer = buildDeployer({
+      url: "https://app.haikostudio.cloud",
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+      holdTrigger: hold,
+    });
+
+    // First publication starts and is held mid-flight (triggerDeploy blocked).
+    const first = await deployer.deployAll("proj-1");
+    expect(first).toEqual({
+      started: true,
+      queued: false,
+      taskIds: [expect.any(String)],
+    });
+    await settle(() => triggered.length === 1);
+
+    // A second press lands while the first is still active: it is QUEUED, not
+    // started in parallel and not refused. The board shows it as "en attente".
+    const second = await deployer.deployAll("proj-1");
+    expect(second).toEqual({ started: false, queued: true, taskIds: [] });
+    expect(triggered).toHaveLength(1);
+    expect((await service.getBoard("proj-1")).deployBatch?.queued).toBe(true);
+
+    // The first finishes and puts everything online. The queued run then finds
+    // nothing left to publish — it is dropped cleanly, never run empty, and the
+    // "en attente" marker is cleared.
+    release?.();
+    await settle(() => restarts.length > 0);
+    // Let the queue drain (the stale-drop clears the marker) before asserting.
+    await settle();
+    expect(triggered).toHaveLength(1);
+    const board = await service.getBoard("proj-1");
+    expect(board.deployBatch?.state).toBe("success");
+    expect(board.deployBatch?.queued).toBe(false);
+  });
+
+  test("a queued publication runs when work is still waiting", async () => {
+    await seedQueued("Login", "task/login");
+    let release: (() => void) | null = null;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const deployer = buildDeployer({
+      url: "https://app.haikostudio.cloud",
+      runs: [
+        { deploying: false, phase: "done", outcome: "success", error: null },
+        { deploying: false, phase: "done", outcome: "success", error: null },
+      ],
+      holdTrigger: hold,
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(() => triggered.length === 1);
+
+    // A brand-new card arrives while the first run is held, then a second press
+    // queues behind it.
+    const late = await seedQueued("Signup", "task/signup");
+    const queued = await deployer.deployAll("proj-1");
+    expect(queued.queued).toBe(true);
+
+    // Releasing the first lets it finish, then the queued run starts on its own
+    // and publishes the card that was still waiting. Two runs, one after another.
+    release?.();
+    await settle(() => triggered.length === 2 && restarts.length === 2);
+    expect(triggered).toHaveLength(2);
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === late.id)?.deployedAt).toBeTruthy();
   });
 });

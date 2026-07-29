@@ -342,6 +342,11 @@ export const TaskDeployBatchSchema = z.object({
   // watched live. Absent on ordinary projects (deployed card-by-card) and on
   // older daemons that predate the field.
   agentId: z.string().nullable().optional(),
+  // True while a SECOND publication is waiting for this one to finish. Publications
+  // are serialized (one active at a time); a request arriving mid-run is queued
+  // rather than run in parallel, and this flag is what the board shows as
+  // "une publication en attente". Additive + optional: old daemons never set it.
+  queued: z.boolean().optional(),
 });
 export type TaskDeployBatch = z.infer<typeof TaskDeployBatchSchema>;
 

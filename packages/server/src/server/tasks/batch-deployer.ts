@@ -48,6 +48,13 @@ const PHASE_LABELS: Record<string, string> = {
 export interface TaskBatchDeployResult {
   /** True when the batch publication really started. */
   started: boolean;
+  /**
+   * True when a publication was already running for this project and this request
+   * was placed in the queue instead. It will begin on its own once the active one
+   * finishes — unless nothing is left to publish by then, in which case it is
+   * dropped cleanly rather than run empty.
+   */
+  queued: boolean;
   /** The cards this run is taking online. */
   taskIds: string[];
 }
@@ -127,13 +134,31 @@ export function selectPendingDeployTasks(tasks: readonly KanbanTask[]): KanbanTa
  *
  * It refuses to start while cards are still running ("En cours"): a build taken
  * from a checkout other agents are writing into is the torn-bundle bug.
+ *
+ * Publications are SERIALIZED per project: only one runs at a time. A request
+ * arriving while one is already active is not refused and not run in parallel —
+ * it is queued, and starts on its own once the active publication ends. Two
+ * publications on the same checkout used to overwrite each other's logs and
+ * produce "ghost" runs whose real outcome was undefined; the queue is what stops
+ * that. At most one request waits per project (a second folds into the same slot:
+ * a queued run republishes whatever is in the column at its turn, so there is
+ * nothing to accumulate). When its turn comes and everything is already live, the
+ * queued run is dropped cleanly with a note instead of running empty.
  */
 export class TaskBatchDeployer {
   private readonly options: TaskBatchDeployerOptions;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
   private readonly logger: pino.Logger;
+  /** Projects with a publication running right now — the one active slot. */
   private readonly running = new Set<string>();
+  /**
+   * Projects with exactly one publication waiting behind the active one, keyed to
+   * the options it was requested with. Held in memory only: if the daemon is
+   * restarted mid-publication the whole map dies with the process, so the "lock"
+   * can never survive as a stuck ghost — a fresh daemon starts clean.
+   */
+  private readonly queued = new Map<string, { auto?: boolean }>();
 
   constructor(options: TaskBatchDeployerOptions) {
     this.options = options;
@@ -147,28 +172,67 @@ export class TaskBatchDeployer {
     options: { auto?: boolean } = {},
   ): Promise<TaskBatchDeployResult> {
     if (this.running.has(projectId)) {
-      throw new TaskBoardServiceError(
-        "batch_deploy_running",
-        "Une publication groupée est déjà en cours pour ce projet.",
-      );
+      // A publication is already active: queue exactly one behind it instead of
+      // refusing (the old behaviour) or racing it. A second request while one
+      // already waits simply refreshes the slot — the queued run republishes
+      // whatever is in the column when its turn comes, so nothing accumulates.
+      this.queued.set(projectId, options);
+      await this.setWaitingMarker(projectId, true);
+      this.logger.info({ projectId }, "Publication queued behind the active one");
+      return { started: false, queued: true, taskIds: [] };
     }
-    const board = await this.options.taskBoardService.getBoard(projectId);
+    // Claim the single slot SYNCHRONOUSLY, before the first await, so two
+    // near-simultaneous presses cannot both pass the guard above and start in
+    // parallel. Releasing it is owned entirely by finishCycle (see beginCycle).
+    this.running.add(projectId);
+    return this.beginCycle(projectId, options, { fromQueue: false });
+  }
+
+  /**
+   * Validate, open the windows and launch one publication. The `running` slot is
+   * assumed already claimed by the caller. Every exit path hands the slot to
+   * `finishCycle` — directly here when nothing starts (empty/busy), or via
+   * `run(...).finally` when a run does start — so the lock is always released and
+   * the queue always drains, even on failure.
+   */
+  private async beginCycle(
+    projectId: string,
+    options: { auto?: boolean },
+    { fromQueue }: { fromQueue: boolean },
+  ): Promise<TaskBatchDeployResult> {
+    let board: Awaited<ReturnType<TaskBoardService["getBoard"]>>;
+    try {
+      board = await this.options.taskBoardService.getBoard(projectId);
+    } catch (error) {
+      await this.finishCycle(projectId);
+      throw error;
+    }
     const pending = selectPendingDeployTasks(board.tasks);
-    if (pending.length === 0) {
-      throw new TaskBoardServiceError(
-        "batch_deploy_empty",
-        "Aucune tâche à déployer : tout ce qui attend dans cette colonne est déjà en ligne.",
-      );
-    }
     const busy = board.tasks.filter((task) => task.column === "in_progress" && !task.archivedAt);
-    if (busy.length > 0) {
+    if (pending.length === 0 || busy.length > 0) {
+      // Nothing (left) to publish, or the workshop is busy. A QUEUED request that
+      // lands here is stale — the publication that just finished already put
+      // everything online, or fresh work is back in progress — so drop it cleanly
+      // with a note rather than running empty. A DIRECT press still gets the
+      // familiar refusal so the button can explain why it did nothing.
+      if (fromQueue) {
+        await this.dropStaleQueued(projectId, pending.length === 0);
+        await this.finishCycle(projectId);
+        return { started: false, queued: false, taskIds: [] };
+      }
+      await this.finishCycle(projectId);
+      if (pending.length === 0) {
+        throw new TaskBoardServiceError(
+          "batch_deploy_empty",
+          "Aucune tâche à déployer : tout ce qui attend dans cette colonne est déjà en ligne.",
+        );
+      }
       throw new TaskBoardServiceError(
         "batch_deploy_workshop_busy",
         `${busy.length} tâche(s) sont encore en cours : attendez qu'elles se terminent avant de publier, sinon la construction embarquerait du code inachevé.`,
       );
     }
 
-    this.running.add(projectId);
     const startedAt = new Date().toISOString();
     // Open the deploy window on every card of the batch BEFORE anything starts:
     // that is what the board shows as "Publication en cours", and — on an ordinary
@@ -182,7 +246,8 @@ export class TaskBatchDeployer {
     const taskIds = pending.map((task) => task.id);
     // The board carries the run itself: the column turns it into one progress
     // bar for the whole batch, then into the "voici ce qui vient d'être mis en
-    // ligne" recap. Titles are snapshotted so the recap survives a rename.
+    // ligne" recap. Titles are snapshotted so the recap survives a rename. A fresh
+    // record starts with no "en attente" flag — this run IS the active one now.
     await this.options.taskBoardService.setDeployBatch(projectId, {
       state: "running",
       phase: null,
@@ -192,6 +257,7 @@ export class TaskBatchDeployer {
       titles: pending.map((task) => task.title),
       url: null,
       error: null,
+      queued: false,
       ...(options.auto ? { auto: true } : {}),
     });
     void this.run(projectId, pending)
@@ -199,9 +265,61 @@ export class TaskBatchDeployer {
         this.logger.error({ err: error, projectId }, "Batch deployment failed");
       })
       .finally(() => {
-        this.running.delete(projectId);
+        void this.finishCycle(projectId);
       });
-    return { started: true, taskIds };
+    return { started: true, queued: false, taskIds };
+  }
+
+  /**
+   * Release the active slot and hand it to whatever was waiting. Called exactly
+   * once per publication (whether it started a run or aborted on validation). If a
+   * request is queued, it claims the slot synchronously and begins — recomputing
+   * what is left to publish, so a queued run that has become stale drops itself
+   * rather than running empty.
+   */
+  private async finishCycle(projectId: string): Promise<void> {
+    this.running.delete(projectId);
+    const next = this.queued.get(projectId);
+    if (!next) {
+      return;
+    }
+    this.queued.delete(projectId);
+    // Claim the slot before the first await inside beginCycle, same as deployAll,
+    // so a press arriving right now queues rather than starting a third run.
+    this.running.add(projectId);
+    try {
+      await this.beginCycle(projectId, next, { fromQueue: true });
+    } catch (error) {
+      // beginCycle already released the slot on its throw paths; just record it.
+      this.logger.error({ err: error, projectId }, "Queued publication failed to start");
+    }
+  }
+
+  /** Show/hide the board's "une publication en attente" marker. Never throws. */
+  private async setWaitingMarker(projectId: string, waiting: boolean): Promise<void> {
+    try {
+      // patchDeployBatch no-ops when there is no active batch record, which is
+      // exactly right: there is nothing to wait behind, so nothing to show.
+      await this.options.taskBoardService.patchDeployBatch(projectId, { queued: waiting });
+    } catch (error) {
+      this.logger.debug({ err: error, projectId }, "Failed to update the queued marker");
+    }
+  }
+
+  /**
+   * A queued publication whose turn came with nothing left to do. Clear the
+   * "en attente" marker so the board stops promising a run that will not happen;
+   * the previous publication's recap (usually "c'est en ligne") stays in place as
+   * the honest last word.
+   */
+  private async dropStaleQueued(projectId: string, alreadyLive: boolean): Promise<void> {
+    await this.setWaitingMarker(projectId, false);
+    this.logger.info(
+      { projectId, alreadyLive },
+      alreadyLive
+        ? "Queued publication dropped: everything is already online"
+        : "Queued publication dropped: the workshop is busy again",
+    );
   }
 
   private async run(projectId: string, pending: KanbanTask[]): Promise<void> {

@@ -45,7 +45,7 @@ describe("AutoDeployWatcher", () => {
       taskBatchDeployer: {
         deployAll: async (projectId: string) => {
           deployed.push(projectId);
-          return { started: true, taskIds: [] };
+          return { started: true, queued: false, taskIds: [] };
         },
       },
       projectRegistry: {

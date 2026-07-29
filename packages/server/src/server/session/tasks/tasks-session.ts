@@ -476,10 +476,12 @@ export class TasksSession {
           "Task batch deployer is not available",
         );
       }
-      const { started, taskIds } = await this.taskBatchDeployer.deployAll(request.projectId);
+      const { started, queued, taskIds } = await this.taskBatchDeployer.deployAll(
+        request.projectId,
+      );
       this.host.emit({
         type: "tasks.board.deploy_all.response",
-        payload: { requestId: request.requestId, started, taskIds, error: null },
+        payload: { requestId: request.requestId, started, queued, taskIds, error: null },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
