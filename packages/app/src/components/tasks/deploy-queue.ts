@@ -5,9 +5,22 @@ import { isTaskDeployed } from "@/components/tasks/task-card-badge";
 // imports so they stay testable in the plain node unit environment (the button
 // itself pulls in the dropdown-menu stack, which that environment can't load).
 
-/** The cards a press would take online: queued, not archived, not live yet. */
+/**
+ * The cards a press would actually take online, so the "(N)" on the button
+ * matches what the batch publishes. Mirrors the server's `selectPendingDeployTasks`
+ * exactly: in the "À déployer" queue, not archived, not held back from the next
+ * batch ("Retirer du prochain lot"), and not live yet. Held or already-live cards
+ * stay visible in the column but the run skips them, so they must not inflate the
+ * count — otherwise the button promises to publish more than it will.
+ */
 export function countTasksAwaitingDeploy(tasks: readonly KanbanTask[]): number {
-  return tasks.filter((task) => !task.archivedAt && !isTaskDeployed(task)).length;
+  return tasks.filter(
+    (task) =>
+      task.column === "deployed" &&
+      !task.archivedAt &&
+      task.deployHold !== true &&
+      !isTaskDeployed(task),
+  ).length;
 }
 
 /** True while the batch publication is running on at least one of these cards. */

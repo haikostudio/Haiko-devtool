@@ -36,6 +36,28 @@ describe("countTasksAwaitingDeploy", () => {
       countTasksAwaitingDeploy([makeTask({ id: "a", deployment: { state: "deployed" } })]),
     ).toBe(0);
   });
+
+  it("skips cards held back from the next batch, matching what the run publishes", () => {
+    // A held card ("Retirer du prochain lot") stays in the column but the batch
+    // skips it, so it must not inflate the button's promise.
+    expect(
+      countTasksAwaitingDeploy([
+        makeTask({ id: "a" }),
+        makeTask({ id: "b", deployHold: true }),
+      ]),
+    ).toBe(1);
+  });
+
+  it("ignores finished cards not yet queued into the column", () => {
+    // A card still sitting in "Terminé" is not in the publication queue; entering
+    // the column is what enqueues it, and only then does it count.
+    expect(
+      countTasksAwaitingDeploy([
+        makeTask({ id: "a", column: "done" }),
+        makeTask({ id: "b", column: "deployed" }),
+      ]),
+    ).toBe(1);
+  });
 });
 
 describe("the queue button's own state", () => {
