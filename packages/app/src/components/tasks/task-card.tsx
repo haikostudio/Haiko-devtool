@@ -82,22 +82,33 @@ interface TaskCardProps {
 
 // Cards carry no colored left edge: the user rejected that accent bar outright,
 // so importance is signalled by the corner pip / inline dot only. Do not
-// reintroduce a borderLeft here in a future restyle.
+// reintroduce a borderLeft here in a future restyle. The `attention` state below
+// repaints the WHOLE hairline frame amber (never a left bar), the same way
+// `selected` repaints it violet — a full ring, not an accent edge.
 //
 // Cards never fade: opacity stays at 100% in every state. The read/unread
 // signal lives entirely in the corner pip (green while a finished card is
 // unseen, gone once opened), NOT in the card's opacity. `selected` (the card
-// open in the dock / Details drawer) still repaints the frame violet.
+// open in the dock / Details drawer) repaints the frame violet; `attention`
+// (the task is waiting on a reply) repaints it amber and wins over selected so
+// a card the user is looking at still shouts that it needs an answer.
 function cardStyle({
   pressed,
   hovered,
   selected,
+  attention,
 }: {
   pressed: boolean;
   hovered?: boolean;
   selected?: boolean;
+  attention?: boolean;
 }) {
-  return [styles.card, (hovered || pressed) && styles.cardHovered, selected && styles.cardSelected];
+  return [
+    styles.card,
+    (hovered || pressed) && styles.cardHovered,
+    selected && styles.cardSelected,
+    attention && styles.cardAttention,
+  ];
 }
 
 // When a validated/planned task will actually launch: the scheduler holds
@@ -122,9 +133,11 @@ function computeNextRunAt(task: KanbanTask, quietHours: QuietHours, nowMs: numbe
   return nextQuietHoursStartMs(nowMs, quietHours);
 }
 
-// Horizontal travel (px) of the attention shake, and how often it repeats.
+// Horizontal travel (px) of the attention shake, and how often it repeats. Kept
+// in step with the voyant's amber bounce (`BOUNCE_INTERVAL_MS`) so the frame,
+// the corner light and the card all pulse together every 3s.
 const SHAKE_AMPLITUDE = 3;
-const SHAKE_INTERVAL_MS = 5000;
+const SHAKE_INTERVAL_MS = 3000;
 
 /**
  * Drives the "waiting for you" shake: a short burst of horizontal wobbles (~0.4s)
@@ -206,9 +219,13 @@ export const TaskCard = memo(function TaskCard({
     return daysUntil(deadline.dueDate, new Date()) <= 2;
   }, [isNote, deadline]);
 
-  // A task that wants a reply nudges itself: a light horizontal shake every ~5s,
-  // just enough to catch the eye without being noisy. Honors reduced motion.
-  const shakeStyle = useAttentionShake(tone === "attention" || noteDeadlineUrgent);
+  // A task that wants a reply nudges itself: a light horizontal shake every 3s,
+  // just enough to catch the eye without being noisy. Honors reduced motion. The
+  // same `attention` tone also repaints the card's frame amber (see below), so a
+  // waiting card reads at a glance even mid-drag or in a column other than "En
+  // cours".
+  const isAttention = tone === "attention";
+  const shakeStyle = useAttentionShake(isAttention || noteDeadlineUrgent);
 
   // Concrete "runs around 01:00" hint for tasks the scheduler parks until the
   // next off-peak window. Formatted in the window's timezone and the UI locale.
@@ -249,8 +266,8 @@ export const TaskCard = memo(function TaskCard({
   const selected = useOpenTaskId() === task.id;
   const resolveCardStyle = useCallback(
     ({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
-      cardStyle({ pressed, hovered, selected }),
-    [selected],
+      cardStyle({ pressed, hovered, selected, attention: isAttention }),
+    [selected, isAttention],
   );
   // Selection mode repaints the press as a checkbox toggle, so the card
   // announces itself as a checkbox with its checked state rather than a button.
@@ -281,55 +298,60 @@ export const TaskCard = memo(function TaskCard({
           level={priority?.level}
           label={priorityLabel}
         />
-        <CardTitleRow
-          title={task.title}
-          priority={priority}
-          isNote={isNote}
-          priorityLabel={priorityLabel}
-          selection={selection}
-        />
-        <CardStatusRow
-          badge={scheduleBadge}
-          publishNotice={publishNotice}
-          errorReason={
-            task.analysis?.state === "failed" && task.analysis.reason && !task.estimate
-              ? task.analysis.reason
-              : null
-          }
-        />
-        {nextRunLabel ? (
-          <View style={styles.nextRunRow}>
-            <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-            <Text style={styles.nextRunText}>{nextRunLabel}</Text>
-          </View>
-        ) : null}
-        {description ? (
-          <Text style={styles.description} numberOfLines={2}>
-            {description}
-          </Text>
-        ) : null}
-        <CardMetaRow task={task} deadline={deadline} />
-        {visibleTags.length > 0 ? (
-          <View style={styles.tagsRow}>
-            {visibleTags.map((tag) => (
-              <View key={tag} style={styles.tagChip}>
-                <Text style={styles.tagText} numberOfLines={1}>
-                  {tag}
-                </Text>
-              </View>
-            ))}
-            {hiddenTagCount > 0 ? (
-              <View style={styles.tagChip}>
-                <Text style={styles.tagText}>{`+${hiddenTagCount}`}</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-        {task.schedule?.lastError ? (
-          <Text style={styles.errorText} numberOfLines={2}>
-            {task.schedule.lastError}
-          </Text>
-        ) : null}
+        {/* Content wrapper carries the overflow clip so long branch names / tags
+            get truncated, while the corner pip above stays a direct child of the
+            card and is free to straddle the border without being clipped. */}
+        <View style={styles.cardContent}>
+          <CardTitleRow
+            title={task.title}
+            priority={priority}
+            isNote={isNote}
+            priorityLabel={priorityLabel}
+            selection={selection}
+          />
+          <CardStatusRow
+            badge={scheduleBadge}
+            publishNotice={publishNotice}
+            errorReason={
+              task.analysis?.state === "failed" && task.analysis.reason && !task.estimate
+                ? task.analysis.reason
+                : null
+            }
+          />
+          {nextRunLabel ? (
+            <View style={styles.nextRunRow}>
+              <ThemedClock size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+              <Text style={styles.nextRunText}>{nextRunLabel}</Text>
+            </View>
+          ) : null}
+          {description ? (
+            <Text style={styles.description} numberOfLines={2}>
+              {description}
+            </Text>
+          ) : null}
+          <CardMetaRow task={task} deadline={deadline} />
+          {visibleTags.length > 0 ? (
+            <View style={styles.tagsRow}>
+              {visibleTags.map((tag) => (
+                <View key={tag} style={styles.tagChip}>
+                  <Text style={styles.tagText} numberOfLines={1}>
+                    {tag}
+                  </Text>
+                </View>
+              ))}
+              {hiddenTagCount > 0 ? (
+                <View style={styles.tagChip}>
+                  <Text style={styles.tagText}>{`+${hiddenTagCount}`}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {task.schedule?.lastError ? (
+            <Text style={styles.errorText} numberOfLines={2}>
+              {task.schedule.lastError}
+            </Text>
+          ) : null}
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -642,11 +664,19 @@ const styles = StyleSheet.create((theme) => ({
     borderWidth: 1,
     borderColor: theme.colors.border,
     padding: theme.spacing[3],
-    gap: theme.spacing[1.5],
     // Pin the card to its column width: an unbreakable branch name or technical
     // tag must be clipped, never widen the card and open a horizontal scroll.
     // `minWidth: 0` lets the card shrink inside the flex column (react-native-web
-    // defaults flex items to `minWidth: auto`), `overflow: hidden` clips the rest.
+    // defaults flex items to `minWidth: auto`). The clip itself now lives on
+    // `cardContent`, NOT here — the card must stay unclipped so the corner pip,
+    // which straddles the top-left border on purpose, is not rogné.
+    minWidth: 0,
+  },
+  // Wraps everything except the corner pip. This is where the overflow clip
+  // lives: long content is truncated inside the card, while the pip (a sibling
+  // of this wrapper) can still overhang the card's edge and stay fully visible.
+  cardContent: {
+    gap: theme.spacing[1.5],
     minWidth: 0,
     overflow: "hidden",
   },
@@ -658,6 +688,14 @@ const styles = StyleSheet.create((theme) => ({
   // `statusMerged` is the theme's violet in both light and dark.
   cardSelected: {
     borderColor: theme.colors.statusMerged,
+  },
+  // Waiting on the user: same 1px frame, repainted amber — a full ring, never a
+  // left bar. Matches the corner voyant's amber light (`palette.amber[500]`, an
+  // amber that reads in both light and dark), so frame, pip and shake all say
+  // the same thing. Applied after `cardSelected` so it wins when a waiting card
+  // also happens to be the one open in the dock.
+  cardAttention: {
+    borderColor: theme.colors.palette.amber[500],
   },
   chipRow: {
     flexDirection: "row",
