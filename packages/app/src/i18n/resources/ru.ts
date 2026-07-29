@@ -634,6 +634,11 @@ export const ru: TranslationResources = {
       priorityLow: "Низкий",
       deadlineField: "Срок",
       deadlinePlaceholder: "15.07.26",
+      sections: {
+        content: "Содержание",
+        classification: "Классификация",
+        estimate: "Оценка",
+      },
       estimateDetail: "{{tokens}} токенов · уверенность: {{confidence}}",
       noEstimate: "Оценки пока нет — перетащите в «Запланировано» или пересчитайте.",
       openPr: "Открыть PR",

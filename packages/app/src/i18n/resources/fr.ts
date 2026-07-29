@@ -641,6 +641,11 @@ export const fr: TranslationResources = {
       priorityLow: "Basse",
       deadlineField: "Échéance",
       deadlinePlaceholder: "15.07.26 ou « à définir »",
+      sections: {
+        content: "Contenu",
+        classification: "Classement",
+        estimate: "Estimation",
+      },
       estimateDetail: "{{tokens}} tokens · confiance : {{confidence}}",
       noEstimate: "Pas encore d'estimation — glissez dans Planifié ou ré-estimez.",
       openPr: "Ouvrir la PR",

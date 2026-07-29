@@ -631,6 +631,11 @@ export const en = {
       priorityLow: "Low",
       deadlineField: "Due date",
       deadlinePlaceholder: "15.07.26",
+      sections: {
+        content: "Content",
+        classification: "Classification",
+        estimate: "Estimate",
+      },
       estimateDetail: "{{tokens}} tokens · confidence: {{confidence}}",
       noEstimate: "No estimate yet — drag into Planned or re-estimate.",
       openPr: "Open PR",

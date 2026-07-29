@@ -623,6 +623,11 @@ export const zhCN: TranslationResources = {
       priorityLow: "低",
       deadlineField: "截止日期",
       deadlinePlaceholder: "15.07.26",
+      sections: {
+        content: "内容",
+        classification: "分类",
+        estimate: "估算",
+      },
       estimateDetail: "{{tokens}} tokens · 置信度：{{confidence}}",
       noEstimate: "尚无估算 — 拖到「已计划」或重新估算。",
       openPr: "打开 PR",

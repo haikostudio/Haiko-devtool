@@ -640,6 +640,11 @@ export const ptBR: TranslationResources = {
       priorityLow: "Baixa",
       deadlineField: "Prazo",
       deadlinePlaceholder: "15.07.26",
+      sections: {
+        content: "Conteúdo",
+        classification: "Classificação",
+        estimate: "Estimativa",
+      },
       estimateDetail: "{{tokens}} tokens · confiança: {{confidence}}",
       noEstimate: "Sem estimativa — arraste para Planejado ou re-estime.",
       openPr: "Abrir PR",

@@ -627,6 +627,11 @@ export const ar: TranslationResources = {
       priorityLow: "منخفضة",
       deadlineField: "الموعد النهائي",
       deadlinePlaceholder: "15.07.26",
+      sections: {
+        content: "المحتوى",
+        classification: "التصنيف",
+        estimate: "التقدير",
+      },
       estimateDetail: "{{tokens}} رمزًا · الثقة: {{confidence}}",
       noEstimate: "لا تقدير بعد — اسحب إلى «مُجدولة» أو أعد التقدير.",
       openPr: "فتح PR",

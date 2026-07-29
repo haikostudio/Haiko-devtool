@@ -5,7 +5,9 @@ import {
   View,
   type NativeSyntheticEvent,
   type PressableStateCallbackType,
+  type StyleProp,
   type TargetedEvent,
+  type ViewStyle,
 } from "react-native";
 import { ChevronDown } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -64,6 +66,13 @@ export interface SelectFieldProps<TValue> {
   getValueKey?: (value: TValue) => string;
   renderOption?: (input: SelectFieldRenderOptionInput<TValue>) => ReactElement;
   triggerLeading?: ReactNode;
+  /**
+   * Extra style for the closed trigger box — used when a surrounding card needs
+   * its editable controls to sit on a different fill than the default
+   * `surface2` (e.g. the task details form, which mirrors the billing form's
+   * card/field contrast). Layered last so it wins over the interaction styles.
+   */
+  triggerStyle?: StyleProp<ViewStyle>;
   field?: boolean;
   testID?: string;
   triggerTestID?: string;
@@ -81,6 +90,7 @@ export interface SelectFieldTriggerProps {
   loading?: boolean;
   leading?: ReactNode;
   size?: FieldControlSize;
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 }
 
@@ -132,6 +142,7 @@ export function SelectFieldTrigger({
   loading = false,
   leading,
   size = "md",
+  style,
   testID,
 }: SelectFieldTriggerProps): ReactElement {
   const sizeStyle = size === "sm" ? styles.triggerSm : styles.triggerMd;
@@ -149,8 +160,9 @@ export function SelectFieldTrigger({
         },
         { hovered, focused, active, disabled },
       ),
+      style,
     ],
-    [active, disabled, focused, hovered, sizeStyle],
+    [active, disabled, focused, hovered, sizeStyle, style],
   );
   const label = explicitLabel ?? display?.label ?? placeholder;
   const isPlaceholder = explicitIsPlaceholder ?? display == null;
@@ -194,6 +206,7 @@ export function SelectField<TValue>({
   getValueKey,
   renderOption,
   triggerLeading,
+  triggerStyle,
   field = true,
   testID,
   triggerTestID,
@@ -318,6 +331,7 @@ export function SelectField<TValue>({
               loading={loading}
               leading={triggerLeading}
               size={size}
+              style={triggerStyle}
             />
           )}
         </Pressable>

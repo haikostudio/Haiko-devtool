@@ -356,50 +356,60 @@ function TaskDetailSheetForm({
         </View>
       ) : null}
 
-      <Field label={t("tasks.detail.titleField")}>
-        <FormTextInput
-          size={controlSize}
-          initialValue={task.title}
-          onChangeText={setTitle}
-          testID="task-detail-title"
+      <View style={styles.card} testID="task-detail-content-card">
+        <Text style={styles.cardTitle}>{t("tasks.detail.sections.content")}</Text>
+        <Field label={t("tasks.detail.titleField")}>
+          <FormTextInput
+            size={controlSize}
+            initialValue={task.title}
+            onChangeText={setTitle}
+            style={styles.field}
+            testID="task-detail-title"
+          />
+        </Field>
+        <Field label={t("tasks.detail.descriptionField")}>
+          <FormTextInput
+            size={controlSize}
+            initialValue={task.description ?? ""}
+            onChangeText={setDescription}
+            style={styles.multilineInput}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            testID="task-detail-description"
+          />
+        </Field>
+      </View>
+
+      <View style={styles.card} testID="task-detail-classification-card">
+        <Text style={styles.cardTitle}>{t("tasks.detail.sections.classification")}</Text>
+        <PriorityField
+          parsedPriority={parsedTags.priority}
+          value={priorityTag}
+          onChange={setPriorityTag}
+          controlSize={controlSize}
         />
-      </Field>
-      <Field label={t("tasks.detail.descriptionField")}>
-        <FormTextInput
-          size={controlSize}
-          initialValue={task.description ?? ""}
-          onChangeText={setDescription}
-          style={styles.multilineInput}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-          testID="task-detail-description"
-        />
-      </Field>
-      <PriorityField
-        parsedPriority={parsedTags.priority}
-        value={priorityTag}
-        onChange={setPriorityTag}
-        controlSize={controlSize}
-      />
-      <Field label={t("tasks.detail.deadlineField")}>
-        <FormTextInput
-          size={controlSize}
-          initialValue={initialDeadline}
-          onChangeText={setDeadlineText}
-          placeholder={t("tasks.detail.deadlinePlaceholder")}
-          testID="task-detail-deadline"
-        />
-      </Field>
-      <Field label={t("tasks.detail.tagsField")}>
-        <FormTextInput
-          size={controlSize}
-          initialValue={parsedTags.tags.join(", ")}
-          onChangeText={setTagsText}
-          placeholder={t("tasks.detail.tagsPlaceholder")}
-          testID="task-detail-tags"
-        />
-      </Field>
+        <Field label={t("tasks.detail.deadlineField")}>
+          <FormTextInput
+            size={controlSize}
+            initialValue={initialDeadline}
+            onChangeText={setDeadlineText}
+            placeholder={t("tasks.detail.deadlinePlaceholder")}
+            style={styles.field}
+            testID="task-detail-deadline"
+          />
+        </Field>
+        <Field label={t("tasks.detail.tagsField")}>
+          <FormTextInput
+            size={controlSize}
+            initialValue={parsedTags.tags.join(", ")}
+            onChangeText={setTagsText}
+            placeholder={t("tasks.detail.tagsPlaceholder")}
+            style={styles.field}
+            testID="task-detail-tags"
+          />
+        </Field>
+      </View>
 
       {supportsRunConfig ? (
         <ExecutionSection
@@ -656,6 +666,7 @@ function PriorityField({
       emptyText={t("tasks.detail.priorityNone")}
       size={controlSize}
       getValueKey={priorityValueKey}
+      triggerStyle={styles.field}
       testID="task-detail-priority"
     />
   );
@@ -828,8 +839,8 @@ function ExecutionSection({
   );
 
   return (
-    <View style={styles.executionSection}>
-      <Text style={styles.sectionTitle}>{t("tasks.detail.execution.title")}</Text>
+    <View style={styles.card} testID="task-detail-execution-card">
+      <Text style={styles.cardTitle}>{t("tasks.detail.execution.title")}</Text>
       <View style={styles.effectiveCard} testID="task-detail-effective">
         <Text style={styles.effectiveLabel}>{t("tasks.detail.execution.effectiveTitle")}</Text>
         <Text style={styles.effectiveLine}>
@@ -857,6 +868,7 @@ function ExecutionSection({
         searchable
         size={controlSize}
         getValueKey={modelSelectionKey}
+        triggerStyle={styles.field}
         testID="task-detail-model"
       />
       {thinkingOptions.length > 1 ? (
@@ -870,6 +882,7 @@ function ExecutionSection({
           emptyText={t("tasks.detail.execution.thinkingDefault")}
           size={controlSize}
           getValueKey={thinkingOptionKey}
+          triggerStyle={styles.field}
           testID="task-detail-thinking"
         />
       ) : null}
@@ -882,6 +895,7 @@ function ExecutionSection({
         placeholder={t("tasks.detail.execution.modeDirect")}
         emptyText={t("tasks.detail.execution.modeDirect")}
         size={controlSize}
+        triggerStyle={styles.field}
         testID="task-detail-mode"
       />
       <SelectField
@@ -893,6 +907,7 @@ function ExecutionSection({
         placeholder={t("tasks.detail.execution.prefAuto")}
         emptyText={t("tasks.detail.execution.prefAuto")}
         size={controlSize}
+        triggerStyle={styles.field}
         testID="task-detail-preference"
       />
     </View>
@@ -910,7 +925,8 @@ function TaskMetaSection({ task, effective }: { task: KanbanTask; effective: Eff
       ? formatUsd(estimateTokenCostUsd(effective.modelId, task.estimate.tokens))
       : null;
   return (
-    <View style={styles.metaSection}>
+    <View style={styles.card} testID="task-detail-estimate-card">
+      <Text style={styles.cardTitle}>{t("tasks.detail.sections.estimate")}</Text>
       {task.estimate ? (
         <View style={styles.metaRow}>
           <StatusBadge
@@ -951,16 +967,43 @@ function TaskMetaSection({ task, effective }: { task: KanbanTask; effective: Eff
 }
 
 const styles = StyleSheet.create((theme) => ({
+  // Editable controls sit one step above their card (surface1) so a field reads
+  // as a box you can type in, not as plain text — same contrast pair the billing
+  // form uses. surface2 is nearly invisible against surface1 in dark mode.
+  field: {
+    backgroundColor: theme.colors.surface3,
+  },
   multilineInput: {
     minHeight: 96,
+    backgroundColor: theme.colors.surface3,
+  },
+  // Grouped block of related fields, mirroring the billing view's cards: the
+  // panel reads as a form (titled sections on a raised surface) instead of a
+  // flat text sheet.
+  card: {
+    backgroundColor: theme.colors.surface1,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing[3],
+    gap: theme.spacing[2],
+  },
+  cardTitle: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   inlineContainer: {
     flex: 1,
   },
   inlineScroll: {
     flex: 1,
+    // Own the drawer's base surface so the cards read as raised blocks and a
+    // short form never leaves a pale band below the content.
+    backgroundColor: theme.colors.surface0,
   },
   inlineScrollContent: {
+    flexGrow: 1,
     padding: theme.spacing[3],
     gap: theme.spacing[3],
   },
@@ -986,15 +1029,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing[1],
     alignItems: "flex-start",
   },
-  executionSection: {
-    marginTop: theme.spacing[2],
-    gap: theme.spacing[3],
-  },
-  sectionTitle: {
-    color: theme.colors.foreground,
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
-  },
   effectiveCard: {
     gap: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
@@ -1012,10 +1046,6 @@ const styles = StyleSheet.create((theme) => ({
   effectiveLine: {
     color: theme.colors.foreground,
     fontSize: theme.fontSize.sm,
-  },
-  metaSection: {
-    marginTop: theme.spacing[2],
-    gap: theme.spacing[2],
   },
   metaRow: {
     flexDirection: "row",

@@ -634,6 +634,11 @@ export const ja: TranslationResources = {
       priorityLow: "低",
       deadlineField: "期限",
       deadlinePlaceholder: "15.07.26",
+      sections: {
+        content: "内容",
+        classification: "分類",
+        estimate: "見積もり",
+      },
       estimateDetail: "{{tokens}} トークン · 信頼度: {{confidence}}",
       noEstimate: "見積もりはまだありません — 「予定」に移動するか再見積もりしてください。",
       openPr: "PR を開く",
