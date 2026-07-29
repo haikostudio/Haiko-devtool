@@ -17,8 +17,14 @@ const REPO_ROOT = "/root/paseo";
  * downloaded the artifact): the server now builds the static site itself and
  * copies it straight into the Caddy webroot. No commit/CI required to publish —
  * git is kept for backup only. ~3-5 min on the KVM4 host.
+ *
+ * Now version-controlled at `ops/paseo-build-local.sh` (so the running script
+ * always tracks the repo). It builds from a frozen git-worktree snapshot of the
+ * commit being published, isolating the build from parallel edits in the shared
+ * `/root/paseo` checkout. The legacy `/home/paseo/paseo-build-local.sh` path is
+ * kept as a thin wrapper that execs this one, so older daemons still work.
  */
-const SHIP_SCRIPT = "/home/paseo/paseo-build-local.sh";
+const SHIP_SCRIPT = `${REPO_ROOT}/ops/paseo-build-local.sh`;
 const DEPLOYED_SHA_FILE = "/var/www/paseo-app/.deployed-sha";
 const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
 /**
