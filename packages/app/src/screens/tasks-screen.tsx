@@ -57,6 +57,7 @@ import {
   useProjectToneMap,
 } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
+import { isTaskMoveAllowed } from "@/components/tasks/task-move-guard";
 import { type TaskDetailSaveInput } from "@/components/tasks/task-detail-sheet";
 import { TaskDetailDrawer } from "@/components/tasks/task-detail-drawer";
 import { ConductorPanel, type ConductorPanelProps } from "@/components/tasks/conductor-panel";
@@ -825,8 +826,17 @@ function BoardContent({
   const taskActions = useBoardTaskActions(boardHandle);
   const handleMoveTask = useCallback(
     (input: { taskId: string; column: TaskColumn; index: number }) => {
-      const from = projectTasks.find((entry) => entry.id === input.taskId)?.column;
+      const task = projectTasks.find((entry) => entry.id === input.taskId);
+      const from = task?.column;
       const to = input.column;
+      // Work in flight never walks backward. A card whose agent is executing (or
+      // whose final check / publication is running) offers no backward button,
+      // so no gesture may take it backward either — the move is dropped in
+      // silence and the card stays where it is. This is the choke point every
+      // manual path goes through (drag, "Déplacer vers…", chevrons).
+      if (task && !isTaskMoveAllowed(task, to)) {
+        return;
+      }
       if (from && from !== to) {
         if (from === "backlog" && to === "validated") {
           taskActions.handleApproveTask(input.taskId);

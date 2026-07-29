@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { KANBAN_COLUMNS } from "@/components/tasks/kanban-columns";
 import { isTaskDeployed } from "@/components/tasks/task-card-badge";
+import { isTaskMoveAllowed } from "@/components/tasks/task-move-guard";
 import type { KanbanTask, TaskColumn } from "@/data/tasks";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { confirmDialog } from "@/utils/confirm-dialog";
@@ -153,18 +154,21 @@ export const TaskCardMenu = memo(function TaskCardMenu({
         ) : null}
         {canLaunch || canHold ? <DropdownMenuSeparator /> : null}
         {/* "Archivé" is never a manual move target — a card only ever reaches it
-            automatically once its work goes live. */}
-        {KANBAN_COLUMNS.filter((column) => column !== task.column && column !== "archived").map(
-          (column) => (
-            <MoveTaskMenuItem
-              key={column}
-              taskId={task.id}
-              column={column}
-              label={t("tasks.actions.moveToColumn", { column: labels[column] })}
-              onMoveTask={onMoveTask}
-            />
-          ),
-        )}
+            automatically once its work goes live. A card whose work is in flight
+            only lists the columns it may still reach: no backward entry, since
+            no backward button exists (see task-move-guard). */}
+        {KANBAN_COLUMNS.filter(
+          (column) =>
+            column !== task.column && column !== "archived" && isTaskMoveAllowed(task, column),
+        ).map((column) => (
+          <MoveTaskMenuItem
+            key={column}
+            taskId={task.id}
+            column={column}
+            label={t("tasks.actions.moveToColumn", { column: labels[column] })}
+            onMoveTask={onMoveTask}
+          />
+        ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           leading={deleteLeading}

@@ -31,6 +31,7 @@ import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
 import { DeployAllButton } from "./deploy-all-button";
 import { DeployBatchBanner } from "./deploy-batch-banner";
+import { isTaskMoveAllowed } from "./task-move-guard";
 import {
   buildColumnModels,
   EMPTY_COLUMN_CONTROLS,
@@ -177,6 +178,12 @@ export function KanbanBoard({
         return;
       }
       if (task.column === targetColumn && overId === taskId) {
+        return;
+      }
+      // Work in flight never walks backward. Refused here, at the drop, so the
+      // card snaps straight back instead of flashing through the forbidden
+      // column, and so a rejected gesture never pins the column to manual order.
+      if (!isTaskMoveAllowed(task, targetColumn)) {
         return;
       }
       // A reorder within the same column is a manual arrangement — pin it so the
