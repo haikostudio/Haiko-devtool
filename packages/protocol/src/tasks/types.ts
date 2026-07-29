@@ -336,7 +336,8 @@ export type TaskFolder = z.infer<typeof TaskFolderSchema>;
 // card is renamed, archived or deleted afterwards.
 export const TaskDeployBatchSchema = z.object({
   state: z.enum(["running", "success", "failed"]),
-  // Coarse step written by the build script: "save" → "build" → "publish".
+  // Visible step written by the publication flow: preparation → checks → engine
+  // → site → online → optional restart. Kept as a string for older hosts.
   phase: z.string().nullable().optional(),
   startedAt: z.string(),
   finishedAt: z.string().nullable().optional(),

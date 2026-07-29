@@ -110,7 +110,7 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
 echo "==> Build local — branche $BRANCH"
 
 # --- Sauvegarde best-effort (git = filet, jamais un bloqueur de publication) ---
-phase "save"
+phase "prepare"
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
   echo "==> Sauvegarde des changements locaux (commit)…"
   git add -A
@@ -245,10 +245,9 @@ fi
 # --- Contrôle des types (filet avant de brûler 5 min de build) ----------------
 # Attrape les incohérences de code (symbole disparu, signature cassée) que
 # l'assemblage metro, lui, laisse passer sans broncher. S'applique à l'INSTANTANÉ
-# figé, pas au code en mutation. Volontairement annoncé sous la phase "build" :
-# l'app n'affiche que save/build/publish/done, et un libellé inconnu la ferait
-# retomber sur un "Déploiement en cours…" muet.
-phase "build"
+# figé, pas au code en mutation. Cette phase distincte garde le suivi lisible :
+# la vérification du code n'est ni la construction du moteur, ni celle du site.
+phase "verify"
 echo "==> Vérification du code (typecheck) sur l'instantané…"
 if ! ( cd "$SNAP" && "${NICE[@]}" npm run typecheck ); then
   fail "Le code ne compile pas — rien n'est publié."
@@ -263,7 +262,7 @@ fi
 # correctif). On compile donc le démon depuis l'instantané figé, puis on le pose
 # dans le checkout vivant : le redémarrage de fin de lot applique enfin le code
 # qui vient d'être publié. Ne jamais retirer cette étape.
-phase "build"
+phase "daemon"
 echo "==> Construction du démon (build:server) depuis l'instantané…"
 if ! ( cd "$SNAP" && "${NICE[@]}" npm run build:server:clean ); then
   fail "La construction du démon a échoué — rien n'est publié."
@@ -273,7 +272,7 @@ fi
 # Depuis l'INSTANTANÉ : expo export lit la source figée et build:app-deps
 # régénère les dist des paquets (highlight/protocol/client/audio) DANS
 # l'instantané, à partir de la même source figée. Rien du checkout vivant.
-phase "build"
+phase "site"
 echo "==> Construction du site (expo export) depuis l'instantané…"
 export EXPO_PUBLIC_BUILD_SHA="$SHA"
 # Active le bouton « Déconnexion » dans les réglages sur le build auto-hébergé

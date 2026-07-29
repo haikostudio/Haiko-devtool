@@ -555,9 +555,14 @@ export const fr: TranslationResources = {
       batchOpenAgent: "Voir l'agent de publication",
       batchPhase: {
         start: "Préparation…",
+        prepare: "Préparation des changements…",
+        verify: "Vérification du code…",
+        daemon: "Construction du moteur…",
+        site: "Construction du site…",
         save: "Sauvegarde du travail…",
         build: "Construction de l'application…",
         publish: "Mise en ligne…",
+        restart: "Redémarrage du moteur…",
         done: "Terminé",
       },
       batch: {

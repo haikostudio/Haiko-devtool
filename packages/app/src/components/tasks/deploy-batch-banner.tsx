@@ -31,8 +31,9 @@ const ThemedClose = withUnistyles(X);
 /**
  * What the "À déployer" column shows above its cards:
  *
- * - while a batch runs, ONE progress bar for the whole run (sauvegarde →
- *   construction → mise en ligne), because it is one build for every card;
+ * - while a batch runs, ONE progress bar for the whole run (préparation →
+ *   contrôles → moteur → site → mise en ligne → redémarrage), because it is
+ *   one build for every card;
  * - once it is over, a "voici ce qui vient d'être mis en ligne" recap listing
  *   what went out (or why it did not), dismissible in one tap.
  *

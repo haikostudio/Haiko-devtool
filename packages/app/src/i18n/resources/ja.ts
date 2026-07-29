@@ -548,9 +548,14 @@ export const ja: TranslationResources = {
       batchOpenAgent: "公開エージェントを表示",
       batchPhase: {
         start: "準備中…",
+        prepare: "変更を準備中…",
+        verify: "コードを確認中…",
+        daemon: "エンジンを構築中…",
+        site: "サイトを構築中…",
         save: "作業を保存中…",
         build: "アプリを構築中…",
         publish: "公開中…",
+        restart: "エンジンを再起動中…",
         done: "完了",
       },
       batch: {

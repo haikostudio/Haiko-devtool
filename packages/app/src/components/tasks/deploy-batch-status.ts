@@ -7,8 +7,8 @@ import type { TaskDeployBatch } from "@getpaseo/protocol/tasks/types";
  * component itself fails to load, which silently zeroed this file's test suite.
  */
 
-/** The build script's coarse steps, in the order it writes them. */
-export const PHASES = ["save", "build", "publish"] as const;
+/** The publication's visible steps, in the order the orchestrator reaches them. */
+export const PHASES = ["prepare", "verify", "daemon", "site", "publish", "restart"] as const;
 
 /** A finished recap stops being news after a day; it hides itself then. */
 export const RECAP_MAX_AGE_MS = 24 * 60 * 60 * 1000;

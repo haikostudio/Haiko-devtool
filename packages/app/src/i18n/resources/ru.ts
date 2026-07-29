@@ -548,9 +548,14 @@ export const ru: TranslationResources = {
       batchOpenAgent: "Открыть агента публикации",
       batchPhase: {
         start: "Подготовка…",
+        prepare: "Подготовка изменений…",
+        verify: "Проверка кода…",
+        daemon: "Сборка движка…",
+        site: "Сборка сайта…",
         save: "Сохранение работы…",
         build: "Сборка приложения…",
         publish: "Публикация…",
+        restart: "Перезапуск движка…",
         done: "Готово",
       },
       batch: {

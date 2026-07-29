@@ -538,9 +538,14 @@ export const zhCN: TranslationResources = {
       batchOpenAgent: "查看发布代理",
       batchPhase: {
         start: "准备中…",
+        prepare: "正在准备更改…",
+        verify: "正在检查代码…",
+        daemon: "正在构建引擎…",
+        site: "正在构建网站…",
         save: "保存工作…",
         build: "构建应用…",
         publish: "上线中…",
+        restart: "正在重启引擎…",
         done: "完成",
       },
       batch: {

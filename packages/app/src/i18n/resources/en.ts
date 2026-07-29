@@ -545,9 +545,14 @@ export const en = {
       batchOpenAgent: "View the publication agent",
       batchPhase: {
         start: "Preparing…",
+        prepare: "Preparing changes…",
+        verify: "Checking the code…",
+        daemon: "Building the engine…",
+        site: "Building the website…",
         save: "Saving the work…",
         build: "Building the app…",
         publish: "Going live…",
+        restart: "Restarting the engine…",
         done: "Done",
       },
       batch: {

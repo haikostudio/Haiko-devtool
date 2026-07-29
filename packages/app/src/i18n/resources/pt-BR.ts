@@ -554,9 +554,14 @@ export const ptBR: TranslationResources = {
       batchOpenAgent: "Ver o agente de publicação",
       batchPhase: {
         start: "Preparando…",
+        prepare: "Preparando alterações…",
+        verify: "Verificando o código…",
+        daemon: "Construindo o mecanismo…",
+        site: "Construindo o site…",
         save: "Salvando o trabalho…",
         build: "Construindo o aplicativo…",
         publish: "Publicando…",
+        restart: "Reiniciando o mecanismo…",
         done: "Concluído",
       },
       batch: {

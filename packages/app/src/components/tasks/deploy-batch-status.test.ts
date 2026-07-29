@@ -7,12 +7,16 @@ describe("batchProgressRatio", () => {
     expect(batchProgressRatio({ state: "running", phase: null })).toBeLessThan(0.25);
   });
 
-  it("grows with each phase the build script reports", () => {
-    const save = batchProgressRatio({ state: "running", phase: "save" });
-    const build = batchProgressRatio({ state: "running", phase: "build" });
+  it("grows with each visible publication phase", () => {
+    const prepare = batchProgressRatio({ state: "running", phase: "prepare" });
+    const daemon = batchProgressRatio({ state: "running", phase: "daemon" });
+    const site = batchProgressRatio({ state: "running", phase: "site" });
     const publish = batchProgressRatio({ state: "running", phase: "publish" });
-    expect(save).toBeLessThan(build);
-    expect(build).toBeLessThan(publish);
+    const restart = batchProgressRatio({ state: "running", phase: "restart" });
+    expect(prepare).toBeLessThan(daemon);
+    expect(daemon).toBeLessThan(site);
+    expect(site).toBeLessThan(publish);
+    expect(publish).toBeLessThan(restart);
     expect(publish).toBeLessThan(1);
   });
 

@@ -542,9 +542,14 @@ export const ar: TranslationResources = {
       batchOpenAgent: "عرض وكيل النشر",
       batchPhase: {
         start: "قيد التحضير…",
+        prepare: "جارٍ تحضير التغييرات…",
+        verify: "جارٍ التحقق من الرمز…",
+        daemon: "جارٍ بناء المحرك…",
+        site: "جارٍ بناء الموقع…",
         save: "حفظ العمل…",
         build: "بناء التطبيق…",
         publish: "جارٍ النشر…",
+        restart: "جارٍ إعادة تشغيل المحرك…",
         done: "تم",
       },
       batch: {

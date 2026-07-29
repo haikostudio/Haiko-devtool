@@ -29,9 +29,12 @@ const RESTART_GRACE_MS = 5_000;
 
 /** Human phase labels, in the order the build script writes them. */
 const PHASE_LABELS: Record<string, string> = {
-  save: "Sauvegarde du travail…",
-  build: "Construction de l'application…",
+  prepare: "Préparation des changements…",
+  verify: "Vérification du code…",
+  daemon: "Construction du moteur…",
+  site: "Construction du site…",
   publish: "Mise en ligne…",
+  restart: "Redémarrage du moteur…",
 };
 
 export interface TaskBatchDeployResult {
@@ -466,13 +469,6 @@ export class TaskBatchDeployer {
         this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
       }
     }
-    await this.options.taskBoardService.patchDeployBatch(projectId, {
-      state: "success",
-      phase: "done",
-      finishedAt: new Date().toISOString(),
-      url,
-      error: null,
-    });
     await this.sayAll(
       pending,
       url
@@ -482,6 +478,7 @@ export class TaskBatchDeployer {
     // Interface-only work is already operational once the published files are
     // served. Do not bounce the daemon just for ceremony.
     if (!needsDaemonRestart) {
+      await this.finishSuccessfully(projectId, url);
       return;
     }
     // The publication is live, but the grouped deploy agent may still be checking
@@ -502,12 +499,38 @@ export class TaskBatchDeployer {
       pending,
       "🔄 **Publication groupée** — redémarrage du moteur pour appliquer les changements…",
     );
+    await this.options.taskBoardService.patchDeployBatch(projectId, { phase: "restart" });
     await this.sleep(RESTART_GRACE_MS);
     try {
+      // The restart deliberately ends this daemon process. Record the terminal
+      // outcome first, after every earlier phase and the live version check have
+      // succeeded, so the verdict cannot be lost when the process hands over.
+      await this.finishSuccessfully(projectId, url);
       this.options.requestDaemonRestart("task_batch_deploy");
     } catch (error) {
       this.logger.error({ err: error, projectId }, "Daemon restart request failed");
+      // The site and cards are already live at this point. This is a final
+      // restart problem, not a failed publication, so never rewrite that fact.
+      await this.options.taskBoardService.patchDeployBatch(projectId, {
+        state: "failed",
+        finishedAt: new Date().toISOString(),
+        error: "Le site est en ligne, mais le redémarrage final n'a pas pu être lancé.",
+      });
+      await this.sayAll(
+        pending,
+        "⚠️ **Publication groupée** — le site est en ligne, mais le redémarrage final n'a pas pu être lancé.",
+      );
     }
+  }
+
+  private async finishSuccessfully(projectId: string, url: string | null): Promise<void> {
+    await this.options.taskBoardService.patchDeployBatch(projectId, {
+      state: "success",
+      phase: "done",
+      finishedAt: new Date().toISOString(),
+      url,
+      error: null,
+    });
   }
 
   private async fail(projectId: string, pending: KanbanTask[], reason: string): Promise<void> {

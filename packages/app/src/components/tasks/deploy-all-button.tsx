@@ -160,6 +160,11 @@ const styles = StyleSheet.create((theme) => ({
   // Same horizontal inset and bottom gap as the search toolbar and the card list,
   // so the button lines up with everything else in the column.
   header: {
+    // The board uses two renderers (scrollable and web). Explicit stretching
+    // keeps this control aligned with the search row and cards in both instead
+    // of letting an outer flex layout size it from its label.
+    alignSelf: "stretch",
+    width: "100%",
     paddingHorizontal: theme.spacing[2],
     paddingBottom: theme.spacing[2],
   },

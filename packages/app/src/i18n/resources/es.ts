@@ -553,9 +553,14 @@ export const es: TranslationResources = {
       batchOpenAgent: "Ver el agente de publicación",
       batchPhase: {
         start: "Preparando…",
+        prepare: "Preparando cambios…",
+        verify: "Comprobando el código…",
+        daemon: "Construyendo el motor…",
+        site: "Construyendo el sitio web…",
         save: "Guardando el trabajo…",
         build: "Construyendo la aplicación…",
         publish: "Publicando…",
+        restart: "Reiniciando el motor…",
         done: "Listo",
       },
       batch: {

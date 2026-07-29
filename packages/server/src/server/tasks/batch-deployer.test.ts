@@ -145,6 +145,11 @@ describe("TaskBatchDeployer", () => {
     return notes.some((note) => note.includes(fragment));
   }
 
+  async function taskIsLive(taskId: string): Promise<boolean> {
+    const board = await service.getBoard("proj-1");
+    return board.tasks.some((task) => task.id === taskId && Boolean(task.deployedAt));
+  }
+
   test("publishes the whole queue in one run, stamps the cards and restarts the engine", async () => {
     const first = await seedQueued("Login", "task/login");
     const second = await seedQueued("Signup", "task/signup");
@@ -155,14 +160,14 @@ describe("TaskBatchDeployer", () => {
     const deployer = buildDeployer({
       url: "https://app.haikostudio.cloud",
       runs: [
-        { deploying: true, phase: "build", outcome: null, error: null },
+        { deploying: true, phase: "daemon", outcome: null, error: null },
         { deploying: false, phase: "done", outcome: "success", error: null },
       ],
     });
 
     const result = await deployer.deployAll("proj-1");
     expect(result).toEqual({ started: true, queued: false, taskIds: [first.id, second.id] });
-    await settle(() => restarts.length > 0);
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
 
     // ONE publication for the whole batch. Tasks run in place on main, so there
     // are no per-task branches to merge — the deploy just builds main.
@@ -174,7 +179,7 @@ describe("TaskBatchDeployer", () => {
       expect(card?.deployedUrl).toBe("https://app.haikostudio.cloud");
       expect(card?.deployment?.state).toBe("deployed");
     }
-    expect(notes.join("\n")).toContain("Construction de l'application");
+    expect(notes.join("\n")).toContain("Construction du moteur");
     expect(restarts).toEqual(["task_batch_deploy"]);
     // The board carries the run, so the column can show one progress bar and
     // then the "voici ce qui vient d'être mis en ligne" recap.
@@ -210,19 +215,20 @@ describe("TaskBatchDeployer", () => {
     // just before succeed() blocks on the agent's rest — a reliable midway marker.
     await settle(() => noteContains("en ligne"));
 
-    // The publication is live: the card is already stamped and archived, the batch
-    // reads "success" — but the engine has NOT restarted, because the deploy agent
-    // is still writing its verdict. Restarting now would freeze its chat.
+    // The publication is live and the card is already stamped, but the shared
+    // progress stays open until the agent has written its verdict and the final
+    // restart has been requested.
     expect(idleCalls).toEqual(["deploy-agent-1"]);
     const midway = await service.getBoard("proj-1");
     expect(midway.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
-    expect(midway.deployBatch?.state).toBe("success");
+    expect(midway.deployBatch?.state).toBe("running");
     expect(restarts).toEqual([]);
 
     // The agent reaches rest → now, and only now, the restart fires.
     releaseAgent?.();
     await settle(() => restarts.length > 0);
     expect(restarts).toEqual(["task_batch_deploy"]);
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
   });
 
   test("a held-back card is left out of the run", async () => {
@@ -236,7 +242,7 @@ describe("TaskBatchDeployer", () => {
 
     const result = await deployer.deployAll("proj-1");
     expect(result.taskIds).toEqual([shipped.id]);
-    await settle(() => noteContains("en ligne"));
+    await settle(() => taskIsLive(shipped.id));
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === shipped.id)?.deployedAt).toBeTruthy();
@@ -277,7 +283,7 @@ describe("TaskBatchDeployer", () => {
     });
 
     await deployer.deployAll("proj-1");
-    await settle(() => noteContains("en ligne"));
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
 
     const board = await service.getBoard("proj-1");
     const card = board.tasks.find((entry) => entry.id === task.id);
@@ -296,7 +302,7 @@ describe("TaskBatchDeployer", () => {
     });
 
     await deployer.deployAll("proj-1");
-    await settle(() => noteContains("en ligne"));
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
@@ -316,6 +322,7 @@ describe("TaskBatchDeployer", () => {
 
     await deployer.deployAll("proj-1");
     await settle(() => restarts.length > 0);
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
 
     // The batch restarts the daemon itself, so the flag that offered a manual
     // restart must be gone — no stale amber badge left on the archived card.
