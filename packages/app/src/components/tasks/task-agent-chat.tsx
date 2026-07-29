@@ -201,15 +201,24 @@ export function TaskAgentChat({
       ? Boolean(state.sessions[serverId]?.agents?.get(agentId)?.synthesis)
       : false,
   );
+  // "The agent finished with a result": its turn has ended (status is "idle",
+  // not mid-turn) AND it has spoken at least once. There is no distinct
+  // "completed" lifecycle state — an agent that is done simply goes back to
+  // "idle" — so idle+spoken is the honest definition of "ready for the final
+  // check". This is the signal that makes finishing the card legitimate, not the
+  // mere fact the card sits in "En cours".
+  const agentReady = agentStatus === "idle" && agentHasSpoken;
   // The bar only exists for a card that is actually being worked on: "En cours"
-  // is the one column a task can legitimately leave for "Terminée". Offering the
-  // final check on a note, a backlog item, a validated-but-not-started card or a
-  // scheduled one invited finishing work that never ran — and the analysis agent
-  // talking during estimation was enough to make the bar appear. Finished cards
-  // (done/deployed) are excluded by the same rule.
+  // is the one column a task can legitimately leave for "Terminée". It appears in
+  // exactly two agent states — working (`agentBusy`, shown disabled with an "En
+  // exécution…" label) and finished-with-a-result (`agentReady`, shown enabled).
+  // It used to also appear the instant `task.progress` became non-null, which is
+  // set the moment the card enters the column, so the green enabled button showed
+  // before the agent had produced anything and the user could finish an empty
+  // task. Gating on the real agent state closes that hole. Finished cards
+  // (done/deployed) are excluded by the column rule.
   const isInProgress = task.column === "in_progress";
-  const showValidate =
-    Boolean(onValidate) && isInProgress && (agentHasSpoken || task.progress != null);
+  const showValidate = Boolean(onValidate) && isInProgress && (agentReady || agentBusy);
   // The run-now bar sits on a scheduled card only: it forces the launch the user
   // already asked for by validating the card, and lives right above the prompt so
   // the launch and validate controls share one home instead of one being on the
@@ -271,7 +280,7 @@ export function TaskAgentChat({
           onPress={handleValidate}
           ready={task.progress === "ready_for_review"}
           validation={task.validation}
-          agentBusy={agentBusy}
+          agentReady={agentReady}
         />
       );
     }
@@ -315,7 +324,7 @@ export function TaskAgentChat({
     task.validation,
     task.deployment,
     task.schedule,
-    agentBusy,
+    agentReady,
   ]);
 
   if (serverId && agentId && workspaceId) {
@@ -347,34 +356,34 @@ export function TaskAgentChat({
  * It shows no report of its own: the check runs in the conversation right above,
  * so the verification, the fixes and the verdict are all readable there.
  *
- * It is disabled in the two states where finishing a card is not a legitimate
- * gesture: while a final check is already running (`validation.state ===
- * "running"`) — so a second press can never fire a duplicate check — and while
- * the card's own agent is still mid-turn (`agentBusy`) — finishing over a working
- * agent would race its output. In both cases the bar stays visible with an
- * explanatory label rather than disappearing, so the user understands why it is
- * inert. It re-enables on its own the instant the agent goes idle (the store's
- * live status drives it, no reload). A running check always implies a busy agent,
- * so its label wins.
+ * It is enabled only when the card's agent has actually finished with a result
+ * (`agentReady` — idle and having spoken). It is disabled in the two states where
+ * finishing a card is not a legitimate gesture: while a final check is already
+ * running (`validation.state === "running"`) — so a second press can never fire a
+ * duplicate check — and while the agent has not finished (still mid-turn, or not
+ * yet ready), where the bar stays visible with an "En exécution…" label so the
+ * user understands why it is inert. It enables on its own the instant the agent
+ * goes idle with a result (the store's live status drives it, no reload). A
+ * running check always implies an unfinished agent, so its label wins.
  */
 function ValidateTaskBar({
   onPress,
   ready,
   validation,
-  agentBusy,
+  agentReady,
 }: {
   onPress: () => void;
   ready: boolean;
   validation: KanbanTask["validation"];
-  agentBusy: boolean;
+  agentReady: boolean;
 }) {
   const { t } = useTranslation();
   const running = validation?.state === "running";
-  const disabled = running || agentBusy;
+  const disabled = running || !agentReady;
   let label = t("tasks.panel.validateTask");
   if (running) {
     label = t("tasks.panel.validateRunning");
-  } else if (agentBusy) {
+  } else if (!agentReady) {
     label = t("tasks.panel.validateAgentBusy");
   }
   const barStyle = useCallback(
