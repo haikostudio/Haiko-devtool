@@ -55,6 +55,11 @@ $PASEO_HOME/
 ├── projects/
 │   ├── projects.json                    # Project registry
 │   └── workspaces.json                  # Workspace registry
+├── project-prompts/
+│   └── {slug-projectId}/
+│       ├── state.json                   # Latest prompt fingerprint + sync history
+│       ├── CLAUDE.md                    # Generated Claude-facing project instructions
+│       └── AGENTS.md                    # Generated GPT/Codex-facing project instructions
 ├── runtime/
 │   └── managed-processes/
 │       └── {recordId}.json              # Helper processes owned by Paseo; reconciled on daemon bootstrap
@@ -62,6 +67,8 @@ $PASEO_HOME/
 ```
 
 The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` by stripping the filesystem root and replacing path separators with `-` (Windows drive letters become a `C-` style prefix). Persistent server stores write atomically by writing a temp file in the target directory and then renaming it into place.
+
+`project-prompts/{slug-projectId}/` is a daemon-owned durable cache of the live project-status instructions injected into agents. The daemon rewrites these files when the watched project changes, independent of Cerveau, and uses the stored fingerprint/history to avoid stale prompt state.
 
 ---
 

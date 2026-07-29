@@ -312,6 +312,10 @@ export interface AgentManagerOptions {
   paseoToolsEnabled?: boolean;
   paseoToolCatalogFactory?: PaseoToolCatalogFactory;
   appendSystemPrompt?: string;
+  resolveDaemonAppendSystemPrompt?: (input: {
+    agentId: string;
+    config: AgentSessionConfig;
+  }) => Promise<string | null | undefined>;
   agentStreamCoalesceWindowMs?: number;
   rescueTimeouts?: AgentManagerRescueTimeouts;
   logger: Logger;
@@ -684,12 +688,21 @@ export class AgentManager {
   private readonly mcpAuthToken: string | null;
   private paseoToolsEnabled = true;
   private paseoToolCatalogFactory: PaseoToolCatalogFactory | null = null;
-  private appendSystemPrompt: string;
+  private appendSystemPrompt = "";
+  private resolveDaemonAppendSystemPrompt:
+    | ((input: {
+        agentId: string;
+        config: AgentSessionConfig;
+      }) => Promise<string | null | undefined>)
+    | null = null;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
   private brainRecallHook: BrainRecallPromptHook | null = null;
   private brainCaptureHook: BrainCapturePromptHook | null = null;
   private responseFormatTemplateHook: ResponseFormatTemplateHook | null = null;
+  private projectPromptHook:
+    | ((input: { agentId: string; cwd: string; text: string }) => Promise<string>)
+    | null = null;
   private onWorkspaceStateMayHaveChanged?: (params: { cwd: string }) => void;
   private logger: Logger;
   private readonly rescueTimeouts: Required<AgentManagerRescueTimeouts>;
@@ -705,7 +718,7 @@ export class AgentManager {
     this.mcpBaseUrl = options?.mcpBaseUrl ?? null;
     this.mcpAuthToken = options?.mcpAuthToken ?? null;
     this.configurePaseoTools(options);
-    this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.configurePromptInstructions(options);
     this.logger = options.logger.child({ module: "agent", component: "agent-manager" });
     this.rescueTimeouts = {
       reloadSessionCloseMs:
@@ -734,6 +747,11 @@ export class AgentManager {
   private configurePaseoTools(options: AgentManagerOptions): void {
     this.paseoToolsEnabled = options.paseoToolsEnabled ?? true;
     this.paseoToolCatalogFactory = options.paseoToolCatalogFactory ?? null;
+  }
+
+  private configurePromptInstructions(options: AgentManagerOptions): void {
+    this.appendSystemPrompt = options.appendSystemPrompt ?? "";
+    this.resolveDaemonAppendSystemPrompt = options.resolveDaemonAppendSystemPrompt ?? null;
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -799,6 +817,23 @@ export class AgentManager {
    */
   setResponseFormatTemplateHook(hook: ResponseFormatTemplateHook | null): void {
     this.responseFormatTemplateHook = hook;
+  }
+
+  setProjectPromptHook(
+    hook: ((input: { agentId: string; cwd: string; text: string }) => Promise<string>) | null,
+  ): void {
+    this.projectPromptHook = hook;
+  }
+
+  setDaemonAppendSystemPromptResolver(
+    resolver:
+      | ((input: {
+          agentId: string;
+          config: AgentSessionConfig;
+        }) => Promise<string | null | undefined>)
+      | null,
+  ): void {
+    this.resolveDaemonAppendSystemPrompt = resolver;
   }
 
   private async resolveResponseFormatTemplate(agentId: string) {
@@ -2337,12 +2372,15 @@ export class AgentManager {
         // same choke point as recall, so every entrypoint's turn is distilled.
         this.brainCaptureHook?.({ agentId: agent.id, text });
         const recalled = hook ? await hook({ agentId: agent.id, text }) : text;
+        const projectAugmented = this.projectPromptHook
+          ? await this.projectPromptHook({ agentId: agent.id, cwd: agent.cwd, text: recalled })
+          : recalled;
         // Which structure the answer must follow depends on where the agent's
         // card currently sits on the board — an analysis in "Validé", a work
         // report in "En cours", a publication log in "Déployé". Anything that
         // is not a card keeps the default five-section report.
         const template = await this.resolveResponseFormatTemplate(agent.id);
-        return injectResponseFormat(recalled, template);
+        return injectResponseFormat(projectAugmented, template);
       };
       if (typeof prompt === "string") {
         if (!prompt.trim()) {
@@ -4469,7 +4507,8 @@ export class AgentManager {
       stripInternalPaseoMcpServer(config),
       normalizeOptions,
     );
-    const launchConfig = this.applyDaemonAppendSystemPrompt(
+    const launchConfig = await this.applyDaemonAppendSystemPrompt(
+      agentId,
       withRuntimePaseoMcpServer({
         config: storedConfig,
         agentId,
@@ -4480,7 +4519,10 @@ export class AgentManager {
     return { storedConfig, launchConfig };
   }
 
-  private applyDaemonAppendSystemPrompt(config: AgentSessionConfig): AgentSessionConfig {
+  private async applyDaemonAppendSystemPrompt(
+    agentId: string,
+    config: AgentSessionConfig,
+  ): Promise<AgentSessionConfig> {
     const next = { ...config };
     delete next.daemonAppendSystemPrompt;
 
@@ -4488,6 +4530,12 @@ export class AgentManager {
     const userAppend = this.appendSystemPrompt.trim();
     if (userAppend) {
       parts.push(userAppend);
+    }
+    const projectAppend = (
+      await this.resolveDaemonAppendSystemPrompt?.({ agentId, config: next })
+    )?.trim();
+    if (projectAppend) {
+      parts.push(projectAppend);
     }
     // Presentation guidance (colored callouts) is for real, user-facing agents
     // only. Internal ephemeral agents (synthesis, estimation, recap) must stay

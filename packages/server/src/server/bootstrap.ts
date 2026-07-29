@@ -168,6 +168,7 @@ import { DaemonConfigStore, type MutableDaemonConfig } from "./daemon-config-sto
 import { BrowserToolsBroker } from "./browser-tools/broker.js";
 import { DaemonConfigBrowserToolsPolicy } from "./browser-tools/policy.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
+import { ProjectPromptSyncService } from "./project-prompt-sync.js";
 import { resolveWorkspaceIdForPath } from "./resolve-workspace-id-for-path.js";
 import {
   archiveByScope,
@@ -556,7 +557,7 @@ function createBrainMemoryServices(input: {
   recentFacts: RecentFactsStore | null;
 } | null {
   const { brainConfig } = input;
-  if (!brainConfig?.enabled || !brainConfig.apiKey) {
+  if (!brainConfig?.apiKey) {
     input.logger.info(
       {
         module: "brain-memory",
@@ -1217,6 +1218,23 @@ export async function createPaseoDaemon(
   };
   const createAgent = (input: Parameters<typeof createAgentCommand>[1]) =>
     createAgentCommand(createAgentCommandDependencies, input);
+  const projectPromptSync = new ProjectPromptSyncService({
+    paseoHome: config.paseoHome,
+    projectRegistry,
+    workspaceRegistry,
+    workspaceGitService,
+    logger,
+  });
+  await projectPromptSync.start();
+  agentManager.setDaemonAppendSystemPromptResolver(({ agentId, config: agentConfig }) =>
+    projectPromptSync.getDaemonAppendSystemPrompt({
+      agentId,
+      cwd: agentConfig.cwd,
+    }),
+  );
+  agentManager.setProjectPromptHook(({ agentId, cwd, text }) =>
+    projectPromptSync.augmentPrompt({ agentId, cwd, text }),
+  );
   const loopService = new LoopService({
     paseoHome: config.paseoHome,
     logger,
@@ -2204,6 +2222,7 @@ export async function createPaseoDaemon(
     quotaResetWatcher.stop();
     taskScheduler.stop();
     autoDeployWatcher.stop();
+    projectPromptSync.dispose();
     agentTaskSync.stop();
     activityLogService.stop();
     await relayTransport?.stop().catch(() => undefined);
