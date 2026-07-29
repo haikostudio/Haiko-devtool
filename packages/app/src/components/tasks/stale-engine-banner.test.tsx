@@ -8,6 +8,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.stubGlobal("React", React);
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
+vi.mock("lucide-react-native", () => ({
+  RotateCw: () => <span data-testid="update-icon" />,
+}));
+
+vi.mock("react-native-unistyles", () => ({
+  StyleSheet: {
+    create: () => ({ container: {} }),
+  },
+}));
+
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) =>
@@ -22,16 +32,16 @@ vi.mock("react-i18next", () => ({
 vi.mock("@/components/ui/alert", () => ({
   Alert: ({
     title,
-    children,
+    action,
     testID,
   }: {
     title: string;
-    children: React.ReactNode;
+    action: React.ReactNode;
     testID: string;
   }) => (
     <section data-testid={testID}>
       <h2>{title}</h2>
-      {children}
+      {action}
     </section>
   ),
 }));
@@ -41,14 +51,22 @@ vi.mock("@/components/ui/button", () => ({
     children,
     disabled,
     onPress,
+    accessibilityLabel,
     testID,
   }: {
-    children: React.ReactNode;
+    children?: React.ReactNode;
     disabled?: boolean;
     onPress: () => void;
+    accessibilityLabel?: string;
     testID: string;
   }) => (
-    <button type="button" data-testid={testID} disabled={disabled} onClick={onPress}>
+    <button
+      type="button"
+      data-testid={testID}
+      disabled={disabled}
+      onClick={onPress}
+      aria-label={accessibilityLabel}
+    >
       {children}
     </button>
   ),
@@ -89,8 +107,9 @@ describe("StaleEngineBanner", () => {
       );
     });
 
-    expect(container.textContent).toBe("Mettre à jour la version du moteurMettre à jour");
+    expect(container.textContent).toBe("Mettre à jour la version du moteur");
     expect(container.querySelectorAll("button")).toHaveLength(1);
+    expect(container.querySelector("button")?.getAttribute("aria-label")).toBe("Mettre à jour");
     expect(container.textContent).not.toContain("technical-built-id");
     expect(container.textContent).not.toContain("technical-deployed-id");
 
@@ -115,6 +134,8 @@ describe("StaleEngineBanner", () => {
 
     expect(onUpdate).not.toHaveBeenCalled();
     expect(button?.disabled).toBe(true);
-    expect(button?.textContent).toBe("Construction de l'application…");
+    expect(button?.textContent).toBe("");
+    expect(button?.getAttribute("aria-label")).toBe("Construction de l'application…");
+    expect(container.querySelector("h2")?.textContent).toBe("Construction de l'application…");
   });
 });

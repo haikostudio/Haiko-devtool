@@ -1,5 +1,8 @@
-import { memo } from "react";
+import { RotateCw } from "lucide-react-native";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { View } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { DaemonBuildFreshness } from "@/components/tasks/use-daemon-build-freshness";
@@ -26,27 +29,40 @@ export const StaleEngineBanner = memo(function StaleEngineBanner({
   progressLabel: string | null;
 }) {
   const { t } = useTranslation();
+  const action = useMemo(
+    () => (
+      <Button
+        variant="outline"
+        size="sm"
+        leftIcon={RotateCw}
+        loading={progressLabel !== null}
+        disabled={progressLabel !== null}
+        onPress={onUpdate}
+        accessibilityLabel={progressLabel ?? t("tasks.board.staleEngineAction")}
+        testID="tasks-stale-engine-update"
+      />
+    ),
+    [onUpdate, progressLabel, t],
+  );
 
   if (!freshness) {
     return null;
   }
 
   return (
-    <Alert
-      title={t("tasks.board.staleEngineTitle")}
-      variant="warning"
-      testID="tasks-stale-engine-banner"
-    >
-      <Button
-        variant="outline"
-        size="sm"
-        loading={progressLabel !== null}
-        disabled={progressLabel !== null}
-        onPress={onUpdate}
-        testID="tasks-stale-engine-update"
-      >
-        {progressLabel ?? t("tasks.board.staleEngineAction")}
-      </Button>
-    </Alert>
+    <View style={styles.container}>
+      <Alert
+        title={progressLabel ?? t("tasks.board.staleEngineTitle")}
+        variant="warning"
+        testID="tasks-stale-engine-banner"
+        action={action}
+      />
+    </View>
   );
 });
+
+const styles = StyleSheet.create((theme) => ({
+  container: {
+    marginHorizontal: theme.spacing[3],
+  },
+}));

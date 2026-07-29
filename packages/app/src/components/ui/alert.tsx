@@ -11,6 +11,7 @@ export interface AlertProps {
   variant?: AlertVariant;
   icon?: ReactNode;
   children?: ReactNode;
+  action?: ReactNode;
   testID?: string;
 }
 
@@ -27,6 +28,7 @@ export function Alert({
   variant = "default",
   icon,
   children,
+  action,
   testID,
 }: AlertProps) {
   const { theme } = useUnistyles();
@@ -64,6 +66,7 @@ export function Alert({
         ) : null}
         {children ? <View style={styles.actions}>{children}</View> : null}
       </View>
+      {action ? <View style={styles.actionSlot}>{action}</View> : null}
     </View>
   );
 }
@@ -117,5 +120,9 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     gap: theme.spacing[2],
     marginTop: theme.spacing[2],
+  },
+  actionSlot: {
+    alignSelf: "center",
+    flexShrink: 0,
   },
 }));
