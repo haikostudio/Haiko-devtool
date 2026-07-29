@@ -55,10 +55,27 @@ function wantsUser(
     task.executionHold === true ||
     Boolean(task.planReadyAt) ||
     task.schedule?.state === "failed" ||
-    agentBucket === "needs_input" ||
     agentBucket === "failed" ||
-    (agentAwaitsUser === true && agentBucket !== "running")
+    isAgentBlockedOnUser(agentBucket, agentAwaitsUser)
   );
+}
+
+// The live-agent half of `wantsUser`: the task's agent is blocked on the user
+// RIGHT NOW — stopped on a permission prompt (`needs_input`), or its latest
+// reply asks a question with no further run in flight (`agentAwaitsUser`). Both
+// are read fresh from the live agent, so they cannot be stale board leftovers.
+//
+// Split out because these two are the only "wants you" signals allowed to win
+// over an action the user just launched (final check / deploy): the running
+// action IS what is now blocked, so the card must flip to amber instead of
+// spinning a loader on a run that can't advance without an answer. The board
+// flags in `wantsUser` (a pending approval, a ready plan) can predate the
+// action and must not — they stay behind `isActionRunning`.
+function isAgentBlockedOnUser(
+  agentBucket: WorkspaceStateBucket | undefined,
+  agentAwaitsUser: boolean | undefined,
+): boolean {
+  return agentBucket === "needs_input" || (agentAwaitsUser === true && agentBucket !== "running");
 }
 
 // Actively working (spinning loader): reflect the agent's REAL activity, not a
@@ -154,6 +171,14 @@ export function deriveTaskTone(
   agentBucket: WorkspaceStateBucket | undefined,
   agentAwaitsUser?: boolean,
 ): TaskTone | null {
+  // The task's agent is blocked on the user right now — a permission prompt or a
+  // question in its latest reply. This wins over everything, even an action the
+  // user just launched (final check / deploy): that action is precisely what is
+  // now waiting on an answer, so the card must go amber and shake rather than
+  // keep spinning a "Contrôle final en cours" loader on a run that can't move.
+  if (isAgentBlockedOnUser(agentBucket, agentAwaitsUser)) {
+    return "attention";
+  }
   // An action the user just launched from the card (final check / deploy) is
   // running: show the working loader immediately, ahead of any stale amber
   // "waiting for you" signal left over from before the action started.

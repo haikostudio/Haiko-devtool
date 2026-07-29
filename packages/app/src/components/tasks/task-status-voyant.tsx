@@ -218,7 +218,7 @@ export function useProjectToneMap(
 // Vertical hop (px) of the attention bounce, and how often it repeats — kept in
 // step with the card's attention shake so the light and the card pulse together.
 const BOUNCE_LIFT = 3;
-const BOUNCE_INTERVAL_MS = 5000;
+const BOUNCE_INTERVAL_MS = 3000;
 
 /**
  * Drives the "waiting for you" bounce on the amber light: a light up-and-settle

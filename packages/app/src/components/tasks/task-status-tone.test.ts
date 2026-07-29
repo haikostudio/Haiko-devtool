@@ -117,16 +117,44 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     expect(deriveTaskTone(makeTask({ column: "in_progress" }), failed)).toBe("attention");
   });
 
-  it("spins the loader while the final check / deploy window is running, over a stale amber bucket", () => {
-    // The user launched the final check or the deploy from a finished card. The
-    // live bucket may still read needs_input until the agent starts streaming, but
-    // the explicit running action must surface immediately as the working loader.
+  it("flips a running final check / deploy to amber when its agent is blocked on a permission", () => {
+    // The final check or deploy is running, but its agent has stopped on a live
+    // permission prompt (needs_input). The action cannot advance without an
+    // answer, so the card must go amber and shake — not keep spinning a
+    // "Contrôle final en cours" loader that hides the wait from the user.
     const needsInput: WorkspaceStateBucket = "needs_input";
     expect(
       deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), needsInput),
-    ).toBe("running");
+    ).toBe("attention");
     expect(
       deriveTaskTone(makeTask({ column: "done", deployment: { state: "running" } }), needsInput),
+    ).toBe("attention");
+  });
+
+  it("still spins the loader for a running action over a stale board flag", () => {
+    // A board flag (a pending approval, a ready plan) can predate the action the
+    // user just launched — it is NOT a live block. The running action must win
+    // over it and show the working loader, so only a genuine live agent block
+    // (permission / prose question) turns a running action amber.
+    expect(
+      deriveTaskTone(
+        makeTask({
+          column: "done",
+          validation: { state: "running" },
+          approval: { state: "pending" },
+        }),
+        undefined,
+      ),
+    ).toBe("running");
+    expect(
+      deriveTaskTone(
+        makeTask({
+          column: "done",
+          validation: { state: "running" },
+          planReadyAt: "2024-01-01T00:00:00.000Z",
+        }),
+        undefined,
+      ),
     ).toBe("running");
   });
 
@@ -164,10 +192,14 @@ describe("deriveTaskTone — a question typed in prose still calls for the user"
     expect(deriveTaskTone(makeTask({ column: "in_progress" }), attention, undefined)).toBe("done");
   });
 
-  it("keeps a running final check ahead of a pending question", () => {
+  it("flips a running final check to amber when its agent asks a question mid-run", () => {
+    // The final check is running, but the agent stopped to ask something in prose
+    // (awaitsUser) with no further run in flight — exactly the reported bug where
+    // a questionnaire stayed hidden behind a green "Contrôle final en cours". The
+    // live block wins so the card goes amber and shakes for the answer.
     expect(
       deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), "done", true),
-    ).toBe("running");
+    ).toBe("attention");
   });
 });
 
