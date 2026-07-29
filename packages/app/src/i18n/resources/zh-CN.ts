@@ -537,7 +537,7 @@ export const zhCN: TranslationResources = {
       batchQueued: "有一个发布在排队 — 当前发布结束后即开始",
       batchOpenAgent: "查看发布代理",
       batchPhase: {
-        start: "准备中…",
+        start: "开始部署",
         prepare: "正在准备更改…",
         verify: "正在检查代码…",
         daemon: "正在构建引擎…",

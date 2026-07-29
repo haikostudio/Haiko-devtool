@@ -541,7 +541,7 @@ export const ar: TranslationResources = {
       batchQueued: "نشرة واحدة في الانتظار — ستبدأ فور انتهاء هذه",
       batchOpenAgent: "عرض وكيل النشر",
       batchPhase: {
-        start: "قيد التحضير…",
+        start: "بدء النشر",
         prepare: "جارٍ تحضير التغييرات…",
         verify: "جارٍ التحقق من الرمز…",
         daemon: "جارٍ بناء المحرك…",

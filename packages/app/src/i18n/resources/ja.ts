@@ -547,7 +547,7 @@ export const ja: TranslationResources = {
       batchQueued: "公開待ちが1件 — これが終わり次第に開始します",
       batchOpenAgent: "公開エージェントを表示",
       batchPhase: {
-        start: "準備中…",
+        start: "デプロイ開始",
         prepare: "変更を準備中…",
         verify: "コードを確認中…",
         daemon: "エンジンを構築中…",

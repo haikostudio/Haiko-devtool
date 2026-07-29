@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useCallback, useMemo } from "react";
+import { memo, type ReactNode, useCallback } from "react";
 import {
   ActivityIndicator,
   type GestureResponderEvent,
@@ -14,7 +14,12 @@ import type { TaskColumn } from "@/data/tasks";
 import type { TaskDeployBatch } from "@getpaseo/protocol/tasks/types";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
-import { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
+import {
+  batchProgressRatio,
+  batchProgressStep,
+  formatBatchProgressStep,
+  isRecapWorthShowing,
+} from "./deploy-batch-status";
 
 // Re-exported so existing importers (and tests) keep their entry points.
 export { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
@@ -66,14 +71,12 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
     },
     [batch, dismiss],
   );
-  const ratio = useMemo(() => (batch ? batchProgressRatio(batch) : 0), [batch]);
-  const fillStyle = useMemo(
-    () => [styles.progressFill, { width: `${Math.round(ratio * 100)}%` as const }],
-    [ratio],
-  );
   if (column !== "deployed" || !batch) {
     return null;
   }
+  const ratio = batchProgressRatio(batch);
+  const step = batchProgressStep(batch);
+  const fillStyle = [styles.progressFill, { width: `${Math.round(ratio * 100)}%` as const }];
   const running = batch.state === "running";
   if (!running) {
     if (dismissedAt === batch.startedAt || !isRecapWorthShowing(batch, Date.now())) {
@@ -104,10 +107,13 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
           <View style={styles.progressTrack}>
             <View style={fillStyle} />
           </View>
-          <Text style={styles.detail}>
-            {t(`tasks.board.batchPhase.${batch.phase ?? "start"}`, {
-              defaultValue: t("tasks.board.batchPhase.start"),
-            })}
+          <Text style={styles.detail} testID="tasks-deploy-batch-step">
+            {formatBatchProgressStep(
+              step,
+              t(`tasks.board.batchPhase.${batch.phase ?? "start"}`, {
+                defaultValue: t("tasks.board.batchPhase.start"),
+              }),
+            )}
             {batch.auto ? ` · ${t("tasks.board.batchAuto")}` : ""}
           </Text>
           {batch.queued ? (

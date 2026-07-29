@@ -547,7 +547,7 @@ export const ru: TranslationResources = {
       batchQueued: "Одна публикация в очереди — начнётся, как только завершится текущая",
       batchOpenAgent: "Открыть агента публикации",
       batchPhase: {
-        start: "Подготовка…",
+        start: "Начало развёртывания",
         prepare: "Подготовка изменений…",
         verify: "Проверка кода…",
         daemon: "Сборка движка…",

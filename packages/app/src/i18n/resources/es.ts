@@ -552,7 +552,7 @@ export const es: TranslationResources = {
       batchQueued: "Una publicación en espera — empezará en cuanto termine esta",
       batchOpenAgent: "Ver el agente de publicación",
       batchPhase: {
-        start: "Preparando…",
+        start: "Inicio del despliegue",
         prepare: "Preparando cambios…",
         verify: "Comprobando el código…",
         daemon: "Construyendo el motor…",

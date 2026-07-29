@@ -544,7 +544,7 @@ export const en = {
       batchQueued: "One publication waiting — it starts as soon as this one ends",
       batchOpenAgent: "View the publication agent",
       batchPhase: {
-        start: "Preparing…",
+        start: "Starting deployment",
         prepare: "Preparing changes…",
         verify: "Checking the code…",
         daemon: "Building the engine…",

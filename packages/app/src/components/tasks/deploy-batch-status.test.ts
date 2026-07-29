@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
+import {
+  batchProgressRatio,
+  batchProgressStep,
+  formatBatchProgressStep,
+  isRecapWorthShowing,
+  PHASES,
+} from "./deploy-batch-status";
 
 describe("batchProgressRatio", () => {
-  it("never reads as empty before the first phase lands", () => {
-    expect(batchProgressRatio({ state: "running", phase: null })).toBeGreaterThan(0);
-    expect(batchProgressRatio({ state: "running", phase: null })).toBeLessThan(0.25);
+  it("starts on the first of seven agent-reported steps", () => {
+    expect(batchProgressStep({ state: "running", phase: null })).toEqual({
+      current: 1,
+      total: 7,
+    });
+    expect(batchProgressRatio({ state: "running", phase: null })).toBe(1 / 7);
   });
 
   it("grows with each visible publication phase", () => {
@@ -18,6 +27,36 @@ describe("batchProgressRatio", () => {
     expect(site).toBeLessThan(publish);
     expect(publish).toBeLessThan(restart);
     expect(publish).toBeLessThan(1);
+  });
+
+  it("reports the final restart as step seven of seven", () => {
+    expect(batchProgressStep({ state: "running", phase: "restart" })).toEqual({
+      current: 7,
+      total: 7,
+    });
+  });
+
+  it("covers the complete publication path in order", () => {
+    expect(PHASES).toEqual(["start", "prepare", "verify", "daemon", "site", "publish", "restart"]);
+    expect(PHASES.map((phase) => batchProgressStep({ state: "running", phase }).current)).toEqual([
+      1, 2, 3, 4, 5, 6, 7,
+    ]);
+  });
+
+  it("formats the translated label for the banner", () => {
+    expect(
+      formatBatchProgressStep(
+        batchProgressStep({ state: "running", phase: "start" }),
+        "Début du déploiement",
+      ),
+    ).toBe("1/7 — Début du déploiement");
+  });
+
+  it("falls back to the first step for a phase sent by a newer agent", () => {
+    expect(batchProgressStep({ state: "running", phase: "future-phase" })).toEqual({
+      current: 1,
+      total: 7,
+    });
   });
 
   it("is full once the run is over, whichever way it ended", () => {

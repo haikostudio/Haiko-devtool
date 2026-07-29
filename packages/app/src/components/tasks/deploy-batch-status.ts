@@ -8,7 +8,38 @@ import type { TaskDeployBatch } from "@getpaseo/protocol/tasks/types";
  */
 
 /** The publication's visible steps, in the order the orchestrator reaches them. */
-export const PHASES = ["prepare", "verify", "daemon", "site", "publish", "restart"] as const;
+export const PHASES = [
+  "start",
+  "prepare",
+  "verify",
+  "daemon",
+  "site",
+  "publish",
+  "restart",
+] as const;
+
+export interface BatchProgressStep {
+  current: number;
+  total: number;
+}
+
+/** The numbered step reported by the publication agent, ready for display. */
+export function batchProgressStep(
+  batch: Pick<TaskDeployBatch, "state" | "phase">,
+): BatchProgressStep {
+  const total = PHASES.length;
+  if (batch.state !== "running") {
+    return { current: total, total };
+  }
+  const phase = batch.phase ?? "start";
+  const index = PHASES.indexOf(phase as (typeof PHASES)[number]);
+  return { current: index < 0 ? 1 : index + 1, total };
+}
+
+/** Combines the agent-reported position with the translated label shown in the banner. */
+export function formatBatchProgressStep(step: BatchProgressStep, label: string): string {
+  return `${step.current}/${step.total} — ${label}`;
+}
 
 /** A finished recap stops being news after a day; it hides itself then. */
 export const RECAP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -18,9 +49,8 @@ export function batchProgressRatio(batch: Pick<TaskDeployBatch, "state" | "phase
   if (batch.state !== "running") {
     return 1;
   }
-  const index = PHASES.indexOf((batch.phase ?? "") as (typeof PHASES)[number]);
-  // Before the first phase lands, show a sliver so the bar never reads as empty.
-  return index < 0 ? 0.08 : (index + 1) / (PHASES.length + 1);
+  const step = batchProgressStep(batch);
+  return step.current / step.total;
 }
 
 /** True when a finished batch is still recent enough to be worth reporting. */

@@ -553,7 +553,7 @@ export const ptBR: TranslationResources = {
       batchQueued: "Uma publicação em espera — começará assim que esta terminar",
       batchOpenAgent: "Ver o agente de publicação",
       batchPhase: {
-        start: "Preparando…",
+        start: "Início da implantação",
         prepare: "Preparando alterações…",
         verify: "Verificando o código…",
         daemon: "Construindo o mecanismo…",
