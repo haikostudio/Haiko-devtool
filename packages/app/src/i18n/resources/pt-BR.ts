@@ -557,6 +557,7 @@ export const ptBR: TranslationResources = {
       failedExhausted: "Análise impossível",
       retry: "Analisar novamente",
       reason: "Motivo: {{reason}}",
+      reasonHint: "Ver o motivo da falha",
     },
     schedule: {
       failed: "Falhou",

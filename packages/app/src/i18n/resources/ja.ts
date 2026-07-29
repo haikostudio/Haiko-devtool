@@ -551,6 +551,7 @@ export const ja: TranslationResources = {
       failedExhausted: "分析できません",
       retry: "もう一度分析",
       reason: "理由: {{reason}}",
+      reasonHint: "失敗の理由を表示",
     },
     schedule: {
       failed: "失敗",

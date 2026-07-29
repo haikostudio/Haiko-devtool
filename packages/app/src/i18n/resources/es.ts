@@ -556,6 +556,7 @@ export const es: TranslationResources = {
       failedExhausted: "Análisis imposible",
       retry: "Analizar de nuevo",
       reason: "Motivo: {{reason}}",
+      reasonHint: "Ver el motivo del fallo",
     },
     schedule: {
       failed: "Fallido",

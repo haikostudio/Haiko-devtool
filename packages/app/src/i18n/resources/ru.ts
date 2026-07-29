@@ -551,6 +551,7 @@ export const ru: TranslationResources = {
       failedExhausted: "Анализ невозможен",
       retry: "Проанализировать снова",
       reason: "Причина: {{reason}}",
+      reasonHint: "Показать причину сбоя",
     },
     schedule: {
       failed: "Ошибка",

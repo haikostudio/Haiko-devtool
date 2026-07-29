@@ -540,6 +540,7 @@ export const zhCN: TranslationResources = {
       failedExhausted: "无法分析",
       retry: "重新分析",
       reason: "原因：{{reason}}",
+      reasonHint: "显示失败原因",
     },
     schedule: {
       failed: "失败",

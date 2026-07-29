@@ -544,6 +544,7 @@ export const ar: TranslationResources = {
       failedExhausted: "تعذّر التحليل",
       retry: "تحليل من جديد",
       reason: "السبب: {{reason}}",
+      reasonHint: "عرض سبب الفشل",
     },
     schedule: {
       failed: "فشلت",
