@@ -145,35 +145,82 @@ SNAP="$SNAPSHOT_DIR"
 # node_modules dans l'instantané : on NE recopie pas (des Go, disque lent). On
 # rebranche par liens vers l'installation vivante — les dépendances tierces ne
 # sont pas versionnées et personne ne les édite, donc les partager est sûr.
+#
+# IMPORTANT : chaque dossier node_modules doit être un VRAI dossier peuplé de
+# liens PAR ENTRÉE (un lien par paquet), jamais un unique lien vers tout le
+# dossier. Metro sait résoudre à travers un lien par-paquet (testé : 4559 modules
+# résolus ainsi), mais REFUSE de descendre dans un node_modules qui est lui-même
+# un lien (ex. expo-clipboard, présent seulement dans packages/app/node_modules,
+# devenait introuvable). On applique donc la même recette au node_modules racine
+# ET à chaque node_modules local de paquet.
+#
 # SEULE subtilité : les liens d'espace de travail @getpaseo/* doivent pointer
 # vers les paquets DE L'INSTANTANÉ (source figée), pas vers le checkout vivant.
 # On recrée donc ces liens avec leur cible relative (../../packages/NAME), qui
 # se résout à l'intérieur de l'instantané. Tout le reste pointe vers le vivant.
+link_node_modules() {  # $1 = node_modules source (vivant), $2 = node_modules cible (instantané)
+  local src="$1" dst="$2" e name l tgt
+  mkdir -p "$dst"
+  for e in "$src"/*; do
+    name="$(basename "$e")"
+    if [ "$name" = "@getpaseo" ]; then
+      mkdir -p "$dst/@getpaseo"
+      for l in "$e"/*; do
+        tgt="$(readlink "$l")"           # ../../packages/NAME (relatif → résout dans l'instantané)
+        ln -s "$tgt" "$dst/@getpaseo/$(basename "$l")"
+      done
+    else
+      ln -s "$e" "$dst/$name"
+    fi
+  done
+}
+# Metro (le bundler web) crawle NATIVEMENT le node_modules local d'un paquet dont
+# il assemble la source, et NE suit PAS les liens qui en sortent (un paquet trouvé
+# par lien vers le vivant est jugé « hors projet » → introuvable, ex. expo-clipboard).
+# Le node_modules RACINE, lui, se résout très bien par liens (4559 modules testés).
+# On COPIE donc pour de vrai les seuls node_modules que Metro parcourt : l'app
+# (point d'entrée) et relay (dont la source est aussi embarquée, cf. metro.config).
+# Les liens durs sont exclus (fs.protected_hardlinks=1 sur ce serveur les refuse
+# entre propriétaires différents) ; copier TOUT node_modules serait trop lourd
+# (~2,5 Go sur disque lent). Copier app+relay ≈ 205 Mo, ~1 s depuis le cache.
+METRO_REAL_NM=(app relay)
 build_snapshot_node_modules() {
-  local shopt_dotglob shopt_nullglob
+  local shopt_dotglob shopt_nullglob p pkg
   shopt_dotglob=$(shopt -p dotglob); shopt_nullglob=$(shopt -p nullglob)
   shopt -s dotglob nullglob
-  mkdir -p "$SNAP/node_modules"
-  local e name tgt link p pkg
-  for e in "$REPO_ROOT"/node_modules/*; do
-    name="$(basename "$e")"
-    [ "$name" = "@getpaseo" ] && continue
-    ln -s "$e" "$SNAP/node_modules/$name"
-  done
-  mkdir -p "$SNAP/node_modules/@getpaseo"
-  for link in "$REPO_ROOT"/node_modules/@getpaseo/*; do
-    name="$(basename "$link")"
-    tgt="$(readlink "$link")"            # ../../packages/NAME (relatif → résout dans l'instantané)
-    ln -s "$tgt" "$SNAP/node_modules/@getpaseo/$name"
-  done
-  # node_modules locaux des paquets (tierces parties propres à chaque workspace).
+  link_node_modules "$REPO_ROOT/node_modules" "$SNAP/node_modules"
   for p in "$REPO_ROOT"/packages/*/node_modules; do
     pkg="$(basename "$(dirname "$p")")"
-    [ -d "$SNAP/packages/$pkg" ] && ln -s "$p" "$SNAP/packages/$pkg/node_modules"
+    [ -d "$SNAP/packages/$pkg" ] && link_node_modules "$p" "$SNAP/packages/$pkg/node_modules"
+  done
+  # Remplace les liens par de vraies copies pour les paquets bundlés par Metro.
+  for pkg in "${METRO_REAL_NM[@]}"; do
+    if [ -d "$REPO_ROOT/packages/$pkg/node_modules" ] && [ -d "$SNAP/packages/$pkg" ]; then
+      rm -rf "$SNAP/packages/$pkg/node_modules"
+      cp -a "$REPO_ROOT/packages/$pkg/node_modules" "$SNAP/packages/$pkg/node_modules"
+    fi
   done
   eval "$shopt_dotglob"; eval "$shopt_nullglob"
 }
 build_snapshot_node_modules
+
+# dist des paquets : le worktree ne contient QUE les fichiers suivis (dist est
+# ignoré par git → absent). Or le typecheck croisé (packages/cli, etc.) a besoin
+# des déclarations `.d.ts` des paquets frères. On COPIE donc les dist déjà bâtis
+# du checkout vivant dans l'instantané (copie figée, pas lien : sinon build:web
+# écrirait DANS le dist vivant). Ces copies ne servent qu'au garde-fou typecheck ;
+# le bundle publié, lui, reste 100 % issu de la source figée car build:web
+# régénère les dist des dépendances de l'app (highlight/protocol/client/audio)
+# depuis cette même source figée.
+copy_snapshot_dist() {
+  local d pkg
+  for d in "$REPO_ROOT"/packages/*/dist; do
+    [ -d "$d" ] || continue
+    pkg="$(basename "$(dirname "$d")")"
+    [ -d "$SNAP/packages/$pkg" ] && cp -a "$d" "$SNAP/packages/$pkg/dist"
+  done
+}
+copy_snapshot_dist
 
 # --- Empreinte du code source (garde-fou anti-build déchiré) -------------------
 # Historiquement ce garde-fou servait à détecter que le checkout PARTAGÉ avait
