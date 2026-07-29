@@ -1,0 +1,14 @@
+[Unit]
+Description=Restart the Paseo daemon after any stop
+
+[Timer]
+# paseo.service already uses Restart=always for crashes. This timer also covers
+# explicit administrative stops, which systemd deliberately excludes from
+# Restart=always.
+OnBootSec=15s
+OnUnitInactiveSec=15s
+AccuracySec=1s
+Unit=paseo.service
+
+[Install]
+WantedBy=timers.target
