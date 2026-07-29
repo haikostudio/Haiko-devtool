@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,18 +19,13 @@ import type { DaemonBuildFreshness } from "@/components/tasks/use-daemon-build-f
 export const StaleEngineBanner = memo(function StaleEngineBanner({
   freshness,
   onUpdate,
+  progressLabel,
 }: {
   freshness: DaemonBuildFreshness | null;
-  onUpdate: () => Promise<void>;
+  onUpdate: () => void;
+  progressLabel: string | null;
 }) {
   const { t } = useTranslation();
-  const [isUpdating, setIsUpdating] = useState(false);
-
-  const handleUpdate = useCallback(() => {
-    if (isUpdating) return;
-    setIsUpdating(true);
-    void onUpdate().finally(() => setIsUpdating(false));
-  }, [isUpdating, onUpdate]);
 
   if (!freshness) {
     return null;
@@ -45,12 +40,12 @@ export const StaleEngineBanner = memo(function StaleEngineBanner({
       <Button
         variant="outline"
         size="sm"
-        loading={isUpdating}
-        disabled={isUpdating}
-        onPress={handleUpdate}
+        loading={progressLabel !== null}
+        disabled={progressLabel !== null}
+        onPress={onUpdate}
         testID="tasks-stale-engine-update"
       >
-        {isUpdating ? t("tasks.board.staleEngineUpdating") : t("tasks.board.staleEngineAction")}
+        {progressLabel ?? t("tasks.board.staleEngineAction")}
       </Button>
     </Alert>
   );

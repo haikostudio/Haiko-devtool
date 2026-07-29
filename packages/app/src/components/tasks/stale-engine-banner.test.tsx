@@ -78,37 +78,43 @@ describe("StaleEngineBanner", () => {
   });
 
   it("shows one simple action without technical versions", () => {
+    const onUpdate = vi.fn();
     act(() => {
-      root.render(<StaleEngineBanner freshness={technicalFreshness} onUpdate={vi.fn()} />);
+      root.render(
+        <StaleEngineBanner
+          freshness={technicalFreshness}
+          onUpdate={onUpdate}
+          progressLabel={null}
+        />,
+      );
     });
 
     expect(container.textContent).toBe("Mettre à jour la version du moteurMettre à jour");
     expect(container.querySelectorAll("button")).toHaveLength(1);
     expect(container.textContent).not.toContain("technical-built-id");
     expect(container.textContent).not.toContain("technical-deployed-id");
+
+    container.querySelector("button")?.click();
+    expect(onUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it("starts the update once and disables the action while it runs", async () => {
-    let finishUpdate: (() => void) | undefined;
-    const onUpdate = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishUpdate = resolve;
-        }),
-    );
+  it("shows detailed progress and disables the action while it runs", () => {
+    const onUpdate = vi.fn();
     act(() => {
-      root.render(<StaleEngineBanner freshness={staleFreshness} onUpdate={onUpdate} />);
+      root.render(
+        <StaleEngineBanner
+          freshness={staleFreshness}
+          onUpdate={onUpdate}
+          progressLabel="Construction de l'application…"
+        />,
+      );
     });
 
     const button = container.querySelector("button");
-    await act(async () => button?.click());
     button?.click();
 
-    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate).not.toHaveBeenCalled();
     expect(button?.disabled).toBe(true);
-    expect(button?.textContent).toBe("Mise à jour…");
-
-    await act(async () => finishUpdate?.());
-    expect(button?.disabled).toBe(false);
+    expect(button?.textContent).toBe("Construction de l'application…");
   });
 });

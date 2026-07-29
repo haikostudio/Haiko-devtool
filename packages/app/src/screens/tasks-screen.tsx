@@ -99,6 +99,28 @@ const ThemedSettings = withUnistyles(Settings2);
 const ThemedMoreVertical = withUnistyles(MoreVertical);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedWand = withUnistyles(Wand2);
+const ENGINE_UPDATE_POLL_MS = 2_000;
+const ENGINE_UPDATE_TIMEOUT_MS = 30 * 60 * 1_000;
+
+class EngineUpdateFailure extends Error {}
+
+function engineUpdatePhaseKey(
+  phase: string | null | undefined,
+):
+  | "tasks.board.batchPhase.start"
+  | "tasks.board.batchPhase.save"
+  | "tasks.board.batchPhase.build"
+  | "tasks.board.batchPhase.publish" {
+  if (phase === "save") return "tasks.board.batchPhase.save";
+  if (phase === "build") return "tasks.board.batchPhase.build";
+  if (phase === "publish") return "tasks.board.batchPhase.publish";
+  return "tasks.board.batchPhase.start";
+}
+
+function waitForEngineUpdatePoll(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ENGINE_UPDATE_POLL_MS));
+}
+
 // Stable empty-array identity so the tone hooks' memos don't rebuild every
 // render while a board is still loading (a fresh `[]` would look like new input).
 type ProjectSortMode = "recent" | "name";
@@ -797,6 +819,7 @@ function BoardContent({
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
+  const [engineUpdateProgress, setEngineUpdateProgress] = useState<string | null>(null);
 
   const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
     () => [
@@ -1131,24 +1154,81 @@ function BoardContent({
 
   // Does the running engine match what is published? Null unless they diverge.
   const staleEngine = useDaemonBuildFreshness(serverId);
+  useEffect(() => {
+    if (!staleEngine) setEngineUpdateProgress(null);
+  }, [staleEngine]);
   const daemonClient = useHostRuntimeClient(serverId ?? "");
-  const handleUpdateStaleEngine = useCallback(async () => {
-    if (!daemonClient) {
-      toast.error(t("tasks.board.staleEngineFailed"));
+  const busyAgentCount = useSessionStore((state) => {
+    const agents = serverId ? state.sessions[serverId]?.agents : undefined;
+    if (!agents) return 0;
+    let count = 0;
+    for (const agent of agents.values()) {
+      if (agent.status === "running") count += 1;
+    }
+    return count;
+  });
+  const handleUpdateStaleEngine = useCallback(() => {
+    if (!daemonClient || engineUpdateProgress !== null) {
+      if (!daemonClient) toast.error(t("tasks.board.staleEngineFailed"));
       return;
     }
-    try {
-      const result = await daemonClient.paseoDeployTrigger({
-        projectId: projectId ?? undefined,
-      });
-      if (!result.started) {
-        throw new Error(result.error ?? "Engine update did not start");
+    void (async () => {
+      if (busyAgentCount > 0) {
+        const confirmed = await confirmDialog({
+          title: t("tasks.board.staleEngineTitle"),
+          message: t("tasks.panel.restartDaemonBusyMessage", { count: busyAgentCount }),
+          confirmLabel: t("tasks.board.staleEngineAction"),
+          cancelLabel: t("common.actions.cancel"),
+          destructive: true,
+        });
+        if (!confirmed) return;
       }
-      toast.show(t("tasks.board.staleEngineStarted"));
-    } catch {
-      toast.error(t("tasks.board.staleEngineFailed"));
-    }
-  }, [daemonClient, projectId, t, toast]);
+
+      setEngineUpdateProgress(t("tasks.board.batchPhase.start"));
+      try {
+        const result = await daemonClient.paseoDeployTrigger({
+          projectId: projectId ?? undefined,
+        });
+        if (!result.started) {
+          throw new Error(result.error ?? "Engine update did not start");
+        }
+        toast.show(t("tasks.board.staleEngineStarted"));
+
+        const deadline = Date.now() + ENGINE_UPDATE_TIMEOUT_MS;
+        while (Date.now() < deadline) {
+          await waitForEngineUpdatePoll();
+          try {
+            const status = await daemonClient.paseoDeployStatus();
+            if (status.deployOutcome === "failed" || status.deployPhase === "error") {
+              throw new EngineUpdateFailure(status.lastError ?? "Engine update failed");
+            }
+            if (
+              status.daemonBuiltSha &&
+              status.deployedSha &&
+              status.daemonBuiltSha === status.deployedSha
+            ) {
+              setEngineUpdateProgress(t("tasks.board.batchPhase.done"));
+              return;
+            }
+            if (status.deploying) {
+              setEngineUpdateProgress(t(engineUpdatePhaseKey(status.deployPhase)));
+            } else {
+              setEngineUpdateProgress(t("tasks.panel.restartDaemonReconnecting"));
+            }
+          } catch (error) {
+            if (error instanceof EngineUpdateFailure) {
+              throw error;
+            }
+            setEngineUpdateProgress(t("tasks.panel.restartDaemonReconnecting"));
+          }
+        }
+        throw new Error("Engine update timed out");
+      } catch {
+        setEngineUpdateProgress(null);
+        toast.error(t("tasks.board.staleEngineFailed"));
+      }
+    })();
+  }, [busyAgentCount, daemonClient, engineUpdateProgress, projectId, t, toast]);
 
   const boardStack = (
     <View style={isCompact ? styles.boardContainerCompact : styles.boardContainer}>
@@ -1167,7 +1247,11 @@ function BoardContent({
       {/* The engine running an older build than what is online is invisible by
           definition — everything looks published. Said here, above the work it
           silently affects. */}
-      <StaleEngineBanner freshness={staleEngine} onUpdate={handleUpdateStaleEngine} />
+      <StaleEngineBanner
+        freshness={staleEngine}
+        onUpdate={handleUpdateStaleEngine}
+        progressLabel={engineUpdateProgress}
+      />
       {/* Gestures the board refused, which are silent by design and therefore
           indistinguishable from a broken board when they repeat. */}
       <RefusedMovesNotice />
