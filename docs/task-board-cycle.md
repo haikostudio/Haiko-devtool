@@ -13,12 +13,13 @@ are "waiting to be published". What says a card is actually live is its own
 `deployedAt` stamp, never the column.
 
 **The board is moved by hand.** A card changes column because the user dragged
-it. Four machine-made moves survive, and only four: the analysis promotion
+it. Three machine-made moves survive, and only three: the analysis promotion
 ("Validé" → "Planifié", the instant a card's cost analysis succeeds), the launch
-stamp ("Planifié" → "En cours", at the instant the agent really starts), the
-final-check bar ("En cours" → "Terminé") and the queueing that immediately
-follows it ("Terminé" → "À déployer"). Nothing else — no agent activity, no
-heuristic — may move a card.
+stamp ("Planifié" → "En cours", at the instant the agent really starts) and the
+final-check bar ("En cours" → "Terminé"). Nothing else — no agent activity, no
+heuristic — may move a card. In particular the last hop ("Terminé" → "À
+déployer") is NOT automatic: a finished card rests in "Terminé" until the user
+queues it.
 
 **One project, one board.** Folders (classeurs) are gone from the product: a
 project has exactly one task list, minted by the server on demand
@@ -32,14 +33,14 @@ in the project's single list.
 
 ## Ownership of each transition
 
-| Transition           | Who performs it      | Notes                                                                                                                                                            |
-| -------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| → Notes / → À faire  | user **or** an agent | The only two columns an agent may write to.                                                                                                                      |
-| À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                           |
-| Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                                 |
-| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                               |
-| En cours → Terminé   | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it.                                                                                         |
-| Terminé → À déployer | daemon               | Automatic: a finished card is queued for publication the instant it completes (`TaskPublisher.queueForDeployment`). Publishing it is a separate, explicit press. |
+| Transition           | Who performs it      | Notes                                                                                                                                                          |
+| -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| → Notes / → À faire  | user **or** an agent | The only two columns an agent may write to.                                                                                                                    |
+| À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                         |
+| Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                               |
+| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                             |
+| En cours → Terminé   | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it.                                                                                       |
+| Terminé → À déployer | **user only**        | Manual: a finished card RESTS in "Terminé" and waits. The user queues it with the card's button (or a drag). `TaskPublisher` only says so in the conversation. |
 
 ## The invariants
 
@@ -75,6 +76,34 @@ in the project's single list.
    preserves the estimate and its `awaiting_slot` schedule (it neither re-arms nor
    disarms anything). The move goes through `transitionTask`, never the agent's
    `move_task` — the analysis agent is still confined to "Notes"/"À faire".
+6. **"À déployer" is reachable from "Terminé" only.** Enforced in the service
+   (`isDeployedReachableFrom`, `TaskBoardService.moveTask`) and mirrored in the
+   app's move guard, so no caller — drag, `move_task`, batch publisher, archive
+   restore — can slip a card into the publication queue without it having
+   completed. A card carrying `completedAt` is exempt: that is a re-queue or the
+   "Désarchiver" restore, neither of which skips anything.
+
+   The rule earns its keep because the skip has already happened twice: once as a
+   deliberate auto-hop (removed), and once because the **compiled daemon was
+   stale**. Which leads to the trap below.
+
+## The stale-daemon trap
+
+The daemon does not run the source — it runs `packages/*/dist`. Publication used
+to build the web app only, so a server-side fix could be committed, "published"
+and even followed by a daemon restart while the daemon reloaded the exact same
+old compiled code. Symptom: a bug that was fixed hours ago behaves as if the fix
+had never been written, and the card keeps skipping "Terminé".
+
+`ops/paseo-build-local.sh` now builds the daemon too (`build:server:clean` inside
+the frozen snapshot), then swaps the compiled `dist` of `highlight`, `relay`,
+`protocol`, `client`, `server` and `cli` into the live checkout by rename before
+the batch publisher's final restart. Never remove that step.
+
+Diagnosing a suspected stale daemon: compare a distinctive string from the source
+against the built file (`grep` in `packages/server/dist/server/server/…`), or the
+`dist` mtimes against the commit time. Same source, absent string ⇒ the running
+daemon predates the fix.
 
 ## Ce qui crée une carte — the conductor's triage
 
@@ -164,10 +193,13 @@ re-reads the request, runs the project's checks, **fixes what it finds**,
 the card itself once everything is green. The user reads the whole thing live
 instead of a dumped report.
 
-**Finishing a card QUEUES it — it does not publish it.** `setOnTaskCompleted` in
-`bootstrap.ts` hands the card to `TaskPublisher.queueForDeployment`, which moves
-it into "À déployer" and says so in the card's own conversation. Nothing is built
-at that moment.
+**Finishing a card STOPS it in "Terminé".** `setOnTaskCompleted` in
+`bootstrap.ts` hands the card to `TaskPublisher.announceReady`, which only writes
+a note in the card's own conversation — it moves nothing. Queueing the card into
+"À déployer" is the user's separate press. The daemon briefly did that hop by
+itself, which left "Terminé" permanently empty: the user never saw finished work
+come to rest, and the board read as if execution went straight to publication.
+Nothing is built at that moment either.
 
 Publication used to fire right there, once per card. On the shared checkout that
 raced itself: several builds reading the same files while other agents were still

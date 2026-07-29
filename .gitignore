@@ -4,6 +4,11 @@ node_modules/
 # Build outputs
 build/
 dist/
+# Dossiers temporaires de l'échange atomique du dist du démon lors d'une
+# publication (ops/paseo-build-local.sh) : jamais versionnés, même si une
+# publication échoue en plein milieu et en laisse traîner un.
+dist.incoming/
+dist.previous/
 .next/
 out/
 result

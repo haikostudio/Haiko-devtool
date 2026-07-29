@@ -71,6 +71,14 @@ export function isTaskMoveAllowed(task: KanbanTask, target: TaskColumn): boolean
   if (task.column === "archived") {
     return false;
   }
+  // "À déployer" is the publication queue, and a card only ever queues work that
+  // is finished: it is reachable from "Terminée" alone. Mirrors the same rule the
+  // server enforces, so the gesture is a silent no-op here instead of a refused
+  // move that bounces back. A card that already completed once (a re-queue) keeps
+  // its way in.
+  if (target === "deployed" && task.column !== "done" && task.completedAt == null) {
+    return false;
+  }
   if (!isTaskExecuting(task)) {
     return true;
   }

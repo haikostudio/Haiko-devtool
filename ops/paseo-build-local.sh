@@ -251,6 +251,21 @@ if ! ( cd "$SNAP" && "${NICE[@]}" npm run typecheck ); then
   fail "Le code ne compile pas — rien n'est publié."
 fi
 
+# --- Construction du DÉMON (côté serveur) -------------------------------------
+# Le démon ne lit PAS la source : il exécute /root/paseo/packages/*/dist, compilé.
+# Ce script ne construisait que le site web, donc un correctif côté serveur était
+# « publié » sans jamais être compilé : le redémarrage de fin de publication
+# rechargeait l'ANCIEN dist et le bug corrigé revenait intact (c'est ainsi que les
+# cartes ont continué de sauter la colonne « Terminée » des heures après le
+# correctif). On compile donc le démon depuis l'instantané figé, puis on le pose
+# dans le checkout vivant : le redémarrage de fin de lot applique enfin le code
+# qui vient d'être publié. Ne jamais retirer cette étape.
+phase "build"
+echo "==> Construction du démon (build:server) depuis l'instantané…"
+if ! ( cd "$SNAP" && "${NICE[@]}" npm run build:server:clean ); then
+  fail "La construction du démon a échoué — rien n'est publié."
+fi
+
 # --- Construction du site statique (le gros du temps, ~3-5 min) ---------------
 # Depuis l'INSTANTANÉ : expo export lit la source figée et build:app-deps
 # régénère les dist des paquets (highlight/protocol/client/audio) DANS
@@ -273,6 +288,34 @@ DIST="$SNAP/packages/app/dist"
 [ -d "$DIST" ] || fail "Dossier de build introuvable ($DIST)."
 # Marqueur de version lu par l'app pour proposer « Nouvelle version — Recharger ».
 printf '{"sha":"%s"}\n' "$SHA" > "$DIST/version.json"
+
+# --- Mise en place du démon compilé dans le checkout vivant --------------------
+# Le service systemd lance /root/paseo/packages/cli/dist : c'est CE dist qu'il faut
+# remplacer pour que le redémarrage de fin de lot serve le code publié.
+# On ne réécrit jamais un dist « en place » (le démon tourne encore et importe des
+# modules à la demande : un dossier à moitié réécrit le ferait tomber). On dépose
+# à côté, puis on échange par renommage — instantané, et les modules déjà chargés
+# en mémoire continuent de vivre jusqu'au redémarrage.
+DAEMON_PKGS=(highlight relay protocol client server cli)
+install_daemon_dist() {
+  local pkg src live
+  for pkg in "${DAEMON_PKGS[@]}"; do
+    src="$SNAP/packages/$pkg/dist"
+    live="$REPO_ROOT/packages/$pkg/dist"
+    [ -d "$src" ] || { echo "   (dist manquant pour $pkg — ignoré)"; continue; }
+    rm -rf "$live.incoming" "$live.previous" 2>/dev/null || true
+    cp -a "$src" "$live.incoming" || return 1
+    if [ -d "$live" ]; then
+      mv "$live" "$live.previous" || return 1
+    fi
+    mv "$live.incoming" "$live" || return 1
+    rm -rf "$live.previous" 2>/dev/null || true
+  done
+}
+echo "==> Installation du démon compilé dans le checkout vivant…"
+if ! install_daemon_dist; then
+  fail "Impossible d'installer le démon compilé — rien n'est publié."
+fi
 
 # --- Publication : copie dans le dossier servi par Caddy ----------------------
 phase "publish"

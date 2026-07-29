@@ -225,18 +225,63 @@ describe("TaskBoardService", () => {
     expect(completed.filter((id) => id === dragged.id)).toHaveLength(1);
   });
 
-  test("moving straight to deployed backfills completedAt", async () => {
+  test("a running card cannot skip « Terminée » on its way to the deploy queue", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Hotfix live" });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "in_progress",
+      index: 0,
+      manual: true,
+    });
 
-    const board = await service.moveTask("proj-1", {
+    await expect(
+      service.moveTask("proj-1", { taskId: task.id, column: "deployed", index: 0, manual: true }),
+    ).rejects.toThrow(/publication queue/);
+    const refused = await service.getBoard("proj-1");
+    expect(refused.tasks[0]?.column).toBe("in_progress");
+    expect(refused.tasks[0]?.completedAt ?? null).toBeNull();
+
+    // Through "Terminée", the same move goes through.
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "done",
+      index: 0,
+      manual: true,
+    });
+    const queued = await service.moveTask("proj-1", {
       taskId: task.id,
       column: "deployed",
       index: 0,
       manual: true,
     });
-    expect(board.tasks[0]?.deployedAt ?? null).toBeNull();
-    expect(board.tasks[0]?.completedAt).toBeTruthy();
+    expect(queued.tasks[0]?.column).toBe("deployed");
+  });
+
+  test("a shipped card restored from the archive returns to the deploy queue", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Shipped" });
+    await service.moveTask("proj-1", { taskId: task.id, column: "done", index: 0, manual: true });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+    await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "archived",
+      index: 0,
+      manual: true,
+    });
+
+    const restored = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "deployed",
+      index: 0,
+      manual: true,
+    });
+    expect(restored.tasks[0]?.column).toBe("deployed");
   });
 
   test('dragging a card back to "À faire" resets it to a draft', async () => {
@@ -815,6 +860,7 @@ describe("TaskBoardService", () => {
       folderId: folder.id,
       title: "En attente",
     });
+    await service.moveTask("proj-1", { taskId: live.id, column: "done", index: 0, manual: true });
     await service.moveTask("proj-1", {
       taskId: live.id,
       column: "deployed",
@@ -846,6 +892,7 @@ describe("TaskBoardService", () => {
   test("legacy « Déployé » cards are stamped live once, so the queue starts empty", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const legacy = await service.createTask("proj-1", { folderId: folder.id, title: "Ancienne" });
+    await service.moveTask("proj-1", { taskId: legacy.id, column: "done", index: 0, manual: true });
     await service.moveTask("proj-1", {
       taskId: legacy.id,
       column: "deployed",
@@ -861,6 +908,7 @@ describe("TaskBoardService", () => {
     // Idempotent: a card queued AFTER the migration is never mistaken for
     // history, so the next batch really does publish it.
     const fresh = await service.createTask("proj-1", { folderId: folder.id, title: "Nouvelle" });
+    await service.transitionTask("proj-1", fresh.id, "done");
     await service.transitionTask("proj-1", fresh.id, "deployed");
     expect(await service.backfillLegacyDeployedCards("proj-1")).toBe(0);
     const after = await service.getBoard("proj-1");

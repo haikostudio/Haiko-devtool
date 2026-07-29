@@ -159,7 +159,8 @@ export function isDeploymentWindowOpen(task: KanbanTask): boolean {
  * it is truly live, plus the one honest signal we cannot infer from the outside:
  * whether the change needs a daemon restart to take effect.
  *
- * For Paseo itself the daemon publishes the moment the card reached "Terminée",
+ * For Paseo itself publication is the batch button on the "À déployer" column
+ * (which builds the web app AND the daemon, then restarts it as its last step),
  * so the agent must NOT run any publish script or restart `paseo.service`; it
  * confirms the build is live and reports the restart need. In every case the last
  * step is `move_task(..., "deployed", needsDaemonRestart)`, which the open consent

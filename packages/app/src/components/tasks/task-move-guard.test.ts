@@ -78,6 +78,22 @@ describe("isTaskMoveAllowed", () => {
     expect(isTaskMoveAllowed(makeTask(), "deployed")).toBe(false);
   });
 
+  it("refuses « À déployer » for any card that never reached « Terminée »", () => {
+    // The publication queue only ever holds finished work, so no at-rest card
+    // upstream of "Terminée" may be dropped into it — the same rule the server
+    // enforces, kept here so the gesture is a silent no-op instead of a bounce.
+    for (const column of ["notes", "backlog", "validated", "scheduled"] as const) {
+      expect(isTaskMoveAllowed(makeTask({ column }), "deployed")).toBe(false);
+    }
+  });
+
+  it("lets a card that already completed re-enter « À déployer »", () => {
+    // A shipped card sent back upstream keeps its completion stamp, so re-queuing
+    // it skips nothing.
+    const requeued = makeTask({ column: "validated", completedAt: "2026-07-24T11:00:00.000Z" });
+    expect(isTaskMoveAllowed(requeued, "deployed")).toBe(true);
+  });
+
   it("always allows a re-order inside the same column", () => {
     // Dropping a card among its neighbours is an arrangement, not a transition.
     expect(isTaskMoveAllowed(makeTask({ validation: { state: "running" } }), "in_progress")).toBe(

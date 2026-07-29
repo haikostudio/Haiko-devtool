@@ -37,6 +37,26 @@ const PIPELINE_COLUMNS = new Set<TaskColumn>(["validated", "scheduled"]);
 const INERT_COLUMNS = new Set<TaskColumn>(["notes", "backlog"]);
 
 /**
+ * "À déployer" is reachable ONLY from "Terminée" — the board's one hard ordering
+ * rule, enforced here rather than in the UI so no caller can bypass it.
+ *
+ * Why it exists: the column used to be entered automatically the instant a card
+ * finished, which made "Terminée" an empty column nobody ever saw the work rest
+ * in. That auto-hop is gone, but several callers can still move a card (the
+ * user's drag, the card's own agent through `move_task`, the batch publisher,
+ * the archive restore). One of them slipping a running card straight into the
+ * publication queue would silently skip completion — and skip the final check
+ * that owns it. So the service refuses the jump outright.
+ *
+ * A card that already carries `completedAt` is allowed: that is the archive
+ * restore ("Désarchiver" puts a shipped card back where it was) and a re-entry
+ * from "À déployer" itself, neither of which skips anything.
+ */
+function isDeployedReachableFrom(task: KanbanTask): boolean {
+  return task.column === "done" || task.column === "deployed" || task.completedAt != null;
+}
+
+/**
  * Everything a run leaves behind on a card, wiped when the user drags it back to
  * "À faire" (or "Notes"). Dragging a card back there is the "start this one
  * over" gesture: it must not keep a cost estimate, a half-finished progress
@@ -58,8 +78,9 @@ const INERT_COLUMNS = new Set<TaskColumn>(["notes", "backlog"]);
  * work is live: a finished card lands there on its own and waits for the batch
  * publication. So entering it never stamps `deployedAt` — that stamp means "this
  * is online" and is written by {@link TaskBoardService.markTaskDeployed} once a
- * publication actually succeeded. A card that jumped straight there still gets
- * its missing completion stamp.
+ * publication actually succeeded. The stamp is kept as a belt-and-braces backfill
+ * for cards that predate {@link isDeployedReachableFrom}, which now forbids
+ * entering the queue without having completed first.
  */
 function stampTerminalDates(
   task: KanbanTask,
@@ -114,8 +135,8 @@ const COLUMN_ORDER = [
  *   arms the schedule (the scheduler/estimator then pick it up); leaving disarms
  *   it. A task that already reached "done" is terminal — never re-arm it, even if
  *   dragged back into a pipeline column (kills the "done keeps relaunching" loop).
- * - "done" stamps completedAt; "deployed" (the publication queue, post-"done")
- *   backfills completedAt if the task jumped straight there. It never stamps
+ * - "done" stamps completedAt; "deployed" (the publication queue) is reachable
+ *   from "done" only — see {@link isDeployedReachableFrom}. It never stamps
  *   deployedAt — being queued is not being live.
  * - dragging a card back into an INERT column ("À faire"/"Notes") RESETS it: see
  *   {@link resetToDraft}. That is the user's "start this one over" gesture.
@@ -788,6 +809,12 @@ export class TaskBoardService {
       const task = current.tasks.find((entry) => entry.id === input.taskId);
       if (!task) {
         throw new TaskBoardServiceError("task_not_found", `Task not found: ${input.taskId}`);
+      }
+      if (input.column === "deployed" && !isDeployedReachableFrom(task)) {
+        throw new TaskBoardServiceError(
+          "invalid_transition",
+          `Task ${input.taskId} cannot enter "deployed" from "${task.column}": a card reaches the publication queue through "done" only.`,
+        );
       }
       const now = new Date().toISOString();
       const { moved, enteringPipeline } = applyColumnMove(task, input, now);
