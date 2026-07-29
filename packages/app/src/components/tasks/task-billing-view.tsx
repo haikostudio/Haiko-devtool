@@ -253,6 +253,7 @@ export function TaskBillingView({
             initialValue={seed.billingTitle}
             resetKey={seedKey}
             onChangeText={setTitleDraft}
+            style={styles.field}
             testID="task-billing-title"
           />
         </Field>
@@ -262,6 +263,7 @@ export function TaskBillingView({
             resetKey={seedKey}
             onChangeText={setDescDraft}
             multiline
+            style={styles.field}
             testID="task-billing-description"
           />
         </Field>
@@ -271,6 +273,7 @@ export function TaskBillingView({
             resetKey={seedKey}
             onChangeText={setHoursDraft}
             keyboardType="numeric"
+            style={styles.field}
             testID="task-billing-hours"
           />
         </Field>
@@ -431,6 +434,14 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing[3],
     gap: theme.spacing[2],
+  },
+  // The default FormTextInput fill (surface2) sits only one step above the
+  // surface1 card, which is nearly invisible in dark mode — the field looked
+  // like bare text with no box. surface3 is a distinctly more elevated theme
+  // token that keeps a clear box in both light and dark without hard-coding a
+  // color. foreground text stays readable on it in either mode.
+  field: {
+    backgroundColor: theme.colors.surface3,
   },
   cardTitle: {
     color: theme.colors.foregroundMuted,
