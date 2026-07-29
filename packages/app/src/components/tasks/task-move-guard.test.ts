@@ -72,6 +72,12 @@ describe("isTaskMoveAllowed", () => {
     expect(isTaskMoveAllowed(makeTask(), "done")).toBe(true);
   });
 
+  it("refuses a jump from « En cours » straight to « À déployer »", () => {
+    // Skipping "Terminée" would bypass the final check that owns the completion:
+    // an executing card reaches the next column and only the next one.
+    expect(isTaskMoveAllowed(makeTask(), "deployed")).toBe(false);
+  });
+
   it("always allows a re-order inside the same column", () => {
     // Dropping a card among its neighbours is an arrangement, not a transition.
     expect(isTaskMoveAllowed(makeTask({ validation: { state: "running" } }), "in_progress")).toBe(

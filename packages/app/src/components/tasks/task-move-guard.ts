@@ -50,8 +50,11 @@ export function isTaskExecuting(task: KanbanTask): boolean {
  * - A card that is not executing keeps the board's usual freedom.
  * - A card with a running action is frozen where it is: the action owns the next
  *   transition and will perform it itself.
- * - An executing card may otherwise only go forward; every upstream column
- *   ("Planifié", "Validé", "À faire", "Notes") is refused.
+ * - An executing card may otherwise only reach the very next column — for
+ *   "En cours" that is "Terminée" and nothing else. Every upstream column
+ *   ("Planifié", "Validé", "À faire", "Notes") is refused, and so is every skip
+ *   ahead: jumping straight to "À déployer" would bypass the final check that
+ *   owns the completion.
  *
  * Refusals are silent no-ops at the call sites: the card simply stays put. There
  * is nothing to explain — the gesture was never an available action.
@@ -66,5 +69,5 @@ export function isTaskMoveAllowed(task: KanbanTask, target: TaskColumn): boolean
   if (hasRunningAction(task)) {
     return false;
   }
-  return pipelineIndex(target) > pipelineIndex(task.column);
+  return pipelineIndex(target) === pipelineIndex(task.column) + 1;
 }
