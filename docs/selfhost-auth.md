@@ -7,13 +7,13 @@ the reverse proxy. This mirrors the existing auth on `root.haikostudio.cloud`.
 
 Everything lives in `ops/selfhost-auth/`:
 
-| File | Role |
-| ---- | ---- |
-| `auth-server.mjs` | Zero-dependency Node service: login page, cookie verify, logout, anti-bruteforce |
-| `hash-password.mjs` | CLI to turn a plaintext password into a scrypt hash |
-| `app.caddy.example` | The Caddy site block with the `forward_auth` gate |
-| `paseo-selfhost-auth.service.example` | systemd unit for the auth service |
-| `env.example` | Template for the secrets file |
+| File                                  | Role                                                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| `auth-server.mjs`                     | Zero-dependency Node service: login page, cookie verify, logout, anti-bruteforce |
+| `hash-password.mjs`                   | CLI to turn a plaintext password into a scrypt hash                              |
+| `app.caddy.example`                   | The Caddy site block with the `forward_auth` gate                                |
+| `paseo-selfhost-auth.service.example` | systemd unit for the auth service                                                |
+| `env.example`                         | Template for the secrets file                                                    |
 
 ## How it works
 
@@ -120,4 +120,4 @@ session (forces everyone to log in again) — do this if you suspect a leaked co
   every same-origin request (including the service worker's asset fetches and
   `/push/*` registration), so offline caching and web push are unaffected.
 - **The daemon (port 6767) and its bearer password are untouched** — this wall is
-  a separate layer in front of the *web* origin only.
+  a separate layer in front of the _web_ origin only.
