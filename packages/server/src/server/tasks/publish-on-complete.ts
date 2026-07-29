@@ -1,25 +1,24 @@
 import type pino from "pino";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
-import type { TaskBoardService } from "./service.js";
 import { resolveTaskAgentId } from "./validator.js";
 
 export interface TaskPublisherOptions {
-  taskBoardService: TaskBoardService;
   agentManager: Pick<AgentManager, "appendTimelineItem">;
   logger: pino.Logger;
 }
 
 /**
- * What happens the moment a card lands in "Terminée": it is QUEUED, not
- * published.
+ * What happens the moment a card lands in "Terminée": it STOPS there and waits.
  *
- * Publication used to fire per card, right here. On the shared checkout that
- * raced itself — several builds reading the same files while other agents were
- * still writing them — and produced torn bundles. So a finished card now moves
- * itself into the last column ("À déployer") and waits there. The user presses
- * "Tout déployer" at the bottom of that column and the whole batch goes online in
- * ONE run, which then restarts the daemon (see {@link TaskBatchDeployer}).
+ * History of this seam: publication once fired per card right here, which raced
+ * the shared checkout and produced torn bundles. The fix moved a finished card
+ * automatically into the last column ("À déployer") to batch it. But that auto
+ * move meant a card never actually rested in "Terminée" — the column stayed
+ * empty and the user never saw the finished work stop. So the card now HALTS in
+ * "Terminée". Entering "À déployer" is a separate, manual act: the user presses
+ * the card's own "Mettre dans À déployer" button (or drags it there). The daemon
+ * never queues a card on its own.
  *
  * The card's conversation says so, so nobody is left wondering whether finishing
  * published anything.
@@ -33,23 +32,18 @@ export class TaskPublisher {
     this.logger = options.logger.child({ module: "task-publisher" });
   }
 
-  /** Moves a freshly finished card into the publication queue and says so. */
-  async queueForDeployment(projectId: string, task: KanbanTask): Promise<void> {
+  /**
+   * Announces that a freshly finished card rests in "Terminée" and awaits a
+   * manual queue. It does NOT move the card: entering "À déployer" is the user's
+   * explicit press, never an automatic hop.
+   */
+  async announceReady(task: KanbanTask): Promise<void> {
     if (task.column === "deployed") {
-      return;
-    }
-    try {
-      await this.options.taskBoardService.transitionTask(projectId, task.id, "deployed");
-    } catch (error) {
-      this.logger.warn(
-        { err: error, projectId, taskId: task.id },
-        "Failed to queue a finished card",
-      );
       return;
     }
     await this.say(
       resolveTaskAgentId(task),
-      "📦 **En attente de publication** — cette tâche rejoint la colonne « À déployer ». Elle partira en ligne au prochain « Tout déployer ».",
+      "✅ **Terminé** — cette tâche s'arrête ici. Pour la publier, mets-la dans « À déployer » avec le bouton de la carte, puis lance « Tout déployer ».",
     );
   }
 

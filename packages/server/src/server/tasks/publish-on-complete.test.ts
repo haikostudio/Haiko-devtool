@@ -59,7 +59,6 @@ describe("TaskPublisher", () => {
 
   function buildPublisher() {
     return new TaskPublisher({
-      taskBoardService: service,
       agentManager: {
         appendTimelineItem: async (_agentId: string, item: { type: string; text?: string }) => {
           notes.push(item.text ?? "");
@@ -69,21 +68,21 @@ describe("TaskPublisher", () => {
     });
   }
 
-  test("a finished card is queued in À déployer, and nothing is published yet", async () => {
+  test("a finished card rests in Terminé — it is NOT queued for deployment", async () => {
     const task = await seedTask();
     const board = await service.transitionTask("proj-1", task.id, "done");
     const done = board.tasks.find((item) => item.id === task.id);
     if (!done) throw new Error("task lost");
 
-    await buildPublisher().queueForDeployment("proj-1", done);
+    await buildPublisher().announceReady(done);
 
     const after = await service.getBoard("proj-1");
-    const queued = after.tasks.find((entry) => entry.id === task.id);
-    expect(queued?.column).toBe("deployed");
-    // Queued is NOT live: no deploy stamp until a publication actually succeeds.
-    expect(queued?.deployedAt ?? null).toBeNull();
-    expect(queued?.deployedUrl ?? null).toBeNull();
-    expect(notes.at(-1)).toContain("À déployer");
+    const resting = after.tasks.find((entry) => entry.id === task.id);
+    // The card stops in "done": entering "deployed" is a manual user press.
+    expect(resting?.column).toBe("done");
+    expect(resting?.deployedAt ?? null).toBeNull();
+    expect(resting?.deployedUrl ?? null).toBeNull();
+    expect(notes.at(-1)).toContain("Terminé");
   });
 
   test("a card already in the queue is left alone", async () => {
@@ -94,7 +93,7 @@ describe("TaskPublisher", () => {
     const queued = board.tasks.find((entry) => entry.id === task.id);
     if (!queued) throw new Error("task lost");
 
-    await buildPublisher().queueForDeployment("proj-1", queued);
+    await buildPublisher().announceReady(queued);
 
     expect(notes).toHaveLength(0);
   });

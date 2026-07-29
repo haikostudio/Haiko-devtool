@@ -1575,7 +1575,6 @@ export async function createPaseoDaemon(
   // says so in its own conversation. Nothing goes online until the user presses
   // "Tout déployer" at the bottom of that column.
   const taskPublisher = new TaskPublisher({
-    taskBoardService,
     agentManager,
     logger,
   });
@@ -1605,13 +1604,15 @@ export async function createPaseoDaemon(
     },
     logger,
   });
-  // Finishing a card no longer publishes it: it QUEUES it. The card moves itself
-  // into the last column ("À déployer") and waits there for the user's "Tout
-  // déployer", which publishes the whole batch in one run and then restarts the
-  // daemon (see TaskBatchDeployer). One run per batch instead of one per card is
-  // the whole point: concurrent per-card builds on the shared checkout produced
-  // torn bundles. A deploy-conflict repair card keeps its own express lane — the
-  // publication it unblocks is already waiting on it.
+  // Finishing a card no longer publishes it, and no longer queues it either: it
+  // STOPS in "Terminée". The card rests there so the user sees the finished work
+  // land, then moves it into "À déployer" with an explicit press when ready. That
+  // last column still batches: the user's "Tout déployer" publishes the whole
+  // queue in one run and restarts the daemon (see TaskBatchDeployer). One run per
+  // batch instead of one per card is the whole point — concurrent per-card builds
+  // on the shared checkout produced torn bundles. A deploy-conflict repair card
+  // keeps its own express lane: the publication it unblocks is already waiting on
+  // it, so it deploys straight away rather than resting in "Terminée".
   // "Publier automatiquement en heures creuses": opt-in twin of the button. Off
   // unless the user turns it on, in which case the same batch (and the same
   // closing restart) fires inside the quiet-hours window.
@@ -1642,7 +1643,7 @@ export async function createPaseoDaemon(
       }
       return;
     }
-    await taskPublisher.queueForDeployment(projectId, task);
+    await taskPublisher.announceReady(task);
   });
   // Light analysis tidies manual backlog cards without running cost estimation.
   taskBoardService.setOnBacklogRefine((projectId, taskId) => {
