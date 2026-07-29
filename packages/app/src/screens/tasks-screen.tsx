@@ -813,11 +813,40 @@ function BoardContent({
   // pending-publish summary: one project, one board, one set of totals.
   const projectTasks = boardHandle.board?.tasks ?? EMPTY_TASKS;
 
+  // Dropping a card into another column is the SAME gesture as pressing that
+  // card's action button for the transition — so it must run the SAME handler,
+  // not a raw column flip. A raw flip skips the confirmations, the agent
+  // dispatch and the deploy-queue side effects, which is exactly what left
+  // statuses and the "À déployer" counters out of sync. We reuse the very
+  // buttons' handlers (approve / run / validate / deploy) so drag and click can
+  // never drift. Transitions with no button equivalent (reorders, backward
+  // moves, note → backlog) keep the plain move.
+  const taskActions = useBoardTaskActions(boardHandle);
   const handleMoveTask = useCallback(
     (input: { taskId: string; column: TaskColumn; index: number }) => {
+      const from = projectTasks.find((entry) => entry.id === input.taskId)?.column;
+      const to = input.column;
+      if (from && from !== to) {
+        if (from === "backlog" && to === "validated") {
+          taskActions.handleApproveTask(input.taskId);
+          return;
+        }
+        if (from === "scheduled" && to === "in_progress") {
+          taskActions.handleRunNow(input.taskId);
+          return;
+        }
+        if (from === "in_progress" && to === "done") {
+          taskActions.handleValidate(input.taskId);
+          return;
+        }
+        if (from === "done" && to === "deployed") {
+          taskActions.handleDeploy(input.taskId);
+          return;
+        }
+      }
       void boardHandle.moveTask(input);
     },
-    [boardHandle],
+    [boardHandle, projectTasks, taskActions],
   );
 
   // Tapping a task (board card or Gantt bar) opens its agent chat in the shared
@@ -1332,6 +1361,19 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle, toast, t, setRestartAfterDeploy, preferChained, setPreferChained],
   );
+  // "Mettre dans À déployer": the button twin of dragging a finished card into
+  // the publication queue. It ONLY moves the column — it never publishes and
+  // never marks the card live (that stays the batch's job). Same effect as the
+  // drag, so the board's one rule holds: a button does exactly what its drag does.
+  const handleQueueDeploy = useCallback(
+    (taskId: string) => {
+      boardHandle.moveTask({ taskId, column: "deployed", index: 0 }).then(
+        () => toast.show(t("tasks.toast.queuedForDeploy")),
+        (error) => toast.error(error instanceof Error ? error.message : String(error)),
+      );
+    },
+    [boardHandle, toast, t],
+  );
   return {
     handleSave,
     handleDelete,
@@ -1343,6 +1385,7 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     handleSetHold,
     handleArchive,
     handleDeploy,
+    handleQueueDeploy,
   };
 }
 
@@ -1402,6 +1445,7 @@ function useConductorPanelProps(
       onValidate: taskActions.handleValidate,
       onArchive: taskActions.handleArchive,
       onDeploy: taskActions.handleDeploy,
+      onQueueDeploy: taskActions.handleQueueDeploy,
       onRestartDaemon: handleRestartDaemon,
       onCancelRestartDaemon: handleCancelRestartDaemon,
       restartProgress: daemonRestart.progress,
