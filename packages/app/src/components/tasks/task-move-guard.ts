@@ -47,7 +47,9 @@ export function isTaskExecuting(task: KanbanTask): boolean {
  * May the user move this card to `target` by hand?
  *
  * - Re-ordering inside the same column is always fine (it is not a transition).
- * - A card that is not executing keeps the board's usual freedom.
+ * - A card already in "Archivé" is frozen: history only, never walked back.
+ * - A card that is not executing keeps the board's usual freedom — including
+ *   filing itself into "Archivé" by hand (drag, menu or chevrons).
  * - A card with a running action is frozen where it is: the action owns the next
  *   transition and will perform it itself.
  * - An executing card may otherwise only reach the very next column — for
@@ -62,6 +64,12 @@ export function isTaskExecuting(task: KanbanTask): boolean {
 export function isTaskMoveAllowed(task: KanbanTask, target: TaskColumn): boolean {
   if (task.column === target) {
     return true;
+  }
+  // "Archivé" is the terminal resting column: once a card is filed there it is
+  // frozen. It may be re-ordered among its neighbours (handled above), but no
+  // gesture ever walks it back into the pipeline — the column is history only.
+  if (task.column === "archived") {
+    return false;
   }
   if (!isTaskExecuting(task)) {
     return true;

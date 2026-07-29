@@ -153,13 +153,13 @@ export const TaskCardMenu = memo(function TaskCardMenu({
           </DropdownMenuItem>
         ) : null}
         {canLaunch || canHold ? <DropdownMenuSeparator /> : null}
-        {/* "Archivé" is never a manual move target — a card only ever reaches it
-            automatically once its work goes live. A card whose work is in flight
-            only lists the columns it may still reach: no backward entry, since
-            no backward button exists (see task-move-guard). */}
+        {/* "Archivé" is a valid manual target now: a card at rest may be filed
+            into the terminal column by hand. A card whose work is in flight only
+            lists the columns it may still reach — no backward entry, since no
+            backward button exists — and an already-archived card lists nothing,
+            because it is frozen (see task-move-guard). */}
         {KANBAN_COLUMNS.filter(
-          (column) =>
-            column !== task.column && column !== "archived" && isTaskMoveAllowed(task, column),
+          (column) => column !== task.column && isTaskMoveAllowed(task, column),
         ).map((column) => (
           <MoveTaskMenuItem
             key={column}

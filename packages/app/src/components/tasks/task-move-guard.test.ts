@@ -90,4 +90,27 @@ describe("isTaskMoveAllowed", () => {
     expect(isTaskMoveAllowed(makeTask({ column: "validated" }), "backlog")).toBe(true);
     expect(isTaskMoveAllowed(makeTask({ column: "done" }), "deployed")).toBe(true);
   });
+
+  it("lets a card at rest be filed into « Archivé » by hand", () => {
+    // Manual archive: a finished (or any at-rest) card may be dropped into the
+    // terminal column, which is what empties the "À déployer" queue on demand.
+    expect(isTaskMoveAllowed(makeTask({ column: "done" }), "archived")).toBe(true);
+    expect(isTaskMoveAllowed(makeTask({ column: "deployed" }), "archived")).toBe(true);
+    expect(isTaskMoveAllowed(makeTask({ column: "backlog" }), "archived")).toBe(true);
+  });
+
+  it("freezes a card already in « Archivé » — history only, never walked back", () => {
+    const archived = makeTask({ column: "archived" });
+    for (const column of ["notes", "backlog", "validated", "done", "deployed"] as const) {
+      expect(isTaskMoveAllowed(archived, column)).toBe(false);
+    }
+    // A re-order among its archived neighbours is still fine.
+    expect(isTaskMoveAllowed(archived, "archived")).toBe(true);
+  });
+
+  it("still refuses an « En cours » card that tries to skip straight to « Archivé »", () => {
+    // Filing is a rest-only privilege: work in flight must finish through its
+    // own buttons, never leap over "Terminée" and "À déployer" into the archive.
+    expect(isTaskMoveAllowed(makeTask(), "archived")).toBe(false);
+  });
 });

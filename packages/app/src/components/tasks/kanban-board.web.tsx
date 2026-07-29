@@ -171,10 +171,10 @@ export function KanbanBoard({
       if (!task || !targetColumn) {
         return;
       }
-      // "Archivé" is read-only and auto-only: its cards are frozen (never dragged
-      // out) and nothing is ever dragged into it (a card lands there only when its
-      // work goes live).
-      if (task.column === "archived" || targetColumn === "archived") {
+      // "Archivé" is the terminal resting column: its cards are frozen and never
+      // dragged back out. Dropping a card INTO it is a manual archive — allowed,
+      // and gated like any other move by isTaskMoveAllowed below.
+      if (task.column === "archived") {
         return;
       }
       if (task.column === targetColumn && overId === taskId) {
