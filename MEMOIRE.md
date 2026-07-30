@@ -60,5 +60,8 @@ d'état du projet — d'où l'exigence de brièveté.
 - Sur le dépôt Paseo lui-même (isSelf), le chef d'orchestre est un agent complet
   qui code : il démarre sur Opus 5 « high » (Claude) / gpt-5.6-sol « high »
   (Codex), pas sur les défauts gestionnaire de tableau des autres projets. Le
-  modèle/niveau dépend donc de isSelf (comme déjà le prompt et les permissions),
-  en remplissant seulement le vide — un chef déjà créé garde son réglage.
+  modèle/niveau dépend donc de isSelf (comme déjà le prompt et les permissions).
+  Sur Paseo, les pins gestionnaire fuités (sonnet-5 / luna, effort medium) d'un
+  chef créé avant isSelf sont FORCÉS vers le modèle frontière au rechargement
+  (comme l'alias legacy) : il se remet à niveau seul, sans « Réinitialiser ».
+  Ailleurs, la règle reste « ne remplir que le vide, un choix explicite l'emporte ».
