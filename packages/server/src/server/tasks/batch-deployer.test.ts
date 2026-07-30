@@ -185,11 +185,6 @@ describe("TaskBatchDeployer", () => {
     return notes.some((note) => note.includes(fragment));
   }
 
-  async function taskIsLive(taskId: string): Promise<boolean> {
-    const board = await service.getBoard("proj-1");
-    return board.tasks.some((task) => task.id === taskId && Boolean(task.deployedAt));
-  }
-
   test("publishes the whole queue in one run, stamps the cards and restarts the engine", async () => {
     const first = await seedQueued("Login", "task/login");
     const second = await seedQueued("Signup", "task/signup");
