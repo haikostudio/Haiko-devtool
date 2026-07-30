@@ -525,6 +525,12 @@ export const en = {
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",
       deployAllConfirm: "Deploy all",
       deployAllStarted: "Batch publication started",
+      deployResetAction: "Reset / retry deploy",
+      deployResetTitle: "Reset the deployment",
+      deployResetMessage:
+        "Clears the failed state and any leftover lock, then starts a fresh publication. The engine restarts at the end; running agents will be interrupted.",
+      deployResetConfirm: "Reset and retry",
+      deployResetStarted: "Fresh publication started",
       archiveAll: "Archive all",
       archiveSelectionConfirm: "Archive selection ({{count}})",
       archiveSelectionCancel: "Cancel",

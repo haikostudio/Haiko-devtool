@@ -479,6 +479,7 @@ export class TasksSession {
       }
       const { started, queued, taskIds } = await this.taskBatchDeployer.deployAll(
         request.projectId,
+        { reset: request.reset },
       );
       this.host.emit({
         type: "tasks.board.deploy_all.response",

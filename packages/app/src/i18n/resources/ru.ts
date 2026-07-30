@@ -529,6 +529,12 @@ export const ru: TranslationResources = {
         "{{count}} задач(и) будут опубликованы одним запуском, затем движок перезапустится. Запущенные агенты будут прерваны.",
       deployAllConfirm: "Развернуть всё",
       deployAllStarted: "Групповая публикация запущена",
+      deployResetAction: "Сбросить / Повторить",
+      deployResetTitle: "Сбросить развёртывание",
+      deployResetMessage:
+        "Очищает состояние ошибки и оставшуюся блокировку, затем запускает чистую публикацию. В конце движок перезапускается; работающие агенты будут прерваны.",
+      deployResetConfirm: "Сбросить и повторить",
+      deployResetStarted: "Новая публикация запущена",
       archiveAll: "Архивировать всё",
       archiveSelectionConfirm: "Архивировать выбранное ({{count}})",
       archiveSelectionCancel: "Отмена",

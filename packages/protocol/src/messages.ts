@@ -2422,6 +2422,12 @@ export const PaseoDeployTriggerRequestSchema = z.object({
    * deploy-branch ship keeps working unchanged.
    */
   mergeBranches: z.array(z.string()).optional(),
+  /**
+   * "Réinitialiser / Relancer le déploiement": clear a stuck or falsely-failed
+   * run's state and residual lock before starting a fresh publication. Additive +
+   * optional — old daemons simply ignore it and start a normal deploy.
+   */
+  reset: z.boolean().optional(),
   requestId: z.string(),
 });
 

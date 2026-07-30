@@ -523,6 +523,12 @@ export const ar: TranslationResources = {
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",
       deployAllConfirm: "نشر الكل",
       deployAllStarted: "بدأ النشر الجماعي",
+      deployResetAction: "إعادة التعيين / إعادة المحاولة",
+      deployResetTitle: "إعادة تعيين النشر",
+      deployResetMessage:
+        "يمسح حالة الفشل وأي قفل متبقٍ، ثم يبدأ نشرًا نظيفًا. تتم إعادة تشغيل المحرك في النهاية؛ وستتوقف الوكلاء قيد التشغيل.",
+      deployResetConfirm: "إعادة التعيين والمحاولة",
+      deployResetStarted: "بدأ نشر جديد",
       archiveAll: "أرشفة الكل",
       archiveSelectionConfirm: "أرشفة المحدد ({{count}})",
       archiveSelectionCancel: "إلغاء",

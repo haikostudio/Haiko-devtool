@@ -529,6 +529,12 @@ export const ja: TranslationResources = {
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",
       deployAllConfirm: "すべてデプロイ",
       deployAllStarted: "一括公開を開始しました",
+      deployResetAction: "リセット / 再試行",
+      deployResetTitle: "デプロイをリセット",
+      deployResetMessage:
+        "失敗状態と残ったロックを消去し、クリーンな公開を開始します。最後にエンジンが再起動し、実行中のエージェントは中断されます。",
+      deployResetConfirm: "リセットして再試行",
+      deployResetStarted: "新しい公開を開始しました",
       archiveAll: "すべてアーカイブ",
       archiveSelectionConfirm: "選択をアーカイブ ({{count}})",
       archiveSelectionCancel: "キャンセル",

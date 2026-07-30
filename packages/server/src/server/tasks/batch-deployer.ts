@@ -63,6 +63,8 @@ export interface TaskBatchDeployerOptions {
   triggerDeploy: (input: {
     projectId: string;
     mergeBranches: string[];
+    /** Clear a stuck/falsely-failed run + residual lock before starting. */
+    reset?: boolean;
   }) => Promise<DeployTriggerResult>;
   readDeployRun: () => Promise<DeployRunSnapshot>;
   /**
@@ -164,8 +166,17 @@ export class TaskBatchDeployer {
 
   async deployAll(
     projectId: string,
-    options: { auto?: boolean } = {},
+    options: { auto?: boolean; reset?: boolean } = {},
   ): Promise<TaskBatchDeployResult> {
+    if (options.reset) {
+      // "Réinitialiser / Relancer": the user is escaping a jammed or falsely
+      // failed publication. Drop any stuck in-memory slot/queue for this project
+      // so this request claims a fresh cycle instead of queuing behind a ghost
+      // that will never finish. The daemon-side run + residual lock are cleared
+      // downstream by triggerDeploy's own reset.
+      this.running.delete(projectId);
+      this.queued.delete(projectId);
+    }
     if (this.running.has(projectId)) {
       // A publication is already active: queue exactly one behind it instead of
       // refusing (the old behaviour) or racing it. A second request while one
@@ -192,7 +203,7 @@ export class TaskBatchDeployer {
    */
   private async beginCycle(
     projectId: string,
-    options: { auto?: boolean },
+    options: { auto?: boolean; reset?: boolean },
     { fromQueue }: { fromQueue: boolean },
   ): Promise<TaskBatchDeployResult> {
     let board: Awaited<ReturnType<TaskBoardService["getBoard"]>>;
@@ -255,7 +266,7 @@ export class TaskBatchDeployer {
       queued: false,
       ...(options.auto ? { auto: true } : {}),
     });
-    void this.run(projectId, pending)
+    void this.run(projectId, pending, { reset: options.reset })
       .catch((error) => {
         this.logger.error({ err: error, projectId }, "Batch deployment failed");
       })
@@ -317,7 +328,11 @@ export class TaskBatchDeployer {
     );
   }
 
-  private async run(projectId: string, pending: KanbanTask[]): Promise<void> {
+  private async run(
+    projectId: string,
+    pending: KanbanTask[],
+    options: { reset?: boolean } = {},
+  ): Promise<void> {
     const project = await this.options.projectRegistry.get(projectId);
     const rootPath = project?.rootPath ?? null;
     await this.sayAll(pending, `🚀 **Publication groupée** — ${pending.length} tâche(s) en file.`);
@@ -329,7 +344,11 @@ export class TaskBatchDeployer {
 
     // Tasks run in place on main — there are no per-task branches to merge. The
     // deploy just builds the project's main branch as it already stands.
-    const result = await this.options.triggerDeploy({ projectId, mergeBranches: [] });
+    const result = await this.options.triggerDeploy({
+      projectId,
+      mergeBranches: [],
+      reset: options.reset,
+    });
     if (!result.started) {
       await this.fail(projectId, pending, result.error ?? "raison inconnue");
       return;

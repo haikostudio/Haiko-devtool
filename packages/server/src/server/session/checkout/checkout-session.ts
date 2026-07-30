@@ -466,6 +466,7 @@ export class CheckoutSession {
       noBuild: msg.noBuild,
       projectId: msg.projectId,
       mergeBranches: msg.mergeBranches,
+      reset: msg.reset,
     });
     this.host.emit({
       type: "checkout.deploy.trigger.response",

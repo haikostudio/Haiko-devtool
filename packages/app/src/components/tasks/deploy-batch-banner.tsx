@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { CheckCircle2, TriangleAlert, X } from "lucide-react-native";
+import { CheckCircle2, RotateCcw, TriangleAlert, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { TaskColumn } from "@/data/tasks";
@@ -32,6 +32,7 @@ const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCheck = withUnistyles(CheckCircle2);
 const ThemedWarning = withUnistyles(TriangleAlert);
 const ThemedClose = withUnistyles(X);
+const ThemedReset = withUnistyles(RotateCcw);
 
 /**
  * What the "À déployer" column shows above its cards:
@@ -49,12 +50,16 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
   column,
   batch,
   onOpenAgent,
+  onReset,
 }: {
   column: TaskColumn;
   batch: TaskDeployBatch | null | undefined;
   // Opens the single grouped deploy agent's conversation. The banner is the
   // window onto the live build/publish — tapping it shows the agent at work.
   onOpenAgent?: ((agentId: string) => void) | undefined;
+  // "Réinitialiser / Relancer": clears the failed state + residual lock and
+  // starts a clean publication. Only offered when the batch actually failed.
+  onReset?: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
   const dismissedAt = useTasksBoardUiStore((state) => state.dismissedDeployBatchAt);
@@ -123,19 +128,7 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
           ) : null}
         </>
       ) : (
-        <>
-          {titles.length > 0 ? <BatchTitleList titles={titles} /> : null}
-          {batch.state === "failed" && batch.error ? (
-            <Text style={styles.error} numberOfLines={3}>
-              {batch.error}
-            </Text>
-          ) : null}
-          {batch.state === "success" && batch.url ? (
-            <Text style={styles.link} numberOfLines={1}>
-              {batch.url}
-            </Text>
-          ) : null}
-        </>
+        <BatchRecap batch={batch} titles={titles} onReset={onReset} />
       )}
     </BatchCard>
   );
@@ -178,6 +171,60 @@ function BatchCard({
     >
       {children}
     </Pressable>
+  );
+}
+
+/**
+ * The finished-run recap: what went out (or why it did not), plus the
+ * "Réinitialiser / Relancer" escape hatch on a failure. Split out of the main
+ * banner so the top-level component stays under the complexity ceiling.
+ */
+function BatchRecap({
+  batch,
+  titles,
+  onReset,
+}: {
+  batch: TaskDeployBatch;
+  titles: string[];
+  onReset?: (() => void) | undefined;
+}) {
+  const { t } = useTranslation();
+  const handleReset = useCallback(
+    (event?: GestureResponderEvent) => {
+      // The banner card is itself pressable (opens the agent); keep the reset tap
+      // from bubbling up and opening the conversation instead.
+      event?.stopPropagation?.();
+      onReset?.();
+    },
+    [onReset],
+  );
+  const failed = batch.state === "failed";
+  return (
+    <>
+      {titles.length > 0 ? <BatchTitleList titles={titles} /> : null}
+      {failed && batch.error ? (
+        <Text style={styles.error} numberOfLines={3}>
+          {batch.error}
+        </Text>
+      ) : null}
+      {failed && onReset ? (
+        <Pressable
+          style={styles.resetButton}
+          onPress={handleReset}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.board.deployResetAction")}
+          testID="tasks-deploy-batch-reset"
+        >
+          <ThemedReset size={ICON_SIZE.sm} uniProps={accentColorMapping} />
+          <Text style={styles.resetLabel}>{t("tasks.board.deployResetAction")}</Text>
+        </Pressable>
+      ) : null}
+      {batch.state === "success" && batch.url ? (
+        <Text style={styles.link} numberOfLines={1}>
+          {batch.url}
+        </Text>
+      ) : null}
+    </>
   );
 }
 
@@ -281,6 +328,22 @@ const styles = StyleSheet.create((theme) => ({
   error: {
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
+  },
+  resetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  resetLabel: {
+    color: theme.colors.accent,
+    fontSize: theme.fontSize.xs,
+    fontWeight: "500",
   },
   link: {
     color: theme.colors.accent,

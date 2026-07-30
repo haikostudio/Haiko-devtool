@@ -207,6 +207,10 @@ export const TasksBoardDeployAllRequestSchema = z.object({
   type: z.literal("tasks.board.deploy_all.request"),
   requestId: z.string(),
   projectId: z.string(),
+  // "Réinitialiser / Relancer": clear a stuck or falsely-failed publication
+  // (in-memory run, error, residual lock) and start a fresh one. Additive +
+  // optional — old daemons ignore it and run a normal batch deploy.
+  reset: z.boolean().optional(),
 });
 
 export const TasksConductorEnsureRequestSchema = z.object({

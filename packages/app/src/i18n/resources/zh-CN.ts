@@ -519,6 +519,12 @@ export const zhCN: TranslationResources = {
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",
       deployAllStarted: "已开始批量发布",
+      deployResetAction: "重置 / 重试发布",
+      deployResetTitle: "重置发布",
+      deployResetMessage:
+        "清除失败状态和残留的锁，然后开始一次干净的发布。最后会重启引擎；正在运行的代理将被中断。",
+      deployResetConfirm: "重置并重试",
+      deployResetStarted: "已开始新的发布",
       archiveAll: "全部归档",
       archiveSelectionConfirm: "归档所选 ({{count}})",
       archiveSelectionCancel: "取消",

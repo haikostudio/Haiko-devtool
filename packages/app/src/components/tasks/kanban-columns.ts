@@ -315,6 +315,9 @@ export interface KanbanBoardProps {
   // Opens the single grouped deploy agent's conversation from the progress
   // banner — the live view onto the running (or last) build/publish.
   onOpenDeployAgent?: ((agentId: string) => void) | undefined;
+  // "Réinitialiser / Relancer": clears a failed publication's state (stuck run,
+  // error, residual lock) and starts a fresh one. Shown on the failure banner.
+  onResetDeploy?: (() => void) | undefined;
   // "Retirer du prochain lot" / "Remettre dans le lot" on a queued card: the
   // card stays on the board, the batch skips it.
   onToggleDeployHold?: ((taskId: string, hold: boolean) => void) | undefined;

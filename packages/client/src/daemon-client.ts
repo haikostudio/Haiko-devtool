@@ -3831,7 +3831,7 @@ export class DaemonClient {
   }
 
   async paseoDeployTrigger(
-    input?: { noBuild?: boolean; projectId?: string; mergeBranches?: string[] },
+    input?: { noBuild?: boolean; projectId?: string; mergeBranches?: string[]; reset?: boolean },
     requestId?: string,
   ): Promise<PaseoDeployTriggerPayload> {
     return this.sendCorrelatedSessionRequest({
@@ -3841,6 +3841,7 @@ export class DaemonClient {
         noBuild: input?.noBuild,
         projectId: input?.projectId,
         mergeBranches: input?.mergeBranches,
+        reset: input?.reset,
       },
       responseType: "checkout.deploy.trigger.response",
     });
@@ -5090,7 +5091,7 @@ export class DaemonClient {
   }
 
   /** "Tout déployer": publish every not-yet-live card of the "À déployer" column. */
-  async tasksBoardDeployAll(input: { projectId: string }, requestId?: string) {
+  async tasksBoardDeployAll(input: { projectId: string; reset?: boolean }, requestId?: string) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.deploy_all.response">({
       requestId,
       message: { type: "tasks.board.deploy_all.request", ...input },

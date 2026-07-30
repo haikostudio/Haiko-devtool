@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { openSync } from "node:fs";
-import { open, readFile, stat, writeFile } from "node:fs/promises";
+import { open, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import type {
   PaseoDeployPendingCommit,
@@ -39,6 +39,15 @@ const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
  * running so the button can show "Construction → Publication → En ligne".
  */
 const PHASE_FILE = "/home/paseo/paseo-build-local.phase";
+/**
+ * Anti-double-run lock the build script holds with `flock -n 9` while it runs.
+ * A crashed build leaves the FILE on disk but not the kernel lock, so the file
+ * alone is never a real blocker — but the "Réinitialiser" action still removes a
+ * provably-unheld one so nothing stale is left behind. Only removed when a
+ * `flock -n` probe confirms no live process holds it (see
+ * {@link clearResidualDeployLock}); a genuinely-held lock is left untouched.
+ */
+const DEPLOY_LOCK_FILE = "/home/paseo/paseo-build-local.lock";
 /**
  * Commit the running daemon's COMPILED code was built from, written by
  * `ops/paseo-build-local.sh` when it installs a fresh `dist`.
@@ -612,9 +621,19 @@ async function resolveDeployRun(now: number): Promise<DeployRun | null> {
   if (run.finishedAt === null) {
     run.phase = await readDeployPhase(run);
     if (now - run.startedAt > DEPLOY_MAX_RUNTIME_MS) {
-      run.finishedAt = now;
-      run.outcome = "failed";
-      lastError = "Le déploiement a dépassé 30 minutes sans se terminer.";
+      // The runtime valve fired — but the run may well have finished its work
+      // and only failed to report. The served marker is the truth: if HEAD is
+      // already live, this is a success that lost its exit signal, not a stall.
+      if (await isPublicationLive()) {
+        run.finishedAt = now;
+        run.outcome = "success";
+        run.phase = "done";
+        lastError = null;
+      } else {
+        run.finishedAt = now;
+        run.outcome = "failed";
+        lastError = "Le déploiement a dépassé 30 minutes sans se terminer.";
+      }
     }
     return run;
   }
@@ -623,6 +642,49 @@ async function resolveDeployRun(now: number): Promise<DeployRun | null> {
     return null;
   }
   return run;
+}
+
+/**
+ * Remove the build lock file when — and only when — a `flock -n` probe proves no
+ * live process holds it. `flock -n <file> true` exits 0 when the lock is free
+ * (and releases it immediately), non-zero when a build genuinely holds it. So a
+ * 0 exit means the on-disk file is a leftover from a crashed run and is safe to
+ * delete; anything else means a real publication is in flight and we leave it be.
+ * Best effort throughout — a lock we cannot probe or remove is not fatal, since
+ * a fresh build re-acquires the flock regardless.
+ */
+async function clearResidualDeployLock(): Promise<void> {
+  const free = await new Promise<boolean>((resolve) => {
+    try {
+      const probe = spawn("flock", ["-n", DEPLOY_LOCK_FILE, "true"], { stdio: "ignore" });
+      probe.on("exit", (code) => resolve(code === 0));
+      probe.on("error", () => resolve(false));
+    } catch {
+      resolve(false);
+    }
+  });
+  if (!free) {
+    return;
+  }
+  try {
+    await unlink(DEPLOY_LOCK_FILE);
+  } catch {
+    // Already gone or unremovable — nothing left to clean.
+  }
+}
+
+/**
+ * "Réinitialiser / Relancer le déploiement": wipe every trace of a stuck or
+ * failed publication so a fresh attempt starts from a clean slate. Force-clears
+ * the in-memory run and its error (a ghost run whose child died without firing
+ * `exit` would otherwise keep the button disabled), resets the phase marker, and
+ * removes a provably-unheld residual lock. The user stays the one who triggers
+ * the new run — this only unblocks the path.
+ */
+export async function resetPaseoDeployState(): Promise<void> {
+  currentRun = null;
+  lastError = null;
+  await Promise.all([resetDeployPhase(), clearResidualDeployLock()]);
 }
 
 function parseUncommittedFiles(porcelain: string): PaseoDeployPendingFile[] {
@@ -1117,6 +1179,21 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const headSha = headResult.stdout.trim() || null;
     const branch = branchResult.stdout.trim() || null;
     const run = await resolveDeployRun(Date.now());
+
+    // Source of truth = `.deployed-sha` vs HEAD, over any log or exit code. When
+    // the served marker already matches HEAD the content IS online, so a failed
+    // outcome left by a previous run (a build that reported non-zero after the
+    // copy landed, or an archiving step that threw AFTER publication) is a false
+    // alarm. Self-heal it here — the read path every client polls — so the "À
+    // déployer" window never cries "publication échouée" over a live site.
+    const publicationLive = deployedSha !== null && deployedSha === headSha;
+    if (publicationLive && !isDeployRunning()) {
+      if (run !== null && run.finishedAt !== null && run.outcome === "failed") {
+        run.outcome = "success";
+        run.phase = "done";
+      }
+      lastError = null;
+    }
     const unshippedCommits = await getUnshippedCommits(deployedSha, headSha);
     const changes = await attachCommitFiles(
       annotateDeployCommits({
@@ -1567,7 +1644,17 @@ export async function triggerPaseoDeploy(input: {
   noBuild?: boolean;
   projectId?: string;
   mergeBranches?: string[];
+  /**
+   * "Réinitialiser / Relancer": wipe a stuck or falsely-failed run's state (and a
+   * residual lock) before starting, so the user can escape a jammed publication
+   * without a daemon restart. The user still initiates the new run — this only
+   * clears the way for it.
+   */
+  reset?: boolean;
 }): Promise<PaseoDeployTriggerResult> {
+  if (input.reset) {
+    await resetPaseoDeployState();
+  }
   if (isDeployRunning()) {
     return { started: false, error: "Un déploiement est déjà en cours." };
   }
@@ -1664,28 +1751,43 @@ export async function triggerPaseoDeploy(input: {
     });
 
     child.on("exit", (code) => {
-      // Guard against a late exit from a superseded run clobbering a newer one.
-      if (currentRun !== run || run.finishedAt !== null) {
-        return;
-      }
-      run.finishedAt = Date.now();
-      if (code !== 0) {
-        run.outcome = "failed";
-        run.phase = "error";
-        void recordShipFailure(code);
-        return;
-      }
-      run.outcome = "success";
-      run.phase = "done";
-      // Full publish succeeded: let listeners (task board) react to what shipped.
-      // A --no-build run commits without publishing, so nothing went live — skip.
-      if (!input.noBuild && onDeploySuccess) {
-        try {
-          onDeploySuccess({ mergedBranches });
-        } catch {
-          // A listener failure must never break the deploy flow.
+      void (async () => {
+        // Guard against a late exit from a superseded run clobbering a newer one.
+        if (currentRun !== run || run.finishedAt !== null) {
+          return;
         }
-      }
+        // A non-zero exit is not proof of failure: the served marker is. If HEAD
+        // is already live the publish landed and the exit code is noise — mark it
+        // a success rather than a false "publication échouée".
+        if (code !== 0 && !(await isPublicationLive())) {
+          if (currentRun !== run || run.finishedAt !== null) {
+            return;
+          }
+          run.finishedAt = Date.now();
+          run.outcome = "failed";
+          run.phase = "error";
+          await recordShipFailure(code);
+          return;
+        }
+        if (currentRun !== run || run.finishedAt !== null) {
+          return;
+        }
+        run.finishedAt = Date.now();
+        run.outcome = "success";
+        run.phase = "done";
+        // Full publish succeeded: let listeners (task board) react to what
+        // shipped. A --no-build run commits without publishing, so nothing went
+        // live — skip. A listener throw (e.g. a card archiving step that fails)
+        // is swallowed here on purpose: the publication already succeeded, so an
+        // archiving miss must NEVER turn a live site into a failed outcome.
+        if (!input.noBuild && onDeploySuccess) {
+          try {
+            onDeploySuccess({ mergedBranches });
+          } catch {
+            // A listener failure must never break the deploy flow.
+          }
+        }
+      })();
     });
     child.on("error", (err) => {
       if (currentRun !== run || run.finishedAt !== null) {

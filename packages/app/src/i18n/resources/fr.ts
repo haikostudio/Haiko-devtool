@@ -535,6 +535,12 @@ export const fr: TranslationResources = {
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",
       deployAllConfirm: "Tout déployer",
       deployAllStarted: "Publication groupée lancée",
+      deployResetAction: "Réinitialiser / Relancer",
+      deployResetTitle: "Réinitialiser le déploiement",
+      deployResetMessage:
+        "Efface l'état d'échec et un éventuel verrou résiduel, puis lance une publication propre. Le moteur redémarre à la fin ; les agents en cours seront interrompus.",
+      deployResetConfirm: "Réinitialiser et relancer",
+      deployResetStarted: "Nouvelle publication lancée",
       archiveAll: "Tout archiver",
       archiveSelectionConfirm: "Archiver la sélection ({{count}})",
       archiveSelectionCancel: "Annuler",

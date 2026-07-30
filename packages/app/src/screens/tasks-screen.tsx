@@ -1065,6 +1065,30 @@ function BoardContent({
     })();
   }, [boardHandle, projectTasks, toast, t]);
 
+  // "Réinitialiser / Relancer le déploiement": the escape hatch on a failed
+  // publication banner. It clears the stuck/false-failed state (in-memory run,
+  // error, residual lock) and starts a clean run — same engine-restarting gesture
+  // as "Tout déployer", so it confirms first. The user stays the one who fires it.
+  const handleResetDeploy = useCallback(() => {
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("tasks.board.deployResetTitle"),
+        message: t("tasks.board.deployResetMessage"),
+        confirmLabel: t("tasks.board.deployResetConfirm"),
+        cancelLabel: t("common.actions.cancel"),
+      });
+      if (!confirmed) {
+        return;
+      }
+      try {
+        await boardHandle.deployAllTasks({ reset: true });
+        toast.show(t("tasks.board.deployResetStarted"));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    })();
+  }, [boardHandle, toast, t]);
+
   // Tapping the "À déployer" progress banner opens the single grouped deploy
   // agent's conversation in the bottom dock — the same drawer that hosts the chef
   // d'orchestre and every task chat — so the build → publish → verdict is watched
@@ -1273,6 +1297,7 @@ function BoardContent({
           onDeleteTask={handleDeleteTask}
           onDeployAll={handleDeployAll}
           onOpenDeployAgent={handleOpenDeployAgent}
+          onResetDeploy={handleResetDeploy}
           onToggleDeployHold={handleToggleDeployHold}
           deployOffPeak={deployOffPeak}
           columnExtras={columnExtras}

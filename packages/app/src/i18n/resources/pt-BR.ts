@@ -534,6 +534,12 @@ export const ptBR: TranslationResources = {
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",
       deployAllConfirm: "Implantar tudo",
       deployAllStarted: "Publicação em lote iniciada",
+      deployResetAction: "Reiniciar / Repetir",
+      deployResetTitle: "Reiniciar a publicação",
+      deployResetMessage:
+        "Limpa o estado de falha e qualquer bloqueio residual e inicia uma publicação limpa. O motor reinicia no final; os agentes em execução serão interrompidos.",
+      deployResetConfirm: "Reiniciar e repetir",
+      deployResetStarted: "Nova publicação iniciada",
       archiveAll: "Arquivar tudo",
       archiveSelectionConfirm: "Arquivar seleção ({{count}})",
       archiveSelectionCancel: "Cancelar",
