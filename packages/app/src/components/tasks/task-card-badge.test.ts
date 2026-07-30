@@ -46,10 +46,7 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.card.finished", variant: "success" });
   });
 
-  it("keeps the running / deploy windows ahead of the « Terminé » badge", () => {
-    expect(
-      getScheduleBadge(makeTask({ column: "done", validation: { state: "running" } }), "done"),
-    ).toEqual({ labelKey: "tasks.card.finalCheck", variant: "success" });
+  it("keeps the deploy window ahead of the « Terminé » badge", () => {
     expect(
       getScheduleBadge(makeTask({ column: "done", deployment: { state: "running" } }), "done"),
     ).toEqual({ labelKey: "tasks.card.deploying", variant: "success" });
@@ -91,18 +88,19 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.card.deploying", variant: "success" });
   });
 
-  it("shows the final-check badge while the validation window is running", () => {
-    const badge = getScheduleBadge(makeTask({ validation: { state: "running" } }), "attention");
-    expect(badge).toEqual({ labelKey: "tasks.card.finalCheck", variant: "success" });
+  it("ignores a leftover final-check window: finishing a card runs nothing", () => {
+    // Older daemons opened a check window on the card; the check is gone, so a card
+    // still carrying one must read as a plain card, not as an action in flight.
+    expect(getScheduleBadge(makeTask({ validation: { state: "running" } }), "attention")).toEqual({
+      labelKey: "tasks.card.needsAction",
+      variant: "warning",
+    });
+    expect(getScheduleBadge(makeTask({ validation: { state: "failed" } }), null)).toBeNull();
   });
 
-  it("surfaces a failed deploy / final check as an error badge", () => {
+  it("surfaces a failed deploy as an error badge", () => {
     expect(getScheduleBadge(makeTask({ deployment: { state: "failed" } }), null)).toEqual({
       labelKey: "tasks.card.deployFailed",
-      variant: "error",
-    });
-    expect(getScheduleBadge(makeTask({ validation: { state: "failed" } }), null)).toEqual({
-      labelKey: "tasks.card.finalCheckFailed",
       variant: "error",
     });
   });

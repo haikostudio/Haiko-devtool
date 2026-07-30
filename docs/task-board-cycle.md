@@ -16,8 +16,8 @@ are "waiting to be published". What says a card is actually live is its own
 it. Three machine-made moves survive, and only three: the analysis promotion
 ("Validé" → "Planifié", the instant a card's cost analysis succeeds), the launch
 stamp ("Planifié" → "En cours", at the instant the agent really starts) and the
-final-check bar ("En cours" → "Terminé"). Nothing else — no agent activity, no
-heuristic — may move a card. In particular the last hop ("Terminé" → "À
+"Terminer la tâche" bar ("En cours" → "Terminé", which is nothing more than that
+move). Nothing else — no agent activity, no heuristic — may move a card. In particular the last hop ("Terminé" → "À
 déployer") is NOT automatic: a finished card rests in "Terminé" until the user
 queues it.
 
@@ -39,7 +39,7 @@ in the project's single list.
 | À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                         |
 | Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                               |
 | Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                             |
-| En cours → Terminé   | **user-initiated**   | The final-check bar — the card's own agent checks, deploys, finishes it.                                                                                       |
+| En cours → Terminé   | **user only**        | The "Terminer la tâche" bar (or a drag). A plain column move: no prompt, no check, no deployment — see below.                                                  |
 | Terminé → À déployer | **user only**        | Manual: a finished card RESTS in "Terminé" and waits. The user queues it with the card's button (or a drag). `TaskPublisher` only says so in the conversation. |
 
 ## The invariants
@@ -55,11 +55,11 @@ in the project's single list.
    themselves, which is precisely the consent the column exists to capture.
 3. **Agents are blocked at the tool boundary, not by a prompt.** `move_task`
    accepts only `notes` and `backlog` (`AGENT_WRITABLE_TASK_COLUMNS`) and throws
-   for the rest — except the two per-card consent windows a user press opens:
-   `done` while a final check runs (`validation.state === "running"`) and
-   `deployed` while a deploy runs (`deployment.state === "running"`). Prompt
-   wording alone is not a gate: a model that is told to be helpful will validate
-   its own work.
+   for the rest — except the ONE per-card consent window a user press opens:
+   `deployed` while a deploy runs (`deployment.state === "running"`). `done` has no
+   window any more: finishing a card is the user's own press, so no agent can
+   complete its own work under any circumstance. Prompt wording alone is not a
+   gate: a model that is told to be helpful will validate its own work.
 4. **Agent activity never moves a card.** `agent-sync` may create a card, link an
    agent to it and update its `progress` badge — it holds no `transitionTask`
    call at all. It used to drag cards into "En cours" the moment a linked agent
@@ -201,8 +201,8 @@ the prompt in the task chat while the card is in "À faire". `approveTask` handl
 both a plain backlog card and an agent proposal awaiting approval — it moves the
 card into "Validé" and arms its `schedule` with `pending_estimate` so the
 estimator picks it up. Do not confuse it with the "En cours" → "Terminé"
-final-check bar, which shares the confusingly-named `validateTask` label key but
-is a different gesture entirely.
+"Terminer la tâche" bar, which shares the confusingly-named `validateTask` label
+key but is a different gesture entirely.
 
 The card then shows **when** it will run, not just that it is scheduled: a
 "Planifié" card carrying an off-peak/heavy estimate renders a concrete
@@ -211,14 +211,25 @@ tasks quiet-hours window), so the user sees the actual launch slot the scheduler
 is holding it for. Light "auto"/"asap" cards that run on the next tick show the
 plain "En attente de créneau" badge instead — there is no future slot to name.
 
-## The final check — a window, not a verdict
+## Finishing a card — a move, and nothing else
 
-Pressing "Lancer le contrôle" does not run a hidden reviewer. It sends a check
-prompt into the card's OWN conversation (`tasks/validator.ts`): the agent
-re-reads the request, runs the project's checks, **fixes what it finds**,
-**deploys the change onto the project's dev instance on the VPS**, and completes
-the card itself once everything is green. The user reads the whole thing live
-instead of a dumped report.
+Pressing "Terminer la tâche" moves the card from "En cours" to "Terminé"
+(`tasks/validator.ts`). That is the whole action: no prompt is sent, no agent
+turn starts, nothing is built and **nothing is deployed**.
+
+It was not always so. The bar used to hand the card's own agent a
+check-then-deploy prompt: re-read the request, run the project's checks, fix what
+it found, **push the change onto the project's dev instance on the VPS**, then
+complete the card itself. Two problems, both fatal. It DEPLOYED — a card looked
+published before the user had queued anything, which is exactly the decision the
+"À déployer" column exists to hold. And it spent a full agent turn on every single
+finished card, the most expensive moment of the board's life.
+
+**Verification lives at publication time now.** `buildDeployPrompt`
+(`tasks/deployer.ts`) is where the agent re-reads the request, exercises the work,
+runs typecheck/lint/tests, fixes what it finds — and only then puts it online. It
+is the right place twice over: the code is about to go live anyway, and a card the
+user never queues never spends a check at all.
 
 **Finishing a card STOPS it in "Terminé".** `setOnTaskCompleted` in
 `bootstrap.ts` hands the card to `TaskPublisher.announceReady`, which only writes
@@ -234,11 +245,14 @@ writing them, which is how a torn bundle (a mix of two versions of the same file
 crashing in the browser with no visible cause) gets published. One press, one
 build, one batch is the fix — see the next section.
 
-That press opens a consent window on that one card — `validation.state ===
-"running"` — and it is the second exception in `move_task`: `done` is accepted
-while the window is open, for that card only. The window closes as soon as the
-agent stops working (`watchAgentIdle`), whether or not it completed the card, so
-a check can never leave the bar stuck.
+Because nothing is dispatched, no consent window is opened either: `move_task` has
+no `done` exception left, and an agent can never complete a card. The press does
+clear any `validation` state a card still carries from an older daemon, so a stale
+"check running" window cannot freeze a card forever.
+
+The one thing the press still arms is the optional queue hop: "Terminer et mettre
+en file" sets `queueOnComplete`, honoured (and cleared) by the completion listener,
+so the card continues into "À déployer" in a single gesture.
 
 ## Publishing — the "Tout déployer" button
 
@@ -356,7 +370,7 @@ only take effect after a daemon restart — instead of discovering it afterwards
   never wiped.
 - **On the card.** `getPublishNotice` renders the verdict as a `StatusBadge`
   beside the live status badge — same tinted-frame family as "Publication en
-  cours" / "Contrôle final en cours". Both outcomes speak: amber "Redémarrage
+  cours". Both outcomes speak: amber "Redémarrage
   requis", or a quiet green "Republication simple" for app-only work. Silence is
   reserved for "no verdict yet", so it can't be mistaken for "nothing to do". The
   notice rides the card for the whole wait and **disappears once the work is

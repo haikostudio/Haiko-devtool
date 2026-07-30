@@ -68,7 +68,6 @@ import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import type { ProjectRegistry, WorkspaceRegistry } from "../../workspace-registry.js";
 import { resolveProjectDisplayName } from "../../workspace-registry.js";
 import type { TaskBoardService } from "../../tasks/service.js";
-import { isValidationWindowOpen } from "../../tasks/validator.js";
 import { isDeploymentWindowOpen } from "../../tasks/deployer.js";
 import { WorktreeRequestError } from "../../worktree-errors.js";
 import {
@@ -386,22 +385,9 @@ function resolveChildAgentCwd(params: {
 // The only kanban columns an agent may put a card in. Everything downstream of
 // "backlog" is the user's own pipeline: "validated" is their explicit consent to
 // spend quota, "scheduled"/"in_progress" belong to the scheduler, "done" is the
-// user's "Valider la tâche", and "deployed" is stamped by a successful publish.
+// user's own "Terminer la tâche" press, and "deployed" is stamped by a successful
+// publish.
 const AGENT_WRITABLE_TASK_COLUMNS = new Set<string>(["notes", "backlog"]);
-
-/**
- * True while the user has an open final check on this card. That press is the
- * consent that lets the card's own agent complete it — see TaskValidator.
- */
-async function isTaskValidationWindowOpen(
-  taskBoardService: TaskBoardService,
-  projectId: string,
-  taskId: string,
-): Promise<boolean> {
-  const board = await taskBoardService.getBoard(projectId);
-  const task = board.tasks.find((entry) => entry.id === taskId);
-  return task ? isValidationWindowOpen(task) : false;
-}
 
 /**
  * True while the user has an open "Lancer le déploiement" window on this card.
@@ -3109,22 +3095,19 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         // An agent that "helpfully" drags its own card into Validé would silently
         // spend the user's quota, which is exactly what this refuses.
         //
-        // The one exception is completion during a final check: pressing "Lancer
-        // le contrôle" opens a window on that single card (validation.state ===
-        // "running") and IS the user's consent for the agent to finish it once
-        // everything is verified. The window closes as soon as the agent stops.
+        // "done" has NO exception any more: finishing a card is a pure move the
+        // user performs (bar or drag), so no prompt and no window can authorize an
+        // agent to complete its own work. The single remaining window is the
+        // deploy one below.
         if (AGENT_WRITABLE_TASK_COLUMNS.has(args.column) === false) {
-          const completionAuthorized =
-            args.column === "done" &&
-            (await isTaskValidationWindowOpen(taskBoardService, args.projectId, args.taskId));
           // The deploy window: pressing "Lancer le déploiement" on a finished card
           // is the user's consent for the card's agent to move it to "deployed".
           const deploymentAuthorized =
             args.column === "deployed" &&
             (await isTaskDeploymentWindowOpen(taskBoardService, args.projectId, args.taskId));
-          if (!completionAuthorized && !deploymentAuthorized) {
+          if (!deploymentAuthorized) {
             throw new Error(
-              `move_task cannot move a task to "${args.column}": only the user validates, schedules or deploys a task. Agents may only move cards between "notes" and "backlog", plus "done" while the user's final check is open on that card, or "deployed" while the user's deploy is open on that card.`,
+              `move_task cannot move a task to "${args.column}": only the user validates, schedules, finishes or deploys a task. Agents may only move cards between "notes" and "backlog", plus "deployed" while the user's deploy is open on that card.`,
             );
           }
         }

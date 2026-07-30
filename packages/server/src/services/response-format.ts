@@ -24,10 +24,6 @@
  *                    cards it shipped, what actually went live, the verdict, and
  *                    the final state. Routed by the agent's deployment role
  *                    label, not by a card's column.
- *  - "verification" — the final-check turn ("Lancer le contrôle"): one single
- *                    end-of-check synthesis covering what was verified, what was
- *                    done, and what it implies for the card now that it is
- *                    finished. A report of a CHECK, not of the work.
  *  - "conductor"   — the board's chef d'orchestre: it never executes anything,
  *                    so it never reports — a short answer, or a bullet list of
  *                    the cards it touched.
@@ -49,7 +45,6 @@ export type ResponseFormatTemplate =
   | "progress"
   | "publication"
   | "batchPublication"
-  | "verification"
   | "conductor";
 
 /**
@@ -153,9 +148,11 @@ const PROGRESS_BODY = [
 ].join("\n");
 
 /**
- * A running deployment, or "Déployé": the publication log. Billing and
- * evolutions belong to the other two moments of the card's life, so they are
- * excluded here.
+ * A running deployment, or "Déployé": the publication log. This turn is also the
+ * one that CHECKS the work — finishing a card is a pure move now, so the
+ * verification section is a real report of what was exercised and fixed, not a
+ * formality. Billing and evolutions belong to the other two moments of the card's
+ * life, so they are excluded here.
  */
 const PUBLICATION_BODY = [
   "Cette carte est en publication (colonne « Déployé ») : ta réponse est un compte rendu de MISE EN LIGNE.",
@@ -169,7 +166,7 @@ const PUBLICATION_BODY = [
   "## 4. Suites éventuelles",
   "",
   "« 2. Déroulé de la publication » : les étapes dans l'ordre et leur résultat (réussi / échoué, et pourquoi).",
-  "« 3. Vérification » : la version réellement en ligne — ce que tu as contrôlé pour l'affirmer.",
+  "« 3. Vérification » : ce que tu as réellement contrôlé avant et après la mise en ligne — demande initiale satisfaite, tests/typecheck/lint passés, corrections faites au passage, et la version réellement en ligne.",
   "« 4. Suites éventuelles » : redémarrage du moteur nécessaire ou non, points à surveiller. « Rien à signaler » si c'est le cas.",
   "",
   "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
@@ -207,37 +204,6 @@ const BATCH_PUBLICATION_BODY = [
 ].join("\n");
 
 /**
- * The final-check turn behind "Lancer le contrôle". The card is still in "En
- * cours" while the check runs (its agent moves it to "Terminée" as the last
- * step), so without this template the check would borrow the "progress" work
- * report — the wrong shape. The check must stay quiet while it runs, then end
- * with one single synthesis covering what was verified, what was done, and what
- * it implies now that the card is done. Billing, estimates and evolutions
- * belong to the other moments of the card's life, so they are excluded here too.
- */
-const VERIFICATION_BODY = [
-  "Cette carte passe son CONTRÔLE FINAL : tu viens de vérifier le travail avant de la marquer « Terminée ».",
-  "Travaille en arrière-plan pendant tout le contrôle : pas de comptes-rendus intermédiaires.",
-  "Tu ne réponds qu'UNE seule fois, à la fin du contrôle, avec une synthèse finale stable.",
-  "Si tu es bloqué et que tu ne peux pas avancer seul, explique seulement le blocage au lieu d'envoyer des points d'étape.",
-  "Ta réponse est un compte rendu de CONTRÔLE, pas un point d'avancement.",
-  "Réponds TOUJOURS en suivant exactement cette structure.",
-  ...COMMON_HEADER,
-  "",
-  "Puis exactement ces trois sections, titres numérotés en Markdown `## N.` :",
-  "## 1. Ce qui a été vérifié",
-  "## 2. Ce qui a été fait",
-  "## 3. Ce que cela implique",
-  "",
-  "« 1. Ce qui a été vérifié » : les contrôles que tu as réellement menés (relecture, tests, typecheck/lint, cohérence, régressions).",
-  "« 2. Ce qui a été fait » : les corrections ou ajustements réellement réalisés pendant le contrôle final. Si rien n'a dû être changé, écris-le clairement.",
-  "« 3. Ce que cela implique » : ce que cela change maintenant pour la carte (prête à être mise en file de publication, ou ce qui reste à surveiller).",
-  "",
-  "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
-  ...COMMON_FOOTER,
-].join("\n");
-
-/**
  * The board's "chef d'orchestre". It never executes anything, so it has nothing
  * to report: dressing its answers in the work-report sections turned a plain
  * "combien de cartes en attente ?" into a fake chantier with an invoice line at
@@ -267,7 +233,6 @@ const RESPONSE_FORMAT_BODIES: Record<ResponseFormatTemplate, string> = {
   progress: PROGRESS_BODY,
   publication: PUBLICATION_BODY,
   batchPublication: BATCH_PUBLICATION_BODY,
-  verification: VERIFICATION_BODY,
   conductor: CONDUCTOR_BODY,
 };
 

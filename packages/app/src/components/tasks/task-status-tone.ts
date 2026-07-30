@@ -66,7 +66,7 @@ function wantsUser(
 // are read fresh from the live agent, so they cannot be stale board leftovers.
 //
 // Split out because these two are the only "wants you" signals allowed to win
-// over an action the user just launched (final check / deploy): the running
+// over an action the user just launched (the deploy): the running
 // action IS what is now blocked, so the card must flip to amber instead of
 // spinning a loader on a run that can't advance without an answer. The board
 // flags in `wantsUser` (a pending approval, a ready plan) can predate the
@@ -146,14 +146,16 @@ function isScheduled(task: KanbanTask): boolean {
   return task.schedule?.state === "awaiting_slot";
 }
 
-// An explicit action the user just launched from the card — the final check
-// ("Valider la tâche") or the deploy ("Lancer le déploiement"). The server sets
-// `validation.state` / `deployment.state` to "running" the instant the action
+// An explicit action the user just launched from the card: the deploy ("Lancer le
+// déploiement"). The server sets `deployment.state` to "running" the instant it
 // starts, so it is the freshest, most reliable truth about what the agent is
 // doing. It must win over a stale "waiting for you" bucket that hasn't caught up
 // yet, so the card's light spins instead of staying frozen on amber.
+//
+// Finishing a card is no longer such an action: it is a plain column move that
+// runs nothing, so it has no window to read.
 function isActionRunning(task: KanbanTask): boolean {
-  return task.validation?.state === "running" || task.deployment?.state === "running";
+  return task.deployment?.state === "running";
 }
 
 /**
@@ -173,14 +175,13 @@ export function deriveTaskTone(
 ): TaskTone | null {
   // The task's agent is blocked on the user right now — a permission prompt or a
   // question in its latest reply. This wins over everything, even an action the
-  // user just launched (final check / deploy): that action is precisely what is
-  // now waiting on an answer, so the card must go amber and shake rather than
-  // keep spinning a "Contrôle final en cours" loader on a run that can't move.
+  // user just launched (the deploy): that action is precisely what is now waiting
+  // on an answer, so the card must go amber and shake rather than keep spinning a
+  // "Publication en cours" loader on a run that can't move.
   if (isAgentBlockedOnUser(agentBucket, agentAwaitsUser)) {
     return "attention";
   }
-  // An action the user just launched from the card (final check / deploy) is
-  // running: show the working loader immediately, ahead of any stale amber
+  // An action the user just launched from the card (the deploy) is running: show the working loader immediately, ahead of any stale amber
   // "waiting for you" signal left over from before the action started.
   if (isActionRunning(task)) {
     return "running";

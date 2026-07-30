@@ -88,37 +88,20 @@ describe("resolveTaskResponseTemplate", () => {
     });
   }
 
-  it("an open final-check window wins over the 'En cours' column", () => {
-    // The card is still in "in_progress" while the check runs — its agent moves
-    // it to "done" as the last step — so the plain column reading would hand it
-    // the work-report shape instead of a check report.
-    const task = makeTask({
-      column: "in_progress",
-      validation: { state: "running", checkedAt: "2026-07-28T12:00:00.000Z" },
-    });
-    expect(resolveTaskResponseTemplate(task)).toBe("verification");
-  });
-
-  it("a closed check window leaves the column reading in place", () => {
-    expect(
-      resolveTaskResponseTemplate(
-        makeTask({
-          column: "in_progress",
-          validation: { state: "passed", checkedAt: "2026-07-28T12:00:00.000Z" },
-        }),
-      ),
-    ).toBe("progress");
-  });
-
-  it("a running publication wins over an open check window", () => {
-    // A card under check has no deployment in flight, so the two do not collide
-    // in practice — but the publication log stays the more specific answer.
-    const task = makeTask({
-      column: "done",
-      deployment: { state: "running" },
-      validation: { state: "running", checkedAt: "2026-07-28T12:00:00.000Z" },
-    });
-    expect(resolveTaskResponseTemplate(task)).toBe("publication");
+  it("a card's check state never steers the template any more", () => {
+    // Finishing a card is a plain move: no agent turn happens in "En cours"
+    // beyond the work itself, so a card carrying validation state (a leftover
+    // from an older daemon) still reports its work.
+    for (const state of ["running", "passed", "failed"] as const) {
+      expect(
+        resolveTaskResponseTemplate(
+          makeTask({
+            column: "in_progress",
+            validation: { state, checkedAt: "2026-07-28T12:00:00.000Z" },
+          }),
+        ),
+      ).toBe("progress");
+    }
   });
 
   it("a running publication wins over the column it started from", () => {
@@ -212,7 +195,7 @@ describe("column → sections, end to end", () => {
     expect(body).not.toContain("Évolutions possibles");
   });
 
-  it("sends the verification sections while a card's final check runs", async () => {
+  it("sends the work report to a card being finished, not a check report", async () => {
     const { hook } = makeHook({
       task: makeTask({
         column: "in_progress",
@@ -220,14 +203,10 @@ describe("column → sections, end to end", () => {
       }),
     });
     const template = await hook({ agentId: "agent-1" });
-    expect(template).toBe("verification");
+    expect(template).toBe("progress");
     const body = responseFormatBody(template ?? "default");
-    expect(body).toContain("## 1. Ce qui a été vérifié");
-    expect(body).toContain("## 2. Ce qui a été fait");
-    expect(body).toContain("## 3. Ce que cela implique");
-    expect(body).toContain("UNE seule fois");
-    expect(body).not.toContain("Évolutions possibles");
-    expect(body).not.toContain("Activation & facturation");
+    expect(body).toContain("## 1. Ce qui est fait");
+    expect(body).not.toContain("## 1. Ce qui a été vérifié");
   });
 
   it("sends the conductor no sections, no estimate and no billing at all", async () => {

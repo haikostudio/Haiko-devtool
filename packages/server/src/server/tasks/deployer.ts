@@ -3,7 +3,7 @@ import type pino from "pino";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
-import { type AgentStopReason, resolveTaskAgentId } from "./validator.js";
+import { type AgentStopReason, resolveTaskAgentId } from "./task-agent-link.js";
 import { isTaskLive } from "./batch-deployer.js";
 
 export interface TaskDeploymentOutcome {
@@ -167,11 +167,15 @@ export function isDeploymentWindowOpen(task: KanbanTask): boolean {
 }
 
 /**
- * The deploy prompt. It is handed to a FINISHED card's own agent, so the work is
- * already committed and — for an ordinary project — already pushed onto its dev
- * instance during the final check. The deploy step here is the confirmation that
- * it is truly live, plus the one honest signal we cannot infer from the outside:
- * whether the change needs a daemon restart to take effect.
+ * The deploy prompt. It is handed to a FINISHED card's own agent, and it is the
+ * ONE moment of the card's life where an agent verifies the work: finishing a card
+ * is now a pure column move (see TaskValidator), so nothing has been re-checked
+ * since the execution turn itself. Verification therefore lives here, right before
+ * the code goes online — which is also the only place it pays for itself, since a
+ * card the user never queues never spends a check.
+ *
+ * It also carries the one honest signal we cannot infer from the outside: whether
+ * the change needs a daemon restart to take effect.
  *
  * For Paseo itself publication is the batch button on the "À déployer" column
  * (which builds the web app AND the daemon, then restarts it as its last step),
@@ -198,7 +202,15 @@ export function buildDeployPrompt(input: {
     '"""',
     "",
     "Procède dans cet ordre :",
-    "1. Vérifie rapidement que le fonctionnement est OK : la demande initiale est bien satisfaite et rien n'est cassé. Si le fonctionnement est ok, tu peux lancer le déploiement.",
+    "Règle de réponse pendant tout ce déploiement : travaille silencieusement du début à la fin.",
+    "N'envoie AUCUN compte-rendu intermédiaire : une seule réponse finale, une fois la mise en ligne confirmée (ou une seule réponse de blocage si tu es réellement empêché d'avancer seul).",
+    "",
+    "1. CONTRÔLE le travail avant de le mettre en ligne — c'est ici, et nulle part ailleurs, que la vérification a lieu :",
+    "   • Relis la demande initiale ci-dessus et vérifie qu'elle est réellement satisfaite, dans son intégralité.",
+    "   • Vérifie que ce qui a été fait fonctionne : relis le code, lance le typecheck, le lint et les tests qui couvrent la zone modifiée.",
+    "   • Cherche les régressions : ce qui marchait avant doit marcher encore.",
+    "   • S'il reste quoi que ce soit à corriger, CORRIGE-LE toi-même, enregistre (commit puis push), puis reprends ce contrôle depuis le début.",
+    "   • Si le fonctionnement est OK, tu peux lancer le déploiement.",
     "2. DÉPLOIE la modification sur l'instance de développement du projet, sur le VPS (domaine haikostudio.cloud) :",
     `   • Dépôt principal du projet : ${projectRoot ?? "(inconnu — retrouve-le)"}. Sous-domaine et service attendus : ${slugHint} → https://<slug>.haikostudio.cloud, service systemd « autoproject-<slug> ».`,
     "   • Confirme le nom exact : `systemctl list-units 'autoproject-*' --all` et `ls /etc/caddy/project-autostart.d/`.",
@@ -212,7 +224,7 @@ export function buildDeployPrompt(input: {
     "   • `false` si le déploiement suffit (changement côté interface uniquement, déjà pris en compte au redémarrage du service ci-dessus).",
     `   move_task(projectId: "${projectId}", taskId: "${task.id}", column: "deployed", needsDaemonRestart: <true|false>)`,
     "",
-    "Si le déploiement échoue et que tu ne peux pas le corriger seul, NE marque pas la tâche déployée : explique en clair ce qui bloque.",
+    "Si le contrôle ou le déploiement échoue et que tu ne peux pas le corriger seul, NE marque pas la tâche déployée : explique en clair ce qui bloque.",
     "Règle absolue : en cas de doute, ne déploie pas. Un faux « c'est en ligne » est pire qu'un doute annoncé.",
   ].join("\n");
 }

@@ -14,7 +14,6 @@ const ALL_TEMPLATES: ResponseFormatTemplate[] = [
   "progress",
   "publication",
   "batchPublication",
-  "verification",
 ];
 
 describe("response-format directive", () => {
@@ -118,17 +117,15 @@ describe("response-format templates", () => {
     expect(body).not.toContain("Estimation");
   });
 
-  it("verification asks for the three check sections only", () => {
-    const body = responseFormatBody("verification");
-    expect(body).toContain("## 1. Ce qui a été vérifié");
-    expect(body).toContain("## 2. Ce qui a été fait");
-    expect(body).toContain("## 3. Ce que cela implique");
-    expect(body).toContain("CONTRÔLE FINAL");
-    expect(body).toContain("UNE seule fois");
-    expect(body).toContain("pas de comptes-rendus intermédiaires");
-    expect(body).not.toContain("## 1. Ce qui est fait");
+  it("publication asks the deploy turn to report what it actually checked", () => {
+    // Finishing a card no longer runs a check of its own, so the publication turn
+    // is where the verification is reported — the section must ask for the real
+    // controls, not a formality.
+    const body = responseFormatBody("publication");
+    expect(body).toContain("## 3. Vérification");
+    expect(body).toContain("demande initiale satisfaite");
+    expect(body).toContain("tests/typecheck/lint");
     expect(body).not.toContain("Évolutions possibles");
-    expect(body).not.toContain("Activation & facturation");
     expect(body).not.toContain("Estimation");
   });
 

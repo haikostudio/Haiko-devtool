@@ -42,7 +42,7 @@ const successForegroundMapping = (theme: Theme) => ({ color: theme.colors.succes
 // bar), so its icon rides on the accent foreground.
 const accentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 // The approve bar is a filled primary control (distinct from both the green
-// final-check bar and the accent run-now bar), so its icon rides on the primary
+// finish bar and the accent run-now bar), so its icon rides on the primary
 // foreground.
 const primaryForegroundMapping = (theme: Theme) => ({ color: theme.colors.primaryForeground });
 const ThemedCheck = withUnistyles(CheckCircle2);
@@ -98,9 +98,9 @@ export interface TaskAgentChatProps {
    */
   onRunNow: (taskId: string) => void;
   /**
-   * Mark the task validated. Shown as a full-width bar right above the prompt
-   * composer as soon as the agent has spoken once — the user, not the agent,
-   * decides a task is finished.
+   * Finish the task: move it from "En cours" to "Terminé", and nothing else. Shown
+   * as a full-width bar right above the prompt composer as soon as the agent has
+   * spoken once — the user, not the agent, decides a task is finished.
    */
   onValidate?: (taskId: string, options?: { queueOnComplete?: boolean }) => void;
   /**
@@ -109,7 +109,7 @@ export interface TaskAgentChatProps {
    * sits in backlog. This is the pipeline's single consent gesture — the user,
    * never the agent, admits a card into the pipeline (see
    * docs/task-board-cycle.md). Distinct from `onValidate`, which is the
-   * "En cours" → "Terminé" final check.
+   * "En cours" → "Terminé" finish press.
    */
   onApproveTask?: (taskId: string) => void;
   /**
@@ -286,7 +286,6 @@ export function TaskAgentChat({
           onPress={handleValidate}
           onPressAndQueue={handleValidateAndQueue}
           ready={task.progress === "ready_for_review"}
-          validation={task.validation}
           agentReady={agentReady}
         />
       );
@@ -329,7 +328,6 @@ export function TaskAgentChat({
     handleArchive,
     restartProgress,
     task.progress,
-    task.validation,
     task.deployment,
     task.schedule,
     agentReady,
@@ -356,47 +354,38 @@ export function TaskAgentChat({
 }
 
 /**
- * Full-width, deliberately quiet bar. It carries the single "Lancer le contrôle"
+ * Full-width, deliberately quiet bar. It carries the single "Terminer la tâche"
  * action and nothing else, so it never competes with the conversation or the
  * prompt field it sits on. Visible for the whole discussion, not only when the
  * agent thinks it is done.
  *
- * It shows no report of its own: the check runs in the conversation right above,
- * so the verification, the fixes and the verdict are all readable there.
+ * The press is a pure column move: the card lands in "Terminé" and nothing else
+ * runs — no check prompt, no deployment. That used to be a full agent turn which
+ * also put the work online before the user had queued anything; verification now
+ * happens at publication time (see docs/task-board-cycle.md).
  *
  * It is enabled only when the card's agent has actually finished with a result
- * (`agentReady` — idle and having spoken). It is disabled in the two states where
- * finishing a card is not a legitimate gesture: while a final check is already
- * running (`validation.state === "running"`) — so a second press can never fire a
- * duplicate check — and while the agent has not finished (still mid-turn, or not
- * yet ready), where the bar stays visible with an "En exécution…" label so the
- * user understands why it is inert. It enables on its own the instant the agent
- * goes idle with a result (the store's live status drives it, no reload). A
- * running check always implies an unfinished agent, so its label wins.
+ * (`agentReady` — idle and having spoken), so an empty card cannot be finished
+ * while its work is still running. Otherwise the bar stays visible with an "En
+ * exécution…" label, so the user understands why it is inert, and enables on its
+ * own the instant the agent goes idle with a result (the store's live status
+ * drives it, no reload).
  */
 function ValidateTaskBar({
   onPress,
   onPressAndQueue,
   ready,
-  validation,
   agentReady,
 }: {
   onPress: () => void;
-  /** Same check, and the card continues into "À déployer" once it completes. */
+  /** Same move, and the card continues into "À déployer" right away. */
   onPressAndQueue: () => void;
   ready: boolean;
-  validation: KanbanTask["validation"];
   agentReady: boolean;
 }) {
   const { t } = useTranslation();
-  const running = validation?.state === "running";
-  const disabled = running || !agentReady;
-  let label = t("tasks.panel.validateTask");
-  if (running) {
-    label = t("tasks.panel.validateRunning");
-  } else if (!agentReady) {
-    label = t("tasks.panel.validateAgentBusy");
-  }
+  const disabled = !agentReady;
+  const label = disabled ? t("tasks.panel.validateAgentBusy") : t("tasks.panel.validateTask");
   const barStyle = useCallback(
     (state: { pressed: boolean; hovered?: boolean }) => validateBarStyle({ ...state, disabled }),
     [disabled],
@@ -417,18 +406,14 @@ function ValidateTaskBar({
           accessibilityState={a11yState}
           testID="task-validate-bar"
         >
-          {running ? (
-            <ThemedActivityIndicator size="small" uniProps={successForegroundMapping} />
-          ) : (
-            <ThemedCheck size={ICON_SIZE.sm} uniProps={successForegroundMapping} />
-          )}
+          <ThemedCheck size={ICON_SIZE.sm} uniProps={successForegroundMapping} />
           <Text style={ready && !disabled ? styles.validateTextReady : styles.validateText}>
             {label}
           </Text>
         </Pressable>
         {/* The chaining variant, deliberately quieter than the bar above it: the
             default remains "the card stops in Terminé and you decide". Offered
-            only while the check is actually startable — a second, inert control
+            only while finishing is actually possible — a second, inert control
             under an inert bar says nothing. */}
         {disabled ? null : (
           <Pressable

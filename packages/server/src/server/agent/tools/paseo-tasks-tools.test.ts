@@ -240,7 +240,7 @@ describe("paseo task board tools", () => {
     expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("backlog");
   });
 
-  test("move_task completes a card only while the user's final check is open", async () => {
+  test("move_task can never complete a card, even with a leftover check window", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
 
@@ -248,27 +248,39 @@ describe("paseo task board tools", () => {
       catalog.executeTool("move_task", { projectId: "proj-1", taskId: task.id, column: "done" }),
     ).rejects.toThrow(/only the user validates/);
 
-    // The user pressed "Lancer le contrôle": that press is the consent.
+    // Finishing a card is the user's own press now, so the old consent window is
+    // gone: a card still carrying one (written by an older daemon) grants nothing.
     await service.patchTask("proj-1", task.id, (current) => ({
       ...current,
       validation: { state: "running" as const },
     }));
+    await expect(
+      catalog.executeTool("move_task", { projectId: "proj-1", taskId: task.id, column: "done" }),
+    ).rejects.toThrow(/only the user validates/);
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("backlog");
+  });
+
+  test("move_task still stamps a card deployed while the user's deploy is open", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      column: "done" as const,
+      completedAt: new Date().toISOString(),
+      deployment: { state: "running" as const },
+    }));
+
     await catalog.executeTool("move_task", {
       projectId: "proj-1",
       taskId: task.id,
-      column: "done",
+      column: "deployed",
     });
-    const board = await service.getBoard("proj-1");
-    expect(board.tasks.find((entry) => entry.id === task.id)?.column).toBe("done");
 
-    // Still no free pass to the other user-owned columns.
-    await expect(
-      catalog.executeTool("move_task", {
-        projectId: "proj-1",
-        taskId: task.id,
-        column: "deployed",
-      }),
-    ).rejects.toThrow(/only the user validates/);
+    // The move is authorized and stamps the card live; the board then files a
+    // published card away on its own, so the live stamp is the honest assertion.
+    const board = await service.getBoard("proj-1");
+    expect(typeof board.tasks.find((entry) => entry.id === task.id)?.deployedAt).toBe("string");
   });
 
   test("move_task still shuffles a card between notes and backlog", async () => {

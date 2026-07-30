@@ -1411,21 +1411,17 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
     },
     [boardHandle, toast, t],
   );
-  // The one and only path from "En cours" to "Terminée". The press hands a check
-  // prompt to the task's OWN agent, in the task's own conversation: it re-reads
-  // the request, runs the project's checks, fixes what it finds, and completes
-  // the card itself once everything is green. The user reads all of it live.
+  // The one and only path from "En cours" to "Terminée", and a plain move: the
+  // card changes column and nothing else runs. It used to hand a check-then-deploy
+  // prompt to the card's own agent, which both burned a full turn per card and put
+  // the work online before the user had queued anything. Verification now belongs
+  // to the publication (see docs/task-board-cycle.md).
   const handleValidate = useCallback(
     (taskId: string, options?: { queueOnComplete?: boolean }) => {
       void (async () => {
-        const alreadyRunning =
-          boardHandle.board?.tasks.find((entry) => entry.id === taskId)?.validation?.state ===
-          "running";
         const confirmed = await confirmDialog({
           title: t("tasks.panel.validateTask"),
-          message: alreadyRunning
-            ? t("tasks.panel.validateRestartMessage")
-            : t("tasks.panel.validateTaskMessage"),
+          message: t("tasks.panel.validateTaskMessage"),
           confirmLabel: t("tasks.panel.validateTask"),
           cancelLabel: t("common.actions.cancel"),
         });
@@ -1433,14 +1429,10 @@ function useBoardTaskActions(boardHandle: BoardHandle) {
           return;
         }
         try {
-          const { passed } = await boardHandle.validateTask(taskId, {
+          await boardHandle.validateTask(taskId, {
             queueOnComplete: options?.queueOnComplete === true,
           });
-          // `passed` here only means "the card was already finished" — the real
-          // verdict now plays out in the conversation.
-          toast.show(
-            passed ? t("tasks.panel.validatePassed") : t("tasks.panel.validateDispatched"),
-          );
+          toast.show(t("tasks.panel.validatePassed"));
         } catch (error) {
           toast.error(error instanceof Error ? error.message : String(error));
         }

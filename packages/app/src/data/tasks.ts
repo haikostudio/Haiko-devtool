@@ -59,13 +59,11 @@ export interface TaskBoardHandle {
   retryTaskAnalysis: (taskId: string) => Promise<void>;
   approveTask: (taskId: string) => Promise<void>;
   /**
-   * Runs the final check and, only if it passes, completes the task. Resolves
-   * with passed=false plus the task carrying the report when it rejects.
-   */
-  /**
-   * Runs the final check. `queueOnComplete` is the "Terminer et mettre en file"
-   * press: the card continues into "À déployer" the instant it completes instead
-   * of resting in "Terminé".
+   * Finishes the task: moves it from "En cours" to "Terminé" and nothing else — no
+   * check, no deployment (verification happens at publication time, see
+   * docs/task-board-cycle.md). `queueOnComplete` is the "Terminer et mettre en
+   * file" press: the card continues into "À déployer" right away instead of
+   * resting in "Terminé".
    */
   validateTask: (
     taskId: string,

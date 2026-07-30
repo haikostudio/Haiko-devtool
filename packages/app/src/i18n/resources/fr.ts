@@ -329,15 +329,11 @@ export const fr: TranslationResources = {
       runNowWaitingWindow: "Hors créneau — lancer maintenant",
       approveTask: "Valider la tâche",
       approveDispatched: "Tâche validée — analyse en cours.",
-      validateTask: "Lancer le contrôle final",
+      validateTask: "Terminer la tâche",
       validateTaskMessage:
-        "L’agent de cette tâche relit la demande, vérifie son travail, corrige ce qui cloche, puis marque la tâche « Terminée » si tout est bon. Vous suivez tout dans la discussion.",
-      validateRunning: "Contrôle en cours dans la discussion…",
+        "La carte passe simplement dans « Terminé ». Aucun contrôle et aucune publication ici : la vérification a lieu au moment de la publication.",
       validateAgentBusy: "L'agent travaille encore…",
-      validateRestartMessage:
-        "Un contrôle est déjà en cours dans la discussion. Le relancer quand même ?",
-      validateDispatched: "Contrôle lancé — suivez-le dans la discussion.",
-      validatePassed: "Tâche déjà terminée.",
+      validatePassed: "Tâche terminée.",
       archiveTask: "Archiver",
       archiveTaskMessage:
         "Cette carte sera masquée du tableau. Elle reste enregistrée et n'est pas publiée.",
@@ -602,9 +598,7 @@ export const fr: TranslationResources = {
       finished: "Terminé",
       deploying: "Publication en cours",
       deployed: "Déployé",
-      finalCheck: "Contrôle final en cours",
       deployFailed: "Publication échouée",
-      finalCheckFailed: "Contrôle échoué",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}} j",
       deadlineOverdue: "en retard",

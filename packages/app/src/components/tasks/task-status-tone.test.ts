@@ -124,7 +124,7 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
     // "Contrôle final en cours" loader that hides the wait from the user.
     const needsInput: WorkspaceStateBucket = "needs_input";
     expect(
-      deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), needsInput),
+      deriveTaskTone(makeTask({ column: "done", deployment: { state: "running" } }), needsInput),
     ).toBe("attention");
     expect(
       deriveTaskTone(makeTask({ column: "done", deployment: { state: "running" } }), needsInput),
@@ -140,7 +140,7 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
       deriveTaskTone(
         makeTask({
           column: "done",
-          validation: { state: "running" },
+          deployment: { state: "running" },
           approval: { state: "pending" },
         }),
         undefined,
@@ -150,7 +150,7 @@ describe("deriveTaskTone — loader reflects the agent's real activity", () => {
       deriveTaskTone(
         makeTask({
           column: "done",
-          validation: { state: "running" },
+          deployment: { state: "running" },
           planReadyAt: "2024-01-01T00:00:00.000Z",
         }),
         undefined,
@@ -198,7 +198,7 @@ describe("deriveTaskTone — a question typed in prose still calls for the user"
     // a questionnaire stayed hidden behind a green "Contrôle final en cours". The
     // live block wins so the card goes amber and shakes for the answer.
     expect(
-      deriveTaskTone(makeTask({ column: "done", validation: { state: "running" } }), "done", true),
+      deriveTaskTone(makeTask({ column: "done", deployment: { state: "running" } }), "done", true),
     ).toBe("attention");
   });
 });

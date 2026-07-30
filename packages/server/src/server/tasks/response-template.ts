@@ -2,10 +2,9 @@
  * Picks the answer structure a card's agent must follow, from where the card
  * currently sits on the board.
  *
- * The card templates (analysis / progress / publication / verification) are
- * described in docs/response-templates.md — this module is the column → template
- * map plus the plumbing that finds a card (or the grouped-deployment agent) from
- * an agent id.
+ * The card templates (analysis / progress / publication) are described in
+ * docs/response-templates.md — this module is the column → template map plus the
+ * plumbing that finds a card (or the grouped-deployment agent) from an agent id.
  *
  * The mapping is deliberately a pure function of the task, so the rule is
  * testable without a board, a registry or an agent.
@@ -23,17 +22,12 @@ import type { WorkspaceRegistry } from "../workspace-registry.js";
 import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import type { TaskBoardService } from "./service.js";
 import { isTaskLive } from "./batch-deployer.js";
-import { isValidationWindowOpen } from "./validator.js";
 
 /**
- * Column → template. Four refinements on top of the plain column reading:
+ * Column → template. Three refinements on top of the plain column reading:
  *  - a deployment in flight, or work already live, wins over the column: that
- *    turn IS the publication log;
- *  - the final-check window being open ("Lancer le contrôle") wins over the
- *    column too: the card is still in "En cours" while the check runs, so
- *    without this it would borrow the work-report shape instead of a check
- *    report. It sits BELOW the publication check because a card under check has
- *    no deployment in flight yet, so the two never conflict;
+ *    turn IS the publication log, and it is also the turn that verifies the work
+ *    (finishing a card no longer runs a check of its own);
  *  - "À déployer" alone does NOT mean published — it is the queue a finished
  *    card waits in — so a card sitting there still reports its work;
  *  - "Planifié" reads like "Validé" (analysis already produced, execution not
@@ -43,9 +37,6 @@ import { isValidationWindowOpen } from "./validator.js";
 export function resolveTaskResponseTemplate(task: KanbanTask): ResponseFormatTemplate {
   if (task.deployment?.state === "running" || isTaskLive(task)) {
     return "publication";
-  }
-  if (isValidationWindowOpen(task)) {
-    return "verification";
   }
   switch (task.column) {
     case "validated":

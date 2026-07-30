@@ -328,15 +328,11 @@ export const ptBR: TranslationResources = {
       runNowWaitingWindow: "Fora da janela — executar agora",
       approveTask: "Validar a tarefa",
       approveDispatched: "Tarefa validada — análise em andamento.",
-      validateTask: "Iniciar a verificação final",
+      validateTask: "Concluir a tarefa",
       validateTaskMessage:
-        "O agente da tarefa relê o pedido, verifica o trabalho, corrige o que estiver errado e marca a tarefa como «Concluída» se estiver tudo certo. Você acompanha tudo na conversa.",
-      validateRunning: "Verificação em andamento na conversa…",
+        "O cartão passa simplesmente para «Concluído». Nada é verificado nem publicado aqui: a verificação acontece na publicação.",
       validateAgentBusy: "O agente ainda está trabalhando…",
-      validateRestartMessage:
-        "Já existe uma verificação em andamento na conversa. Iniciar novamente mesmo assim?",
-      validateDispatched: "Verificação iniciada — acompanhe na conversa.",
-      validatePassed: "A tarefa já estava concluída.",
+      validatePassed: "Tarefa concluída.",
       archiveTask: "Arquivar",
       archiveTaskMessage:
         "Este cartão será ocultado do quadro. Ele permanece salvo e não é publicado.",
@@ -601,9 +597,7 @@ export const ptBR: TranslationResources = {
       finished: "Concluído",
       deploying: "Publicando…",
       deployed: "Implantado",
-      finalCheck: "Verificação final em andamento…",
       deployFailed: "Falha na publicação",
-      finalCheckFailed: "Falha na verificação",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}} d",
       deadlineOverdue: "atrasada",

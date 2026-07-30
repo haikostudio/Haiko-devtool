@@ -395,9 +395,9 @@ export class TasksSession {
   }
 
   /**
-   * "Lancer le contrôle": hand the final check to the task's own agent. The
-   * verification, the fixes and the completion all happen in the task's
-   * conversation, where the user can read them.
+   * "Terminer la tâche": move the card from "En cours" to "Terminé". Nothing else
+   * runs — the RPC keeps its historical `validate` name for old clients, but the
+   * check it used to dispatch is gone (see tasks/validator.ts).
    */
   async handleTaskValidateRequest(
     request: Extract<SessionInboundMessage, { type: "tasks.task.validate.request" }>,

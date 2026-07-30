@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { TaskDeployer } from "./deployer.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
-import type { AgentStopReason } from "./validator.js";
+import type { AgentStopReason } from "./task-agent-link.js";
 
 const logger = pino({ level: "silent" });
 
@@ -74,7 +74,12 @@ describe("TaskDeployer", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.agentId).toBe("agent-7");
     expect(sent[0]?.prompt).toContain("DÉPLOIEMENT");
-    expect(sent[0]?.prompt).toContain("fonctionnement est ok, tu peux lancer le déploiement");
+    // The verification moved here from the (now inert) final check, so the prompt
+    // must ask for it explicitly before anything goes online.
+    expect(sent[0]?.prompt).toContain("CONTRÔLE le travail avant de le mettre en ligne");
+    expect(sent[0]?.prompt).toContain("le typecheck, le lint et les tests");
+    expect(sent[0]?.prompt).toContain("CORRIGE-LE toi-même");
+    expect(sent[0]?.prompt).toContain("le fonctionnement est OK, tu peux lancer le déploiement");
     expect(sent[0]?.prompt).toContain(`taskId: "${taskId}"`);
     expect(sent[0]?.prompt).toContain("needsDaemonRestart");
     expect(sent[0]?.prompt).toContain("haikostudio.cloud");

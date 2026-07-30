@@ -7,10 +7,10 @@ import { KANBAN_COLUMNS } from "./kanban-columns";
 // The board's rule since e62ef15b8 is "dragging a card does exactly what its
 // button does". The corollary was missing: a card that is *executing* offers no
 // backward button at all, so no gesture may take it backward either. Dragging a
-// card out of "En cours" — worse, while its final check is running — used to
+// card out of "En cours" — worse, while its publication is running — used to
 // drop it back into "Planifié", where the scheduler would see it again. Work in
 // flight only ever moves forward, and only through the action that owns the
-// transition (the final-check bar).
+// transition (the "Terminer la tâche" bar).
 //
 // One pure predicate, consumed by every manual path (drag, the "Déplacer
 // vers…" menu, the chevrons), so the three can never drift apart.
@@ -22,20 +22,20 @@ function pipelineIndex(column: TaskColumn): number {
   return KANBAN_COLUMNS.indexOf(column);
 }
 
-// An action the user launched from the card is live right now: the final check
-// ("Valider la tâche") or the publication. The server opens the window the
-// instant the action starts and closes it when the agent stops, so this is the
-// freshest truth about the card — and while it is open the card belongs to that
-// action, not to the mouse.
+// An action the user launched from the card is live right now: the publication.
+// The server opens the window the instant the action starts and closes it when the
+// agent stops, so this is the freshest truth about the card — and while it is open
+// the card belongs to that action, not to the mouse. Finishing a card opens no
+// such window any more: it is a plain move that runs nothing.
 function hasRunningAction(task: KanbanTask): boolean {
-  return task.validation?.state === "running" || task.deployment?.state === "running";
+  return task.deployment?.state === "running";
 }
 
 /**
  * The card's work is under way: its agent is executing (the card sits in
  * "En cours") or an explicit action the user pressed is still running.
  *
- * Deliberately state-based, not position-based: a card whose final check runs is
+ * Deliberately state-based, not position-based: a card whose publication runs is
  * executing wherever it happens to sit, which is exactly the case the drag bug
  * fell through.
  */
@@ -55,8 +55,8 @@ export function isTaskExecuting(task: KanbanTask): boolean {
  * - An executing card may otherwise only reach the very next column — for
  *   "En cours" that is "Terminée" and nothing else. Every upstream column
  *   ("Planifié", "Validé", "À faire", "Notes") is refused, and so is every skip
- *   ahead: jumping straight to "À déployer" would bypass the final check that
- *   owns the completion.
+ *   ahead: jumping straight to "À déployer" would bypass the completion the
+ *   "Terminer la tâche" bar owns.
  *
  * Refusals are silent no-ops at the call sites: the card simply stays put. There
  * is nothing to explain — the gesture was never an available action.

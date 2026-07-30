@@ -93,14 +93,8 @@ function actionWindowBadge(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (task.deployment?.state === "running") {
     return { labelKey: "tasks.card.deploying", variant: "success" };
   }
-  if (task.validation?.state === "running") {
-    return { labelKey: "tasks.card.finalCheck", variant: "success" };
-  }
   if (task.deployment?.state === "failed") {
     return { labelKey: "tasks.card.deployFailed", variant: "error" };
-  }
-  if (task.validation?.state === "failed") {
-    return { labelKey: "tasks.card.finalCheckFailed", variant: "error" };
   }
   return null;
 }

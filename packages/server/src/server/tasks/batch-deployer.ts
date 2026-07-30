@@ -3,7 +3,7 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
-import { resolveTaskAgentId } from "./validator.js";
+import { resolveTaskAgentId } from "./task-agent-link.js";
 
 export interface DeployTriggerResult {
   started: boolean;

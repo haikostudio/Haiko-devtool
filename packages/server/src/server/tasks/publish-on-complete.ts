@@ -1,7 +1,7 @@
 import type pino from "pino";
 import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
-import { resolveTaskAgentId } from "./validator.js";
+import { resolveTaskAgentId } from "./task-agent-link.js";
 
 export interface TaskPublisherOptions {
   agentManager: Pick<AgentManager, "appendTimelineItem">;

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isTaskExecuting, isTaskMoveAllowed } from "./task-move-guard";
 
 // Minimal in-progress task fixture; specs override what drives the guard
-// (column, validation, deployment).
+// (column, deployment).
 function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
   return {
     id: "t1",
@@ -29,7 +29,7 @@ describe("isTaskExecuting", () => {
   it("is true wherever the card sits while its final check runs", () => {
     // The bug's exact state: the final check is running, so the work is under
     // way regardless of which column the card is drawn in.
-    expect(isTaskExecuting(makeTask({ column: "done", validation: { state: "running" } }))).toBe(
+    expect(isTaskExecuting(makeTask({ column: "done", deployment: { state: "running" } }))).toBe(
       true,
     );
   });
@@ -56,7 +56,7 @@ describe("isTaskMoveAllowed", () => {
   it("freezes the card in place while its final check runs", () => {
     // The final-check bar owns the "En cours" → "Terminé" transition and will
     // perform it itself; no gesture may pre-empt it, forward or backward.
-    const task = makeTask({ validation: { state: "running" } });
+    const task = makeTask({ deployment: { state: "running" } });
     expect(isTaskMoveAllowed(task, "scheduled")).toBe(false);
     expect(isTaskMoveAllowed(task, "done")).toBe(false);
   });
@@ -96,7 +96,7 @@ describe("isTaskMoveAllowed", () => {
 
   it("always allows a re-order inside the same column", () => {
     // Dropping a card among its neighbours is an arrangement, not a transition.
-    expect(isTaskMoveAllowed(makeTask({ validation: { state: "running" } }), "in_progress")).toBe(
+    expect(isTaskMoveAllowed(makeTask({ deployment: { state: "running" } }), "in_progress")).toBe(
       true,
     );
   });

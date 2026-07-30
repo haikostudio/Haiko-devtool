@@ -328,15 +328,11 @@ export const es: TranslationResources = {
       runNowWaitingWindow: "Fuera de la ventana — ejecutar ahora",
       approveTask: "Validar la tarea",
       approveDispatched: "Tarea validada: análisis en curso.",
-      validateTask: "Lanzar la comprobación final",
+      validateTask: "Terminar la tarea",
       validateTaskMessage:
-        "El agente de la tarea relee la petición, comprueba su trabajo, corrige lo que falle y marca la tarea como «Terminada» si todo está bien. Puedes seguirlo todo en la conversación.",
-      validateRunning: "Comprobación en curso en la conversación…",
+        "La tarjeta pasa simplemente a «Terminado». Aquí no se comprueba ni se publica nada: la verificación se hace al publicar.",
       validateAgentBusy: "El agente aún está trabajando…",
-      validateRestartMessage:
-        "Ya hay una comprobación en curso en la conversación. ¿Lanzarla de nuevo igualmente?",
-      validateDispatched: "Comprobación lanzada: síguela en la conversación.",
-      validatePassed: "La tarea ya estaba terminada.",
+      validatePassed: "Tarea terminada.",
       archiveTask: "Archivar",
       archiveTaskMessage:
         "Esta tarjeta se ocultará del tablero. Permanece guardada y no se publica.",
@@ -600,9 +596,7 @@ export const es: TranslationResources = {
       finished: "Hecho",
       deploying: "Publicando…",
       deployed: "Desplegado",
-      finalCheck: "Verificación final en curso…",
       deployFailed: "Error al publicar",
-      finalCheckFailed: "Verificación fallida",
       duration: "~{{minutes}} min",
       deadlineDays: "{{count}} d",
       deadlineOverdue: "vencida",
