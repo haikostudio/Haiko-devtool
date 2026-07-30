@@ -204,6 +204,9 @@ export interface WorkspaceTabSnapshot {
   activeAgentIds: Iterable<string>;
   autoOpenAgentIds: Iterable<string>;
   knownAgentIds: Iterable<string>;
+  // Agents the host archived. Optional so older callers keep compiling; an
+  // omitted set simply means "nothing archived".
+  archivedAgentIds?: Iterable<string>;
   knownTerminalIds?: Iterable<string>;
   standaloneTerminalIds: Iterable<string>;
   hasActivePendingDraftCreate?: boolean;
@@ -1662,10 +1665,25 @@ function applyPinnedAndHidden(input: {
   pendingAgentIds: Set<string>;
   hiddenAgentIds: Set<string>;
   knownAgentIds: Set<string>;
+  archivedAgentIds: Set<string>;
 }): Set<string> {
-  const { baseAgentIds, pinnedAgentIds, pendingAgentIds, hiddenAgentIds, knownAgentIds } = input;
+  const {
+    baseAgentIds,
+    pinnedAgentIds,
+    pendingAgentIds,
+    hiddenAgentIds,
+    knownAgentIds,
+    archivedAgentIds,
+  } = input;
   const result = new Set(baseAgentIds);
   for (const agentId of pinnedAgentIds) {
+    // An archived agent stays out even when pinned: archiving is the host saying
+    // this conversation is over (a task card filed away, a workspace archived),
+    // and it must close the tab on every client. A pin only ever holds open a
+    // conversation that still exists.
+    if (archivedAgentIds.has(agentId)) {
+      continue;
+    }
     if (knownAgentIds.has(agentId) || pendingAgentIds.has(agentId)) {
       result.add(agentId);
     }
@@ -1796,6 +1814,7 @@ export function reconcileWorkspaceTabs(
   const activeAgentIds = normalizeStringSet(snapshot.activeAgentIds);
   const autoOpenAgentIds = normalizeStringSet(snapshot.autoOpenAgentIds);
   const knownAgentIds = normalizeStringSet(snapshot.knownAgentIds);
+  const archivedAgentIds = normalizeStringSet(snapshot.archivedAgentIds ?? []);
   const standaloneTerminalIds = normalizeStringSet(snapshot.standaloneTerminalIds);
   const knownTerminalIds = snapshot.knownTerminalIds
     ? normalizeStringSet(snapshot.knownTerminalIds)
@@ -1806,6 +1825,7 @@ export function reconcileWorkspaceTabs(
     pendingAgentIds,
     hiddenAgentIds,
     knownAgentIds,
+    archivedAgentIds,
   });
   const autoOpenSet = applyPinnedAndHidden({
     baseAgentIds: autoOpenAgentIds,
@@ -1813,6 +1833,7 @@ export function reconcileWorkspaceTabs(
     pendingAgentIds,
     hiddenAgentIds,
     knownAgentIds,
+    archivedAgentIds,
   });
 
   const initialTabs = collectAllTabs(nextLayout.root);

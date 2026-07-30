@@ -324,6 +324,7 @@ describe("workspace agent visibility", () => {
       activeAgentIds: new Set(["active-agent"]),
       autoOpenAgentIds: new Set(["root-agent"]),
       knownAgentIds: new Set(["active-agent", "archived-agent"]),
+      archivedAgentIds: new Set(["archived-agent"]),
     };
 
     expect(

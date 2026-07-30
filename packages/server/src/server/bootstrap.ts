@@ -136,6 +136,7 @@ import { TaskBoardStore } from "./tasks/store.js";
 import { DaemonRestartReminder } from "./tasks/daemon-restart-reminder.js";
 import { resolveDaemonRestartImpact } from "./tasks/restart-impact.js";
 import { TaskBoardService } from "./tasks/service.js";
+import { TaskSessionCloser } from "./tasks/session-closer.js";
 import { TaskProposalNotifier } from "./tasks/proposal-notifier.js";
 import { DEFAULT_TASKS_QUIET_HOURS } from "./quiet-hours.js";
 import { AgentTaskSyncService } from "./tasks/agent-sync.js";
@@ -1374,6 +1375,12 @@ export async function createPaseoDaemon(
     const project = await projectRegistry.get(projectId);
     return resolveDaemonRestartImpact(project?.rootPath ?? null);
   });
+  // An archived card closes its own conversation, so its tab leaves the band on
+  // every connected client (see tasks/session-closer.ts).
+  const taskSessionCloser = new TaskSessionCloser({ agentManager, agentStorage, logger });
+  taskBoardService.setOnTaskArchived((projectId, task) =>
+    taskSessionCloser.closeSessionsForTask(projectId, task),
+  );
   // This process is running the current code, so every already-published card's
   // restart debt is settled. Done once at boot, per known project.
   void (async () => {
@@ -1384,6 +1391,11 @@ export async function createPaseoDaemon(
         // genuinely waiting to go out.
         await taskBoardService.backfillLegacyDeployedCards(project.projectId);
         await taskBoardService.settleRestartFlags(project.projectId);
+        // Catch-up for the tabs that piled up before archiving closed anything.
+        await taskSessionCloser.sweepArchivedTasks(
+          project.projectId,
+          await taskBoardService.getBoard(project.projectId),
+        );
       }
     } catch (error) {
       logger.warn({ err: error }, "Failed to settle daemon-restart flags at boot");

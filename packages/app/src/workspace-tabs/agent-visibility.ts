@@ -7,6 +7,11 @@ export interface WorkspaceAgentVisibility {
   activeAgentIds: Set<string>;
   autoOpenAgentIds: Set<string>;
   knownAgentIds: Set<string>;
+  // Agents the host archived. Tracked separately from "not active" because a
+  // PINNED agent is otherwise re-added from knownAgentIds, which kept an archived
+  // agent's tab open forever — the reason archiving a task card never emptied the
+  // tab band. Archiving wins over the pin.
+  archivedAgentIds: Set<string>;
 }
 
 function agentBelongsToWorkspace(agent: Agent, workspaceId: string): boolean {
@@ -25,12 +30,14 @@ export function deriveWorkspaceAgentVisibility(input: {
       activeAgentIds: new Set<string>(),
       autoOpenAgentIds: new Set<string>(),
       knownAgentIds: new Set<string>(),
+      archivedAgentIds: new Set<string>(),
     };
   }
 
   const activeAgentIds = new Set<string>();
   const autoOpenAgentIds = new Set<string>();
   const knownAgentIds = new Set<string>();
+  const archivedAgentIds = new Set<string>();
   const agentsById = new Map<string, Agent>([
     ...(agentDetails?.entries() ?? []),
     ...(sessionAgents?.entries() ?? []),
@@ -40,7 +47,9 @@ export function deriveWorkspaceAgentVisibility(input: {
       continue;
     }
     knownAgentIds.add(agent.id);
-    if (!agent.archivedAt) {
+    if (agent.archivedAt) {
+      archivedAgentIds.add(agent.id);
+    } else {
       activeAgentIds.add(agent.id);
       const parentAgent = agent.parentAgentId ? agentsById.get(agent.parentAgentId) : undefined;
       if (isWorkspaceRootAgent(agent, parentAgent)) {
@@ -53,9 +62,12 @@ export function deriveWorkspaceAgentVisibility(input: {
       continue;
     }
     knownAgentIds.add(agent.id);
+    if (agent.archivedAt && !activeAgentIds.has(agent.id)) {
+      archivedAgentIds.add(agent.id);
+    }
   }
 
-  return { activeAgentIds, autoOpenAgentIds, knownAgentIds };
+  return { activeAgentIds, autoOpenAgentIds, knownAgentIds, archivedAgentIds };
 }
 
 // Remove agents that an in-flight create flow already owns through its draft tab
@@ -96,6 +108,7 @@ export function buildWorkspaceTabSnapshot(input: {
     activeAgentIds: input.agentVisibility.activeAgentIds,
     autoOpenAgentIds: input.agentVisibility.autoOpenAgentIds,
     knownAgentIds: input.agentVisibility.knownAgentIds,
+    archivedAgentIds: input.agentVisibility.archivedAgentIds,
     knownTerminalIds: input.knownTerminalIds,
     standaloneTerminalIds: input.standaloneTerminalIds,
     hasActivePendingDraftCreate: input.hasActivePendingDraftCreate,
@@ -109,7 +122,8 @@ export function workspaceAgentVisibilityEqual(
   return (
     setsEqual(a.activeAgentIds, b.activeAgentIds) &&
     setsEqual(a.autoOpenAgentIds, b.autoOpenAgentIds) &&
-    setsEqual(a.knownAgentIds, b.knownAgentIds)
+    setsEqual(a.knownAgentIds, b.knownAgentIds) &&
+    setsEqual(a.archivedAgentIds, b.archivedAgentIds)
   );
 }
 

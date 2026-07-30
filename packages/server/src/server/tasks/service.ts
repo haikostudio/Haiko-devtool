@@ -16,6 +16,13 @@ import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
 export type TaskBoardListener = (board: TaskBoard) => void;
 export type TaskCompletedListener = (projectId: string, task: KanbanTask) => void | Promise<void>;
+/**
+ * Fired the moment a card becomes archived, through either door: the terminal
+ * "archived" column (automatic, once its work went live) or the manual hide
+ * (`archivedAt`). Wired at bootstrap to the session closer, which closes the
+ * card's conversation so its tab leaves the band.
+ */
+export type TaskArchivedListener = (projectId: string, task: KanbanTask) => void | Promise<void>;
 
 /**
  * Answers "will publishing this card's work need a daemon restart?" — resolved
@@ -278,6 +285,7 @@ export class TaskBoardService {
   private onTaskScheduled: ((projectId: string, taskId: string) => void) | null = null;
   private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
   private onTaskCompleted: TaskCompletedListener | null = null;
+  private onTaskArchived: TaskArchivedListener | null = null;
   private onResolveRestartImpact: TaskRestartImpactResolver | null = null;
   private onTaskCreated: ((projectId: string, task: KanbanTask) => void) | null = null;
 
@@ -297,6 +305,15 @@ export class TaskBoardService {
 
   setOnTaskCompleted(callback: TaskCompletedListener | null): void {
     this.onTaskCompleted = callback;
+  }
+
+  /**
+   * Wires "an archived card closes its conversation". Both doors into the
+   * archive report here — the terminal column and the manual hide — so the
+   * listener never has to guess which gesture archived the card.
+   */
+  setOnTaskArchived(callback: TaskArchivedListener | null): void {
+    this.onTaskArchived = callback;
   }
 
   /**
@@ -749,12 +766,14 @@ export class TaskBoardService {
    * "done" or "deployed".
    */
   async archiveTask(projectId: string, taskId: string, archived: boolean): Promise<KanbanTask> {
+    let justArchived = false;
     const board = await this.mutateTask(projectId, taskId, (task) => {
       const isTerminal = task.column === "done" || task.column === "deployed";
       if (archived) {
         if (!isTerminal || task.archivedAt) {
           return task;
         }
+        justArchived = true;
         return { ...task, archivedAt: new Date().toISOString() };
       }
       if (!task.archivedAt) {
@@ -764,7 +783,11 @@ export class TaskBoardService {
       delete updated.archivedAt;
       return updated;
     });
-    return this.requireTask(board, taskId);
+    const task = this.requireTask(board, taskId);
+    if (justArchived) {
+      this.notifyArchived(projectId, task);
+    }
+    return task;
   }
 
   /**
@@ -783,6 +806,7 @@ export class TaskBoardService {
   async moveTask(projectId: string, input: MoveTaskInput): Promise<TaskBoard> {
     let scheduledTask: KanbanTask | null = null;
     let completedTask: KanbanTask | null = null;
+    let archivedTask: KanbanTask | null = null;
     const board = await this.store.mutate(projectId, (current) => {
       const task = current.tasks.find((entry) => entry.id === input.taskId);
       if (!task) {
@@ -808,6 +832,9 @@ export class TaskBoardService {
       }
       if (input.column === "done" && task.column !== "done") {
         completedTask = moved;
+      }
+      if (input.column === "archived" && task.column !== "archived") {
+        archivedTask = moved;
       }
 
       // Re-pack orders for the affected folder: target column gets the moved
@@ -857,7 +884,22 @@ export class TaskBoardService {
       // never go through: a card finished from the board simply never told anyone.
       this.notifyCompleted(projectId, completedTask);
     }
+    if (archivedTask) {
+      // Filed away: its conversation has nothing left to say, so the tab goes.
+      this.notifyArchived(projectId, archivedTask);
+    }
     return board;
+  }
+
+  /** Runs the archive listener without ever letting it break the move. */
+  private notifyArchived(projectId: string, task: KanbanTask): void {
+    const listener = this.onTaskArchived;
+    if (!listener) {
+      return;
+    }
+    void Promise.resolve(listener(projectId, task)).catch((error) => {
+      this.logger.warn({ err: error, projectId, taskId: task.id }, "onTaskArchived callback failed");
+    });
   }
 
   /** Runs the completion listener without ever letting it break the move. */
