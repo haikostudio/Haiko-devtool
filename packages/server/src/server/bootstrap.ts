@@ -201,6 +201,7 @@ import {
   getPaseoDeployRoots,
   getPaseoDeployRunSnapshot,
   getPublishedSha,
+  getRunningEngineSha,
   recordDaemonBootSha,
   setPaseoDeployAgentLauncher,
   setPaseoDeployConflictTaskCreator,
@@ -1656,6 +1657,9 @@ export async function createPaseoDaemon(
     triggerDeploy: (input) => triggerPaseoDeploy(input),
     readDeployRun: () => getPaseoDeployRunSnapshot(),
     readPublishedSha: () => getPublishedSha(),
+    // Lets the batch skip its final restart when the engine is already executing
+    // the version that just went online (a republish with no new commit).
+    readRunningEngineSha: () => getRunningEngineSha(),
     deployTask: (projectId, taskId) => taskDeployer.deploy(projectId, taskId),
     // The user's press IS the authorization: the batch ends by restarting the
     // engine so the code that was just published is the code that runs.

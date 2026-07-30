@@ -399,6 +399,54 @@ describe("TaskScheduler", () => {
     expect(board.tasks[0]?.schedule?.state).toBe("awaiting_slot");
   });
 
+  test("says so when a sibling task holds the shared worktree", async () => {
+    // Two cards, one folder, one worktree: the second waits. That wait used to be
+    // a bare `continue` — the card sat in "Planifié" promising "Démarrage
+    // imminent" while the scheduler knew exactly why it was not starting.
+    const folder = await service.createFolder("proj-1", "Auth");
+    const busy = await service.createTask("proj-1", { folderId: folder.id, title: "Première" });
+    const waiting = await service.createTask("proj-1", { folderId: folder.id, title: "Seconde" });
+    await service.moveTask("proj-1", { taskId: busy.id, column: "in_progress", index: 0 });
+    await service.moveTask("proj-1", { taskId: waiting.id, column: "scheduled", index: 0 });
+    await service.patchTask("proj-1", waiting.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 100_000,
+        quotaPercent: 10,
+        estimatedMinutes: 5,
+        confidence: "medium" as const,
+        model: "claude/haiku",
+        estimatedAt: "2026-07-16T00:00:00.000Z",
+      },
+      schedule: { state: "awaiting_slot" as const, attempts: 0 },
+    }));
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.tick();
+
+    expect(createAgent).not.toHaveBeenCalled();
+    expect((await findTask(waiting.id))?.schedule?.waitingBlocker).toBe("shared_worktree");
+  });
+
+  test("clears the hold once the card actually launches", async () => {
+    const task = await seedScheduledTask();
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      schedule: { state: "awaiting_slot" as const, attempts: 0, waitingBlocker: "slots_busy" },
+    }));
+    const { scheduler } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.tick();
+    // The launch is fire-and-forget: wait for it to land, both so the assertion
+    // reads a settled card and so the run stops writing into this test's temp dir.
+    await vi.waitFor(async () => {
+      expect((await findTask(task.id))?.progress).toBe("ready_for_review");
+    });
+
+    // A stale explanation on a card that is starting is its own small lie.
+    expect((await findTask(task.id))?.schedule?.waitingBlocker).toBeUndefined();
+  });
+
   test("auto-re-queues a canceled run without a lasting error or a spent attempt", async () => {
     const task = await seedScheduledTask();
     const { scheduler } = buildScheduler({

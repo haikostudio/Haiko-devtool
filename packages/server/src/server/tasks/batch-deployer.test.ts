@@ -122,6 +122,9 @@ describe("TaskBatchDeployer", () => {
     awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
     /** Blocks each triggerDeploy until resolved — holds a run active on purpose. */
     holdTrigger?: Promise<void>;
+    /** The version the run puts online, and the one the engine already runs. */
+    publishedSha?: string | null;
+    runningEngineSha?: string | null;
   }) {
     const runs = [...(input.runs ?? [])];
     // Bind the collectors NOW, so a run still finishing when its test ends keeps
@@ -159,6 +162,8 @@ describe("TaskBatchDeployer", () => {
         runPerCard.push(taskId);
       },
       requestDaemonRestart: (reason) => runRestarts.push(reason),
+      readPublishedSha: async () => input.publishedSha ?? null,
+      readRunningEngineSha: () => input.runningEngineSha ?? null,
       awaitDeployAgentIdle: input.awaitDeployAgentIdle,
       sleep: async () => {},
       logger,
@@ -350,6 +355,40 @@ describe("TaskBatchDeployer", () => {
     // Published cards are filed away, so the queue empties itself.
     expect(card?.column).toBe("archived");
     expect(board.deployBatch?.taskIds.sort()).toEqual([forgotten.id, queued.id].sort());
+  });
+
+  test("skips the restart when the engine already runs the published version", async () => {
+    // Two publications in a row with no new commit between them: reloading
+    // identical code would cut every session for nothing.
+    const card = await seedQueued("Login", "task/login");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+      publishedSha: "abcdef1234567890",
+      runningEngineSha: "abcdef1234567890",
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
+    expect(restarts).toEqual([]);
+    expect(noteContains("pas de redémarrage nécessaire")).toBe(true);
+  });
+
+  test("still restarts when the running version is unknown", async () => {
+    // An unknown answer is not a diagnosis: it must never suppress the restart.
+    await seedQueued("Login", "task/login");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+      publishedSha: "abcdef1234567890",
+      runningEngineSha: null,
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    expect(restarts).toEqual(["task_batch_deploy"]);
   });
 
   test("restarts the engine even when the work looks interface-only", async () => {

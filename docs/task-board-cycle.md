@@ -41,7 +41,7 @@ in the project's single list.
 | → Notes / → À faire  | user **or** an agent | The only two columns an agent may write to.                                                                                                               |
 | À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                    |
 | Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                          |
-| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                        |
+| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass. A card held by one of them says which — see "Why a card waits in Planifié".            |
 | En cours → Terminé   | **user only**        | The "Terminer la tâche" bar (or a drag). A plain column move: no prompt, no check, no deployment — see below.                                             |
 | Terminé → À déployer | **user only**        | Manual: a finished card RESTS in "Terminé" and waits. The user queues it with the card's button (or a drag), or a publication they launched sweeps it in. |
 
@@ -394,6 +394,32 @@ A single card can still be published on its own, which is how an ordinary projec
   still in "Terminé" or already waiting in "À déployer" — and takes the composer
   slot ahead of the archive bar, so the natural order is deploy, then archive.
 
+## Why a card waits in "Planifié"
+
+A queued card that is not launching is always held by exactly one of four gates,
+and **all four now say so on the card**. They used to be two: the other two were a
+bare `continue`/`return` in the tick loop, which is how a card sat for hours
+wearing a green "Démarrage imminent" while the scheduler knew precisely why it was
+not starting. "On l'a lancée et elle reste dans Planifié" was that silence, not a
+crash.
+
+| Gate                              | Field                     | Card says                           |
+| --------------------------------- | ------------------------- | ----------------------------------- |
+| Outside the launch window         | `schedule.waitingReason`  | "Attente heures creuses"            |
+| Not enough quota left             | `schedule.waitingReason`  | "En attente de quota"               |
+| A sibling holds the shared branch | `schedule.waitingBlocker` | "Une autre tâche occupe le dossier" |
+| Every launch slot is taken        | `schedule.waitingBlocker` | "Tous les créneaux sont occupés"    |
+
+Two fields, one concept, on purpose: `waitingReason` is a wire `z.enum`, and a
+third literal on it would make an old client reject the whole board message. So
+the two new holds travel in their own optional field
+(`COMPAT(scheduleWaitingBlocker)`), to be folded in once the version floor allows.
+
+The blocker is cleared the moment the card is actually launched — a stale
+explanation on a card that is starting is its own small lie. Run-now overrides the
+two timing gates but NOT the two physical ones, so the "Lancer maintenant" control
+names the hold instead of looking like it ignored the press.
+
 ## "Redémarrage requis" — an advance warning, not a post-mortem
 
 `KanbanTask.needsDaemonRestart` is resolved **automatically the moment a card
@@ -413,18 +439,20 @@ only take effect after a daemon restart — instead of discovering it afterwards
 - **Never a guess.** An unresolved verdict (`null`: git unavailable, no baseline)
   leaves whatever the card already carried, so a flag an agent set by hand is
   never wiped.
-- **On the card.** `getPublishNotice` renders the verdict as a `StatusBadge`
-  beside the live status badge — same tinted-frame family as "Publication en
-  cours". Both outcomes speak: amber "Redémarrage
-  requis", or a quiet green "Republication simple" for app-only work. Silence is
-  reserved for "no verdict yet", so it can't be mistaken for "nothing to do". The
-  notice rides the card for the whole wait and **disappears once the work is
-  live** (column `deployed`, or a stamped `deployedUrl`).
+- **Not on the card any more.** The badge slot now answers a more useful question:
+  what the NEXT publication will do with this card. `getPublishNotice` renders a
+  quiet green "Partira à la prochaine publication" on every finished card — true
+  because the run sweeps them in — or an amber "Retirée du prochain lot" when the
+  user held it back. The restart wording is gone from it: a publication restarts
+  the engine every time, so "Redémarrage requis" no longer distinguished anything,
+  while a finished card shipping without notice genuinely surprised people. The
+  notice rides the card for the whole wait and **disappears once the work is live**
+  (a stamped `deployedAt` / `deployedUrl`).
 - **On the board.** `PendingPublishSummary` sits above the columns (same gutter
-  rule as the billable total) with one line — "3 cartes prêtes à publier, dont 1
-  nécessitant un redémarrage" — so the pending volume and the restart debt read
-  without opening a card. Archived cards are excluded; the line hides entirely
-  when nothing is pending, and drops the restart clause when none needs one.
+  rule as the billable total) with one line — "3 cartes prêtes à publier" — so the
+  pending volume reads without opening a card. Archived cards are excluded and the
+  line hides entirely when nothing is pending. It used to add "dont 1 nécessitant
+  un redémarrage"; `countPendingPublish` dropped that half for the same reason.
 
 ### Finishing the job — the restart itself
 

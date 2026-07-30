@@ -33,28 +33,35 @@ export function isTaskDeployed(task: KanbanTask): boolean {
 }
 
 /**
- * What publishing this card will take, announced BEFORE the user publishes:
+ * What the NEXT publication will do with this card, announced before the user
+ * publishes:
  *
- * - amber "Redémarrage requis" — the work only takes effect once the daemon is
- *   restarted (a server-side change);
- * - quiet green "Republication simple" — an app-only change; publishing is the
- *   whole story.
+ * - quiet green "Partira à la prochaine publication" — a finished card rides the
+ *   next run whether or not anyone queued it, because a publication builds the
+ *   whole checkout;
+ * - amber "Retirée du prochain lot" — the user held it back (`deployHold`), which
+ *   is the louder of the two and therefore wins.
  *
- * Both are advance warnings, so they ride the card for the whole wait and go
- * away the moment the work is live: the card then says "Déployé", and the user
- * has already been told what remains. Saying BOTH cases out loud is deliberate —
- * silence would be indistinguishable from "the daemon hasn't answered yet".
+ * Either way the notice rides the card for the whole wait and goes away the moment
+ * the work is live: the card then says "Déployé". Announcing the departure is what
+ * turns a surprise into a decision — that a finished card ships invisibly was the
+ * actual bug behind "je n'ai pas demandé à publier ça".
  *
- * The verdict is resolved by the daemon from the files the next publication will
- * carry; a card it could not settle carries no flag and shows nothing.
+ * It used to say "Redémarrage requis" / "Republication simple" instead. Both are
+ * gone: a publication now restarts the engine every time, so telling the user
+ * which half of the batch needed it only invited them to wonder what the other
+ * half was waiting for.
  */
 export function getPublishNotice(task: KanbanTask): ScheduleBadgeDescriptor | null {
-  if (task.needsDaemonRestart === undefined || isTaskDeployed(task)) {
+  if (isTaskDeployed(task)) {
     return null;
   }
-  return task.needsDaemonRestart
-    ? { labelKey: "tasks.card.needsRestart", variant: "warning" }
-    : { labelKey: "tasks.card.republishOnly", variant: "success" };
+  if (task.column !== "done" && task.column !== "deployed") {
+    return null;
+  }
+  return task.deployHold === true
+    ? { labelKey: "tasks.card.publishHeld", variant: "warning" }
+    : { labelKey: "tasks.card.ridesNextPublish", variant: "success" };
 }
 
 /**
@@ -183,6 +190,16 @@ function queuedBadge(task: KanbanTask): ScheduleBadgeDescriptor {
   }
   if (task.schedule?.waitingReason === "quota") {
     return { labelKey: "tasks.schedule.awaitingQuota" };
+  }
+  // A concrete hold recorded by the scheduler: a sibling owns the shared
+  // worktree, or every slot is taken. Read BEFORE "launchingSoon" — a held card
+  // that keeps promising an imminent launch is the "elle reste dans Planifié et
+  // rien ne se passe" report.
+  if (task.schedule?.waitingBlocker === "shared_worktree") {
+    return { labelKey: "tasks.schedule.awaitingSibling", variant: "warning" };
+  }
+  if (task.schedule?.waitingBlocker === "slots_busy") {
+    return { labelKey: "tasks.schedule.awaitingSlotFree", variant: "warning" };
   }
   // No blocking reason yet: a light task is about to launch (say so, rather than
   // the vague "en attente de créneau"); a heavy/off-peak task is parked for the
