@@ -3323,6 +3323,52 @@ test("writes project config via correlated RPC and returns inline failures", asy
   });
 });
 
+test("refreshes project prompt sync via correlated RPC", async () => {
+  const logger = createMockLogger();
+  const mock = createMockTransport();
+  const client = new DaemonClient({
+    url: "ws://test",
+    clientId: "clsk_unit_test",
+    logger,
+    reconnect: { enabled: false },
+    transportFactory: () => mock.transport,
+  });
+  clients.push(client);
+
+  const connectPromise = client.connect();
+  mock.triggerOpen();
+  await connectPromise;
+
+  const promise = client.refreshProjectPromptSync("/repo/app", "prompt-sync-refresh-1");
+
+  expect(parseSentFrame(mock.sent[0])).toEqual({
+    type: "project.promptSync.refresh.request",
+    requestId: "prompt-sync-refresh-1",
+    repoRoot: "/repo/app",
+  });
+
+  mock.triggerMessage(
+    wrapSessionMessage({
+      type: "project.promptSync.refresh.response",
+      payload: {
+        requestId: "prompt-sync-refresh-1",
+        repoRoot: "/repo/app",
+        ok: true,
+        projectPromptSync: {
+          lastSyncedAt: "2026-07-30T08:45:00.000Z",
+          recentFiles: ["src/app.ts"],
+          preview: "Project instructions",
+        },
+      },
+    }),
+  );
+
+  await expect(promise).resolves.toMatchObject({
+    ok: true,
+    projectPromptSync: { preview: "Project instructions" },
+  });
+});
+
 test("requests directory suggestions via RPC", async () => {
   const logger = createMockLogger();
   const mock = createMockTransport();

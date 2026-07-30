@@ -43,6 +43,7 @@ const ProjectPromptSyncStateSchema = z.object({
   rootPath: z.string(),
   latestFingerprint: z.string(),
   lastSyncedAt: z.string(),
+  preview: z.string().optional(),
   history: z.array(ProjectPromptSyncHistoryEntrySchema).default([]),
 });
 
@@ -89,6 +90,7 @@ interface ProjectPromptPreferences {
 export interface ProjectPromptSyncStatus {
   lastSyncedAt: string | null;
   recentFiles: string[];
+  preview: string | null;
 }
 
 interface PromptCacheEntry {
@@ -215,6 +217,14 @@ export class ProjectPromptSyncService {
     return wrapProjectPrompt(entry.prompt, input.text);
   }
 
+  async syncNow(project: PersistedProjectRecord): Promise<ProjectPromptSyncStatus> {
+    await this.syncProject(project, true);
+    return readProjectPromptSyncStatus({
+      paseoHome: path.dirname(this.baseDirectory),
+      project,
+    });
+  }
+
   private async handleProjectMutation(projectId: string): Promise<void> {
     if (this.disposed) {
       return;
@@ -256,7 +266,10 @@ export class ProjectPromptSyncService {
     return await this.syncProject(project);
   }
 
-  private async syncProject(project: PersistedProjectRecord): Promise<PromptCacheEntry | null> {
+  private async syncProject(
+    project: PersistedProjectRecord,
+    force = false,
+  ): Promise<PromptCacheEntry | null> {
     const snapshot = await this.buildSnapshot(project);
     const prompt = renderSharedPrompt(snapshot);
     const statePath = this.getStatePath(snapshot.slug);
@@ -269,7 +282,13 @@ export class ProjectPromptSyncService {
         existsSync(this.getPromptPath(snapshot.slug, output.filename)),
       ) && existsSync(statePath);
 
-    if (currentState?.latestFingerprint === snapshot.fingerprint && filesExist) {
+    const hasCurrentPreview = currentState?.preview === prompt;
+    if (
+      !force &&
+      currentState?.latestFingerprint === snapshot.fingerprint &&
+      filesExist &&
+      hasCurrentPreview
+    ) {
       return nextEntry;
     }
 
@@ -516,6 +535,7 @@ function buildProjectPromptSyncState(input: {
     rootPath: input.snapshot.rootPath,
     latestFingerprint: input.snapshot.fingerprint,
     lastSyncedAt: input.snapshot.syncedAt,
+    preview: renderSharedPrompt(input.snapshot),
     history,
   };
 }
@@ -637,11 +657,12 @@ export function readProjectPromptSyncStatus(input: {
     path.join(input.paseoHome, "project-prompts", slug, "state.json"),
   );
   if (!state) {
-    return { lastSyncedAt: null, recentFiles: [] };
+    return { lastSyncedAt: null, recentFiles: [], preview: null };
   }
   return {
     lastSyncedAt: state.lastSyncedAt,
     recentFiles: state.history[0]?.changedFiles ?? [],
+    preview: state.preview ?? null,
   };
 }
 

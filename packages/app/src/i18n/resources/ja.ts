@@ -2701,6 +2701,13 @@ export const ja: TranslationResources = {
         workspaces: "有効なワークスペース",
         remote: "リモートリポジトリのアドレス",
         instructionFiles: "プロジェクトの指示ファイル",
+        preview: "プレビュー",
+        previewTitle: "指示のプレビュー",
+        previewEmpty: "まだ指示はありません。",
+        refresh: "今すぐ同期",
+        refreshing: "同期中…",
+        refreshed: "指示を同期しました",
+        refreshFailed: "指示を同期できませんでした。",
       },
       worktree: {
         title: "ワークツリーライフサイクルフック",

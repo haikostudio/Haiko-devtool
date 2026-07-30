@@ -103,7 +103,15 @@ describe("ProjectPromptSyncService", () => {
     ).toEqual({
       lastSyncedAt: expect.any(String),
       recentFiles: ["packages/server/src/server/bootstrap.ts"],
+      preview: expect.stringContaining("Project: Paseo"),
     });
+    const firstSyncedAt = readProjectPromptSyncStatus({
+      paseoHome,
+      project: projectRegistry.projects[0]!,
+    }).lastSyncedAt;
+    await waitFor(5);
+    const refreshed = await service.syncNow(projectRegistry.projects[0]!);
+    expect(refreshed.lastSyncedAt).not.toBe(firstSyncedAt);
   });
 
   test("respects the project choices when rendering generated instructions", async () => {

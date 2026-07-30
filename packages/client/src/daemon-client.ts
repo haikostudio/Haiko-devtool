@@ -459,6 +459,10 @@ type WriteProjectConfigPayload = Extract<
   SessionOutboundMessage,
   { type: "write_project_config_response" }
 >["payload"];
+type ProjectPromptSyncRefreshPayload = Extract<
+  SessionOutboundMessage,
+  { type: "project.promptSync.refresh.response" }
+>["payload"];
 
 type ListCommandsPayload = ListCommandsResponse["payload"];
 type ListCommandsDraftConfig = Pick<
@@ -4776,6 +4780,20 @@ export class DaemonClient {
         expectedRevision: input.expectedRevision,
       },
       responseType: "write_project_config_response",
+    });
+  }
+
+  async refreshProjectPromptSync(
+    repoRoot: string,
+    requestId?: string,
+  ): Promise<ProjectPromptSyncRefreshPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "project.promptSync.refresh.request",
+        repoRoot,
+      },
+      responseType: "project.promptSync.refresh.response",
     });
   }
 

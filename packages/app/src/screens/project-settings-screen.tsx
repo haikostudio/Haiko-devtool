@@ -479,6 +479,27 @@ function ProjectConfigForm({
       }
     },
   });
+  const refreshProjectPromptSyncMutation = useMutation({
+    mutationFn: async () => {
+      const result = await client.refreshProjectPromptSync(repoRoot);
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result;
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<ReadProjectConfigData>(queryKey, (current) => {
+        if (!current?.ok) {
+          return current;
+        }
+        return { ...current, projectPromptSync: result.projectPromptSync };
+      });
+      toast.show(t("settings.project.promptSync.refreshed"), { variant: "success" });
+    },
+    onError: () => {
+      toast.show(t("settings.project.promptSync.refreshFailed"), { variant: "error" });
+    },
+  });
 
   const handleSave = useCallback(() => {
     if (writeError?.code === "stale_project_config") return;
@@ -524,6 +545,9 @@ function ProjectConfigForm({
       })),
     [updateDraft],
   );
+  const handleProjectPromptSyncRefresh = useCallback(() => {
+    refreshProjectPromptSyncMutation.mutate();
+  }, [refreshProjectPromptSyncMutation]);
 
   const handleRemoveScript = useCallback(
     async (script: ProjectScriptDraft) => {
@@ -659,6 +683,8 @@ function ProjectConfigForm({
           status={projectPromptSyncStatus}
           value={draft.projectPromptSync}
           onChange={handleProjectPromptSyncChange}
+          onRefresh={handleProjectPromptSyncRefresh}
+          isRefreshing={refreshProjectPromptSyncMutation.isPending}
         />
       ) : null}
       <SettingsGroup
@@ -817,6 +843,8 @@ interface ProjectPromptSyncGroupProps {
   status: ProjectPromptSyncStatus;
   value: ProjectPromptSyncDraft;
   onChange(key: keyof ProjectPromptSyncDraft, enabled: boolean): void;
+  onRefresh(): void;
+  isRefreshing: boolean;
 }
 
 const PROJECT_PROMPT_SYNC_FIELDS: ReadonlyArray<{
@@ -833,8 +861,15 @@ const PROJECT_PROMPT_SYNC_FIELDS: ReadonlyArray<{
   },
 ];
 
-function ProjectPromptSyncGroup({ status, value, onChange }: ProjectPromptSyncGroupProps) {
+function ProjectPromptSyncGroup({
+  status,
+  value,
+  onChange,
+  onRefresh,
+  isRefreshing,
+}: ProjectPromptSyncGroupProps) {
   const { t } = useTranslation();
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const lastSyncedAt = status?.lastSyncedAt;
   const syncedDate = lastSyncedAt ? new Date(lastSyncedAt) : null;
   const hasValidDate = syncedDate !== null && !Number.isNaN(syncedDate.getTime());
@@ -850,6 +885,12 @@ function ProjectPromptSyncGroup({ status, value, onChange }: ProjectPromptSyncGr
           files: recentFiles.slice(0, 3).join(", "),
         })
       : t("settings.project.promptSync.noRecentFiles");
+  const handleOpenPreview = useCallback(() => setIsPreviewOpen(true), []);
+  const handleClosePreview = useCallback(() => setIsPreviewOpen(false), []);
+  const previewHeader = useMemo<SheetHeader>(
+    () => ({ title: t("settings.project.promptSync.previewTitle") }),
+    [t],
+  );
 
   return (
     <SettingsGroup
@@ -867,6 +908,29 @@ function ProjectPromptSyncGroup({ status, value, onChange }: ProjectPromptSyncGr
             </View>
           </View>
         </View>
+        <View style={[styles.promptSyncActions, settingsStyles.rowBorder]}>
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={handleOpenPreview}
+            disabled={!status?.preview}
+            testID="project-prompt-sync-preview"
+          >
+            {t("settings.project.promptSync.preview")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onPress={onRefresh}
+            loading={isRefreshing}
+            disabled={isRefreshing}
+            testID="project-prompt-sync-refresh"
+          >
+            {isRefreshing
+              ? t("settings.project.promptSync.refreshing")
+              : t("settings.project.promptSync.refresh")}
+          </Button>
+        </View>
         {PROJECT_PROMPT_SYNC_FIELDS.map((field) => (
           <ProjectPromptSyncFieldRow
             key={field.key}
@@ -876,6 +940,17 @@ function ProjectPromptSyncGroup({ status, value, onChange }: ProjectPromptSyncGr
           />
         ))}
       </View>
+      <AdaptiveModalSheet
+        visible={isPreviewOpen}
+        header={previewHeader}
+        onClose={handleClosePreview}
+        testID="project-prompt-sync-preview-modal"
+        desktopMaxWidth={680}
+      >
+        <Text selectable style={styles.promptSyncPreview}>
+          {status?.preview ?? t("settings.project.promptSync.previewEmpty")}
+        </Text>
+      </AdaptiveModalSheet>
     </SettingsGroup>
   );
 }
@@ -1474,6 +1549,21 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     marginRight: theme.spacing[3],
+  },
+  promptSyncActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: theme.spacing[2],
+    paddingVertical: theme.spacing[3],
+    paddingHorizontal: theme.spacing[4],
+  },
+  promptSyncPreview: {
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    lineHeight: theme.fontSize.sm * 1.5,
+    backgroundColor: theme.colors.surface2,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing[4],
   },
   emptyScripts: {
     color: theme.colors.foregroundMuted,

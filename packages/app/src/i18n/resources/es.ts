@@ -2735,6 +2735,13 @@ export const es: TranslationResources = {
         workspaces: "Espacios de trabajo activos",
         remote: "Dirección del repositorio remoto",
         instructionFiles: "Archivos de instrucciones del proyecto",
+        preview: "Vista previa",
+        previewTitle: "Vista previa de las instrucciones",
+        previewEmpty: "Todavía no hay instrucciones disponibles.",
+        refresh: "Sincronizar ahora",
+        refreshing: "Sincronizando…",
+        refreshed: "Instrucciones sincronizadas",
+        refreshFailed: "No se pudieron sincronizar las instrucciones.",
       },
       worktree: {
         title: "Ganchos del ciclo de vida del árbol de trabajo",

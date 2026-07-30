@@ -438,6 +438,27 @@ describe("daemon update messages", () => {
   });
 });
 
+describe("project prompt sync compatibility", () => {
+  test("old status without a generated preview still parses", () => {
+    const parsed = SessionOutboundMessageSchema.parse({
+      type: "read_project_config_response",
+      payload: {
+        requestId: "project-config-1",
+        repoRoot: "/repo/app",
+        ok: true,
+        config: null,
+        revision: null,
+        projectPromptSync: {
+          lastSyncedAt: "2026-07-30T10:00:00.000Z",
+          recentFiles: ["README.md"],
+        },
+      },
+    });
+
+    expect(parsed.type).toBe("read_project_config_response");
+  });
+});
+
 describe("viewed timeline subscription messages", () => {
   test("parses a complete viewed-agent set and its acknowledgement", () => {
     const request = SessionInboundMessageSchema.parse({

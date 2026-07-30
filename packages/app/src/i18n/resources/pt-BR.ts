@@ -2721,6 +2721,13 @@ export const ptBR: TranslationResources = {
         workspaces: "Espaços de trabalho ativos",
         remote: "Endereço do repositório remoto",
         instructionFiles: "Arquivos de instruções do projeto",
+        preview: "Pré-visualizar",
+        previewTitle: "Pré-visualização das instruções",
+        previewEmpty: "Ainda não há instruções disponíveis.",
+        refresh: "Sincronizar agora",
+        refreshing: "Sincronizando…",
+        refreshed: "Instruções sincronizadas",
+        refreshFailed: "Não foi possível sincronizar as instruções.",
       },
       worktree: {
         title: "Hooks de ciclo de vida do worktree",

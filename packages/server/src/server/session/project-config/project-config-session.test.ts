@@ -39,6 +39,15 @@ function makeSubsystem(records: PersistedProjectRecord[]) {
   const subsystem = new ProjectConfigSession({
     host,
     projectRegistry: { list: async () => records },
+    projectPromptSync: {
+      async syncNow() {
+        return {
+          lastSyncedAt: "2026-07-30T08:45:00.000Z",
+          recentFiles: ["src/app.ts"],
+          preview: "Project instructions",
+        };
+      },
+    },
     paseoHome: records[0]?.rootPath ?? makeRoot(),
     logger: pino({ level: "silent" }),
   });
@@ -69,7 +78,7 @@ describe("ProjectConfigSession", () => {
             mtimeMs: expect.any(Number),
             size: expect.any(Number),
           }),
-          projectPromptSync: { lastSyncedAt: null, recentFiles: [] },
+          projectPromptSync: { lastSyncedAt: null, recentFiles: [], preview: null },
         },
       },
     ]);
@@ -106,7 +115,7 @@ describe("ProjectConfigSession", () => {
               mtimeMs: expect.any(Number),
               size: expect.any(Number),
             }),
-            projectPromptSync: { lastSyncedAt: null, recentFiles: [] },
+            projectPromptSync: { lastSyncedAt: null, recentFiles: [], preview: null },
           },
         },
       ]);
@@ -177,7 +186,7 @@ describe("ProjectConfigSession", () => {
             mtimeMs: expect.any(Number),
             size: expect.any(Number),
           }),
-          projectPromptSync: { lastSyncedAt: null, recentFiles: [] },
+          projectPromptSync: { lastSyncedAt: null, recentFiles: [], preview: null },
         },
       },
     ]);
@@ -227,6 +236,33 @@ describe("ProjectConfigSession", () => {
           repoRoot: unknownRoot,
           ok: false,
           error: { code: "project_not_found" },
+        },
+      },
+    ]);
+  });
+
+  test("refreshes project instructions immediately and returns their preview", async () => {
+    const repoRoot = makeRoot();
+    const { subsystem, emitted } = makeSubsystem([projectRecord(repoRoot)]);
+
+    await subsystem.handleProjectPromptSyncRefreshRequest({
+      type: "project.promptSync.refresh.request",
+      requestId: "refresh-1",
+      repoRoot,
+    });
+
+    expect(emitted).toEqual([
+      {
+        type: "project.promptSync.refresh.response",
+        payload: {
+          requestId: "refresh-1",
+          repoRoot,
+          ok: true,
+          projectPromptSync: {
+            lastSyncedAt: "2026-07-30T08:45:00.000Z",
+            recentFiles: ["src/app.ts"],
+            preview: "Project instructions",
+          },
         },
       },
     ]);

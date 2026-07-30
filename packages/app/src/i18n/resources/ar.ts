@@ -2676,6 +2676,13 @@ export const ar: TranslationResources = {
         workspaces: "مساحات العمل النشطة",
         remote: "عنوان المستودع البعيد",
         instructionFiles: "ملفات تعليمات المشروع",
+        preview: "معاينة",
+        previewTitle: "معاينة التعليمات",
+        previewEmpty: "لا توجد تعليمات متاحة بعد.",
+        refresh: "مزامنة الآن",
+        refreshing: "جارٍ المزامنة…",
+        refreshed: "تمت مزامنة التعليمات",
+        refreshFailed: "تعذّرت مزامنة التعليمات.",
       },
       worktree: {
         title: "خطافات دورة حياة شجرة العمل",

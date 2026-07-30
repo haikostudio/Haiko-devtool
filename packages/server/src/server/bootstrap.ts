@@ -2117,6 +2117,7 @@ export async function createPaseoDaemon(
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
               brainMemoryServices,
+              projectPromptSync,
             );
             wsServer.setTasksServices({
               taskBoardService,

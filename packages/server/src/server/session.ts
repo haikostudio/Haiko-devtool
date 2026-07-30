@@ -175,6 +175,7 @@ import { ProviderCatalogSession } from "./session/provider/provider-catalog-sess
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
 import { ProjectConfigSession } from "./session/project-config/project-config-session.js";
+import type { ProjectPromptSyncService } from "./project-prompt-sync.js";
 import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import type { DaemonWebSocketRuntimeDiagnosticSnapshot } from "./session/daemon/diagnostics.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
@@ -466,6 +467,7 @@ export interface SessionOptions {
   agentManager: AgentManager;
   agentStorage: AgentStorage;
   projectRegistry: ProjectRegistry;
+  projectPromptSync?: Pick<ProjectPromptSyncService, "syncNow">;
   workspaceRegistry: WorkspaceRegistry;
   sidebarOrderStore?: SidebarOrderStore;
   sessionUiStateStore?: SessionUiStateStore;
@@ -718,6 +720,7 @@ export class Session {
       agentManager,
       agentStorage,
       projectRegistry,
+      projectPromptSync,
       workspaceRegistry,
       sidebarOrderStore,
       sessionUiStateStore,
@@ -953,6 +956,7 @@ export class Session {
     this.projectConfigSession = createProjectConfigSession({
       emit: this.emit.bind(this),
       projectRegistry: this.projectRegistry,
+      projectPromptSync,
       paseoHome: this.paseoHome,
       logger: this.sessionLogger,
     });
@@ -1745,6 +1749,8 @@ export class Session {
         return this.projectConfigSession.handleReadProjectConfigRequest(msg);
       case "write_project_config_request":
         return this.projectConfigSession.handleWriteProjectConfigRequest(msg);
+      case "project.promptSync.refresh.request":
+        return this.projectConfigSession.handleProjectPromptSyncRefreshRequest(msg);
       default:
         return undefined;
     }
@@ -7418,12 +7424,14 @@ export class Session {
 function createProjectConfigSession(input: {
   emit: (message: SessionOutboundMessage) => void;
   projectRegistry: ProjectRegistry;
+  projectPromptSync: Pick<ProjectPromptSyncService, "syncNow"> | undefined;
   paseoHome: string;
   logger: pino.Logger;
 }): ProjectConfigSession {
   return new ProjectConfigSession({
     host: { emit: input.emit },
     projectRegistry: input.projectRegistry,
+    projectPromptSync: input.projectPromptSync,
     paseoHome: input.paseoHome,
     logger: input.logger,
   });

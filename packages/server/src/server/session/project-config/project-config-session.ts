@@ -4,7 +4,10 @@ import type pino from "pino";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 import type { ProjectRegistry } from "../../workspace-registry.js";
 import type { PersistedProjectRecord } from "../../workspace-registry.js";
-import { readProjectPromptSyncStatus } from "../../project-prompt-sync.js";
+import {
+  readProjectPromptSyncStatus,
+  type ProjectPromptSyncService,
+} from "../../project-prompt-sync.js";
 import {
   readPaseoConfigForEdit,
   writePaseoConfigForEdit,
@@ -18,6 +21,7 @@ export interface ProjectConfigSessionHost {
 export interface ProjectConfigSessionOptions {
   host: ProjectConfigSessionHost;
   projectRegistry: Pick<ProjectRegistry, "list">;
+  projectPromptSync?: Pick<ProjectPromptSyncService, "syncNow">;
   paseoHome: string;
   logger: pino.Logger;
 }
@@ -32,12 +36,14 @@ export interface ProjectConfigSessionOptions {
 export class ProjectConfigSession {
   private readonly host: ProjectConfigSessionHost;
   private readonly projectRegistry: Pick<ProjectRegistry, "list">;
+  private readonly projectPromptSync: Pick<ProjectPromptSyncService, "syncNow"> | null;
   private readonly paseoHome: string;
   private readonly logger: pino.Logger;
 
   constructor(options: ProjectConfigSessionOptions) {
     this.host = options.host;
     this.projectRegistry = options.projectRegistry;
+    this.projectPromptSync = options.projectPromptSync ?? null;
     this.paseoHome = options.paseoHome;
     this.logger = options.logger;
   }
@@ -133,6 +139,38 @@ export class ProjectConfigSession {
     });
   }
 
+  async handleProjectPromptSyncRefreshRequest(
+    msg: Extract<SessionInboundMessage, { type: "project.promptSync.refresh.request" }>,
+  ): Promise<void> {
+    const project = await this.resolveKnownProject(msg.repoRoot);
+    if (!project) {
+      this.emitProjectPromptSyncRefreshFailure(msg, "project_not_found");
+      return;
+    }
+    if (!this.projectPromptSync) {
+      this.emitProjectPromptSyncRefreshFailure(msg, "sync_failed", project.rootPath);
+      return;
+    }
+    try {
+      const projectPromptSync = await this.projectPromptSync.syncNow(project);
+      this.host.emit({
+        type: "project.promptSync.refresh.response",
+        payload: {
+          requestId: msg.requestId,
+          repoRoot: project.rootPath,
+          ok: true,
+          projectPromptSync,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        { err: error, projectId: project.projectId, repoRoot: project.rootPath },
+        "Failed to refresh project prompt sync",
+      );
+      this.emitProjectPromptSyncRefreshFailure(msg, "sync_failed", project.rootPath);
+    }
+  }
+
   private emitProjectConfigReadFailure(
     msg: Extract<SessionInboundMessage, { type: "read_project_config_request" }>,
     error: ProjectConfigRpcError,
@@ -156,6 +194,22 @@ export class ProjectConfigSession {
   ): void {
     this.host.emit({
       type: "write_project_config_response",
+      payload: {
+        requestId: msg.requestId,
+        repoRoot,
+        ok: false,
+        error,
+      },
+    });
+  }
+
+  private emitProjectPromptSyncRefreshFailure(
+    msg: Extract<SessionInboundMessage, { type: "project.promptSync.refresh.request" }>,
+    error: "project_not_found" | "sync_failed",
+    repoRoot = msg.repoRoot,
+  ): void {
+    this.host.emit({
+      type: "project.promptSync.refresh.response",
       payload: {
         requestId: msg.requestId,
         repoRoot,

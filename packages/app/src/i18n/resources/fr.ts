@@ -2740,6 +2740,13 @@ export const fr: TranslationResources = {
         workspaces: "Espaces de travail actifs",
         remote: "Adresse du dépôt distant",
         instructionFiles: "Fichiers de consignes du projet",
+        preview: "Prévisualiser",
+        previewTitle: "Prévisualisation des consignes",
+        previewEmpty: "Aucune consigne n'est encore disponible.",
+        refresh: "Relancer maintenant",
+        refreshing: "Synchronisation…",
+        refreshed: "Consignes synchronisées",
+        refreshFailed: "Impossible de synchroniser les consignes.",
       },
       worktree: {
         title: "Crochets de cycle de vie Worktree",

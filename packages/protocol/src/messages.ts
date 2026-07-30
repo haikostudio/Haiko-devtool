@@ -1415,6 +1415,12 @@ export const WriteProjectConfigRequestMessageSchema = z.object({
   expectedRevision: PaseoConfigRevisionSchema.nullable(),
 });
 
+export const ProjectPromptSyncRefreshRequestSchema = z.object({
+  type: z.literal("project.promptSync.refresh.request"),
+  requestId: z.string(),
+  repoRoot: z.string(),
+});
+
 // ============================================================================
 // Dictation Streaming (lossless, resumable)
 // ============================================================================
@@ -4191,6 +4197,13 @@ export const SetDaemonConfigResponseMessageSchema = z.object({
     .passthrough(),
 });
 
+export const ProjectPromptSyncStatusSchema = z.object({
+  lastSyncedAt: z.string().nullable(),
+  recentFiles: z.array(z.string()),
+  // COMPAT(projectPromptSyncPreview): old daemons omit the generated preview.
+  preview: z.string().nullable().optional(),
+});
+
 export const ReadProjectConfigResponseMessageSchema = z.object({
   type: z.literal("read_project_config_response"),
   // zod-aot 0.2.0 miscompiles boolean discriminators as string options
@@ -4203,12 +4216,7 @@ export const ReadProjectConfigResponseMessageSchema = z.object({
       config: PaseoConfigRawSchema.nullable(),
       revision: PaseoConfigRevisionSchema.nullable(),
       // COMPAT(projectPromptSync): added in v0.2.X, old daemons omit this status.
-      projectPromptSync: z
-        .object({
-          lastSyncedAt: z.string().nullable(),
-          recentFiles: z.array(z.string()),
-        })
-        .optional(),
+      projectPromptSync: ProjectPromptSyncStatusSchema.optional(),
     }),
     z.object({
       requestId: z.string(),
@@ -4231,18 +4239,32 @@ export const WriteProjectConfigResponseMessageSchema = z.object({
       config: PaseoConfigRawSchema,
       revision: PaseoConfigRevisionSchema,
       // COMPAT(projectPromptSync): added in v0.2.X, old daemons omit this status.
-      projectPromptSync: z
-        .object({
-          lastSyncedAt: z.string().nullable(),
-          recentFiles: z.array(z.string()),
-        })
-        .optional(),
+      projectPromptSync: ProjectPromptSyncStatusSchema.optional(),
     }),
     z.object({
       requestId: z.string(),
       repoRoot: z.string(),
       ok: z.literal(false),
       error: ProjectConfigRpcErrorSchema,
+    }),
+  ]),
+});
+
+export const ProjectPromptSyncRefreshResponseSchema = z.object({
+  type: z.literal("project.promptSync.refresh.response"),
+  // zod-aot 0.2.0 miscompiles boolean discriminators as string options.
+  payload: z.union([
+    z.object({
+      requestId: z.string(),
+      repoRoot: z.string(),
+      ok: z.literal(true),
+      projectPromptSync: ProjectPromptSyncStatusSchema,
+    }),
+    z.object({
+      requestId: z.string(),
+      repoRoot: z.string(),
+      ok: z.literal(false),
+      error: z.enum(["project_not_found", "sync_failed"]),
     }),
   ]),
 });
@@ -5943,6 +5965,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   SetDaemonConfigRequestMessageSchema,
   ReadProjectConfigRequestMessageSchema,
   WriteProjectConfigRequestMessageSchema,
+  ProjectPromptSyncRefreshRequestSchema,
   DictationStreamStartMessageSchema,
   DictationStreamChunkMessageSchema,
   DictationStreamFinishMessageSchema,
@@ -6165,6 +6188,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   SetDaemonConfigResponseMessageSchema,
   ReadProjectConfigResponseMessageSchema,
   WriteProjectConfigResponseMessageSchema,
+  ProjectPromptSyncRefreshResponseSchema,
   SetAgentModeResponseMessageSchema,
   SetAgentModelResponseMessageSchema,
   SetAgentThinkingResponseMessageSchema,

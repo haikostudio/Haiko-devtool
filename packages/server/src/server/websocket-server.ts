@@ -61,6 +61,7 @@ import type {
   WorkspaceGitServiceMetrics,
 } from "./workspace-git-service.js";
 import type { WorkspaceAutoName } from "./workspace-auto-name.js";
+import type { ProjectPromptSyncService } from "./project-prompt-sync.js";
 import { deriveProjectSlug } from "./workspace-git-metadata.js";
 import { PushTokenStore } from "./push/token-store.js";
 import { PushNotificationHistoryStore } from "./push/notification-history-store.js";
@@ -528,6 +529,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly providerUsageHistoryStore: ProviderUsageHistoryStore;
   private readonly providerUsageHistoryRecorder: ProviderUsageHistoryRecorder;
   private readonly brainMemory: BrainMemoryClient | null;
+  private readonly projectPromptSync: ProjectPromptSyncService | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private taskBoardService: TaskBoardService | null = null;
   private taskEstimator: TaskEstimator | null = null;
@@ -602,6 +604,7 @@ export class VoiceAssistantWebSocketServer {
       client: BrainMemoryClient;
       curator: BrainCurator | null;
     } | null,
+    projectPromptSync?: ProjectPromptSyncService | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -611,6 +614,7 @@ export class VoiceAssistantWebSocketServer {
     this.daemonVersion = daemonVersion.trim();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
     this.browserToolsBroker = browserToolsBroker ?? null;
+    this.projectPromptSync = projectPromptSync ?? null;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry ?? createNoopProjectRegistry();
@@ -1172,6 +1176,7 @@ export class VoiceAssistantWebSocketServer {
       agentManager: this.agentManager,
       agentStorage: this.agentStorage,
       projectRegistry: this.projectRegistry,
+      projectPromptSync: this.projectPromptSync ?? undefined,
       workspaceRegistry: this.workspaceRegistry,
       sidebarOrderStore: this.sidebarOrderStore,
       sessionUiStateStore: this.sessionUiStateStore,
@@ -1435,7 +1440,7 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(workspaceMultiplicity): added in v0.1.97, drop the gate when floor >= v0.1.97
         workspaceMultiplicity: true,
         // COMPAT(projectPromptSync): added in v0.2.X, remove gate after 2027-01-30.
-        projectPromptSync: true,
+        projectPromptSync: this.projectPromptSync !== null,
         // COMPAT(projectRemove): added in v0.1.97, drop the gate when floor >= v0.1.97.
         projectRemove: true,
         // COMPAT(projectAdd): added in v0.1.97, drop the gate when floor >= v0.1.97.

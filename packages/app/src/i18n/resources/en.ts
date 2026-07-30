@@ -2692,6 +2692,13 @@ export const en = {
         workspaces: "Active workspaces",
         remote: "Remote repository address",
         instructionFiles: "Project instruction files",
+        preview: "Preview",
+        previewTitle: "Instruction preview",
+        previewEmpty: "No instructions are available yet.",
+        refresh: "Sync now",
+        refreshing: "Syncing…",
+        refreshed: "Instructions synced",
+        refreshFailed: "Couldn't sync the instructions.",
       },
       worktree: {
         title: "Worktree lifecycle hooks",

@@ -2646,6 +2646,13 @@ export const zhCN: TranslationResources = {
         workspaces: "活动工作区",
         remote: "远程仓库地址",
         instructionFiles: "项目指令文件",
+        preview: "预览",
+        previewTitle: "指令预览",
+        previewEmpty: "暂无可用指令。",
+        refresh: "立即同步",
+        refreshing: "正在同步…",
+        refreshed: "指令已同步",
+        refreshFailed: "无法同步指令。",
       },
       worktree: {
         title: "Worktree 生命周期 hooks",

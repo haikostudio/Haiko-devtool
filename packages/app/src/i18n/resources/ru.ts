@@ -2721,6 +2721,13 @@ export const ru: TranslationResources = {
         workspaces: "Активные рабочие пространства",
         remote: "Адрес удалённого репозитория",
         instructionFiles: "Файлы инструкций проекта",
+        preview: "Предпросмотр",
+        previewTitle: "Предпросмотр инструкций",
+        previewEmpty: "Инструкции пока недоступны.",
+        refresh: "Синхронизировать",
+        refreshing: "Синхронизация…",
+        refreshed: "Инструкции синхронизированы",
+        refreshFailed: "Не удалось синхронизировать инструкции.",
       },
       worktree: {
         title: "Перехватчики жизненного цикла Worktree",
