@@ -121,9 +121,11 @@ describe("response-format templates", () => {
   it("verification asks for the three check sections only", () => {
     const body = responseFormatBody("verification");
     expect(body).toContain("## 1. Ce qui a été vérifié");
-    expect(body).toContain("## 2. Résultat du contrôle");
-    expect(body).toContain("## 3. Ce que ça change");
+    expect(body).toContain("## 2. Ce qui a été fait");
+    expect(body).toContain("## 3. Ce que cela implique");
     expect(body).toContain("CONTRÔLE FINAL");
+    expect(body).toContain("UNE seule fois");
+    expect(body).toContain("pas de comptes-rendus intermédiaires");
     expect(body).not.toContain("## 1. Ce qui est fait");
     expect(body).not.toContain("Évolutions possibles");
     expect(body).not.toContain("Activation & facturation");

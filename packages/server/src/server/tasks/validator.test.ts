@@ -73,6 +73,10 @@ describe("TaskValidator", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.agentId).toBe("agent-7");
     expect(sent[0]?.prompt).toContain("CONTRÔLE FINAL");
+    expect(sent[0]?.prompt).toContain("travaille silencieusement");
+    expect(sent[0]?.prompt).toContain("AUCUN compte-rendu intermédiaire");
+    expect(sent[0]?.prompt).toContain("## 2. Ce qui a été fait");
+    expect(sent[0]?.prompt).toContain("## 3. Ce que cela implique");
     expect(sent[0]?.prompt).toContain(`taskId: "${taskId}"`);
     // The check is also the deploy onto the project's dev instance — so the
     // prompt must name that instance on the VPS. What it must NOT promise any

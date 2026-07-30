@@ -24,9 +24,10 @@
  *                    cards it shipped, what actually went live, the verdict, and
  *                    the final state. Routed by the agent's deployment role
  *                    label, not by a card's column.
- *  - "verification" — the final-check turn ("Lancer le contrôle"): what was
- *                    verified, the verdict, and what it changes for the card now
- *                    that it is finished. A report of a CHECK, not of the work.
+ *  - "verification" — the final-check turn ("Lancer le contrôle"): one single
+ *                    end-of-check synthesis covering what was verified, what was
+ *                    done, and what it implies for the card now that it is
+ *                    finished. A report of a CHECK, not of the work.
  *  - "conductor"   — the board's chef d'orchestre: it never executes anything,
  *                    so it never reports — a short answer, or a bullet list of
  *                    the cards it touched.
@@ -209,25 +210,28 @@ const BATCH_PUBLICATION_BODY = [
  * The final-check turn behind "Lancer le contrôle". The card is still in "En
  * cours" while the check runs (its agent moves it to "Terminée" as the last
  * step), so without this template the check would borrow the "progress" work
- * report — the wrong shape. A check answers three questions instead: what was
- * verified, what the check found, and what it changes now that the card is done.
- * Billing, estimates and evolutions belong to the other moments of the card's
- * life, so they are excluded here too.
+ * report — the wrong shape. The check must stay quiet while it runs, then end
+ * with one single synthesis covering what was verified, what was done, and what
+ * it implies now that the card is done. Billing, estimates and evolutions
+ * belong to the other moments of the card's life, so they are excluded here too.
  */
 const VERIFICATION_BODY = [
   "Cette carte passe son CONTRÔLE FINAL : tu viens de vérifier le travail avant de la marquer « Terminée ».",
+  "Travaille en arrière-plan pendant tout le contrôle : pas de comptes-rendus intermédiaires.",
+  "Tu ne réponds qu'UNE seule fois, à la fin du contrôle, avec une synthèse finale stable.",
+  "Si tu es bloqué et que tu ne peux pas avancer seul, explique seulement le blocage au lieu d'envoyer des points d'étape.",
   "Ta réponse est un compte rendu de CONTRÔLE, pas un point d'avancement.",
   "Réponds TOUJOURS en suivant exactement cette structure.",
   ...COMMON_HEADER,
   "",
   "Puis exactement ces trois sections, titres numérotés en Markdown `## N.` :",
   "## 1. Ce qui a été vérifié",
-  "## 2. Résultat du contrôle",
-  "## 3. Ce que ça change",
+  "## 2. Ce qui a été fait",
+  "## 3. Ce que cela implique",
   "",
   "« 1. Ce qui a été vérifié » : les contrôles que tu as réellement menés (relecture, tests, typecheck/lint, cohérence, régressions).",
-  "« 2. Résultat du contrôle » : le verdict, en clair — tout est bon / des corrections ont été apportées (lesquelles) / points d'attention relevés.",
-  "« 3. Ce que ça change » : ce que cela implique maintenant que la carte est « Terminée » (prête à être mise en file de publication, ou ce qui reste à surveiller).",
+  "« 2. Ce qui a été fait » : les corrections ou ajustements réellement réalisés pendant le contrôle final. Si rien n'a dû être changé, écris-le clairement.",
+  "« 3. Ce que cela implique » : ce que cela change maintenant pour la carte (prête à être mise en file de publication, ou ce qui reste à surveiller).",
   "",
   "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
   ...COMMON_FOOTER,
