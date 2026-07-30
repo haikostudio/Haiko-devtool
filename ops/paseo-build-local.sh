@@ -246,6 +246,7 @@ fi
 SITE_SHA_FILE="$WWW/.site-sha"
 
 read_marker() {  # $1 = fichier ; imprime le sha, ou rien
+  [ -r "$1" ] || return 0
   tr -d '[:space:]' < "$1" 2>/dev/null || true
 }
 
