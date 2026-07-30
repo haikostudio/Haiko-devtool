@@ -816,7 +816,7 @@ export class TaskScheduler {
 
       // A finished run does NOT complete the task. The card stays in "En cours"
       // and only says it believes it is done; reaching "Terminée" requires the
-      // user to press "Valider la tâche", which runs the final check.
+      // user's own press ("Terminer la tâche"), which is a plain column move.
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
         ...current,
         schedule: null,

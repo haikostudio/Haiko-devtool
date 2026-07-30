@@ -1556,7 +1556,7 @@ export async function createPaseoDaemon(
   // "Terminer la tâche": a plain move from "En cours" to "Terminé". No prompt, no
   // agent, no deployment — verification happens at publication time instead.
   const taskValidator = new TaskValidator({ taskBoardService, logger });
-  // "Lancer le déploiement": the sibling of the final check for a FINISHED card.
+  // "Lancer le déploiement": the verify-then-publish action for a FINISHED card.
   // It hands the card's own agent a deploy-then-confirm prompt and lets it move
   // the card to "Déployée" while reporting whether a daemon restart is needed.
   const taskDeployer = new TaskDeployer({

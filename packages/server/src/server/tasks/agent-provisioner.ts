@@ -23,7 +23,7 @@ interface TaskAgentProvisionerOptions {
  * and it is created the moment the card is born.
  *
  * Everything the task ever does goes through that single conversation — the
- * title tidy-up, the analysis, the execution, the final check, and every prompt
+ * title tidy-up, the analysis, the execution, the deploy check, and every prompt
  * the interface injects on the user's behalf. That is what lets the user open a
  * card months later, in any column including "deployed", and read the whole
  * story in order instead of a few disconnected fragments.

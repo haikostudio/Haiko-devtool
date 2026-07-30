@@ -45,8 +45,8 @@ const INERT_COLUMNS = new Set<TaskColumn>(["notes", "backlog"]);
  * in. That auto-hop is gone, but several callers can still move a card (the
  * user's drag, the card's own agent through `move_task`, the batch publisher,
  * the archive restore). One of them slipping a running card straight into the
- * publication queue would silently skip completion — and skip the final check
- * that owns it. So the service refuses the jump outright.
+ * publication queue would silently skip completion — and skip the user's own
+ * press that owns it. So the service refuses the jump outright.
  *
  * A card that already carries `completedAt` is allowed: that is the archive
  * restore ("Désarchiver" puts a shipped card back where it was) and a re-entry
@@ -612,7 +612,7 @@ export class TaskBoardService {
       throw new TaskBoardServiceError("task_create_failed", "Task creation produced no task");
     }
     // A card owns ONE agent, from its very first second. Everything the task ever
-    // does — the title tidy-up, the analysis, the execution, the final check —
+    // does — the title tidy-up, the analysis, the execution, the deploy check —
     // happens in that single conversation, so opening the card months later shows
     // the whole story in order. A proposal awaiting approval gets no agent yet:
     // the user has not accepted the work.

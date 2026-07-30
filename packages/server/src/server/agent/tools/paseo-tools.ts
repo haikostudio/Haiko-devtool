@@ -3056,8 +3056,8 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         title: "Move task",
         description:
           "Move a kanban task between the two agent-writable columns: 'notes' (free-form draft) and 'backlog' (À faire). " +
-          "The rest of the board belongs to the user: 'validated', 'scheduled' and 'in_progress' are reached by the user's own validation or by the scheduler — an agent may never move a card there. " +
-          "Two exceptions, each opened by the user pressing a bar on that exact card: 'done' while a final check is open (\"Lancer le contrôle\"), and 'deployed' while a deploy is open (\"Lancer le déploiement\"), and only once everything is verified. " +
+          "The rest of the board belongs to the user: 'validated', 'scheduled', 'in_progress' and 'done' are reached by the user's own press or by the scheduler — an agent may never move a card there. Finishing a task in particular is always the user's own gesture. " +
+          "One exception, opened by the user pressing a bar on that exact card: 'deployed' while a deploy is open (\"Lancer le déploiement\"), and only once the work is verified and confirmed live. " +
           "When moving to 'deployed', set needsDaemonRestart to true if the change only takes effect after a daemon/service restart (the user restarts it themselves — never do it yourself).",
         inputSchema: {
           projectId: z.string(),
