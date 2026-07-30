@@ -57,3 +57,8 @@ d'état du projet — d'où l'exigence de brièveté.
   Un chef d'orchestre déjà créé avant ce correctif garde son ancien modèle tant
   qu'on ne clique pas « Réinitialiser » (le niveau de réflexion, lui, se corrige
   seul au prochain chargement s'il n'était pas explicitement choisi).
+- Sur le dépôt Paseo lui-même (isSelf), le chef d'orchestre est un agent complet
+  qui code : il démarre sur Opus 5 « high » (Claude) / gpt-5.6-sol « high »
+  (Codex), pas sur les défauts gestionnaire de tableau des autres projets. Le
+  modèle/niveau dépend donc de isSelf (comme déjà le prompt et les permissions),
+  en remplissant seulement le vide — un chef déjà créé garde son réglage.
