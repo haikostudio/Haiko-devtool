@@ -49,15 +49,16 @@ describe("countTasksAwaitingDeploy", () => {
     ).toBe(1);
   });
 
-  it("ignores finished cards not yet queued into the column", () => {
-    // A card still sitting in "Terminé" is not in the publication queue; entering
-    // the column is what enqueues it, and only then does it count.
+  it("counts finished cards too, because the run sweeps them in", () => {
+    // A publication builds the whole checkout, so a card resting in "Terminé"
+    // ships whether or not it was queued. The run takes it in and stamps it, and
+    // the button must promise exactly that — not one card fewer.
     expect(
       countTasksAwaitingDeploy([
         makeTask({ id: "a", column: "done" }),
         makeTask({ id: "b", column: "deployed" }),
       ]),
-    ).toBe(1);
+    ).toBe(2);
   });
 });
 

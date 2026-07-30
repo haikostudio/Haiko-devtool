@@ -17,9 +17,12 @@ it. Three machine-made moves survive, and only three: the analysis promotion
 ("Validé" → "Planifié", the instant a card's cost analysis succeeds), the launch
 stamp ("Planifié" → "En cours", at the instant the agent really starts) and the
 "Terminer la tâche" bar ("En cours" → "Terminé", which is nothing more than that
-move). Nothing else — no agent activity, no heuristic — may move a card. In particular the last hop ("Terminé" → "À
-déployer") is NOT automatic: a finished card rests in "Terminé" until the user
-queues it.
+move). Nothing else — no agent activity, no heuristic — may move a card. In
+particular the last hop ("Terminé" → "À déployer") never happens on its own: a
+finished card rests in "Terminé" until the user queues it, or until a publication
+the user launched sweeps it in (see "Publishing" — the run promotes what it is
+about to ship, which is bookkeeping inside a gesture the user made, not a fourth
+machine-made move).
 
 **One project, one board.** Folders (classeurs) are gone from the product: a
 project has exactly one task list, minted by the server on demand
@@ -40,7 +43,7 @@ in the project's single list.
 | Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                               |
 | Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                             |
 | En cours → Terminé   | **user only**        | The "Terminer la tâche" bar (or a drag). A plain column move: no prompt, no check, no deployment — see below.                                                  |
-| Terminé → À déployer | **user only**        | Manual: a finished card RESTS in "Terminé" and waits. The user queues it with the card's button (or a drag). `TaskPublisher` only says so in the conversation. |
+| Terminé → À déployer | **user only**        | Manual: a finished card RESTS in "Terminé" and waits. The user queues it with the card's button (or a drag), or a publication they launched sweeps it in. |
 
 ## The invariants
 
@@ -278,9 +281,25 @@ The **only** gesture that puts work online is the button at the FOOT of the
 `TaskBatchDeployer`). It publishes every card of that column whose work is not
 live yet, in ONE run, and restarts the daemon at the end.
 
-- **What it takes.** `selectPendingDeployTasks`: column `deployed`, not archived,
-  not live (`deployedAt` / `deployment.state === "deployed"` / `deployedUrl`). A
-  column whose cards are all online shows no button at all.
+- **What it takes.** `selectPendingDeployTasks`: every FINISHED card — column
+  `deployed` **or** `done` — that is not archived, not held (`deployHold`) and not
+  live yet (`deployedAt` / `deployment.state === "deployed"` / `deployedUrl`).
+
+  "Terminé" counts because a publication builds the whole checkout: a finished
+  card the user never queued rides along physically no matter what the board says.
+  It used to ride along INVISIBLY — its work went online while its card stayed in
+  "Terminé", unstamped, unarchived, and eligible for a later publication with
+  nothing left to publish. `beginCycle` therefore sweeps those cards into the
+  queue (`promoteFinishedCards`) BEFORE the run starts, so the lot on screen is
+  the lot the build carries. `deployHold` remains the one way to keep a finished
+  card out. The client's count (`countTasksAwaitingDeploy`) mirrors this exactly —
+  the button must never promise fewer cards than the run publishes.
+
+  The off-peak watcher is the one caller that keeps the narrower view
+  (`selectQueuedDeployTasks`): only a card the user placed in "À déployer" may
+  ORDER an unattended publication. Once it starts, it publishes the full lot like
+  any other run.
+
 - **Two shapes.** Paseo's own batch goes through `triggerPaseoDeploy` (which
   merges the cards' branches and hands the build to its own supervising agent);
   the daemon watches the run, narrates each phase into every card's conversation,
@@ -292,10 +311,19 @@ live yet, in ONE run, and restarts the daemon at the end.
   a checkout other agents are writing into is the torn-bundle bug), while a batch
   is already running, and when there is nothing left to publish. Each refusal
   says which case it is.
-- **The restart is part of the deal.** The confirmation dialog says so before
-  anything starts: the daemon is running the code from BEFORE the publication, so
-  the batch ends by restarting it. That press is the explicit, informed consent —
-  nothing else in the daemon ever restarts it on its own.
+- **The restart is part of the deal, unconditionally.** The confirmation dialog
+  says so before anything starts: the daemon is running the code from BEFORE the
+  publication, so the batch ends by restarting it. That press is the explicit,
+  informed consent — nothing else in the daemon ever restarts it on its own.
+
+  It is no longer conditional on `needsDaemonRestart`. That flag is a heuristic
+  over the changed paths, so a daemon change it failed to recognise went online
+  while the engine kept executing the previous build — the published version and
+  the running version disagreeing with no trace, which reads as "the fix was never
+  applied". A few seconds of reconnect per publication buys the end of that whole
+  class of ghost bugs. The flag survives only as the card's "Redémarrage requis"
+  badge, cleared as the batch stamps each card.
+
 - **A failed run marks nothing live**, sets each card's `deployment.state` to
   `failed`, and says why in the conversations. Silence is never taken for success.
 

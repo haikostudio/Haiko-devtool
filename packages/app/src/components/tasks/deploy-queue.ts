@@ -8,15 +8,20 @@ import { isTaskDeployed } from "@/components/tasks/task-card-badge";
 /**
  * The cards a press would actually take online, so the "(N)" on the button
  * matches what the batch publishes. Mirrors the server's `selectPendingDeployTasks`
- * exactly: in the "À déployer" queue, not archived, not held back from the next
- * batch ("Retirer du prochain lot"), and not live yet. Held or already-live cards
- * stay visible in the column but the run skips them, so they must not inflate the
- * count — otherwise the button promises to publish more than it will.
+ * exactly: FINISHED (resting in "Terminé" or queued in "À déployer"), not
+ * archived, not held back from the next batch ("Retirer du prochain lot"), and
+ * not live yet.
+ *
+ * "Terminé" counts because the run sweeps those cards in: a publication builds
+ * the whole checkout, so finished work ships whether or not its card was queued.
+ * Held or already-live cards stay visible in the column but the run skips them,
+ * so they must not inflate the count — otherwise the button promises to publish
+ * more than it will.
  */
 export function countTasksAwaitingDeploy(tasks: readonly KanbanTask[]): number {
   return tasks.filter(
     (task) =>
-      task.column === "deployed" &&
+      (task.column === "deployed" || task.column === "done") &&
       !task.archivedAt &&
       task.deployHold !== true &&
       !isTaskDeployed(task),

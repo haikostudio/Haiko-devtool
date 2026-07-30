@@ -98,17 +98,39 @@ export function isTaskLive(task: KanbanTask): boolean {
 }
 
 /**
- * The cards a "Tout déployer" press would take online, in board order: queued,
- * not archived, not live, and not held back by "Retirer du prochain lot".
+ * The cards a "Tout déployer" press would take online, in board order: FINISHED
+ * (either resting in "Terminé" or already queued in "À déployer"), not archived,
+ * not live, and not held back by "Retirer du prochain lot".
+ *
+ * "Terminé" counts on purpose. A publication builds the whole checkout, so a
+ * finished card the user never queued rides along physically whether or not the
+ * board says so — and it used to ride along INVISIBLY: its work went online while
+ * its card stayed behind in "Terminé", unstamped, unarchived, and eligible for a
+ * second publication that had nothing left to publish. Sweeping the finished
+ * cards into the run is what makes the lot honest: what the batch reports is what
+ * the build actually carries. `deployHold` remains the one way to keep a finished
+ * card out of it.
  */
 export function selectPendingDeployTasks(tasks: readonly KanbanTask[]): KanbanTask[] {
   return tasks.filter(
     (task) =>
-      task.column === "deployed" &&
+      (task.column === "deployed" || task.column === "done") &&
       !task.archivedAt &&
       task.deployHold !== true &&
       !isTaskLive(task),
   );
+}
+
+/**
+ * The cards the user actually placed in "À déployer" — the gesture that ORDERS a
+ * publication, as opposed to the finished cards a run sweeps along with it.
+ *
+ * Only the off-peak watcher needs this distinction: it must never start a
+ * publication nobody asked for, so it waits for at least one queued card before
+ * launching the (complete) batch.
+ */
+export function selectQueuedDeployTasks(tasks: readonly KanbanTask[]): KanbanTask[] {
+  return selectPendingDeployTasks(tasks).filter((task) => task.column === "deployed");
 }
 
 /**
@@ -213,24 +235,24 @@ export class TaskBatchDeployer {
       await this.finishCycle(projectId);
       throw error;
     }
-    const pending = selectPendingDeployTasks(board.tasks);
+    const selected = selectPendingDeployTasks(board.tasks);
     const busy = board.tasks.filter((task) => task.column === "in_progress" && !task.archivedAt);
-    if (pending.length === 0 || busy.length > 0) {
+    if (selected.length === 0 || busy.length > 0) {
       // Nothing (left) to publish, or the workshop is busy. A QUEUED request that
       // lands here is stale — the publication that just finished already put
       // everything online, or fresh work is back in progress — so drop it cleanly
       // with a note rather than running empty. A DIRECT press still gets the
       // familiar refusal so the button can explain why it did nothing.
       if (fromQueue) {
-        await this.dropStaleQueued(projectId, pending.length === 0);
+        await this.dropStaleQueued(projectId, selected.length === 0);
         await this.finishCycle(projectId);
         return { started: false, queued: false, taskIds: [] };
       }
       await this.finishCycle(projectId);
-      if (pending.length === 0) {
+      if (selected.length === 0) {
         throw new TaskBoardServiceError(
           "batch_deploy_empty",
-          "Aucune tâche à déployer : tout ce qui attend dans cette colonne est déjà en ligne.",
+          "Aucune tâche à déployer : tout ce qui est terminé est déjà en ligne.",
         );
       }
       throw new TaskBoardServiceError(
@@ -240,6 +262,21 @@ export class TaskBatchDeployer {
     }
 
     const startedAt = new Date().toISOString();
+    // The run sweeps finished cards along with the queued ones, so move them into
+    // the queue FIRST: the lot the board shows must be the lot the build carries.
+    // A card left in "Terminé" while its work goes online is the invisible-ship
+    // bug — nothing marked it live, nothing archived it.
+    const pending = await this.promoteFinishedCards(projectId, selected);
+    if (pending.length === 0) {
+      // Every card of the lot failed to enter the queue. Publishing now would
+      // build with nothing to stamp or archive afterwards, which is the invisible
+      // ship all over again — so refuse instead, with the board untouched.
+      await this.finishCycle(projectId);
+      throw new TaskBoardServiceError(
+        "batch_deploy_empty",
+        "Aucune carte n'a pu rejoindre la file de publication : rien n'a été publié.",
+      );
+    }
     // Open the deploy window on every card of the batch BEFORE anything starts:
     // that is what the board shows as "Publication en cours", and — on an ordinary
     // project — what authorizes each card's agent to confirm its own deployment.
@@ -299,6 +336,43 @@ export class TaskBatchDeployer {
       // beginCycle already released the slot on its throw paths; just record it.
       this.logger.error({ err: error, projectId }, "Queued publication failed to start");
     }
+  }
+
+  /**
+   * Moves the finished cards this run swept up into "À déployer" before it
+   * starts, so the queue on screen IS the lot being published. Reachability
+   * allows it (the queue is reachable from "Terminé"), and the move is what later
+   * lets `markTaskDeployed` stamp then archive each card.
+   *
+   * A card whose promotion fails is dropped from the run rather than published
+   * silently: a card that cannot be shown as part of the lot must not be counted
+   * as part of it. Cards already queued are returned untouched.
+   */
+  private async promoteFinishedCards(
+    projectId: string,
+    selected: readonly KanbanTask[],
+  ): Promise<KanbanTask[]> {
+    const promoted: KanbanTask[] = [];
+    for (const task of selected) {
+      if (task.column !== "done") {
+        promoted.push(task);
+        continue;
+      }
+      try {
+        await this.options.taskBoardService.transitionTask(projectId, task.id, "deployed");
+        promoted.push({ ...task, column: "deployed" });
+        this.logger.info(
+          { projectId, taskId: task.id },
+          "Finished card swept into the publication queue",
+        );
+      } catch (error) {
+        this.logger.warn(
+          { err: error, projectId, taskId: task.id },
+          "Could not queue a finished card for this publication",
+        );
+      }
+    }
+    return promoted;
   }
 
   /** Show/hide the board's "une publication en attente" marker. Never throws. */
@@ -461,7 +535,7 @@ export class TaskBatchDeployer {
     }
   }
 
-  /** Everything is online: stamp the cards, then restart the engine if needed. */
+  /** Everything is online: stamp the cards, then restart the engine. Always. */
   private async succeed(
     projectId: string,
     pending: KanbanTask[],
@@ -472,7 +546,6 @@ export class TaskBatchDeployer {
     // Read once for the whole batch: every card of a run goes live in the same
     // build, and a per-card read would only invite them to disagree.
     const publishedSha = await this.readPublishedSha();
-    const needsDaemonRestart = pending.some((task) => task.needsDaemonRestart === true);
     for (const task of pending) {
       try {
         // Clear "Redémarrage requis" as we stamp: this batch restarts the daemon
@@ -494,12 +567,15 @@ export class TaskBatchDeployer {
         ? `✅ **Publication groupée** — c'est en ligne : ${url}`
         : "✅ **Publication groupée** — c'est en ligne.",
     );
-    // Interface-only work is already operational once the published files are
-    // served. Do not bounce the daemon just for ceremony.
-    if (!needsDaemonRestart) {
-      await this.finishSuccessfully(projectId, url);
-      return;
-    }
+    // The restart is a STEP OF THE PUBLICATION, not a reaction to what the batch
+    // happened to contain. It used to be skipped whenever no card was flagged
+    // "Redémarrage requis" — and that verdict is a heuristic over changed paths,
+    // so a daemon fix it failed to recognise went online while the engine kept
+    // executing the previous build. The published version and the running version
+    // then disagree with no trace, which reads as "the fix was never applied".
+    // Restarting every time costs a few seconds of reconnect and removes a whole
+    // class of ghost bugs.
+    //
     // The publication is live, but the grouped deploy agent may still be checking
     // the served version and writing its own closing verdict. Restarting now would
     // kill it mid-sentence and leave its chat frozen on "j'attends la fin…". So

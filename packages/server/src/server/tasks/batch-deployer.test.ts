@@ -7,6 +7,7 @@ import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import {
   TaskBatchDeployer,
   selectPendingDeployTasks,
+  selectQueuedDeployTasks,
   type DeployRunSnapshot,
 } from "./batch-deployer.js";
 import { TaskBoardService } from "./service.js";
@@ -32,7 +33,7 @@ describe("selectPendingDeployTasks", () => {
     } as KanbanTask;
   }
 
-  test("keeps the queued cards and drops the ones already live", () => {
+  test("sweeps every finished card and drops the ones already live", () => {
     const pending = selectPendingDeployTasks([
       task({ id: "queued" }),
       task({ id: "live-stamp", deployedAt: "2026-07-28T11:00:00.000Z" }),
@@ -40,11 +41,21 @@ describe("selectPendingDeployTasks", () => {
       task({ id: "live-window", deployment: { state: "deployed" } }),
       task({ id: "archived", archivedAt: "2026-07-28T11:00:00.000Z" }),
       task({ id: "still-running", column: "in_progress" }),
+      // Resting in "Terminé": the build carries its work whether it was queued or
+      // not, so the run takes it in rather than shipping it invisibly.
       task({ id: "just-done", column: "done" }),
       // "Retirer du prochain lot": still on the board, skipped by the batch.
       task({ id: "held", deployHold: true }),
     ]);
-    expect(pending.map((entry) => entry.id)).toEqual(["queued"]);
+    expect(pending.map((entry) => entry.id)).toEqual(["queued", "just-done"]);
+  });
+
+  test("only the queued cards order an off-peak publication", () => {
+    const queued = selectQueuedDeployTasks([
+      task({ id: "queued" }),
+      task({ id: "just-done", column: "done" }),
+    ]);
+    expect(queued.map((entry) => entry.id)).toEqual(["queued"]);
   });
 });
 
@@ -86,6 +97,22 @@ describe("TaskBatchDeployer", () => {
     return queued;
   }
 
+  /** A finished card the user left resting in "Terminé", never queued. */
+  async function seedFinished(title: string, branch: string): Promise<KanbanTask> {
+    const board = await service.getBoard("proj-1");
+    const folder = board.folders[0] ?? (await service.createFolder("proj-1", "Tâches"));
+    const task = await service.createTask("proj-1", { folderId: folder.id, title });
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      links: { ...current.links, taskAgentId: `agent-${task.id}`, branch },
+    }));
+    await service.transitionTask("proj-1", task.id, "done");
+    const latest = await service.getBoard("proj-1");
+    const finished = latest.tasks.find((entry) => entry.id === task.id);
+    if (!finished) throw new Error("task lost");
+    return finished;
+  }
+
   function buildDeployer(input: {
     isSelfHost?: boolean;
     url?: string | null;
@@ -97,18 +124,26 @@ describe("TaskBatchDeployer", () => {
     holdTrigger?: Promise<void>;
   }) {
     const runs = [...(input.runs ?? [])];
+    // Bind the collectors NOW, so a run still finishing when its test ends keeps
+    // writing into that test's arrays instead of the next test's fresh ones. A
+    // publication ends with a restart request, and a leaked one used to surface
+    // as a phantom restart in an unrelated test.
+    const runNotes = notes;
+    const runTriggered = triggered;
+    const runRestarts = restarts;
+    const runPerCard = perCard;
     return new TaskBatchDeployer({
       taskBoardService: service,
       projectRegistry: { get: async () => ({ projectId: "proj-1", rootPath: "/root/x" }) as never },
       agentManager: {
         appendTimelineItem: async (_agentId: string, item: { type: string; text?: string }) => {
-          notes.push(item.text ?? "");
+          runNotes.push(item.text ?? "");
         },
       } as never,
       isSelfHostRoot: () => input.isSelfHost !== false,
       resolveProjectUrl: async () => input.url ?? null,
       triggerDeploy: async (trigger) => {
-        triggered.push(trigger);
+        runTriggered.push(trigger);
         if (input.holdTrigger) {
           await input.holdTrigger;
         }
@@ -121,9 +156,9 @@ describe("TaskBatchDeployer", () => {
       readDeployRun: async () =>
         runs.shift() ?? { deploying: false, phase: null, outcome: null, error: null },
       deployTask: async (_projectId, taskId) => {
-        perCard.push(taskId);
+        runPerCard.push(taskId);
       },
-      requestDaemonRestart: (reason) => restarts.push(reason),
+      requestDaemonRestart: (reason) => runRestarts.push(reason),
       awaitDeployAgentIdle: input.awaitDeployAgentIdle,
       sleep: async () => {},
       logger,
@@ -242,7 +277,10 @@ describe("TaskBatchDeployer", () => {
 
     const result = await deployer.deployAll("proj-1");
     expect(result.taskIds).toEqual([shipped.id]);
-    await settle(() => taskIsLive(shipped.id));
+    // Settle on the run's terminal state, not just on the card: a publication
+    // keeps writing (recap, restart) after the first card goes live, and leaving
+    // that tail running raced this test's own temp directory teardown.
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === shipped.id)?.deployedAt).toBeTruthy();
@@ -291,11 +329,34 @@ describe("TaskBatchDeployer", () => {
     expect(card?.deployment?.state).toBe("deployed");
     expect(board.deployBatch?.state).toBe("success");
     expect(board.deployBatch?.error ?? null).toBeNull();
-    // This batch only changed the interface, so no restart is needed.
-    expect(restarts).toEqual([]);
+    expect(restarts).toEqual(["task_batch_deploy"]);
   });
 
-  test("does not restart the daemon for interface-only work", async () => {
+  test("takes in a card left resting in « Terminé », then archives it too", async () => {
+    const queued = await seedQueued("Login", "task/login");
+    const forgotten = await seedFinished("Graphe", "task/graphe");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+    });
+
+    const result = await deployer.deployAll("proj-1");
+    // Both cards belong to the run: the build carries both either way.
+    expect(result.taskIds.sort()).toEqual([forgotten.id, queued.id].sort());
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    const board = await service.getBoard("proj-1");
+    const card = board.tasks.find((entry) => entry.id === forgotten.id);
+    expect(card?.deployedAt).toBeTruthy();
+    // Published cards are filed away, so the queue empties itself.
+    expect(card?.column).toBe("archived");
+    expect(board.deployBatch?.taskIds.sort()).toEqual([forgotten.id, queued.id].sort());
+  });
+
+  test("restarts the engine even when the work looks interface-only", async () => {
+    // The restart is a step of the publication, not a reaction to what the batch
+    // contains: "Redémarrage requis" is a heuristic over changed paths, and a
+    // daemon change it fails to recognise would otherwise go online while the
+    // engine keeps running the previous build.
     const card = await seedQueued("Interface", "task/interface");
     const deployer = buildDeployer({
       runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
@@ -306,7 +367,7 @@ describe("TaskBatchDeployer", () => {
 
     const board = await service.getBoard("proj-1");
     expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
-    expect(restarts).toEqual([]);
+    expect(restarts).toEqual(["task_batch_deploy"]);
   });
 
   test("clears « Redémarrage requis » on the cards it publishes", async () => {

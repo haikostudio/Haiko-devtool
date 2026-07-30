@@ -2,7 +2,7 @@ import type pino from "pino";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBatchDeployer } from "./batch-deployer.js";
-import { selectPendingDeployTasks } from "./batch-deployer.js";
+import { selectQueuedDeployTasks } from "./batch-deployer.js";
 import type { TaskBoardService } from "./service.js";
 
 /** How often the off-peak window is checked. Coarse on purpose. */
@@ -90,7 +90,11 @@ export class AutoDeployWatcher {
     let pendingCount = 0;
     try {
       const board = await this.options.taskBoardService.getBoard(projectId);
-      pendingCount = selectPendingDeployTasks(board.tasks).length;
+      // Only cards the user PLACED in "À déployer" arm the off-peak run. The run
+      // itself then sweeps every finished card along with them, but the order to
+      // publish still comes from a human gesture — a card merely resting in
+      // "Terminé" must never wake a publication on its own at 3am.
+      pendingCount = selectQueuedDeployTasks(board.tasks).length;
     } catch (error) {
       this.logger.debug({ err: error, projectId }, "Off-peak publication board read failed");
       return;
