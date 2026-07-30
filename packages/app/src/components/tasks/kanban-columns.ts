@@ -312,9 +312,10 @@ export interface KanbanBoardProps {
   // "Tout déployer": publishes every not-yet-live card of the "À déployer"
   // column in one run. Rendered at the bottom of that column only.
   onDeployAll?: (() => void) | undefined;
-  // Opens the single grouped deploy agent's conversation from the progress
-  // banner — the live view onto the running (or last) build/publish.
-  onOpenDeployAgent?: ((agentId: string) => void) | undefined;
+  // Opens the publication's own log from the progress banner — the live view
+  // onto the running (or last) build/publish, which is a script and therefore
+  // has output rather than a conversation.
+  onOpenDeployLog?: (() => void) | undefined;
   // "Réinitialiser / Relancer": clears a failed publication's state (stuck run,
   // error, residual lock) and starts a fresh one. Shown on the failure banner.
   onResetDeploy?: (() => void) | undefined;

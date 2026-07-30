@@ -3,12 +3,18 @@
 #
 # Remplace l'aller-retour GitHub Actions (build-web-selfhost.yml) + paseo-ship-now.sh :
 # le serveur construit lui-même le site statique, puis le copie dans le dossier
-# servi par Caddy. Aucun commit ni CI requis pour publier — git ne sert plus que
-# de sauvegarde (commit/push best-effort), plus de déclencheur de mise en ligne.
+# servi par Caddy. Aucune CI requise pour publier.
 #
-# Lancé par le démon Paseo (bouton « À déployer »), détaché, sortie -> paseo-ship-now.log.
-# À chaque étape on écrit une phase courte dans PHASE_FILE pour que l'app affiche
-# la progression : build -> publish -> done (ou error).
+# C'EST LE DÉPLOIEMENT, EN ENTIER. Le bouton « Tout déployer » lance ce script
+# directement (démon → spawn détaché) : aucun agent, aucun modèle, aucun quota
+# entre le clic et la mise en ligne. La suite est fixe et vérifiable :
+#   enregistrer (commit) → envoyer (push) → vérifier les types → construire le
+#   moteur → construire le site → mettre en ligne → (le démon redémarre ensuite).
+# Chaque étape écrit son nom dans PHASE_FILE — c'est la barre de progression de
+# la colonne — et toute cause fatale sort en « !! … », la ligne que le démon
+# affiche telle quelle à l'utilisateur.
+#
+# Sortie complète -> paseo-ship-now.log (lue par le démon et montrée dans l'app).
 #
 # ISOLATION PAR INSTANTANÉ (voir bloc « snapshot » plus bas)
 # --------------------------------------------------------------------------------
@@ -83,12 +89,53 @@ cd "$REPO_ROOT" || fail "$REPO_ROOT introuvable"
 # se terminent dans le désordre et le DERNIER à publier gagne — on a déjà vu un
 # vieux build republier une ancienne version par-dessus la bonne. On refuse net.
 # Le verrou garantit aussi qu'un seul instantané worktree existe à la fois.
-exec 9>"/home/paseo/paseo-build-local.lock"
+LOCK_FILE="/home/paseo/paseo-build-local.lock"
+# Un verrou qu'on ne peut pas OUVRIR n'est pas un verrou tenu. Sans cette
+# distinction, un fichier appartenant au mauvais utilisateur (un lancement
+# manuel en root suffit à le créer ainsi) faisait échouer la redirection, puis
+# `flock` sur un descripteur mort, et le script annonçait « une publication est
+# déjà en cours » alors qu'aucune ne tournait — une panne indébloquable tant
+# qu'on croyait le message.
+if ! exec 9>"$LOCK_FILE"; then
+  fail "Verrou de publication inaccessible ($LOCK_FILE) — vérifiez son propriétaire (il doit appartenir à l'utilisateur qui publie)."
+fi
 if ! flock -n 9; then
-  echo "==> Un build est déjà en cours — abandon (anti-doublon)."
+  # `!!` : c'est la ligne que le démon remonte comme cause à l'écran. Sans elle,
+  # une demande refusée par le verrou n'affichait qu'un « code 0 » inexplicable.
+  echo "!! Une publication est déjà en cours sur ce serveur — cette demande a été ignorée."
   # Un autre build détient le verrou et son propre instantané : ne rien nettoyer.
   trap - EXIT
   exit 0
+fi
+
+# --- Contrôle avant vol : la place disque -------------------------------------
+# Panne d'environnement n°1 sur ce VPS : un build tombe à mi-course faute de
+# place, et le message qui remonte parle de metro ou de rsync, jamais du disque.
+# On regarde AVANT, on fait le ménage évident (instantanés morts, caches), et on
+# refuse tôt avec une cause lisible plutôt qu'après cinq minutes de construction.
+# Mégaoctets libres sur le système de fichiers d'un chemin. Répond toujours un
+# nombre : un `df` muet ou illisible doit valoir « je ne sais pas » (0 refuserait
+# à tort), donc on renvoie une valeur assez grande pour ne bloquer personne.
+free_mib() {
+  local value
+  value="$(df -PBM "$1" 2>/dev/null | awk 'NR==2 {gsub(/M/,"",$4); print $4}')"
+  case "$value" in
+    ''|*[!0-9]*) printf '999999\n' ;;
+    *) printf '%s\n' "$value" ;;
+  esac
+}
+DISK_MIN_MIB=5000   # ~5 Go : une construction complète + la copie vers Caddy
+RAM_MIN_MIB=1500    # /dev/shm accueille l'instantané et les caches metro
+if [ "$(free_mib "$REPO_ROOT")" -lt "$DISK_MIN_MIB" ]; then
+  echo "==> Peu de place disque — nettoyage des instantanés et caches abandonnés…"
+  git worktree prune >/dev/null 2>&1 || true
+  rm -rf "$RAMDIR/snapshot" "$RAMDIR/metro-cache" 2>/dev/null || true
+  if [ "$(free_mib "$REPO_ROOT")" -lt "$DISK_MIN_MIB" ]; then
+    fail "Place disque insuffisante pour construire (moins de ${DISK_MIN_MIB} Mo libres) — rien n'est publié."
+  fi
+fi
+if [ "$(free_mib /dev/shm)" -lt "$RAM_MIN_MIB" ]; then
+  rm -rf "$RAMDIR/snapshot" "$RAMDIR/metro-cache" 2>/dev/null || true
 fi
 
 # Cache de construction en RAM (voir RAMDIR plus haut) : lie node_modules/.cache
@@ -109,12 +156,35 @@ rm -rf "$RAMDIR/metro-cache" "$RAMDIR/nmcache/metro" "$RAMDIR/nmcache/expo" 2>/d
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
 echo "==> Build local — branche $BRANCH"
 
-# --- Sauvegarde best-effort (git = filet, jamais un bloqueur de publication) ---
+# --- Enregistrement du travail : tout ce qui traîne entre dans un commit -------
+# Publier, c'est d'abord ENREGISTRER. Un site en ligne construit depuis des
+# fichiers jamais commités est du code qu'on ne peut plus retrouver ni annuler ;
+# c'est aussi ce qui rendait `.deployed-sha` menteur (il nomme un commit qui ne
+# contient pas ce qui est en ligne). Le commit porte le nom des tâches du lot
+# (PASEO_DEPLOY_TASKS, une par ligne, transmis par le démon) : l'historique dit
+# enfin ce qui est parti, au lieu d'une file de « sauvegarde avant build local ».
 phase "prepare"
+build_commit_message() {
+  local count
+  if [ -z "${PASEO_DEPLOY_TASKS:-}" ]; then
+    printf 'chore(publication): enregistrer le travail avant mise en ligne\n'
+    return 0
+  fi
+  count="$(printf '%s\n' "$PASEO_DEPLOY_TASKS" | grep -c . || true)"
+  printf 'chore(publication): mettre en ligne %s tâche(s)\n\n' "$count"
+  printf '%s\n' "$PASEO_DEPLOY_TASKS" | grep . | sed 's/^/- /'
+}
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-  echo "==> Sauvegarde des changements locaux (commit)…"
+  echo "==> Enregistrement des changements locaux (commit)…"
   git add -A
-  git commit --no-verify -m "chore: sauvegarde avant build local" || true
+  # --no-verify : les crochets de pré-commit (lint/format/changelog) peuvent
+  # échouer sur du travail d'agent en cours ; refuser d'enregistrer laisserait
+  # le code SEULEMENT sur le disque, ce qui est pire que de l'enregistrer tel quel.
+  if ! git commit --no-verify -m "$(build_commit_message)"; then
+    fail "Impossible d'enregistrer les changements locaux (git commit) — rien n'est publié."
+  fi
+else
+  echo "==> Rien de nouveau à enregistrer — le dépôt est déjà propre."
 fi
 # Re-read HEAD after the save: the published marker and the bundle must refer
 # to the commit that is actually being built, including freshly saved changes.
@@ -123,11 +193,36 @@ fi
 # checkout vivant, et le démon (isPublicationLive) ne signale rien en attente.
 SHA="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 echo "==> Version publiée : $SHA"
-# Push best-effort — ne déclenche plus aucune CI (workflow débranché), pure sauvegarde.
-git push "$REMOTE" "HEAD:$BRANCH" >/dev/null 2>&1 || echo "   (push ignoré — sauvegarde locale conservée)"
+
+# --- Envoi sur le dépôt : une étape à part entière, pas un effet de bord -------
+# Le push était best-effort et SILENCIEUX (`>/dev/null 2>&1 || echo`) : quand la
+# clé ou le réseau lâchait, la version partait en ligne sans exister nulle part
+# ailleurs que sur ce serveur, et personne ne l'apprenait. Il est désormais
+# vérifié : trois tentatives, puis arrêt net avec une cause lisible. Le dépôt
+# distant fait partie de la publication.
+# Échappatoire pour les cas où le distant est durablement injoignable et où il
+# faut publier quand même : PASEO_DEPLOY_SKIP_PUSH=1.
+phase "push"
+push_to_remote() {
+  local attempt output
+  for attempt in 1 2 3; do
+    if output="$(git push "$REMOTE" "HEAD:$BRANCH" 2>&1)"; then
+      echo "==> Dépôt à jour ($REMOTE/$BRANCH → $SHA)."
+      return 0
+    fi
+    echo "   (envoi refusé, tentative $attempt/3) $output"
+    sleep 5
+  done
+  return 1
+}
+if [ "${PASEO_DEPLOY_SKIP_PUSH:-0}" = "1" ]; then
+  echo "==> Envoi sur le dépôt ignoré (PASEO_DEPLOY_SKIP_PUSH=1)."
+elif ! push_to_remote; then
+  fail "Le dépôt distant n'a pas pu être mis à jour après 3 tentatives — rien n'est publié. Le travail est enregistré localement (commit $SHA)."
+fi
 
 if [ "$NO_BUILD" = "1" ]; then
-  echo "==> --no-build : sauvegarde seule, rien n'est publié."
+  echo "==> --no-build : enregistrement seul, rien n'est publié."
   phase "done"
   exit 0
 fi

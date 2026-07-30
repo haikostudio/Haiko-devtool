@@ -203,16 +203,12 @@ import {
   getPublishedSha,
   getRunningEngineSha,
   recordDaemonBootSha,
-  setPaseoDeployAgentLauncher,
   setPaseoDeployConflictTaskCreator,
   setPaseoDeploySuccessListener,
   triggerPaseoDeploy,
 } from "../utils/paseo-deploy.js";
-import { buildPaseoDeployAgentPrompt } from "../utils/paseo-deploy-agent-prompt.js";
 import { getPaseoAppUrl, resolveProjectDevInstanceUrl } from "../utils/project-dev-instance.js";
 import { sendPromptToAgent } from "./agent/agent-prompt.js";
-import { getErrorMessage } from "@getpaseo/protocol/error-utils";
-import { CONDUCTOR_ROLE_LABEL, DEPLOYMENT_ROLE_VALUE } from "@getpaseo/protocol/agent-labels";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@getpaseo/protocol/messages";
 import type {
@@ -1518,48 +1514,6 @@ export async function createPaseoDaemon(
       conflictTaskCreationInFlight.delete(branch);
     }
   });
-  // Clicking "Publier" hands the publication to a real agent instead of firing
-  // a detached script nobody can talk to. It runs the same build script, but it
-  // watches it, checks afterwards that the new version is genuinely served, and
-  // can repair the boring environment failures on its own. The user can open it
-  // and read exactly what is happening — which is what a progress bar never told
-  // them.
-  setPaseoDeployAgentLauncher(async (launch) => {
-    // Mechanical work (run a script, read a log, retry once): a mid-tier model is
-    // the right tool. Codex takes over when the Claude quota is spent, so a
-    // publication is never blocked by a quota it did not need.
-    const usage = await providerUsageService.listUsage({ forceRefresh: true });
-    const claude = usage.providers.find((provider) => provider.providerId === "claude");
-    const providerModel =
-      !claude || isProviderUsageExhausted(claude) ? "codex/gpt-5.4" : "claude/sonnet";
-    const created = await createAgent({
-      kind: "mcp",
-      provider: providerModel,
-      cwd: launch.repoRoot,
-      title: "Publication en ligne",
-      unattended: true,
-      promptFailure: "return-error",
-      background: true,
-      notifyOnFinish: true,
-      // Marks this as THE grouped-deployment agent so its answer follows the
-      // batch publication template (response-template.ts routes on this label).
-      labels: {
-        [CONDUCTOR_ROLE_LABEL]: DEPLOYMENT_ROLE_VALUE,
-      },
-    });
-    const agentId = created.snapshot.id;
-    if (created.initialPromptError) {
-      throw created.initialPromptError;
-    }
-    const done = agentManager
-      .runAgent(agentId, buildPaseoDeployAgentPrompt(launch))
-      .then((run) => run.finalText || null)
-      .catch((error: unknown) => {
-        logger.warn({ err: error, agentId }, "Deploy agent run failed");
-        return getErrorMessage(error);
-      });
-    return { agentId, done };
-  });
   const agentTaskSync = new AgentTaskSyncService({
     agentManager,
     workspaceRegistry,
@@ -1653,9 +1607,9 @@ export async function createPaseoDaemon(
     },
   });
   // "Tout déployer": one publication for the whole queue, then the daemon
-  // restart. Paseo's own batch goes through the local build (triggerDeploy, which
-  // supervises the build with its own agent); any other project is deployed card
-  // by card by each card's own agent.
+  // restart. Paseo's own batch goes through the local build script
+  // (triggerDeploy — a plain process, no model, no quota); any other project is
+  // deployed card by card by each card's own agent.
   const taskBatchDeployer = new TaskBatchDeployer({
     taskBoardService,
     projectRegistry,
@@ -1680,32 +1634,6 @@ export async function createPaseoDaemon(
         reason,
       });
     },
-    // Let the grouped deploy agent finish its own verdict before the restart cuts
-    // it off. Guarded by a timeout so a stuck agent never blocks the restart
-    // forever — five minutes is far longer than a post-publish verification takes.
-    awaitDeployAgentIdle: (agentId) =>
-      new Promise<void>((resolve) => {
-        let settled = false;
-        let stop: (() => void) | null = null;
-        const done = () => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          resolve();
-        };
-        const timeout = setTimeout(
-          () => {
-            stop?.();
-            done();
-          },
-          5 * 60 * 1000,
-        );
-        stop = watchAgentIdle(agentManager, agentId, () => {
-          clearTimeout(timeout);
-          done();
-        });
-      }),
     logger,
   });
   // Finishing a card no longer publishes it, and no longer queues it either: it

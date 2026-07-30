@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { countPendingPublish } from "@/components/tasks/pending-publish-count";
 import { DeployRestartChain } from "@/components/tasks/deploy-restart-chain";
+import { DeployLogSheet } from "@/components/tasks/deploy-log-sheet";
 import { useDaemonRestartAction } from "@/components/tasks/use-daemon-restart";
 import { useDaemonRestartStore } from "@/stores/daemon-restart-store";
 import { showAppDialog } from "@/stores/app-dialog-store";
@@ -86,7 +87,6 @@ import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { deriveProjectIconColor } from "@/utils/project-icon-color";
 import { buildProjectSettingsRoute } from "@/utils/host-routes";
-import { navigateToAgent } from "@/utils/navigate-to-agent";
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const ThemedChevronRight = withUnistyles(ChevronRight);
@@ -814,12 +814,13 @@ function BoardContent({
   const setDetailsTaskId = useTasksBoardUiStore((state) => state.setDetailsTaskId);
   // Tapping a task points the shared bottom dock at its agent chat.
   const setDockTaskId = useTasksBoardUiStore((state) => state.setDockTaskId);
-  const setDockDeployAgentId = useTasksBoardUiStore((state) => state.setDockDeployAgentId);
   const setConductorOpen = useTasksBoardUiStore((state) => state.setConductorOpen);
   const supportsConductor = useHostFeature(serverId, "tasksConductor");
   const [newTaskColumn, setNewTaskColumn] = useState<TaskColumn | null>(null);
   const [compactView, setCompactView] = useState<CompactBoardView>("board");
   const [engineUpdateProgress, setEngineUpdateProgress] = useState<string | null>(null);
+  // The publication's log, opened from the progress banner.
+  const [deployLogOpen, setDeployLogOpen] = useState(false);
 
   const viewOptions = useMemo<SegmentedControlOption<CompactBoardView>[]>(
     () => [
@@ -1089,27 +1090,16 @@ function BoardContent({
     })();
   }, [boardHandle, toast, t]);
 
-  // Tapping the "À déployer" progress banner opens the single grouped deploy
-  // agent's conversation in the bottom dock — the same drawer that hosts the chef
-  // d'orchestre and every task chat — so the build → publish → verdict is watched
-  // live in place, never in a separate full-screen agent tab. The banner only
-  // offers this when the batch actually carries an agent id.
-  const handleOpenDeployAgent = useCallback(
-    (agentId: string) => {
-      if (!serverId) {
-        return;
-      }
-      // Hosts without the conductor dock fall back to the raw agent tab — there is
-      // no bottom dock to show it in.
-      if (!supportsConductor) {
-        navigateToAgent({ serverId, agentId });
-        return;
-      }
-      setDockDeployAgentId(agentId);
-      setConductorOpen(true);
-    },
-    [serverId, supportsConductor, setDockDeployAgentId, setConductorOpen],
-  );
+  // Tapping the "À déployer" progress banner opens the publication's own log.
+  // The publication is a build script — there is no conversation to open, and
+  // its output is the only honest account of what the run is doing (which phase,
+  // which command refused, why nothing went online).
+  const handleOpenDeployLog = useCallback(() => {
+    setDeployLogOpen(true);
+  }, []);
+  const handleCloseDeployLog = useCallback(() => {
+    setDeployLogOpen(false);
+  }, []);
 
   // "Retirer du prochain lot" / "Remettre dans le lot": the card keeps its place
   // in "À déployer" and stays visible — the batch simply skips it. A pause, not
@@ -1296,13 +1286,14 @@ function BoardContent({
           onReanalyzeTask={handleEstimateTask}
           onDeleteTask={handleDeleteTask}
           onDeployAll={handleDeployAll}
-          onOpenDeployAgent={handleOpenDeployAgent}
+          onOpenDeployLog={handleOpenDeployLog}
           onResetDeploy={handleResetDeploy}
           onToggleDeployHold={handleToggleDeployHold}
           deployOffPeak={deployOffPeak}
           columnExtras={columnExtras}
         />
       ) : null}
+      <DeployLogSheet serverId={serverId} visible={deployLogOpen} onClose={handleCloseDeployLog} />
     </View>
   );
 

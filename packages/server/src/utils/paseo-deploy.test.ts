@@ -6,7 +6,6 @@ import {
   extractShipFailureReason,
   isPaseoDeployRepairBranch,
   parseWorktreeList,
-  sanitizeAgentFailureReason,
 } from "./paseo-deploy.js";
 
 describe("annotateDeployCommits", () => {
@@ -147,46 +146,6 @@ describe("extractShipFailureReason", () => {
   it("returns null for an empty log rather than an empty message", () => {
     expect(extractShipFailureReason("")).toBeNull();
     expect(extractShipFailureReason("!!   \n")).toBeNull();
-  });
-});
-
-describe("sanitizeAgentFailureReason", () => {
-  it("drops the model/level/time/cost header and keeps the real cause", () => {
-    const summary = [
-      "**Modèle : Codex très haut · 12 min · coût ≈ 26 CHF (0,2 h × 130 CHF/h)**",
-      "La construction a échoué : dépendance manquante.",
-    ].join("\n");
-    expect(sanitizeAgentFailureReason(summary)).toBe(
-      "La construction a échoué : dépendance manquante.",
-    );
-  });
-
-  it("ignores intermediate progress chatter", () => {
-    const summary = [
-      "Le moniteur est en place, je serai notifié dès la fin.",
-      "Conflit de fusion sur la branche login.",
-    ].join("\n");
-    expect(sanitizeAgentFailureReason(summary)).toBe("Conflit de fusion sur la branche login.");
-  });
-
-  it("prefers the line that names a failure over later prose", () => {
-    const summary = [
-      "Le serveur a redémarré pendant la publication.",
-      "Je vous laisse relancer quand vous voulez.",
-    ].join("\n");
-    expect(sanitizeAgentFailureReason(summary)).toBe(
-      "Le serveur a redémarré pendant la publication.",
-    );
-  });
-
-  it("returns null when only noise remains", () => {
-    const summary = "**Codex très haut · 8 min · ≈ 17 CHF**\nLe moniteur est en place.";
-    expect(sanitizeAgentFailureReason(summary)).toBeNull();
-  });
-
-  it("returns null for empty input", () => {
-    expect(sanitizeAgentFailureReason("")).toBeNull();
-    expect(sanitizeAgentFailureReason(null)).toBeNull();
   });
 });
 

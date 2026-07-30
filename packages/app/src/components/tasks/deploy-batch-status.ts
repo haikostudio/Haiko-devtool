@@ -11,6 +11,7 @@ import type { TaskDeployBatch } from "@getpaseo/protocol/tasks/types";
 export const PHASES = [
   "start",
   "prepare",
+  "push",
   "verify",
   "daemon",
   "site",

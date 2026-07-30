@@ -8,8 +8,6 @@ import { resolveTaskAgentId } from "./task-agent-link.js";
 export interface DeployTriggerResult {
   started: boolean;
   error?: string | null;
-  /** The grouped deploy agent launched for this run, when there is one. */
-  agentId?: string | null;
 }
 
 export interface DeployRunSnapshot {
@@ -29,7 +27,8 @@ const RESTART_GRACE_MS = 5_000;
 
 /** Human phase labels, in the order the build script writes them. */
 const PHASE_LABELS: Record<string, string> = {
-  prepare: "Préparation des changements…",
+  prepare: "Enregistrement des changements…",
+  push: "Envoi sur le dépôt…",
   verify: "Vérification du code…",
   daemon: "Construction du moteur…",
   site: "Construction du site…",
@@ -63,6 +62,8 @@ export interface TaskBatchDeployerOptions {
   triggerDeploy: (input: {
     projectId: string;
     mergeBranches: string[];
+    /** Titles of the cards in this lot — they become the save commit's message. */
+    taskTitles?: string[];
     /** Clear a stuck/falsely-failed run + residual lock before starting. */
     reset?: boolean;
   }) => Promise<DeployTriggerResult>;
@@ -84,14 +85,6 @@ export interface TaskBatchDeployerOptions {
    * answer must never suppress the restart.
    */
   readRunningEngineSha?: () => string | null;
-  /**
-   * Resolves once the grouped deploy agent has gone back to rest (posted its own
-   * final verdict), or after a guard timeout. Awaited before the daemon restart
-   * so the restart never cuts the agent off mid-sentence — the frozen "le suivi
-   * est en place, j'attends la fin…" message the user used to be left with.
-   * Absent on the per-card path (no grouped agent to wait for).
-   */
-  awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
   /** Injected so tests don't wait on real time. */
   sleep?: (ms: number) => Promise<void>;
   logger: pino.Logger;
@@ -150,11 +143,14 @@ export function selectQueuedDeployTasks(tasks: readonly KanbanTask[]): KanbanTas
  * raced itself on the shared checkout and produced torn builds.
  *
  * Two shapes, one gesture:
- * - **Paseo itself** is published by the daemon (`triggerDeploy` builds the
- *   project's main branch and hands it to its own supervising agent). Tasks work
- *   in place on main, so there is nothing to merge — the deploy just builds what
- *   is already there. We watch the run, narrate each phase into every card's
- *   conversation, stamp the cards live, then restart the daemon.
+ * - **Paseo itself** is published by the daemon: `triggerDeploy` starts the
+ *   build script directly — a process, not an agent, so a publication can never
+ *   be blocked by a model quota or derailed by a model's improvisation. Tasks
+ *   work in place on main, so there is nothing to merge; the script commits what
+ *   is uncommitted, pushes it to the repository, checks the types, builds the
+ *   engine and the site, puts them online. We watch the run, narrate each phase
+ *   into every card's conversation, stamp the cards live, then restart the
+ *   daemon so the running engine IS the published code.
  * - **Any other project** is deployed card by card by each card's OWN agent (the
  *   existing "Lancer le déploiement" path), because the agent is the only one who
  *   knows that project's dev instance. No daemon restart there: the project's own
@@ -424,26 +420,20 @@ export class TaskBatchDeployer {
     }
 
     // Tasks run in place on main — there are no per-task branches to merge. The
-    // deploy just builds the project's main branch as it already stands.
+    // deploy just builds the project's main branch as it already stands. The
+    // titles ride along so the save commit says what this lot shipped.
     const result = await this.options.triggerDeploy({
       projectId,
       mergeBranches: [],
+      taskTitles: pending.map((task) => task.title),
       reset: options.reset,
     });
     if (!result.started) {
       await this.fail(projectId, pending, result.error ?? "raison inconnue");
       return;
     }
-    // Point the board's progress banner at the single grouped deploy agent, so a
-    // tap on the bar opens its conversation and the build/publish can be watched
-    // live. Only when the launcher gave us one (self-host, real build).
-    if (result.agentId) {
-      await this.options.taskBoardService.patchDeployBatch(projectId, {
-        agentId: result.agentId,
-      });
-    }
     const url = await this.options.resolveProjectUrl(rootPath);
-    await this.watch({ projectId, pending, url, agentId: result.agentId ?? null });
+    await this.watch({ projectId, pending, url });
   }
 
   /**
@@ -481,18 +471,8 @@ export class TaskBatchDeployer {
     projectId: string;
     pending: KanbanTask[];
     url: string | null;
-    /** The grouped deploy agent to let finish before the restart, if any. */
-    agentId: string | null;
   }): Promise<void> {
     let lastPhase: string | null = null;
-    // Subscribe once and share the promise with succeed(). An idle agent is not
-    // a failed agent: it may be waiting for the user, a permission or an external
-    // operation. Only the deploy run's verified outcome is allowed to close the
-    // progress window or produce an error.
-    const idle =
-      input.agentId && this.options.awaitDeployAgentIdle
-        ? this.options.awaitDeployAgentIdle(input.agentId)
-        : null;
     while (true) {
       await this.sleep(POLL_INTERVAL_MS);
       let run: DeployRunSnapshot;
@@ -516,7 +496,7 @@ export class TaskBatchDeployer {
       // even if the agent has just gone to rest, so the stall check never fires
       // on a publication that actually finished.
       if (run.outcome === "success") {
-        await this.succeed(input.projectId, input.pending, input.url, idle);
+        await this.succeed(input.projectId, input.pending, input.url);
         return;
       }
       if (run.outcome === "failed") {
@@ -565,8 +545,6 @@ export class TaskBatchDeployer {
     projectId: string,
     pending: KanbanTask[],
     url: string | null,
-    /** The agent's shared rest promise, awaited so the restart never cuts it off. */
-    idle: Promise<void> | null,
   ): Promise<void> {
     // Read once for the whole batch: every card of a run goes live in the same
     // build, and a per-card read would only invite them to disagree.
@@ -616,18 +594,6 @@ export class TaskBatchDeployer {
       );
       await this.finishSuccessfully(projectId, url);
       return;
-    }
-    // The publication is live, but the grouped deploy agent may still be checking
-    // the served version and writing its own closing verdict. Restarting now would
-    // kill it mid-sentence and leave its chat frozen on "j'attends la fin…". So
-    // wait for it to reach rest first — the restart is genuinely the LAST step,
-    // after every card is stamped AND the agent has had its final say.
-    if (idle) {
-      try {
-        await idle;
-      } catch (error) {
-        this.logger.debug({ err: error }, "Wait for deploy agent to finish failed");
-      }
     }
     // Daemon code changed, so the last step is restarting it. Nothing else ever
     // restarts it on its own.

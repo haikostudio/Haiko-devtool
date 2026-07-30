@@ -87,11 +87,14 @@ interface TasksBoardUiState {
   setDockTaskId: (dockTaskId: string | null) => void;
   /**
    * Ephemeral (not persisted): the id of the grouped batch-publication agent
-   * whose chat the bottom dock shows. `null` means the dock is not showing the
-   * deploy agent. Set when the "Publication en cours" banner is tapped, cleared
-   * by the dock's "back to conductor" control and on close. Mutually exclusive
-   * with `dockTaskId`: showing one drops the other, so the dock never tries to
-   * present a task chat and the deploy chat at the same time.
+   * whose chat the bottom dock shows. Mutually exclusive with `dockTaskId`.
+   *
+   * DORMANT since the publication became a plain build script: there is no
+   * deploy agent to dock any more, so nothing ever sets this to a non-null value
+   * — the banner now opens the publication's LOG (`DeployLogSheet`). Kept
+   * (always null) rather than ripped out of the dock's presence rules, which are
+   * shared with the task and conductor views. Remove with the dock's deploy
+   * branch the next time that file is opened.
    */
   dockDeployAgentId: string | null;
   setDockDeployAgentId: (dockDeployAgentId: string | null) => void;

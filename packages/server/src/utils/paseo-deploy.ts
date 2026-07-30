@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { openSync } from "node:fs";
-import { open, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { appendFile, open, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { getErrorMessage } from "@getpaseo/protocol/error-utils";
 import type {
   PaseoDeployPendingCommit,
@@ -75,8 +75,12 @@ const DEPLOY_OUTCOME_RETENTION_MS = 15 * 60 * 1000;
  * with no way out but a daemon restart.
  */
 const DEPLOY_MAX_RUNTIME_MS = 30 * 60 * 1000;
-/** Bytes of the ship log read to recover a human-readable failure reason. */
-const SHIP_LOG_TAIL_BYTES = 32 * 1024;
+/**
+ * Bytes of the running publication's log sent to clients. Bounded because a
+ * build prints tens of thousands of lines (every bundled asset) and the status
+ * is polled every few seconds — the last screenfuls are what tells the story.
+ */
+const DEPLOY_LOG_MAX_BYTES = 16 * 1024;
 
 /**
  * Repo paths whose changes only take effect once the daemon is restarted —
@@ -115,8 +119,12 @@ interface DeployRun {
   phase: string | null;
   /** `--no-build` runs save without publishing — no "live" claim to make. */
   noBuild: boolean;
-  /** Agent carrying out this publication, when one was launched for it. */
-  agentId: string | null;
+  /**
+   * Size of the ship log when this run started. The log is appended to forever,
+   * so this is where THIS publication begins — what the client is shown, rather
+   * than the tail of whatever ran before it.
+   */
+  logOffset: number;
   /**
    * The changes this run is putting online, captured at the click. Kept after
    * the run ends because a successful publish empties the "not yet online" list:
@@ -152,41 +160,6 @@ export function setPaseoDeploySuccessListener(
   onDeploySuccess = listener;
 }
 
-/** Everything the deploy agent needs to know about the run it is carrying out. */
-export interface PaseoDeployAgentLaunchInput {
-  /** Deploy checkout to work in. */
-  repoRoot: string;
-  /** Build + publish script the agent must run (never reinvent it). */
-  shipScript: string;
-  /** File the script appends its output to. */
-  logFile: string;
-  /** File the script writes its coarse phase to. */
-  phaseFile: string;
-  /** Task branches merged into the deploy branch just before this run. */
-  mergedBranches: string[];
-}
-
-export interface PaseoDeployAgentRun {
-  agentId: string;
-  /** Resolves with the agent's closing words once its run ends. */
-  done: Promise<string | null>;
-}
-
-/**
- * Launches the agent that carries out a publication. Registered at bootstrap
- * (the deploy module must not depend on the agent stack). When none is
- * registered — tests, or a `--no-build` save — the build script is spawned
- * directly instead.
- */
-export type PaseoDeployAgentLauncher = (
-  input: PaseoDeployAgentLaunchInput,
-) => Promise<PaseoDeployAgentRun>;
-
-let launchDeployAgent: PaseoDeployAgentLauncher | null = null;
-
-export function setPaseoDeployAgentLauncher(launcher: PaseoDeployAgentLauncher | null): void {
-  launchDeployAgent = launcher;
-}
 /**
  * HEAD at the moment the daemon booted — captured once so we can tell, later,
  * that new daemon-side commits have landed since this process started (they stay
@@ -373,8 +346,12 @@ export interface PaseoDeployStatus {
    * still read as a failure and not as "still working".
    */
   deployOutcome: PaseoDeployOutcome | null;
-  /** Agent carrying out the running (or last finished) publication, if any. */
-  deployAgentId: string | null;
+  /**
+   * Tail of the publication's own log — the window onto a run that is carried
+   * out by a script rather than by an agent whose conversation could be opened.
+   * Null when no run of this process wrote anything yet.
+   */
+  deployLog: string | null;
   hasPending: boolean;
   uncommittedFiles: PaseoDeployPendingFile[];
   unshippedCommits: PaseoDeployPendingCommit[];
@@ -416,12 +393,6 @@ export interface PaseoDeployStatus {
 export interface PaseoDeployTriggerResult {
   started: boolean;
   error: string | null;
-  /**
-   * The agent launched to carry out this publication, when one was (a real
-   * build handed to a supervising agent). Null for save-only or direct-spawn
-   * runs. Lets the batch record point the progress banner at the live agent.
-   */
-  agentId?: string | null;
 }
 
 /** Tag used for tasks opened automatically when a selected branch conflicts. */
@@ -564,23 +535,68 @@ async function resetDeployPhase(): Promise<void> {
   }
 }
 
-/**
- * Tail of the ship log. Read bounded from the end because the log is appended to
- * on every deploy and grows without limit.
- */
-async function readShipLogTail(): Promise<string> {
-  const handle = await open(SHIP_LOG_FILE, "r");
+/** Current size of the ship log, or 0 when it does not exist yet. */
+async function readShipLogSize(): Promise<number> {
   try {
-    const { size } = await handle.stat();
-    const length = Math.min(SHIP_LOG_TAIL_BYTES, size);
-    if (length === 0) {
-      return "";
+    return (await stat(SHIP_LOG_FILE)).size;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Opens THIS publication's section of the shared log. The log is one endless
+ * append-only file, so without a visible header the client's live view would
+ * start mid-sentence in the previous run's output.
+ */
+async function appendShipLogHeader(input: {
+  taskTitles: string[];
+  noBuild: boolean;
+}): Promise<void> {
+  const lines = [
+    "",
+    `=== ${new Date().toISOString()} — ${
+      input.noBuild ? "Sauvegarde (sans mise en ligne)" : "Publication"
+    } ===`,
+    ...input.taskTitles.map((title) => `    • ${title}`),
+    "",
+  ];
+  try {
+    await appendFile(SHIP_LOG_FILE, `${lines.join("\n")}\n`, "utf8");
+  } catch {
+    // The header is a comfort, never a precondition: a log we cannot write to
+    // must not stop the publication itself.
+  }
+}
+
+/**
+ * What the running (or last) publication has printed so far, from the point it
+ * started. This is the window the deploy agent used to be: with the agent gone,
+ * the script's own output is the only honest account of what is happening, so
+ * it has to be reachable from the client.
+ */
+async function readRunLog(run: DeployRun): Promise<string | null> {
+  try {
+    const handle = await open(SHIP_LOG_FILE, "r");
+    try {
+      const { size } = await handle.stat();
+      // A log that shrank (rotated mid-run) invalidates the offset: fall back to
+      // the plain tail rather than reading from a position that no longer means
+      // anything.
+      const from = run.logOffset <= size ? run.logOffset : Math.max(0, size - DEPLOY_LOG_MAX_BYTES);
+      const start = Math.max(from, size - DEPLOY_LOG_MAX_BYTES);
+      const length = size - start;
+      if (length <= 0) {
+        return null;
+      }
+      const buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, start);
+      return buffer.toString("utf8");
+    } finally {
+      await handle.close();
     }
-    const buffer = Buffer.alloc(length);
-    await handle.read(buffer, 0, length, size - length);
-    return buffer.toString("utf8");
-  } finally {
-    await handle.close();
+  } catch {
+    return null;
   }
 }
 
@@ -602,13 +618,19 @@ export function extractShipFailureReason(logTail: string): string | null {
 }
 
 /** Store the failure reason for the sheet, once the log has been consulted. */
-async function recordShipFailure(exitCode: number | null): Promise<void> {
-  lastError = await describeShipFailure(exitCode);
+async function recordShipFailure(run: DeployRun, exitCode: number | null): Promise<void> {
+  lastError = await describeShipFailure(run, exitCode);
 }
 
-async function describeShipFailure(exitCode: number | null): Promise<string> {
+/**
+ * Why this publication stopped, in the script's own words. Read from THIS run's
+ * section of the log: the file is append-only across every publication, so the
+ * plain tail could hand back a previous run's `!!` line and blame a failure that
+ * was already fixed.
+ */
+async function describeShipFailure(run: DeployRun, exitCode: number | null): Promise<string> {
   try {
-    const reason = extractShipFailureReason(await readShipLogTail());
+    const reason = extractShipFailureReason((await readRunLog(run)) ?? "");
     if (reason !== null) {
       return reason;
     }
@@ -1131,24 +1153,24 @@ async function getPendingWorktrees(
   return results.filter((entry): entry is PaseoDeployWorktree => entry !== null);
 }
 
-/** The five run-derived status fields, in one place for both status branches. */
+/** The run-derived status fields, in one place for both status branches. */
 interface DeployRunFields {
   deploying: boolean;
   deployPhase: string | null;
   deployStartedAt: number | null;
   deployFinishedAt: number | null;
   deployOutcome: PaseoDeployOutcome | null;
-  deployAgentId: string | null;
+  deployLog: string | null;
 }
 
-function describeDeployRun(run: DeployRun | null): DeployRunFields {
+async function describeDeployRun(run: DeployRun | null): Promise<DeployRunFields> {
   return {
     deploying: run !== null && run.finishedAt === null,
     deployPhase: run?.phase ?? null,
     deployStartedAt: run?.startedAt ?? null,
     deployFinishedAt: run?.finishedAt ?? null,
     deployOutcome: run?.outcome ?? null,
-    deployAgentId: run?.agentId ?? null,
+    deployLog: run === null ? null : await readRunLog(run),
   };
 }
 
@@ -1229,7 +1251,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
       (deployedSha !== null && deployedSha !== headSha);
 
     return {
-      ...describeDeployRun(run),
+      ...(await describeDeployRun(run)),
       hasPending,
       uncommittedFiles,
       unshippedCommits,
@@ -1247,7 +1269,7 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     };
   } catch (error) {
     return {
-      ...describeDeployRun(currentRun),
+      ...(await describeDeployRun(currentRun)),
       hasPending: false,
       uncommittedFiles: [],
       unshippedCommits: [],
@@ -1538,97 +1560,21 @@ async function isPublicationLive(): Promise<boolean> {
   return deployedSha !== null && headSha !== null && deployedSha === headSha;
 }
 
-/** Longest agent explanation kept as a failure reason (it lands in an alert). */
-const AGENT_FAILURE_REASON_MAX_LENGTH = 300;
-
 /**
- * Generic last-resort cause, when neither the build log nor the agent's own
- * words carry anything readable.
+ * Close a run on the evidence rather than on an exit code: the published marker
+ * is what decides. A non-zero exit over a site that is genuinely live is noise
+ * (the copy landed, a late step complained), and a clean exit that never moved
+ * the marker is a failure however calmly it ended.
  */
-const GENERIC_FAILURE_REASON =
-  "La publication s'est arrêtée sans mettre la nouvelle version en ligne.";
-
-/** Words that make a line read as an actual cause worth surfacing. */
-const CAUSE_KEYWORDS =
-  /(échou|échec|erreur|conflit|redémarr|construction|build|impossible|introuvable|disque|plein|full|interromp|timeout|refus|cassé|manqu)/i;
-
-/**
- * Lines an agent writes that are NOT the failure cause and must never end up in
- * the red banner: the imposed header (model / level / time / cost), and the
- * running-commentary an agent leaves while it works ("le moniteur est en place,
- * je serai notifié…"). Before this filter the banner showed "Codex très haut,
- * 12 min, coût…" as the reason — the header, not the error.
- */
-const NOISE_LINE =
-  /(\bchf\b|coût|tarif|\bopus\b|\bcodex\b|\bsonnet\b|\bhaiku\b|\bgpt\b|niveau\s|moniteur|je serai notifié|notifié dès|j'attends|suivi est en place|je surveille|je vous préviens|en place, je)/i;
-
-/** Strip markdown noise (headings, bold, list markers) from a candidate line. */
-function stripMarkdown(line: string): string {
-  return line
-    .replace(/^#{1,6}\s*/, "")
-    .replace(/^[-*]\s+/, "")
-    .replace(/\*\*/g, "")
-    .replace(/`/g, "")
-    .trim();
-}
-
-/**
- * The readable cause hidden in an agent's closing message: drop the header and
- * the progress chatter, then prefer the last line that actually names a failure,
- * falling back to the last meaningful line. Returns null when nothing survives,
- * so the caller can reach for a generic sentence rather than echoing noise.
- *
- * Exported for the same reason as extractShipFailureReason: this is pure text
- * triage and deserves its own tests, independent of the filesystem.
- */
-export function sanitizeAgentFailureReason(summary: string | null): string | null {
-  const candidates = (summary ?? "")
-    .split("\n")
-    .map(stripMarkdown)
-    .filter((line) => line.length > 0 && !NOISE_LINE.test(line));
-  if (candidates.length === 0) {
-    return null;
-  }
-  const cause =
-    candidates.toReversed().find((line) => CAUSE_KEYWORDS.test(line)) ??
-    candidates[candidates.length - 1];
-  if (!cause) {
-    return null;
-  }
-  return cause.length > AGENT_FAILURE_REASON_MAX_LENGTH
-    ? `${cause.slice(0, AGENT_FAILURE_REASON_MAX_LENGTH)}…`
-    : cause;
-}
-
-/**
- * Why nothing went live, in the most concrete words available: the build
- * script's own fatal line first, then the agent's closing words (stripped of the
- * header and progress chatter), then a generic sentence. Never silence — a
- * publication that stops without a reason is exactly the "j'ai cliqué et il ne
- * s'est rien passé" report.
- */
-async function describeAgentFailure(summary: string | null): Promise<string> {
-  try {
-    const reason = extractShipFailureReason(await readShipLogTail());
-    if (reason !== null) {
-      return reason;
-    }
-  } catch {
-    // Log unreadable — fall back to what the agent said.
-  }
-  return sanitizeAgentFailureReason(summary) ?? GENERIC_FAILURE_REASON;
-}
-
-/** Close a run carried out by an agent, on the evidence rather than its word. */
-async function finishAgentRun(
+async function finishRun(
   run: DeployRun,
-  input: { summary: string | null; mergedBranches: string[] },
+  input: { exitCode: number | null; mergedBranches: string[] },
 ): Promise<void> {
   // A superseded or already-closed run must not clobber a newer one.
   if (currentRun !== run || run.finishedAt !== null) {
     return;
   }
-  const live = await isPublicationLive();
+  const live = run.noBuild ? input.exitCode === 0 : await isPublicationLive();
   if (currentRun !== run || run.finishedAt !== null) {
     return;
   }
@@ -1636,12 +1582,17 @@ async function finishAgentRun(
   if (!live) {
     run.outcome = "failed";
     run.phase = "error";
-    lastError = await describeAgentFailure(input.summary);
+    await recordShipFailure(run, input.exitCode);
     return;
   }
   run.outcome = "success";
   run.phase = "done";
-  if (onDeploySuccess) {
+  lastError = null;
+  // A `--no-build` run saves without publishing, so nothing went live and there
+  // is nothing for the board to react to. A listener throw (a card-archiving
+  // step that fails) is swallowed on purpose: the publication already succeeded,
+  // and an archiving miss must never turn a live site into a failed outcome.
+  if (!run.noBuild && onDeploySuccess) {
     try {
       onDeploySuccess({ mergedBranches: input.mergedBranches });
     } catch {
@@ -1654,6 +1605,12 @@ export async function triggerPaseoDeploy(input: {
   noBuild?: boolean;
   projectId?: string;
   mergeBranches?: string[];
+  /**
+   * Titles of the cards this publication is taking online. Purely descriptive:
+   * they become the save commit's message, so the repository history says what
+   * shipped instead of "sauvegarde avant build local" over and over.
+   */
+  taskTitles?: string[];
   /**
    * "Réinitialiser / Relancer": wipe a stuck or falsely-failed run's state (and a
    * residual lock) before starting, so the user can escape a jammed publication
@@ -1726,78 +1683,36 @@ export async function triggerPaseoDeploy(input: {
       outcome: null,
       phase: null,
       noBuild: input.noBuild === true,
-      agentId: null,
+      logOffset: await readShipLogSize(),
       commits: await getUnshippedCommits(deployedShaAtStart, headShaAtStart),
     };
     currentRun = run;
     // Keep the skip note visible after a partial merge; otherwise clear.
     lastError = skippedNote;
 
-    // A real publication is handed to an agent: it runs the build script, keeps
-    // an eye on it, and — unlike a bare `spawn` — can actually deal with what
-    // goes wrong (a stale dependency, a full disk, a half-finished copy) instead
-    // of leaving a dead progress bar behind. A save-only run stays a plain
-    // script call: there is nothing to supervise.
-    if (!run.noBuild && launchDeployAgent !== null) {
-      const launched = await launchDeployAgent({
-        repoRoot: REPO_ROOT,
-        shipScript: SHIP_SCRIPT,
-        logFile: SHIP_LOG_FILE,
-        phaseFile: PHASE_FILE,
-        mergedBranches,
-      });
-      run.agentId = launched.agentId;
-      void launched.done.then(
-        (summary) => finishAgentRun(run, { summary, mergedBranches }),
-        (error) => finishAgentRun(run, { summary: getErrorMessage(error), mergedBranches }),
-      );
-      return { started: true, error: null, agentId: launched.agentId };
-    }
-
+    // The publication is a SCRIPT, started here and nothing else. It used to be
+    // handed to an LLM agent that was supposed to run it, watch it and repair
+    // the boring environment failures on its own — and that made publishing
+    // depend on a model quota: the day both providers were exhausted, pressing
+    // "Tout déployer" created an agent that died on "usage limit" before ever
+    // running the script. Nothing was built, nothing went online, and the column
+    // filled with the agent's own error messages. A publication must not be able
+    // to fail for a reason that has nothing to do with the code being published.
+    await appendShipLogHeader({ taskTitles: input.taskTitles ?? [], noBuild: run.noBuild });
     const logFd = openSync(SHIP_LOG_FILE, "a");
-    const child = spawn(SHIP_SCRIPT, input.noBuild ? ["--no-build"] : [], {
+    const child = spawn(SHIP_SCRIPT, run.noBuild ? ["--no-build"] : [], {
       detached: true,
       stdio: ["ignore", logFd, logFd],
+      env: {
+        ...process.env,
+        // What this publication carries, so the save commit names the work
+        // instead of the anonymous "sauvegarde avant build local".
+        PASEO_DEPLOY_TASKS: (input.taskTitles ?? []).join("\n"),
+      },
     });
 
     child.on("exit", (code) => {
-      void (async () => {
-        // Guard against a late exit from a superseded run clobbering a newer one.
-        if (currentRun !== run || run.finishedAt !== null) {
-          return;
-        }
-        // A non-zero exit is not proof of failure: the served marker is. If HEAD
-        // is already live the publish landed and the exit code is noise — mark it
-        // a success rather than a false "publication échouée".
-        if (code !== 0 && !(await isPublicationLive())) {
-          if (currentRun !== run || run.finishedAt !== null) {
-            return;
-          }
-          run.finishedAt = Date.now();
-          run.outcome = "failed";
-          run.phase = "error";
-          await recordShipFailure(code);
-          return;
-        }
-        if (currentRun !== run || run.finishedAt !== null) {
-          return;
-        }
-        run.finishedAt = Date.now();
-        run.outcome = "success";
-        run.phase = "done";
-        // Full publish succeeded: let listeners (task board) react to what
-        // shipped. A --no-build run commits without publishing, so nothing went
-        // live — skip. A listener throw (e.g. a card archiving step that fails)
-        // is swallowed here on purpose: the publication already succeeded, so an
-        // archiving miss must NEVER turn a live site into a failed outcome.
-        if (!input.noBuild && onDeploySuccess) {
-          try {
-            onDeploySuccess({ mergedBranches });
-          } catch {
-            // A listener failure must never break the deploy flow.
-          }
-        }
-      })();
+      void finishRun(run, { exitCode: code, mergedBranches });
     });
     child.on("error", (err) => {
       if (currentRun !== run || run.finishedAt !== null) {
@@ -1806,7 +1721,7 @@ export async function triggerPaseoDeploy(input: {
       run.finishedAt = Date.now();
       run.outcome = "failed";
       run.phase = "error";
-      lastError = err.message;
+      lastError = `La publication n'a pas pu démarrer : ${err.message}`;
     });
 
     child.unref();

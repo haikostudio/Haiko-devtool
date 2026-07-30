@@ -51,7 +51,7 @@ export function ScrollableKanbanBoard({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
-  onOpenDeployAgent,
+  onOpenDeployLog,
   onResetDeploy,
   onToggleDeployHold,
   deployOffPeak,
@@ -97,7 +97,7 @@ export function ScrollableKanbanBoard({
             onReanalyzeTask={onReanalyzeTask}
             onDeleteTask={onDeleteTask}
             onDeployAll={onDeployAll}
-            onOpenDeployAgent={onOpenDeployAgent}
+            onOpenDeployLog={onOpenDeployLog}
             onResetDeploy={onResetDeploy}
             onToggleDeployHold={onToggleDeployHold}
             deployOffPeak={deployOffPeak}
@@ -125,7 +125,7 @@ const BoardColumn = memo(function BoardColumn({
   onReanalyzeTask,
   onDeleteTask,
   onDeployAll,
-  onOpenDeployAgent,
+  onOpenDeployLog,
   onResetDeploy,
   onToggleDeployHold,
   deployOffPeak,
@@ -146,7 +146,7 @@ const BoardColumn = memo(function BoardColumn({
   onReanalyzeTask: KanbanBoardProps["onReanalyzeTask"];
   onDeleteTask: KanbanBoardProps["onDeleteTask"];
   onDeployAll: KanbanBoardProps["onDeployAll"];
-  onOpenDeployAgent: KanbanBoardProps["onOpenDeployAgent"];
+  onOpenDeployLog: KanbanBoardProps["onOpenDeployLog"];
   onResetDeploy: KanbanBoardProps["onResetDeploy"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
   deployOffPeak: KanbanBoardProps["deployOffPeak"];
@@ -250,7 +250,7 @@ const BoardColumn = memo(function BoardColumn({
           <DeployBatchBanner
             column={column}
             batch={board?.deployBatch ?? null}
-            onOpenAgent={onOpenDeployAgent}
+            onOpenLog={onOpenDeployLog}
             onReset={onResetDeploy}
           />
           {extras}

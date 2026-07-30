@@ -49,14 +49,15 @@ const ThemedReset = withUnistyles(RotateCcw);
 export const DeployBatchBanner = memo(function DeployBatchBanner({
   column,
   batch,
-  onOpenAgent,
+  onOpenLog,
   onReset,
 }: {
   column: TaskColumn;
   batch: TaskDeployBatch | null | undefined;
-  // Opens the single grouped deploy agent's conversation. The banner is the
-  // window onto the live build/publish — tapping it shows the agent at work.
-  onOpenAgent?: ((agentId: string) => void) | undefined;
+  // Opens the publication's own log. The publication is a script, not an agent,
+  // so its output IS the window onto the live build — tapping the banner shows
+  // exactly which command is running and what it printed.
+  onOpenLog?: (() => void) | undefined;
   // "Réinitialiser / Relancer": clears the failed state + residual lock and
   // starts a clean publication. Only offered when the batch actually failed.
   onReset?: (() => void) | undefined;
@@ -64,7 +65,6 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
   const { t } = useTranslation();
   const dismissedAt = useTasksBoardUiStore((state) => state.dismissedDeployBatchAt);
   const dismiss = useTasksBoardUiStore((state) => state.dismissDeployBatch);
-  const agentId = batch?.agentId ?? null;
   const handleDismiss = useCallback(
     (event?: GestureResponderEvent) => {
       // Don't let the dismiss tap also open the agent when the whole card is
@@ -91,7 +91,7 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
   const count = batch.taskIds.length;
   const titles = batch.titles ?? [];
   return (
-    <BatchCard openAgentId={onOpenAgent ? agentId : null} onOpenAgent={onOpenAgent}>
+    <BatchCard onOpenLog={onOpenLog}>
       <View style={styles.header}>
         <BatchIcon state={batch.state} />
         <Text style={styles.title}>{batchTitle(t, batch.state, count)}</Text>
@@ -135,26 +135,19 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
 });
 
 /**
- * The banner's outer surface. When the run carries a deploy agent, the whole
- * card is a Pressable that opens its conversation (watch the build/publish
- * live); otherwise it is a plain, non-interactive View — exactly as before.
+ * The banner's outer surface. When the host can show the publication's log, the
+ * whole card is a Pressable that opens it (watch the build/publish live);
+ * otherwise it is a plain, non-interactive View.
  */
 function BatchCard({
-  openAgentId,
-  onOpenAgent,
+  onOpenLog,
   children,
 }: {
-  openAgentId: string | null;
-  onOpenAgent?: ((agentId: string) => void) | undefined;
+  onOpenLog?: (() => void) | undefined;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
-  const handleOpen = useCallback(() => {
-    if (onOpenAgent && openAgentId) {
-      onOpenAgent(openAgentId);
-    }
-  }, [onOpenAgent, openAgentId]);
-  if (!openAgentId) {
+  if (!onOpenLog) {
     return (
       <View style={styles.card} testID="tasks-deploy-batch-banner">
         {children}
@@ -165,9 +158,9 @@ function BatchCard({
     <Pressable
       style={styles.card}
       testID="tasks-deploy-batch-banner"
-      onPress={handleOpen}
+      onPress={onOpenLog}
       accessibilityRole="button"
-      accessibilityLabel={t("tasks.board.batchOpenAgent")}
+      accessibilityLabel={t("tasks.board.batchOpenLog")}
     >
       {children}
     </Pressable>
@@ -191,8 +184,8 @@ function BatchRecap({
   const { t } = useTranslation();
   const handleReset = useCallback(
     (event?: GestureResponderEvent) => {
-      // The banner card is itself pressable (opens the agent); keep the reset tap
-      // from bubbling up and opening the conversation instead.
+      // The banner card is itself pressable (opens the log); keep the reset tap
+      // from bubbling up and opening the log instead.
       event?.stopPropagation?.();
       onReset?.();
     },

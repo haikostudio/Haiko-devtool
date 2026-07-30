@@ -63,7 +63,7 @@ describe("TaskBatchDeployer", () => {
   let dir: string;
   let service: TaskBoardService;
   let notes: string[];
-  let triggered: { projectId: string; mergeBranches: string[] }[];
+  let triggered: { projectId: string; mergeBranches: string[]; taskTitles?: string[] }[];
   let restarts: string[];
   let perCard: string[];
 
@@ -118,8 +118,6 @@ describe("TaskBatchDeployer", () => {
     url?: string | null;
     runs?: DeployRunSnapshot[];
     started?: boolean;
-    agentId?: string | null;
-    awaitDeployAgentIdle?: (agentId: string) => Promise<void>;
     /** Blocks each triggerDeploy until resolved — holds a run active on purpose. */
     holdTrigger?: Promise<void>;
     /** The version the run puts online, and the one the engine already runs. */
@@ -150,11 +148,7 @@ describe("TaskBatchDeployer", () => {
         if (input.holdTrigger) {
           await input.holdTrigger;
         }
-        return {
-          started: input.started ?? true,
-          error: "déjà en cours",
-          agentId: input.agentId ?? null,
-        };
+        return { started: input.started ?? true, error: "déjà en cours" };
       },
       readDeployRun: async () =>
         runs.shift() ?? { deploying: false, phase: null, outcome: null, error: null },
@@ -164,7 +158,6 @@ describe("TaskBatchDeployer", () => {
       requestDaemonRestart: (reason) => runRestarts.push(reason),
       readPublishedSha: async () => input.publishedSha ?? null,
       readRunningEngineSha: () => input.runningEngineSha ?? null,
-      awaitDeployAgentIdle: input.awaitDeployAgentIdle,
       sleep: async () => {},
       logger,
     });
@@ -206,7 +199,14 @@ describe("TaskBatchDeployer", () => {
 
     // ONE publication for the whole batch. Tasks run in place on main, so there
     // are no per-task branches to merge — the deploy just builds main.
-    expect(triggered).toEqual([{ projectId: "proj-1", mergeBranches: [] }]);
+    expect(triggered).toEqual([
+      {
+        projectId: "proj-1",
+        mergeBranches: [],
+        taskTitles: ["Login", "Signup"],
+        reset: undefined,
+      },
+    ]);
     const board = await service.getBoard("proj-1");
     for (const id of [first.id, second.id]) {
       const card = board.tasks.find((entry) => entry.id === id);
@@ -225,45 +225,37 @@ describe("TaskBatchDeployer", () => {
     expect(board.deployBatch?.finishedAt).toBeTruthy();
   });
 
-  test("stamps the cards but holds the restart until the deploy agent has finished", async () => {
+  test("stamps the cards, then restarts the engine as the last step", async () => {
     const card = await seedQueued("Login", "task/login");
     await service.patchTask("proj-1", card.id, (current) => ({
       ...current,
       needsDaemonRestart: true,
     }));
-    let releaseAgent: (() => void) | null = null;
-    const idleCalls: string[] = [];
     const deployer = buildDeployer({
       url: "https://app.haikostudio.cloud",
-      agentId: "deploy-agent-1",
       runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
-      awaitDeployAgentIdle: (agentId) => {
-        idleCalls.push(agentId);
-        return new Promise<void>((resolve) => {
-          releaseAgent = resolve;
-        });
-      },
     });
 
     await deployer.deployAll("proj-1");
-    // The "c'est en ligne" note is posted right after the cards are stamped and
-    // just before succeed() blocks on the agent's rest — a reliable midway marker.
-    await settle(() => noteContains("en ligne"));
-
-    // The publication is live and the card is already stamped, but the shared
-    // progress stays open until the agent has written its verdict and the final
-    // restart has been requested.
-    expect(idleCalls).toEqual(["deploy-agent-1"]);
-    const midway = await service.getBoard("proj-1");
-    expect(midway.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
-    expect(midway.deployBatch?.state).toBe("running");
-    expect(restarts).toEqual([]);
-
-    // The agent reaches rest → now, and only now, the restart fires.
-    releaseAgent?.();
     await settle(() => restarts.length > 0);
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
     expect(restarts).toEqual(["task_batch_deploy"]);
     await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+  });
+
+  test("hands the lot's titles to the publication so the commit names them", async () => {
+    await seedQueued("Login", "task/login");
+    await seedQueued("Signup", "task/signup");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    expect(triggered[0]?.taskTitles).toEqual(["Login", "Signup"]);
   });
 
   test("a held-back card is left out of the run", async () => {
@@ -307,17 +299,16 @@ describe("TaskBatchDeployer", () => {
     expect(board.deployBatch?.error).toContain("build cassé");
   });
 
-  test("keeps progress open when the deploy agent pauses without a live verdict", async () => {
+  test("keeps progress open while the run has not reached a verdict", async () => {
     const task = await seedQueued("Login", "task/login");
     const deployer = buildDeployer({
-      agentId: "deploy-agent-1",
-      // The run pauses once, then resumes and reaches a verified live outcome.
+      // The run goes quiet once (unreadable status), then resumes and reaches a
+      // verified live outcome. An unknown state is never read as a failure.
       runs: [
         { deploying: true, phase: "build", outcome: null, error: null },
-        { deploying: true, phase: "build", outcome: null, error: null },
+        { deploying: false, phase: "build", outcome: null, error: null },
         { deploying: false, phase: "done", outcome: "success", error: null },
       ],
-      awaitDeployAgentIdle: async () => {},
     });
 
     await deployer.deployAll("proj-1");

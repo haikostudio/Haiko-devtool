@@ -101,6 +101,49 @@ in the project's single list.
    in-memory history surfaced on the board (`RefusedMovesNotice`) — one silent
    no-op is right, three in a row look like a broken board.
 
+## "Tout déployer" — what one press actually runs
+
+The press is the ONLY thing that publishes, and what it starts is a script, not
+an agent:
+
+```
+TaskBatchDeployer.deployAll        (queue, one run per project, serialized)
+  → triggerPaseoDeploy             (snapshot the lot, reset the phase marker)
+    → spawn ops/paseo-build-local.sh (detached, its own log, no model involved)
+       prepare → push → verify → daemon → site → publish
+  → watch (poll deploy status ~5 s, narrate each phase into every card)
+  → stamp the cards live, then request the daemon restart
+```
+
+Each step of the script writes its name into
+`/home/paseo/paseo-build-local.phase` (the column's progress bar) and every fatal
+cause is printed as `!! <raison>` — the exact line the board shows in the failure
+recap. The full output goes to `/home/paseo/paseo-ship-now.log`; the daemon
+serves this run's slice of it as `deployLog` on the deploy-status RPC, and the
+banner opens it (`DeployLogSheet`). That log IS the window onto a publication.
+
+**Never put a model back on this path.** Publication used to be handed to an LLM
+agent that ran the script, watched it and repaired environment failures. The day
+both provider quotas were spent, pressing "Tout déployer" created an agent that
+died on "usage limit" before running anything: nothing was built, nothing went
+online, and the column filled with the agent's own errors. A publication must not
+be able to fail for a reason unrelated to the code being published. Environment
+repairs that were the agent's excuse to exist are now explicit steps in the
+script (disk preflight, residual-lock probe, push retries).
+
+**Publishing includes saving.** `prepare` commits whatever is uncommitted (the
+message names the lot's cards, passed down as `PASEO_DEPLOY_TASKS`) and `push`
+sends it to the fork — three attempts, then a hard stop. A site built from files
+that exist nowhere but this server is code that cannot be reviewed, reverted or
+retrieved, and it makes `.deployed-sha` name a commit that does not contain what
+is online. `PASEO_DEPLOY_SKIP_PUSH=1` is the escape hatch when the remote is
+durably unreachable.
+
+**The restart is a step, not a reaction.** A successful batch always restarts the
+daemon, so the engine runs the code that just went online. The single exception
+is a proven one: the engine already runs exactly the published sha (a republish
+with no new commit). An unknown version never takes that door.
+
 ## The stale-daemon trap
 
 The daemon does not run the source — it runs `packages/*/dist`. Publication used
