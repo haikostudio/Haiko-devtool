@@ -101,8 +101,6 @@ import {
 import { ProviderUsageHistoryRecorder } from "../services/quota-fetcher/history-recorder.js";
 import { ProviderUsageHistoryStore } from "../services/quota-fetcher/history-store.js";
 import { ProviderUsageService } from "../services/quota-fetcher/service.js";
-import type { BrainMemoryClient } from "../services/brain-memory/client.js";
-import type { BrainCurator } from "../services/brain-memory/curator.js";
 import { getProcessMemoryDiagnostics, getProcessUptimeSeconds } from "./process-diagnostics.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
@@ -343,16 +341,6 @@ function buildServerCapabilities(params: {
   };
 }
 
-function readMutableBrainMemoryEnabled(config: MutableDaemonConfig): boolean {
-  const brainMemory = config.brainMemory;
-  return (
-    typeof brainMemory === "object" &&
-    brainMemory !== null &&
-    "enabled" in brainMemory &&
-    brainMemory.enabled === true
-  );
-}
-
 function areServerCapabilitiesEqual(
   current: ServerCapabilities | undefined,
   next: ServerCapabilities | undefined,
@@ -528,7 +516,6 @@ export class VoiceAssistantWebSocketServer {
   private readonly providerUsageService: ProviderUsageService;
   private readonly providerUsageHistoryStore: ProviderUsageHistoryStore;
   private readonly providerUsageHistoryRecorder: ProviderUsageHistoryRecorder;
-  private readonly brainMemory: BrainMemoryClient | null;
   private readonly projectPromptSync: ProjectPromptSyncService | null;
   private unsubscribeTerminalActivity: (() => void) | null = null;
   private taskBoardService: TaskBoardService | null = null;
@@ -600,10 +587,6 @@ export class VoiceAssistantWebSocketServer {
     },
     serviceProxyPublicBaseUrl?: string | null,
     browserToolsBroker?: BrowserToolsBroker | null,
-    brainMemoryServices?: {
-      client: BrainMemoryClient;
-      curator: BrainCurator | null;
-    } | null,
     projectPromptSync?: ProjectPromptSyncService | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
@@ -732,8 +715,6 @@ export class VoiceAssistantWebSocketServer {
       logger: this.logger,
     });
     this.providerUsageHistoryRecorder.start();
-
-    this.brainMemory = brainMemoryServices?.client ?? null;
 
     this.wss = this.createWebSocketServer(server, wsConfig, auth);
     this.startRuntimeMetricsInterval();
@@ -1480,8 +1461,11 @@ export class VoiceAssistantWebSocketServer {
         // COMPAT(sessionUiStateSync): added in v0.1.X, drop the gate when floor >= v0.1.X.
         sessionUiStateSync: true,
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
-        brainMemory:
-          readMutableBrainMemoryEnabled(this.daemonConfigStore.get()) && !!this.brainMemory,
+        // La mémoire longue durée a été retirée du démon (coût en jetons pour un
+        // gain marginal) : la capacité reste dans le protocole — un vieux client
+        // doit continuer de la lire — mais elle vaut désormais toujours faux, ce
+        // qui masque le réglage côté application.
+        brainMemory: false,
         // COMPAT(messageTriage): added in v0.1.X, drop the gate when floor >= v0.1.X.
         messageTriage: !!this.messageTriage,
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.

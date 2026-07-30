@@ -32,6 +32,16 @@ const DEPLOYED_SHA_FILE = "/var/www/paseo-app/.deployed-sha";
  * publication that copied only half of itself is caught instead of trusted.
  */
 const SERVED_VERSION_FILE = "/var/www/paseo-app/version.json";
+/**
+ * Version dont le BUNDLE en ligne est issu, écrite par le script de publication
+ * à chaque reconstruction du site.
+ *
+ * Distincte de {@link DEPLOYED_SHA_FILE} depuis que la publication ne
+ * reconstruit que ce qui a changé : une publication purement serveur avance la
+ * version publiée sans toucher au bundle. Sans ce second repère, comparer
+ * `version.json` à `.deployed-sha` signalait à tort un site « à moitié copié ».
+ */
+const SITE_SHA_FILE = "/var/www/paseo-app/.site-sha";
 const SHIP_LOG_FILE = "/home/paseo/paseo-ship-now.log";
 /**
  * Coarse progress phase written by the local build script at each step
@@ -60,6 +70,16 @@ const DEPLOY_LOCK_FILE = "/home/paseo/paseo-build-local.lock";
  * marker is what makes the difference observable.
  */
 const DAEMON_BUILD_MARKER = "/home/paseo/paseo-daemon-built.sha";
+/**
+ * Posé par le script de publication quand il vient d'installer un nouveau `dist`
+ * moteur, effacé par le démon à son démarrage. Il répond à une seule question :
+ * « le code moteur sur le disque a-t-il changé depuis que ce processus tourne ? »
+ *
+ * Depuis que la publication ne reconstruit que ce qui a bougé, une mise en ligne
+ * purement visuelle ne touche plus au moteur : redémarrer y coupait toutes les
+ * sessions pour recharger exactement le même code.
+ */
+const DAEMON_RESTART_PENDING_FILE = "/home/paseo/paseo-daemon-restart-pending";
 /**
  * How long a finished run's outcome stays visible in the status after it ends.
  * Without this the progress block vanished the instant the build stopped, so a
@@ -186,6 +206,28 @@ export async function recordDaemonBootSha(): Promise<void> {
     daemonBootSha = null;
   }
   daemonBuiltSha = await readDaemonBuildSha();
+  // Ce processus vient de charger le `dist` présent sur le disque : la dette de
+  // redémarrage est soldée, quelle qu'elle fût.
+  await unlink(DAEMON_RESTART_PENDING_FILE).catch(() => undefined);
+}
+
+/**
+ * Un `dist` moteur a-t-il été installé depuis le démarrage de ce processus ?
+ *
+ * Le drapeau est posé par le script de publication au moment PRÉCIS où il
+ * remplace le `dist`, et effacé au démarrage du démon. C'est donc un fait
+ * observé, pas une supposition sur les chemins modifiés — la nuance compte : la
+ * décision « faut-il redémarrer ? » a déjà été prise par heuristique par le
+ * passé, et un correctif serveur non rechargé a semblé « publié sans effet ».
+ * Absent = le processus en cours exécute déjà le code installé.
+ */
+export async function isDaemonRestartPending(): Promise<boolean> {
+  try {
+    const raw = await readFile(DAEMON_RESTART_PENDING_FILE, "utf8");
+    return raw.trim().length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /** The marker written by the publish script, or null when it was never written. */
@@ -291,17 +333,23 @@ export async function getPublishedSha(): Promise<string | null> {
  * "did the publication I just did actually reach the engine?".
  */
 export async function getDaemonBuildFreshness(): Promise<DaemonBuildFreshness> {
-  const [builtSha, deployedSha, servedSha] = await Promise.all([
+  const [builtSha, deployedSha, servedSha, siteSha] = await Promise.all([
     readDaemonBuildSha(),
     readDeployedSha(),
     readServedSha(),
+    readSiteSha(),
   ]);
+  // Le bundle se compare à SON propre repère quand il existe : une publication
+  // qui n'a rien reconstruit côté site laisse volontairement version.json en
+  // arrière, et ce n'est pas une copie ratée. Sans repère de site (installations
+  // d'avant cette évolution), on retombe sur l'ancienne comparaison.
+  const siteReference = siteSha ?? deployedSha;
   return {
     builtSha,
     deployedSha,
     servedSha,
     stale: builtSha !== null && deployedSha !== null && builtSha !== deployedSha,
-    siteMismatch: servedSha !== null && deployedSha !== null && servedSha !== deployedSha,
+    siteMismatch: servedSha !== null && siteReference !== null && servedSha !== siteReference,
   };
 }
 
@@ -494,6 +542,17 @@ async function prepareDeployBranches(input: {
 async function readDeployedSha(): Promise<string | null> {
   try {
     const raw = await readFile(DEPLOYED_SHA_FILE, "utf8");
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Version dont le bundle servi est issu, ou null avant la première écriture. */
+async function readSiteSha(): Promise<string | null> {
+  try {
+    const raw = await readFile(SITE_SHA_FILE, "utf8");
     const trimmed = raw.trim();
     return trimmed.length > 0 ? trimmed : null;
   } catch {

@@ -85,6 +85,13 @@ export interface TaskBatchDeployerOptions {
    * answer must never suppress the restart.
    */
   readRunningEngineSha?: () => string | null;
+  /**
+   * Un `dist` moteur a-t-il été installé depuis le démarrage de ce processus ?
+   * Fait posé par le script de publication au moment où il remplace le moteur —
+   * pas une supposition sur les chemins modifiés. Absent ou en erreur = inconnu,
+   * et un inconnu redémarre (jamais l'inverse).
+   */
+  readDaemonRestartPending?: () => Promise<boolean>;
   /** Injected so tests don't wait on real time. */
   sleep?: (ms: number) => Promise<void>;
   logger: pino.Logger;
@@ -530,6 +537,24 @@ export class TaskBatchDeployer {
     return publishedSha.slice(0, shortest) === running.slice(0, shortest);
   }
 
+  /**
+   * True dès qu'un doute existe : un drapeau illisible, une sonde absente ou en
+   * erreur doivent redémarrer. Seul un « non » franc et lu sur le disque
+   * autorise à sauter l'étape.
+   */
+  private async readDaemonRestartPending(): Promise<boolean> {
+    const probe = this.options.readDaemonRestartPending;
+    if (!probe) {
+      return true;
+    }
+    try {
+      return await probe();
+    } catch (error) {
+      this.logger.debug({ err: error }, "Restart-pending flag could not be read");
+      return true;
+    }
+  }
+
   /** Never lets an unreadable version marker break a successful publication. */
   private async readPublishedSha(): Promise<string | null> {
     try {
@@ -591,6 +616,23 @@ export class TaskBatchDeployer {
       this.logger.info(
         { projectId, publishedSha },
         "Final restart skipped: the engine already runs the published version",
+      );
+      await this.finishSuccessfully(projectId, url);
+      return;
+    }
+    // Seconde porte, du même genre : un fait constaté, pas une supposition. La
+    // publication ne reconstruit plus que ce qui a changé, donc une mise en
+    // ligne purement visuelle ne remplace aucun `dist` moteur — et le script
+    // n'a alors posé aucun drapeau de dette. Redémarrer là couperait toutes les
+    // sessions pour recharger, à l'octet près, le code déjà en mémoire.
+    if ((await this.readDaemonRestartPending()) === false) {
+      await this.sayAll(
+        pending,
+        "✅ **Publication groupée** — le moteur n'a pas changé : pas de redémarrage nécessaire.",
+      );
+      this.logger.info(
+        { projectId, publishedSha },
+        "Final restart skipped: no new engine build was installed",
       );
       await this.finishSuccessfully(projectId, url);
       return;

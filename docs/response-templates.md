@@ -7,9 +7,10 @@ carrying one of the templates below.
 
 - Bodies: `packages/server/src/services/response-format.ts`
 - Column → template map: `packages/server/src/server/tasks/response-template.ts`
-- Injection point: `AgentManager.applyBrainRecall` (same choke point as the
-  Cerveau recall, so every entrypoint is covered — chat, MCP, schedules, loops,
-  task launches)
+- Injection point: `AgentManager.applyPromptEnvelope` (the single dispatch choke
+  point, so every entrypoint is covered — chat, MCP, schedules, loops, task
+  launches). It used to also carry the Cerveau long-term-memory recall; that
+  recall was removed (see "Token budget" below).
 - Wiring: `bootstrap.ts` → `agentManager.setResponseFormatTemplateHook(...)`
 
 ## Why per-column
@@ -100,3 +101,28 @@ inserted into the composer has to read as a standalone instruction.
 Coverage: `packages/app/src/utils/evolution-section.test.ts` walks every
 formatting variant through the chain and asserts each proposal comes out
 actionable.
+
+## Token budget — why the directives are short
+
+Every one of these bodies is prepended to **every** message sent to **every**
+agent. A sentence added here is paid once per message, forever, on both sides of
+the exchange: input tokens for the directive, output tokens for the longer
+answer it invites. Two decisions follow from that.
+
+**The directives stay terse.** No restating the same rule twice, no examples, no
+politeness. If a rule can be a clause instead of a sentence, it is a clause.
+
+**Every template carries an explicit brevity budget** (`BREVITY` in
+`response-format.ts`): 1–3 sentences per section, no preamble, no closing
+summary, no repetition across sections, no code unless asked. The structure was
+already imposed — what was missing was a ceiling, and unbounded answers were the
+single largest quota consumer in production.
+
+**Removed for the same reason: the Cerveau long-term memory.** Each prompt used
+to query an external memory service, come back with a block of recalled facts
+prepended, and schedule a second internal agent at end of turn to distil the
+conversation back into it. Two extra model calls and a few thousand context
+tokens per message, for a marginal benefit. The wiring is gone; only a read-only
+parser for old transcripts remains
+(`packages/server/src/services/brain-context-envelope.ts`), so conversations
+recorded before the removal still display the user's text instead of raw XML.

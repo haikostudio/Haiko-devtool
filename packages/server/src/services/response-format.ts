@@ -59,37 +59,52 @@ export type ResponseFormatTemplateHook = (input: {
 
 export const DEFAULT_RESPONSE_TEMPLATE: ResponseFormatTemplate = "default";
 
-/** Opening line shared by every template: who answers, and for whom. */
+/**
+ * Opening line shared by every template: who answers, and for whom.
+ *
+ * TENU COURT VOLONTAIREMENT. Ce bloc part en tête de CHAQUE message envoyé à
+ * CHAQUE agent : chaque phrase superflue ici est payée autant de fois qu'il y a
+ * de messages. La version longue coûtait ~350 jetons par prompt.
+ */
 const COMMON_HEADER = [
-  "Lecteur non technique : phrases simples, images concrètes, pas de jargon ni de chemins de fichiers.",
-  "",
-  "En-tête (avant la réponse) : une ligne annonçant le modèle utilisé (Opus = code, Codex = administratif),",
-  "son niveau (Claude : de « eau » à « ultra code » ; GPT : de « eau » à « très haut »),",
-  "le temps estimé et le coût approximatif (tarif : 130 CHF/h).",
+  "Lecteur non technique : phrases simples, images concrètes, sans jargon ni chemins de fichiers.",
+  "En-tête : une ligne = modèle (Opus = code, Codex = admin), niveau, temps estimé, coût (130 CHF/h).",
+];
+
+/**
+ * Budget de longueur, commun à tous les gabarits. La consigne de forme obtenait
+ * jusqu'ici des réponses complètes MAIS bavardes (rappel du contexte, résumé
+ * final, redites d'une section à l'autre) : c'est le poste de dépense n°1 côté
+ * production, celui qui épuise le quota. On plafonne explicitement.
+ */
+const BREVITY = [
+  "SOIS BREF : 1 à 3 phrases par section, ou 3 à 5 puces courtes.",
+  "Pas de préambule, pas de conclusion générale, pas de redite d'une section à l'autre,",
+  "pas de reformulation de la demande, pas d'extrait de code sauf demande explicite.",
 ];
 
 /** Closing lines shared by every template. */
 const COMMON_FOOTER = [
-  "Utilise des callouts colorés (> [!TIP], > [!NOTE], > [!WARNING], etc.) uniquement là où ils aident vraiment.",
+  "Callouts (> [!TIP], > [!NOTE], > [!WARNING]) seulement s'ils aident vraiment.",
   "Les icônes des titres sont ajoutées automatiquement par l'app — n'en mets pas toi-même.",
 ];
 
 /** Historical five-section report — everything that is not a board card. */
 const DEFAULT_BODY = [
-  "Réponds TOUJOURS en suivant exactement cette structure de réponse de tâche.",
+  "Réponds exactement avec cette structure.",
   ...COMMON_HEADER,
+  ...BREVITY,
   "",
-  "Puis exactement ces cinq sections, titres numérotés en Markdown `## N.` :",
+  "Cinq sections, titres numérotés en Markdown `## N.` :",
   "## 1. Ce qui est fait",
   "## 2. Ce qui change",
   "## 3. Impact",
   "## 4. Évolutions possibles",
   "## 5. Activation & facturation",
   "",
-  "Dans « 5. Activation & facturation », termine par un bloc récapitulatif : temps réel/estimé, taux (130 CHF/h) et coût.",
-  "Si le travail se rattache à un projet client identifiable (site/app d'un client, pas l'outillage interne),",
-  "ajoute après le bloc récapitulatif une proposition d'ajouter la prestation en ligne de facture brouillon",
-  "via la compétence compta (client, libellé, heures × 130 CHF) — ne jamais créer/modifier une facture sans accord explicite.",
+  "Section 5 : finis par temps réel/estimé, taux (130 CHF/h) et coût. Si le travail concerne",
+  "un projet client identifiable (pas l'outillage interne), propose ensuite une ligne de facture",
+  "brouillon via la compétence compta — jamais de facture créée ou modifiée sans accord explicite.",
   ...COMMON_FOOTER,
 ].join("\n");
 
@@ -99,26 +114,20 @@ const DEFAULT_BODY = [
  * outright rather than merely discouraged.
  */
 const ANALYSIS_BODY = [
-  "Cette carte est en analyse (colonne « Validé ») : le travail n'est PAS encore exécuté.",
-  "Réponds TOUJOURS en suivant exactement cette structure de réponse d'ANALYSE.",
+  "Carte en analyse (colonne « Validé ») : le travail n'est PAS encore exécuté — jamais de compte rendu.",
   ...COMMON_HEADER,
+  ...BREVITY,
   "",
-  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "Quatre sections, titres numérotés en Markdown `## N.` :",
   "## 1. Objectif",
   "## 2. Approche retenue",
   "## 3. Fichiers & points de vigilance",
   "## 4. Estimation",
   "",
-  "« 1. Objectif » : en une ou deux phrases, le résultat visé.",
-  "« 2. Approche retenue » : le plan d'action, étapes ordonnées, concret et court.",
-  "« 3. Fichiers & points de vigilance » : un TABLEAU Markdown à deux colonnes | Élément | Détail |,",
-  "une ligne par fichier touché et une ligne par point de vigilance (risque, dépendance, test).",
-  "« 4. Estimation » : temps d'exécution estimé, heures facturables, taux 130 CHF/h, montant total,",
-  "et part de quota consommée. Si le prompt demande un bloc ```json d'estimation, il termine cette",
-  "section et rien ne vient après lui.",
-  "",
-  "N'écris AUCUNE autre section. Sont formellement exclues : « Ce qui est fait », « Ce qui change »,",
-  "« Impact », « Évolutions possibles », « Activation & facturation ».",
+  "3 : un TABLEAU | Élément | Détail |, une ligne par fichier touché et par risque.",
+  "4 : temps estimé, heures facturables, taux 130 CHF/h, total, part de quota. Un éventuel",
+  "bloc ```json d'estimation demandé par le prompt termine la réponse.",
+  "Aucune autre section (ni « Ce qui est fait », ni « Évolutions possibles », ni « Activation & facturation »).",
   ...COMMON_FOOTER,
 ].join("\n");
 
@@ -128,22 +137,19 @@ const ANALYSIS_BODY = [
  * composer — hence the "one self-contained line per proposal" rule.
  */
 const PROGRESS_BODY = [
-  "Cette carte est en cours de travail (colonne « En cours ») : ta réponse est un point d'AVANCEMENT.",
-  "Réponds TOUJOURS en suivant exactement cette structure.",
+  "Carte en cours de travail : ta réponse est un point d'AVANCEMENT.",
   ...COMMON_HEADER,
+  ...BREVITY,
   "",
-  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "Quatre sections, titres numérotés en Markdown `## N.` :",
   "## 1. Ce qui est fait",
   "## 2. Ce qui change",
   "## 3. Impact",
   "## 4. Évolutions possibles",
   "",
-  "Dans « 4. Évolutions possibles », chaque proposition tient sur UNE seule ligne,",
-  "écrite comme un élément de liste (« - » ou « 1. »), autonome et compréhensible seule :",
-  "l'app pose un bouton « + » sur chaque ligne pour la réutiliser telle quelle comme consigne suivante.",
-  "Pas de sous-listes ni de paragraphe libre dans cette section.",
-  "",
-  "N'écris AUCUNE autre section : ni « Activation & facturation », ni analyse, ni estimation.",
+  "Section 4 : chaque proposition sur UNE seule ligne de liste, autonome et compréhensible seule",
+  "(l'app y pose un bouton « + » pour la réutiliser telle quelle). Ni sous-liste ni paragraphe.",
+  "Aucune autre section : ni facturation, ni analyse, ni estimation.",
   ...COMMON_FOOTER,
 ].join("\n");
 
@@ -155,21 +161,21 @@ const PROGRESS_BODY = [
  * life, so they are excluded here.
  */
 const PUBLICATION_BODY = [
-  "Cette carte est en publication (colonne « Déployé ») : ta réponse est un compte rendu de MISE EN LIGNE.",
-  "Réponds TOUJOURS en suivant exactement cette structure.",
+  "Carte en publication : ta réponse est un compte rendu de MISE EN LIGNE.",
   ...COMMON_HEADER,
+  ...BREVITY,
   "",
-  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "Quatre sections, titres numérotés en Markdown `## N.` :",
   "## 1. Ce qui a été publié",
   "## 2. Déroulé de la publication",
   "## 3. Vérification",
   "## 4. Suites éventuelles",
   "",
-  "« 2. Déroulé de la publication » : les étapes dans l'ordre et leur résultat (réussi / échoué, et pourquoi).",
-  "« 3. Vérification » : ce que tu as réellement contrôlé avant et après la mise en ligne — demande initiale satisfaite, tests/typecheck/lint passés, corrections faites au passage, et la version réellement en ligne.",
-  "« 4. Suites éventuelles » : redémarrage du moteur nécessaire ou non, points à surveiller. « Rien à signaler » si c'est le cas.",
-  "",
-  "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
+  "2 : les étapes dans l'ordre et leur résultat (réussi / échoué, et pourquoi).",
+  "3 : ce que tu as réellement contrôlé — demande initiale satisfaite, tests/typecheck/lint passés,",
+  "corrections faites au passage, version réellement en ligne.",
+  "4 : redémarrage du moteur ou non, points à surveiller. « Rien à signaler » si c'est le cas.",
+  "Aucune autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
   ...COMMON_FOOTER,
 ].join("\n");
 
@@ -183,23 +189,23 @@ const PUBLICATION_BODY = [
  * belong elsewhere, so they are excluded here too.
  */
 const BATCH_PUBLICATION_BODY = [
-  "Tu es l'agent de PUBLICATION GROUPÉE : tu as ramassé toutes les tâches en file « À déployer » et tu les mets en ligne EN UN SEUL LOT.",
-  "Ta réponse est un compte rendu de MISE EN LIGNE GROUPÉE — pas le compte rendu d'une seule carte.",
-  "Réponds TOUJOURS en suivant exactement cette structure.",
+  "Tu es l'agent de PUBLICATION GROUPÉE : tu mets en ligne EN UN SEUL LOT toutes les tâches en file « À déployer ».",
+  "Compte rendu du LOT, pas d'une seule carte.",
   ...COMMON_HEADER,
+  ...BREVITY,
   "",
-  "Puis exactement ces quatre sections, titres numérotés en Markdown `## N.` :",
+  "Quatre sections, titres numérotés en Markdown `## N.` :",
   "## 1. Tâches publiées",
   "## 2. Ce qui est en ligne",
   "## 3. Résultat de la publication",
   "## 4. État final",
   "",
-  "« 1. Tâches publiées » : la liste des cartes du lot, une par ligne, avec en une phrase ce que chacune apporte.",
-  "« 2. Ce qui est en ligne » : ce que le public voit réellement maintenant — le changement concret mis à disposition, pas l'intention.",
-  "« 3. Résultat de la publication » : réussi ou échoué, avec ta vérification que la version réellement en ligne correspond bien à la dernière version enregistrée (et, en cas d'échec, la raison précise).",
-  "« 4. État final » : ce que ça implique pour l'utilisateur — cartes prêtes à passer en « Archivé », redémarrage du moteur nécessaire ou non, points à surveiller. « Rien à signaler » si c'est le cas.",
-  "",
-  "N'écris AUCUNE autre section : ni analyse, ni estimation, ni facturation, ni évolutions.",
+  "1 : une carte par ligne, avec en une phrase ce qu'elle apporte.",
+  "2 : ce que le public voit réellement maintenant, pas l'intention.",
+  "3 : réussi ou échoué, avec la vérification que la version en ligne est bien la dernière enregistrée",
+  "(et, en cas d'échec, la raison précise).",
+  "4 : cartes prêtes à archiver, redémarrage du moteur ou non, points à surveiller.",
+  "Aucune autre section : ni analyse, ni chiffrage, ni facturation, ni évolutions.",
   ...COMMON_FOOTER,
 ].join("\n");
 
@@ -213,17 +219,10 @@ const BATCH_PUBLICATION_BODY = [
  */
 const CONDUCTOR_BODY = [
   "Tu es le chef d'orchestre du tableau : tu n'exécutes aucun travail, donc tu n'en rends jamais compte.",
-  "N'utilise AUCUN gabarit à sections numérotées, aucune estimation de temps, de quota ou de coût,",
-  "aucune ligne de facturation, et pas d'en-tête annonçant un modèle.",
-  "",
-  "La forme suit le message auquel tu réponds :",
-  "- Question, demande d'information, cas ambigu ou geste sur le tableau : réponds en quelques",
-  "  phrases de français simple, sans titre de section. Pour un cas ambigu, termine par la",
-  "  proposition d'en faire une tâche.",
-  "- Cartes créées, modifiées, déplacées ou supprimées : termine par un court récapitulatif,",
-  "  une puce par carte (son titre et ce qui lui est arrivé).",
-  "",
-  "Lecteur non technique : phrases simples, pas de jargon ni de chemins de fichiers.",
+  "Aucun gabarit à sections, aucune estimation de temps/quota/coût, aucune facturation, aucun en-tête de modèle.",
+  "Réponds en 1 à 3 phrases de français simple. Pour un cas ambigu, propose d'en faire une tâche.",
+  "Si tu as touché des cartes : une puce par carte (titre + ce qui lui est arrivé), rien de plus.",
+  "Lecteur non technique : phrases simples, sans jargon ni chemins de fichiers.",
   ...COMMON_FOOTER,
 ].join("\n");
 

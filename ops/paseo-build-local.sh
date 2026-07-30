@@ -40,6 +40,10 @@ PHASE_FILE="/home/paseo/paseo-build-local.phase"
 # Commit à partir duquel le démon en service a été compilé (écrit à l'installation
 # du dist, lu par le démon au démarrage — voir paseo-deploy.ts).
 DAEMON_BUILD_MARKER="/home/paseo/paseo-daemon-built.sha"
+# Posé quand un nouveau dist moteur vient d'être installé, effacé par le démon à
+# son démarrage : « le moteur sur le disque a changé depuis que le processus
+# tourne ». Voir paseo-deploy.ts (DAEMON_RESTART_PENDING_FILE).
+DAEMON_RESTART_PENDING_FILE="/home/paseo/paseo-daemon-restart-pending"
 REMOTE="fork"
 # Isole le build du démon/agents sans le faire mourir de faim : CPU un peu bas
 # (nice 10) mais I/O en classe best-effort PRIORITAIRE (-c2 -n0). L'ancienne
@@ -227,6 +231,80 @@ if [ "$NO_BUILD" = "1" ]; then
   exit 0
 fi
 
+# --- Ne reconstruire QUE ce qui a changé --------------------------------------
+# Chaque publication reconstruisait tout : le moteur (~1-2 min) ET le site
+# (~3-5 min), même quand le lot ne touchait que des textes ou qu'un seul des
+# deux. On compare donc ce qu'on s'apprête à publier avec ce qui est DÉJÀ en
+# place, fichier par fichier, et on saute les étapes sans objet.
+#
+# Deux repères distincts, parce que les deux moitiés peuvent désormais avancer
+# à des rythmes différents :
+#   .site-sha            = version dont le SITE en ligne est issu
+#   paseo-daemon-built.sha = version dont le MOTEUR compilé est issu
+# Règle de prudence : le moindre doute (repère absent, commit inconnu, chemin
+# non classé) fait tout reconstruire. On n'économise que sur des certitudes.
+SITE_SHA_FILE="$WWW/.site-sha"
+
+read_marker() {  # $1 = fichier ; imprime le sha, ou rien
+  tr -d '[:space:]' < "$1" 2>/dev/null || true
+}
+
+# À quelle moitié de la publication un fichier appartient-il ?
+# « both » par défaut : un chemin qu'on ne sait pas classer doit tout relancer.
+scope_of_change() {
+  case "$1" in
+    packages/app/*) printf 'site\n' ;;
+    packages/server/*|packages/cli/*|packages/relay/*) printf 'daemon\n' ;;
+    packages/website/*|packages/desktop/*|docs/*|ops/*|.github/*|*.md) printf 'none\n' ;;
+    *) printf 'both\n' ;;
+  esac
+}
+
+# Imprime « 1 » s'il faut reconstruire la moitié demandée ($2 = site|daemon),
+# « 0 » sinon. $1 = version de référence déjà en place.
+needs_rebuild() {
+  local base="$1" half="$2" changed file scope
+  [ -n "$base" ] || { printf '1\n'; return 0; }
+  git cat-file -e "${base}^{commit}" 2>/dev/null || { printf '1\n'; return 0; }
+  changed="$(git diff --name-only "$base" "$SHA" 2>/dev/null)" || { printf '1\n'; return 0; }
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    scope="$(scope_of_change "$file")"
+    if [ "$scope" = "both" ] || [ "$scope" = "$half" ]; then
+      printf '1\n'; return 0
+    fi
+  done <<EOF
+$changed
+EOF
+  printf '0\n'
+}
+
+LAST_SITE_SHA="$(read_marker "$SITE_SHA_FILE")"
+# Repli pour la première publication après cette évolution : avant elle, la seule
+# trace de la version en ligne était .deployed-sha, qui valait aussi pour le site.
+[ -n "$LAST_SITE_SHA" ] || LAST_SITE_SHA="$(read_marker "$WWW/.deployed-sha")"
+LAST_DAEMON_SHA="$(read_marker "$DAEMON_BUILD_MARKER")"
+
+NEED_SITE="$(needs_rebuild "$LAST_SITE_SHA" site)"
+NEED_DAEMON="$(needs_rebuild "$LAST_DAEMON_SHA" daemon)"
+
+if [ "$NEED_SITE" = "0" ] && [ "$NEED_DAEMON" = "0" ]; then
+  # Rien de publiable n'a bougé : le site en ligne et le moteur compilé sont déjà
+  # exactement ce commit (au fichier près). On se contente de mettre les repères
+  # à jour — la fenêtre de publication doit dire « tout est en ligne », sans
+  # brûler cinq minutes de construction pour un résultat identique.
+  echo "==> Rien de publiable n'a changé depuis la dernière mise en ligne — aucune reconstruction."
+  phase "publish"
+  printf '%s\n' "$SHA" > "$WWW/.deployed-sha"
+  printf '%s\n' "$SHA" > "$DAEMON_BUILD_MARKER" 2>/dev/null || true
+  phase "done"
+  echo "==> Terminé. Version en ligne : $SHA (site et moteur inchangés)."
+  exit 0
+fi
+
+[ "$NEED_SITE" = "1" ] || echo "==> Site inchangé depuis $LAST_SITE_SHA — construction du site sautée."
+[ "$NEED_DAEMON" = "1" ] || echo "==> Moteur inchangé depuis $LAST_DAEMON_SHA — construction du moteur sautée."
+
 # --- Instantané figé : copie isolée du code exact à publier --------------------
 # On épingle un git worktree détaché sur $SHA. Il ne contient QUE les fichiers
 # suivis à ce commit (source figée) ; dist/node_modules sont ignorés par git donc
@@ -292,6 +370,8 @@ build_snapshot_node_modules() {
     [ -d "$SNAP/packages/$pkg" ] && link_node_modules "$p" "$SNAP/packages/$pkg/node_modules"
   done
   # Remplace les liens par de vraies copies pour les paquets bundlés par Metro.
+  # Inutile quand le site n'est pas reconstruit : ~205 Mo de copie pour rien.
+  [ "$NEED_SITE" = "1" ] || { eval "$shopt_dotglob"; eval "$shopt_nullglob"; return 0; }
   for pkg in "${METRO_REAL_NM[@]}"; do
     if [ -d "$REPO_ROOT/packages/$pkg/node_modules" ] && [ -d "$SNAP/packages/$pkg" ]; then
       rm -rf "$SNAP/packages/$pkg/node_modules"
@@ -342,10 +422,18 @@ fi
 # l'assemblage metro, lui, laisse passer sans broncher. S'applique à l'INSTANTANÉ
 # figé, pas au code en mutation. Cette phase distincte garde le suivi lisible :
 # la vérification du code n'est ni la construction du moteur, ni celle du site.
-phase "verify"
-echo "==> Vérification du code (typecheck) sur l'instantané…"
-if ! ( cd "$SNAP" && "${NICE[@]}" npm run typecheck ); then
-  fail "Le code ne compile pas — rien n'est publié."
+#
+# Sauté quand SEUL le moteur est reconstruit : `build:server:clean` compile les
+# paquets serveur avec tsc, ce qui EST le contrôle des types de cette moitié —
+# le refaire d'abord doublait simplement la facture. Dès que le site est
+# reconstruit (donc dès qu'un paquet partagé bouge), le filet reste en place,
+# car metro, lui, ne vérifie rien.
+if [ "$NEED_SITE" = "1" ]; then
+  phase "verify"
+  echo "==> Vérification du code (typecheck) sur l'instantané…"
+  if ! ( cd "$SNAP" && "${NICE[@]}" npm run typecheck ); then
+    fail "Le code ne compile pas — rien n'est publié."
+  fi
 fi
 
 # --- Construction du DÉMON (côté serveur) -------------------------------------
@@ -357,34 +445,42 @@ fi
 # correctif). On compile donc le démon depuis l'instantané figé, puis on le pose
 # dans le checkout vivant : le redémarrage de fin de lot applique enfin le code
 # qui vient d'être publié. Ne jamais retirer cette étape.
-phase "daemon"
-echo "==> Construction du démon (build:server) depuis l'instantané…"
-if ! ( cd "$SNAP" && "${NICE[@]}" npm run build:server:clean ); then
-  fail "La construction du démon a échoué — rien n'est publié."
+if [ "$NEED_DAEMON" = "1" ]; then
+  phase "daemon"
+  echo "==> Construction du démon (build:server) depuis l'instantané…"
+  if ! ( cd "$SNAP" && "${NICE[@]}" npm run build:server:clean ); then
+    fail "La construction du démon a échoué — rien n'est publié."
+  fi
 fi
 
 # --- Construction du site statique (le gros du temps, ~3-5 min) ---------------
 # Depuis l'INSTANTANÉ : expo export lit la source figée et build:app-deps
 # régénère les dist des paquets (highlight/protocol/client/audio) DANS
 # l'instantané, à partir de la même source figée. Rien du checkout vivant.
-phase "site"
-echo "==> Construction du site (expo export) depuis l'instantané…"
-export EXPO_PUBLIC_BUILD_SHA="$SHA"
-# Active le bouton « Déconnexion » dans les réglages sur le build auto-hébergé
-# (le mur d'auth Caddy expose /auth/logout). Voir docs/selfhost-auth.md.
-export EXPO_PUBLIC_SELFHOST_AUTH=1
-if ! ( cd "$SNAP" && "${NICE[@]}" npm run build:web --workspace=@getpaseo/app ); then
-  fail "La construction a échoué — rien n'est publié."
-fi
+if [ "$NEED_SITE" = "1" ]; then
+  phase "site"
+  echo "==> Construction du site (expo export) depuis l'instantané…"
+  export EXPO_PUBLIC_BUILD_SHA="$SHA"
+  # Active le bouton « Déconnexion » dans les réglages sur le build auto-hébergé
+  # (le mur d'auth Caddy expose /auth/logout). Voir docs/selfhost-auth.md.
+  export EXPO_PUBLIC_SELFHOST_AUTH=1
+  if ! ( cd "$SNAP" && "${NICE[@]}" npm run build:web --workspace=@getpaseo/app ); then
+    fail "La construction a échoué — rien n'est publié."
+  fi
 
-if [ "$(source_fingerprint)" != "$FINGERPRINT_BEFORE" ]; then
-  fail "La source figée a changé pendant la construction (cas anormal) — rien n'est publié. Relancez la publication."
-fi
+  if [ "$(source_fingerprint)" != "$FINGERPRINT_BEFORE" ]; then
+    fail "La source figée a changé pendant la construction (cas anormal) — rien n'est publié. Relancez la publication."
+  fi
 
-DIST="$SNAP/packages/app/dist"
-[ -d "$DIST" ] || fail "Dossier de build introuvable ($DIST)."
-# Marqueur de version lu par l'app pour proposer « Nouvelle version — Recharger ».
-printf '{"sha":"%s"}\n' "$SHA" > "$DIST/version.json"
+  DIST="$SNAP/packages/app/dist"
+  [ -d "$DIST" ] || fail "Dossier de build introuvable ($DIST)."
+  # Marqueur de version lu par l'app pour proposer « Nouvelle version — Recharger ».
+  # Il porte la version DU BUNDLE, pas celle de la publication : quand le site
+  # n'est pas reconstruit, l'app compare son propre numéro (cuit dans le bundle)
+  # à ce fichier — les faire diverger afficherait « Nouvelle version — Recharger »
+  # en boucle pour un site pourtant identique.
+  printf '{"sha":"%s"}\n' "$SHA" > "$DIST/version.json"
+fi
 
 # --- Mise en place du démon compilé dans le checkout vivant --------------------
 # Le service systemd lance /root/paseo/packages/cli/dist : c'est CE dist qu'il faut
@@ -409,27 +505,44 @@ install_daemon_dist() {
     rm -rf "$live.previous" 2>/dev/null || true
   done
 }
-echo "==> Installation du démon compilé dans le checkout vivant…"
-if ! install_daemon_dist; then
-  fail "Impossible d'installer le démon compilé — rien n'est publié."
+if [ "$NEED_DAEMON" = "1" ]; then
+  echo "==> Installation du démon compilé dans le checkout vivant…"
+  if ! install_daemon_dist; then
+    fail "Impossible d'installer le démon compilé — rien n'est publié."
+  fi
+  # Drapeau de dette de redémarrage : le code moteur SUR LE DISQUE vient de
+  # changer, le processus en cours exécute donc désormais du code périmé. Le
+  # démon l'efface à son démarrage. C'est ce fait — et non une supposition sur
+  # les chemins modifiés — qui décide du redémarrage de fin de publication.
+  printf '%s\n' "$SHA" > "$DAEMON_RESTART_PENDING_FILE" 2>/dev/null || true
 fi
 # Carte d'identité du démon compilé : le démon la lit au démarrage pour savoir
 # quelle version il exécute VRAIMENT. Sans elle il ne connaît que le commit
 # présent au démarrage, ce qui ment dès que le dist est plus vieux que le code.
+# Écrite même quand la construction a été sautée : sauter signifie précisément
+# qu'aucun fichier du moteur n'a bougé, donc le dist en place EST le code de ce
+# commit — laisser l'ancien numéro ferait croire à un moteur en retard.
 printf '%s\n' "$SHA" > "$DAEMON_BUILD_MARKER" 2>/dev/null || true
 
 # --- Publication : copie dans le dossier servi par Caddy ----------------------
 phase "publish"
-echo "==> Publication vers $WWW…"
-# --chmod force des permissions lisibles par Caddy (dossiers 755, fichiers 644),
-# sinon rsync -a hérite des perms restrictives et Caddy renvoie des 404.
-rsync -a --delete --chmod=D755,F644 "$DIST"/ "$WWW"/ || fail "La copie vers $WWW a échoué."
-chmod 755 "$WWW" 2>/dev/null || true
+if [ "$NEED_SITE" = "1" ]; then
+  echo "==> Publication vers $WWW…"
+  # --chmod force des permissions lisibles par Caddy (dossiers 755, fichiers 644),
+  # sinon rsync -a hérite des perms restrictives et Caddy renvoie des 404.
+  rsync -a --delete --chmod=D755,F644 "$DIST"/ "$WWW"/ || fail "La copie vers $WWW a échoué."
+  chmod 755 "$WWW" 2>/dev/null || true
+  # Version dont le SITE en ligne est issu — le repère qui décidera, la prochaine
+  # fois, s'il faut le reconstruire. Distinct de .deployed-sha, qui nomme la
+  # publication (site + moteur) et avance même quand le bundle ne bouge pas.
+  printf '%s\n' "$SHA" > "$SITE_SHA_FILE"
+  echo "==> Rechargement de Caddy…"
+  sudo systemctl reload caddy || echo "   (reload Caddy ignoré — les fichiers sont en place)"
+else
+  echo "==> Site déjà en ligne dans cette version — aucune copie, aucun rechargement."
+fi
 printf '%s\n' "$SHA" > "$WWW/.deployed-sha"
 
-echo "==> Rechargement de Caddy…"
-sudo systemctl reload caddy || echo "   (reload Caddy ignoré — les fichiers sont en place)"
-
 phase "done"
-echo "==> Terminé. $(find "$WWW" -type f 2>/dev/null | wc -l) fichiers en ligne. https://app.haikostudio.cloud/"
-echo "==> Version en ligne : $SHA (instantané figé)."
+echo "==> Terminé. https://app.haikostudio.cloud/"
+echo "==> Version publiée : $SHA (site: $([ "$NEED_SITE" = 1 ] && echo reconstruit || echo inchangé), moteur: $([ "$NEED_DAEMON" = 1 ] && echo reconstruit || echo inchangé))."

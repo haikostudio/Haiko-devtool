@@ -140,9 +140,53 @@ is online. `PASEO_DEPLOY_SKIP_PUSH=1` is the escape hatch when the remote is
 durably unreachable.
 
 **The restart is a step, not a reaction.** A successful batch always restarts the
-daemon, so the engine runs the code that just went online. The single exception
-is a proven one: the engine already runs exactly the published sha (a republish
-with no new commit). An unknown version never takes that door.
+daemon, so the engine runs the code that just went online. Two exceptions, both
+proven facts rather than guesses over changed paths:
+
+- the engine already runs exactly the published sha (a republish with no new
+  commit);
+- the run installed no new engine `dist` at all, so the process in memory _is_
+  the code on disk — see "Only rebuild what changed" below.
+
+An unknown answer never takes either door: a missing marker, an unreadable flag
+or an absent probe all restart.
+
+## Only rebuild what changed
+
+Every publication used to rebuild both halves — the engine (~1–2 min) and the
+site (~3–5 min) — even when the lot touched only one of them, or neither. The
+script now diffs what it is about to publish against what is already in place and
+skips the steps with no object. Two markers, because the halves advance at
+different rates:
+
+| Marker                               | Means                                            |
+| ------------------------------------ | ------------------------------------------------ |
+| `/var/www/paseo-app/.site-sha`       | commit the **served bundle** was built from      |
+| `/home/paseo/paseo-daemon-built.sha` | commit the **installed engine** is equivalent to |
+| `/var/www/paseo-app/.deployed-sha`   | commit **published** (advances every run)        |
+
+`scope_of_change` classifies each changed file as `site`, `daemon`, `none`
+(docs, ops, website, desktop, `*.md`) or `both`. **`both` is the default**: an
+unclassified path, a missing marker or a commit git cannot reach rebuilds
+everything. Savings only ever come from certainties.
+
+Consequences worth knowing:
+
+- `version.json` carries the **bundle's** version, never the publication's. The
+  app compares its own baked sha to that file to offer "Nouvelle version —
+  Recharger"; bumping it without a new bundle loops that banner forever. This is
+  why `siteMismatch` compares `version.json` to `.site-sha`, not to
+  `.deployed-sha`.
+- The typecheck runs only when the site is rebuilt. When only the engine is
+  rebuilt, `build:server:clean` _is_ the typecheck of that half; metro, on the
+  other hand, checks nothing, so the site half keeps its net.
+- `/home/paseo/paseo-daemon-restart-pending` is written the moment a new engine
+  `dist` is installed and deleted when the daemon boots. That file — not a path
+  heuristic — is what lets a UI-only publication skip the restart instead of
+  cutting every session to reload identical code.
+- The engine marker is stamped even when the build is skipped: skipping means no
+  engine file moved, so the installed `dist` _is_ that commit's code. Leaving the
+  old number there would fake a stale engine.
 
 ## The stale-daemon trap
 

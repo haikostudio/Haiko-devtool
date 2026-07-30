@@ -68,9 +68,7 @@ import { AgentRunState, type ForegroundTurnWaiter } from "./agent-run-state.js";
 import { getAgentProviderDefinition } from "@getpaseo/protocol/provider-manifest";
 import { invokeRewindCapability, type RewindMode } from "./rewind/rewind.js";
 import { isSystemInjectedEnvelope } from "./agent-prompt.js";
-import { parseBrainContextEnvelope } from "../../services/brain-memory/client.js";
-import type { BrainCapturePromptHook } from "../../services/brain-memory/capture.js";
-import type { BrainRecallPromptHook } from "../../services/brain-memory/recall.js";
+import { parseBrainContextEnvelope } from "../../services/brain-context-envelope.js";
 import {
   DEFAULT_RESPONSE_TEMPLATE,
   hasResponseFormatDirective,
@@ -697,8 +695,6 @@ export class AgentManager {
     | null = null;
   private onAgentAttention?: AgentAttentionCallback;
   private onAgentArchived?: AgentArchivedCallback;
-  private brainRecallHook: BrainRecallPromptHook | null = null;
-  private brainCaptureHook: BrainCapturePromptHook | null = null;
   private responseFormatTemplateHook: ResponseFormatTemplateHook | null = null;
   private projectPromptHook:
     | ((input: { agentId: string; cwd: string; text: string }) => Promise<string>)
@@ -784,28 +780,6 @@ export class AgentManager {
 
   setAgentArchivedCallback(callback: AgentArchivedCallback): void {
     this.onAgentArchived = callback;
-  }
-
-  /**
-   * Install the Cerveau recall hook applied to every foreground prompt of
-   * every non-internal agent, whatever the entrypoint — session message, MCP
-   * send_agent_prompt, schedules, loops, task launches, notify-on-finish. Set
-   * once at bootstrap. Internal agents (curator, triage, estimator, quota
-   * keep-alive) are excluded: recalling for the librarian's own runs would
-   * recurse.
-   */
-  setBrainRecallHook(hook: BrainRecallPromptHook | null): void {
-    this.brainRecallHook = hook;
-  }
-
-  /**
-   * Install the end-of-turn Cerveau capture hook. Symmetric to the recall hook:
-   * fires for every fresh foreground prompt of every non-internal agent at this
-   * choke point, so autonomous work (schedules, loops, tasks) is distilled into
-   * the brain just like an interactive chat. Set once at bootstrap.
-   */
-  setBrainCaptureHook(hook: BrainCapturePromptHook | null): void {
-    this.brainCaptureHook = hook;
   }
 
   /**
@@ -2275,10 +2249,10 @@ export class AgentManager {
     const streamForwarder = async function* streamForwarder(this: AgentManager) {
       let turnId: string;
       let turnStream: ReturnType<AgentRunState["createTurnStream"]> | null = null;
-      // Cerveau recall lives here — the single point every foreground prompt
-      // passes through (runAgent and replaceAgentRun both funnel into
-      // streamAgent) — so every entrypoint queries the brain. Never throws.
-      const effectivePrompt = await this.applyBrainRecall(agent, prompt);
+      // Single point every foreground prompt passes through (runAgent and
+      // replaceAgentRun both funnel into streamAgent): the answer-shape
+      // directive is attached here, once, for every entrypoint. Never throws.
+      const effectivePrompt = await this.applyPromptEnvelope(agent, prompt);
       try {
         const result = await agent.session.startTurn(effectivePrompt, options);
         turnId = result.turnId;
@@ -2338,29 +2312,32 @@ export class AgentManager {
   }
 
   /**
-   * Recall Cerveau context for this prompt and return the augmented prompt
-   * (string prompts get the <contexte_memoire> envelope prepended; structured
-   * prompts get it inside their user-text block — text attachments carry a
-   * mimeType and are left alone). Skips internal agents (recursion), empty
-   * text, and prompts already carrying an envelope (requeues/replays).
-   * Best-effort: any failure returns the prompt unchanged.
+   * Attach the answer-shape directive to this prompt and return the augmented
+   * prompt (string prompts get it prepended; structured prompts get it inside
+   * their user-text block — text attachments carry a mimeType and are left
+   * alone). Skips internal agents, empty text, and prompts already carrying an
+   * envelope (requeues/replays). Best-effort: any failure returns the prompt
+   * unchanged.
+   *
+   * Il y avait ici un RAPPEL DE MÉMOIRE longue durée (« Cerveau ») : chaque
+   * prompt interrogeait un service externe et repartait avec un bloc de
+   * souvenirs collé devant, plus un second agent qui distillait le tour une
+   * fois fini. Coût : deux appels de modèle et quelques milliers de jetons de
+   * contexte par message, pour une aide marginale. Retiré — on ne garde que la
+   * lecture des anciennes enveloppes, côté affichage.
    */
-  private async applyBrainRecall(
+  private async applyPromptEnvelope(
     agent: ActiveManagedAgent,
     prompt: AgentPromptInput,
   ): Promise<AgentPromptInput> {
-    // Internal agents (curator/librarian, keep-alive) get neither the Cerveau
-    // recall (recursion) nor the response-format directive (they emit data, not
-    // user-facing reports).
+    // Internal agents (estimator, triage, keep-alive) emit data, not
+    // user-facing reports: no response-format directive for them.
     if (agent.internal) {
       return prompt;
     }
-    const hook = this.brainRecallHook;
     try {
-      // Applied to the single non-empty text of the prompt: run the Cerveau
-      // recall first (its envelope wraps the user text), then prepend the
-      // response-format directive so it sits ahead of the recall block. Both
-      // are idempotent, so requeues/replays don't double-wrap.
+      // Applied to the single non-empty text of the prompt. Idempotent, so
+      // requeues/replays don't double-wrap.
       const augment = async (text: string): Promise<string> => {
         // Requeues/replays echo the already-augmented prompt: the directive
         // envelope (outermost) or a bare recall envelope (older messages) both
@@ -2368,13 +2345,9 @@ export class AgentManager {
         if (hasResponseFormatDirective(text) || parseBrainContextEnvelope(text)) {
           return text;
         }
-        // Fresh prompt: schedule the end-of-turn capture (fire-and-forget) at the
-        // same choke point as recall, so every entrypoint's turn is distilled.
-        this.brainCaptureHook?.({ agentId: agent.id, text });
-        const recalled = hook ? await hook({ agentId: agent.id, text }) : text;
         const projectAugmented = this.projectPromptHook
-          ? await this.projectPromptHook({ agentId: agent.id, cwd: agent.cwd, text: recalled })
-          : recalled;
+          ? await this.projectPromptHook({ agentId: agent.id, cwd: agent.cwd, text })
+          : text;
         // Which structure the answer must follow depends on where the agent's
         // card currently sits on the board — an analysis in "Validé", a work
         // report in "En cours", a publication log in "Déployé". Anything that
@@ -2403,7 +2376,7 @@ export class AgentManager {
       next[textIndex] = { type: "text", text: augmented };
       return next;
     } catch (err) {
-      this.logger.debug({ err, agentId: agent.id }, "brain: prompt recall failed");
+      this.logger.debug({ err, agentId: agent.id }, "prompt envelope failed");
       return prompt;
     }
   }

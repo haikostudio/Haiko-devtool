@@ -123,6 +123,8 @@ describe("TaskBatchDeployer", () => {
     /** The version the run puts online, and the one the engine already runs. */
     publishedSha?: string | null;
     runningEngineSha?: string | null;
+    /** Undefined = pas de sonde installée (le doute redémarre, comme en prod). */
+    daemonRestartPending?: boolean;
   }) {
     const runs = [...(input.runs ?? [])];
     // Bind the collectors NOW, so a run still finishing when its test ends keeps
@@ -158,6 +160,9 @@ describe("TaskBatchDeployer", () => {
       requestDaemonRestart: (reason) => runRestarts.push(reason),
       readPublishedSha: async () => input.publishedSha ?? null,
       readRunningEngineSha: () => input.runningEngineSha ?? null,
+      ...(input.daemonRestartPending === undefined
+        ? {}
+        : { readDaemonRestartPending: async () => input.daemonRestartPending === true }),
       sleep: async () => {},
       logger,
     });
@@ -369,6 +374,45 @@ describe("TaskBatchDeployer", () => {
       runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
       publishedSha: "abcdef1234567890",
       runningEngineSha: null,
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    expect(restarts).toEqual(["task_batch_deploy"]);
+  });
+
+  test("skips the restart when no new engine build was installed", async () => {
+    // La publication ne reconstruit plus que ce qui a changé : une mise en ligne
+    // purement visuelle ne remplace aucun `dist` moteur, donc le script ne pose
+    // aucune dette de redémarrage. Couper les sessions rechargerait le même code.
+    const card = await seedQueued("Bouton", "task/bouton");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+      publishedSha: "abcdef1234567890",
+      runningEngineSha: "0000000000000000",
+      daemonRestartPending: false,
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeTruthy();
+    expect(restarts).toEqual([]);
+    expect(noteContains("le moteur n'a pas changé")).toBe(true);
+  });
+
+  test("restarts when a new engine build was installed", async () => {
+    // Symétrique du test précédent : dès que le script a remplacé le `dist`, le
+    // processus en cours exécute du code périmé — le redémarrage est la seule
+    // façon d'appliquer le correctif qui vient d'être publié.
+    await seedQueued("Moteur", "task/moteur");
+    const deployer = buildDeployer({
+      runs: [{ deploying: false, phase: "done", outcome: "success", error: null }],
+      publishedSha: "abcdef1234567890",
+      runningEngineSha: "0000000000000000",
+      daemonRestartPending: true,
     });
 
     await deployer.deployAll("proj-1");

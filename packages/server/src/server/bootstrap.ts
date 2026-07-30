@@ -153,12 +153,6 @@ import type {
   HubRelationshipRetryPolicy,
 } from "./hub/relationship-controller.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
-import { BrainMemoryClient } from "../services/brain-memory/client.js";
-import { BrainCurator } from "../services/brain-memory/curator.js";
-import { ProjectBriefStore } from "../services/brain-memory/project-brief.js";
-import { createBrainCaptureHook } from "../services/brain-memory/capture.js";
-import { createBrainRecallHook } from "../services/brain-memory/recall.js";
-import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { TaskPublisher } from "./tasks/publish-on-complete.js";
 import { watchAgentIdle } from "./tasks/task-agent-link.js";
@@ -202,6 +196,7 @@ import {
   getPaseoDeployRunSnapshot,
   getPublishedSha,
   getRunningEngineSha,
+  isDaemonRestartPending,
   recordDaemonBootSha,
   setPaseoDeployConflictTaskCreator,
   setPaseoDeploySuccessListener,
@@ -238,7 +233,6 @@ import { createGitMutationService } from "./session/git-mutation/git-mutation-se
 import { workspaceIdsOnCheckout } from "./workspace-directory.js";
 import { resolveFirstAgentPromptTitle } from "./agent/create-agent-title.js";
 import {
-  type BoundCreateAgentCommand,
   createAgentCommand,
   type CreateAgentCommandDependencies,
 } from "./agent/create-agent/create.js";
@@ -527,81 +521,6 @@ function mountWebUi(app: express.Application, config: PaseoDaemonConfig, logger:
 
 function resolveExpressTrustProxySetting(config: PaseoDaemonConfig): true | string[] {
   return config.trustedProxies ?? ["loopback"];
-}
-
-function readMutableBrainMemoryEnabled(config: MutableDaemonConfig): boolean {
-  const brainMemory = config.brainMemory;
-  return (
-    typeof brainMemory === "object" &&
-    brainMemory !== null &&
-    "enabled" in brainMemory &&
-    brainMemory.enabled === true
-  );
-}
-
-/**
- * Cerveau long-term memory: REST client + curation layer (librarian recall
- * filter and scribe distillation, both short-lived internal Haiku agents).
- * Null when the feature is disabled or unkeyed.
- */
-function createBrainMemoryServices(input: {
-  brainConfig: PaseoDaemonConfig["brainMemory"];
-  paseoHome: string;
-  agentManager: AgentManager;
-  createAgent: BoundCreateAgentCommand;
-  logger: Logger;
-}): {
-  client: BrainMemoryClient;
-  curator: BrainCurator | null;
-  recentFacts: RecentFactsStore | null;
-} | null {
-  const { brainConfig } = input;
-  if (!brainConfig?.apiKey) {
-    input.logger.info(
-      {
-        module: "brain-memory",
-        enabled: brainConfig?.enabled ?? false,
-        hasApiKey: Boolean(brainConfig?.apiKey),
-      },
-      "Cerveau: OFF (brainMemory client not created — missing apiKey)",
-    );
-    return null;
-  }
-  const client = new BrainMemoryClient({
-    logger: input.logger,
-    apiKey: brainConfig.apiKey,
-    baseUrl: brainConfig.baseUrl,
-    globalFallback: brainConfig.globalFallback,
-  });
-  // Shared by the scribe (writes freshly distilled facts) and the recall path
-  // (reads them), so a just-learned fact is recallable before the Cerveau
-  // finishes synthesizing it. Only meaningful with curation on.
-  const recentFacts = brainConfig.curation
-    ? new RecentFactsStore(path.join(input.paseoHome, "brain", "recent"), input.logger)
-    : null;
-  const curator = brainConfig.curation
-    ? new BrainCurator({
-        agentManager: input.agentManager,
-        createAgent: input.createAgent,
-        brain: client,
-        briefStore: new ProjectBriefStore(
-          path.join(input.paseoHome, "brain", "fiches"),
-          input.logger,
-        ),
-        recentFacts,
-        providerModel: brainConfig.providerModel,
-        logger: input.logger,
-      })
-    : null;
-  input.logger.info(
-    {
-      module: "brain-memory",
-      curation: Boolean(curator),
-      baseUrl: brainConfig.baseUrl ?? "default",
-    },
-    "Cerveau: ON (recall injected before every prompt)",
-  );
-  return { client, curator, recentFacts };
 }
 
 function createInitialMutableDaemonConfig(config: PaseoDaemonConfig): MutableDaemonConfig {
@@ -1304,48 +1223,14 @@ export async function createPaseoDaemon(
       },
     );
   };
-  // Cerveau services + the recall hook are wired BEFORE any service that can
-  // dispatch prompts (schedule service, task scheduler, loops): the hook lives
-  // at the AgentManager choke point, so from here on every foreground prompt
-  // of every non-internal agent queries the brain — whatever the entrypoint.
-  const brainMemoryServices = createBrainMemoryServices({
-    brainConfig: config.brainMemory,
-    paseoHome: config.paseoHome,
-    agentManager,
-    createAgent,
-    logger,
-  });
-  const isBrainMemoryEnabled = () => readMutableBrainMemoryEnabled(daemonConfigStore.get());
-  if (brainMemoryServices && workspaceRegistry) {
-    agentManager.setBrainRecallHook(
-      createBrainRecallHook({
-        brain: brainMemoryServices.client,
-        curator: brainMemoryServices.curator,
-        recentFacts: brainMemoryServices.recentFacts,
-        isEnabled: isBrainMemoryEnabled,
-        agentManager,
-        agentStorage,
-        workspaceRegistry,
-        projectRegistry,
-        logger,
-      }),
-    );
-    // Symmetric end-of-turn capture at the same choke point: every entrypoint's
-    // completed turn is distilled (session, MCP, schedules, loops, tasks), not
-    // just the interactive session path that used to schedule this by hand.
-    agentManager.setBrainCaptureHook(
-      createBrainCaptureHook({
-        brain: brainMemoryServices.client,
-        curator: brainMemoryServices.curator,
-        isEnabled: isBrainMemoryEnabled,
-        agentManager,
-        agentStorage,
-        workspaceRegistry,
-        projectRegistry,
-        logger,
-      }),
-    );
-  }
+  // MÉMOIRE LONGUE DURÉE (« Cerveau ») — RETIRÉE.
+  // Chaque prompt de chaque agent interrogeait ici un service externe, repartait
+  // avec un bloc de souvenirs collé devant, et déclenchait à la fin du tour un
+  // second agent (le « greffier ») qui distillait la conversation. Soit, à chaque
+  // message : deux appels de modèle supplémentaires et quelques milliers de
+  // jetons de contexte, pour un gain marginal. Tout ce câblage est supprimé ; la
+  // configuration `brainMemory` reste acceptée dans le fichier de config (elle
+  // existe chez les utilisateurs) mais n'a plus aucun effet.
   const scheduleService = new ScheduleService({
     paseoHome: config.paseoHome,
     logger,
@@ -1623,6 +1508,10 @@ export async function createPaseoDaemon(
     // Lets the batch skip its final restart when the engine is already executing
     // the version that just went online (a republish with no new commit).
     readRunningEngineSha: () => getRunningEngineSha(),
+    // Et lui laisse aussi sauter le redémarrage quand la publication n'a
+    // reconstruit que le site : aucun `dist` moteur installé, donc rien à
+    // recharger — inutile de couper les sessions de tout le monde.
+    readDaemonRestartPending: () => isDaemonRestartPending(),
     deployTask: (projectId, taskId) => taskDeployer.deploy(projectId, taskId),
     // The user's press IS the authorization: the batch ends by restarting the
     // engine so the code that was just published is the code that runs.
@@ -1976,15 +1865,6 @@ export async function createPaseoDaemon(
               agentManager.setMcpBaseUrl(value ? mcpBaseUrl : null);
               agentManager.setPaseoToolsEnabled(value !== false);
             });
-            daemonConfigStore.onFieldChange("brainMemory.enabled", (value) => {
-              const enabled = value === true;
-              logger.info(
-                { module: "brain-memory", enabled },
-                enabled
-                  ? "Cerveau: ON (dynamic toggle enabled)"
-                  : "Cerveau: OFF (dynamic toggle disabled)",
-              );
-            });
             daemonConfigStore.onFieldChange("appendSystemPrompt", (value) => {
               agentManager.setAppendSystemPrompt(typeof value === "string" ? value : "");
             });
@@ -2075,7 +1955,6 @@ export async function createPaseoDaemon(
               },
               serviceProxyPublicBaseUrl,
               browserToolsBroker,
-              brainMemoryServices,
               projectPromptSync,
             );
             wsServer.setTasksServices({

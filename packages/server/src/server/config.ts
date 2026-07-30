@@ -22,7 +22,6 @@ import { AgentProviderSchema } from "@getpaseo/protocol/provider-manifest";
 import { hashDaemonPassword } from "./auth.js";
 import { resolveSpeechConfig } from "./speech/speech-config-resolver.js";
 import { mergeHostnames, parseHostnamesEnv, type HostnamesConfig } from "./hostnames.js";
-import { DEFAULT_BRAIN_BASE_URL } from "../services/brain-memory/client.js";
 
 const DEFAULT_PORT = 6767;
 const DEFAULT_RELAY_ENDPOINT = "relay.paseo.sh:443";
@@ -306,6 +305,12 @@ function resolveWebUiConfig(
     distDir,
   };
 }
+
+// Adresse historique du service de mémoire longue durée. La fonctionnalité a été
+// retirée du démon (elle coûtait deux appels de modèle et plusieurs milliers de
+// jetons par message) ; on continue seulement de LIRE la configuration existante
+// pour ne pas faire échouer le chargement des fichiers déjà en place.
+const DEFAULT_BRAIN_BASE_URL = "https://memoire.haiko-s1.com";
 
 function resolveBrainMemoryConfig(
   env: NodeJS.ProcessEnv,
