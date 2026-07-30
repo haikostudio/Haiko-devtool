@@ -146,7 +146,6 @@ describe("TaskScheduler", () => {
     runAgent?: () => Promise<{ canceled: boolean; finalText: string; timeline: [] }>;
     quietHours?: QuietHours;
     nowMs?: number;
-    lightAnalyzer?: { refine: ReturnType<typeof vi.fn> };
   }) {
     const createAgent = vi.fn(async () => ({
       snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1", cwd: "/tmp/wt/feat-auth" },
@@ -163,7 +162,6 @@ describe("TaskScheduler", () => {
     const scheduler = new TaskScheduler({
       taskBoardService: service,
       taskEstimator: estimator,
-      ...(options.lightAnalyzer ? { taskLightAnalyzer: options.lightAnalyzer } : {}),
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
       agentManager: { runAgent } as never,
       createAgent: createAgent as never,
@@ -211,24 +209,37 @@ describe("TaskScheduler", () => {
     });
   });
 
-  test("backlog light analysis is re-armed after a restart", async () => {
+  test("backlog remains silent after a restart", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     const task = await service.createTask("proj-1", {
       folderId: folder.id,
       title: "Raw pasted prompt",
       description: "il faut brancher le paiement",
     });
-    // The card is a fresh manual backlog prompt awaiting light refinement; after a
-    // restart the in-memory refiner queue is empty, so the sweep must re-arm it.
-    expect(task.refinement).toBe("pending");
-
-    const lightAnalyzer = { refine: vi.fn() };
-    const { scheduler } = buildScheduler({ remainingPct: 80, lightAnalyzer });
+    const { scheduler, estimator } = buildScheduler({ remainingPct: 80 });
     await scheduler.tick();
 
-    expect(lightAnalyzer.refine).toHaveBeenCalledWith("proj-1", task.id);
-    // Backlog is never sent to the cost estimator.
-    const { estimator } = buildScheduler({ remainingPct: 80 });
+    const untouched = await findTask(task.id);
+    expect(untouched?.refinement ?? null).toBeNull();
+    expect(estimator.requestEstimate).not.toHaveBeenCalled();
+  });
+
+  test("notes remain silent and never request an estimate", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Note brute",
+      description: "penser au flux mobile",
+      column: "notes",
+    });
+
+    const { scheduler, estimator } = buildScheduler({ remainingPct: 80 });
+    await scheduler.tick();
+
+    const untouched = await findTask(task.id);
+    expect(untouched?.column).toBe("notes");
+    expect(untouched?.schedule ?? null).toBeNull();
+    expect(untouched?.estimate ?? null).toBeNull();
     expect(estimator.requestEstimate).not.toHaveBeenCalled();
   });
 

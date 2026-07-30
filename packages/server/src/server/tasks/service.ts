@@ -279,7 +279,6 @@ export class TaskBoardService {
   private onTaskProposed: ((projectId: string, task: KanbanTask) => void) | null = null;
   private onTaskCompleted: TaskCompletedListener | null = null;
   private onResolveRestartImpact: TaskRestartImpactResolver | null = null;
-  private onBacklogRefine: ((projectId: string, taskId: string) => void) | null = null;
   private onTaskCreated: ((projectId: string, task: KanbanTask) => void) | null = null;
 
   constructor(options: TaskBoardServiceOptions) {
@@ -307,15 +306,6 @@ export class TaskBoardService {
    */
   setRestartImpactResolver(callback: TaskRestartImpactResolver | null): void {
     this.onResolveRestartImpact = callback;
-  }
-
-  /**
-   * Fired when a manual backlog task needs light analysis (title + tidied
-   * prompt). Wired to the light analyzer at bootstrap. NEVER triggers the cost
-   * estimate — that's onTaskScheduled, and only fires from "Validé" onward.
-   */
-  setOnBacklogRefine(callback: (projectId: string, taskId: string) => void): void {
-    this.onBacklogRefine = callback;
   }
 
   /**
@@ -588,13 +578,6 @@ export class TaskBoardService {
     // own.
     const requested = input.column ?? "backlog";
     const column: TaskColumn = requested === "notes" ? "notes" : "backlog";
-    // A manual backlog card built from a pasted prompt gets a LIGHT analysis
-    // (title + tidied description) — never a cost estimate. That's the whole
-    // point of the gate: analysis cost only starts at "Validé".
-    const needsLightAnalysis =
-      (input.origin ?? "manual") === "manual" &&
-      input.approval?.state !== "pending" &&
-      (input.description?.trim() ?? "") !== "";
     const nextBoard = await this.store.mutate(projectId, (current) => {
       const now = new Date().toISOString();
       const siblings = current.tasks.filter((task) => task.column === column);
@@ -616,8 +599,6 @@ export class TaskBoardService {
           ? { schedulePreference: input.schedulePreference }
           : {}),
         ...(input.approval !== undefined ? { approval: input.approval } : {}),
-        // Mark pending so the refiner (and a restart re-arm) knows to clean it up.
-        ...(needsLightAnalysis ? { refinement: "pending" as const } : {}),
         links: input.agentId
           ? { agentIds: [input.agentId], primaryAgentId: input.agentId }
           : { agentIds: [] },
@@ -637,9 +618,6 @@ export class TaskBoardService {
     // the user has not accepted the work.
     if (input.approval?.state !== "pending") {
       this.notifyTaskCreated(projectId, created);
-    }
-    if (needsLightAnalysis) {
-      this.notifyBacklogRefine(projectId, created);
     }
     if (input.approval?.state === "pending" && this.onTaskProposed) {
       try {
@@ -1261,16 +1239,6 @@ export class TaskBoardService {
         this.onTaskCreated(projectId, task);
       } catch (error) {
         this.logger.warn({ err: error, taskId: task.id }, "onTaskCreated callback failed");
-      }
-    }
-  }
-
-  private notifyBacklogRefine(projectId: string, task: KanbanTask): void {
-    if (this.onBacklogRefine) {
-      try {
-        this.onBacklogRefine(projectId, task.id);
-      } catch (error) {
-        this.logger.warn({ err: error, taskId: task.id }, "onBacklogRefine callback failed");
       }
     }
   }

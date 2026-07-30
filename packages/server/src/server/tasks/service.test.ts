@@ -422,11 +422,9 @@ describe("TaskBoardService", () => {
     expect(snapshots[1]?.tasks).toHaveLength(1);
   });
 
-  test("a manual backlog task with a prompt fires light analysis, NOT the cost estimate", async () => {
+  test("a manual backlog task with a prompt stays inert and does not arm the pipeline", async () => {
     const scheduled: string[] = [];
-    const refined: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
-    service.setOnBacklogRefine((_projectId, taskId) => refined.push(taskId));
     const folder = await service.createFolder("proj-1", "Auth");
 
     const task = await service.createTask("proj-1", {
@@ -435,30 +433,23 @@ describe("TaskBoardService", () => {
       description: "il faut que le champ mot de passe prenne toute la largeur",
     });
 
-    // Backlog: the light refiner runs; the expensive estimate hook never fires,
-    // and the card carries no schedule/estimate.
+    // Backlog: no preparation runs, and the expensive estimate hook never fires.
     expect(task.column).toBe("backlog");
-    expect(task.refinement).toBe("pending");
+    expect(task.refinement ?? null).toBeNull();
     expect(task.schedule ?? null).toBeNull();
     expect(task.estimate ?? null).toBeNull();
-    expect(refined).toEqual([task.id]);
     expect(scheduled).toEqual([]);
   });
 
-  test("a backlog task created from the '+' button (no prompt) is NOT light-analyzed", async () => {
-    const refined: string[] = [];
-    service.setOnBacklogRefine((_projectId, taskId) => refined.push(taskId));
+  test("a backlog task created from the '+' button stays inert", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
 
     const task = await service.createTask("proj-1", { folderId: folder.id, title: "Empty card" });
 
     expect(task.refinement ?? null).toBeNull();
-    expect(refined).toEqual([]);
   });
 
-  test("agent-proposed backlog tasks are not light-analyzed", async () => {
-    const refined: string[] = [];
-    service.setOnBacklogRefine((_projectId, taskId) => refined.push(taskId));
+  test("agent-proposed backlog tasks stay inert until approval", async () => {
     const folder = await service.createFolder("proj-1", "Agent");
 
     const task = await service.createTask("proj-1", {
@@ -469,7 +460,6 @@ describe("TaskBoardService", () => {
     });
 
     expect(task.refinement ?? null).toBeNull();
-    expect(refined).toEqual([]);
   });
 
   test("createTask honours an explicit inert column", async () => {

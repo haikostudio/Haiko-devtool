@@ -10,7 +10,6 @@ import {
 import { DEFAULT_TASKS_QUIET_HOURS, isQuietTime, type QuietHours } from "../quiet-hours.js";
 import type { TaskBoardService } from "./service.js";
 import type { TaskEstimator } from "./estimator.js";
-import type { TaskLightAnalyzer } from "./light-analyzer.js";
 import {
   buildTaskExecutionPrompt,
   resolveTaskLaunch,
@@ -43,8 +42,6 @@ const LIGHT_TASK_MAX_MINUTES = 45;
 interface TaskSchedulerOptions {
   taskBoardService: TaskBoardService;
   taskEstimator: TaskEstimator;
-  /** Light-analysis pass for backlog cards; re-armed here after a restart. */
-  taskLightAnalyzer?: Pick<TaskLightAnalyzer, "refine">;
   projectRegistry: ProjectRegistry;
   agentManager: Pick<AgentManager, "runAgent" | "appendTimelineItem" | "getLastAssistantMessage">;
   createAgent: BoundCreateAgentCommand;
@@ -128,7 +125,6 @@ function isScheduledCandidate(task: KanbanTask): boolean {
 export class TaskScheduler {
   private readonly taskBoardService: TaskBoardService;
   private readonly taskEstimator: TaskEstimator;
-  private readonly taskLightAnalyzer: Pick<TaskLightAnalyzer, "refine"> | null;
   private readonly projectRegistry: ProjectRegistry;
   private readonly agentManager: Pick<
     AgentManager,
@@ -155,7 +151,6 @@ export class TaskScheduler {
   constructor(options: TaskSchedulerOptions) {
     this.taskBoardService = options.taskBoardService;
     this.taskEstimator = options.taskEstimator;
-    this.taskLightAnalyzer = options.taskLightAnalyzer ?? null;
     this.projectRegistry = options.projectRegistry;
     this.agentManager = options.agentManager;
     this.createAgent = options.createAgent;
@@ -339,8 +334,8 @@ export class TaskScheduler {
         if (task.column === "in_progress") {
           continue;
         }
-        if (task.column === "backlog") {
-          await this.handleBacklogTask(project.projectId, task);
+        if (task.column === "notes" || task.column === "backlog") {
+          await this.handleInertTask(project.projectId, task);
           continue;
         }
         task = await this.fallbackDeployConflictProvider(project.projectId, task);
@@ -395,44 +390,38 @@ export class TaskScheduler {
   }
 
   /**
-   * Backlog is inert: no estimate, no execution, and no exit. Exactly two things
-   * are allowed here — self-healing cleanup of stray cost state, and the cheap
-   * light analysis (title + tidied prompt). The card then STAYS in "À faire"
-   * until the user validates it by hand; the scheduler never promotes it.
+   * "Notes" and "À faire" are inert: no estimate, no prepared text, no
+   * execution, and no exit. The only automatic work tolerated there is
+   * self-healing cleanup of stray pipeline state left by older builds.
    */
-  private async handleBacklogTask(projectId: string, task: KanbanTask): Promise<void> {
-    // Self-heal legacy/dirty data — a backlog card must never carry a cost
-    // estimate or an armed schedule (those belong to "Validé" onward). Retro-
-    // cleans boards where analysis fired too early (e.g. Maestria).
-    if (task.estimate || task.schedule) {
-      await this.clearBacklogPipelineState(projectId, task.id);
-    }
-    // Light analysis is cheap and produces NO cost/billing, so it's allowed in
-    // backlog. Re-arm it after a daemon restart, since the queue is in-memory.
-    if (task.refinement === "pending" && this.taskLightAnalyzer) {
-      this.taskLightAnalyzer.refine(projectId, task.id);
+  private async handleInertTask(projectId: string, task: KanbanTask): Promise<void> {
+    // Self-heal legacy/dirty data — an inert card must never carry a cost
+    // estimate or an armed schedule (those belong to "Validé" onward).
+    if (task.estimate || task.schedule || task.refinement !== undefined) {
+      await this.clearInertPipelineState(projectId, task.id);
     }
   }
 
   /**
-   * Self-healing cleanup: strip a stray cost estimate / armed schedule off a
-   * task that is (back) in backlog. Cost analysis is a "Validé"-only decision,
-   * so a backlog card must never show one. Runs once per dirty task (subsequent
-   * ticks see it clean and skip), fixing boards analyzed before this gate.
+   * Self-healing cleanup: strip stray pipeline state off a task that is back in
+   * an inert column. Analysis is a "Validé"-only decision, so "Notes"/"À faire"
+   * must never show costs, queued work, or a half-prepared backlog refinement.
    */
-  private async clearBacklogPipelineState(projectId: string, taskId: string): Promise<void> {
+  private async clearInertPipelineState(projectId: string, taskId: string): Promise<void> {
     try {
       await this.taskBoardService.patchTask(projectId, taskId, (task) => {
-        if (task.column !== "backlog" || (!task.estimate && !task.schedule)) {
+        const isInert = task.column === "backlog" || task.column === "notes";
+        if (!isInert || (!task.estimate && !task.schedule && task.refinement === undefined)) {
           return task;
         }
         const next = { ...task };
         delete next.estimate;
         delete next.schedule;
+        delete next.refinement;
         return next;
       });
     } catch (error) {
-      this.logger.warn({ err: error, taskId }, "Backlog pipeline-state cleanup failed");
+      this.logger.warn({ err: error, taskId }, "Inert task pipeline-state cleanup failed");
     }
   }
 

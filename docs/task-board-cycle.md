@@ -47,11 +47,11 @@ in the project's single list.
 1. **`createTask` always pins "backlog".** No caller can create a card straight
    into the pipeline — the `column` field on `CreateTaskInput` is deliberately
    ignored. A card enters the pipeline by being _moved_, never by being _born_.
-2. **The scheduler never promotes a backlog card.** Backlog does exactly two
-   things: self-healing cleanup of stray cost state, and the free light analysis
-   (title + tidied prompt). No estimate, no agent, no exit. There used to be a
-   per-folder "auto-start" default that auto-validated backlog cards; it was
-   removed — cards appeared to transit "À faire" and land in "Validé" by
+2. **The scheduler never promotes or prepares a backlog card.** Backlog does
+   exactly one thing: self-healing cleanup of stray pipeline state left by older
+   builds. No estimate, no tidied prompt, no agent prompt, no exit. There used
+   to be a per-folder "auto-start" default that auto-validated backlog cards;
+   it was removed — cards appeared to transit "À faire" and land in "Validé" by
    themselves, which is precisely the consent the column exists to capture.
 3. **Agents are blocked at the tool boundary, not by a prompt.** `move_task`
    accepts only `notes` and `backlog` (`AGENT_WRITABLE_TASK_COLUMNS`) and throws

@@ -143,7 +143,6 @@ import { createTaskResponseTemplateHook } from "./tasks/response-template.js";
 import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskAgentProvisioner } from "./tasks/agent-provisioner.js";
-import { TaskLightAnalyzer } from "./tasks/light-analyzer.js";
 import { MessageTriage } from "./tasks/message-triage.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import type { HubRelationshipRemote } from "./hub/relationship-remote.js";
@@ -160,7 +159,8 @@ import { createBrainRecallHook } from "../services/brain-memory/recall.js";
 import { RecentFactsStore } from "../services/brain-memory/recent-facts.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
 import { TaskPublisher } from "./tasks/publish-on-complete.js";
-import { TaskValidator, watchAgentIdle } from "./tasks/validator.js";
+import { watchAgentIdle } from "./tasks/task-agent-link.js";
+import { TaskValidator } from "./tasks/validator.js";
 import { TaskDeployer } from "./tasks/deployer.js";
 import { TaskBatchDeployer } from "./tasks/batch-deployer.js";
 import { AutoDeployWatcher } from "./tasks/auto-deploy.js";
@@ -1553,17 +1553,9 @@ export async function createPaseoDaemon(
     projectRegistry,
     logger,
   });
-  // The final check behind "Lancer le contrôle": a prompt into the task agent's
-  // own conversation, which verifies, fixes, then completes the card itself.
-  const taskValidator = new TaskValidator({
-    taskBoardService,
-    projectRegistry,
-    sendPrompt: async ({ agentId, prompt }) => {
-      await sendPromptToAgent({ agentManager, agentStorage, agentId, prompt, logger });
-    },
-    watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
-    logger,
-  });
+  // "Terminer la tâche": a plain move from "En cours" to "Terminé". No prompt, no
+  // agent, no deployment — verification happens at publication time instead.
+  const taskValidator = new TaskValidator({ taskBoardService, logger });
   // "Lancer le déploiement": the sibling of the final check for a FINISHED card.
   // It hands the card's own agent a deploy-then-confirm prompt and lets it move
   // the card to "Déployée" while reporting whether a daemon restart is needed.
@@ -1576,19 +1568,9 @@ export async function createPaseoDaemon(
     watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
     logger,
   });
-  // Runs in its own throwaway Haiku agent: the tidy-up must never show up in the
-  // card's Discussion (raw JSON) nor burn the card's real provider.
-  const taskLightAnalyzer = new TaskLightAnalyzer({
-    agentManager,
-    createAgent,
-    taskBoardService,
-    projectRegistry,
-    logger,
-  });
   const taskScheduler = new TaskScheduler({
     taskBoardService,
     taskEstimator,
-    taskLightAnalyzer,
     projectRegistry,
     agentManager,
     createAgent,
@@ -1715,10 +1697,6 @@ export async function createPaseoDaemon(
       return;
     }
     await taskPublisher.announceReady(projectId, task);
-  });
-  // Light analysis tidies manual backlog cards without running cost estimation.
-  taskBoardService.setOnBacklogRefine((projectId, taskId) => {
-    taskLightAnalyzer.refine(projectId, taskId);
   });
   // Auto-move: when a publish goes live, promote the shipped task branches' done
   // cards into the terminal "deployed" column across every project's board.
