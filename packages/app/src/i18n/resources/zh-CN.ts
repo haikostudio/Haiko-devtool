@@ -600,6 +600,7 @@ export const zhCN: TranslationResources = {
       deployed: "已部署",
       deployFailed: "发布失败",
       duration: "约{{minutes}}分钟",
+      usage: "{{tokens}} 令牌",
       deadlineDays: "{{count}} 天",
       deadlineOverdue: "已逾期",
       deadlineToday: "今天",
@@ -658,6 +659,13 @@ export const zhCN: TranslationResources = {
       openPr: "打开 PR",
       viewPlan: "查看计划",
       viewAgent: "查看代理",
+      usage: {
+        title: "实际消耗",
+        tokens: "{{tokens}} 令牌",
+        breakdown: "输入 {{input}} · 输出 {{output}} · {{turns}} 轮",
+        cost: "≈ {{amount}} · 实际",
+        none: "尚未消耗。",
+      },
       cost: {
         billable: "≈ {{amount}} · 时间",
         tokens: "≈ {{amount}} · 令牌",

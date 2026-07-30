@@ -615,6 +615,7 @@ export const ptBR: TranslationResources = {
       deployed: "Implantado",
       deployFailed: "Falha na publicação",
       duration: "~{{minutes}} min",
+      usage: "{{tokens}} tokens",
       deadlineDays: "{{count}} d",
       deadlineOverdue: "atrasada",
       deadlineToday: "hoje",
@@ -673,6 +674,13 @@ export const ptBR: TranslationResources = {
       openPr: "Abrir PR",
       viewPlan: "Ver o plano",
       viewAgent: "Ver o agente",
+      usage: {
+        title: "Consumo real",
+        tokens: "{{tokens}} tokens",
+        breakdown: "{{input}} entrada · {{output}} saída · {{turns}} turno(s)",
+        cost: "≈ {{amount}} · real",
+        none: "Nada consumido ainda.",
+      },
       cost: {
         billable: "≈ {{amount}} · tempo",
         tokens: "≈ {{amount}} · tokens",

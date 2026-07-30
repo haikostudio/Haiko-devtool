@@ -165,6 +165,120 @@ describe("ProjectPromptSyncService", () => {
     expect(prompt).not.toContain("git@example.test");
   });
 
+  test("carries the project memory and the instruction that keeps it alive", async () => {
+    const project = buildProjectRecord({
+      projectId: "prj_memory",
+      rootPath: projectRoot,
+      displayName: "Memory",
+    });
+    writeFileSync(
+      path.join(projectRoot, "MEMOIRE.md"),
+      "- Le déploiement ne reconstruit que ce qui a changé.\n",
+    );
+    const service = new ProjectPromptSyncService({
+      paseoHome,
+      projectRegistry: new MutableProjectRegistry([project]),
+      workspaceRegistry: new MutableWorkspaceRegistry([]),
+      workspaceGitService: createWorkspaceGitServiceStub(),
+      inspector: new MutableInspector(),
+      logger,
+    });
+
+    await service.start();
+    const prompt = await service.getDaemonAppendSystemPrompt({
+      agentId: "agent-memory",
+      cwd: projectRoot,
+    });
+
+    expect(prompt).toContain("Le déploiement ne reconstruit que ce qui a changé.");
+    // Sans cette consigne, la mémoire ne serait jamais alimentée : personne
+    // d'autre que les agents ne l'écrit.
+    expect(prompt).toContain("MEMOIRE.md");
+    expect(prompt).toContain("fait DURABLE");
+  });
+
+  test("says the memory is empty rather than hiding the file when it is missing", async () => {
+    const project = buildProjectRecord({
+      projectId: "prj_no_memory",
+      rootPath: projectRoot,
+      displayName: "NoMemory",
+    });
+    const service = new ProjectPromptSyncService({
+      paseoHome,
+      projectRegistry: new MutableProjectRegistry([project]),
+      workspaceRegistry: new MutableWorkspaceRegistry([]),
+      workspaceGitService: createWorkspaceGitServiceStub(),
+      inspector: new MutableInspector(),
+      logger,
+    });
+
+    await service.start();
+    const prompt = await service.getDaemonAppendSystemPrompt({
+      agentId: "agent-no-memory",
+      cwd: projectRoot,
+    });
+
+    // Un agent qui ignore que le fichier peut exister ne le créera jamais.
+    expect(prompt).toContain("le fichier n'existe pas encore");
+    expect(prompt).toContain("crée le fichier s'il manque");
+  });
+
+  test("truncates an oversized memory instead of paying for it forever", async () => {
+    const project = buildProjectRecord({
+      projectId: "prj_big_memory",
+      rootPath: projectRoot,
+      displayName: "BigMemory",
+    });
+    writeFileSync(path.join(projectRoot, "MEMOIRE.md"), `${"a".repeat(9_000)}\nFIN-DU-FICHIER\n`);
+    const service = new ProjectPromptSyncService({
+      paseoHome,
+      projectRegistry: new MutableProjectRegistry([project]),
+      workspaceRegistry: new MutableWorkspaceRegistry([]),
+      workspaceGitService: createWorkspaceGitServiceStub(),
+      inspector: new MutableInspector(),
+      logger,
+    });
+
+    await service.start();
+    const prompt = await service.getDaemonAppendSystemPrompt({
+      agentId: "agent-big-memory",
+      cwd: projectRoot,
+    });
+
+    expect(prompt).not.toContain("FIN-DU-FICHIER");
+    expect(prompt).toContain("Mémoire tronquée");
+  });
+
+  test("lets a project turn the memory off", async () => {
+    const project = buildProjectRecord({
+      projectId: "prj_memory_off",
+      rootPath: projectRoot,
+      displayName: "MemoryOff",
+    });
+    writeFileSync(path.join(projectRoot, "MEMOIRE.md"), "- Un secret bien gardé.\n");
+    writeFileSync(
+      path.join(projectRoot, "paseo.json"),
+      JSON.stringify({ projectPromptSync: { includeMemory: false } }),
+    );
+    const service = new ProjectPromptSyncService({
+      paseoHome,
+      projectRegistry: new MutableProjectRegistry([project]),
+      workspaceRegistry: new MutableWorkspaceRegistry([]),
+      workspaceGitService: createWorkspaceGitServiceStub(),
+      inspector: new MutableInspector(),
+      logger,
+    });
+
+    await service.start();
+    const prompt = await service.getDaemonAppendSystemPrompt({
+      agentId: "agent-memory-off",
+      cwd: projectRoot,
+    });
+
+    expect(prompt).not.toContain("Un secret bien gardé");
+    expect(prompt).not.toContain("MEMOIRE.md");
+  });
+
   test("serializes overlapping sync requests for the same project", async () => {
     const project = buildProjectRecord({
       projectId: "prj_serial",

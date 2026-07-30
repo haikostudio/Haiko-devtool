@@ -21,6 +21,7 @@ import {
   formatUsd,
   resolveEffectiveExecution,
 } from "@/components/tasks/task-cost";
+import { formatTokenCount, hasTaskUsage, totalTaskTokens } from "@/components/tasks/task-usage";
 import {
   deadlineTagFor,
   type ParsedPriority,
@@ -956,12 +957,42 @@ function TaskMetaSection({ task, effective }: { task: KanbanTask; effective: Eff
         <Text style={styles.metaText}>{t("tasks.detail.noEstimate")}</Text>
       )}
       {task.estimate?.summary ? <Text style={styles.metaText}>{task.estimate.summary}</Text> : null}
+      {/* La consommation RÉELLE, en face de l'estimation : c'est la comparaison
+          qui dit si un réglage a servi à quelque chose. Absente tant que la
+          carte n'a rien lancé — un zéro affiché passerait pour une panne. */}
+      <TaskUsageRow usage={task.usage} />
       {task.schedule?.lastError ? (
         <Text style={styles.errorText}>{task.schedule.lastError}</Text>
       ) : null}
       {task.links.prUrl ? (
         <ExternalLink href={task.links.prUrl} label={t("tasks.detail.openPr")} />
       ) : null}
+    </View>
+  );
+}
+
+function TaskUsageRow({ usage }: { usage: KanbanTask["usage"] }) {
+  const { t } = useTranslation();
+  if (!hasTaskUsage(usage)) {
+    return null;
+  }
+  return (
+    <View style={styles.metaRow} testID="task-detail-usage">
+      <StatusBadge
+        label={t("tasks.detail.usage.tokens", {
+          tokens: formatTokenCount(totalTaskTokens(usage)),
+        })}
+      />
+      {usage.costUsd > 0 ? (
+        <StatusBadge label={t("tasks.detail.usage.cost", { amount: formatUsd(usage.costUsd) })} />
+      ) : null}
+      <Text style={styles.metaText}>
+        {t("tasks.detail.usage.breakdown", {
+          input: formatTokenCount(usage.inputTokens),
+          output: formatTokenCount(usage.outputTokens),
+          turns: usage.turns,
+        })}
+      </Text>
     </View>
   );
 }

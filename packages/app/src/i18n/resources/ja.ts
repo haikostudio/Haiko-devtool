@@ -610,6 +610,7 @@ export const ja: TranslationResources = {
       deployed: "デプロイ済み",
       deployFailed: "公開に失敗しました",
       duration: "約{{minutes}}分",
+      usage: "{{tokens}} トークン",
       deadlineDays: "残り{{count}}日",
       deadlineOverdue: "期限切れ",
       deadlineToday: "今日",
@@ -668,6 +669,13 @@ export const ja: TranslationResources = {
       openPr: "PR を開く",
       viewPlan: "プランを見る",
       viewAgent: "エージェントを見る",
+      usage: {
+        title: "実際の消費",
+        tokens: "{{tokens}} トークン",
+        breakdown: "入力 {{input}} · 出力 {{output}} · {{turns}} ターン",
+        cost: "≈ {{amount}} · 実績",
+        none: "まだ消費はありません。",
+      },
       cost: {
         billable: "≈ {{amount}} · 時間",
         tokens: "≈ {{amount}} · トークン",

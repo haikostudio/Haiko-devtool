@@ -21,6 +21,8 @@ This is an npm workspace monorepo:
 
 At the start of non-trivial work, list `docs/` and skim anything relevant to the task. When you learn something meta worth preserving — a gotcha, a convention, a workflow, a piece of system context that will outlive the current task — update an existing doc or propose a new one. Code-level facts belong in inline comments next to the code; system, process, and gotcha-level facts belong in `docs/`.
 
+**[MEMOIRE.md](MEMOIRE.md) is the project's own memory, and you maintain it.** One short line per durable fact: a decision taken, a trap hit, a convention, a user preference. The daemon injects it into every agent's first prompt, so it replaces the external long-term memory service that used to query a model on every message. Keep it under a hundred lines, never restate what the code or git history already says, and delete a line that became false instead of contradicting it. Longer, structured knowledge still belongs in `docs/` — `MEMOIRE.md` links to it rather than duplicating it.
+
 | Doc                                                                | What's in it                                                                                                                   |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | [docs/product.md](docs/product.md)                                 | What Paseo is, who it's for, where it's going                                                                                  |

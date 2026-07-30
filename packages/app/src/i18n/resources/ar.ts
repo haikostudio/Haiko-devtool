@@ -604,6 +604,7 @@ export const ar: TranslationResources = {
       deployed: "تم النشر",
       deployFailed: "فشل النشر",
       duration: "~{{minutes}} دقيقة",
+      usage: "{{tokens}} رمز",
       deadlineDays: "{{count}} ي",
       deadlineOverdue: "متأخرة",
       deadlineToday: "اليوم",
@@ -662,6 +663,13 @@ export const ar: TranslationResources = {
       openPr: "فتح PR",
       viewPlan: "عرض الخطة",
       viewAgent: "عرض الوكيل",
+      usage: {
+        title: "الاستهلاك الفعلي",
+        tokens: "{{tokens}} رمز",
+        breakdown: "{{input}} إدخال · {{output}} إخراج · {{turns}} دور",
+        cost: "≈ {{amount}} · فعلي",
+        none: "لم يُستهلك شيء بعد.",
+      },
       cost: {
         billable: "≈ {{amount}} · الوقت",
         tokens: "≈ {{amount}} · الرموز",

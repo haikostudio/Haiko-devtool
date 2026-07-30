@@ -146,6 +146,7 @@ import { ActivityLogService } from "./activity/service.js";
 import { TaskEstimator } from "./tasks/estimator.js";
 import { TaskAgentProvisioner } from "./tasks/agent-provisioner.js";
 import { MessageTriage } from "./tasks/message-triage.js";
+import { TaskUsageRecorder } from "./tasks/usage-recorder.js";
 import { createWorkspaceProvisioningService } from "./session/workspace-provisioning/workspace-provisioning-service.js";
 import type { HubRelationshipRemote } from "./hub/relationship-remote.js";
 import type {
@@ -1637,6 +1638,23 @@ export async function createPaseoDaemon(
         logger,
       })
     : null;
+  // Compteur de consommation par carte : additionne sur la carte ce que ses
+  // agents dépensent réellement. Branché sur le flux de deltas des statistiques
+  // d'usage — le seul endroit où les compteurs cumulés des fournisseurs sont
+  // déjà transformés en écarts additionnables.
+  const taskUsageRecorder = new TaskUsageRecorder({
+    taskBoardService,
+    resolveProjectId: async (agentId) => {
+      const agent = await agentStorage.get(agentId);
+      if (!agent?.workspaceId) {
+        return null;
+      }
+      const workspace = await workspaceRegistry.get(agent.workspaceId);
+      return workspace?.projectId ?? null;
+    },
+    logger,
+  });
+  agentManager.getUsageStatsStore()?.setDeltaListener((delta) => taskUsageRecorder.note(delta));
   // Persistent per-project "Chef d'orchestre" agent: manages the board via the
   // paseo task tools and survives restarts (persisted, discovered by label).
   const conductorService = new ConductorAgentService({
@@ -2062,6 +2080,11 @@ export async function createPaseoDaemon(
     taskScheduler.stop();
     autoDeployWatcher.stop();
     projectPromptSync.dispose();
+    // Le dernier lot de consommation est écrit avant l'arrêt : sans ce vidage,
+    // les jetons des dix dernières secondes de travail disparaissent avec le
+    // processus, et une carte publiée juste avant un redémarrage sous-compte.
+    await taskUsageRecorder.flush().catch(() => undefined);
+    taskUsageRecorder.dispose();
     agentTaskSync.stop();
     activityLogService.stop();
     await relayTransport?.stop().catch(() => undefined);

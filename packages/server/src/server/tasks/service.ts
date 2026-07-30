@@ -9,6 +9,7 @@ import type {
   TaskFolder,
   TaskRunConfig,
   TaskSchedulePreference,
+  TaskUsage,
 } from "@getpaseo/protocol/tasks/types";
 import { backfillTaskBilling, slugifyBranch } from "./agent-launch.js";
 import { settleDeployedRestartFlags } from "./restart-impact.js";
@@ -965,6 +966,52 @@ export class TaskBoardService {
       return {
         ...current,
         tasks: current.tasks.map((entry) => (entry.id === taskId ? { ...entry, viewedAt } : entry)),
+      };
+    });
+    if (!changed) {
+      return null;
+    }
+    this.broadcast(board);
+    return board;
+  }
+
+  /**
+   * Ajoute une consommation modèle au compteur d'une carte, SANS toucher à
+   * `updatedAt`.
+   *
+   * Même précaution que `markTaskViewed` : les colonnes sont triées par dernière
+   * modification, et un fournisseur annonce sa consommation en continu. Passer
+   * par la voie normale ferait remonter la carte en tête de colonne toutes les
+   * dix secondes tant qu'un agent travaille — le tableau se réordonnerait tout
+   * seul sous les yeux de l'utilisateur.
+   *
+   * Renvoie null quand la carte n'existe pas : un compteur n'est jamais une
+   * raison de faire échouer quoi que ce soit.
+   */
+  async addTaskUsage(
+    projectId: string,
+    taskId: string,
+    delta: Omit<TaskUsage, "updatedAt">,
+  ): Promise<TaskBoard | null> {
+    let changed = false;
+    const board = await this.store.mutate(projectId, (current) => {
+      const task = current.tasks.find((entry) => entry.id === taskId);
+      if (!task) {
+        return current;
+      }
+      changed = true;
+      const previous = task.usage;
+      const usage: TaskUsage = {
+        inputTokens: (previous?.inputTokens ?? 0) + delta.inputTokens,
+        outputTokens: (previous?.outputTokens ?? 0) + delta.outputTokens,
+        cachedInputTokens: (previous?.cachedInputTokens ?? 0) + delta.cachedInputTokens,
+        costUsd: (previous?.costUsd ?? 0) + delta.costUsd,
+        turns: (previous?.turns ?? 0) + delta.turns,
+        updatedAt: new Date().toISOString(),
+      };
+      return {
+        ...current,
+        tasks: current.tasks.map((entry) => (entry.id === taskId ? { ...entry, usage } : entry)),
       };
     });
     if (!changed) {

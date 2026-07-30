@@ -126,3 +126,11 @@ tokens per message, for a marginal benefit. The wiring is gone; only a read-only
 parser for old transcripts remains
 (`packages/server/src/services/brain-context-envelope.ts`), so conversations
 recorded before the removal still display the user's text instead of raw XML.
+
+## Where the removed memory went
+
+`MEMOIRE.md` at the project root replaced the Cerveau. One short line per durable
+fact, injected once per agent by the project-state block (see
+docs/data-model.md), and maintained by the agents themselves with their ordinary
+editing tools — no extra model call, no external service, and a file the user can
+read and fix by hand.

@@ -22,6 +22,7 @@ import {
   type ParsedPriority,
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
+import { formatTokenCount, hasTaskUsage, totalTaskTokens } from "@/components/tasks/task-usage";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import { type TaskTone, shouldShowVoyant } from "@/components/tasks/task-status-tone";
 import {
@@ -468,9 +469,12 @@ const CardMetaRow = memo(function CardMetaRow({
       ? t("tasks.card.duration", { minutes: task.estimate.estimatedMinutes })
       : null;
 
+  const hasUsage = hasTaskUsage(task.usage);
+
   const hasMetaRow = Boolean(
     deadline ||
     duration ||
+    hasUsage ||
     task.links.primaryAgentId ||
     task.links.prUrl ||
     task.deployedUrl ||
@@ -485,6 +489,7 @@ const CardMetaRow = memo(function CardMetaRow({
       {duration ? (
         <Text style={styles.estimateText}>{`${deadline ? "· " : ""}${duration}`}</Text>
       ) : null}
+      <UsageChip usage={task.usage} lead={Boolean(deadline || duration)} />
       {task.links.primaryAgentId ? (
         <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       ) : null}
@@ -666,6 +671,30 @@ const LiveChip = memo(function LiveChip({ url }: { url: string }) {
  * the length everything else in this repo quotes a commit at). Read-only: it is
  * a receipt, not a link — there is nothing useful to open from a phone.
  */
+/**
+ * Ce que la carte a réellement coûté, en un chiffre rond. C'est la seule réponse
+ * chiffrée à « ce réglage économise-t-il vraiment ? ». Le détail (entrée /
+ * sortie / tours) reste dans la fiche : la carte doit se lire d'un coup d'œil.
+ */
+const UsageChip = memo(function UsageChip({
+  usage,
+  lead,
+}: {
+  usage: KanbanTask["usage"];
+  lead: boolean;
+}) {
+  const { t } = useTranslation();
+  if (!hasTaskUsage(usage)) {
+    return null;
+  }
+  const label = t("tasks.card.usage", { tokens: formatTokenCount(totalTaskTokens(usage)) });
+  return (
+    <Text style={styles.estimateText} testID="task-card-usage">
+      {`${lead ? "· " : ""}${label}`}
+    </Text>
+  );
+});
+
 const VersionChip = memo(function VersionChip({ sha }: { sha: string }) {
   return (
     <View style={styles.prChip}>

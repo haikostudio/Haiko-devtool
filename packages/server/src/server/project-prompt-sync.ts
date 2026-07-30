@@ -20,6 +20,28 @@ const PROJECT_PROMPT_SYNC_DEBOUNCE_MS = 250;
 const PROJECT_PROMPT_HISTORY_LIMIT = 20;
 const PROJECT_PROMPT_CHANGED_PATH_LIMIT = 12;
 const PROJECT_PROMPT_WORKSPACE_LIMIT = 12;
+/**
+ * Mémoire du projet : un fichier à la racine, tenu par les agents eux-mêmes.
+ *
+ * Remplace le service de mémoire externe (« Cerveau »), retiré parce qu'il
+ * coûtait deux appels de modèle et plusieurs milliers de jetons à CHAQUE
+ * message. Ici, rien de tout ça : le fichier est lu à froid, injecté une seule
+ * fois par agent (l'empreinte évite les répétitions), et mis à jour par les
+ * agents avec leurs outils d'édition habituels — zéro appel supplémentaire.
+ *
+ * Il vit dans le dépôt du projet, donc il est versionné, relisible et
+ * corrigeable à la main, contrairement à une base distante que personne ne
+ * pouvait inspecter.
+ */
+const PROJECT_MEMORY_FILE = "MEMOIRE.md";
+/**
+ * Plafond de lecture. La mémoire est injectée dans un prompt : sans limite, un
+ * fichier qui enfle silencieusement redeviendrait le poste de dépense qu'on
+ * vient de supprimer. Au-delà, on coupe et on le dit — la consigne d'écriture
+ * demande justement de rester court.
+ */
+const PROJECT_MEMORY_MAX_CHARS = 6_000;
+
 const PROJECT_PROMPT_OUTPUTS = [
   { filename: "CLAUDE.md", providerLabel: "Claude" },
   {
@@ -75,6 +97,10 @@ interface PromptProjectSnapshot {
   git: PromptGitSnapshot;
   workspaces: PromptWorkspaceSummary[];
   manualInstructionFiles: string[];
+  /** Contenu du fichier de mémoire du projet, ou null s'il n'existe pas encore. */
+  memory: string | null;
+  /** Vrai quand la mémoire a été coupée au plafond de lecture. */
+  memoryTruncated: boolean;
   preferences: ProjectPromptPreferences;
   fingerprint: string;
 }
@@ -85,6 +111,7 @@ interface ProjectPromptPreferences {
   includeWorkspaces: boolean;
   includeRemote: boolean;
   includeInstructionFiles: boolean;
+  includeMemory: boolean;
 }
 
 export interface ProjectPromptSyncStatus {
@@ -366,6 +393,7 @@ export class ProjectPromptSyncService {
       existsSync(path.join(project.rootPath, filename)),
     );
     const preferences = readProjectPromptPreferences(project.rootPath);
+    const memory = readProjectMemory(project.rootPath);
     const slug = `${slugify(project.displayName || path.basename(project.rootPath))}-${project.projectId}`;
     const fingerprint = createFingerprint({
       projectId: project.projectId,
@@ -382,6 +410,10 @@ export class ProjectPromptSyncService {
       dirtyFiles: preferences.includeChangedFiles ? git.dirtyFiles : [],
       workspaces: preferences.includeWorkspaces ? workspaces : [],
       manualInstructionFiles: preferences.includeInstructionFiles ? manualInstructionFiles : [],
+      // La mémoire entre dans l'empreinte : une ligne ajoutée par un agent doit
+      // atteindre les autres agents au prompt suivant, sans quoi ils
+      // continueraient d'ignorer ce qui vient d'être appris.
+      memory: preferences.includeMemory ? memory.text : null,
       preferences,
     });
     return {
@@ -393,6 +425,8 @@ export class ProjectPromptSyncService {
       git,
       workspaces,
       manualInstructionFiles,
+      memory: memory.text,
+      memoryTruncated: memory.truncated,
       preferences,
       fingerprint,
     };
@@ -625,7 +659,54 @@ function renderSharedPrompt(snapshot: PromptProjectSnapshot): string {
   lines.push(
     "Use this state to keep answers and plans aligned with the current project, even when the repo has changed since the conversation started.",
   );
+  if (snapshot.preferences.includeMemory) {
+    lines.push(...renderProjectMemorySection(snapshot));
+  }
   return lines.join("\n");
+}
+
+/**
+ * La mémoire du projet, plus la consigne qui la fait vivre.
+ *
+ * C'est ici que tient tout le mécanisme : aucun robot n'entretient ce fichier,
+ * ce sont les agents qui l'écrivent avec leurs outils d'édition ordinaires,
+ * quand ils apprennent quelque chose. D'où une consigne qui dit surtout ce qu'il
+ * ne faut PAS y mettre : une mémoire qui répète le code ou l'historique git est
+ * une mémoire qu'on paie sans jamais la lire.
+ */
+function renderProjectMemorySection(snapshot: PromptProjectSnapshot): string[] {
+  const lines = ["", `Mémoire du projet (fichier ${PROJECT_MEMORY_FILE}, à la racine du dépôt) :`];
+  if (snapshot.memory) {
+    lines.push(snapshot.memory);
+    if (snapshot.memoryTruncated) {
+      lines.push(
+        `[…] Mémoire tronquée à ${PROJECT_MEMORY_MAX_CHARS} caractères — elle est trop longue, resserre-la.`,
+      );
+    }
+  } else {
+    lines.push("(vide pour l'instant — le fichier n'existe pas encore)");
+  }
+  lines.push(
+    `Tu tiens cette mémoire toi-même : quand tu apprends un fait DURABLE sur ce projet (décision prise, piège rencontré, convention, préférence de l'utilisateur), ajoute-le à ${PROJECT_MEMORY_FILE} avec tes outils d'édition — une ligne courte par fait, et crée le fichier s'il manque.`,
+    "N'y mets PAS ce que le code, les tests ou l'historique disent déjà, ni ce qui ne vaut que pour la conversation en cours. Supprime une ligne devenue fausse plutôt que d'en ajouter une qui la contredit. Vise moins de cent lignes : c'est une mémoire, pas un journal.",
+  );
+  return lines;
+}
+
+/** Lecture tolérante du fichier de mémoire : absent ou illisible = pas de mémoire. */
+function readProjectMemory(rootPath: string): { text: string | null; truncated: boolean } {
+  try {
+    const raw = readFileSync(path.join(rootPath, PROJECT_MEMORY_FILE), "utf8").trim();
+    if (!raw) {
+      return { text: null, truncated: false };
+    }
+    if (raw.length <= PROJECT_MEMORY_MAX_CHARS) {
+      return { text: raw, truncated: false };
+    }
+    return { text: raw.slice(0, PROJECT_MEMORY_MAX_CHARS), truncated: true };
+  } catch {
+    return { text: null, truncated: false };
+  }
 }
 
 function renderInstructionFile(input: {
@@ -704,6 +785,7 @@ function readProjectPromptPreferences(rootPath: string): ProjectPromptPreference
     includeWorkspaces: preferences?.includeWorkspaces ?? true,
     includeRemote: preferences?.includeRemote ?? true,
     includeInstructionFiles: preferences?.includeInstructionFiles ?? true,
+    includeMemory: preferences?.includeMemory ?? true,
   };
 }
 

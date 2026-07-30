@@ -78,6 +78,10 @@ export const PaseoProjectPromptSyncSchema = z
     includeWorkspaces: z.boolean().optional(),
     includeRemote: z.boolean().optional(),
     includeInstructionFiles: z.boolean().optional(),
+    // Mémoire du projet (MEMOIRE.md), tenue par les agents et injectée avec le
+    // reste de l'état. Activée par défaut ; à couper sur un dépôt où l'on ne
+    // veut aucun fichier de mémoire.
+    includeMemory: z.boolean().optional(),
   })
   .passthrough()
   .catch({});

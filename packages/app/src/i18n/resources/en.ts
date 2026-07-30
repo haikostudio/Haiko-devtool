@@ -606,6 +606,7 @@ export const en = {
       deployFailed: "Publish failed",
       deployed: "Deployed",
       duration: "~{{minutes}} min",
+      usage: "{{tokens}} tokens",
       deadlineDays: "{{count}}d",
       deadlineOverdue: "overdue",
       deadlineToday: "today",
@@ -664,6 +665,13 @@ export const en = {
       openPr: "Open PR",
       viewPlan: "View the plan",
       viewAgent: "View the agent",
+      usage: {
+        title: "Actual usage",
+        tokens: "{{tokens}} tokens",
+        breakdown: "{{input}} in · {{output}} out · {{turns}} turn(s)",
+        cost: "≈ {{amount}} · actual",
+        none: "Nothing spent yet.",
+      },
       cost: {
         billable: "≈ {{amount}} · time",
         tokens: "≈ {{amount}} · tokens",

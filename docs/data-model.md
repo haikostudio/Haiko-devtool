@@ -68,9 +68,22 @@ $PASEO_HOME/
 
 The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` by stripping the filesystem root and replacing path separators with `-` (Windows drive letters become a `C-` style prefix). Persistent server stores write atomically by writing a temp file in the target directory and then renaming it into place.
 
-`project-prompts/{slug-projectId}/` is a daemon-owned durable cache of the live project-status instructions injected into agents. The daemon rewrites these files when the watched project changes, independent of Cerveau, and uses the stored fingerprint/history to avoid stale prompt state. The project settings screen reads the same state to show the last successful sync, recent changed files, and the exact prompt preview. A manual refresh rewrites this state even when the project fingerprint has not changed, so the displayed timestamp confirms the requested sync actually completed.
+`project-prompts/{slug-projectId}/` is a daemon-owned durable cache of the live project-status instructions injected into agents. The daemon rewrites these files when the watched project changes and uses the stored fingerprint/history to avoid stale prompt state. The project settings screen reads the same state to show the last successful sync, recent changed files, and the exact prompt preview. A manual refresh rewrites this state even when the project fingerprint has not changed, so the displayed timestamp confirms the requested sync actually completed.
 
-The optional `projectPromptSync` block in a project's `paseo.json` controls whether version details, changed files, active workspaces, the remote repository, and manual instruction-file names enter the generated prompt. The delivery hook is provider-neutral, so every current or future agent provider receives the same selected project context.
+The optional `projectPromptSync` block in a project's `paseo.json` controls whether version details, changed files, active workspaces, the remote repository, manual instruction-file names, and the project memory enter the generated prompt. The delivery hook is provider-neutral, so every current or future agent provider receives the same selected project context.
+
+### Project memory (`MEMOIRE.md`)
+
+The same block carries the project's own memory: a `MEMOIRE.md` file at the repo root, read cold on each sync, capped at 6 000 characters, and folded into the fingerprint so a line added by one agent reaches the others on their next prompt.
+
+**Agents maintain it themselves**, with their ordinary editing tools — the injected block states the rule. That is the whole mechanism, and it is deliberate: it replaces the external long-term memory service (Cerveau), which queried a REST API on every prompt and spawned a second agent at end of turn to distil the conversation back into it. Two model calls and a few thousand context tokens per message, versus one file read.
+
+Consequences of that design:
+
+- the memory is versioned with the project, readable and fixable by hand;
+- it costs nothing per message beyond its own length — hence the cap, and the "under a hundred lines, one short line per fact" instruction that ships with it;
+- an oversized memory is truncated _and says so_, so the agent that reads it is the one told to trim it;
+- `paseo.json` → `projectPromptSync.includeMemory: false` opts a repo out entirely.
 
 ---
 

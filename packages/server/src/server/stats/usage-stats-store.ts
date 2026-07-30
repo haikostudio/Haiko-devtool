@@ -95,6 +95,7 @@ export class UsageStatsStore {
   private readonly lastCumulativeByAgent = new Map<string, AgentUsage>();
   private flushTimer: NodeJS.Timeout | null = null;
   private persistQueue: Promise<void> = Promise.resolve();
+  private deltaListener: ((delta: UsageStatsDeltaParams) => void) | null = null;
 
   constructor(baseDir: string, logger: Logger) {
     this.baseDir = baseDir;
@@ -152,7 +153,24 @@ export class UsageStatsStore {
     this.lastCumulativeByAgent.delete(agentId);
   }
 
+  /**
+   * Écoute les deltas au passage. Posé une fois au démarrage par le tableau de
+   * tâches, qui les additionne sur la carte de l'agent concerné : c'est le seul
+   * endroit où un delta existe déjà calculé (les fournisseurs, eux, annoncent
+   * des compteurs cumulés qu'on ne peut pas additionner tels quels).
+   * Volontairement synchrone et sans await : une erreur d'auditeur ne doit
+   * jamais faire échouer l'enregistrement des statistiques.
+   */
+  setDeltaListener(listener: ((delta: UsageStatsDeltaParams) => void) | null): void {
+    this.deltaListener = listener;
+  }
+
   async recordDelta(params: UsageStatsDeltaParams): Promise<void> {
+    try {
+      this.deltaListener?.(params);
+    } catch (error) {
+      this.logger.debug({ err: error, agentId: params.agentId }, "Usage delta listener failed");
+    }
     const dateKey = formatDateKey(params.timestamp);
     const hourKey = String(params.timestamp.getHours());
     const dayFile = await this.loadDay(dateKey);

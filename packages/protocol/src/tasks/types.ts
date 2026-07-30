@@ -182,6 +182,25 @@ export const TaskDeploymentSchema = z.object({
 });
 export type TaskDeployment = z.infer<typeof TaskDeploymentSchema>;
 
+/**
+ * Consommation modèle cumulée d'une carte : additionnée à chaque tour de chaque
+ * agent qui lui est rattaché, et conservée même après l'archivage de l'agent.
+ *
+ * Tous les champs sont des compteurs simples, jamais nuls une fois écrits. Le
+ * coût est en dollars parce que c'est l'unité que les fournisseurs rapportent ;
+ * la conversion en francs, elle, appartient à la facturation.
+ */
+export const TaskUsageSchema = z.object({
+  inputTokens: z.number().nonnegative(),
+  outputTokens: z.number().nonnegative(),
+  cachedInputTokens: z.number().nonnegative(),
+  costUsd: z.number().nonnegative(),
+  turns: z.number().int().nonnegative(),
+  /** Dernier tour comptabilisé, pour dater le compteur sur la carte. */
+  updatedAt: z.string(),
+});
+export type TaskUsage = z.infer<typeof TaskUsageSchema>;
+
 export const KanbanTaskSchema = z.object({
   id: z.string(),
   folderId: z.string(),
@@ -298,6 +317,11 @@ export const KanbanTaskSchema = z.object({
   // that shipped it. "Déployé" alone cannot answer "which build?" once a second
   // publication has followed. Additive + optional: old boards/clients omit it.
   deployedSha: z.string().nullable().optional(),
+  // Ce que la carte a réellement coûté en modèle, cumulé sur tous ses agents et
+  // tous ses tours. Sans ce compteur, « est-ce que ce réglage économise
+  // vraiment ? » n'a pas de réponse chiffrée — seulement une impression.
+  // Additif + optionnel : les anciens tableaux/clients l'omettent simplement.
+  usage: TaskUsageSchema.nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

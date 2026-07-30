@@ -610,6 +610,7 @@ export const ru: TranslationResources = {
       deployed: "Развёрнуто",
       deployFailed: "Ошибка публикации",
       duration: "~{{minutes}} мин",
+      usage: "{{tokens}} токенов",
       deadlineDays: "{{count}} дн",
       deadlineOverdue: "просрочено",
       deadlineToday: "сегодня",
@@ -668,6 +669,13 @@ export const ru: TranslationResources = {
       openPr: "Открыть PR",
       viewPlan: "Посмотреть план",
       viewAgent: "Открыть агента",
+      usage: {
+        title: "Фактический расход",
+        tokens: "{{tokens}} токенов",
+        breakdown: "{{input}} вход · {{output}} выход · {{turns}} ход(ов)",
+        cost: "≈ {{amount}} · факт",
+        none: "Пока ничего не потрачено.",
+      },
       cost: {
         billable: "≈ {{amount}} · время",
         tokens: "≈ {{amount}} · токены",
