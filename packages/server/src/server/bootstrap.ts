@@ -1419,10 +1419,19 @@ export async function createPaseoDaemon(
         await taskBoardService.backfillLegacyDeployedCards(project.projectId);
         await taskBoardService.settleRestartFlags(project.projectId);
         // Catch-up for the tabs that piled up before archiving closed anything.
-        await taskSessionCloser.sweepArchivedTasks(
-          project.projectId,
-          await taskBoardService.getBoard(project.projectId),
-        );
+        // Isolated: tidying tabs is cosmetic, and letting it throw here would
+        // skip the restart-debt backfill of every project after this one.
+        try {
+          await taskSessionCloser.sweepArchivedTasks(
+            project.projectId,
+            await taskBoardService.getBoard(project.projectId),
+          );
+        } catch (error) {
+          logger.warn(
+            { err: error, projectId: project.projectId },
+            "Failed to close the sessions of already-archived cards at boot",
+          );
+        }
       }
     } catch (error) {
       logger.warn({ err: error }, "Failed to settle daemon-restart flags at boot");

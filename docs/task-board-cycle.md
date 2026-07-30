@@ -559,8 +559,17 @@ the tab, because the app's tab reconciler already drops agent tabs whose agent
 left the active set. There is deliberately no second "close this tab" channel —
 one would be a new resurrection race.
 
-Three things the closer gets right, each of which was a bug waiting to happen:
+Four things the closer gets right, each of which was a bug waiting to happen:
 
+- **Not every agent on a card belongs to it.** `primaryAgentId` and `agentIds` can
+  hold the agent that merely PROPOSED the card — the conductor, message triage,
+  an agent whose todo list minted it — and each of those holds a live
+  conversation of its own. Closing one would shut the conductor's chat the moment
+  a card it created got archived. `ownsTask` therefore demands proof: the agent
+  carries this card's `paseo.task-id` label (stamped by the provisioner and the
+  scheduler), or the card names it as `taskAgentId`. Anything unproven is left
+  alone — a stale tab costs a click, someone else's closed conversation costs
+  their work.
 - **A running agent is never cut off.** Its archive waits on `watchAgentIdle`, the
   same watcher the deploy path uses. A card hidden by hand while its last reply
   streams keeps that reply.

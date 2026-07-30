@@ -3,6 +3,7 @@ import type pino from "pino";
 
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { AgentStorage } from "../agent/agent-storage.js";
+import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import { type AgentIdleWatcherHost, watchAgentIdle } from "./task-agent-link.js";
 
 /**
@@ -61,7 +62,18 @@ export interface TaskSessionCloserOptions {
   logger: pino.Logger;
 }
 
-/** Every agent id a card owns, deduplicated, newest link first. */
+/**
+ * Candidate agents to close, newest link first.
+ *
+ * NOT every id on a card belongs to it. `primaryAgentId` and `agentIds` can hold
+ * the agent that merely PROPOSED the card (message triage, an agent's todo list,
+ * the conductor) — a live conversation of its own that must survive the card
+ * being filed away. Closing one of those would shut the conductor's chat the
+ * moment a card it created got archived.
+ *
+ * So this list is only a shortlist: {@link ownsTask} decides, from the agent's
+ * own `paseo.task-id` label, which of them is really the card's own agent.
+ */
 export function collectTaskAgentIds(task: KanbanTask): string[] {
   const ids = [
     task.links.taskAgentId ?? null,
@@ -76,6 +88,27 @@ export function collectTaskAgentIds(task: KanbanTask): string[] {
     }
   }
   return [...seen];
+}
+
+/**
+ * "This agent IS this card's conversation" — the only agents the closer may
+ * touch. Two proofs, either of which is enough:
+ * - the agent carries the card's own `paseo.task-id` label (stamped by the
+ *   provisioner and the scheduler when a card's agent is minted), or
+ * - the card names it as `taskAgentId`, the field that means exactly this.
+ *
+ * Deliberately strict: an unproven agent is left alone. A stale tab costs a
+ * click; closing someone else's conversation costs their work.
+ */
+export function ownsTask(input: {
+  task: KanbanTask;
+  agentId: string;
+  labels: Record<string, string> | undefined;
+}): boolean {
+  if (input.labels?.[TASK_AGENT_LABEL] === input.task.id) {
+    return true;
+  }
+  return input.task.links.taskAgentId === input.agentId;
 }
 
 /** "Archived" covers both doors: the terminal column, and the manual hide. */
@@ -101,10 +134,10 @@ export class TaskSessionCloser {
     this.logger = options.logger;
   }
 
-  /** Closes every session attached to a card. Never throws. */
+  /** Closes the sessions that belong to a card. Never throws. */
   async closeSessionsForTask(projectId: string, task: KanbanTask): Promise<void> {
     for (const agentId of collectTaskAgentIds(task)) {
-      await this.closeAgentSession(projectId, task.id, agentId);
+      await this.closeAgentSession(projectId, task, agentId);
     }
   }
 
@@ -131,16 +164,22 @@ export class TaskSessionCloser {
 
   private async closeAgentSession(
     projectId: string,
-    taskId: string,
+    task: KanbanTask,
     agentId: string,
   ): Promise<void> {
+    const taskId = task.id;
     if (this.handledAgentIds.has(agentId)) {
       return;
     }
     const agent = this.agentManager.getAgent(agentId);
     if (agent) {
+      // Someone else's conversation that merely proposed this card: not ours to
+      // close (see ownsTask).
+      if (!ownsTask({ task, agentId, labels: agent.labels })) {
+        return;
+      }
       if (agent.lifecycle === "running") {
-        this.deferUntilIdle(projectId, taskId, agentId);
+        this.deferUntilIdle(projectId, task, agentId);
         return;
       }
       this.handledAgentIds.add(agentId);
@@ -162,6 +201,9 @@ export class TaskSessionCloser {
     if (!stored || stored.archivedAt) {
       return;
     }
+    if (!ownsTask({ task, agentId, labels: stored.labels })) {
+      return;
+    }
     this.handledAgentIds.add(agentId);
     await this.archive(projectId, taskId, agentId, stored.id);
   }
@@ -171,12 +213,12 @@ export class TaskSessionCloser {
    * while its final message streams). Cutting the process here would lose that
    * reply, so the close waits for the agent to fall silent.
    */
-  private deferUntilIdle(projectId: string, taskId: string, agentId: string): void {
+  private deferUntilIdle(projectId: string, task: KanbanTask, agentId: string): void {
     if (this.pendingWatchers.has(agentId)) {
       return;
     }
     this.logger.debug(
-      { projectId, taskId, agentId },
+      { projectId, taskId: task.id, agentId },
       "task.session-closer.deferred: agent still running",
     );
     const cancel = watchAgentIdle(this.agentManager as AgentIdleWatcherHost, agentId, () => {
@@ -185,7 +227,7 @@ export class TaskSessionCloser {
         return;
       }
       this.handledAgentIds.add(agentId);
-      void this.archive(projectId, taskId, agentId);
+      void this.archive(projectId, task.id, agentId);
     });
     this.pendingWatchers.set(agentId, cancel);
   }

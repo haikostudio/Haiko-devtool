@@ -21,11 +21,15 @@ type Lifecycle = "idle" | "running" | "closed" | "error";
 interface FakeAgent {
   id: string;
   lifecycle: Lifecycle;
+  labels?: Record<string, string>;
 }
 
 // Minimal stand-in for AgentManager: only the three doors the closer uses, plus
 // the state feed watchAgentIdle subscribes to.
-function buildAgentHost(agents: FakeAgent[], stored: Array<{ id: string; archivedAt?: string }>) {
+function buildAgentHost(
+  agents: FakeAgent[],
+  stored: Array<{ id: string; archivedAt?: string; labels?: Record<string, string> }>,
+) {
   const live = new Map(agents.map((agent) => [agent.id, agent]));
   const records = new Map(stored.map((record) => [record.id, { ...record }]));
   const listeners = new Set<(event: { type: string; agent: FakeAgent }) => void>();
@@ -176,6 +180,50 @@ describe("TaskSessionCloser", () => {
     expect(host.archived).toEqual(["agent-1"]);
   });
 
+  test("never closes an agent that merely proposed the card", async () => {
+    // The conductor (or a triage agent) created this card and is linked to it,
+    // but it holds its own live conversation — archiving the card must not shut
+    // it down. Only the card's own agent, proven by its label, is closed.
+    const host = buildAgentHost(
+      [
+        { id: "agent-conductor", lifecycle: "idle" },
+        { id: "agent-own", lifecycle: "idle", labels: { "paseo.task-id": "task-1" } },
+      ],
+      [],
+    );
+    const closer = new TaskSessionCloser({
+      agentManager: asAgentHost(host.manager),
+      agentStorage: asStorageHost(host.storage),
+      logger,
+    });
+
+    await closer.closeSessionsForTask("proj-1", {
+      id: "task-1",
+      links: {
+        agentIds: ["agent-conductor", "agent-own"],
+        primaryAgentId: "agent-conductor",
+      },
+    } as unknown as KanbanTask);
+
+    expect(host.archived).toEqual(["agent-own"]);
+  });
+
+  test("never closes a stored agent that belongs to another card", async () => {
+    const host = buildAgentHost([], [{ id: "agent-other", labels: { "paseo.task-id": "task-9" } }]);
+    const closer = new TaskSessionCloser({
+      agentManager: asAgentHost(host.manager),
+      agentStorage: asStorageHost(host.storage),
+      logger,
+    });
+
+    await closer.closeSessionsForTask("proj-1", {
+      id: "task-1",
+      links: { agentIds: ["agent-other"], primaryAgentId: "agent-other" },
+    } as unknown as KanbanTask);
+
+    expect(host.archivedSnapshots).toEqual([]);
+  });
+
   test("waits for a running agent to fall silent before closing it", async () => {
     const host = buildAgentHost([{ id: "agent-1", lifecycle: "running" }], []);
     const closer = new TaskSessionCloser({
@@ -200,7 +248,7 @@ describe("TaskSessionCloser", () => {
   });
 
   test("archives the stored record of an agent this daemon never resumed", async () => {
-    const host = buildAgentHost([], [{ id: "agent-old" }]);
+    const host = buildAgentHost([], [{ id: "agent-old", labels: { "paseo.task-id": "task-1" } }]);
     const closer = new TaskSessionCloser({
       agentManager: asAgentHost(host.manager),
       agentStorage: asStorageHost(host.storage),
@@ -297,7 +345,16 @@ describe("TaskSessionCloser", () => {
   });
 
   test("leaves an already archived record alone", async () => {
-    const host = buildAgentHost([], [{ id: "agent-old", archivedAt: "2026-07-01T00:00:00.000Z" }]);
+    const host = buildAgentHost(
+      [],
+      [
+        {
+          id: "agent-old",
+          archivedAt: "2026-07-01T00:00:00.000Z",
+          labels: { "paseo.task-id": "task-1" },
+        },
+      ],
+    );
     const closer = new TaskSessionCloser({
       agentManager: asAgentHost(host.manager),
       agentStorage: asStorageHost(host.storage),
