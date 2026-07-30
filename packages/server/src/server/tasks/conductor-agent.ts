@@ -41,6 +41,15 @@ const DEFAULT_CONDUCTOR_PROVIDER: ConductorProvider = CLAUDE_CONDUCTOR_PROVIDER;
 const CODEX_CONDUCTOR_MODEL = "gpt-5.6-luna";
 const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.6-luna";
 
+/**
+ * On Paseo itself (`isSelf`) the conductor is not a router but a full agent that
+ * reads, edits and ships the repo — so it earns the frontier model, not the cheap
+ * board-manager pin above. Only the blank is filled: an explicit user pick still
+ * wins, exactly like the elsewhere defaults.
+ */
+const CLAUDE_CONDUCTOR_SELF_MODEL = "claude-opus-5";
+const CODEX_CONDUCTOR_SELF_MODEL = "gpt-5.6-sol";
+
 // COMPAT(conductorClaudeModel): until v0.2.3 the Claude conductor was created on
 // the bare "sonnet" alias. That string is persisted in two places we do not
 // migrate — the provider label of every existing conductor record and its
@@ -69,6 +78,12 @@ const PREVIOUS_CODEX_CONDUCTOR_PROVIDER = "codex/gpt-5.4";
  */
 const CONDUCTOR_CLAUDE_THINKING_OPTION_ID = "medium";
 const CONDUCTOR_CODEX_THINKING_OPTION_ID = "medium";
+/**
+ * On Paseo itself the conductor codes, so it starts on a deeper effort ("high")
+ * than the "medium" a board manager needs elsewhere. Fills the blank only.
+ */
+const CONDUCTOR_CLAUDE_SELF_THINKING_OPTION_ID = "high";
+const CONDUCTOR_CODEX_SELF_THINKING_OPTION_ID = "high";
 
 /**
  * The ONLY paseo MCP tools the "chef d'orchestre" is allowed to use. Its whole
@@ -542,8 +557,11 @@ function buildConductorConfig(
     const codexBase = {
       ...base,
       // Same "fill the blank, an explicit pick still wins" rule as Claude below.
-      thinkingOptionId: base.thinkingOptionId ?? CONDUCTOR_CODEX_THINKING_OPTION_ID,
-      model: base.model ?? CODEX_CONDUCTOR_MODEL,
+      // On Paseo itself the conductor codes → deeper effort + frontier model.
+      thinkingOptionId:
+        base.thinkingOptionId ??
+        (isSelf ? CONDUCTOR_CODEX_SELF_THINKING_OPTION_ID : CONDUCTOR_CODEX_THINKING_OPTION_ID),
+      model: base.model ?? (isSelf ? CODEX_CONDUCTOR_SELF_MODEL : CODEX_CONDUCTOR_MODEL),
     };
     // On Paseo itself the conductor is a full agent: no read-only sandbox, let it
     // edit the repo and run commands like any global Codex agent.
@@ -563,8 +581,10 @@ function buildConductorConfig(
     ...base,
     // `base` already carries the stored id when the user picked one, so this only
     // applies to a conductor that never had an explicit level.
-    thinkingOptionId: base.thinkingOptionId ?? CONDUCTOR_CLAUDE_THINKING_OPTION_ID,
-    model: resolveClaudeConductorModel(base.model),
+    thinkingOptionId:
+      base.thinkingOptionId ??
+      (isSelf ? CONDUCTOR_CLAUDE_SELF_THINKING_OPTION_ID : CONDUCTOR_CLAUDE_THINKING_OPTION_ID),
+    model: resolveClaudeConductorModel(base.model, isSelf),
     extra: {
       ...existing?.extra,
       claude: {
@@ -621,11 +641,15 @@ function conductorConfigIsCurrent(
  * Model a Claude conductor should carry. An explicit pick from the composer's
  * model menu wins; a blank — or the legacy bare "sonnet" alias, which that menu
  * never offers and so can only come from the old hardcoded default — falls to the
- * pinned conductor model.
+ * pinned conductor model. On Paseo itself (`isSelf`) that pin is the frontier
+ * model, since the conductor codes there instead of only routing.
  */
-function resolveClaudeConductorModel(storedModel: string | null | undefined): string {
+function resolveClaudeConductorModel(
+  storedModel: string | null | undefined,
+  isSelf: boolean,
+): string {
   if (!storedModel || storedModel === LEGACY_CLAUDE_CONDUCTOR_MODEL) {
-    return CLAUDE_CONDUCTOR_MODEL;
+    return isSelf ? CLAUDE_CONDUCTOR_SELF_MODEL : CLAUDE_CONDUCTOR_MODEL;
   }
   return storedModel;
 }

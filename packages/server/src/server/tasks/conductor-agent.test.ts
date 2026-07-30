@@ -292,6 +292,32 @@ describe("ConductorAgentService", () => {
     expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-sonnet-5");
   });
 
+  it("on Paseo itself, a fresh Claude conductor gets Opus 5 on high effort", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    }, PASEO_SELF_ROOT);
+
+    await service.ensureConductorAgent("project-1", "claude");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.config?.model).toBe("claude-opus-5");
+    expect(input.config?.thinkingOptionId).toBe("high");
+  });
+
+  it("on Paseo itself, a fresh Codex conductor gets GPT-5.6-Sol on high effort", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    }, PASEO_SELF_ROOT);
+
+    await service.ensureConductorAgent("project-1", "codex");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.config?.model).toBe("gpt-5.6-sol");
+    expect(input.config?.thinkingOptionId).toBe("high");
+  });
+
   it('accepts the bare "claude" provider the client sends over the wire', async () => {
     let captured: CreateAgentCommandInput | null = null;
     const service = makeService((input) => {
