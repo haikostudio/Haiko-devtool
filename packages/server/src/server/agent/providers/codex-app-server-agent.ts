@@ -44,6 +44,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import pLimit from "p-limit";
 import { renderPromptAttachmentAsText } from "../prompt-attachments.js";
 import { composeSystemPromptParts } from "../system-prompt.js";
 import { curateAgentActivity } from "../activity-curator.js";
@@ -138,6 +139,13 @@ const CODEX_NON_ORIGINATING_APP_SERVER_CLIENT_INFO = {
 const ASSISTANT_MESSAGE_BOUNDARY_MARKDOWN = "\n\n---\n\n";
 const MAX_PENDING_SUB_AGENT_THREADS = 32;
 const MAX_PENDING_SUB_AGENT_NOTIFICATIONS_PER_THREAD = 128;
+// Cap on how many persisted sub-agent conversations we replay when resuming a
+// thread, and how many of those thread reads run at once. The replay used to be
+// fully sequential (one round-trip per thread, up to 100 in series), which made
+// resuming a conductor with many sub-agents extremely slow. Reads within a BFS
+// level are independent, so we fan them out with a bounded pool.
+const MAX_PERSISTED_SUB_AGENT_THREADS = 100;
+const PERSISTED_SUB_AGENT_HISTORY_CONCURRENCY = 8;
 // COMPAT(codexLegacyCollabAgentToolCall): Codex <0.143 emits this shape. Added in
 // Paseo v0.1.105; remove after 2027-01-09 once the supported Codex floor is >=0.143.
 const CODEX_TOOL_THREAD_ITEM_TYPES = new Set([
@@ -3243,7 +3251,9 @@ export class CodexAppServerAgentSession implements AgentSession {
 
   async connect(): Promise<void> {
     if (this.connected) return;
+    const connectStartedAt = Date.now();
     const child = await this.spawnAppServer();
+    const spawnedAt = Date.now();
     this.client = new CodexAppServerClient(child, this.logger, () => this.traceContext());
     this.client.setNotificationHandler((method, params) => this.handleNotification(method, params));
     this.registerRequestHandlers();
@@ -3254,13 +3264,33 @@ export class CodexAppServerAgentSession implements AgentSession {
 
       await this.loadCollaborationModes();
       await this.loadSkills();
+      const initializedAt = Date.now();
 
+      let historyStartedAt = initializedAt;
       if (this.currentThreadId) {
         await this.ensureThreadLoaded({
           allowArchivedHistory: this.initialResumePurpose === "history",
         });
+        historyStartedAt = Date.now();
         await this.loadPersistedHistory();
       }
+
+      // Timing breakdown so we can tell process spawn/init from history replay
+      // when diagnosing a slow conductor resume.
+      const finishedAt = Date.now();
+      this.logger.debug(
+        {
+          agentId: this.agentId,
+          provider: CODEX_PROVIDER,
+          sessionId: this.currentThreadId,
+          spawnMs: spawnedAt - connectStartedAt,
+          initMs: initializedAt - spawnedAt,
+          threadResumeMs: historyStartedAt - initializedAt,
+          historyMs: finishedAt - historyStartedAt,
+          totalMs: finishedAt - connectStartedAt,
+        },
+        "provider.codex.connect_timing",
+      );
 
       this.connected = true;
     } catch (error) {
@@ -3513,6 +3543,7 @@ export class CodexAppServerAgentSession implements AgentSession {
     const client = this.client;
     const threadId = this.currentThreadId;
 
+    const rootStartedAt = Date.now();
     const history = await loadCodexThreadHistoryTimeline({
       threadId,
       cwd: this.config.cwd ?? null,
@@ -3526,11 +3557,25 @@ export class CodexAppServerAgentSession implements AgentSession {
     this.pendingSubAgentNotificationsByThreadId.clear();
     this.persistedProviderSubagentEvents = [];
     this.loadingPersistedHistory = true;
+    const subAgentStartedAt = Date.now();
+    let subAgentThreadCount = 0;
     try {
-      await this.loadPersistedSubAgentHistories(client, subAgentRoutes);
+      subAgentThreadCount = await this.loadPersistedSubAgentHistories(client, subAgentRoutes);
     } finally {
       this.loadingPersistedHistory = false;
     }
+    const doneAt = Date.now();
+    this.logger.debug(
+      {
+        agentId: this.agentId,
+        provider: CODEX_PROVIDER,
+        sessionId: threadId,
+        rootHistoryMs: subAgentStartedAt - rootStartedAt,
+        subAgentHistoryMs: doneAt - subAgentStartedAt,
+        subAgentThreadCount,
+      },
+      "provider.codex.history_timing",
+    );
     this.resetCodexUserMessageTurns();
     for (const entry of timeline) {
       if (entry.item.type === "user_message") {
@@ -3544,39 +3589,66 @@ export class CodexAppServerAgentSession implements AgentSession {
   private async loadPersistedSubAgentHistories(
     client: CodexAppServerClientLike,
     rootRoutes: readonly PersistedSubAgentRoute[],
-  ): Promise<void> {
-    const queue = rootRoutes.map((route) => ({ route, parentCallId: null as string | null }));
+  ): Promise<number> {
     const visitedThreadIds = new Set(this.currentThreadId ? [this.currentThreadId] : []);
-    while (queue.length > 0 && visitedThreadIds.size < 100) {
-      const next = queue.shift();
-      if (!next || visitedThreadIds.has(next.route.childThreadId)) {
-        continue;
-      }
-      visitedThreadIds.add(next.route.childThreadId);
-      this.registerSubAgentToolCall({
-        timelineItem: next.route.toolCall,
-        rawItem: { agentThreadId: next.route.childThreadId },
-        parentCallId: next.parentCallId,
-      });
-      try {
-        const childHistory = await loadCodexThreadHistoryTimeline({
-          threadId: next.route.childThreadId,
-          cwd: this.config.cwd ?? null,
-          requestThread: (childThreadId) => readCodexThread(client, childThreadId),
+    const limit = pLimit(PERSISTED_SUB_AGENT_HISTORY_CONCURRENCY);
+    let frontier = rootRoutes.map((route) => ({ route, parentCallId: null as string | null }));
+    let loadedCount = 0;
+
+    // Breadth-first, but each level's thread reads run concurrently (they are
+    // independent round-trips). We keep registration and emission in frontier
+    // order so the projected timeline is identical to the old sequential walk;
+    // only the network reads overlap.
+    while (frontier.length > 0 && visitedThreadIds.size < MAX_PERSISTED_SUB_AGENT_THREADS) {
+      const level: { route: PersistedSubAgentRoute; parentCallId: string | null }[] = [];
+      for (const next of frontier) {
+        if (visitedThreadIds.has(next.route.childThreadId)) continue;
+        if (visitedThreadIds.size >= MAX_PERSISTED_SUB_AGENT_THREADS) break;
+        visitedThreadIds.add(next.route.childThreadId);
+        this.registerSubAgentToolCall({
+          timelineItem: next.route.toolCall,
+          rawItem: { agentThreadId: next.route.childThreadId },
+          parentCallId: next.parentCallId,
         });
+        level.push(next);
+      }
+
+      const histories = await Promise.all(
+        level.map((next) =>
+          limit(async () => {
+            try {
+              return await loadCodexThreadHistoryTimeline({
+                threadId: next.route.childThreadId,
+                cwd: this.config.cwd ?? null,
+                requestThread: (childThreadId) => readCodexThread(client, childThreadId),
+              });
+            } catch (error) {
+              this.logger.trace(
+                { err: error, childThreadId: next.route.childThreadId },
+                "Failed to load persisted Codex child history",
+              );
+              return null;
+            }
+          }),
+        ),
+      );
+
+      const nextFrontier: { route: PersistedSubAgentRoute; parentCallId: string | null }[] = [];
+      for (let i = 0; i < level.length; i += 1) {
+        const childHistory = histories[i];
+        if (!childHistory) continue;
+        loadedCount += 1;
+        const { childThreadId, toolCall } = level[i].route;
         for (const entry of childHistory.timeline) {
-          this.emitProviderSubagentTimeline(next.route.childThreadId, entry.item, entry.timestamp);
+          this.emitProviderSubagentTimeline(childThreadId, entry.item, entry.timestamp);
         }
         for (const route of childHistory.subAgentRoutes) {
-          queue.push({ route, parentCallId: next.route.toolCall.callId });
+          nextFrontier.push({ route, parentCallId: toolCall.callId });
         }
-      } catch (error) {
-        this.logger.trace(
-          { err: error, childThreadId: next.route.childThreadId },
-          "Failed to load persisted Codex child history",
-        );
       }
+      frontier = nextFrontier;
     }
+    return loadedCount;
   }
 
   private async ensureThreadLoaded(
