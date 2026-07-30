@@ -1564,6 +1564,60 @@ describe("workspace-layout-store actions", () => {
     ).toEqual(["agent_parent-agent"]);
   });
 
+  it("reconcileTabs closes a pinned agent tab once the host archives the agent", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    // The user opened this agent themselves, which pins it — the case that kept
+    // an archived task card's tab in the band forever.
+    store.openTabFocused(workspaceKey, { kind: "agent", agentId: "task-agent" });
+    store.pinAgent(workspaceKey, "task-agent");
+
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["parent-agent"],
+      autoOpenAgentIds: ["parent-agent"],
+      knownAgentIds: ["parent-agent", "task-agent"],
+      archivedAgentIds: ["task-agent"],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+    });
+
+    expect(
+      workspaceLayoutStore
+        .getState()
+        .getWorkspaceTabs(workspaceKey)
+        .map((tab) => tab.tabId),
+    ).toEqual(["agent_parent-agent"]);
+  });
+
+  it("reconcileTabs still holds a pinned tab open while the agent is merely inactive", () => {
+    const workspaceKey = createWorkspaceKey();
+    const store = workspaceLayoutStore.getState();
+
+    store.openTabFocused(workspaceKey, { kind: "agent", agentId: "task-agent" });
+    store.pinAgent(workspaceKey, "task-agent");
+
+    store.reconcileTabs(workspaceKey, {
+      agentsHydrated: true,
+      terminalsHydrated: true,
+      activeAgentIds: ["parent-agent"],
+      autoOpenAgentIds: ["parent-agent"],
+      knownAgentIds: ["parent-agent", "task-agent"],
+      archivedAgentIds: [],
+      standaloneTerminalIds: [],
+      hasActivePendingDraftCreate: false,
+    });
+
+    expect(
+      workspaceLayoutStore
+        .getState()
+        .getWorkspaceTabs(workspaceKey)
+        .map((tab) => tab.tabId),
+    ).toEqual(["agent_task-agent", "agent_parent-agent"]);
+  });
+
   it("openTabFocused reopens hidden subagent tabs and clears hidden intent", () => {
     const workspaceKey = createWorkspaceKey();
     const store = workspaceLayoutStore.getState();

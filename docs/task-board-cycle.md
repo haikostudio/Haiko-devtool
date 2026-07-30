@@ -492,6 +492,35 @@ The mechanics:
 - The bar is offered **only** in "Terminé"/"À déployer" — the two terminal columns —
   because archiving mid-flight would hide live work.
 
+### An archived card closes its conversation
+
+Both doors into the archive — the manual `archivedAt` hide above, and the
+automatic move into the terminal `archived` column once a card's work went live
+(`markTaskDeployed`) — fire `TaskBoardService.setOnTaskArchived`. Bootstrap wires
+that to `TaskSessionCloser` (`tasks/session-closer.ts`), which **archives the
+card's agent**. Nothing else: archiving the agent is the single lever that closes
+the tab, because the app's tab reconciler already drops agent tabs whose agent
+left the active set. There is deliberately no second "close this tab" channel —
+one would be a new resurrection race.
+
+Three things the closer gets right, each of which was a bug waiting to happen:
+
+- **A running agent is never cut off.** Its archive waits on `watchAgentIdle`, the
+  same watcher the deploy path uses. A card hidden by hand while its last reply
+  streams keeps that reply.
+- **Agents this daemon never resumed still get closed.** A card's agent survives
+  restarts as a stored record that clients keep listing (and keep a tab for), so
+  the closer falls back to `archiveSnapshot` on the record. Boot runs
+  `sweepArchivedTasks` per project to catch up on everything archived before this
+  existed.
+- **A pinned tab loses to the archive.** `applyPinnedAndHidden` used to re-add any
+  pinned agent still present in `knownAgentIds` — and archived agents stay in
+  `knownAgentIds` — so the tab of a card the user had opened themselves never
+  closed. The reconcile snapshot now carries `archivedAgentIds`, and archiving
+  beats the pin. `reconcileTabs` also tombstones what it closes (see
+  `session-ui-state/close-tombstones`), so a host snapshot captured before the
+  archive cannot reopen the tab at the next reconnect.
+
 ## The other exception
 
 A publish blocked by a merge conflict opens a repair task and validates it

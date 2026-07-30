@@ -505,6 +505,12 @@ export function createWorkspaceLayoutStore(
             return;
           }
 
+          // Tabs the reconcile pass dropped (their agent/terminal is gone or was
+          // archived). Collected here so they can be tombstoned below, exactly
+          // like a user-initiated close: without that, a host snapshot captured
+          // before the archive re-opens the tab on the next reconnect and the
+          // close looks like it never happened (see close-tombstones).
+          const removedTabIds: string[] = [];
           set((state) => {
             const currentLayout = getWorkspaceLayout(
               state.layoutByWorkspace,
@@ -522,6 +528,12 @@ export function createWorkspaceLayoutStore(
             if (nextState.layout === currentLayout) {
               return state;
             }
+            const nextTabIds = new Set(collectAllTabs(nextState.layout.root).map((t) => t.tabId));
+            for (const tab of collectAllTabs(currentLayout.root)) {
+              if (!nextTabIds.has(tab.tabId)) {
+                removedTabIds.push(tab.tabId);
+              }
+            }
 
             return {
               layoutByWorkspace: {
@@ -530,6 +542,10 @@ export function createWorkspaceLayoutStore(
               },
             };
           });
+          for (const tabId of removedTabIds) {
+            recordTabClose(normalizedWorkspaceKey, tabId);
+            clearTabOpenMarker(normalizedWorkspaceKey, tabId);
+          }
         },
         resolvePendingAgent: (workspaceKey, agentId) => {
           const normalizedWorkspaceKey = trimNonEmpty(workspaceKey);

@@ -898,7 +898,10 @@ export class TaskBoardService {
       return;
     }
     void Promise.resolve(listener(projectId, task)).catch((error) => {
-      this.logger.warn({ err: error, projectId, taskId: task.id }, "onTaskArchived callback failed");
+      this.logger.warn(
+        { err: error, projectId, taskId: task.id },
+        "onTaskArchived callback failed",
+      );
     });
   }
 

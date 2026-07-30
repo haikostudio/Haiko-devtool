@@ -18,6 +18,26 @@ function agentBelongsToWorkspace(agent: Agent, workspaceId: string): boolean {
   return normalizeWorkspaceOpaqueId(agent.workspaceId) === workspaceId;
 }
 
+// Lazily-loaded historical agents: known to the workspace, never active. An
+// archived one is recorded as such so a pin can't resurrect its tab.
+function addHistoricalAgents(input: {
+  agents: Map<string, Agent> | undefined;
+  workspaceId: string;
+  activeAgentIds: Set<string>;
+  knownAgentIds: Set<string>;
+  archivedAgentIds: Set<string>;
+}): void {
+  for (const agent of input.agents?.values() ?? []) {
+    if (!agentBelongsToWorkspace(agent, input.workspaceId)) {
+      continue;
+    }
+    input.knownAgentIds.add(agent.id);
+    if (agent.archivedAt && !input.activeAgentIds.has(agent.id)) {
+      input.archivedAgentIds.add(agent.id);
+    }
+  }
+}
+
 export function deriveWorkspaceAgentVisibility(input: {
   sessionAgents: Map<string, Agent> | undefined;
   agentDetails?: Map<string, Agent> | undefined;
@@ -57,15 +77,13 @@ export function deriveWorkspaceAgentVisibility(input: {
       }
     }
   }
-  for (const agent of agentDetails?.values() ?? []) {
-    if (!agentBelongsToWorkspace(agent, workspaceId)) {
-      continue;
-    }
-    knownAgentIds.add(agent.id);
-    if (agent.archivedAt && !activeAgentIds.has(agent.id)) {
-      archivedAgentIds.add(agent.id);
-    }
-  }
+  addHistoricalAgents({
+    agents: agentDetails,
+    workspaceId,
+    activeAgentIds,
+    knownAgentIds,
+    archivedAgentIds,
+  });
 
   return { activeAgentIds, autoOpenAgentIds, knownAgentIds, archivedAgentIds };
 }
