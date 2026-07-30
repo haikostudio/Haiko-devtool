@@ -22,6 +22,7 @@ import {
   expectScriptRowCount,
   expectWriteFailedCalloutActions,
   installDaemonConnectionGate,
+  installProjectPromptSyncFailure,
   installReadTransportFailure,
   navigateToProjectSettings,
   openProjectSettings,
@@ -215,6 +216,23 @@ test.describe("Projects settings", () => {
     await clickSaveProjectSettings(page);
     await expectProjectConfigSaved(gitlabRemoteProject);
   });
+
+  test("user refreshes and previews the generated project instructions", async ({
+    page,
+    editableProject,
+  }) => {
+    await openProjects(page);
+    await openProjectSettings(page, editableProject.name);
+
+    await page.getByTestId("project-prompt-sync-refresh").click();
+    const previewButton = page.getByTestId("project-prompt-sync-preview");
+    await expect(previewButton).toBeEnabled({ timeout: 30_000 });
+    await previewButton.click();
+
+    const preview = page.getByTestId("project-prompt-sync-preview-modal");
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText("Paseo project sync");
+  });
 });
 
 test.describe("Projects settings — error UX", () => {
@@ -331,6 +349,21 @@ test.describe("Projects settings — error UX", () => {
 
     await expectHostIndicatorVisible(page);
     await expectHostPickerHidden(page);
+  });
+
+  test("project prompt refresh failure stays visible and can be retried", async ({
+    page,
+    editableProject,
+  }) => {
+    await installProjectPromptSyncFailure(page);
+    await openProjects(page);
+    await openProjectSettings(page, editableProject.name);
+
+    await page.getByTestId("project-prompt-sync-refresh").click();
+
+    const failure = page.getByTestId("project-prompt-sync-refresh-failed");
+    await expect(failure).toBeVisible();
+    await expect(failure.getByRole("button", { name: "Sync now" })).toBeVisible();
   });
 
   test("script removal via kebab menu removes the row from the form", async ({

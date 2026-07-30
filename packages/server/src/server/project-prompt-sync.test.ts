@@ -35,6 +35,9 @@ class MutableWorkspaceRegistry implements Pick<WorkspaceRegistry, "list"> {
 }
 
 class MutableInspector {
+  delayMs = 0;
+  activeInspections = 0;
+  maxConcurrentInspections = 0;
   current = {
     projectKind: "git" as const,
     branch: "main",
@@ -45,7 +48,16 @@ class MutableInspector {
   };
 
   async inspect(_rootPath: string) {
-    return this.current;
+    this.activeInspections += 1;
+    this.maxConcurrentInspections = Math.max(this.maxConcurrentInspections, this.activeInspections);
+    try {
+      if (this.delayMs > 0) {
+        await waitFor(this.delayMs);
+      }
+      return this.current;
+    } finally {
+      this.activeInspections -= 1;
+    }
   }
 }
 
@@ -151,6 +163,28 @@ describe("ProjectPromptSyncService", () => {
     expect(prompt).not.toContain("Current branch");
     expect(prompt).not.toContain("bootstrap.ts");
     expect(prompt).not.toContain("git@example.test");
+  });
+
+  test("serializes overlapping sync requests for the same project", async () => {
+    const project = buildProjectRecord({
+      projectId: "prj_serial",
+      rootPath: projectRoot,
+      displayName: "Serial",
+    });
+    const inspector = new MutableInspector();
+    inspector.delayMs = 10;
+    const service = new ProjectPromptSyncService({
+      paseoHome,
+      projectRegistry: new MutableProjectRegistry([project]),
+      workspaceRegistry: new MutableWorkspaceRegistry([]),
+      workspaceGitService: createWorkspaceGitServiceStub(),
+      inspector,
+      logger,
+    });
+
+    await Promise.all([service.syncNow(project), service.syncNow(project)]);
+
+    expect(inspector.maxConcurrentInspections).toBe(1);
   });
 
   test("prepends a fresh project block only after the project fingerprint changes", async () => {

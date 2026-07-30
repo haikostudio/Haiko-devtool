@@ -251,6 +251,50 @@ export async function installReadTransportFailure(
   };
 }
 
+export async function installProjectPromptSyncFailure(page: Page): Promise<void> {
+  await page.routeWebSocket(daemonWsRoutePattern(), (ws) => {
+    const server = ws.connectToServer();
+
+    ws.onMessage((message) => {
+      const sessionMessage = getSessionMessage(message);
+      if (sessionMessage?.type === "project.promptSync.refresh.request") {
+        const requestId = sessionMessage.requestId;
+        const repoRoot = sessionMessage.repoRoot;
+        if (typeof requestId === "string" && typeof repoRoot === "string") {
+          ws.send(
+            JSON.stringify({
+              type: "session",
+              message: {
+                type: "project.promptSync.refresh.response",
+                payload: {
+                  requestId,
+                  repoRoot,
+                  ok: false,
+                  error: "sync_failed",
+                },
+              },
+            }),
+          );
+        }
+        return;
+      }
+      try {
+        server.send(message);
+      } catch {
+        // server socket already closed
+      }
+    });
+
+    server.onMessage((message) => {
+      try {
+        ws.send(message);
+      } catch {
+        // client socket already closed
+      }
+    });
+  });
+}
+
 // Installs a transparent WS proxy that can later drop all active daemon connections
 // and block new ones. Code 1001 (Going Away) without reason triggers "error" state
 // in DaemonClient due to describeTransportClose returning a non-empty string.

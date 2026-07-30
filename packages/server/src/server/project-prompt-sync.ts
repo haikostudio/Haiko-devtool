@@ -136,6 +136,7 @@ export class ProjectPromptSyncService {
   private readonly inspector: ProjectPromptInspector;
   private readonly watchUnsubscribes = new Map<string, () => void>();
   private readonly scheduledSyncs = new Map<string, NodeJS.Timeout>();
+  private readonly syncQueues = new Map<string, Promise<PromptCacheEntry | null>>();
   private readonly promptCache = new Map<string, PromptCacheEntry>();
   private readonly deliveredFingerprints = new Map<string, string>();
   private unsubscribeRegistry: (() => void) | null = null;
@@ -159,7 +160,9 @@ export class ProjectPromptSyncService {
     this.started = true;
     this.unsubscribeRegistry =
       this.projectRegistry.subscribeToMutations?.((mutation) => {
-        void this.handleProjectMutation(mutation.projectId);
+        void this.handleProjectMutation(mutation.projectId).catch((error) => {
+          this.logSyncFailure(error, mutation.projectId);
+        });
       }) ?? null;
     await this.syncProjectWatches();
     const projects = await this.listActiveProjects();
@@ -243,7 +246,9 @@ export class ProjectPromptSyncService {
     }
     const timer = this.clock.setTimeout(() => {
       this.scheduledSyncs.delete(projectId);
-      void this.syncProjectById(projectId);
+      void this.syncProjectById(projectId).catch((error) => {
+        this.logSyncFailure(error, projectId);
+      });
     }, PROJECT_PROMPT_SYNC_DEBOUNCE_MS);
     this.scheduledSyncs.set(projectId, timer);
   }
@@ -269,6 +274,24 @@ export class ProjectPromptSyncService {
   private async syncProject(
     project: PersistedProjectRecord,
     force = false,
+  ): Promise<PromptCacheEntry | null> {
+    const previous = this.syncQueues.get(project.projectId);
+    const pending = (previous ? previous.catch(() => null) : Promise.resolve(null)).then(() =>
+      this.performProjectSync(project, force),
+    );
+    this.syncQueues.set(project.projectId, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.syncQueues.get(project.projectId) === pending) {
+        this.syncQueues.delete(project.projectId);
+      }
+    }
+  }
+
+  private async performProjectSync(
+    project: PersistedProjectRecord,
+    force: boolean,
   ): Promise<PromptCacheEntry | null> {
     const snapshot = await this.buildSnapshot(project);
     const prompt = renderSharedPrompt(snapshot);
@@ -296,7 +319,6 @@ export class ProjectPromptSyncService {
       currentState,
       snapshot,
     });
-    writePrivateFileAtomicSync(statePath, `${JSON.stringify(nextState, null, 2)}\n`);
     for (const output of PROJECT_PROMPT_OUTPUTS) {
       writePrivateFileAtomicSync(
         this.getPromptPath(snapshot.slug, output.filename),
@@ -308,6 +330,9 @@ export class ProjectPromptSyncService {
         }),
       );
     }
+    // Commit the status last so a successful timestamp always means every
+    // generated instruction file was written.
+    writePrivateFileAtomicSync(statePath, `${JSON.stringify(nextState, null, 2)}\n`);
     this.logger.debug(
       {
         projectId: project.projectId,
@@ -317,6 +342,10 @@ export class ProjectPromptSyncService {
       "Project prompt files synced",
     );
     return nextEntry;
+  }
+
+  private logSyncFailure(error: unknown, projectId: string): void {
+    this.logger.warn({ err: error, projectId }, "Project prompt sync failed");
   }
 
   private async buildSnapshot(project: PersistedProjectRecord): Promise<PromptProjectSnapshot> {

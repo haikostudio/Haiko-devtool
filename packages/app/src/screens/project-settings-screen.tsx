@@ -685,6 +685,7 @@ function ProjectConfigForm({
           onChange={handleProjectPromptSyncChange}
           onRefresh={handleProjectPromptSyncRefresh}
           isRefreshing={refreshProjectPromptSyncMutation.isPending}
+          refreshFailed={refreshProjectPromptSyncMutation.isError}
         />
       ) : null}
       <SettingsGroup
@@ -845,6 +846,7 @@ interface ProjectPromptSyncGroupProps {
   onChange(key: keyof ProjectPromptSyncDraft, enabled: boolean): void;
   onRefresh(): void;
   isRefreshing: boolean;
+  refreshFailed: boolean;
 }
 
 const PROJECT_PROMPT_SYNC_FIELDS: ReadonlyArray<{
@@ -867,6 +869,7 @@ function ProjectPromptSyncGroup({
   onChange,
   onRefresh,
   isRefreshing,
+  refreshFailed,
 }: ProjectPromptSyncGroupProps) {
   const { t } = useTranslation();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -940,6 +943,19 @@ function ProjectPromptSyncGroup({
           />
         ))}
       </View>
+      {refreshFailed ? (
+        <View style={styles.calloutWrap}>
+          <Alert
+            testID="project-prompt-sync-refresh-failed"
+            variant="error"
+            title={t("settings.project.promptSync.refreshFailed")}
+          >
+            <Button variant="outline" size="sm" onPress={onRefresh}>
+              {t("settings.project.promptSync.refresh")}
+            </Button>
+          </Alert>
+        </View>
+      ) : null}
       <AdaptiveModalSheet
         visible={isPreviewOpen}
         header={previewHeader}
