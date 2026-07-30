@@ -558,10 +558,13 @@ function buildConductorConfig(
       ...base,
       // Same "fill the blank, an explicit pick still wins" rule as Claude below.
       // On Paseo itself the conductor codes → deeper effort + frontier model.
-      thinkingOptionId:
-        base.thinkingOptionId ??
-        (isSelf ? CONDUCTOR_CODEX_SELF_THINKING_OPTION_ID : CONDUCTOR_CODEX_THINKING_OPTION_ID),
-      model: base.model ?? (isSelf ? CODEX_CONDUCTOR_SELF_MODEL : CODEX_CONDUCTOR_MODEL),
+      thinkingOptionId: resolveConductorEffort(
+        base.thinkingOptionId,
+        isSelf,
+        CONDUCTOR_CODEX_THINKING_OPTION_ID,
+        CONDUCTOR_CODEX_SELF_THINKING_OPTION_ID,
+      ),
+      model: resolveCodexConductorModel(base.model, isSelf),
     };
     // On Paseo itself the conductor is a full agent: no read-only sandbox, let it
     // edit the repo and run commands like any global Codex agent.
@@ -581,9 +584,12 @@ function buildConductorConfig(
     ...base,
     // `base` already carries the stored id when the user picked one, so this only
     // applies to a conductor that never had an explicit level.
-    thinkingOptionId:
-      base.thinkingOptionId ??
-      (isSelf ? CONDUCTOR_CLAUDE_SELF_THINKING_OPTION_ID : CONDUCTOR_CLAUDE_THINKING_OPTION_ID),
+    thinkingOptionId: resolveConductorEffort(
+      base.thinkingOptionId,
+      isSelf,
+      CONDUCTOR_CLAUDE_THINKING_OPTION_ID,
+      CONDUCTOR_CLAUDE_SELF_THINKING_OPTION_ID,
+    ),
     model: resolveClaudeConductorModel(base.model, isSelf),
     extra: {
       ...existing?.extra,
@@ -612,6 +618,15 @@ function conductorConfigIsCurrent(
     if (config.thinkingOptionId == null || config.model == null) {
       return false;
     }
+    // On Paseo the leaked board-manager pins (luna / "medium") must be re-locked up
+    // to the frontier — mirrors `resolveCodexConductorModel` / `resolveConductorEffort`.
+    if (
+      isSelf &&
+      (config.model === CODEX_CONDUCTOR_MODEL ||
+        config.thinkingOptionId === CONDUCTOR_CODEX_THINKING_OPTION_ID)
+    ) {
+      return false;
+    }
     if (isSelf) {
       return config.approvalPolicy === "on-request" && config.sandboxMode === "workspace-write";
     }
@@ -633,6 +648,15 @@ function conductorConfigIsCurrent(
   if (config.model == null || config.model === LEGACY_CLAUDE_CONDUCTOR_MODEL) {
     return false;
   }
+  // On Paseo the leaked board-manager pins (sonnet-5 / "medium") must be re-locked
+  // up to the frontier — mirrors `resolveClaudeConductorModel` / `resolveConductorEffort`.
+  if (
+    isSelf &&
+    (config.model === CLAUDE_CONDUCTOR_MODEL ||
+      config.thinkingOptionId === CONDUCTOR_CLAUDE_THINKING_OPTION_ID)
+  ) {
+    return false;
+  }
   const expectedDisallowed = isSelf ? [] : CONDUCTOR_DISALLOWED_TOOLS;
   return sameToolSet(readStoredDisallowedTools(config.extra), expectedDisallowed);
 }
@@ -651,7 +675,55 @@ function resolveClaudeConductorModel(
   if (!storedModel || storedModel === LEGACY_CLAUDE_CONDUCTOR_MODEL) {
     return isSelf ? CLAUDE_CONDUCTOR_SELF_MODEL : CLAUDE_CONDUCTOR_MODEL;
   }
+  // On Paseo itself the cheap board-manager pin is never a deliberate pick: it can
+  // only have leaked in from a conductor created before `isSelf` earned the
+  // frontier model. Treat it like the legacy alias above and force it up, so an
+  // existing Paseo conductor self-heals on next open instead of staying on Sonnet
+  // for the life of the record. Any OTHER stored model is still respected.
+  if (isSelf && storedModel === CLAUDE_CONDUCTOR_MODEL) {
+    return CLAUDE_CONDUCTOR_SELF_MODEL;
+  }
   return storedModel;
+}
+
+/**
+ * Codex counterpart of {@link resolveClaudeConductorModel}: fill a blank with the
+ * board-manager pin (or the frontier model on Paseo itself), and — on Paseo only —
+ * force the leaked board-manager pin up to the frontier so an existing conductor
+ * stops opening on the cheap model. Any other stored model is preserved.
+ */
+function resolveCodexConductorModel(
+  storedModel: string | null | undefined,
+  isSelf: boolean,
+): string {
+  if (!storedModel) {
+    return isSelf ? CODEX_CONDUCTOR_SELF_MODEL : CODEX_CONDUCTOR_MODEL;
+  }
+  if (isSelf && storedModel === CODEX_CONDUCTOR_MODEL) {
+    return CODEX_CONDUCTOR_SELF_MODEL;
+  }
+  return storedModel;
+}
+
+/**
+ * Thinking effort a conductor should carry. Same shape as the model resolvers: a
+ * blank falls to the default for the context, and on Paseo itself the leaked
+ * board-manager "medium" is forced up to "high" (the two leaked together when the
+ * record predated `isSelf`). Any other explicit level is preserved.
+ */
+function resolveConductorEffort(
+  storedEffort: string | null | undefined,
+  isSelf: boolean,
+  boardDefault: string,
+  selfDefault: string,
+): string {
+  if (storedEffort == null) {
+    return isSelf ? selfDefault : boardDefault;
+  }
+  if (isSelf && storedEffort === boardDefault) {
+    return selfDefault;
+  }
+  return storedEffort;
 }
 
 function toAgentSessionConfigOverrides(

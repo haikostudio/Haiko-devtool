@@ -91,6 +91,7 @@ function makeService(
 function makeReuseService(
   existing: StoredAgentRecord,
   upserts: StoredAgentRecord[],
+  rootPath = "/tmp/project",
 ): ConductorAgentService {
   return new ConductorAgentService({
     createAgent: (async () => {
@@ -103,7 +104,7 @@ function makeReuseService(
       },
     } as unknown as AgentStorage,
     projectRegistry: {
-      get: async () => ({ rootPath: "/tmp/project" }),
+      get: async () => ({ rootPath }),
     } as unknown as ProjectRegistry,
     logger: { info: () => {}, error: () => {}, debug: () => {} } as unknown as pino.Logger,
   });
@@ -407,6 +408,66 @@ describe("ConductorAgentService", () => {
 
     expect(upserts).toHaveLength(1);
     expect(upserts[0]?.config?.model).toBe("claude-opus-5[1m]");
+  });
+
+  it("on Paseo, upgrades an existing Claude conductor stuck on the board-manager pin", async () => {
+    // Created before `isSelf` earned the frontier model, so it carries the leaked
+    // board-manager sonnet-5 / medium. On Paseo those are never a real pick and must
+    // self-heal up to Opus 5 / high instead of staying cheap for the record's life.
+    const existing = {
+      id: "paseo-claude-conductor",
+      provider: "claude/claude-sonnet-5",
+      cwd: PASEO_SELF_ROOT,
+      workspaceId: "ws-claude",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
+        [CONDUCTOR_PROJECT_ID_LABEL]: "project-1",
+        [CONDUCTOR_PROVIDER_LABEL]: "claude/claude-sonnet-5",
+      },
+      lastStatus: "closed",
+      config: { thinkingOptionId: "medium", model: "claude-sonnet-5" },
+    } as unknown as StoredAgentRecord;
+    const upserts: StoredAgentRecord[] = [];
+    const service = makeReuseService(existing, upserts, PASEO_SELF_ROOT);
+
+    await service.ensureConductorAgent("project-1");
+
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.config?.model).toBe("claude-opus-5");
+    expect(upserts[0]?.config?.thinkingOptionId).toBe("high");
+  });
+
+  it("on Paseo, upgrades an existing Codex conductor stuck on the board-manager pin", async () => {
+    const existing = {
+      id: "paseo-codex-conductor",
+      provider: "codex/gpt-5.6-luna",
+      cwd: PASEO_SELF_ROOT,
+      workspaceId: "ws-codex",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      labels: {
+        [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE,
+        [CONDUCTOR_PROJECT_ID_LABEL]: "project-1",
+        [CONDUCTOR_PROVIDER_LABEL]: "codex/gpt-5.6-luna",
+      },
+      lastStatus: "closed",
+      config: {
+        thinkingOptionId: "medium",
+        model: "gpt-5.6-luna",
+        approvalPolicy: "on-request",
+        sandboxMode: "workspace-write",
+      },
+    } as unknown as StoredAgentRecord;
+    const upserts: StoredAgentRecord[] = [];
+    const service = makeReuseService(existing, upserts, PASEO_SELF_ROOT);
+
+    await service.ensureConductorAgent("project-1", "codex");
+
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.config?.model).toBe("gpt-5.6-sol");
+    expect(upserts[0]?.config?.thinkingOptionId).toBe("high");
   });
 
   it("re-locks an existing Claude conductor that has no stored thinking level", async () => {
