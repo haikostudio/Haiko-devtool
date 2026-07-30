@@ -1042,6 +1042,7 @@ function SheetAgentControlsContent(props: SheetAgentControlsContentProps) {
           serverId={modelSelectorServerId}
           desktopPlacement="top-start"
           desktopMinWidth={360}
+          chevronOnly
         />
       ) : null}
 
@@ -1736,6 +1737,7 @@ export function DraftAgentControls({
           serverId={modelSelectorServerId}
           desktopPlacement="top-start"
           desktopMinWidth={360}
+          chevronOnly
         />
         {selectedProvider ? (
           <ControlledAgentControls

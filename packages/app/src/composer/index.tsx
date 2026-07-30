@@ -1,10 +1,4 @@
-import {
-  View,
-  Pressable,
-  Text,
-  ActivityIndicator,
-  type PressableStateCallbackType,
-} from "react-native";
+import { View, Pressable, Text, ActivityIndicator } from "react-native";
 import type { TFunction } from "i18next";
 import {
   useState,
@@ -24,7 +18,6 @@ import {
   ArrowUp,
   Square,
   Pencil,
-  AudioLines,
   CircleDot,
   FileText,
   GitPullRequest,
@@ -68,7 +61,6 @@ import {
   type QueueWriter,
   type QueuedComposerMessage,
 } from "@/composer/actions";
-import { useVoiceOptional } from "@/contexts/voice-context";
 import { useComposerFooterControls } from "@/composer/footer-controls-context";
 import { useToast } from "@/contexts/toast-context";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -140,14 +132,6 @@ function resolveIsComposerLocked(
   return submitBehavior === "preserve-and-lock" && isSubmitLoading;
 }
 
-function resolveIsVoiceModeForAgent(
-  voice: ReturnType<typeof useVoiceOptional>,
-  serverId: string,
-  agentId: string,
-): boolean {
-  return voice?.isVoiceModeForAgent(serverId, agentId) ?? false;
-}
-
 function resolveKeyboardPriority(isMessageInputFocused: boolean): number {
   return isMessageInputFocused ? 200 : 100;
 }
@@ -183,19 +167,6 @@ function resolveCheckoutRemoteUrl(
 function buildCancelButtonStyle(isConnected: boolean, isCancellingAgent: boolean): object[] {
   const disabled = !isConnected || isCancellingAgent ? styles.buttonDisabled : undefined;
   return [styles.cancelButton, disabled].filter((value): value is object => Boolean(value));
-}
-
-function buildRealtimeVoiceButtonStyle(
-  hovered: boolean | undefined,
-  voiceButtonDisabled: boolean,
-  reserveLeadingSpace: boolean,
-): object[] {
-  const hoveredStyle = hovered ? styles.iconButtonHovered : undefined;
-  const disabledStyle = voiceButtonDisabled ? styles.buttonDisabled : undefined;
-  const reserveStyle = reserveLeadingSpace ? styles.realtimeVoiceButtonCompactReserve : undefined;
-  return [styles.realtimeVoiceButton, reserveStyle, hoveredStyle, disabledStyle].filter(
-    (value): value is object => Boolean(value),
-  );
 }
 
 function buildAgentStateSelector(serverId: string, agentId: string) {
@@ -432,29 +403,6 @@ function resolveErrorMessage(error: unknown): string | null {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
   return null;
-}
-
-interface AttemptStartRealtimeVoiceArgs {
-  voice: ReturnType<typeof useVoiceOptional>;
-  isConnected: boolean;
-  hasAgent: boolean;
-  serverId: string;
-  agentId: string;
-  toastErrorRef: { current: (message: string) => void };
-}
-
-function attemptStartRealtimeVoice(args: AttemptStartRealtimeVoiceArgs): void {
-  const { voice, isConnected, hasAgent, serverId, agentId, toastErrorRef } = args;
-  if (!voice || !isConnected || !hasAgent) return;
-  if (voice.isVoiceSwitching) return;
-  if (voice.isVoiceModeForAgent(serverId, agentId)) return;
-  void voice.startVoice(serverId, agentId).catch((error) => {
-    console.error("[Composer] Failed to start voice mode", error);
-    const message = resolveErrorMessage(error);
-    if (message && message.trim().length > 0) {
-      toastErrorRef.current(message);
-    }
-  });
 }
 
 function focusMessageInputWithPlatformStrategy(messageInputRef: {
@@ -912,90 +860,22 @@ function ComposerCancelButtonSlot({
   return <ComposerCancelButton {...rest} />;
 }
 
-interface ComposerVoiceModeButtonProps {
-  buttonIconSize: number;
-  handleToggleRealtimeVoice: () => void;
-  isConnected: boolean;
-  isVoiceSwitching: boolean;
-  realtimeVoiceButtonStyle: (
-    state: PressableStateCallbackType & { hovered?: boolean },
-  ) => (object | undefined)[];
-  voiceToggleKeys: ReturnType<typeof useShortcutKeys>;
-  t: TFunction;
-}
-
-interface ComposerRightControlsSlotProps extends ComposerVoiceModeButtonProps {
-  isVoiceModeForAgent: boolean;
-  hasAgent: boolean;
+interface ComposerRightControlsSlotProps {
   isAgentRunning: boolean;
   hasSendableContent: boolean;
   isProcessing: boolean;
-  isCompact: boolean;
   cancelButton: ReactElement;
 }
 
 function ComposerRightControlsSlot({
-  isVoiceModeForAgent,
-  hasAgent,
   isAgentRunning,
   hasSendableContent,
   isProcessing,
-  isCompact,
   cancelButton,
-  ...voiceProps
 }: ComposerRightControlsSlotProps) {
-  const hideVoiceForCompactInput = isCompact && hasSendableContent;
-  const showVoiceModeButton =
-    !isVoiceModeForAgent && hasAgent && !isAgentRunning && !hideVoiceForCompactInput;
   const shouldShowCancelButton = isAgentRunning && !hasSendableContent && !isProcessing;
-  if (!showVoiceModeButton && !shouldShowCancelButton) return null;
-  return (
-    <View style={styles.rightControls}>
-      {showVoiceModeButton ? <ComposerVoiceModeButton {...voiceProps} /> : null}
-      {cancelButton}
-    </View>
-  );
-}
-
-function ComposerVoiceModeButton({
-  buttonIconSize,
-  handleToggleRealtimeVoice,
-  isConnected,
-  isVoiceSwitching,
-  realtimeVoiceButtonStyle,
-  voiceToggleKeys,
-  t,
-}: ComposerVoiceModeButtonProps) {
-  const shortcutNode = voiceToggleKeys ? <Shortcut chord={voiceToggleKeys} /> : null;
-  const renderTriggerContent = useCallback(
-    ({ hovered }: PressableStateCallbackType & { hovered?: boolean }) => {
-      if (isVoiceSwitching) {
-        return <ActivityIndicator size="small" color="white" />;
-      }
-      const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
-      return <ThemedAudioLines size={buttonIconSize} uniProps={colorMapping} />;
-    },
-    [buttonIconSize, isVoiceSwitching],
-  );
-  return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger
-        onPress={handleToggleRealtimeVoice}
-        disabled={!isConnected || isVoiceSwitching}
-        accessibilityLabel={t("composer.voice.enableVoiceMode")}
-        accessibilityRole="button"
-        style={realtimeVoiceButtonStyle}
-      >
-        {renderTriggerContent}
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
-        <View style={styles.tooltipRow}>
-          <Text style={styles.tooltipText}>{t("composer.voice.voiceMode")}</Text>
-          {shortcutNode}
-        </View>
-      </TooltipContent>
-    </Tooltip>
-  );
+  if (!shouldShowCancelButton) return null;
+  return <View style={styles.rightControls}>{cancelButton}</View>;
 }
 
 // oxlint-disable-next-line complexity
@@ -1046,11 +926,9 @@ export function Composer({
   const toast = useToast();
   const toastErrorRef = useRef(toast.error);
   toastErrorRef.current = toast.error;
-  const voice = useVoiceOptional();
   // Extra footer controls injected by an ancestor (e.g. the conductor drawer's
   // « Réinitialiser » button). Null everywhere else, so the footer is unchanged.
   const footerControls = useComposerFooterControls();
-  const voiceToggleKeys = useShortcutKeys("voice-toggle");
   const agentInterruptKeys = useShortcutKeys("agent-interrupt");
   const isDictationReady = useIsDictationReady({
     serverId,
@@ -1298,7 +1176,6 @@ export function Composer({
   }, [onSubmitMessage]);
 
   const isAgentRunning = agentState.status === "running";
-  const hasAgent = agentState.status !== null;
 
   const queueWriter = useMemo<QueueWriter>(
     () => ({
@@ -1618,19 +1495,6 @@ export function Composer({
     enabled: !externalKeyboardShift,
   });
 
-  const isVoiceModeForAgent = resolveIsVoiceModeForAgent(voice, serverId, agentId);
-
-  const handleToggleRealtimeVoice = useCallback(() => {
-    attemptStartRealtimeVoice({
-      voice,
-      isConnected,
-      hasAgent,
-      serverId,
-      agentId,
-      toastErrorRef,
-    });
-  }, [agentId, hasAgent, isConnected, serverId, voice]);
-
   const handleEditQueuedMessage = useCallback(
     (id: string) => {
       const result = editQueuedComposerMessage({
@@ -1693,14 +1557,6 @@ export function Composer({
     [isConnected, isCancellingAgent],
   );
 
-  const isVoiceSwitching = voice?.isVoiceSwitching ?? false;
-  const voiceButtonDisabled = !isConnected || isVoiceSwitching;
-  const realtimeVoiceButtonStyle = useCallback(
-    (state: PressableStateCallbackType & { hovered?: boolean }) =>
-      buildRealtimeVoiceButtonStyle(state.hovered, voiceButtonDisabled, isCompactLayout),
-    [isCompactLayout, voiceButtonDisabled],
-  );
-
   const cancelButton = useMemo(
     () => (
       <ComposerCancelButtonSlot
@@ -1734,41 +1590,15 @@ export function Composer({
     () => (
       <>
         <ComposerRightControlsSlot
-          isVoiceModeForAgent={isVoiceModeForAgent}
-          hasAgent={hasAgent}
           isAgentRunning={isAgentRunning}
           hasSendableContent={hasSendableContent}
           isProcessing={isProcessing}
-          isCompact={isCompactLayout}
-          buttonIconSize={buttonIconSize}
-          handleToggleRealtimeVoice={handleToggleRealtimeVoice}
-          isConnected={isConnected}
-          isVoiceSwitching={isVoiceSwitching}
-          realtimeVoiceButtonStyle={realtimeVoiceButtonStyle}
-          voiceToggleKeys={voiceToggleKeys}
-          t={t}
           cancelButton={cancelButton}
         />
         {footerControls}
       </>
     ),
-    [
-      buttonIconSize,
-      cancelButton,
-      footerControls,
-      handleToggleRealtimeVoice,
-      hasAgent,
-      hasSendableContent,
-      isAgentRunning,
-      isConnected,
-      isCompactLayout,
-      isProcessing,
-      isVoiceModeForAgent,
-      isVoiceSwitching,
-      realtimeVoiceButtonStyle,
-      t,
-      voiceToggleKeys,
-    ],
+    [cancelButton, footerControls, hasSendableContent, isAgentRunning, isProcessing],
   );
 
   const { contextWindowMaxTokens, contextWindowUsedTokens } = resolveContextWindowValues(
@@ -2284,7 +2114,6 @@ const ThemedPencil = withUnistyles(Pencil);
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedGitPullRequest = withUnistyles(GitPullRequest);
 const ThemedCircleDot = withUnistyles(CircleDot);
-const ThemedAudioLines = withUnistyles(AudioLines);
 const ThemedPaperclip = withUnistyles(Paperclip);
 const ThemedImageIcon = withUnistyles(ImageIcon);
 const ThemedFileText = withUnistyles(FileText);

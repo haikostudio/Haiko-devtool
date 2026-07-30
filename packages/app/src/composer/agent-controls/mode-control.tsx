@@ -205,11 +205,6 @@ function AgentModeControlView({
     return modeOptions.find((m) => m.id === selectedModeId) ?? modeOptions[0];
   }, [modeOptions, selectedModeId]);
 
-  const visuals = selectedMode
-    ? getModeVisuals(provider, selectedMode.id, providerDefinitions)
-    : undefined;
-  const Icon = visuals?.icon ? MODE_ICONS[visuals.icon] : undefined;
-  const iconColor = theme.colors.foregroundMuted;
   const selectedModeLabel = selectedMode ? formatAgentModeLabel(selectedMode) : "";
 
   const allOptions = useMemo<ComboboxOption[]>(
@@ -278,15 +273,13 @@ function AgentModeControlView({
 
   const pressableStyle = useCallback(
     ({ pressed, hovered }: PressableStateCallbackType) => [
-      styles.chip,
+      styles.chevronButton,
       hovered && styles.chipHovered,
       (pressed || open) && styles.chipPressed,
       disabled && styles.chipDisabled,
     ],
     [open, disabled],
   );
-
-  const labelStyle = styles.chipLabel;
 
   const sheetHeader = useMemo<SheetHeader>(
     () => ({
@@ -317,10 +310,7 @@ function AgentModeControlView({
               value: selectedModeLabel,
             })}
             testID="mode-control"
-          >
-            {Icon ? <Icon size={theme.iconSize.md} color={iconColor} /> : null}
-            <Text style={labelStyle}>{selectedModeLabel}</Text>
-          </ComboboxTrigger>
+          />
         </TooltipTrigger>
         <TooltipContent side="top" align="center" offset={8}>
           <View style={styles.tooltipRow}>
@@ -541,6 +531,14 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+  },
+  chevronButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    borderRadius: theme.borderRadius.full,
   },
   section: {
     gap: theme.spacing[1],

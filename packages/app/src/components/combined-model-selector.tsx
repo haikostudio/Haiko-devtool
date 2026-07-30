@@ -161,6 +161,7 @@ interface CombinedModelSelectorProps {
    * (the composer's layout).
    */
   triggerFill?: boolean;
+  chevronOnly?: boolean;
 }
 
 interface SelectorContentProps {
@@ -619,6 +620,7 @@ export function CombinedModelSelector({
   desktopPlacement,
   desktopMinWidth,
   triggerFill = false,
+  chevronOnly = false,
 }: CombinedModelSelectorProps) {
   const { t } = useTranslation();
   const anchorRef = useRef<View>(null);
@@ -850,17 +852,21 @@ export function CombinedModelSelector({
           collapsable={false}
           disabled={disabled}
           onPress={handleTriggerPress}
-          style={triggerStyle}
+          style={chevronOnly ? styles.chevronOnlyTrigger : triggerStyle}
           accessibilityRole="button"
           accessibilityLabel={t("modelSelector.selectedModel", { model: selectedModelLabel })}
           testID="combined-model-selector"
         >
-          {hasSelectedProvider ? (
-            <ProviderGlyph provider={selectedProvider} size={ICON_SIZE.md} />
+          {!chevronOnly ? (
+            <>
+              {hasSelectedProvider ? (
+                <ProviderGlyph provider={selectedProvider} size={ICON_SIZE.md} />
+              ) : null}
+              <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="tail">
+                {triggerLabel}
+              </Text>
+            </>
           ) : null}
-          <Text style={styles.triggerText} numberOfLines={1} ellipsizeMode="tail">
-            {triggerLabel}
-          </Text>
         </ComboboxTrigger>
       )}
       <Combobox
@@ -928,6 +934,14 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+  },
+  chevronOnlyTrigger: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    borderRadius: theme.borderRadius.full,
   },
   customTriggerWrapper: {
     paddingHorizontal: 0,

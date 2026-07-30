@@ -25,7 +25,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import { LIST_ROW_HEIGHT } from "@/components/ui/control-geometry";
-import { ArrowUp, Mic, MicOff, CornerDownLeft, Paperclip, Square } from "lucide-react-native";
+import { ArrowUp, CornerDownLeft, Paperclip } from "lucide-react-native";
 import { useDictation } from "@/hooks/use-dictation";
 import { DictationOverlay } from "@/components/dictation-controls";
 import { RealtimeVoiceOverlay } from "@/components/realtime-voice-overlay";
@@ -60,12 +60,7 @@ import { isImeComposingKeyboardEvent } from "@/utils/keyboard-ime";
 import { isWeb } from "@/constants/platform";
 import { useIsCompactFormFactor } from "@/constants/layout";
 import { useComposerHeightMirror } from "./height-mirror";
-import {
-  resolveSendTooltipLabel,
-  resolveSubmitAccessibilityLabel,
-  resolveVoiceAccessibilityLabel,
-  resolveVoiceTooltipText,
-} from "./labels";
+import { resolveSendTooltipLabel, resolveSubmitAccessibilityLabel } from "./labels";
 import {
   computeCanStartDictation,
   resolveComposerSurfacePresentation,
@@ -390,43 +385,7 @@ function AttachmentDropdown({
   );
 }
 
-function VoiceButtonIcon({
-  hovered,
-  isDictating,
-  isMutedRealtime,
-  buttonIconSize,
-}: {
-  hovered: boolean;
-  isDictating: boolean;
-  isMutedRealtime: boolean;
-  buttonIconSize: number;
-}) {
-  if (isDictating) {
-    return <Square size={buttonIconSize} color="white" fill="white" />;
-  }
-  const colorMapping = hovered ? iconForegroundMapping : iconForegroundMutedMapping;
-  if (isMutedRealtime) {
-    return <ThemedMicOff size={buttonIconSize} uniProps={colorMapping} />;
-  }
-  return <ThemedMic size={buttonIconSize} uniProps={colorMapping} />;
-}
-
 type ShortcutChord = NonNullable<React.ComponentProps<typeof Shortcut>["chord"]>;
-
-function VoiceTooltipBody({
-  voiceTooltipText,
-  shortcut,
-}: {
-  voiceTooltipText: string;
-  shortcut: ShortcutChord | null | undefined;
-}) {
-  return (
-    <View style={styles.tooltipRow}>
-      <Text style={styles.tooltipText}>{voiceTooltipText}</Text>
-      {shortcut ? <Shortcut chord={shortcut} /> : null}
-    </View>
-  );
-}
 
 function SendTooltipBody({
   label,
@@ -752,46 +711,6 @@ function FocusHint({
   );
 }
 
-function VoiceButtonTooltip({
-  onVoicePress,
-  isDictationStartEnabled,
-  voiceButtonAccessibilityLabel,
-  voiceButtonStyle,
-  renderVoiceButtonIcon,
-  voiceTooltipText,
-  isRealtimeVoiceForCurrentAgent,
-  voiceMuteToggleKeys,
-  dictationToggleKeys,
-}: {
-  onVoicePress: () => void;
-  isDictationStartEnabled: boolean;
-  voiceButtonAccessibilityLabel: string;
-  voiceButtonStyle: React.ComponentProps<typeof TooltipTrigger>["style"];
-  renderVoiceButtonIcon: (input: { hovered?: boolean }) => React.ReactElement;
-  voiceTooltipText: string;
-  isRealtimeVoiceForCurrentAgent: boolean;
-  voiceMuteToggleKeys: ShortcutChord | null | undefined;
-  dictationToggleKeys: ShortcutChord | null | undefined;
-}) {
-  const shortcut = isRealtimeVoiceForCurrentAgent ? voiceMuteToggleKeys : dictationToggleKeys;
-  return (
-    <Tooltip delayDuration={0} enabledOnDesktop enabledOnMobile={false}>
-      <TooltipTrigger
-        onPress={onVoicePress}
-        disabled={!isDictationStartEnabled}
-        accessibilityRole="button"
-        accessibilityLabel={voiceButtonAccessibilityLabel}
-        style={voiceButtonStyle}
-      >
-        {renderVoiceButtonIcon}
-      </TooltipTrigger>
-      <TooltipContent side="top" align="center" offset={8}>
-        <VoiceTooltipBody voiceTooltipText={voiceTooltipText} shortcut={shortcut} />
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 function SendButtonTooltip({
   shouldShow,
   canPressLoadingButton,
@@ -944,26 +863,6 @@ async function startDictationIfAvailableImpl(ctx: StartDictationContext): Promis
   await ctx.startDictation();
 }
 
-interface VoicePressContext {
-  isRealtimeVoiceForCurrentAgent: boolean;
-  voice: { toggleMute: () => void } | null | undefined;
-  isDictating: boolean;
-  cancelDictation: () => Promise<void> | void;
-  startDictationIfAvailable: () => Promise<void>;
-}
-
-async function handleVoicePressImpl(ctx: VoicePressContext): Promise<void> {
-  if (ctx.isRealtimeVoiceForCurrentAgent && ctx.voice) {
-    ctx.voice.toggleMute();
-    return;
-  }
-  if (ctx.isDictating) {
-    await ctx.cancelDictation();
-    return;
-  }
-  await ctx.startDictationIfAvailable();
-}
-
 interface SendMessageContext {
   value: string;
   attachments: ComposerAttachment[];
@@ -1056,14 +955,6 @@ function computeSendableContent(input: SendableContentInput): SendableContentOut
   const shouldShowSendButton =
     hasSendableContent || input.allowEmptySubmit || input.isSubmitLoading;
   return { hasAttachments, hasRealContent, hasSendableContent, shouldShowSendButton };
-}
-
-function computeIsDictationStartEnabled(
-  isReadyForDictation: boolean | undefined,
-  isConnected: boolean,
-  disabled: boolean,
-): boolean {
-  return (isReadyForDictation ?? isConnected) && !disabled;
 }
 
 function resolveMaxInputHeight(windowHeight: number): number {
@@ -1268,8 +1159,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
     const buttonIconSize = isWeb ? ICON_SIZE.md : ICON_SIZE.lg;
     const toast = useToast();
     const voice = useVoiceOptional();
-    const voiceMuteToggleKeys = useShortcutKeys("voice-mute-toggle");
-    const dictationToggleKeys = useShortcutKeys("dictation-toggle");
     const focusInputKeys = useShortcutKeys("focus-message-input");
     const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
     const [isInputFocused, setIsInputFocused] = useState(false);
@@ -1373,12 +1262,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
 
     const canConfirmDictation = useCallback(() => client?.isConnected ?? false, [client]);
     const isConnected = client?.isConnected ?? false;
-    const isDictationStartEnabled = computeIsDictationStartEnabled(
-      isReadyForDictation,
-      isConnected,
-      disabled,
-    );
-
     const {
       isRecording: isDictating,
       isProcessing: isDictationProcessing,
@@ -1458,24 +1341,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
           startDictation,
         }),
       [canStartDictation, dictationUnavailableMessage, startDictation, toast],
-    );
-
-    const handleVoicePress = useCallback(
-      () =>
-        handleVoicePressImpl({
-          isRealtimeVoiceForCurrentAgent,
-          voice,
-          isDictating,
-          cancelDictation,
-          startDictationIfAvailable,
-        }),
-      [
-        cancelDictation,
-        isDictating,
-        isRealtimeVoiceForCurrentAgent,
-        startDictationIfAvailable,
-        voice,
-      ],
     );
 
     const handleCancelRecording = useCallback(async () => {
@@ -1714,19 +1579,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
       t,
     });
 
-    const voiceButtonAccessibilityLabel = resolveVoiceAccessibilityLabel({
-      isRealtimeVoiceForCurrentAgent,
-      isMuted: Boolean(voice?.isMuted),
-      isDictating,
-      t,
-    });
-
-    const voiceTooltipText = resolveVoiceTooltipText({
-      isRealtimeVoiceForCurrentAgent,
-      isMuted: Boolean(voice?.isMuted),
-      t,
-    });
-
     const sendTooltipLabel = resolveSendTooltipLabel({
       submitButtonAccessibilityLabel,
       defaultActionQueues,
@@ -1760,16 +1612,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         (!isConnected || disabled) && styles.buttonDisabled,
       ],
       [isConnected, disabled],
-    );
-
-    const voiceButtonStyle = useCallback(
-      ({ hovered }: { hovered?: boolean }) => [
-        styles.voiceButton,
-        Boolean(hovered) && !isDictating && styles.iconButtonHovered,
-        !isDictationStartEnabled && styles.buttonDisabled,
-        isDictating && styles.voiceButtonRecording,
-      ],
-      [isDictating, isDictationStartEnabled],
     );
 
     const handleRealtimeVoiceStop = useCallback(() => {
@@ -1806,18 +1648,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
         />
       ),
       [onAttachButtonRef, buttonIconSize],
-    );
-
-    const renderVoiceButtonIcon = useCallback(
-      ({ hovered }: { hovered?: boolean }) => (
-        <VoiceButtonIcon
-          hovered={Boolean(hovered)}
-          isDictating={isDictating}
-          isMutedRealtime={Boolean(isRealtimeVoiceForCurrentAgent && voice?.isMuted)}
-          buttonIconSize={buttonIconSize}
-        />
-      ),
-      [isDictating, isRealtimeVoiceForCurrentAgent, voice?.isMuted, buttonIconSize],
     );
 
     return (
@@ -1877,17 +1707,6 @@ export const MessageInput = forwardRef<MessageInputRef, MessageInputProps>(
             {/* Right: voice button, contextual button (realtime/send/cancel) */}
             <View style={styles.rightButtonGroup}>
               {beforeVoiceContent}
-              <VoiceButtonTooltip
-                onVoicePress={handleVoicePress}
-                isDictationStartEnabled={isDictationStartEnabled}
-                voiceButtonAccessibilityLabel={voiceButtonAccessibilityLabel}
-                voiceButtonStyle={voiceButtonStyle}
-                renderVoiceButtonIcon={renderVoiceButtonIcon}
-                voiceTooltipText={voiceTooltipText}
-                isRealtimeVoiceForCurrentAgent={isRealtimeVoiceForCurrentAgent}
-                voiceMuteToggleKeys={voiceMuteToggleKeys}
-                dictationToggleKeys={dictationToggleKeys}
-              />
               {rightContent}
               <SendButtonTooltip
                 shouldShow={shouldShowSendButton}
@@ -2094,8 +1913,6 @@ const styles = StyleSheet.create((theme: Theme) => ({
 })) as unknown as Record<string, object>;
 
 const ThemedPaperclip = withUnistyles(Paperclip);
-const ThemedMic = withUnistyles(Mic);
-const ThemedMicOff = withUnistyles(MicOff);
 const ThemedArrowUp = withUnistyles(ArrowUp);
 const ThemedCornerDownLeft = withUnistyles(CornerDownLeft);
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
