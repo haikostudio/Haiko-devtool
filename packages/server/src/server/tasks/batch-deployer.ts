@@ -75,8 +75,15 @@ export interface TaskBatchDeployerOptions {
   readPublishedSha?: () => Promise<string | null>;
   /** Hands a deploy-then-confirm prompt to one card's own agent. */
   deployTask: (projectId: string, taskId: string) => Promise<unknown>;
-  /** Restarts the daemon — the last step of a successful self-host batch, when needed. */
+  /** Restarts the daemon — the last step of a successful self-host batch. */
   requestDaemonRestart: (reason: string) => void;
+  /**
+   * The commit the RUNNING engine was compiled from. Compared with the version
+   * that just went online to skip a restart that would reload the exact same code
+   * — the "two publications in a row" case. Absent means unknown, and an unknown
+   * answer must never suppress the restart.
+   */
+  readRunningEngineSha?: () => string | null;
   /**
    * Resolves once the grouped deploy agent has gone back to rest (posted its own
    * final verdict), or after a guard timeout. Awaited before the daemon restart
@@ -525,6 +532,24 @@ export class TaskBatchDeployer {
     }
   }
 
+  /**
+   * True when the running engine was compiled from the version that just went
+   * online. Both facts must be known and must agree — a missing marker, a missing
+   * published version, or two versions that merely look alike all mean "restart".
+   * Prefix-tolerant because one side may be a short sha.
+   */
+  private engineAlreadyRuns(publishedSha: string | null): boolean {
+    const running = this.options.readRunningEngineSha?.() ?? null;
+    if (!publishedSha || !running) {
+      return false;
+    }
+    const shortest = Math.min(publishedSha.length, running.length);
+    if (shortest < 7) {
+      return false;
+    }
+    return publishedSha.slice(0, shortest) === running.slice(0, shortest);
+  }
+
   /** Never lets an unreadable version marker break a successful publication. */
   private async readPublishedSha(): Promise<string | null> {
     try {
@@ -576,6 +601,22 @@ export class TaskBatchDeployer {
     // Restarting every time costs a few seconds of reconnect and removes a whole
     // class of ghost bugs.
     //
+    // ONE exception, and it is a fact rather than a guess: the engine is already
+    // executing the exact version that just went online (two publications in a row
+    // with no new commit between them). Reloading identical code would cut every
+    // session for nothing. An unknown version never takes this door.
+    if (this.engineAlreadyRuns(publishedSha)) {
+      await this.sayAll(
+        pending,
+        "✅ **Publication groupée** — le moteur exécute déjà cette version : pas de redémarrage nécessaire.",
+      );
+      this.logger.info(
+        { projectId, publishedSha },
+        "Final restart skipped: the engine already runs the published version",
+      );
+      await this.finishSuccessfully(projectId, url);
+      return;
+    }
     // The publication is live, but the grouped deploy agent may still be checking
     // the served version and writing its own closing verdict. Restarting now would
     // kill it mid-sentence and leave its chat frozen on "j'attends la fin…". So

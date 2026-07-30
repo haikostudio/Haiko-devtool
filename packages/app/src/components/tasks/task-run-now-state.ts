@@ -87,5 +87,25 @@ export function resolveRunNowState(
       retry: false,
     };
   }
+  // Run-now overrides the timing gates, but NOT the two physical ones: a sibling
+  // task holding the shared worktree, and a full set of launch slots. Pressing
+  // again cannot help, so the control names the hold instead of pretending the
+  // press was ignored.
+  if (schedule?.waitingBlocker === "shared_worktree") {
+    return {
+      labelKey: "tasks.panel.runNowWaitingSibling",
+      busy: false,
+      disabled: false,
+      retry: false,
+    };
+  }
+  if (schedule?.waitingBlocker === "slots_busy") {
+    return {
+      labelKey: "tasks.panel.runNowWaitingSlot",
+      busy: false,
+      disabled: false,
+      retry: false,
+    };
+  }
   return { labelKey: "tasks.actions.runNow", busy: false, disabled: false, retry: false };
 }

@@ -266,6 +266,11 @@ export class TaskScheduler {
       }
       for (const candidate of candidates) {
         if (this.inFlight.size >= MAX_CONCURRENT_TASK_AGENTS) {
+          // The ceiling stops the whole pass, so every card still waiting has the
+          // same answer. Saying it on each of them is the difference between
+          // "Lancement imminent" (a lie that lasted hours) and "tous les créneaux
+          // sont occupés". The loop used to just return, silently.
+          await this.markRemainingAsSlotsBusy(candidates, candidate);
           return;
         }
         if (this.inFlight.has(candidate.task.id)) {
@@ -277,6 +282,7 @@ export class TaskScheduler {
           ? `${candidate.projectId}:${candidate.folder.id}`
           : null;
         if (branchFolderKey && this.busyBranchFolders.has(branchFolderKey)) {
+          await this.setWaitingBlocker(candidate, "shared_worktree");
           continue;
         }
         if (!candidate.runNow) {
@@ -290,6 +296,10 @@ export class TaskScheduler {
           }
           await this.setWaitingReason(candidate, undefined);
         }
+        // Nothing holds this card back any more: it launches below, so drop any
+        // hold it was still wearing rather than leaving a stale explanation on a
+        // card that is starting.
+        await this.setWaitingBlocker(candidate, undefined);
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
         if (branchFolderKey) {
@@ -594,6 +604,59 @@ export class TaskScheduler {
         this.logger.warn(
           { err: error, taskId: candidate.task.id },
           "Failed to record task waiting reason",
+        );
+      });
+  }
+
+  /**
+   * The ceiling was reached at `stoppedAt`: that card and every candidate after it
+   * are waiting on a free slot, so all of them say so.
+   */
+  private async markRemainingAsSlotsBusy(
+    candidates: LaunchCandidate[],
+    stoppedAt: LaunchCandidate,
+  ): Promise<void> {
+    const from = candidates.indexOf(stoppedAt);
+    for (const candidate of candidates.slice(from < 0 ? 0 : from)) {
+      if (this.inFlight.has(candidate.task.id)) {
+        continue;
+      }
+      await this.setWaitingBlocker(candidate, "slots_busy");
+    }
+  }
+
+  /**
+   * Records the OTHER two holds — a sibling task owning the shared worktree, and
+   * "every launch slot is taken".
+   *
+   * Both used to be a bare `continue`/`return` in the tick loop, which is how a
+   * card sat in "Planifié" for hours wearing "Lancement imminent": the scheduler
+   * knew exactly why it was not launching and told nobody. Run-now goes through
+   * the same gates, so this is also what makes a press that cannot start yet say
+   * so instead of looking ignored.
+   */
+  private async setWaitingBlocker(
+    candidate: LaunchCandidate,
+    blocker: "shared_worktree" | "slots_busy" | undefined,
+  ): Promise<void> {
+    if (candidate.task.schedule?.waitingBlocker === blocker) {
+      return;
+    }
+    await this.taskBoardService
+      .patchTask(candidate.projectId, candidate.task.id, (current) => {
+        if (current.schedule?.state !== "awaiting_slot") {
+          return current;
+        }
+        const { waitingBlocker: _dropped, ...schedule } = current.schedule;
+        return {
+          ...current,
+          schedule: blocker === undefined ? schedule : { ...schedule, waitingBlocker: blocker },
+        };
+      })
+      .catch((error) => {
+        this.logger.warn(
+          { err: error, taskId: candidate.task.id },
+          "Failed to record task waiting blocker",
         );
       });
   }

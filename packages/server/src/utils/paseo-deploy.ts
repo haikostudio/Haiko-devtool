@@ -236,6 +236,16 @@ function getDaemonRunningSha(): string | null {
 }
 
 /**
+ * Same fact, for callers outside this module: the commit the running engine is
+ * actually executing. The batch publisher uses it to skip a pointless final
+ * restart when the version it just put online is already the one running (two
+ * publications in a row with no new commit in between).
+ */
+export function getRunningEngineSha(): string | null {
+  return getDaemonRunningSha();
+}
+
+/**
  * Count commits since the daemon's code was compiled that touch daemon-side code
  * — the real number of shipped-but-dormant features waiting for a restart.
  * Returns 0 when the running SHA is unknown or equals HEAD.

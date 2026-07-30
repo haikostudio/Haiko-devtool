@@ -413,18 +413,20 @@ only take effect after a daemon restart — instead of discovering it afterwards
 - **Never a guess.** An unresolved verdict (`null`: git unavailable, no baseline)
   leaves whatever the card already carried, so a flag an agent set by hand is
   never wiped.
-- **On the card.** `getPublishNotice` renders the verdict as a `StatusBadge`
-  beside the live status badge — same tinted-frame family as "Publication en
-  cours". Both outcomes speak: amber "Redémarrage
-  requis", or a quiet green "Republication simple" for app-only work. Silence is
-  reserved for "no verdict yet", so it can't be mistaken for "nothing to do". The
-  notice rides the card for the whole wait and **disappears once the work is
-  live** (column `deployed`, or a stamped `deployedUrl`).
+- **Not on the card any more.** The badge slot now answers a more useful question:
+  what the NEXT publication will do with this card. `getPublishNotice` renders a
+  quiet green "Partira à la prochaine publication" on every finished card — true
+  because the run sweeps them in — or an amber "Retirée du prochain lot" when the
+  user held it back. The restart wording is gone from it: a publication restarts
+  the engine every time, so "Redémarrage requis" no longer distinguished anything,
+  while a finished card shipping without notice genuinely surprised people. The
+  notice rides the card for the whole wait and **disappears once the work is live**
+  (a stamped `deployedAt` / `deployedUrl`).
 - **On the board.** `PendingPublishSummary` sits above the columns (same gutter
-  rule as the billable total) with one line — "3 cartes prêtes à publier, dont 1
-  nécessitant un redémarrage" — so the pending volume and the restart debt read
-  without opening a card. Archived cards are excluded; the line hides entirely
-  when nothing is pending, and drops the restart clause when none needs one.
+  rule as the billable total) with one line — "3 cartes prêtes à publier" — so the
+  pending volume reads without opening a card. Archived cards are excluded and the
+  line hides entirely when nothing is pending. It used to add "dont 1 nécessitant
+  un redémarrage"; `countPendingPublish` dropped that half for the same reason.
 
 ### Finishing the job — the restart itself
 

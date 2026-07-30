@@ -197,49 +197,39 @@ describe("getScheduleBadge", () => {
 });
 
 describe("getPublishNotice", () => {
-  it("warns a finished-but-unpublished card that the daemon will need a restart", () => {
-    expect(getPublishNotice(makeTask({ column: "done", needsDaemonRestart: true }))).toEqual({
-      labelKey: "tasks.card.needsRestart",
-      variant: "warning",
+  it("tells a finished card it will ship with the next publication", () => {
+    // A publication builds the whole checkout, so a finished card rides it even
+    // if nobody queued it. Announcing the departure is what makes it a decision.
+    expect(getPublishNotice(makeTask({ column: "done" }))).toEqual({
+      labelKey: "tasks.card.ridesNextPublish",
+      variant: "success",
     });
-  });
-
-  it("says out loud that an app-only card just needs republishing", () => {
-    // Silence would be indistinguishable from "the daemon hasn't answered yet".
-    expect(getPublishNotice(makeTask({ column: "done", needsDaemonRestart: false }))).toEqual({
-      labelKey: "tasks.card.republishOnly",
+    expect(getPublishNotice(makeTask({ column: "deployed" }))).toEqual({
+      labelKey: "tasks.card.ridesNextPublish",
       variant: "success",
     });
   });
 
-  it("shows nothing while the verdict is unknown", () => {
-    expect(getPublishNotice(makeTask({ column: "done" }))).toBeNull();
+  it("says instead when the card was held out of the next batch", () => {
+    expect(getPublishNotice(makeTask({ column: "done", deployHold: true }))).toEqual({
+      labelKey: "tasks.card.publishHeld",
+      variant: "warning",
+    });
+  });
+
+  it("shows nothing on a card that is not finished", () => {
+    expect(getPublishNotice(makeTask({ column: "in_progress" }))).toBeNull();
+    expect(getPublishNotice(makeTask({ column: "backlog" }))).toBeNull();
   });
 
   it("drops the notice once the work is live", () => {
     // The truths that mean "published": the deploy stamp and the stamped URL.
     // The column is NOT one of them — "À déployer" is where a card waits.
     expect(
-      getPublishNotice(
-        makeTask({
-          column: "deployed",
-          needsDaemonRestart: true,
-          deployedAt: "2026-07-28T12:00:00.000Z",
-        }),
-      ),
+      getPublishNotice(makeTask({ column: "deployed", deployedAt: "2026-07-28T12:00:00.000Z" })),
     ).toBeNull();
-    expect(getPublishNotice(makeTask({ column: "deployed", needsDaemonRestart: true }))).toEqual({
-      labelKey: "tasks.card.needsRestart",
-      variant: "warning",
-    });
     expect(
-      getPublishNotice(
-        makeTask({
-          column: "done",
-          needsDaemonRestart: true,
-          deployedUrl: "https://app.example.com",
-        }),
-      ),
+      getPublishNotice(makeTask({ column: "done", deployedUrl: "https://app.example.com" })),
     ).toBeNull();
   });
 });

@@ -20,13 +20,13 @@ function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
 }
 
 describe("countPendingPublish", () => {
-  it("counts finished cards that are not live yet, and the restarts among them", () => {
+  it("counts finished cards that are not live yet", () => {
     const counts = countPendingPublish([
       makeTask({ id: "a", needsDaemonRestart: true }),
       makeTask({ id: "b", needsDaemonRestart: false }),
       makeTask({ id: "c" }),
     ]);
-    expect(counts).toEqual({ pending: 3, needingRestart: 1 });
+    expect(counts).toEqual({ pending: 3 });
   });
 
   it("ignores cards that are already live", () => {
@@ -35,7 +35,7 @@ describe("countPendingPublish", () => {
       makeTask({ id: "b", deployedUrl: "https://app.example.com", needsDaemonRestart: true }),
       makeTask({ id: "c", deployment: { state: "deployed" } }),
     ]);
-    expect(counts).toEqual({ pending: 0, needingRestart: 0 });
+    expect(counts).toEqual({ pending: 0 });
   });
 
   it("counts the cards queued in « À déployer » — queued is not published", () => {
@@ -43,7 +43,7 @@ describe("countPendingPublish", () => {
       makeTask({ id: "a", column: "deployed", needsDaemonRestart: true }),
       makeTask({ id: "b", column: "deployed", needsDaemonRestart: false }),
     ]);
-    expect(counts).toEqual({ pending: 2, needingRestart: 1 });
+    expect(counts).toEqual({ pending: 2 });
   });
 
   it("ignores cards that are not finished", () => {
@@ -52,17 +52,17 @@ describe("countPendingPublish", () => {
       makeTask({ id: "b", column: "backlog" }),
       makeTask({ id: "c", column: "notes" }),
     ]);
-    expect(counts).toEqual({ pending: 0, needingRestart: 0 });
+    expect(counts).toEqual({ pending: 0 });
   });
 
   it("ignores archived cards — the user filed them away", () => {
     const counts = countPendingPublish([
       makeTask({ id: "a", archivedAt: "2026-07-28T12:00:00.000Z", needsDaemonRestart: true }),
     ]);
-    expect(counts).toEqual({ pending: 0, needingRestart: 0 });
+    expect(counts).toEqual({ pending: 0 });
   });
 
   it("counts nothing on an empty board", () => {
-    expect(countPendingPublish([])).toEqual({ pending: 0, needingRestart: 0 });
+    expect(countPendingPublish([])).toEqual({ pending: 0 });
   });
 });
