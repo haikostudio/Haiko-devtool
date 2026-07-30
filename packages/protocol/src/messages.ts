@@ -3200,6 +3200,8 @@ export const ServerInfoStatusPayloadSchema = z
         sessionUiStateSync: z.boolean().optional(),
         // COMPAT(brainMemory): added in v0.1.X, drop the gate when floor >= v0.1.X.
         brainMemory: z.boolean().optional(),
+        // COMPAT(projectPromptSync): added in v0.2.X, remove gate after 2027-01-30.
+        projectPromptSync: z.boolean().optional(),
         // COMPAT(messageTriage): added in v0.1.X, drop the gate when floor >= v0.1.X.
         messageTriage: z.boolean().optional(),
         // COMPAT(tasksBoard): added in v0.1.109, drop the gate when floor >= v0.1.109.
@@ -4200,6 +4202,13 @@ export const ReadProjectConfigResponseMessageSchema = z.object({
       ok: z.literal(true),
       config: PaseoConfigRawSchema.nullable(),
       revision: PaseoConfigRevisionSchema.nullable(),
+      // COMPAT(projectPromptSync): added in v0.2.X, old daemons omit this status.
+      projectPromptSync: z
+        .object({
+          lastSyncedAt: z.string().nullable(),
+          recentFiles: z.array(z.string()),
+        })
+        .optional(),
     }),
     z.object({
       requestId: z.string(),
@@ -4221,6 +4230,13 @@ export const WriteProjectConfigResponseMessageSchema = z.object({
       ok: z.literal(true),
       config: PaseoConfigRawSchema,
       revision: PaseoConfigRevisionSchema,
+      // COMPAT(projectPromptSync): added in v0.2.X, old daemons omit this status.
+      projectPromptSync: z
+        .object({
+          lastSyncedAt: z.string().nullable(),
+          recentFiles: z.array(z.string()),
+        })
+        .optional(),
     }),
     z.object({
       requestId: z.string(),

@@ -16,6 +16,13 @@ function emptyDraft(): ProjectConfigDraft {
       pullRequest: "",
     },
     metadataGenerationBase: undefined,
+    projectPromptSync: {
+      includeVersion: true,
+      includeChangedFiles: true,
+      includeWorkspaces: true,
+      includeRemote: true,
+      includeInstructionFiles: true,
+    },
   };
 }
 
@@ -66,6 +73,19 @@ describe("configToDraft", () => {
 });
 
 describe("applyDraftToConfig", () => {
+  it("saves project prompt choices only when the host supports them", () => {
+    const draft = configToDraft(null);
+    draft.projectPromptSync.includeRemote = false;
+
+    expect(applyDraftToConfig({ draft, base: null })).toEqual({});
+    expect(applyDraftToConfig({ draft, base: null, saveProjectPromptSync: true })).toMatchObject({
+      projectPromptSync: {
+        includeRemote: false,
+        includeVersion: true,
+      },
+    });
+  });
+
   it("preserves the original string kind when editing an existing setup field", () => {
     const base: PaseoConfigRaw = { worktree: { setup: "npm install" } };
     const draft = configToDraft(base);

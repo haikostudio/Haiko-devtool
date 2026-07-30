@@ -698,13 +698,15 @@ export class Session {
   private readonly workspaceScripts: WorkspaceScriptsService;
   private readonly createAgentLifecycleDispatch: CreateAgentLifecycleDispatch;
 
+  // Session construction wires independent subsystems; runtime branching lives in those subsystems.
+  // eslint-disable-next-line complexity
   constructor(options: SessionOptions) {
     const {
       clientId,
       appVersion,
       clientCapabilities,
       onMessage,
-      onBinaryMessage,
+      onBinaryMessage = null,
       getTransportBufferedAmount,
       onLifecycleIntent,
       logger,
@@ -771,7 +773,7 @@ export class Session {
     this.clientCapabilities = parseClientCapabilities(clientCapabilities);
     this.sessionId = uuidv4();
     this.onMessage = onMessage;
-    this.onBinaryMessage = onBinaryMessage ?? null;
+    this.onBinaryMessage = onBinaryMessage;
     this.getTransportBufferedAmount = getTransportBufferedAmount ?? (() => 0);
     this.onLifecycleIntent = onLifecycleIntent ?? null;
     this.pushTokenStore = pushTokenStore;
@@ -948,11 +950,10 @@ export class Session {
       },
       logger: this.sessionLogger,
     });
-    this.projectConfigSession = new ProjectConfigSession({
-      host: {
-        emit: (msg) => this.emit(msg),
-      },
+    this.projectConfigSession = createProjectConfigSession({
+      emit: this.emit.bind(this),
       projectRegistry: this.projectRegistry,
+      paseoHome: this.paseoHome,
       logger: this.sessionLogger,
     });
     this.daemonSession = new DaemonSession({
@@ -7412,6 +7413,20 @@ export class Session {
 
     this.workspaceGitObserver.dispose();
   }
+}
+
+function createProjectConfigSession(input: {
+  emit: (message: SessionOutboundMessage) => void;
+  projectRegistry: ProjectRegistry;
+  paseoHome: string;
+  logger: pino.Logger;
+}): ProjectConfigSession {
+  return new ProjectConfigSession({
+    host: { emit: input.emit },
+    projectRegistry: input.projectRegistry,
+    paseoHome: input.paseoHome,
+    logger: input.logger,
+  });
 }
 
 interface CloneRepositoryInput {

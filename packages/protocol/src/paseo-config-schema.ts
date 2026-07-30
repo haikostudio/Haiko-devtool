@@ -71,11 +71,23 @@ export const PaseoMetadataGenerationSchema = z
   .passthrough()
   .catch({});
 
+export const PaseoProjectPromptSyncSchema = z
+  .object({
+    includeVersion: z.boolean().optional(),
+    includeChangedFiles: z.boolean().optional(),
+    includeWorkspaces: z.boolean().optional(),
+    includeRemote: z.boolean().optional(),
+    includeInstructionFiles: z.boolean().optional(),
+  })
+  .passthrough()
+  .catch({});
+
 export const PaseoConfigRawSchema = z
   .object({
     worktree: PaseoWorktreeConfigRawSchema.optional(),
     scripts: z.record(z.string(), PaseoScriptEntryRawSchema).optional(),
     metadataGeneration: PaseoMetadataGenerationSchema.optional(),
+    projectPromptSync: PaseoProjectPromptSyncSchema.optional(),
   })
   .passthrough();
 
@@ -92,6 +104,7 @@ export const PaseoConfigSchema = PaseoConfigRawSchema.extend({
   worktree: WorktreeConfigSchema.optional(),
   scripts: z.record(z.string(), ScriptEntrySchema).optional().catch({}),
   metadataGeneration: PaseoMetadataGenerationSchema.optional(),
+  projectPromptSync: PaseoProjectPromptSyncSchema.optional(),
 })
   .passthrough()
   .catch({});
@@ -114,6 +127,7 @@ export const ProjectConfigRpcErrorSchema = z.discriminatedUnion("code", [
 export type PaseoScriptEntryRaw = z.infer<typeof PaseoScriptEntryRawSchema>;
 export type PaseoMetadataGenerationEntry = z.infer<typeof PaseoMetadataGenerationEntrySchema>;
 export type PaseoMetadataGeneration = z.infer<typeof PaseoMetadataGenerationSchema>;
+export type PaseoProjectPromptSync = z.infer<typeof PaseoProjectPromptSyncSchema>;
 export type PaseoServicePortAllocation = z.infer<typeof PaseoServicePortAllocationSchema>;
 export type PaseoConfigRaw = z.infer<typeof PaseoConfigRawSchema>;
 export type PaseoConfig = z.infer<typeof PaseoConfigSchema>;

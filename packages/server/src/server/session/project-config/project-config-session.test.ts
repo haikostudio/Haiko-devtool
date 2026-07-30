@@ -39,6 +39,7 @@ function makeSubsystem(records: PersistedProjectRecord[]) {
   const subsystem = new ProjectConfigSession({
     host,
     projectRegistry: { list: async () => records },
+    paseoHome: records[0]?.rootPath ?? makeRoot(),
     logger: pino({ level: "silent" }),
   });
   return { subsystem, emitted };
@@ -68,6 +69,7 @@ describe("ProjectConfigSession", () => {
             mtimeMs: expect.any(Number),
             size: expect.any(Number),
           }),
+          projectPromptSync: { lastSyncedAt: null, recentFiles: [] },
         },
       },
     ]);
@@ -104,6 +106,7 @@ describe("ProjectConfigSession", () => {
               mtimeMs: expect.any(Number),
               size: expect.any(Number),
             }),
+            projectPromptSync: { lastSyncedAt: null, recentFiles: [] },
           },
         },
       ]);
@@ -174,6 +177,7 @@ describe("ProjectConfigSession", () => {
             mtimeMs: expect.any(Number),
             size: expect.any(Number),
           }),
+          projectPromptSync: { lastSyncedAt: null, recentFiles: [] },
         },
       },
     ]);

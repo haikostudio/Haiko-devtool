@@ -13,12 +13,20 @@ import type {
 import type { WorkspaceGitService } from "./workspace-git-service.js";
 import { writePrivateFileAtomicSync } from "./private-files.js";
 import { areEquivalentPaths, isPathInsideRoot } from "../utils/path.js";
+import { readPaseoConfigForEdit } from "../utils/paseo-config-file.js";
 
 const execFileAsync = promisify(execFile);
 const PROJECT_PROMPT_SYNC_DEBOUNCE_MS = 250;
 const PROJECT_PROMPT_HISTORY_LIMIT = 20;
 const PROJECT_PROMPT_CHANGED_PATH_LIMIT = 12;
 const PROJECT_PROMPT_WORKSPACE_LIMIT = 12;
+const PROJECT_PROMPT_OUTPUTS = [
+  { filename: "CLAUDE.md", providerLabel: "Claude" },
+  {
+    filename: "AGENTS.md",
+    providerLabel: "Paseo agents (Codex, Copilot, OpenCode, Pi, and future providers)",
+  },
+] as const;
 
 const ProjectPromptSyncHistoryEntrySchema = z.object({
   syncedAt: z.string(),
@@ -26,6 +34,7 @@ const ProjectPromptSyncHistoryEntrySchema = z.object({
   branch: z.string().nullable(),
   headSha: z.string().nullable(),
   dirtyFileCount: z.number().int().nonnegative(),
+  changedFiles: z.array(z.string()).default([]),
 });
 
 const ProjectPromptSyncStateSchema = z.object({
@@ -65,7 +74,21 @@ interface PromptProjectSnapshot {
   git: PromptGitSnapshot;
   workspaces: PromptWorkspaceSummary[];
   manualInstructionFiles: string[];
+  preferences: ProjectPromptPreferences;
   fingerprint: string;
+}
+
+interface ProjectPromptPreferences {
+  includeVersion: boolean;
+  includeChangedFiles: boolean;
+  includeWorkspaces: boolean;
+  includeRemote: boolean;
+  includeInstructionFiles: boolean;
+}
+
+export interface ProjectPromptSyncStatus {
+  lastSyncedAt: string | null;
+  recentFiles: string[];
 }
 
 interface PromptCacheEntry {
@@ -242,9 +265,9 @@ export class ProjectPromptSyncService {
     this.promptCache.set(project.projectId, nextEntry);
 
     const filesExist =
-      existsSync(this.getClaudePromptPath(snapshot.slug)) &&
-      existsSync(this.getAgentsPromptPath(snapshot.slug)) &&
-      existsSync(statePath);
+      PROJECT_PROMPT_OUTPUTS.every((output) =>
+        existsSync(this.getPromptPath(snapshot.slug, output.filename)),
+      ) && existsSync(statePath);
 
     if (currentState?.latestFingerprint === snapshot.fingerprint && filesExist) {
       return nextEntry;
@@ -255,14 +278,17 @@ export class ProjectPromptSyncService {
       snapshot,
     });
     writePrivateFileAtomicSync(statePath, `${JSON.stringify(nextState, null, 2)}\n`);
-    writePrivateFileAtomicSync(
-      this.getClaudePromptPath(snapshot.slug),
-      renderInstructionFile({ providerLabel: "Claude", snapshot, prompt, state: nextState }),
-    );
-    writePrivateFileAtomicSync(
-      this.getAgentsPromptPath(snapshot.slug),
-      renderInstructionFile({ providerLabel: "GPT / Codex", snapshot, prompt, state: nextState }),
-    );
+    for (const output of PROJECT_PROMPT_OUTPUTS) {
+      writePrivateFileAtomicSync(
+        this.getPromptPath(snapshot.slug, output.filename),
+        renderInstructionFile({
+          providerLabel: output.providerLabel,
+          snapshot,
+          prompt,
+          state: nextState,
+        }),
+      );
+    }
     this.logger.debug(
       {
         projectId: project.projectId,
@@ -291,13 +317,24 @@ export class ProjectPromptSyncService {
     const manualInstructionFiles = ["CLAUDE.md", "AGENTS.md"].filter((filename) =>
       existsSync(path.join(project.rootPath, filename)),
     );
+    const preferences = readProjectPromptPreferences(project.rootPath);
     const slug = `${slugify(project.displayName || path.basename(project.rootPath))}-${project.projectId}`;
     const fingerprint = createFingerprint({
       projectId: project.projectId,
       rootPath: project.rootPath,
-      git,
-      workspaces,
-      manualInstructionFiles,
+      version: preferences.includeVersion
+        ? {
+            projectKind: git.projectKind,
+            branch: git.branch,
+            headSha: git.headSha,
+            headSummary: git.headSummary,
+          }
+        : null,
+      remoteUrl: preferences.includeRemote ? git.remoteUrl : null,
+      dirtyFiles: preferences.includeChangedFiles ? git.dirtyFiles : [],
+      workspaces: preferences.includeWorkspaces ? workspaces : [],
+      manualInstructionFiles: preferences.includeInstructionFiles ? manualInstructionFiles : [],
+      preferences,
     });
     return {
       projectId: project.projectId,
@@ -308,6 +345,7 @@ export class ProjectPromptSyncService {
       git,
       workspaces,
       manualInstructionFiles,
+      preferences,
       fingerprint,
     };
   }
@@ -366,12 +404,8 @@ export class ProjectPromptSyncService {
     return path.join(this.baseDirectory, slug, "state.json");
   }
 
-  private getClaudePromptPath(slug: string): string {
-    return path.join(this.baseDirectory, slug, "CLAUDE.md");
-  }
-
-  private getAgentsPromptPath(slug: string): string {
-    return path.join(this.baseDirectory, slug, "AGENTS.md");
+  private getPromptPath(slug: string, filename: string): string {
+    return path.join(this.baseDirectory, slug, filename);
   }
 }
 
@@ -463,7 +497,12 @@ function buildProjectPromptSyncState(input: {
     fingerprint: input.snapshot.fingerprint,
     branch: input.snapshot.git.branch,
     headSha: input.snapshot.git.headSha,
-    dirtyFileCount: input.snapshot.git.dirtyFiles.length,
+    dirtyFileCount: input.snapshot.preferences.includeChangedFiles
+      ? input.snapshot.git.dirtyFiles.length
+      : 0,
+    changedFiles: input.snapshot.preferences.includeChangedFiles
+      ? input.snapshot.git.dirtyFiles
+      : [],
   };
   const previousHistory = input.currentState?.history ?? [];
   const history =
@@ -488,39 +527,52 @@ function renderSharedPrompt(snapshot: PromptProjectSnapshot): string {
     `Project: ${snapshot.projectDisplayName}`,
     `Project root: ${snapshot.rootPath}`,
     `Synced at: ${snapshot.syncedAt}`,
-    `Project kind: ${snapshot.git.projectKind === "git" ? "git repository" : "directory"}`,
-    `Current branch: ${snapshot.git.branch ?? "none"}`,
-    `HEAD commit: ${snapshot.git.headSha ?? "none"}`,
-    `Last commit title: ${snapshot.git.headSummary ?? "none"}`,
-    `Remote: ${snapshot.git.remoteUrl ?? "none"}`,
-    snapshot.git.dirtyFiles.length === 0
-      ? "Working tree: clean"
-      : `Working tree: ${snapshot.git.dirtyFiles.length} local change(s)`,
   ];
 
-  if (snapshot.git.dirtyFiles.length > 0) {
-    lines.push("Recent changed paths:");
+  if (snapshot.preferences.includeVersion) {
+    lines.push(
+      `Project kind: ${snapshot.git.projectKind === "git" ? "git repository" : "directory"}`,
+      `Current branch: ${snapshot.git.branch ?? "none"}`,
+      `HEAD commit: ${snapshot.git.headSha ?? "none"}`,
+      `Last commit title: ${snapshot.git.headSummary ?? "none"}`,
+    );
+  }
+
+  if (snapshot.preferences.includeRemote) {
+    lines.push(`Remote: ${snapshot.git.remoteUrl ?? "none"}`);
+  }
+
+  if (snapshot.preferences.includeChangedFiles) {
+    lines.push(
+      snapshot.git.dirtyFiles.length === 0
+        ? "Latest file changes: none"
+        : `Latest file changes: ${snapshot.git.dirtyFiles.length} file(s) currently touched`,
+    );
     for (const changedPath of snapshot.git.dirtyFiles) {
       lines.push(`- ${changedPath}`);
     }
   }
 
-  if (snapshot.workspaces.length === 0) {
-    lines.push("Active workspaces: none");
-  } else {
-    lines.push("Active workspaces:");
-    for (const workspace of snapshot.workspaces) {
-      lines.push(
-        `- ${workspace.displayName} | ${workspace.kind} | branch=${workspace.branch ?? "none"} | cwd=${workspace.cwd}`,
-      );
+  if (snapshot.preferences.includeWorkspaces) {
+    if (snapshot.workspaces.length === 0) {
+      lines.push("Active workspaces: none");
+    } else {
+      lines.push("Active workspaces:");
+      for (const workspace of snapshot.workspaces) {
+        lines.push(
+          `- ${workspace.displayName} | ${workspace.kind} | branch=${workspace.branch ?? "none"} | cwd=${workspace.cwd}`,
+        );
+      }
     }
   }
 
-  lines.push(
-    snapshot.manualInstructionFiles.length === 0
-      ? "Manual project instruction files: none in the project root"
-      : `Manual project instruction files in the project root: ${snapshot.manualInstructionFiles.join(", ")}`,
-  );
+  if (snapshot.preferences.includeInstructionFiles) {
+    lines.push(
+      snapshot.manualInstructionFiles.length === 0
+        ? "Manual project instruction files: none in the project root"
+        : `Manual project instruction files in the project root: ${snapshot.manualInstructionFiles.join(", ")}`,
+    );
+  }
   lines.push(
     "Use this state to keep answers and plans aligned with the current project, even when the repo has changed since the conversation started.",
   );
@@ -547,9 +599,17 @@ function renderInstructionFile(input: {
     "",
   ];
   for (const entry of input.state.history) {
-    lines.push(
-      `- ${entry.syncedAt} | branch=${entry.branch ?? "none"} | head=${entry.headSha ?? "none"} | dirty=${entry.dirtyFileCount}`,
-    );
+    const details = [`- ${entry.syncedAt}`];
+    if (input.snapshot.preferences.includeVersion) {
+      details.push(`branch=${entry.branch ?? "none"}`, `head=${entry.headSha ?? "none"}`);
+    }
+    if (input.snapshot.preferences.includeChangedFiles) {
+      details.push(`changed=${entry.dirtyFileCount}`);
+    }
+    lines.push(details.join(" | "));
+    if (input.snapshot.preferences.includeChangedFiles && entry.changedFiles.length > 0) {
+      lines.push(`  Files: ${entry.changedFiles.join(", ")}`);
+    }
   }
   lines.push("");
   return `${lines.join("\n")}\n`;
@@ -564,6 +624,37 @@ function loadProjectPromptSyncState(filePath: string): ProjectPromptSyncState | 
   } catch {
     return null;
   }
+}
+
+export function readProjectPromptSyncStatus(input: {
+  paseoHome: string;
+  project: PersistedProjectRecord;
+}): ProjectPromptSyncStatus {
+  const slug = `${slugify(
+    input.project.displayName || path.basename(input.project.rootPath),
+  )}-${input.project.projectId}`;
+  const state = loadProjectPromptSyncState(
+    path.join(input.paseoHome, "project-prompts", slug, "state.json"),
+  );
+  if (!state) {
+    return { lastSyncedAt: null, recentFiles: [] };
+  }
+  return {
+    lastSyncedAt: state.lastSyncedAt,
+    recentFiles: state.history[0]?.changedFiles ?? [],
+  };
+}
+
+function readProjectPromptPreferences(rootPath: string): ProjectPromptPreferences {
+  const config = readPaseoConfigForEdit(rootPath);
+  const preferences = config.ok ? config.config?.projectPromptSync : undefined;
+  return {
+    includeVersion: preferences?.includeVersion ?? true,
+    includeChangedFiles: preferences?.includeChangedFiles ?? true,
+    includeWorkspaces: preferences?.includeWorkspaces ?? true,
+    includeRemote: preferences?.includeRemote ?? true,
+    includeInstructionFiles: preferences?.includeInstructionFiles ?? true,
+  };
 }
 
 function wrapProjectPrompt(projectPrompt: string, userText: string): string {

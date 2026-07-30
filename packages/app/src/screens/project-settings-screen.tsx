@@ -34,6 +34,7 @@ import { settingsStyles } from "@/styles/settings";
 import { useProjects } from "@/hooks/use-projects";
 import { useProjectIconDataByProjectKey } from "@/projects/project-icons";
 import { useHostRuntimeClient, useHostRuntimeSnapshot } from "@/runtime/host-runtime";
+import { useHostFeature } from "@/runtime/host-features";
 import { useToast } from "@/contexts/toast-context";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import {
@@ -43,10 +44,12 @@ import {
   type LifecycleOriginalKind,
   type MetadataPromptKey,
   type ProjectConfigDraft,
+  type ProjectPromptSyncDraft,
   type ProjectScriptDraft,
 } from "@/utils/project-config-form";
 import { buildProjectsSettingsRoute } from "@/utils/host-routes";
 import type { ProjectHostEntry, ProjectSummary } from "@/utils/projects";
+import { formatTimeAgo } from "@/utils/time";
 
 const SCRIPT_SERVICE_TYPE = "service";
 
@@ -83,6 +86,7 @@ const METADATA_PROMPT_FIELDS: Record<MetadataPromptKey, MetadataPromptField> = {
 const WORKTREE_DOCS_URL = "https://paseo.sh/docs/worktrees";
 
 type ReadProjectConfigData = Awaited<ReturnType<DaemonClient["readProjectConfig"]>>;
+type ProjectPromptSyncStatus = Extract<ReadProjectConfigData, { ok: true }>["projectPromptSync"];
 
 export interface ProjectSettingsScreenProps {
   projectKey: string;
@@ -108,6 +112,7 @@ export default function ProjectSettingsScreen({ projectKey }: ProjectSettingsScr
   }, [editableHosts, selectedServerId]);
 
   const selectedSnapshot = useHostRuntimeSnapshot(selectedServerId);
+  const supportsProjectPromptSync = useHostFeature(selectedServerId, "projectPromptSync");
   const isHostGone =
     Boolean(selectedServerId) &&
     (selectedSnapshot?.connectionStatus === "offline" ||
@@ -128,6 +133,7 @@ export default function ProjectSettingsScreen({ projectKey }: ProjectSettingsScr
       onSelectHost={setSelectedServerId}
       client={client}
       isHostGone={isHostGone}
+      supportsProjectPromptSync={supportsProjectPromptSync}
     />
   );
 }
@@ -167,6 +173,7 @@ interface ProjectSettingsBodyProps {
   onSelectHost: (serverId: string) => void;
   client: DaemonClient;
   isHostGone: boolean;
+  supportsProjectPromptSync: boolean;
 }
 
 function ProjectSettingsBody({
@@ -176,6 +183,7 @@ function ProjectSettingsBody({
   onSelectHost,
   client,
   isHostGone,
+  supportsProjectPromptSync,
 }: ProjectSettingsBodyProps) {
   const queryKey = useMemo(
     () => ["project-config", selectedHost.serverId, selectedHost.repoRoot] as const,
@@ -186,6 +194,7 @@ function ProjectSettingsBody({
     queryKey,
     queryFn: () => client.readProjectConfig(selectedHost.repoRoot),
     retry: false,
+    refetchInterval: 15_000,
   });
 
   const data = readQuery.data;
@@ -239,6 +248,7 @@ function ProjectSettingsBody({
         onReload: handleReload,
         hasMultipleHosts,
         isHostGone,
+        supportsProjectPromptSync,
       })}
     </View>
   );
@@ -256,6 +266,7 @@ interface RenderContentInput {
   onReload: () => void;
   hasMultipleHosts: boolean;
   isHostGone: boolean;
+  supportsProjectPromptSync: boolean;
 }
 
 function renderContent({
@@ -270,6 +281,7 @@ function renderContent({
   onReload,
   hasMultipleHosts,
   isHostGone,
+  supportsProjectPromptSync,
 }: RenderContentInput) {
   if (readQuery.isLoading) {
     return (
@@ -319,6 +331,8 @@ function renderContent({
       key={formKey}
       baseConfig={loadedConfig}
       revision={loadedRevision}
+      projectPromptSyncStatus={readQuery.data?.ok ? readQuery.data.projectPromptSync : undefined}
+      supportsProjectPromptSync={supportsProjectPromptSync}
       repoRoot={selectedHost.repoRoot}
       serverId={selectedHost.serverId}
       projectId={projectId}
@@ -406,6 +420,8 @@ function errorToDetail(error: unknown): string | null {
 interface ProjectConfigFormProps {
   baseConfig: PaseoConfigRaw;
   revision: PaseoConfigRevision | null;
+  projectPromptSyncStatus: ProjectPromptSyncStatus;
+  supportsProjectPromptSync: boolean;
   repoRoot: string;
   serverId: string;
   projectId: string;
@@ -417,6 +433,8 @@ interface ProjectConfigFormProps {
 function ProjectConfigForm({
   baseConfig,
   revision,
+  projectPromptSyncStatus,
+  supportsProjectPromptSync,
   repoRoot,
   serverId,
   projectId,
@@ -451,6 +469,7 @@ function ProjectConfigForm({
           revision: result.revision,
           requestId: "local-cache",
           repoRoot,
+          projectPromptSync: result.projectPromptSync,
         });
         setWriteError(null);
         queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -463,9 +482,13 @@ function ProjectConfigForm({
 
   const handleSave = useCallback(() => {
     if (writeError?.code === "stale_project_config") return;
-    const config = applyDraftToConfig({ draft, base: baseConfig });
+    const config = applyDraftToConfig({
+      draft,
+      base: baseConfig,
+      saveProjectPromptSync: supportsProjectPromptSync,
+    });
     saveMutation.mutate({ config, expectedRevision: revision });
-  }, [draft, baseConfig, revision, writeError, saveMutation]);
+  }, [draft, baseConfig, supportsProjectPromptSync, revision, writeError, saveMutation]);
 
   const handleReload = useCallback(() => {
     setWriteError(null);
@@ -490,6 +513,14 @@ function ProjectConfigForm({
       updateDraft((d) => ({
         ...d,
         metadataPrompts: { ...d.metadataPrompts, [key]: text },
+      })),
+    [updateDraft],
+  );
+  const handleProjectPromptSyncChange = useCallback(
+    (key: keyof ProjectPromptSyncDraft, enabled: boolean) =>
+      updateDraft((current) => ({
+        ...current,
+        projectPromptSync: { ...current.projectPromptSync, [key]: enabled },
       })),
     [updateDraft],
   );
@@ -623,6 +654,13 @@ function ProjectConfigForm({
   return (
     <View>
       <ProjectBillingSection serverId={serverId} projectId={projectId} />
+      {supportsProjectPromptSync ? (
+        <ProjectPromptSyncGroup
+          status={projectPromptSyncStatus}
+          value={draft.projectPromptSync}
+          onChange={handleProjectPromptSyncChange}
+        />
+      ) : null}
       <SettingsGroup
         title={t("settings.project.worktree.title")}
         info={t("settings.project.worktree.info")}
@@ -771,6 +809,98 @@ function ProjectConfigForm({
           onSave={handleSaveEditing}
         />
       ) : null}
+    </View>
+  );
+}
+
+interface ProjectPromptSyncGroupProps {
+  status: ProjectPromptSyncStatus;
+  value: ProjectPromptSyncDraft;
+  onChange(key: keyof ProjectPromptSyncDraft, enabled: boolean): void;
+}
+
+const PROJECT_PROMPT_SYNC_FIELDS: ReadonlyArray<{
+  key: keyof ProjectPromptSyncDraft;
+  labelKey: string;
+}> = [
+  { key: "includeVersion", labelKey: "settings.project.promptSync.version" },
+  { key: "includeChangedFiles", labelKey: "settings.project.promptSync.changedFiles" },
+  { key: "includeWorkspaces", labelKey: "settings.project.promptSync.workspaces" },
+  { key: "includeRemote", labelKey: "settings.project.promptSync.remote" },
+  {
+    key: "includeInstructionFiles",
+    labelKey: "settings.project.promptSync.instructionFiles",
+  },
+];
+
+function ProjectPromptSyncGroup({ status, value, onChange }: ProjectPromptSyncGroupProps) {
+  const { t } = useTranslation();
+  const lastSyncedAt = status?.lastSyncedAt;
+  const syncedDate = lastSyncedAt ? new Date(lastSyncedAt) : null;
+  const hasValidDate = syncedDate !== null && !Number.isNaN(syncedDate.getTime());
+  const statusText = hasValidDate
+    ? t("settings.project.promptSync.lastSynced", {
+        time: formatTimeAgo(syncedDate),
+      })
+    : t("settings.project.promptSync.waiting");
+  const recentFiles = status?.recentFiles ?? [];
+  const recentFilesText =
+    recentFiles.length > 0
+      ? t("settings.project.promptSync.recentFiles", {
+          files: recentFiles.slice(0, 3).join(", "),
+        })
+      : t("settings.project.promptSync.noRecentFiles");
+
+  return (
+    <SettingsGroup
+      title={t("settings.project.promptSync.title")}
+      info={t("settings.project.promptSync.info")}
+      testID="project-prompt-sync-group"
+    >
+      <View style={settingsStyles.card}>
+        <View style={settingsStyles.row} testID="project-prompt-sync-status">
+          <View style={styles.promptSyncStatusContent}>
+            <View style={[styles.promptSyncDot, hasValidDate ? styles.promptSyncDotReady : null]} />
+            <View style={settingsStyles.rowContent}>
+              <Text style={settingsStyles.rowTitle}>{statusText}</Text>
+              <Text style={settingsStyles.rowHint}>{recentFilesText}</Text>
+            </View>
+          </View>
+        </View>
+        {PROJECT_PROMPT_SYNC_FIELDS.map((field) => (
+          <ProjectPromptSyncFieldRow
+            key={field.key}
+            field={field}
+            value={value[field.key]}
+            onChange={onChange}
+          />
+        ))}
+      </View>
+    </SettingsGroup>
+  );
+}
+
+interface ProjectPromptSyncFieldRowProps {
+  field: (typeof PROJECT_PROMPT_SYNC_FIELDS)[number];
+  value: boolean;
+  onChange(key: keyof ProjectPromptSyncDraft, enabled: boolean): void;
+}
+
+function ProjectPromptSyncFieldRow({ field, value, onChange }: ProjectPromptSyncFieldRowProps) {
+  const { t } = useTranslation();
+  const handleChange = useCallback(
+    (enabled: boolean) => onChange(field.key, enabled),
+    [field.key, onChange],
+  );
+  return (
+    <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+      <Text style={[settingsStyles.rowTitle, styles.promptSyncLabel]}>{t(field.labelKey)}</Text>
+      <Switch
+        value={value}
+        onValueChange={handleChange}
+        accessibilityLabel={t(field.labelKey)}
+        testID={`project-prompt-sync-${field.key}`}
+      />
     </View>
   );
 }
@@ -1323,6 +1453,27 @@ const styles = StyleSheet.create((theme) => ({
   },
   errorBlock: {
     marginTop: theme.spacing[2],
+  },
+  promptSyncStatusContent: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  promptSyncDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.foregroundMuted,
+  },
+  promptSyncDotReady: {
+    backgroundColor: theme.colors.statusSuccess,
+  },
+  promptSyncLabel: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: theme.spacing[3],
   },
   emptyScripts: {
     color: theme.colors.foregroundMuted,

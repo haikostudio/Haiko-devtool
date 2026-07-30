@@ -28,6 +28,15 @@ export interface ProjectConfigDraft {
   scripts: ProjectScriptDraft[];
   metadataPrompts: Record<MetadataPromptKey, string>;
   metadataGenerationBase: PaseoMetadataGeneration | undefined;
+  projectPromptSync: ProjectPromptSyncDraft;
+}
+
+export interface ProjectPromptSyncDraft {
+  includeVersion: boolean;
+  includeChangedFiles: boolean;
+  includeWorkspaces: boolean;
+  includeRemote: boolean;
+  includeInstructionFiles: boolean;
 }
 
 interface LifecycleProjection {
@@ -106,6 +115,17 @@ function emptyMetadataPrompts(): Record<MetadataPromptKey, string> {
   };
 }
 
+function projectPromptSyncDraft(config: PaseoConfigRaw | null | undefined): ProjectPromptSyncDraft {
+  const preferences = config?.projectPromptSync;
+  return {
+    includeVersion: preferences?.includeVersion ?? true,
+    includeChangedFiles: preferences?.includeChangedFiles ?? true,
+    includeWorkspaces: preferences?.includeWorkspaces ?? true,
+    includeRemote: preferences?.includeRemote ?? true,
+    includeInstructionFiles: preferences?.includeInstructionFiles ?? true,
+  };
+}
+
 export function configToDraft(config: PaseoConfigRaw | null | undefined): ProjectConfigDraft {
   const worktree = config?.worktree ?? {};
   const setup = projectLifecycle(worktree.setup);
@@ -143,12 +163,14 @@ export function configToDraft(config: PaseoConfigRaw | null | undefined): Projec
     scripts,
     metadataPrompts,
     metadataGenerationBase: metadataGeneration,
+    projectPromptSync: projectPromptSyncDraft(config),
   };
 }
 
 interface ApplyDraftInput {
   draft: ProjectConfigDraft;
   base: PaseoConfigRaw | null | undefined;
+  saveProjectPromptSync?: boolean;
 }
 
 export function applyDraftToConfig(input: ApplyDraftInput): PaseoConfigRaw {
@@ -241,6 +263,9 @@ export function applyDraftToConfig(input: ApplyDraftInput): PaseoConfigRaw {
     delete result.metadataGeneration;
   } else {
     result.metadataGeneration = nextMetadataGeneration;
+  }
+  if (input.saveProjectPromptSync) {
+    result.projectPromptSync = { ...input.draft.projectPromptSync };
   }
   return result as PaseoConfigRaw;
 }

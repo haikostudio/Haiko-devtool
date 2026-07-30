@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, test } from "vitest";
-import { ProjectPromptSyncService } from "./project-prompt-sync.js";
+import { ProjectPromptSyncService, readProjectPromptSyncStatus } from "./project-prompt-sync.js";
 import type {
   PersistedProjectRecord,
   PersistedWorkspaceRecord,
@@ -15,7 +15,7 @@ import { createTestLogger } from "../test-utils/test-logger.js";
 const logger = createTestLogger();
 
 class MutableProjectRegistry implements Pick<ProjectRegistry, "list" | "subscribeToMutations"> {
-  constructor(private projects: PersistedProjectRecord[]) {}
+  constructor(readonly projects: PersistedProjectRecord[]) {}
 
   async list(): Promise<PersistedProjectRecord[]> {
     return this.projects;
@@ -98,6 +98,51 @@ describe("ProjectPromptSyncService", () => {
     expect(readFileSync(path.join(outputDir, "CLAUDE.md"), "utf8")).toContain(
       "Generated Claude instructions",
     );
+    expect(
+      readProjectPromptSyncStatus({ paseoHome, project: projectRegistry.projects[0]! }),
+    ).toEqual({
+      lastSyncedAt: expect.any(String),
+      recentFiles: ["packages/server/src/server/bootstrap.ts"],
+    });
+  });
+
+  test("respects the project choices when rendering generated instructions", async () => {
+    const project = buildProjectRecord({
+      projectId: "prj_private",
+      rootPath: projectRoot,
+      displayName: "Private",
+    });
+    writeFileSync(
+      path.join(projectRoot, "paseo.json"),
+      JSON.stringify({
+        projectPromptSync: {
+          includeVersion: false,
+          includeChangedFiles: false,
+          includeWorkspaces: false,
+          includeRemote: false,
+          includeInstructionFiles: false,
+        },
+      }),
+    );
+    const service = new ProjectPromptSyncService({
+      paseoHome,
+      projectRegistry: new MutableProjectRegistry([project]),
+      workspaceRegistry: new MutableWorkspaceRegistry([]),
+      workspaceGitService: createWorkspaceGitServiceStub(),
+      inspector: new MutableInspector(),
+      logger,
+    });
+
+    await service.start();
+    const prompt = await service.getDaemonAppendSystemPrompt({
+      agentId: "agent-private",
+      cwd: projectRoot,
+    });
+
+    expect(prompt).toContain("Project: Private");
+    expect(prompt).not.toContain("Current branch");
+    expect(prompt).not.toContain("bootstrap.ts");
+    expect(prompt).not.toContain("git@example.test");
   });
 
   test("prepends a fresh project block only after the project fingerprint changes", async () => {

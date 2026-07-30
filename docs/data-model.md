@@ -68,7 +68,9 @@ $PASEO_HOME/
 
 The `agents/{sanitized-cwd}/` directory name is derived from the agent's `cwd` by stripping the filesystem root and replacing path separators with `-` (Windows drive letters become a `C-` style prefix). Persistent server stores write atomically by writing a temp file in the target directory and then renaming it into place.
 
-`project-prompts/{slug-projectId}/` is a daemon-owned durable cache of the live project-status instructions injected into agents. The daemon rewrites these files when the watched project changes, independent of Cerveau, and uses the stored fingerprint/history to avoid stale prompt state.
+`project-prompts/{slug-projectId}/` is a daemon-owned durable cache of the live project-status instructions injected into agents. The daemon rewrites these files when the watched project changes, independent of Cerveau, and uses the stored fingerprint/history to avoid stale prompt state. The project settings screen reads the same state to show the last successful sync and recent changed files.
+
+The optional `projectPromptSync` block in a project's `paseo.json` controls whether version details, changed files, active workspaces, the remote repository, and manual instruction-file names enter the generated prompt. The delivery hook is provider-neutral, so every current or future agent provider receives the same selected project context.
 
 ---
 

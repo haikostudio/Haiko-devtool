@@ -3,6 +3,8 @@ import { resolve, sep } from "path";
 import type pino from "pino";
 import type { SessionInboundMessage, SessionOutboundMessage } from "../../messages.js";
 import type { ProjectRegistry } from "../../workspace-registry.js";
+import type { PersistedProjectRecord } from "../../workspace-registry.js";
+import { readProjectPromptSyncStatus } from "../../project-prompt-sync.js";
 import {
   readPaseoConfigForEdit,
   writePaseoConfigForEdit,
@@ -16,6 +18,7 @@ export interface ProjectConfigSessionHost {
 export interface ProjectConfigSessionOptions {
   host: ProjectConfigSessionHost;
   projectRegistry: Pick<ProjectRegistry, "list">;
+  paseoHome: string;
   logger: pino.Logger;
 }
 
@@ -29,22 +32,25 @@ export interface ProjectConfigSessionOptions {
 export class ProjectConfigSession {
   private readonly host: ProjectConfigSessionHost;
   private readonly projectRegistry: Pick<ProjectRegistry, "list">;
+  private readonly paseoHome: string;
   private readonly logger: pino.Logger;
 
   constructor(options: ProjectConfigSessionOptions) {
     this.host = options.host;
     this.projectRegistry = options.projectRegistry;
+    this.paseoHome = options.paseoHome;
     this.logger = options.logger;
   }
 
   async handleReadProjectConfigRequest(
     msg: Extract<SessionInboundMessage, { type: "read_project_config_request" }>,
   ): Promise<void> {
-    const repoRoot = await this.resolveKnownProjectRoot(msg.repoRoot);
-    if (!repoRoot) {
+    const project = await this.resolveKnownProject(msg.repoRoot);
+    if (!project) {
       this.emitProjectConfigReadFailure(msg, { code: "project_not_found" });
       return;
     }
+    const repoRoot = project.rootPath;
 
     const result = readPaseoConfigForEdit(repoRoot);
     if (!result.ok) {
@@ -71,6 +77,10 @@ export class ProjectConfigSession {
         ok: true,
         config: result.config,
         revision: result.revision,
+        projectPromptSync: readProjectPromptSyncStatus({
+          paseoHome: this.paseoHome,
+          project,
+        }),
       },
     });
   }
@@ -78,11 +88,12 @@ export class ProjectConfigSession {
   async handleWriteProjectConfigRequest(
     msg: Extract<SessionInboundMessage, { type: "write_project_config_request" }>,
   ): Promise<void> {
-    const repoRoot = await this.resolveKnownProjectRoot(msg.repoRoot);
-    if (!repoRoot) {
+    const project = await this.resolveKnownProject(msg.repoRoot);
+    if (!project) {
       this.emitProjectConfigWriteFailure(msg, { code: "project_not_found" });
       return;
     }
+    const repoRoot = project.rootPath;
 
     this.logger.debug(
       { repoRoot, requestId: msg.requestId, outcome: "write_attempt" },
@@ -114,6 +125,10 @@ export class ProjectConfigSession {
         ok: true,
         config: result.config,
         revision: result.revision,
+        projectPromptSync: readProjectPromptSyncStatus({
+          paseoHome: this.paseoHome,
+          project,
+        }),
       },
     });
   }
@@ -150,7 +165,7 @@ export class ProjectConfigSession {
     });
   }
 
-  private async resolveKnownProjectRoot(repoRoot: string): Promise<string | null> {
+  private async resolveKnownProject(repoRoot: string): Promise<PersistedProjectRecord | null> {
     const requestedRoot = canonicalizeConfigRoot(repoRoot);
     const projects = await this.projectRegistry.list();
     for (const project of projects) {
@@ -159,7 +174,7 @@ export class ProjectConfigSession {
       }
       const projectRoot = canonicalizeConfigRoot(project.rootPath);
       if (requestedRoot === projectRoot) {
-        return projectRoot;
+        return { ...project, rootPath: projectRoot };
       }
     }
     return null;
