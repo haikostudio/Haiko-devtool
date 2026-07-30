@@ -27,6 +27,7 @@ import {
 } from "@getpaseo/protocol/agent-state-bucket";
 import { useAggregatedAgents } from "@/hooks/use-aggregated-agents";
 import { getHostRuntimeStore } from "@/runtime/host-runtime";
+import { useOptimisticTaskActionStore } from "@/stores/optimistic-task-action-store";
 import { SyncedLoader } from "@/components/synced-loader";
 import type { KanbanTask } from "@/data/tasks";
 import { aggregateTaskTones, deriveTaskTone, taskAgentId, type TaskTone } from "./task-status-tone";
@@ -83,29 +84,44 @@ export function useTaskTone(task: KanbanTask): TaskTone | null {
   // the agent list changes, and re-deriving on an unchanged state is pure waste.
   const bucket = signal?.bucket;
   const awaitsUser = signal?.awaitsUser;
-  return useMemo(() => deriveTaskTone(task, bucket, awaitsUser), [task, bucket, awaitsUser]);
+  // A boolean selector: this card re-renders only when ITS own flag flips, not
+  // when any other card's action starts or clears.
+  const optimisticPending = useOptimisticTaskActionStore((state) => state.pendingIds.has(task.id));
+  return useMemo(
+    () => deriveTaskTone(task, bucket, awaitsUser, optimisticPending),
+    [task, bucket, awaitsUser, optimisticPending],
+  );
 }
 
 // Aggregate tone for a folder/project card, rolled up from its tasks' live tones.
 export function useAggregateTone(tasks: KanbanTask[]): TaskTone | null {
   const map = useAgentBucketMap();
-  return useMemo(() => aggregateTaskTones(tasks.map((task) => toneOf(task, map))), [tasks, map]);
+  const pendingIds = useOptimisticTaskActionStore((state) => state.pendingIds);
+  return useMemo(
+    () => aggregateTaskTones(tasks.map((task) => toneOf(task, map, pendingIds))),
+    [tasks, map, pendingIds],
+  );
 }
 
-function toneOf(task: KanbanTask, map: Map<string, AgentSignal>): TaskTone | null {
+function toneOf(
+  task: KanbanTask,
+  map: Map<string, AgentSignal>,
+  pendingIds?: ReadonlySet<string>,
+): TaskTone | null {
   const agentId = taskAgentId(task);
   const signal = agentId ? map.get(agentId) : undefined;
-  return deriveTaskTone(task, signal?.bucket, signal?.awaitsUser);
+  return deriveTaskTone(task, signal?.bucket, signal?.awaitsUser, pendingIds?.has(task.id));
 }
 
 // Groups a project's live tasks by folder and rolls each folder up to one tone.
 // Keyed by folderId. Used by the folder rails, which already hold the live board.
 export function useFolderToneMap(tasks: KanbanTask[]): Map<string, TaskTone | null> {
   const map = useAgentBucketMap();
+  const pendingIds = useOptimisticTaskActionStore((state) => state.pendingIds);
   return useMemo(() => {
     const byFolder = new Map<string, TaskTone[]>();
     for (const task of tasks) {
-      const tone = toneOf(task, map);
+      const tone = toneOf(task, map, pendingIds);
       if (tone === null) {
         continue;
       }
@@ -121,7 +137,7 @@ export function useFolderToneMap(tasks: KanbanTask[]): Map<string, TaskTone | nu
       result.set(folderId, aggregateTaskTones(tones));
     }
     return result;
-  }, [tasks, map]);
+  }, [tasks, map, pendingIds]);
 }
 
 interface ProjectRef {

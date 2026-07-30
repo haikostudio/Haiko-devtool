@@ -172,7 +172,17 @@ export function deriveTaskTone(
   task: KanbanTask,
   agentBucket: WorkspaceStateBucket | undefined,
   agentAwaitsUser?: boolean,
+  optimisticPending?: boolean,
 ): TaskTone | null {
+  // An action the user just fired on this card (a drag into another column, or an
+  // action button) is in flight but the server hasn't answered yet. Show the
+  // working loader at once so the gesture never looks ignored — this optimistic
+  // bridge clears itself the instant the authoritative board push lands, after
+  // which the checks below drive the tone from real state. It wins over a stale
+  // agent bucket left over from before the action started.
+  if (optimisticPending) {
+    return "running";
+  }
   // The task's agent is blocked on the user right now — a permission prompt or a
   // question in its latest reply. This wins over everything, even an action the
   // user just launched (the deploy): that action is precisely what is now waiting

@@ -10,6 +10,7 @@ import type {
 } from "@getpaseo/protocol/tasks/types";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
+import { useOptimisticTaskActionStore } from "@/stores/optimistic-task-action-store";
 
 export type { TaskBilling, TaskBoard, TaskColumn, TaskRunConfig, TaskSchedulePreference };
 export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
@@ -104,6 +105,49 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   const boardRef = useRef<TaskBoard | null>(null);
   boardRef.current = board;
 
+  // Optimistic "action in flight" flags, so a card that just triggered a
+  // transition (approve, launch, finish) lights its loader at once instead of
+  // waiting for the server. Grabbed via getState so these helpers never re-run
+  // when the pending set changes — only the cards that render the tone re-render.
+  const markPending = useOptimisticTaskActionStore((state) => state.markPending);
+  const clearPending = useOptimisticTaskActionStore((state) => state.clearPending);
+  const clearAllPending = useOptimisticTaskActionStore((state) => state.clearAll);
+
+  // Move a card into `column` right now, without waiting for the RPC, and flag it
+  // as busy. Returns a rollback that restores the card's previous slot — but only
+  // if our optimistic value is still what's on screen (no authoritative push has
+  // overwritten it since), so a failed action snaps back cleanly instead of
+  // fighting a fresher server board.
+  const optimisticTransition = useCallback(
+    (taskId: string, column: TaskColumn): (() => void) => {
+      const current = boardRef.current;
+      const task = current?.tasks.find((entry) => entry.id === taskId);
+      if (!current || !task) {
+        return () => {};
+      }
+      const previousColumn = task.column;
+      const previousOrder = task.order;
+      markPending(taskId);
+      const optimistic = { ...task, column, order: 0 };
+      setBoard({
+        ...current,
+        tasks: current.tasks.map((entry) => (entry.id === taskId ? optimistic : entry)),
+      });
+      return () => {
+        const now = boardRef.current;
+        const stillOptimistic = now?.tasks.find((entry) => entry.id === taskId);
+        if (now && stillOptimistic && stillOptimistic.column === column) {
+          const restored = { ...stillOptimistic, column: previousColumn, order: previousOrder };
+          setBoard({
+            ...now,
+            tasks: now.tasks.map((entry) => (entry.id === taskId ? restored : entry)),
+          });
+        }
+      };
+    },
+    [markPending],
+  );
+
   const getClient = useCallback(() => {
     if (!serverId) {
       return null;
@@ -138,6 +182,9 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       if (message.payload.subscriptionId !== subscriptionId) {
         return;
       }
+      // The authoritative board just landed: the server's truth now drives every
+      // card's tone, so the optimistic "in flight" bridge is no longer needed.
+      clearAllPending();
       setBoard(message.payload.board);
     });
     const runSubscribe = async () => {
@@ -171,7 +218,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         // Socket may already be gone; the server also cleans up on disconnect.
       });
     };
-  }, [serverId, projectId, liveClient, t]);
+  }, [serverId, projectId, liveClient, t, clearAllPending]);
 
   const requireContext = useCallback(() => {
     const client = getClient();
@@ -276,9 +323,16 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   const runTaskNow = useCallback(
     async (taskId: string) => {
       const { client, projectId: project } = requireContext();
-      await client.tasksTaskRunNow({ projectId: project, taskId });
+      const revert = optimisticTransition(taskId, "in_progress");
+      try {
+        await client.tasksTaskRunNow({ projectId: project, taskId });
+      } catch (actionError) {
+        revert();
+        clearPending(taskId);
+        throw actionError;
+      }
     },
-    [requireContext],
+    [requireContext, optimisticTransition, clearPending],
   );
 
   const retryTaskAnalysis = useCallback(
@@ -295,28 +349,47 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   const approveTask = useCallback(
     async (taskId: string) => {
       const { client, projectId: project } = requireContext();
-      const payload = await client.tasksTaskApprove({ projectId: project, taskId });
-      if (payload.error) {
-        throw new Error(payload.error);
+      const revert = optimisticTransition(taskId, "validated");
+      try {
+        const payload = await client.tasksTaskApprove({ projectId: project, taskId });
+        if (payload.error) {
+          throw new Error(payload.error);
+        }
+      } catch (actionError) {
+        revert();
+        clearPending(taskId);
+        throw actionError;
       }
     },
-    [requireContext],
+    [requireContext, optimisticTransition, clearPending],
   );
 
   const validateTask = useCallback(
     async (taskId: string, options?: { queueOnComplete?: boolean }) => {
       const { client, projectId: project } = requireContext();
-      const payload = await client.tasksTaskValidate({
-        projectId: project,
+      // The card is already past its confirmation dialog by the time this runs, so
+      // it is safe to slide it into "Terminée" (or on to "À déployer") at once.
+      const revert = optimisticTransition(
         taskId,
-        queueOnComplete: options?.queueOnComplete === true,
-      });
-      if (payload.error) {
-        throw new Error(payload.error);
+        options?.queueOnComplete === true ? "deployed" : "done",
+      );
+      try {
+        const payload = await client.tasksTaskValidate({
+          projectId: project,
+          taskId,
+          queueOnComplete: options?.queueOnComplete === true,
+        });
+        if (payload.error) {
+          throw new Error(payload.error);
+        }
+        return { passed: payload.passed, task: payload.task };
+      } catch (actionError) {
+        revert();
+        clearPending(taskId);
+        throw actionError;
       }
-      return { passed: payload.passed, task: payload.task };
     },
-    [requireContext],
+    [requireContext, optimisticTransition, clearPending],
   );
 
   const deployTask = useCallback(

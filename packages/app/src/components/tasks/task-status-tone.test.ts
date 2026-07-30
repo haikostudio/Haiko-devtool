@@ -203,6 +203,26 @@ describe("deriveTaskTone — a question typed in prose still calls for the user"
   });
 });
 
+describe("deriveTaskTone — an action just fired lights the loader immediately", () => {
+  it("shows the working loader while an optimistic move is in flight", () => {
+    // Card dragged into another column: the server hasn't answered yet, but the
+    // gesture must not look ignored — show the loader at once.
+    expect(deriveTaskTone(makeTask({ column: "validated" }), undefined, undefined, true)).toBe(
+      "running",
+    );
+  });
+
+  it("overrides a stale agent bucket left from before the action started", () => {
+    // The card was finished (idle agent), then dragged/pressed. The optimistic
+    // flag wins over the leftover "done" bucket so the loader shows right away.
+    expect(deriveTaskTone(makeTask({ column: "done" }), "done", undefined, true)).toBe("running");
+  });
+
+  it("falls back to the real tone once the optimistic flag clears", () => {
+    expect(deriveTaskTone(makeTask({ column: "done" }), "done", undefined, false)).toBe("done");
+  });
+});
+
 describe("shouldShowVoyant — the corner pip carries read/unread, opacity never fades", () => {
   it("lights the green pip on a finished card the user has not opened yet", () => {
     expect(shouldShowVoyant(makeTask({ column: "done", viewedAt: null }), "done")).toBe(true);
