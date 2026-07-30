@@ -46,7 +46,14 @@ async function listAllPaseoToolNames(): Promise<string[]> {
   }
 }
 
-function makeService(onCreate: (input: CreateAgentCommandInput) => void): ConductorAgentService {
+// "/root/paseo" is REPO_ROOT in paseo-deploy.ts, so isPaseoDeployRoot() treats a
+// project rooted here as Paseo itself → the conductor becomes a full agent.
+const PASEO_SELF_ROOT = "/root/paseo";
+
+function makeService(
+  onCreate: (input: CreateAgentCommandInput) => void,
+  rootPath = "/tmp/project",
+): ConductorAgentService {
   const createAgent: BoundCreateAgentCommand = async (input) => {
     onCreate(input);
     return {
@@ -64,7 +71,7 @@ function makeService(onCreate: (input: CreateAgentCommandInput) => void): Conduc
   } as unknown as AgentStorage;
 
   const projectRegistry = {
-    get: async () => ({ rootPath: "/tmp/project" }),
+    get: async () => ({ rootPath }),
   } as unknown as ProjectRegistry;
 
   const logger = {
@@ -155,6 +162,25 @@ describe("ConductorAgentService", () => {
       expect(disallowed).not.toContain(tool);
     }
     expect(disallowed).toEqual([...CONDUCTOR_DISALLOWED_TOOLS]);
+  });
+
+  it("on the Paseo repo itself, the conductor is a full agent with no tool lock", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    }, PASEO_SELF_ROOT);
+
+    await service.ensureConductorAgent("project-1");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    // No tools are stripped: it can edit code, run commands, steer agents.
+    expect(input.config?.extra?.claude?.disallowedTools ?? []).toEqual([]);
+    // The prompt tells it to act directly instead of minting a card.
+    const systemPrompt = (input.config?.systemPrompt ?? "").replace(/\s+/g, " ");
+    expect(systemPrompt).toContain("AGENT COMPLET");
+    expect(systemPrompt).toContain("Paseo lui-même");
+    // And it still respects the deploy discretion: never publish on its own.
+    expect(systemPrompt).toContain("ne DÉPLOIES JAMAIS");
   });
 
   it("instructs the conductor to turn action requests into tasks, never to code", async () => {

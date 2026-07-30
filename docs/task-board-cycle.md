@@ -157,6 +157,23 @@ conductor **never writes code** (its edit/shell/subagent tools are removed at th
 SDK level) and **never moves a card into "Validé"** (`move_task` refuses it — see
 invariant 3).
 
+### One exception — the conductor on the Paseo repo itself
+
+Everything above describes the conductor on a **user project**. On the **Paseo
+repo itself** it wears the other hat: a **full agent**, like a global agent. It
+carries out an action request **directly** — edit code, run commands, publish —
+instead of minting a card, and its edit/shell/subagent tools are **not** stripped
+(`disallowedTools` is empty). It still knows the board and manages it on demand.
+
+The switch is decided by the project's checkout path, not a remote URL:
+`ensureConductorAgentInner` calls `isPaseoDeployRoot(project.rootPath)` (the same
+signal the deploy pipeline trusts to recognise "this is Paseo"), and threads the
+resulting `isSelf` through the prompt builder, the config builder, and the
+relock/current checks in `conductor-agent.ts`. On Paseo the full agent still
+respects the standing deploy directive baked into its prompt: **commit + push
+freely, never publish or restart the daemon on its own initiative** — that stays
+the user's call.
+
 ### Accepting the offer in one click
 
 The ambiguous case ends with the offer on a line of its own ("Souhaitez-vous que

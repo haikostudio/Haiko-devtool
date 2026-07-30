@@ -9,6 +9,7 @@ import type { AgentStorage, StoredAgentRecord } from "../agent/agent-storage.js"
 import type { AgentSessionConfig } from "../agent/agent-sdk-types.js";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
+import { isPaseoDeployRoot } from "../../utils/paseo-deploy.js";
 
 export interface ConductorAgentServiceOptions {
   createAgent: BoundCreateAgentCommand;
@@ -167,7 +168,74 @@ export const CONDUCTOR_DISALLOWED_TOOLS: readonly string[] = [
  * every message, which buried the board under cards that were really questions.
  * See docs/task-board-cycle.md ("Ce qui crée une carte").
  */
-function conductorSystemPrompt(projectId: string): string {
+/**
+ * The conductor wears one of two hats, chosen by the project it runs on:
+ *
+ * - On EVERY OTHER project it is a board manager: it never touches code, it turns
+ *   every action request into a card (`conductorBoardManagerSystemPrompt`), and
+ *   its edit/shell/subagent tools are stripped (`CONDUCTOR_DISALLOWED_TOOLS`).
+ *
+ * - On the Paseo repo itself (`isPaseoDeployRoot(project.rootPath)`) it is a FULL
+ *   agent (`conductorFullAgentSystemPrompt`): it executes orders directly — edit,
+ *   run commands, publish — like a normal global agent, with no tool lock.
+ *
+ * The switch keys off the project's checkout path, the same signal the deploy
+ * pipeline already trusts to recognise "this is Paseo" — never a remote URL,
+ * which projects do not even persist. `isSelf` is threaded through config build
+ * and the relock/current checks so a full-agent conductor is not perpetually
+ * seen as "stale" and rewritten back to the locked manager shape.
+ */
+function conductorSystemPrompt(projectId: string, isSelf: boolean): string {
+  return isSelf
+    ? conductorFullAgentSystemPrompt(projectId)
+    : conductorBoardManagerSystemPrompt(projectId);
+}
+
+/**
+ * Full-agent prompt used ONLY on the Paseo repo itself. Here the conductor is not
+ * a router but a hands-on agent: it carries out the user's orders directly (edit
+ * code, run commands, publish) instead of minting a card. It still knows the
+ * board and manages it when explicitly asked. Deploy/restart discretion mirrors
+ * the repo's standing directive: commit + push freely, never deploy or restart
+ * the daemon on its own initiative.
+ */
+function conductorFullAgentSystemPrompt(projectId: string): string {
+  return [
+    "Tu es le « chef d'orchestre » du projet Paseo lui-même (ce dépôt).",
+    `L'identifiant du projet est : ${projectId}. Passe TOUJOURS ce même projectId à chaque outil du tableau.`,
+    "",
+    "RÈGLE PARTICULIÈRE À PASEO — TU ES UN AGENT COMPLET :",
+    "Contrairement aux chefs d'orchestre des autres projets, tu n'es PAS limité à",
+    "la gestion du tableau. Sur ce dépôt, tu es un agent à part entière, comme un",
+    "agent global : quand l'utilisateur te demande une action (corriger un bug,",
+    "modifier le code, publier, etc.), tu la RÉALISES toi-même directement, au lieu",
+    "de créer une carte. Tu as accès aux outils d'édition, de terminal et de lecture",
+    "du code : sers-t'en.",
+    "",
+    "TU GARDES LE TABLEAU SOUS LA MAIN :",
+    "Tu peux toujours gérer le tableau via les outils paseo (list_tasks, create_task,",
+    "update_task, move_task, delete_task) : crée ou range une carte quand c'est",
+    "l'intention réelle de l'utilisateur (« ajoute une tâche pour… », « range le",
+    "tableau »). Mais une simple demande d'action n'a plus besoin de devenir une",
+    "carte : fais le travail.",
+    "",
+    "ENREGISTRER OUI, PUBLIER NON SANS ACCORD :",
+    "Après une modification de code, tu ENREGISTRES (commit) et tu SAUVEGARDES",
+    "(push sur la branche) pour ne rien perdre. Mais tu ne DÉPLOIES JAMAIS de ta",
+    "propre initiative : pas de reconstruction du site ni de publication tant que",
+    "l'utilisateur ne te le demande pas explicitement (« déploie », « publie »,",
+    "« mets en ligne ») ou ne clique pas « Publier ». Les commits non déployés",
+    "apparaissent dans sa fenêtre « À déployer » : c'est le comportement voulu.",
+    "Ne redémarre JAMAIS le daemon (port 6767) sans accord explicite : cela tuerait",
+    "les agents en cours, dont potentiellement toi-même.",
+    "",
+    "FORME DE TA RÉPONSE :",
+    "Rends compte simplement, en français clair, de ce que tu as fait. Pas de",
+    "gabarit rigide imposé : adapte-toi à la demande.",
+  ].join("\n");
+}
+
+function conductorBoardManagerSystemPrompt(projectId: string): string {
   return [
     "Tu es le « chef d'orchestre » du tableau de tâches (kanban) de ce projet.",
     `L'identifiant du projet est : ${projectId}. Passe TOUJOURS ce même projectId à chaque outil.`,
@@ -328,6 +396,9 @@ export class ConductorAgentService {
       throw new Error(`Cannot resolve project root for conductor: ${projectId}`);
     }
     const cwd = project.rootPath;
+    // The conductor is a full agent on the Paseo repo itself, a locked board
+    // manager everywhere else. Decided by the checkout path, never a remote URL.
+    const isSelf = isPaseoDeployRoot(cwd);
 
     // Persistence-by-label: scan persisted agents for an existing, non-archived
     // conductor for this project. This is what makes the conductor survive
@@ -361,11 +432,11 @@ export class ConductorAgentService {
       // forever. Re-apply the lock to its stored config so the daemon rebuilds a
       // locked session on its next restart. This is why the lock was "deployed
       // but not active": the existing conductor was simply never re-locked.
-      await this.relockConductorIfStale(found, projectId, provider);
+      await this.relockConductorIfStale(found, projectId, provider, isSelf);
       return { agentId: found.id, workspaceId: found.workspaceId ?? null };
     }
 
-    const providerConfig = buildConductorConfig(projectId, provider);
+    const providerConfig = buildConductorConfig(projectId, provider, isSelf);
     const created = await this.createAgent({
       kind: "mcp",
       provider,
@@ -438,13 +509,14 @@ export class ConductorAgentService {
     record: StoredAgentRecord,
     projectId: string,
     provider: ConductorProvider,
+    isSelf: boolean,
   ): Promise<void> {
-    const alreadyLocked = conductorConfigIsCurrent(record.config, projectId, provider);
+    const alreadyLocked = conductorConfigIsCurrent(record.config, projectId, provider, isSelf);
     if (alreadyLocked) {
       return;
     }
 
-    const desiredConfig = buildConductorConfig(projectId, provider, record.config);
+    const desiredConfig = buildConductorConfig(projectId, provider, isSelf, record.config);
     const updated: StoredAgentRecord = {
       ...record,
       labels: {
@@ -494,13 +566,19 @@ function recordMatchesConductorProvider(
 function buildConductorConfig(
   projectId: string,
   provider: ConductorProvider,
+  isSelf: boolean,
   existing?: StoredAgentRecord["config"],
 ): Partial<AgentSessionConfig> {
   const base = {
     ...toAgentSessionConfigOverrides(existing),
-    systemPrompt: conductorSystemPrompt(projectId),
+    systemPrompt: conductorSystemPrompt(projectId, isSelf),
   };
   if (provider === CODEX_CONDUCTOR_PROVIDER) {
+    // On Paseo itself the conductor is a full agent: no read-only sandbox, let it
+    // edit the repo and run commands like any global Codex agent.
+    if (isSelf) {
+      return { ...base, approvalPolicy: "on-request", sandboxMode: "workspace-write" };
+    }
     return {
       ...base,
       approvalPolicy: "on-request",
@@ -520,7 +598,8 @@ function buildConductorConfig(
       ...existing?.extra,
       claude: {
         ...existingClaudeExtra,
-        disallowedTools: [...CONDUCTOR_DISALLOWED_TOOLS],
+        // Full agent on Paseo → no tool lock; board manager elsewhere → hard lock.
+        disallowedTools: isSelf ? [] : [...CONDUCTOR_DISALLOWED_TOOLS],
       },
     },
   };
@@ -530,11 +609,15 @@ function conductorConfigIsCurrent(
   config: StoredAgentRecord["config"] | undefined,
   projectId: string,
   provider: ConductorProvider,
+  isSelf: boolean,
 ): boolean {
-  if (config?.systemPrompt !== conductorSystemPrompt(projectId)) {
+  if (config?.systemPrompt !== conductorSystemPrompt(projectId, isSelf)) {
     return false;
   }
   if (provider === CODEX_CONDUCTOR_PROVIDER) {
+    if (isSelf) {
+      return config.approvalPolicy === "on-request" && config.sandboxMode === "workspace-write";
+    }
     return (
       config.approvalPolicy === "on-request" &&
       config.sandboxMode === "read-only" &&
@@ -553,7 +636,8 @@ function conductorConfigIsCurrent(
   if (config.model == null || config.model === LEGACY_CLAUDE_CONDUCTOR_MODEL) {
     return false;
   }
-  return sameToolSet(readStoredDisallowedTools(config.extra), CONDUCTOR_DISALLOWED_TOOLS);
+  const expectedDisallowed = isSelf ? [] : CONDUCTOR_DISALLOWED_TOOLS;
+  return sameToolSet(readStoredDisallowedTools(config.extra), expectedDisallowed);
 }
 
 /**
