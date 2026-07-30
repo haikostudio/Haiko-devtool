@@ -42,3 +42,18 @@ d'état du projet — d'où l'exigence de brièveté.
 - Réponses en français simple, pour un lecteur non technique : pas de jargon,
   pas de chemins de fichiers, pas de pavés.
 - Économiser le quota est un objectif permanent, pas une optimisation ponctuelle.
+- Chef d'orchestre tourne sur `claude-sonnet-5` ou `gpt-5.4-mini` — jamais Haiku
+  (ni un id inventé type "-20251001" : toujours vérifier list_models avant de
+  fixer un runConfig). À la création d'une carte, il DOIT déjà assigner le
+  modèle réel que la tâche utilisera (ex. `claude-opus-4-8` pour du code exigeant
+  des compétences, `claude-sonnet-5`/`gpt-5.4` sinon) — la tâche hérite de ce
+  choix, pas question de laisser le défaut du chef d'orchestre s'appliquer.
+- Défauts de l'AGENT « chef d'orchestre » (celui qui gère le tableau, pas le
+  runConfig des cartes) fixés dans conductor-agent.ts : Sonnet 5 medium (Claude),
+  gpt-5.6-luna medium (Codex). Le client (tasks-board-ui-store.ts) envoie
+  toujours l'id de provider NU ("claude"/"codex"), jamais un modèle en dur —
+  sinon le client impose le modèle et le défaut serveur ne s'applique jamais
+  (bug vécu : bascule Codex chargeait gpt-5.4 car le client l'envoyait tel quel).
+  Un chef d'orchestre déjà créé avant ce correctif garde son ancien modèle tant
+  qu'on ne clique pas « Réinitialiser » (le niveau de réflexion, lui, se corrige
+  seul au prochain chargement s'il n'était pas explicitement choisi).

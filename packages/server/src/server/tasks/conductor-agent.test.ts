@@ -266,7 +266,7 @@ describe("ConductorAgentService", () => {
     expect(systemPrompt).toContain("jamais passer une carte en « Validé »");
   });
 
-  it("starts a Claude conductor on high thinking effort, not the catalog's low", async () => {
+  it("starts a Claude conductor on medium thinking effort, not the catalog's low", async () => {
     let captured: CreateAgentCommandInput | null = null;
     const service = makeService((input) => {
       captured = input;
@@ -275,10 +275,10 @@ describe("ConductorAgentService", () => {
     await service.ensureConductorAgent("project-1");
 
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
-    expect(input.config?.thinkingOptionId).toBe("high");
+    expect(input.config?.thinkingOptionId).toBe("medium");
   });
 
-  it("creates a Claude conductor pinned to Opus 4.8, not the catalog default", async () => {
+  it("creates a Claude conductor pinned to Sonnet 5, not the catalog default", async () => {
     let captured: CreateAgentCommandInput | null = null;
     const service = makeService((input) => {
       captured = input;
@@ -287,9 +287,9 @@ describe("ConductorAgentService", () => {
     await service.ensureConductorAgent("project-1");
 
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
-    expect(input.provider).toBe("claude/claude-opus-4-8");
-    expect(input.config?.model).toBe("claude-opus-4-8");
-    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-opus-4-8");
+    expect(input.provider).toBe("claude/claude-sonnet-5");
+    expect(input.config?.model).toBe("claude-sonnet-5");
+    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-sonnet-5");
   });
 
   it('accepts the bare "claude" provider the client sends over the wire', async () => {
@@ -301,8 +301,8 @@ describe("ConductorAgentService", () => {
     await service.ensureConductorAgent("project-1", "claude");
 
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
-    expect(input.provider).toBe("claude/claude-opus-4-8");
-    expect(input.config?.model).toBe("claude-opus-4-8");
+    expect(input.provider).toBe("claude/claude-sonnet-5");
+    expect(input.config?.model).toBe("claude-sonnet-5");
   });
 
   it("still answers to the legacy claude/sonnet provider spec", async () => {
@@ -314,8 +314,20 @@ describe("ConductorAgentService", () => {
     await service.ensureConductorAgent("project-1", "claude/sonnet");
 
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
-    expect(input.provider).toBe("claude/claude-opus-4-8");
-    expect(input.config?.model).toBe("claude-opus-4-8");
+    expect(input.provider).toBe("claude/claude-sonnet-5");
+    expect(input.config?.model).toBe("claude-sonnet-5");
+  });
+
+  it("still answers to the previous claude/claude-opus-4-8 provider spec", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    });
+
+    await service.ensureConductorAgent("project-1", "claude/claude-opus-4-8");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.provider).toBe("claude/claude-sonnet-5");
   });
 
   it("moves an existing conductor off the legacy sonnet model", async () => {
@@ -341,8 +353,8 @@ describe("ConductorAgentService", () => {
 
     expect(result.agentId).toBe("legacy-claude-conductor");
     expect(upserts).toHaveLength(1);
-    expect(upserts[0]?.config?.model).toBe("claude-opus-4-8");
-    expect(upserts[0]?.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-opus-4-8");
+    expect(upserts[0]?.config?.model).toBe("claude-sonnet-5");
+    expect(upserts[0]?.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-sonnet-5");
   });
 
   it("keeps a model the user picked from the composer's model menu", async () => {
@@ -408,7 +420,7 @@ describe("ConductorAgentService", () => {
 
     expect(result.agentId).toBe("old-claude-conductor");
     expect(upserts).toHaveLength(1);
-    expect(upserts[0]?.config?.thinkingOptionId).toBe("high");
+    expect(upserts[0]?.config?.thinkingOptionId).toBe("medium");
   });
 
   it("keeps a thinking level the user picked explicitly", async () => {
@@ -457,15 +469,29 @@ describe("ConductorAgentService", () => {
       captured = input;
     });
 
-    await service.ensureConductorAgent("project-1", "codex/gpt-5.4");
+    await service.ensureConductorAgent("project-1", "codex");
 
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
-    expect(input.provider).toBe("codex/gpt-5.4");
+    expect(input.provider).toBe("codex/gpt-5.6-luna");
+    expect(input.config?.model).toBe("gpt-5.6-luna");
+    expect(input.config?.thinkingOptionId).toBe("medium");
     expect(input.config?.approvalPolicy).toBe("on-request");
     expect(input.config?.sandboxMode).toBe("read-only");
     expect(input.config?.networkAccess).toBe(false);
-    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("codex/gpt-5.4");
+    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("codex/gpt-5.6-luna");
     expect(input.config?.systemPrompt ?? "").toContain("TU NE TOUCHES JAMAIS AU CODE");
+  });
+
+  it("still answers to the previous codex/gpt-5.4 provider spec", async () => {
+    let captured: CreateAgentCommandInput | null = null;
+    const service = makeService((input) => {
+      captured = input;
+    });
+
+    await service.ensureConductorAgent("project-1", "codex/gpt-5.4");
+
+    const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
+    expect(input.provider).toBe("codex/gpt-5.6-luna");
   });
 
   it("keeps Claude and Codex conductors separate for the same project", async () => {
@@ -487,7 +513,7 @@ describe("ConductorAgentService", () => {
     } as unknown as StoredAgentRecord;
     const createAgent: BoundCreateAgentCommand = async (input) => {
       created = true;
-      expect(input.provider).toBe("codex/gpt-5.4");
+      expect(input.provider).toBe("codex/gpt-5.6-luna");
       return {
         snapshot: { id: "new-codex-conductor", workspaceId: "ws-codex" },
         liveSnapshot: { id: "new-codex-conductor", workspaceId: "ws-codex" },

@@ -13,8 +13,12 @@ import { FILE_PREVIEW_WIDTH_UNSET } from "@/components/tasks/task-file-preview-l
  * never be changed from the composer's native model menu (that menu only lists
  * the running agent's own provider), so the Claude/Codex choice has to be made
  * where the conductor agent is created — here, remembered across reloads.
+ *
+ * Deliberately the BARE provider id, never `provider/model`: which model the
+ * conductor runs on is the daemon's call (see `conductor-agent.ts`), so the
+ * client must never bake a model name into what it asks for.
  */
-export type ConductorProviderChoice = "claude/claude-opus-4-8" | "codex/gpt-5.4";
+export type ConductorProviderChoice = "claude" | "codex";
 
 interface TasksBoardUiState {
   /** Open width (in px) of the right-hand Details/Billing drawer. */
@@ -167,31 +171,33 @@ const DEFAULT_CONDUCTOR_HEIGHT = 340;
 // it — a touch wider than the file explorer since it hosts a chat, not a tree.
 const DEFAULT_CONDUCTOR_PANEL_WIDTH = 440;
 // Claude by default, matching the daemon's own conductor default.
-const DEFAULT_CONDUCTOR_PROVIDER: ConductorProviderChoice = "claude/claude-opus-4-8";
+const DEFAULT_CONDUCTOR_PROVIDER: ConductorProviderChoice = "claude";
 
 /**
  * Coerces a persisted provider choice back into the union: Codex stays Codex,
  * anything else lands on the Claude default rather than leaking outside the type.
  *
- * COMPAT(conductorClaudeModel): added in v0.2.3 — the Claude choice used to be
- * the bare "claude/sonnet" alias and is still sitting in every existing install's
- * persisted store, where it would otherwise blank the toggle label. Drop the
- * normalizer when no install can still hold that value.
+ * COMPAT(conductorProviderChoiceBareId): added in v0.2.4 — this choice used to
+ * be persisted as the full `provider/model` spec ("claude/claude-opus-4-8",
+ * "codex/gpt-5.4", or the older "claude/sonnet" alias). Existing installs still
+ * have one of those sitting in their persisted store; only the Codex spelling
+ * needs a mapping since every other legacy value already lands on the Claude
+ * default. Drop once no install can still hold the old composite value.
  */
 function normalizeConductorProviderChoice(value: unknown): ConductorProviderChoice {
-  return value === "codex/gpt-5.4" ? "codex/gpt-5.4" : DEFAULT_CONDUCTOR_PROVIDER;
+  return value === "codex" || value === "codex/gpt-5.4" ? "codex" : DEFAULT_CONDUCTOR_PROVIDER;
 }
 
 /**
- * The value to send to the daemon when asking for this conductor. The Claude
- * choice travels as the BARE provider id, never as the full `provider/model`
- * spec: which Claude model the conductor runs on is the daemon's call, and a
- * daemon older than this build rejects outright any spec it does not recognise
- * by name. "claude" is understood by every daemon version and always lands on
- * that daemon's own conductor default.
+ * The value to send to the daemon when asking for this conductor. Always the
+ * BARE provider id, never a `provider/model` spec: which model the conductor
+ * runs on is the daemon's call, and a daemon older than this build rejects
+ * outright any spec it does not recognise by name. The bare id is understood
+ * by every daemon version and always lands on that daemon's own conductor
+ * default.
  */
 export function toConductorEnsureProvider(choice: ConductorProviderChoice): string {
-  return choice === "codex/gpt-5.4" ? "codex/gpt-5.4" : "claude";
+  return choice;
 }
 
 export const useTasksBoardUiStore = create<TasksBoardUiState>()(

@@ -58,8 +58,8 @@ type ConductorProvider = ConductorProviderChoice;
 // destroying anything. The native menu still owns model + thinking level within
 // the chosen provider; this control never touches those.
 const CONDUCTOR_PROVIDER_LABELS: Record<ConductorProvider, string> = {
-  "claude/claude-opus-4-8": "Claude",
-  "codex/gpt-5.4": "Codex",
+  claude: "Claude",
+  codex: "Codex",
 };
 
 export interface ConductorPanelProps {
@@ -252,7 +252,7 @@ export function useConductorController({
   // the stored choice changes here: the ensure effect below reacts to it and asks
   // the daemon for that provider's conductor. Nothing is reset or destroyed.
   const nextConductorProvider: ConductorProvider =
-    conductorProvider === "codex/gpt-5.4" ? "claude/claude-opus-4-8" : "codex/gpt-5.4";
+    conductorProvider === "codex" ? "claude" : "codex";
   const handleToggleProvider = useCallback(() => {
     setConductorProvider(nextConductorProvider);
   }, [nextConductorProvider, setConductorProvider]);

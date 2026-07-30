@@ -23,7 +23,7 @@ export interface EnsureConductorResult {
   workspaceId: string | null;
 }
 
-type ConductorProvider = "claude/claude-opus-4-8" | "codex/gpt-5.4";
+type ConductorProvider = "claude/claude-sonnet-5" | "codex/gpt-5.6-luna";
 
 /**
  * Model the Claude conductor runs on. Pinned on purpose: the conductor is a
@@ -31,10 +31,15 @@ type ConductorProvider = "claude/claude-opus-4-8" | "codex/gpt-5.4";
  * with the 1M window) that code tasks want. Only fills the blank — the composer's
  * native model menu can still move a live conductor to any other Claude model.
  */
-const CLAUDE_CONDUCTOR_MODEL = "claude-opus-4-8";
-const CLAUDE_CONDUCTOR_PROVIDER: ConductorProvider = "claude/claude-opus-4-8";
+const CLAUDE_CONDUCTOR_MODEL = "claude-sonnet-5";
+const CLAUDE_CONDUCTOR_PROVIDER: ConductorProvider = "claude/claude-sonnet-5";
 const DEFAULT_CONDUCTOR_PROVIDER: ConductorProvider = CLAUDE_CONDUCTOR_PROVIDER;
-const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
+/**
+ * Model the Codex conductor runs on. Same reasoning as the Claude pin above:
+ * cheap and fast, not the code-task default.
+ */
+const CODEX_CONDUCTOR_MODEL = "gpt-5.6-luna";
+const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.6-luna";
 
 // COMPAT(conductorClaudeModel): until v0.2.3 the Claude conductor was created on
 // the bare "sonnet" alias. That string is persisted in two places we do not
@@ -45,14 +50,25 @@ const CODEX_CONDUCTOR_PROVIDER: ConductorProvider = "codex/gpt-5.4";
 const LEGACY_CLAUDE_CONDUCTOR_PROVIDER = "claude/sonnet";
 const LEGACY_CLAUDE_CONDUCTOR_MODEL = "sonnet";
 
+// COMPAT(conductorModelPin2026Q3): the conductor used to be pinned on Opus 4.8 /
+// GPT-5.4 — both real, still-selectable catalog models, so unlike the alias
+// above they are NOT force-migrated (a stored value there could be a deliberate
+// user pick). Only accepted here so a conductor record still carrying the old
+// composite provider label ("claude/claude-opus-4-8", "codex/gpt-5.4") keeps
+// resolving instead of throwing "Unsupported conductor provider". Drop once
+// every persisted conductor has gone through "Réinitialiser" at least once.
+const PREVIOUS_CLAUDE_CONDUCTOR_PROVIDER = "claude/claude-opus-4-8";
+const PREVIOUS_CODEX_CONDUCTOR_PROVIDER = "codex/gpt-5.4";
+
 /**
- * Thinking effort a Claude conductor starts on. Without an explicit id the model
+ * Thinking effort a conductor starts on. Without an explicit id the model
  * catalog falls back to the FIRST effort level it declares — "low" — which is the
  * wrong default for an agent whose entire job is to read a project, split it into
  * tasks and route them. An explicit user choice still wins: this only fills the
  * blank.
  */
-const CONDUCTOR_CLAUDE_THINKING_OPTION_ID = "high";
+const CONDUCTOR_CLAUDE_THINKING_OPTION_ID = "medium";
+const CONDUCTOR_CODEX_THINKING_OPTION_ID = "medium";
 
 /**
  * The ONLY paseo MCP tools the "chef d'orchestre" is allowed to use. Its whole
@@ -485,11 +501,16 @@ function resolveConductorProvider(value: string | undefined): ConductorProvider 
   if (
     normalized === "claude" ||
     normalized === CLAUDE_CONDUCTOR_PROVIDER ||
-    normalized === LEGACY_CLAUDE_CONDUCTOR_PROVIDER
+    normalized === LEGACY_CLAUDE_CONDUCTOR_PROVIDER ||
+    normalized === PREVIOUS_CLAUDE_CONDUCTOR_PROVIDER
   ) {
     return CLAUDE_CONDUCTOR_PROVIDER;
   }
-  if (normalized === "codex" || normalized === CODEX_CONDUCTOR_PROVIDER) {
+  if (
+    normalized === "codex" ||
+    normalized === CODEX_CONDUCTOR_PROVIDER ||
+    normalized === PREVIOUS_CODEX_CONDUCTOR_PROVIDER
+  ) {
     return CODEX_CONDUCTOR_PROVIDER;
   }
   throw new Error(`Unsupported conductor provider: ${value}`);
@@ -518,13 +539,19 @@ function buildConductorConfig(
     systemPrompt: conductorSystemPrompt(projectId, isSelf),
   };
   if (provider === CODEX_CONDUCTOR_PROVIDER) {
+    const codexBase = {
+      ...base,
+      // Same "fill the blank, an explicit pick still wins" rule as Claude below.
+      thinkingOptionId: base.thinkingOptionId ?? CONDUCTOR_CODEX_THINKING_OPTION_ID,
+      model: base.model ?? CODEX_CONDUCTOR_MODEL,
+    };
     // On Paseo itself the conductor is a full agent: no read-only sandbox, let it
     // edit the repo and run commands like any global Codex agent.
     if (isSelf) {
-      return { ...base, approvalPolicy: "on-request", sandboxMode: "workspace-write" };
+      return { ...codexBase, approvalPolicy: "on-request", sandboxMode: "workspace-write" };
     }
     return {
-      ...base,
+      ...codexBase,
       approvalPolicy: "on-request",
       sandboxMode: "read-only",
       networkAccess: false,
@@ -559,6 +586,12 @@ function conductorConfigIsCurrent(
     return false;
   }
   if (provider === CODEX_CONDUCTOR_PROVIDER) {
+    // Same "no stored id/model yet" staleness check as the Claude branch below —
+    // fills the blank on a conductor that predates these defaults, never
+    // overrides an explicit pick already on record.
+    if (config.thinkingOptionId == null || config.model == null) {
+      return false;
+    }
     if (isSelf) {
       return config.approvalPolicy === "on-request" && config.sandboxMode === "workspace-write";
     }
