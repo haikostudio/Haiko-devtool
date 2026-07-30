@@ -10,6 +10,7 @@ import {
   collectTaskAgentIds,
   isTaskArchived,
 } from "./session-closer.js";
+import { AgentTerminalRegistry } from "../agent/agent-terminal-registry.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
 
@@ -74,6 +75,59 @@ function asAgentHost(host: ReturnType<typeof buildAgentHost>["manager"]): AgentH
 function asStorageHost(host: ReturnType<typeof buildAgentHost>["storage"]): StorageHost {
   return host as unknown as StorageHost;
 }
+
+type TerminalState = "idle" | "working" | "attention" | null;
+
+/** Terminal host backed by a registry, so ownership behaves like the real one. */
+function buildTerminalHost(
+  owned: Record<string, string[]>,
+  states: Record<string, TerminalState> = {},
+) {
+  const registry = new AgentTerminalRegistry();
+  for (const [agentId, terminalIds] of Object.entries(owned)) {
+    for (const terminalId of terminalIds) {
+      registry.record(agentId, terminalId);
+    }
+  }
+  const killed: string[] = [];
+  return {
+    killed,
+    registry,
+    host: {
+      takeForAgent: (agentId: string) => registry.takeForAgent(agentId),
+      getActivityState: (terminalId: string) =>
+        terminalId in states ? states[terminalId] : "idle",
+      killTerminal: async (terminalId: string) => {
+        killed.push(terminalId);
+        registry.forget(terminalId);
+      },
+    },
+  };
+}
+
+describe("AgentTerminalRegistry", () => {
+  test("hands an agent's terminals over once, then forgets them", () => {
+    const registry = new AgentTerminalRegistry();
+    registry.record("agent-1", "term-a");
+    registry.record("agent-1", "term-a");
+    registry.record("agent-1", "term-b");
+    registry.record("agent-2", "term-c");
+
+    expect(registry.takeForAgent("agent-1").sort()).toEqual(["term-a", "term-b"]);
+    expect(registry.takeForAgent("agent-1")).toEqual([]);
+    expect(registry.takeForAgent("agent-2")).toEqual(["term-c"]);
+  });
+
+  test("ignores blank ids and drops a terminal that died on its own", () => {
+    const registry = new AgentTerminalRegistry();
+    registry.record("", "term-a");
+    registry.record("agent-1", "  ");
+    registry.record("agent-1", "term-a");
+    registry.forget("term-a");
+
+    expect(registry.takeForAgent("agent-1")).toEqual([]);
+  });
+});
 
 describe("collectTaskAgentIds", () => {
   test("gathers every agent a card owns, once each, task agent first", () => {
@@ -159,6 +213,87 @@ describe("TaskSessionCloser", () => {
     } as unknown as KanbanTask);
 
     expect(host.archivedSnapshots).toEqual(["agent-old"]);
+  });
+
+  test("closes the terminals the card's agent opened", async () => {
+    const host = buildAgentHost([{ id: "agent-1", lifecycle: "idle" }], []);
+    const terminals = buildTerminalHost({ "agent-1": ["term-a", "term-b"], "agent-9": ["term-z"] });
+    const closer = new TaskSessionCloser({
+      agentManager: asAgentHost(host.manager),
+      agentStorage: asStorageHost(host.storage),
+      terminals: terminals.host,
+      logger,
+    });
+
+    await closer.closeSessionsForTask("proj-1", {
+      id: "task-1",
+      links: { agentIds: [], taskAgentId: "agent-1" },
+    } as unknown as KanbanTask);
+
+    // Only this card's terminals — another agent's terminal is untouched.
+    expect(terminals.killed.sort()).toEqual(["term-a", "term-b"]);
+  });
+
+  test("leaves a terminal that is still running a command open", async () => {
+    const host = buildAgentHost([{ id: "agent-1", lifecycle: "idle" }], []);
+    const terminals = buildTerminalHost(
+      { "agent-1": ["term-build", "term-idle"] },
+      { "term-build": "working" },
+    );
+    const closer = new TaskSessionCloser({
+      agentManager: asAgentHost(host.manager),
+      agentStorage: asStorageHost(host.storage),
+      terminals: terminals.host,
+      logger,
+    });
+
+    await closer.closeSessionsForTask("proj-1", {
+      id: "task-1",
+      links: { agentIds: [], taskAgentId: "agent-1" },
+    } as unknown as KanbanTask);
+
+    expect(terminals.killed).toEqual(["term-idle"]);
+  });
+
+  test("skips a terminal that already died", async () => {
+    const host = buildAgentHost([{ id: "agent-1", lifecycle: "idle" }], []);
+    const terminals = buildTerminalHost({ "agent-1": ["term-gone"] }, { "term-gone": null });
+    const closer = new TaskSessionCloser({
+      agentManager: asAgentHost(host.manager),
+      agentStorage: asStorageHost(host.storage),
+      terminals: terminals.host,
+      logger,
+    });
+
+    await closer.closeSessionsForTask("proj-1", {
+      id: "task-1",
+      links: { agentIds: [], taskAgentId: "agent-1" },
+    } as unknown as KanbanTask);
+
+    expect(terminals.killed).toEqual([]);
+  });
+
+  test("closes the terminals only once the running agent has fallen silent", async () => {
+    const host = buildAgentHost([{ id: "agent-1", lifecycle: "running" }], []);
+    const terminals = buildTerminalHost({ "agent-1": ["term-a"] });
+    const closer = new TaskSessionCloser({
+      agentManager: asAgentHost(host.manager),
+      agentStorage: asStorageHost(host.storage),
+      terminals: terminals.host,
+      logger,
+    });
+
+    await closer.closeSessionsForTask("proj-1", {
+      id: "task-1",
+      links: { agentIds: [], taskAgentId: "agent-1" },
+    } as unknown as KanbanTask);
+    expect(terminals.killed).toEqual([]);
+
+    host.emitState("agent-1", "idle");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(terminals.killed).toEqual(["term-a"]);
+    closer.dispose();
   });
 
   test("leaves an already archived record alone", async () => {

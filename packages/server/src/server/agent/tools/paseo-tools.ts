@@ -122,6 +122,13 @@ export interface PaseoToolHostDependencies {
    */
   callerAgentId?: string;
   /**
+   * Records that the calling agent opened a terminal, so whoever closes that
+   * agent down can close its terminals too (see AgentTerminalRegistry). A
+   * terminal carries no owner of its own, and this call is the only moment the
+   * link exists.
+   */
+  onAgentTerminalCreated?: (input: { agentId: string; terminalId: string }) => void;
+  /**
    * Optional resolver for session-bound speak handlers.
    * Used by hidden voice agents to narrate through daemon-managed TTS.
    */
@@ -458,6 +465,7 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
     scheduleService,
     providerSnapshotManager,
     callerAgentId,
+    onAgentTerminalCreated,
     resolveSpeakHandler,
     resolveCallerContext,
     logger,
@@ -1885,6 +1893,10 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         workspaceId,
         ...(name?.trim() ? { name: name.trim() } : {}),
       });
+      // The one moment "this terminal belongs to that agent" is knowable.
+      if (callerAgentId) {
+        onAgentTerminalCreated?.({ agentId: callerAgentId, terminalId: terminal.id });
+      }
 
       return {
         content: [],

@@ -36,13 +36,13 @@ in the project's single list.
 
 ## Ownership of each transition
 
-| Transition           | Who performs it      | Notes                                                                                                                                                          |
-| -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| → Notes / → À faire  | user **or** an agent | The only two columns an agent may write to.                                                                                                                    |
-| À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                         |
-| Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                               |
-| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                             |
-| En cours → Terminé   | **user only**        | The "Terminer la tâche" bar (or a drag). A plain column move: no prompt, no check, no deployment — see below.                                                  |
+| Transition           | Who performs it      | Notes                                                                                                                                                     |
+| -------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| → Notes / → À faire  | user **or** an agent | The only two columns an agent may write to.                                                                                                               |
+| À faire → Validé     | **user only**        | Drag, the task chat's "Valider la tâche" bar, or approving a proposal.                                                                                    |
+| Validé → Planifié    | estimator            | Auto, the instant the card's cost analysis succeeds (see below).                                                                                          |
+| Planifié → En cours  | scheduler            | Stamped at launch, when the slot, quota and timing gates all pass.                                                                                        |
+| En cours → Terminé   | **user only**        | The "Terminer la tâche" bar (or a drag). A plain column move: no prompt, no check, no deployment — see below.                                             |
 | Terminé → À déployer | **user only**        | Manual: a finished card RESTS in "Terminé" and waits. The user queues it with the card's button (or a drag), or a publication they launched sweeps it in. |
 
 ## The invariants
@@ -548,6 +548,24 @@ Three things the closer gets right, each of which was a bug waiting to happen:
   beats the pin. `reconcileTabs` also tombstones what it closes (see
   `session-ui-state/close-tombstones`), so a host snapshot captured before the
   archive cannot reopen the tab at the next reconnect.
+
+The card's **terminals** go with its conversation. A terminal knows its cwd and
+its workspace, never who asked for it — and a card runs in the project's main
+checkout alongside everything else, so "the terminals of this workspace" is far
+too wide a net. The only honest link is the gesture: the agent called
+`create_terminal`, and that call records the owner in `AgentTerminalRegistry`
+(`agent/agent-terminal-registry.ts`, wired through the tool catalog's
+`onAgentTerminalCreated`). The closer claims that list when it archives the
+agent, and:
+
+- kills each terminal **after** the conversation is closed, never before — a
+  terminal cut while its agent still runs takes unfinished work with it;
+- **leaves a terminal that reports `working` open**, and releases it from the
+  card's ownership. A build or a dev server the user is watching must not die
+  because a card was filed away;
+- is in-memory and daemon-local on purpose: terminals do not survive a daemon
+  restart, so a mapping that did would only point at terminals that no longer
+  exist.
 
 ## The other exception
 

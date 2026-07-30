@@ -20,9 +20,17 @@ import { type AgentIdleWatcherHost, watchAgentIdle } from "./task-agent-link.js"
  * also means no new resurrection path: the close travels through the existing
  * host snapshot, not through a second, competing "close this tab" channel.
  *
- * Two safety rules:
+ * The card's TERMINALS go with it. A terminal the card's agent opened for its own
+ * work outlives the card otherwise, and its tab sits in the same band. Ownership
+ * comes from the `create_terminal` call itself (see AgentTerminalRegistry) —
+ * never from the workspace, which a card shares with everything else in the
+ * project.
+ *
+ * Three safety rules:
  * - a RUNNING agent is never cut off mid-sentence: the archive is deferred until
  *   it goes idle (the deploy path uses the same watcher);
+ * - a terminal still WORKING is left alone: a build or a dev server the user is
+ *   watching must not die because a card was filed away;
  * - failures are logged and swallowed — a card must archive even if its agent is
  *   already gone.
  */
@@ -32,12 +40,24 @@ export type TaskSessionCloserAgentHost = Pick<
   "getAgent" | "subscribe" | "archiveAgent" | "archiveSnapshot"
 >;
 
+/** The terminal side of a card: what it opened, and how to close it. */
+export interface TaskSessionCloserTerminalHost {
+  /** Terminal ids the agent opened, claimed once (see AgentTerminalRegistry). */
+  takeForAgent: (agentId: string) => string[];
+  /** "working" for a terminal still running a command; null when it is gone. */
+  getActivityState: (terminalId: string) => "idle" | "working" | "attention" | null;
+  killTerminal: (terminalId: string) => Promise<void>;
+}
+
 export interface TaskSessionCloserOptions {
   agentManager: TaskSessionCloserAgentHost;
   // A card's agent survives daemon restarts as a stored record the clients still
   // list — and still show a tab for. Closing only the live ones would leave every
   // pre-restart tab behind, which is most of the band.
   agentStorage: Pick<AgentStorage, "get">;
+  // Omitted when no terminal manager is configured (tests, headless runs): the
+  // card's conversation still closes, there is simply nothing else to close.
+  terminals?: TaskSessionCloserTerminalHost;
   logger: pino.Logger;
 }
 
@@ -66,6 +86,7 @@ export function isTaskArchived(task: KanbanTask): boolean {
 export class TaskSessionCloser {
   private readonly agentManager: TaskSessionCloserAgentHost;
   private readonly agentStorage: Pick<AgentStorage, "get">;
+  private readonly terminals: TaskSessionCloserTerminalHost | null;
   private readonly logger: pino.Logger;
   // Agents already handled (archived, or waiting on the idle watcher). Keeps a
   // repeated archive — a board sweep on top of the live listener — from stacking
@@ -76,6 +97,7 @@ export class TaskSessionCloser {
   constructor(options: TaskSessionCloserOptions) {
     this.agentManager = options.agentManager;
     this.agentStorage = options.agentStorage;
+    this.terminals = options.terminals ?? null;
     this.logger = options.logger;
   }
 
@@ -192,6 +214,52 @@ export class TaskSessionCloser {
         { err: error, projectId, taskId, agentId },
         "task.session-closer.failed: could not close the archived card's session",
       );
+      return;
+    }
+    // Only once the conversation is closed: a terminal killed while its agent
+    // still runs would cut work the card had not finished.
+    await this.closeTerminalsForAgent(projectId, taskId, agentId);
+  }
+
+  /**
+   * Closes the terminals this agent opened. A terminal still running a command
+   * is kept — the user may be watching a build or a dev server — and is simply
+   * released from the card's ownership, so nothing tries to kill it again.
+   */
+  private async closeTerminalsForAgent(
+    projectId: string,
+    taskId: string,
+    agentId: string,
+  ): Promise<void> {
+    const terminals = this.terminals;
+    if (!terminals) {
+      return;
+    }
+    for (const terminalId of terminals.takeForAgent(agentId)) {
+      const activity = terminals.getActivityState(terminalId);
+      // Already gone: nothing to close, and no tab left either.
+      if (activity === null) {
+        continue;
+      }
+      if (activity === "working") {
+        this.logger.info(
+          { projectId, taskId, agentId, terminalId },
+          "task.session-closer.terminal-busy: left a running terminal open",
+        );
+        continue;
+      }
+      try {
+        await terminals.killTerminal(terminalId);
+        this.logger.info(
+          { projectId, taskId, agentId, terminalId },
+          "task.session-closer.terminal-closed: closed the archived card's terminal",
+        );
+      } catch (error) {
+        this.logger.warn(
+          { err: error, projectId, taskId, agentId, terminalId },
+          "task.session-closer.terminal-failed: could not close the card's terminal",
+        );
+      }
     }
   }
 }

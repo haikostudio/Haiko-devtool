@@ -104,6 +104,7 @@ import { createSpeechService } from "./speech/speech-runtime.js";
 import { AgentManager } from "./agent/agent-manager.js";
 import { FileAgentTimelineStore } from "./agent/file-agent-timeline-store.js";
 import { AgentStorage } from "./agent/agent-storage.js";
+import { AgentTerminalRegistry } from "./agent/agent-terminal-registry.js";
 import { UsageStatsStore } from "./stats/usage-stats-store.js";
 import { ComptaLinksStore } from "./compta/compta-links-store.js";
 import { ComptaSummaryService } from "./compta/compta-summary-service.js";
@@ -717,6 +718,9 @@ export async function createPaseoDaemon(
   const terminalManager = createConfiguredTerminalManager({
     getTerminalActivityUrl: () => createTerminalActivityUrl(boundListenTarget),
   });
+  // Who opened which terminal — the link a terminal itself does not carry. Used
+  // to close a card's terminals when the card is archived.
+  const agentTerminalRegistry = new AgentTerminalRegistry();
   applyTerminalAgentHookSetting({ store: daemonConfigStore, logger });
 
   const serviceProxyPublicBaseUrl = config.serviceProxy?.publicBaseUrl
@@ -1377,7 +1381,29 @@ export async function createPaseoDaemon(
   });
   // An archived card closes its own conversation, so its tab leaves the band on
   // every connected client (see tasks/session-closer.ts).
-  const taskSessionCloser = new TaskSessionCloser({ agentManager, agentStorage, logger });
+  const taskSessionCloser = new TaskSessionCloser({
+    agentManager,
+    agentStorage,
+    terminals: {
+      takeForAgent: (agentId) => agentTerminalRegistry.takeForAgent(agentId),
+      getActivityState: (terminalId) => {
+        const terminal = terminalManager.getTerminal(terminalId);
+        if (!terminal) {
+          return null;
+        }
+        // No activity record yet means nothing has run in it: safe to close.
+        return terminal.getActivity()?.state ?? "idle";
+      },
+      killTerminal: async (terminalId) => {
+        await terminalManager.killTerminalAndWait(terminalId, {
+          gracefulTimeoutMs: 2000,
+          forceTimeoutMs: 1500,
+        });
+        agentTerminalRegistry.forget(terminalId);
+      },
+    },
+    logger,
+  });
   taskBoardService.setOnTaskArchived((projectId, task) =>
     taskSessionCloser.closeSessionsForTask(projectId, task),
   );
@@ -1827,6 +1853,8 @@ export async function createPaseoDaemon(
     paseoHome: config.paseoHome,
     worktreesRoot: config.worktreesRoot,
     callerAgentId: runtime.callerAgentId,
+    onAgentTerminalCreated: ({ agentId, terminalId }) =>
+      agentTerminalRegistry.record(agentId, terminalId),
     enableVoiceTools: runtime.enableVoiceTools,
     voiceOnly: runtime.voiceOnly,
     taskBoardService,
