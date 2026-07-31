@@ -920,6 +920,9 @@ export const zhCN: TranslationResources = {
       context: {
         size: "大小",
         modified: "修改时间",
+        copyPath: "复制路径",
+        addToChat: "添加到聊天…",
+        download: "下载",
       },
       actions: {
         back: "返回",

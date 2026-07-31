@@ -924,6 +924,9 @@ export const ar: TranslationResources = {
       context: {
         size: "مقاس",
         modified: "معدل",
+        copyPath: "نسخ المسار",
+        addToChat: "إضافة إلى الدردشة…",
+        download: "تحميل",
       },
       actions: {
         back: "خلف",

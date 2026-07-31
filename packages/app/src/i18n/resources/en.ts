@@ -926,6 +926,9 @@ export const en = {
       context: {
         size: "Size",
         modified: "Modified",
+        copyPath: "Copy path",
+        addToChat: "Add to chat…",
+        download: "Download",
       },
       actions: {
         back: "Back",

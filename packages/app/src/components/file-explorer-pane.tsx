@@ -46,6 +46,7 @@ import { usePanelStore, type SortOption } from "@/stores/panel-store";
 import { formatTimeAgo } from "@/utils/time";
 import { buildAbsoluteExplorerPath } from "@/utils/explorer-paths";
 import { filterVisibleExplorerEntries, isHiddenExplorerPath } from "@/file-explorer/visibility";
+import { useToast } from "@/contexts/toast-context";
 
 const SORT_OPTIONS: { value: SortOption }[] = [
   { value: "name" },
@@ -240,6 +241,7 @@ export function FileExplorerPane({
   onAddToChat,
 }: FileExplorerPaneProps) {
   const { t } = useTranslation();
+  const toast = useToast();
 
   const daemons = useHosts();
   const daemonProfile = useMemo(
@@ -356,14 +358,19 @@ export function FileExplorerPane({
 
   const handleCopyPath = useCallback(
     async (path: string) => {
-      await Clipboard.setStringAsync(
-        buildAbsoluteExplorerPath({
-          workspaceRoot: normalizedWorkspaceRoot,
-          entryPath: path,
-        }),
-      );
+      try {
+        await Clipboard.setStringAsync(
+          buildAbsoluteExplorerPath({
+            workspaceRoot: normalizedWorkspaceRoot,
+            entryPath: path,
+          }),
+        );
+        toast.copied();
+      } catch {
+        toast.error(t("workspace.tabs.toasts.copyFailed"));
+      }
     },
-    [normalizedWorkspaceRoot],
+    [normalizedWorkspaceRoot, t, toast],
   );
 
   const startDownload = useDownloadStore((state) => state.startDownload);

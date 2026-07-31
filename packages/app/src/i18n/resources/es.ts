@@ -935,6 +935,9 @@ export const es: TranslationResources = {
       context: {
         size: "Tamaño",
         modified: "Modificado",
+        copyPath: "Copiar ruta",
+        addToChat: "Añadir al chat…",
+        download: "Descargar",
       },
       actions: {
         back: "Atrás",

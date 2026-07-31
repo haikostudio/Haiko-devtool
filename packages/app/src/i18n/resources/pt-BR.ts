@@ -936,6 +936,9 @@ export const ptBR: TranslationResources = {
       context: {
         size: "Tamanho",
         modified: "Modificado",
+        copyPath: "Copiar caminho",
+        addToChat: "Adicionar ao chat…",
+        download: "Baixar",
       },
       actions: {
         back: "Voltar",

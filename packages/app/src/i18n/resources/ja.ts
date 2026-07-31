@@ -931,6 +931,9 @@ export const ja: TranslationResources = {
       context: {
         size: "サイズ",
         modified: "更新日時",
+        copyPath: "パスをコピー",
+        addToChat: "チャットに追加…",
+        download: "ダウンロード",
       },
       actions: {
         back: "戻る",

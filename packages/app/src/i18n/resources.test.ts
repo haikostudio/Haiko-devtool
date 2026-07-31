@@ -258,6 +258,14 @@ describe("translation resources", () => {
     expect(en.panels.file.directoryMissing).toBe("Workspace directory not found.");
   });
 
+  it("includes file explorer context menu action labels", () => {
+    expect(en.workspace.fileExplorer.context.copyPath).toBe("Copy path");
+    expect(en.workspace.fileExplorer.context.addToChat).toBe("Add to chat…");
+    expect(en.workspace.fileExplorer.context.download).toBe("Download");
+    expect(fr.workspace.fileExplorer.context.copyPath).toBe("Copier le chemin");
+    expect(fr.workspace.fileExplorer.context.download).toBe("Télécharger");
+  });
+
   it("includes workspace Git and review keys for the Batch 4B migration", () => {
     expect(en.workspace.tabs.actions.newAgent).toBe("New agent");
     expect(en.workspace.header.actions.copyPath).toBe("Copy workspace path");

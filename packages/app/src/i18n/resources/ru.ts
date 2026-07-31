@@ -931,6 +931,9 @@ export const ru: TranslationResources = {
       context: {
         size: "Размер",
         modified: "Модифицированный",
+        copyPath: "Копировать путь",
+        addToChat: "Добавить в чат…",
+        download: "Скачать",
       },
       actions: {
         back: "Назад",
