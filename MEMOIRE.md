@@ -35,6 +35,10 @@ d'état du projet — d'où l'exigence de brièveté.
 
 - Le démon exécute `packages/*/dist`, pas la source : un correctif serveur reste
   sans effet tant que le moteur n'a pas été reconstruit ET redémarré.
+- Le verrou du checkout partagé suit l'agent VIVANT, jamais la colonne : une
+  carte finie oubliée dans « En cours » bloquait sinon tout le projet avec
+  « Une autre tâche occupe le dossier », et un glissement vers « En cours »
+  rebondissait aussitôt.
 - `/root/paseo` est un checkout partagé : plusieurs agents y écrivent en même
   temps. La publication travaille donc sur une copie figée du commit à publier.
 - `version.json` porte la version DU BUNDLE, jamais celle de la publication.
