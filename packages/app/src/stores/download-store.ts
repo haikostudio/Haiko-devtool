@@ -102,7 +102,7 @@ export const useDownloadStore = create<DownloadState>()((set, get) => ({
       );
 
       if (isWeb) {
-        triggerBrowserDownload(downloadUrl, resolvedFileName);
+        await triggerBrowserDownload(downloadUrl, resolvedFileName);
         get().completeDownload(id);
         return;
       }
@@ -320,7 +320,7 @@ function buildDownloadUrl(
   return url.toString();
 }
 
-function triggerBrowserDownload(url: string, fileName: string) {
+async function triggerBrowserDownload(url: string, fileName: string): Promise<void> {
   if (typeof document === "undefined") {
     if (typeof window !== "undefined") {
       void openExternalUrl(url);
@@ -328,9 +328,90 @@ function triggerBrowserDownload(url: string, fileName: string) {
     return;
   }
 
+  // Safari on iOS ignores the `download` attribute and navigates to the URL
+  // instead. Inside an installed PWA there is no browser chrome, so the file
+  // preview iOS renders in place of the app ("Open in ...", "More...") has no
+  // back or close button: the user is trapped and has to kill the app. Handing
+  // Safari a same-origin blob: URL keeps `download` honored, so the page never
+  // navigates; when the file lives on another origin (no blob to build without
+  // CORS) we at least open it in a new context, which stays dismissable.
+  if (isIosBrowser()) {
+    if (isSameOriginUrl(url)) {
+      await downloadThroughBlob(url, fileName);
+      return;
+    }
+    clickDownloadLink({ url, fileName: null, newContext: true });
+    return;
+  }
+
+  clickDownloadLink({ url, fileName, newContext: false });
+}
+
+function isIosBrowser(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  const userAgent = navigator.userAgent ?? "";
+  if (/iPad|iPhone|iPod/.test(userAgent)) {
+    return true;
+  }
+  // iPadOS 13+ claims to be a Mac; the touch points give it away.
+  return userAgent.includes("Macintosh") && (navigator.maxTouchPoints ?? 0) > 1;
+}
+
+function isSameOriginUrl(url: string): boolean {
+  const origin = typeof window !== "undefined" ? window.location?.origin : null;
+  if (!origin || origin === "null") {
+    return false;
+  }
+  try {
+    return new URL(url).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+async function downloadThroughBlob(url: string, fileName: string): Promise<void> {
+  // The download URL may carry basic-auth credentials, which fetch() refuses to
+  // accept inline — move them to an Authorization header.
+  const target = new URL(url);
+  const headers: Record<string, string> = {};
+  if (target.username || target.password) {
+    const user = decodeURIComponent(target.username);
+    const password = decodeURIComponent(target.password);
+    headers.Authorization = `Basic ${btoa(`${user}:${password}`)}`;
+    target.username = "";
+    target.password = "";
+  }
+
+  const response = await fetch(target.toString(), { headers });
+  if (!response.ok) {
+    throw new Error(i18n.t("downloads.failed"));
+  }
+
+  const objectUrl = URL.createObjectURL(await response.blob());
+  clickDownloadLink({ url: objectUrl, fileName, newContext: false });
+  // Revoking immediately would race the download Safari has just started.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function clickDownloadLink({
+  url,
+  fileName,
+  newContext,
+}: {
+  url: string;
+  fileName: string | null;
+  newContext: boolean;
+}): void {
   const link = document.createElement("a");
   link.href = url;
-  link.download = fileName;
+  if (fileName) {
+    link.download = fileName;
+  }
+  if (newContext) {
+    link.target = "_blank";
+  }
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
