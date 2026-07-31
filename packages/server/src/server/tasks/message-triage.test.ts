@@ -4,6 +4,7 @@ import { join } from "node:path";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
+import { CONDUCTOR_ROLE_LABEL, CONDUCTOR_ROLE_VALUE } from "@getpaseo/protocol/agent-labels";
 import { MessageTriage, matchesTaskIntent } from "./message-triage.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
@@ -49,7 +50,11 @@ describe("MessageTriage", () => {
 
   function buildTriage(options: {
     finalText: string | Error;
-    sourceAgent?: { provider: string; config: { model?: string; thinkingOptionId?: string } };
+    sourceAgent?: {
+      provider: string;
+      config: { model?: string; thinkingOptionId?: string };
+      labels?: Record<string, string>;
+    };
   }) {
     const runAgent = vi.fn(async () => {
       if (options.finalText instanceof Error) {
@@ -122,6 +127,31 @@ describe("MessageTriage", () => {
     }
     // Distinct proposal ids so each approval stays independently idempotent.
     expect(proposedTasks[0]?.proposalId).not.toBe(proposedTasks[1]?.proposalId);
+  });
+
+  // The conductor creates the card itself. Triaging its thread on top produced
+  // both at once: the card in "À faire" AND a tray offering to create it again.
+  test("stays out of the conductor's thread, which has its own create_task", async () => {
+    const { triage, runAgent, createAgent, appendTimelineItem } = buildTriage({
+      finalText: JSON.stringify({
+        kind: "tasks",
+        tasks: [{ title: "Ajouter le mode sombre", tags: [] }],
+      }),
+      sourceAgent: {
+        provider: "claude",
+        config: {},
+        labels: { [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE },
+      },
+    });
+
+    triage.triage({ agentId: "conductor-1", text: "ajoute cette tâche à la liste" });
+    await vi.waitFor(() => {
+      expect(createAgent).not.toHaveBeenCalled();
+    });
+
+    // Not even the cheap Haiku call: the guard fires before the queue.
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(appendTimelineItem).not.toHaveBeenCalled();
   });
 
   test("a proposal inherits the chatting agent's provider, model and effort", async () => {

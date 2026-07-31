@@ -7,6 +7,7 @@ import {
   getStructuredAgentResponse,
 } from "../agent/agent-response-loop.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
+import { isConductorAgent } from "@getpaseo/protocol/agent-labels";
 import {
   type TaskChatProposal,
   type TaskRunConfig,
@@ -128,6 +129,15 @@ export class MessageTriage {
   /** Fire-and-forget: enqueue a message for triage if it trips the intent gate. */
   triage(input: { agentId: string; text: string }): void {
     if (!matchesTaskIntent(input.text)) {
+      return;
+    }
+    // The conductor owns create_task: asked for a card, it simply creates one.
+    // Triaging its thread too produced the exact absurdity this guard exists to
+    // kill — the card already sitting in "À faire" AND a "1 tâche proposée — à
+    // valider" tray offering to create it a second time. This sideband is for
+    // threads with no board tool of their own; the conductor is never one.
+    const agent = this.agentManager.getAgent(input.agentId);
+    if (agent && isConductorAgent(agent)) {
       return;
     }
     this.queue.push({ agentId: input.agentId, text: input.text });
