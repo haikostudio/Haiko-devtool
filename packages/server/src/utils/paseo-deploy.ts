@@ -345,6 +345,13 @@ export async function getPublishedSha(): Promise<string | null> {
   return await readDeployedSha();
 }
 
+/** The commit the checkout is on right now, or null when it cannot be read. */
+export async function getHeadSha(): Promise<string | null> {
+  return await runGitCommand(["rev-parse", "HEAD"], { cwd: REPO_ROOT })
+    .then((result) => result.stdout.trim() || null)
+    .catch(() => null);
+}
+
 /**
  * Compare the compiled daemon against what is published. Called right after a
  * boot (a publication restarts the daemon as its very last step), so it answers

@@ -197,6 +197,7 @@ import {
   isPaseoDeployRoot,
   getPaseoDeployRoots,
   getPaseoDeployRunSnapshot,
+  getHeadSha,
   getPublishedSha,
   getRunningEngineSha,
   isDaemonRestartPending,
@@ -1327,7 +1328,9 @@ export async function createPaseoDaemon(
         // A publication frozen on "running" whose in-memory watcher died with the
         // previous process would otherwise spin forever: settle it to a failure so
         // the "Réinitialiser / Relancer" escape hatch appears.
-        await taskBoardService.reconcileOrphanDeployBatch(project.projectId);
+        await taskBoardService.reconcileOrphanDeployBatch(project.projectId, () =>
+          getPublishedSha(),
+        );
         // Catch-up for the tabs that piled up before archiving closed anything.
         // Isolated: tidying tabs is cosmetic, and letting it throw here would
         // skip the restart-debt backfill of every project after this one.
@@ -1569,6 +1572,7 @@ export async function createPaseoDaemon(
     triggerDeploy: (input) => triggerPaseoDeploy(input),
     readDeployRun: () => getPaseoDeployRunSnapshot(),
     readPublishedSha: () => getPublishedSha(),
+    readHeadSha: () => getHeadSha(),
     // Lets the batch skip its final restart when the engine is already executing
     // the version that just went online (a republish with no new commit).
     readRunningEngineSha: () => getRunningEngineSha(),

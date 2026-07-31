@@ -1391,46 +1391,85 @@ export class TaskBoardService {
    * with). Best-effort and idempotent — an untouched board is never rewritten.
    */
   /**
-   * At boot, close any batch publication left frozen on "running".
+   * At boot, settle any batch publication left frozen on "running" — by CHECKING
+   * what happened, never by assuming.
    *
-   * The run's progress is advanced by an IN-MEMORY watcher (TaskBatchDeployer),
-   * and the stall/timeout safety nets live inside that same loop. When the engine
-   * restarts mid-publication — a crash, a manual restart, or the deploy's own
-   * final restart firing while a sibling run is still open — the watcher dies with
-   * the process, but the board record persists. Nothing left alive would ever move
-   * it off "running": the banner then spins forever, with no elapsed time, no log
-   * verdict, and (because "Réinitialiser / Relancer" only shows on a failure) no
-   * way out. This turns that orphan into an honest, actionable failure so the
-   * escape hatch appears.
+   * The run's progress is advanced by an in-memory watcher, and a publication
+   * restarts the engine as its own last step. So the watcher does not merely
+   * "sometimes" die mid-run: on a successful publication it dies EVERY time, at
+   * the exact moment the work reaches production. Reading a record still on
+   * "running" as an interruption therefore mislabelled the successful case, and
+   * told the user "rien n'a été mis en ligne" over a live site — while every card
+   * of the lot wore "publication échouée".
    *
-   * A genuinely successful run stamps its record "success" BEFORE requesting the
-   * restart, so a record still on "running" at boot is always an interrupted one.
-   * No card was stamped live, so nothing is lost: a re-run republishes, or drops
-   * cleanly if the work already reached production.
+   * The disk is the judge, as everywhere else: the run recorded the commit it set
+   * out to publish, and the site publishes a marker naming what it serves. Equal
+   * means it landed. The verdict is injected (`resolvePublishedSha`) so this stays
+   * a pure board operation.
+   *
+   * Without a recorded target — a run started by an older daemon — there is
+   * nothing to compare, and only then does the honest answer become "interrupted,
+   * check before re-running".
    */
-  async reconcileOrphanDeployBatch(projectId: string): Promise<void> {
+  async reconcileOrphanDeployBatch(
+    projectId: string,
+    resolvePublishedSha?: () => Promise<string | null>,
+  ): Promise<void> {
     try {
       const current = await this.store.getBoard(projectId);
-      if (current.deployBatch?.state !== "running") {
+      const batch = current.deployBatch;
+      if (batch?.state !== "running") {
         return;
       }
+      const publishedSha = (await resolvePublishedSha?.()) ?? null;
+      const landed =
+        batch.targetSha != null && publishedSha != null && batch.targetSha === publishedSha;
+      const settled = landed
+        ? {
+            state: "success" as const,
+            phase: "done",
+            error: null,
+          }
+        : {
+            state: "failed" as const,
+            error: batch.targetSha
+              ? "La publication n'a pas abouti : le site ne sert pas la version visée. Relancez « Tout déployer »."
+              : "La publication a été interrompue par un redémarrage du moteur. Vérifiez la fenêtre « À déployer » avant de relancer.",
+          };
       const board = await this.store.mutate(projectId, (latest) =>
         latest.deployBatch?.state === "running"
           ? {
               ...latest,
               deployBatch: {
                 ...latest.deployBatch,
-                state: "failed" as const,
+                ...settled,
                 finishedAt: new Date().toISOString(),
                 queued: false,
-                error:
-                  "La publication a été interrompue par un redémarrage du moteur. Rien n'a été mis en ligne — relancez « Tout déployer » si besoin.",
               },
             }
           : latest,
       );
       this.broadcast(board);
-      this.logger.info({ projectId }, "Orphan running deploy batch settled to failed at boot");
+      if (landed) {
+        // The cards never got stamped: the process that would have done it died
+        // with the run. Finish its work rather than leave them claiming they are
+        // still waiting to go out.
+        for (const taskId of batch.taskIds) {
+          try {
+            await this.markTaskDeployed(projectId, taskId, {
+              url: batch.url ?? null,
+              needsDaemonRestart: false,
+              sha: publishedSha,
+            });
+          } catch (error) {
+            this.logger.warn({ err: error, projectId, taskId }, "Failed to stamp a resumed card");
+          }
+        }
+      }
+      this.logger.info(
+        { projectId, landed, targetSha: batch.targetSha, publishedSha },
+        "Orphan running deploy batch settled at boot",
+      );
     } catch (error) {
       this.logger.warn({ err: error, projectId }, "Failed to reconcile an orphan deploy batch");
     }

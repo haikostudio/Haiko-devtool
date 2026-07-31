@@ -90,6 +90,9 @@ export interface TaskBatchDeployerOptions {
    * becoming unanswerable as soon as a second publication follows.
    */
   readPublishedSha?: () => Promise<string | null>;
+  /** The commit this run sets out to publish — recorded so a run that outlives
+   *  its watcher can be judged from disk instead of guessed. */
+  readHeadSha?: () => Promise<string | null>;
   /** Hands a deploy-then-confirm prompt to one card's own agent. */
   deployTask: (projectId: string, taskId: string) => Promise<unknown>;
   /**
@@ -326,6 +329,10 @@ export class TaskBatchDeployer {
       }));
     }
     const taskIds = pending.map((task) => task.id);
+    // Recorded BEFORE the first build: the engine restarts itself as this run's
+    // last step, so the watcher below never survives to write a verdict. This is
+    // what the next boot compares the served marker against.
+    const targetSha = (await this.options.readHeadSha?.()) ?? null;
     // The board carries the run itself: the column turns it into one progress
     // bar for the whole batch, then into the "voici ce qui vient d'être mis en
     // ligne" recap. Titles are snapshotted so the recap survives a rename. A fresh
@@ -340,6 +347,7 @@ export class TaskBatchDeployer {
       url: null,
       error: null,
       queued: false,
+      targetSha,
       ...(options.auto ? { auto: true } : {}),
     });
     void this.run(projectId, pending, { reset: options.reset })

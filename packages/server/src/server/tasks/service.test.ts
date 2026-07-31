@@ -963,6 +963,55 @@ describe("TaskBoardService", () => {
     await expect(readdir(dir)).resolves.toEqual([]);
   });
 
+  // The case that made every card of a lot read "publication échouée" over a
+  // perfectly live site: a publication restarts the engine as its LAST step, so
+  // a successful run ALWAYS loses its watcher at the moment it succeeds.
+  test("reconcileOrphanDeployBatch concludes success when the site serves the version the run aimed at", async () => {
+    const folder = await service.createFolder("proj-1", "Tâches");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Une carte" });
+    await service.setDeployBatch("proj-1", {
+      state: "running",
+      phase: "site",
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      taskIds: [task.id],
+      titles: ["Une carte"],
+      url: "https://app.example.com",
+      error: null,
+      queued: true,
+      targetSha: "abc123",
+    });
+
+    await service.reconcileOrphanDeployBatch("proj-1", async () => "abc123");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.deployBatch?.state).toBe("success");
+    expect(board.deployBatch?.error).toBeNull();
+    // And the cards its watcher never got to stamp are stamped now.
+    expect(board.tasks[0]?.deployedAt).toBeTruthy();
+  });
+
+  test("reconcileOrphanDeployBatch still fails a run the site never received", async () => {
+    await service.setDeployBatch("proj-1", {
+      state: "running",
+      phase: "site",
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      taskIds: ["t1"],
+      titles: ["Une carte"],
+      url: null,
+      error: null,
+      queued: true,
+      targetSha: "abc123",
+    });
+
+    await service.reconcileOrphanDeployBatch("proj-1", async () => "oldersha");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.deployBatch?.state).toBe("failed");
+    expect(board.deployBatch?.error).toContain("n'a pas abouti");
+  });
+
   test("reconcileOrphanDeployBatch settles a run frozen on 'running' into a failure", async () => {
     // A publication whose in-memory watcher died with the previous process: the
     // record persists on "running" and nothing left alive would ever move it.

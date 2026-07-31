@@ -384,6 +384,13 @@ export const TaskDeployBatchSchema = z.object({
   // watched live. Absent on ordinary projects (deployed card-by-card) and on
   // older daemons that predate the field.
   agentId: z.string().nullable().optional(),
+  // The commit this run set out to publish, recorded before the first build.
+  // It is what lets a run that outlived its own watcher be JUDGED rather than
+  // guessed: the engine restarts itself as the publication's last step, so the
+  // watcher dies mid-run every single time, and the only honest verdict left is
+  // to compare the served marker on disk against this. Additive + optional: a
+  // run recorded by an older daemon simply carries none.
+  targetSha: z.string().nullable().optional(),
   // True while a SECOND publication is waiting for this one to finish. Publications
   // are serialized (one active at a time); a request arriving mid-run is queued
   // rather than run in parallel, and this flag is what the board shows as
