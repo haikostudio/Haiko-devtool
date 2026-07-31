@@ -6,7 +6,7 @@ import {
   DEPLOYMENT_ROLE_VALUE,
 } from "@getpaseo/protocol/agent-labels";
 import type { KanbanTask, TaskBoard, TaskColumn } from "@getpaseo/protocol/tasks/types";
-import { responseFormatBody } from "../../services/response-format.js";
+import { injectResponseFormat, responseFormatBody } from "../../services/response-format.js";
 import { TASK_AGENT_LABEL } from "./agent-launch.js";
 import {
   createTaskResponseTemplateHook,
@@ -214,14 +214,35 @@ describe("column → sections, end to end", () => {
       labels: { [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE },
     });
     const template = await hook({ agentId: "agent-1" });
+    expect(template).toBe("conductor");
     const body = responseFormatBody(template ?? "default");
+    // No numbered sections, no model header, no estimate/quota/cost, no billing.
     expect(body).not.toContain("## 1.");
     expect(body).not.toContain("130 CHF/h");
-    expect(body).toContain("AUCUN gabarit à sections numérotées");
-    // A simple question gets a simple answer; touched cards get a bullet recap.
     // Read flat: the body is hard-wrapped, and the sense is what matters.
     const flat = body.replace(/\s+/g, " ");
-    expect(flat).toContain("quelques phrases de français simple");
+    expect(flat).toContain("aucune estimation");
+    expect(flat).toContain("aucune facturation");
+    expect(flat).toContain("aucun en-tête de modèle");
+    // A simple question gets a simple answer; touched cards get a bullet recap.
+    expect(flat).toContain("1 à 3 phrases de français simple");
     expect(flat).toContain("une puce par carte");
+  });
+
+  it("injects the conductor format directive into the prompt actually sent", async () => {
+    // Proves the guarantee end to end: the conductor's answer-shape directive is
+    // resolved by the hook AND embedded in the prompt envelope the daemon sends
+    // on every message — not merely defined somewhere.
+    const { hook } = makeHook({
+      labels: { [CONDUCTOR_ROLE_LABEL]: CONDUCTOR_ROLE_VALUE },
+    });
+    const template = await hook({ agentId: "agent-1" });
+    expect(template).toBe("conductor");
+    const sent = injectResponseFormat("combien de cartes en attente ?", template ?? "default");
+    expect(sent).toContain("<paseo-format>");
+    expect(sent).toContain(responseFormatBody("conductor"));
+    // The conductor never carries the card/report shape it must not use.
+    expect(sent).not.toContain("## 1.");
+    expect(sent).not.toContain("130 CHF/h");
   });
 });
