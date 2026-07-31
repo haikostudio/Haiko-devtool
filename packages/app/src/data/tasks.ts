@@ -10,6 +10,7 @@ import type {
 } from "@getpaseo/protocol/tasks/types";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import {
+  PENDING_MOVE_MAX_AGE_MS,
   type PendingMove,
   reconcileBoardWithPendingMoves,
 } from "@/components/tasks/board-move-reconcile";
@@ -162,6 +163,18 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [retainOnlyPending],
   );
 
+  // Remember a card the user just sent to `column` so incoming snapshots can't
+  // undo it. Reads the card's current `updatedAt` as the "what the server last
+  // told us" watermark — see PendingMove.
+  const rememberPendingMove = useCallback((task: KanbanTask, column: TaskColumn, order: number) => {
+    pendingMovesRef.current.set(task.id, {
+      column,
+      order,
+      knownUpdatedAt: task.updatedAt,
+      expiresAtMs: Date.now() + PENDING_MOVE_MAX_AGE_MS,
+    });
+  }, []);
+
   // Move a card into `column` right now, without waiting for the RPC, and flag it
   // as busy. Returns a rollback that restores the card's previous slot — but only
   // if our optimistic value is still what's on screen (no authoritative push has
@@ -176,6 +189,12 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       }
       const previousColumn = task.column;
       const previousOrder = task.order;
+      // A button transition is a user move like any other, and it used to be the
+      // one kind that carried no pending-move claim: dragging a card from "À
+      // faire" to "Validé" routes here rather than through moveTask, so a board
+      // snapshot in flight yanked it straight back to "À faire" before the
+      // approval landed and pushed it forward again. Hence the visible bounce.
+      rememberPendingMove(task, column, 0);
       markPending(taskId);
       const optimistic = { ...task, column, order: 0 };
       setBoard({
@@ -183,6 +202,9 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         tasks: current.tasks.map((entry) => (entry.id === taskId ? optimistic : entry)),
       });
       return () => {
+        // The action failed: withdraw the claim first, or the overlay would put
+        // the card straight back into the column it never reached.
+        pendingMovesRef.current.delete(taskId);
         const now = boardRef.current;
         const stillOptimistic = now?.tasks.find((entry) => entry.id === taskId);
         if (now && stillOptimistic && stillOptimistic.column === column) {
@@ -194,7 +216,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         }
       };
     },
-    [markPending],
+    [markPending, rememberPendingMove],
   );
 
   const getClient = useCallback(() => {
@@ -321,10 +343,12 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       // apply it optimistically. The pending move overrides any server snapshot for
       // this card until the server catches up, so the card never bounces back to its
       // old column while the RPC runs — and the indicator shows the move is working.
-      pendingMovesRef.current.set(input.taskId, { column: input.column, order: input.index });
-      markPending(input.taskId);
       const current = boardRef.current;
       const task = current?.tasks.find((entry) => entry.id === input.taskId);
+      if (task) {
+        rememberPendingMove(task, input.column, input.index);
+      }
+      markPending(input.taskId);
       if (current && task) {
         const optimistic = { ...task, column: input.column, order: input.index };
         setBoard({
@@ -345,7 +369,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         throw moveError;
       }
     },
-    [requireContext, applyServerBoard, markPending, clearPending],
+    [requireContext, applyServerBoard, markPending, clearPending, rememberPendingMove],
   );
 
   const markTaskViewed = useCallback(
