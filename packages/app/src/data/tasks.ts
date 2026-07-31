@@ -9,6 +9,10 @@ import type {
   TaskSchedulePreference,
 } from "@getpaseo/protocol/tasks/types";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import {
+  type PendingMove,
+  reconcileBoardWithPendingMoves,
+} from "@/components/tasks/board-move-reconcile";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useOptimisticTaskActionStore } from "@/stores/optimistic-task-action-store";
 
@@ -111,7 +115,36 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   // when the pending set changes — only the cards that render the tone re-render.
   const markPending = useOptimisticTaskActionStore((state) => state.markPending);
   const clearPending = useOptimisticTaskActionStore((state) => state.clearPending);
+  const retainOnlyPending = useOptimisticTaskActionStore((state) => state.retainOnly);
   const clearAllPending = useOptimisticTaskActionStore((state) => state.clearAll);
+
+  // Cards the user just dropped, kept as the local source of truth until the
+  // server board reflects them. This is what stops a dropped card from bouncing
+  // back to its old column when a stale board snapshot arrives.
+  const pendingMovesRef = useRef<Map<string, PendingMove>>(new Map());
+
+  // Fold an authoritative server board in: overlay any still-pending user move
+  // (last write wins), then forget every move the server has now caught up to
+  // and clear its busy indicator. Button transitions (not tracked as moves)
+  // settle here too — their flag drops as soon as any authoritative board lands.
+  const applyServerBoard = useCallback(
+    (serverBoard: TaskBoard) => {
+      const {
+        board: reconciledBoard,
+        satisfied,
+        dropped,
+      } = reconcileBoardWithPendingMoves(serverBoard, pendingMovesRef.current);
+      for (const id of satisfied) {
+        pendingMovesRef.current.delete(id);
+      }
+      for (const id of dropped) {
+        pendingMovesRef.current.delete(id);
+      }
+      retainOnlyPending([...pendingMovesRef.current.keys()]);
+      setBoard(reconciledBoard);
+    },
+    [retainOnlyPending],
+  );
 
   // Move a card into `column` right now, without waiting for the RPC, and flag it
   // as busy. Returns a rollback that restores the card's previous slot — but only
@@ -161,6 +194,10 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   const liveClient = useHostRuntimeClient(serverId ?? "");
 
   useEffect(() => {
+    // Switching project abandons any in-flight move: its target column belongs
+    // to the board we're leaving, so it must not overlay the next one.
+    pendingMovesRef.current.clear();
+    clearAllPending();
     if (!serverId || !projectId) {
       setBoard(null);
       setError(null);
@@ -182,10 +219,10 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       if (message.payload.subscriptionId !== subscriptionId) {
         return;
       }
-      // The authoritative board just landed: the server's truth now drives every
-      // card's tone, so the optimistic "in flight" bridge is no longer needed.
-      clearAllPending();
-      setBoard(message.payload.board);
+      // The authoritative board just landed. Overlay any move the server hasn't
+      // caught up to yet (so a stale snapshot can't bounce a dropped card back),
+      // and let its truth drive every settled card's tone.
+      applyServerBoard(message.payload.board);
     });
     const runSubscribe = async () => {
       try {
@@ -218,7 +255,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
         // Socket may already be gone; the server also cleans up on disconnect.
       });
     };
-  }, [serverId, projectId, liveClient, t, clearAllPending]);
+  }, [serverId, projectId, liveClient, t, clearAllPending, applyServerBoard]);
 
   const requireContext = useCallback(() => {
     const client = getClient();
@@ -264,7 +301,12 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   const moveTask = useCallback(
     async (input: { taskId: string; column: TaskColumn; index: number }) => {
       const { client, projectId: project } = requireContext();
-      // Optimistic local move so the card doesn't snap back while the RPC runs.
+      // Record the drop as the local source of truth and light the busy flag, THEN
+      // apply it optimistically. The pending move overrides any server snapshot for
+      // this card until the server catches up, so the card never bounces back to its
+      // old column while the RPC runs — and the indicator shows the move is working.
+      pendingMovesRef.current.set(input.taskId, { column: input.column, order: input.index });
+      markPending(input.taskId);
       const current = boardRef.current;
       const task = current?.tasks.find((entry) => entry.id === input.taskId);
       if (current && task) {
@@ -274,12 +316,20 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
           tasks: current.tasks.map((entry) => (entry.id === input.taskId ? optimistic : entry)),
         });
       }
-      const payload = await client.tasksTaskMove({ projectId: project, ...input });
-      if (payload.board) {
-        setBoard(payload.board);
+      try {
+        const payload = await client.tasksTaskMove({ projectId: project, ...input });
+        if (payload.board) {
+          applyServerBoard(payload.board);
+        }
+      } catch (moveError) {
+        // Refused or failed move: drop our override and busy flag so the next
+        // authoritative board can put the card back where it belongs.
+        pendingMovesRef.current.delete(input.taskId);
+        clearPending(input.taskId);
+        throw moveError;
       }
     },
-    [requireContext],
+    [requireContext, applyServerBoard, markPending, clearPending],
   );
 
   const markTaskViewed = useCallback(
@@ -298,10 +348,12 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       }
       const payload = await client.tasksTaskMarkViewed({ projectId: project, taskId });
       if (payload.board) {
-        setBoard(payload.board);
+        // Overlay any in-flight move: marking a card viewed must not clobber a
+        // drop the server hasn't reflected yet.
+        applyServerBoard(payload.board);
       }
     },
-    [requireContext],
+    [requireContext, applyServerBoard],
   );
 
   const deleteTask = useCallback(

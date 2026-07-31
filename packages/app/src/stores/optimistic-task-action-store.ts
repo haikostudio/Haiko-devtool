@@ -24,7 +24,14 @@ interface OptimisticTaskActionState {
   markPending: (taskId: string) => void;
   /** Clear one task's in-flight flag (on settle or rollback). */
   clearPending: (taskId: string) => void;
-  /** Clear every in-flight flag — called when an authoritative board push lands. */
+  /**
+   * Clear every in-flight flag EXCEPT the given ids. An authoritative board push
+   * settles button transitions (approve/run/validate) at once, but a card whose
+   * drag has not yet been reflected by the server keeps its flag so the indicator
+   * stays lit until the move actually lands. Passing an empty set == clearAll.
+   */
+  retainOnly: (taskIds: Iterable<string>) => void;
+  /** Clear every in-flight flag — used on project switch / unmount. */
   clearAll: () => void;
 }
 
@@ -68,6 +75,27 @@ export const useOptimisticTaskActionStore = create<OptimisticTaskActionState>((s
       const next = new Set(state.pendingIds);
       next.delete(taskId);
       return { pendingIds: next };
+    });
+  },
+  retainOnly: (taskIds) => {
+    const keep = new Set(taskIds);
+    for (const [id, timer] of timers) {
+      if (!keep.has(id)) {
+        clearTimeout(timer);
+        timers.delete(id);
+      }
+    }
+    set((state) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of state.pendingIds) {
+        if (keep.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? { pendingIds: next } : state;
     });
   },
   clearAll: () => {
