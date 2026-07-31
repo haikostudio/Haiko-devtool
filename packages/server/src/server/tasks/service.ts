@@ -95,10 +95,21 @@ function stampTerminalDates(
   column: TaskColumn,
   now: string,
 ): Partial<KanbanTask> {
-  if ((column === "done" || column === "deployed") && task.completedAt == null) {
-    return { completedAt: now };
+  if (column !== "done" && column !== "deployed") {
+    return {};
   }
-  return {};
+  const patch: Partial<KanbanTask> = {};
+  if (task.completedAt == null) {
+    patch.completedAt = now;
+  }
+  // `planReadyAt` is a "come review the plan" flag; a card that reached a terminal
+  // column is no longer waiting on a plan, so drop it or it lingers as a stale
+  // « Plan prêt » badge. The client guards against this defensively too, but
+  // clearing the stored flag keeps board state honest for any reader.
+  if (task.planReadyAt != null) {
+    patch.planReadyAt = null;
+  }
+  return patch;
 }
 
 function resetToDraft(task: KanbanTask): Partial<KanbanTask> {

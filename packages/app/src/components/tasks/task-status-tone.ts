@@ -45,6 +45,23 @@ export function taskAgentId(task: KanbanTask): string | null {
 // server's agent-pending-question) and it clears by itself the moment the user
 // answers, since the agent then spoke second-to-last. It is ignored while the
 // agent is running again — a fresh run outranks a question already superseded.
+// "Plan prêt" is a live "come review the plan" state, not a permanent stamp: the
+// agent produced a plan and parked the card in `in_progress` waiting for the
+// user's go. The moment the card moves past that step — real work done, card in
+// « Terminé », or published — it is no longer waiting on a plan, so the stamp
+// must stop counting. `planReadyAt` is never cleared on a terminal transition by
+// older daemons, so this guard is what keeps a stale stamp from lighting a
+// finished card amber or slapping a « Plan prêt » badge over « Terminé ».
+export function isPlanReady(task: KanbanTask): boolean {
+  if (!task.planReadyAt) {
+    return false;
+  }
+  if (task.column === "done" || task.column === "deployed") {
+    return false;
+  }
+  return task.completedAt == null && task.deployedAt == null;
+}
+
 function wantsUser(
   task: KanbanTask,
   agentBucket: WorkspaceStateBucket | undefined,
@@ -53,7 +70,7 @@ function wantsUser(
   return (
     task.approval?.state === "pending" ||
     task.executionHold === true ||
-    Boolean(task.planReadyAt) ||
+    isPlanReady(task) ||
     task.schedule?.state === "failed" ||
     agentBucket === "failed" ||
     isAgentBlockedOnUser(agentBucket, agentAwaitsUser)

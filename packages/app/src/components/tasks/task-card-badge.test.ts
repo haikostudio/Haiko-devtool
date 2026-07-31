@@ -29,6 +29,41 @@ describe("getScheduleBadge", () => {
     expect(badge).toEqual({ labelKey: "tasks.card.needsAction", variant: "warning" });
   });
 
+  it("shows « Plan prêt » while the card is parked at the plan-review step", () => {
+    const badge = getScheduleBadge(
+      makeTask({ column: "in_progress", planReadyAt: "2026-07-31T10:00:00.000Z" }),
+      "attention",
+    );
+    expect(badge).toEqual({ labelKey: "tasks.card.planReady", variant: "success" });
+  });
+
+  it("drops a stale « Plan prêt » once the card is finished", () => {
+    // The plan stamp is a "come review the plan" flag. A card that moved to
+    // « Terminé » is no longer waiting on a plan — it must read « Terminé », never
+    // a frozen « Plan prêt » left over from an earlier plan run.
+    const badge = getScheduleBadge(
+      makeTask({
+        column: "done",
+        planReadyAt: "2026-07-31T10:00:00.000Z",
+        completedAt: "2026-07-31T10:30:00.000Z",
+      }),
+      "done",
+    );
+    expect(badge).toEqual({ labelKey: "tasks.card.finished", variant: "success" });
+  });
+
+  it("drops a stale « Plan prêt » once the work is published", () => {
+    const badge = getScheduleBadge(
+      makeTask({
+        column: "deployed",
+        planReadyAt: "2026-07-31T10:00:00.000Z",
+        deployedAt: "2026-07-31T10:30:00.000Z",
+      }),
+      null,
+    );
+    expect(badge).toEqual({ labelKey: "tasks.card.deployed", variant: "success" });
+  });
+
   it("says « Terminé » when nothing is expected from the user", () => {
     // The agent finished and went idle: no question, no running action. The card
     // must read as done instead of claiming it waits for a reply.

@@ -1,6 +1,6 @@
 import type { KanbanTask } from "@/data/tasks";
 import { waitsForOffPeak } from "@/components/tasks/task-schedule";
-import type { TaskTone } from "@/components/tasks/task-status-tone";
+import { isPlanReady, type TaskTone } from "@/components/tasks/task-status-tone";
 
 export type ScheduleBadgeVariant = "success" | "error" | "warning";
 
@@ -126,7 +126,10 @@ export function getScheduleBadge(
   if (task.approval?.state === "pending") {
     return { labelKey: "tasks.approval.pending", variant: "warning" };
   }
-  if (task.planReadyAt) {
+  // Only while the card is genuinely parked at the plan-review step. A card that
+  // moved past it (done, deployed, work completed) must not keep flashing « Plan
+  // prêt » over its real status — see isPlanReady.
+  if (isPlanReady(task)) {
     return { labelKey: "tasks.card.planReady", variant: "success" };
   }
   // A failed analysis (with no estimate to override it) wins over every softer

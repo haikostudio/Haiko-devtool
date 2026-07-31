@@ -158,6 +158,30 @@ describe("TaskBoardService", () => {
     expect(scheduled).toEqual([]);
   });
 
+  test("reaching a terminal column clears a leftover planReadyAt stamp", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", {
+      folderId: folder.id,
+      title: "Plan then ship",
+    });
+    // A plan-mode run parked the card in in_progress with a "come review" stamp.
+    await service.patchTask("proj-1", task.id, (current) => ({
+      ...current,
+      column: "in_progress",
+      planReadyAt: "2026-07-31T10:00:00.000Z",
+    }));
+
+    const doneBoard = await service.moveTask("proj-1", {
+      taskId: task.id,
+      column: "done",
+      index: 0,
+      manual: false,
+    });
+    // The stamp is a "waiting on a plan" flag; a finished card no longer waits.
+    expect(doneBoard.tasks[0]?.completedAt).toBeTruthy();
+    expect(doneBoard.tasks[0]?.planReadyAt ?? null).toBeNull();
+  });
+
   test("the deploy queue is terminal: entering it never stamps deployedAt nor re-arms", async () => {
     const scheduled: string[] = [];
     service.setOnTaskScheduled((_projectId, taskId) => scheduled.push(taskId));
