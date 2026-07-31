@@ -49,6 +49,15 @@ interface TasksBoardUiState {
   /** Height (in px) of the Details/Billing dock. */
   detailsHeight: number;
   setDetailsHeight: (detailsHeight: number) => void;
+  /**
+   * Height (in px) the user dragged the Details tab's Description field to.
+   * Persisted so the size chosen once survives every reopen of a card — the
+   * Description is the sheet's most-read field and opens tall by default.
+   * Web-only in practice (the drag handle is a browser affordance); native
+   * shows a generous fixed height instead of a fiddly handle.
+   */
+  detailDescriptionHeight: number;
+  setDetailDescriptionHeight: (detailDescriptionHeight: number) => void;
   /** Horizontal offset (in px) of the Details/Billing dock from its centered position. */
   detailsOffsetX: number;
   setDetailsOffsetX: (detailsOffsetX: number) => void;
@@ -167,6 +176,9 @@ export function useOpenTaskId(): string | null {
 // opens the panel at before the user has resized it.
 const DEFAULT_PANEL_WIDTH = 440;
 const DEFAULT_CONDUCTOR_HEIGHT = 340;
+// Opening height of the Details Description field: a real paragraph on sight,
+// not a 3-4 line peephole. The user can drag it and that size is remembered.
+const DEFAULT_DETAIL_DESCRIPTION_HEIGHT = 220;
 // Opening width of the desktop conductor/agents side panel before the user drags
 // it — a touch wider than the file explorer since it hosts a chat, not a tree.
 const DEFAULT_CONDUCTOR_PANEL_WIDTH = 440;
@@ -219,6 +231,8 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
       setConductorCollapsed: (conductorCollapsed) => set({ conductorCollapsed }),
       detailsHeight: DEFAULT_CONDUCTOR_HEIGHT,
       setDetailsHeight: (detailsHeight) => set({ detailsHeight }),
+      detailDescriptionHeight: DEFAULT_DETAIL_DESCRIPTION_HEIGHT,
+      setDetailDescriptionHeight: (detailDescriptionHeight) => set({ detailDescriptionHeight }),
       detailsOffsetX: 0,
       setDetailsOffsetX: (detailsOffsetX) => set({ detailsOffsetX }),
       detailsCollapsed: false,
@@ -280,6 +294,7 @@ export const useTasksBoardUiStore = create<TasksBoardUiState>()(
         conductorOffsetX: state.conductorOffsetX,
         conductorCollapsed: state.conductorCollapsed,
         detailsHeight: state.detailsHeight,
+        detailDescriptionHeight: state.detailDescriptionHeight,
         detailsOffsetX: state.detailsOffsetX,
         detailsCollapsed: state.detailsCollapsed,
         explorerOpen: state.explorerOpen,

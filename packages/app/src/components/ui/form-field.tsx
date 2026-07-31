@@ -74,7 +74,9 @@ type FormTextInputProps = AdaptiveTextInputProps & {
 // `resize` is a web-only CSS property (not in RN's TextStyle) used to give a
 // multiline field a native drag-to-resize handle. It must land on the <textarea>
 // itself (the input), not the chrome wrapper, so we route it explicitly below.
-type WebResizeStyle = { resize?: "none" | "vertical" | "horizontal" | "both" };
+interface WebResizeStyle {
+  resize?: "none" | "vertical" | "horizontal" | "both";
+}
 type FlatFormTextInputStyle = ViewStyle & TextStyle & WebResizeStyle;
 
 interface SplitFormTextInputStyle {
@@ -239,6 +241,9 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.normal,
+    // Give the glyphs room: without an explicit line height the tight line box
+    // clips the top of ascenders (the "D" in "Description" lost its cap on web).
+    lineHeight: Math.round(theme.fontSize.sm * 1.4),
   },
   hintText: {
     color: theme.colors.foregroundMuted,

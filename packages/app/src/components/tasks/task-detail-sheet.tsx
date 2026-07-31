@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { type LayoutChangeEvent, ScrollView, Text, type ViewStyle, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -12,6 +12,8 @@ import type { FieldControlSize } from "@/components/ui/control-geometry";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useIsCompactFormFactor } from "@/constants/layout";
+import { isWeb } from "@/constants/platform";
+import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import type { KanbanTask, TaskRunConfig, TaskSchedulePreference } from "@/data/tasks";
 import {
   computeBillableCostChf,
@@ -38,6 +40,80 @@ const DEFAULT_MODEL_OPTION_ID = "__default__";
 // Footer/action buttons stay compact (32px) so the sheet reads as a form, not a
 // wall of chunky CTAs — the field inputs keep the taller comfortable tap target.
 const ACTION_BUTTON_SIZE = "sm" as const;
+
+// The Description field opens tall and, on web, gets a drag-to-resize handle on
+// its wrapper (the browser affordance needs `resize` + a non-visible overflow,
+// neither of which lives in RN's ViewStyle, hence the cast). Native shows a
+// generous fixed height instead — a corner handle is too fiddly to grab by
+// thumb. The dragged height is captured via onLayout and persisted per device.
+const DESCRIPTION_RESIZE_STYLE = (
+  isWeb ? { resize: "vertical", overflow: "auto" } : null
+) as ViewStyle | null;
+// Floor the persisted height so a stray zero-height layout pass never sticks.
+const DESCRIPTION_MIN_HEIGHT = 120;
+const DESCRIPTION_MAX_HEIGHT = 1000;
+
+// The Description field: tall by default, and on web wrapped in a drag-resizable
+// box whose height is persisted. Native skips the handle (too fiddly by thumb)
+// and just opens generous, growing with its content. Kept as its own component
+// so the persisted-height wiring stays out of the already-busy detail form.
+function DescriptionField({
+  controlSize,
+  initialValue,
+  onChangeText,
+}: {
+  controlSize: FieldControlSize;
+  initialValue: string;
+  onChangeText: (value: string) => void;
+}) {
+  const height = useTasksBoardUiStore((state) => state.detailDescriptionHeight);
+  const setHeight = useTasksBoardUiStore((state) => state.setDetailDescriptionHeight);
+  // The first layout pass reports the height we already set, so the >= 2px guard
+  // keeps that no-op (and sub-pixel jitter) from writing back on every render.
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const next = Math.round(event.nativeEvent.layout.height);
+      const clamped = Math.max(DESCRIPTION_MIN_HEIGHT, Math.min(DESCRIPTION_MAX_HEIGHT, next));
+      if (Math.abs(clamped - height) >= 2) {
+        setHeight(clamped);
+      }
+    },
+    [height, setHeight],
+  );
+
+  if (!isWeb) {
+    return (
+      <FormTextInput
+        size={controlSize}
+        initialValue={initialValue}
+        onChangeText={onChangeText}
+        style={styles.multilineInput}
+        multiline
+        numberOfLines={8}
+        textAlignVertical="top"
+        testID="task-detail-description"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[styles.descriptionResizeWrap, DESCRIPTION_RESIZE_STYLE, { height }]}
+      onLayout={handleLayout}
+    >
+      <FormTextInput
+        size={controlSize}
+        initialValue={initialValue}
+        onChangeText={onChangeText}
+        style={styles.descriptionInputFill}
+        multiline
+        numberOfLines={4}
+        textAlignVertical="top"
+        testID="task-detail-description"
+      />
+    </View>
+  );
+}
 const ThemedTrash2 = withUnistyles(Trash2);
 const destructiveColorMapping = (theme: Theme) => ({ color: theme.colors.destructive });
 const DELETE_ICON = <ThemedTrash2 size={16} uniProps={destructiveColorMapping} />;
@@ -369,15 +445,10 @@ function TaskDetailSheetForm({
           />
         </Field>
         <Field label={t("tasks.detail.descriptionField")}>
-          <FormTextInput
-            size={controlSize}
+          <DescriptionField
+            controlSize={controlSize}
             initialValue={task.description ?? ""}
             onChangeText={setDescription}
-            style={styles.multilineInput}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            testID="task-detail-description"
           />
         </Field>
       </View>
@@ -1004,8 +1075,18 @@ const styles = StyleSheet.create((theme) => ({
   field: {
     backgroundColor: theme.colors.surface3,
   },
+  // Native: no drag handle, so open at a generous fixed floor and let the field
+  // grow with its content instead of hiding paragraphs behind an inner scroll.
   multilineInput: {
-    minHeight: 96,
+    minHeight: 200,
+    backgroundColor: theme.colors.surface3,
+  },
+  // Web: the resizable wrapper owns the height; the field just fills it.
+  descriptionResizeWrap: {
+    minHeight: DESCRIPTION_MIN_HEIGHT,
+  },
+  descriptionInputFill: {
+    flex: 1,
     backgroundColor: theme.colors.surface3,
   },
   // Grouped block of related fields, mirroring the billing view's cards: the
