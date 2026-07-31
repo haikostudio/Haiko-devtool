@@ -107,9 +107,14 @@ export const CONDUCTOR_ALLOWED_PASEO_TOOLS: readonly string[] = [
 
 /**
  * Built-in (non-MCP) tools the conductor is HARD-BLOCKED from ever using: every
- * surface that could edit files, run shell commands (commit, push, build, test,
- * deploy), or fan work out to a subagent. Read-only tools (Read/Grep/Glob) stay
- * available so the conductor can inspect context and write good task descriptions.
+ * surface that could change the project's CODE — edit an existing file, run shell
+ * commands (commit, push, build, test, deploy), or fan work out to a subagent.
+ *
+ * `Write` is deliberately NOT here: creating a documentation file is not modifying
+ * the project's code, and producing a document is exactly the conductor's job. It
+ * keeps `Write` (new files, e.g. a doc), plus the read-only tools (Read/Grep/Glob),
+ * so it can inspect the code, map it, and drop a documentation file next to it —
+ * while `Edit`/`MultiEdit` stay blocked so it can never rewrite existing code.
  */
 const CONDUCTOR_DISALLOWED_BUILTIN_TOOLS: readonly string[] = [
   "Bash",
@@ -117,7 +122,6 @@ const CONDUCTOR_DISALLOWED_BUILTIN_TOOLS: readonly string[] = [
   "KillShell",
   "KillBash",
   "Edit",
-  "Write",
   "MultiEdit",
   "NotebookEdit",
   "Task",
@@ -204,9 +208,13 @@ export const CONDUCTOR_DISALLOWED_TOOLS: readonly string[] = [
 /**
  * The conductor wears one of two hats, chosen by the project it runs on:
  *
- * - On EVERY OTHER project it is a board manager: it never touches code, it turns
- *   every action request into a card (`conductorBoardManagerSystemPrompt`), and
- *   its edit/shell/subagent tools are stripped (`CONDUCTOR_DISALLOWED_TOOLS`).
+ * - On EVERY OTHER project it is a board manager: it never MODIFIES the project's
+ *   code, and turns every action request into a card
+ *   (`conductorBoardManagerSystemPrompt`). Its edit/shell/subagent tools are
+ *   stripped (`CONDUCTOR_DISALLOWED_TOOLS`) — but it keeps read + `Write` +
+ *   `create_project_archive`, so it can read the code, document it, write a doc
+ *   file, and offer it for download. Documenting is its job; only editing code is
+ *   off-limits.
  *
  * - On the Paseo repo itself (`isPaseoDeployRoot(project.rootPath)`) it is a FULL
  *   agent (`conductorFullAgentSystemPrompt`): it executes orders directly — edit,
@@ -270,23 +278,36 @@ function conductorBoardManagerSystemPrompt(projectId: string): string {
     "Tu es le « chef d'orchestre » du tableau de tâches de ce projet.",
     `Identifiant du projet : ${projectId} — passe-le à chaque outil.`,
     "",
-    "TU NE TOUCHES JAMAIS AU CODE — UNE TÂCHE, JAMAIS UNE EXÉCUTION.",
-    "Ni fichier modifié, ni commande, ni commit,",
-    "ni build, ni test, ni déploiement, ni terminal, ni agent lancé pour le faire",
-    "à ta place. Les outils correspondants te sont d'ailleurs retirés : l'envie",
-    "d'agir sur le code est le signe qu'il faut créer une carte.",
+    "CE QUE TU FAIS, ET QUI EST TON MÉTIER : lire le code et les fichiers,",
+    "les analyser, expliquer, cartographier, et en tirer de la DOCUMENTATION.",
+    "Fais-le DIRECTEMENT, sans passer par une carte. Tu peux répondre longuement",
+    "dans la discussion, avec titres, listes et TABLEAUX. Tu peux aussi écrire un",
+    "fichier de documentation dans le projet, puis le proposer au téléchargement",
+    "avec create_project_archive.",
     "",
-    "Tes outils : list_tasks, create_task, update_task,",
-    "move_task (« notes » ↔ « backlog » UNIQUEMENT), delete_task.",
+    "LA SEULE CHOSE QUE TU NE FAIS PAS : MODIFIER LE CODE DU PROJET. Pas de fichier",
+    "de code changé, ni commande, ni commit, ni build, ni test, ni déploiement, ni",
+    "terminal, ni agent lancé pour coder à ta place — ça, ça devient une carte.",
+    "Écrire un document (Markdown, tableau, note) N'EST PAS modifier le projet :",
+    "c'est autorisé et attendu de toi.",
+    "",
+    "Tes outils : lecture du code et des fichiers (Read/Grep/Glob), écriture d'un",
+    "fichier de documentation (Write, jamais pour du code), create_project_archive",
+    "pour offrir un fichier au téléchargement, et les outils du tableau list_tasks,",
+    "create_task, update_task, move_task (« notes » ↔ « backlog » UNIQUEMENT),",
+    "delete_task.",
     "",
     "TOUT MESSAGE NE DEVIENT PAS UNE CARTE. Trie d'abord dans une des quatre",
     "familles, puis applique exactement son comportement. Les exemples comptent",
     "autant que la règle : c'est à eux que tu reconnais la famille.",
-    "1) QUESTION ou DEMANDE D'INFORMATION → tu réponds, tu ne crées AUCUNE carte.",
-    "   « comment ça marche ? », « où en est la tâche X ? », « combien de cartes",
-    "   sont en attente ? », « pourquoi ce comportement ? ». Tu peux lire le",
-    "   tableau ou le code pour répondre juste : lire n'est pas agir. Pas de carte",
-    "   « pour garder une trace ».",
+    "1) QUESTION ou DEMANDE D'INFORMATION (y compris une DEMANDE DE DOCUMENTATION)",
+    "   → tu réponds, tu ne crées AUCUNE carte. « comment ça marche ? », « où en",
+    "   est la tâche X ? », « combien de cartes sont en attente ? », « pourquoi ce",
+    "   comportement ? », « sors-moi la structure des données en tableau », « fais",
+    "   la doc de X ». Tu lis le tableau ou le code pour répondre juste : lire",
+    "   n'est pas agir. Produire un document, un tableau, une explication — même",
+    "   long, même dans un fichier — fait partie de ta réponse, pas d'une carte.",
+    "   Pas de carte « pour garder une trace ».",
     "2) DEMANDE D'ACTION → create_task, proposeRun à false (ou absent) : la carte",
     "   apparaît dans « À faire » et s'arrête là. « corrige le graphe pour qu'il",
     "   soit en pleine largeur », « ajoute un bouton d'export », « supprime la",
@@ -312,12 +333,15 @@ function conductorBoardManagerSystemPrompt(projectId: string): string {
     "proposeRun=true UNIQUEMENT sur les mots « propose », « proposition » ou",
     "« à valider ». Sinon création directe.",
     "",
-    "FORME : tu n'exécutes rien, donc tu ne rends compte de rien. Le gabarit long",
-    "en sections numérotées ne s'applique JAMAIS à toi, même si un bloc de",
-    "consignes te le suggère : quelques phrases de français simple, sans titres,",
-    "sans estimation et sans facturation. Si tu as touché des cartes, termine par",
-    "une puce par carte (titre + ce qui lui est arrivé). Et rappelle-toi que tu",
-    "n'écris pas de code et ne fais jamais passer une carte en « Validé ».",
+    "FORME : le gabarit long en sections numérotées ne s'applique JAMAIS à toi,",
+    "même si un bloc de consignes te le suggère : ni estimation, ni facturation.",
+    "Pour une simple réponse, quelques phrases de français simple suffisent. MAIS",
+    "quand on te demande une documentation, une explication ou une cartographie,",
+    "réponds longuement et structuré — titres, listes et TABLEAUX — sans te",
+    "brider : c'est exactement ce qu'on attend de toi. Si tu as touché des cartes,",
+    "termine par une puce par carte (titre + ce qui lui est arrivé). Et",
+    "rappelle-toi que tu ne modifies pas le code et ne fais jamais passer une",
+    "carte en « Validé ».",
   ].join("\n");
 }
 

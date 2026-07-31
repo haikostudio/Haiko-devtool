@@ -140,10 +140,13 @@ describe("ConductorAgentService", () => {
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
     const disallowed = input.config?.extra?.claude?.disallowedTools ?? [];
 
-    // Editing + shell + subagent spawning must all be blocked.
-    for (const tool of ["Bash", "Edit", "Write", "NotebookEdit", "Task"]) {
+    // Editing existing files + shell + subagent spawning must all be blocked.
+    for (const tool of ["Bash", "Edit", "MultiEdit", "NotebookEdit", "Task"]) {
       expect(disallowed).toContain(tool);
     }
+    // Write is NOT blocked: creating a documentation file is not modifying the
+    // project's code, and producing a document is part of the conductor's job.
+    expect(disallowed).not.toContain("Write");
     // Paseo tools that execute code or steer other agents/terminals are blocked,
     // including killing/steering other agents and approving their permissions.
     for (const tool of [
@@ -186,7 +189,7 @@ describe("ConductorAgentService", () => {
     expect(systemPrompt).toContain("ne DÉPLOIES JAMAIS");
   });
 
-  it("instructs the conductor to turn action requests into tasks, never to code", async () => {
+  it("bans only modifying code, and frames documenting as the conductor's job", async () => {
     let captured: CreateAgentCommandInput | null = null;
     const service = makeService((input) => {
       captured = input;
@@ -196,8 +199,13 @@ describe("ConductorAgentService", () => {
 
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
     const systemPrompt = input.config?.systemPrompt ?? "";
-    expect(systemPrompt).toContain("TU NE TOUCHES JAMAIS AU CODE");
-    expect(systemPrompt).toContain("UNE TÂCHE, JAMAIS UNE EXÉCUTION");
+    // The one prohibition is now narrow: modifying the project's code, not
+    // producing anything at all.
+    expect(systemPrompt).toContain("MODIFIER LE CODE DU PROJET");
+    // And it is explicitly told documenting is allowed and expected.
+    expect(systemPrompt).toContain("DOCUMENTATION");
+    expect(systemPrompt).toContain("N'EST PAS modifier le projet");
+    expect(systemPrompt).toContain("create_project_archive");
   });
 
   it("answers a question in conversation instead of minting a card", async () => {
@@ -263,7 +271,9 @@ describe("ConductorAgentService", () => {
     // A plain answer must not be dressed up as a work report: the five-section
     // template is injected on every dispatch, so the prompt overrides it here too.
     expect(systemPrompt).toContain("ne s'applique JAMAIS à toi");
-    expect(systemPrompt).toContain("sans estimation et sans facturation");
+    expect(systemPrompt).toContain("ni estimation, ni facturation");
+    // But a documentation request may still be answered long and structured.
+    expect(systemPrompt).toContain("titres, listes et TABLEAUX");
     // The two standing bans survive the triage rewrite.
     expect(systemPrompt).toContain("LA VALIDATION APPARTIENT À L'UTILISATEUR");
     expect(systemPrompt).toContain("jamais passer une carte en « Validé »");
@@ -577,7 +587,7 @@ describe("ConductorAgentService", () => {
     expect(input.config?.sandboxMode).toBe("read-only");
     expect(input.config?.networkAccess).toBe(false);
     expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("codex/gpt-5.6-luna");
-    expect(input.config?.systemPrompt ?? "").toContain("TU NE TOUCHES JAMAIS AU CODE");
+    expect(input.config?.systemPrompt ?? "").toContain("MODIFIER LE CODE DU PROJET");
   });
 
   it("still answers to the previous codex/gpt-5.4 provider spec", async () => {
@@ -785,7 +795,7 @@ describe("ConductorAgentService", () => {
     expect(rewritten.config?.extra?.claude?.disallowedTools).toEqual([
       ...CONDUCTOR_DISALLOWED_TOOLS,
     ]);
-    expect(rewritten.config?.systemPrompt ?? "").toContain("TU NE TOUCHES JAMAIS AU CODE");
+    expect(rewritten.config?.systemPrompt ?? "").toContain("MODIFIER LE CODE DU PROJET");
     // Untouched fields survive the rewrite.
     expect(rewritten.id).toBe("existing-conductor");
     expect(rewritten.labels[CONDUCTOR_ROLE_LABEL]).toBe(CONDUCTOR_ROLE_VALUE);
