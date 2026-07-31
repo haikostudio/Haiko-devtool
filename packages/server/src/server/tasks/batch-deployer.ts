@@ -15,6 +15,13 @@ export interface DeployRunSnapshot {
   phase: string | null;
   outcome: "success" | "failed" | null;
   error: string | null;
+  /**
+   * Branches whose merge conflicted with a sibling card and were skipped (their
+   * merge was aborted). The lot still publishes; these cards are reported in
+   * conflict rather than stamped live. Absent on runs that merge nothing (Paseo,
+   * in-place projects).
+   */
+  conflictedBranches?: string[];
 }
 
 /** How often the publication is polled while it runs. */
@@ -27,6 +34,7 @@ const RESTART_GRACE_MS = 5_000;
 
 /** Human phase labels, in the order the build script writes them. */
 const PHASE_LABELS: Record<string, string> = {
+  merge: "Fusion des branches des cartes…",
   prepare: "Enregistrement des changements…",
   push: "Envoi sur le dépôt…",
   verify: "Vérification du code…",
@@ -85,7 +93,7 @@ export interface TaskBatchDeployerOptions {
    */
   triggerProjectDeploy?: (input: {
     rootPath: string;
-    cards: { title: string }[];
+    cards: { title: string; branch?: string }[];
   }) => Promise<DeployTriggerResult>;
   /** The phase snapshot of a running ordinary-project publication. */
   readProjectDeployRun?: (rootPath: string) => Promise<DeployRunSnapshot>;
@@ -485,7 +493,10 @@ export class TaskBatchDeployer {
   ): Promise<void> {
     const result = await this.options.triggerProjectDeploy!({
       rootPath,
-      cards: pending.map((task) => ({ title: task.title })),
+      cards: pending.map((task) => ({
+        title: task.title,
+        ...(task.links.branch ? { branch: task.links.branch } : {}),
+      })),
     });
     if (!result.started) {
       await this.fail(projectId, pending, result.error ?? "raison inconnue");
@@ -497,7 +508,8 @@ export class TaskBatchDeployer {
       pending,
       url,
       readRun: () => this.options.readProjectDeployRun!(rootPath),
-      onSuccess: (input) => this.succeedProject(input.projectId, input.pending, input.url),
+      onSuccess: (input) =>
+        this.succeedProject(input.projectId, input.pending, input.url, input.run),
     });
   }
 
@@ -546,6 +558,7 @@ export class TaskBatchDeployer {
       projectId: string;
       pending: KanbanTask[];
       url: string | null;
+      run: DeployRunSnapshot;
     }) => Promise<void>;
   }): Promise<void> {
     let lastPhase: string | null = null;
@@ -576,6 +589,7 @@ export class TaskBatchDeployer {
           projectId: input.projectId,
           pending: input.pending,
           url: input.url,
+          run,
         });
         return;
       }
@@ -750,8 +764,17 @@ export class TaskBatchDeployer {
     projectId: string,
     pending: KanbanTask[],
     url: string | null,
+    run: DeployRunSnapshot,
   ): Promise<void> {
-    for (const task of pending) {
+    // A card whose branch conflicted with a sibling was skipped by the deployer
+    // (its merge aborted). It must NOT be stamped live — its work never reached
+    // the published build. Split the lot so the rest ships and these are reported.
+    const conflicted = new Set(run.conflictedBranches ?? []);
+    const live = pending.filter((task) => !task.links.branch || !conflicted.has(task.links.branch));
+    const skipped = pending.filter(
+      (task) => task.links.branch && conflicted.has(task.links.branch),
+    );
+    for (const task of live) {
       try {
         await this.options.taskBoardService.markTaskDeployed(projectId, task.id, {
           url,
@@ -763,11 +786,19 @@ export class TaskBatchDeployer {
       }
     }
     await this.sayAll(
-      pending,
+      live,
       url
         ? `✅ **Publication groupée** — c'est en ligne : ${url}`
         : "✅ **Publication groupée** — c'est en ligne.",
     );
+    // Conflicted cards stay out of "Déployé": their branch clashed with another
+    // card's changes, so a human must resolve the overlap before they can ship.
+    for (const task of skipped) {
+      await this.say(
+        task,
+        "⚠️ **Publication groupée** — cette carte n'a pas pu être fusionnée : sa branche est en conflit avec une autre carte du lot. Le reste du lot est en ligne ; cette carte attend une résolution manuelle du conflit.",
+      );
+    }
     await this.finishSuccessfully(projectId, url);
   }
 

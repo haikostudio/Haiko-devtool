@@ -4,8 +4,10 @@ import {
   ANALYSIS_FALLBACK_ESTIMATE,
   backfillTaskBilling,
   buildTaskAnalysisPrompt,
+  buildTaskBranchName,
   DEFAULT_BILLING_HOURS,
   parseTaskAnalysisEstimate,
+  resolveTaskWorktreePlan,
   withBillingDefaults,
   withTaskAttachments,
 } from "./agent-launch.js";
@@ -32,6 +34,49 @@ function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
     ...overrides,
   };
 }
+
+describe("task worktree plan", () => {
+  test("an ordinary card gets an isolated worktree on a task/<id>-<slug> branch", () => {
+    const plan = resolveTaskWorktreePlan({
+      task: makeTask({ id: "abc123def", title: "Ajouter la connexion" }),
+      folder: undefined,
+      planMode: false,
+      isSelf: false,
+    });
+    expect(plan.kind).toBe("isolated");
+    expect(plan.branch).toBe("task/abc123de-ajouter-la-connexion");
+  });
+
+  test("plan-mode stays in place — a plan produces no commits, so no branch", () => {
+    const plan = resolveTaskWorktreePlan({
+      task: makeTask(),
+      folder: undefined,
+      planMode: true,
+      isSelf: false,
+    });
+    expect(plan).toEqual({ kind: "in-place", branch: null });
+  });
+
+  test("Paseo itself (isSelf) stays in place on its shared checkout", () => {
+    const plan = resolveTaskWorktreePlan({
+      task: makeTask(),
+      folder: undefined,
+      planMode: false,
+      isSelf: true,
+    });
+    expect(plan).toEqual({ kind: "in-place", branch: null });
+  });
+
+  test("branch name is a valid git ref: lowercased, accents stripped, dashed", () => {
+    const branch = buildTaskBranchName(makeTask({ id: "Xy_9", title: "Éditer le Réglage !!" }));
+    expect(branch).toBe("task/Xy9-editer-le-reglage");
+  });
+
+  test("a title with no usable characters still yields a unique branch", () => {
+    const branch = buildTaskBranchName(makeTask({ id: "id-42", title: "!!!" }));
+    expect(branch).toBe("task/id42");
+  });
+});
 
 describe("task analysis estimation", () => {
   test("the fallback is a short agent runtime that reads as a light task", () => {

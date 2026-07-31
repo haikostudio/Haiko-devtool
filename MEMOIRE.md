@@ -22,6 +22,14 @@ d'état du projet — d'où l'exigence de brièveté.
   phrase ajoutée est payée à chaque message, pour toujours.
 - Le tableau se déplace à la main. Trois exceptions seulement, et « Validé »
   reste le geste par lequel l'utilisateur autorise la dépense de quota.
+- Chaque carte s'exécute dans SON worktree isolé + branche `task/<id>-<slug>`
+  (modèle GitHub) : les cartes d'un même projet tournent en parallèle, et une
+  carte terminée-non-déployée ne bloque plus rien. Deux exceptions restent « en
+  place » sur le checkout partagé : Paseo lui-même (isSelf) et le mode plan.
+  Le verrou « une autre tâche occupe le dossier » ne vaut donc plus que pour ces
+  cartes en place. La publication groupée fusionne la branche de chaque carte,
+  signale (sans casser le lot) une carte en conflit, et supprime les branches
+  fusionnées.
 
 ## Pièges connus
 

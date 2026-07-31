@@ -17,7 +17,7 @@ import {
   TASK_AGENT_LABEL,
   withTaskAttachments,
 } from "./agent-launch.js";
-import { PASEO_DEPLOY_CONFLICT_TAG } from "../../utils/paseo-deploy.js";
+import { isPaseoDeployRoot, PASEO_DEPLOY_CONFLICT_TAG } from "../../utils/paseo-deploy.js";
 
 export { TASK_AGENT_LABEL } from "./agent-launch.js";
 
@@ -60,6 +60,10 @@ interface LaunchCandidate {
   folder: TaskFolder | undefined;
   folderOrder: number;
   runNow: boolean;
+  // Whether this card runs in place on the shared checkout (Paseo itself, or a
+  // plan-mode task) rather than in its own isolated worktree. In-place cards of
+  // one project must serialize; isolated cards never do.
+  inPlace: boolean;
 }
 
 // "Planifié" column task ready to launch: estimated, awaiting a slot, and not
@@ -141,9 +145,10 @@ export class TaskScheduler {
   // taskId -> reserved quota percent for launches still in flight.
   private readonly inFlight = new Map<string, number>();
   private readonly runNowQueue = new Set<string>();
-  // "projectId:folderId" of branch-folders with an active task, recomputed each
-  // tick. A branch-folder runs its tasks one at a time (single shared worktree).
-  private readonly busyBranchFolders = new Set<string>();
+  // Project ids that already have an active IN-PLACE task, recomputed each tick.
+  // In-place cards (Paseo itself, plan-mode) share the one checkout, so only one
+  // may run at a time; isolated cards each own a worktree and never appear here.
+  private readonly busyInPlaceProjects = new Set<string>();
   // Open tasks already sent to the estimator this daemon lifetime — the sweep
   // estimates each task once (a failed run writes a fallback estimate anyway).
   private readonly estimateRequested = new Set<string>();
@@ -276,12 +281,12 @@ export class TaskScheduler {
         if (this.inFlight.has(candidate.task.id)) {
           continue;
         }
-        // Serialize within a branch-folder: its tasks share one worktree, so hold
-        // this one back while a sibling is already active (or launched this tick).
-        const branchFolderKey = candidate.folder?.branch
-          ? `${candidate.projectId}:${candidate.folder.id}`
-          : null;
-        if (branchFolderKey && this.busyBranchFolders.has(branchFolderKey)) {
+        // Isolated cards each own a worktree, so they launch in parallel with no
+        // sibling hold — a finished-but-undeployed card never blocks the next one.
+        // Only in-place cards (Paseo itself, plan-mode) share the one checkout, so
+        // hold this one back while another in-place card of the SAME project is
+        // already active (or launched this tick).
+        if (candidate.inPlace && this.busyInPlaceProjects.has(candidate.projectId)) {
           await this.setWaitingBlocker(candidate, "shared_worktree");
           continue;
         }
@@ -302,8 +307,8 @@ export class TaskScheduler {
         await this.setWaitingBlocker(candidate, undefined);
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
-        if (branchFolderKey) {
-          this.busyBranchFolders.add(branchFolderKey);
+        if (candidate.inPlace) {
+          this.busyInPlaceProjects.add(candidate.projectId);
         }
         void this.launch(candidate)
           .catch((error) => {
@@ -324,7 +329,7 @@ export class TaskScheduler {
   private async collectCandidates(): Promise<LaunchCandidate[]> {
     const projects = await this.projectRegistry.list();
     const candidates: LaunchCandidate[] = [];
-    this.busyBranchFolders.clear();
+    this.busyInPlaceProjects.clear();
     for (const project of projects) {
       if (project.archivedAt) {
         continue;
@@ -335,7 +340,8 @@ export class TaskScheduler {
       }
       const foldersById = new Map(board.folders.map((folder) => [folder.id, folder]));
       const folderOrders = new Map(board.folders.map((folder) => [folder.id, folder.order]));
-      this.markBusyBranchFolders(project.projectId, board.tasks, foldersById);
+      const isSelf = isPaseoDeployRoot(project.rootPath);
+      this.markBusyInPlaceProjects(project.projectId, board.tasks, foldersById, isSelf);
       for (let task of board.tasks) {
         if (task.column === "done" || task.column === "deployed") {
           continue;
@@ -368,33 +374,53 @@ export class TaskScheduler {
         if (!isScheduledCandidate(task)) {
           continue;
         }
+        const folder = foldersById.get(task.folderId);
+        const plan = resolveTaskWorktreePlan({
+          task,
+          folder,
+          planMode: resolveTaskLaunch(task).planMode,
+          isSelf,
+        });
         candidates.push({
           projectId: project.projectId,
           task,
-          folder: foldersById.get(task.folderId),
+          folder,
           folderOrder: folderOrders.get(task.folderId) ?? 0,
           runNow: this.runNowQueue.has(`${project.projectId}:${task.id}`),
+          inPlace: plan.kind === "in-place",
         });
       }
     }
     return this.sortForPacking(candidates);
   }
 
-  // A branch-folder shares ONE worktree, so only one of its tasks may run at a
-  // time. Records folders that already have an active (launching/running) task so
-  // the tick loop holds their other tasks back until the slot frees up.
-  private markBusyBranchFolders(
+  // In-place cards (Paseo itself, plan-mode) share the ONE checkout, so only one
+  // may run at a time. Records projects that already have an active
+  // (launching/running) in-place task so the tick loop holds their other in-place
+  // cards back. Isolated cards each own a worktree and are ignored here — they run
+  // in parallel, and a finished-but-undeployed card never counts as "busy".
+  private markBusyInPlaceProjects(
     projectId: string,
     tasks: KanbanTask[],
     foldersById: Map<string, TaskFolder>,
+    isSelf: boolean,
   ): void {
     for (const task of tasks) {
       const active =
         task.column === "in_progress" ||
         task.schedule?.state === "launching" ||
         task.schedule?.state === "running";
-      if (active && foldersById.get(task.folderId)?.branch) {
-        this.busyBranchFolders.add(`${projectId}:${task.folderId}`);
+      if (!active) {
+        continue;
+      }
+      const plan = resolveTaskWorktreePlan({
+        task,
+        folder: foldersById.get(task.folderId),
+        planMode: resolveTaskLaunch(task).planMode,
+        isSelf,
+      });
+      if (plan.kind === "in-place") {
+        this.busyInPlaceProjects.add(projectId);
       }
     }
   }
@@ -765,21 +791,26 @@ export class TaskScheduler {
 
     try {
       const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-      // Every task runs in place, on the project's main branch — no branch, no
-      // separate worktree, for any project. See resolveTaskWorktreePlan.
-      resolveTaskWorktreePlan({ task, folder: candidate.folder, planMode });
-      // The analysis phase already spawned the task's visible agent and ran the
-      // read-only analysis turn. Execution CONTINUES that same conversation —
-      // reuse the agent instead of creating a new one, so the analysis is the
-      // task's starting point. Only the legacy path (no analysis agent, e.g.
-      // pre-upgrade tasks) creates the agent here.
+      // Isolated worktree + `task/<id>-<slug>` branch by default; Paseo itself and
+      // plan-mode stay in place. See resolveTaskWorktreePlan.
+      const plan = resolveTaskWorktreePlan({
+        task,
+        folder: candidate.folder,
+        planMode,
+        isSelf: isPaseoDeployRoot(project.rootPath),
+      });
+      // The analysis phase already spawned the task's visible agent (in its own
+      // worktree) and ran the read-only analysis turn. Execution CONTINUES that
+      // same conversation — reuse the agent instead of creating a new one, so the
+      // analysis is the task's starting point. Only the legacy path (no analysis
+      // agent, e.g. pre-upgrade tasks) creates the agent here.
       let agentId = task.links.taskAgentId ?? null;
-      const branch = task.links.branch ?? null;
+      let branch = task.links.branch ?? (plan.kind === "isolated" ? plan.branch : null);
       let workspaceId = task.links.workspaceId ?? null;
 
       if (!agentId) {
-        // Legacy path (no analysis agent yet): run directly in the project
-        // checkout on its main branch. No worktree, no branch is ever created.
+        // Legacy path (no analysis agent yet): cut the same isolated worktree the
+        // provisioner would have, so this card behaves like any other.
         const created = await this.createAgent({
           kind: "mcp",
           provider,
@@ -794,12 +825,16 @@ export class TaskScheduler {
             ? { thinking: task.runConfig.thinkingOptionId }
             : {}),
           mode: launchMode,
+          ...(plan.kind === "isolated"
+            ? { worktree: { branchName: plan.branch, action: "branch-off" as const } }
+            : {}),
         });
         if (created.initialPromptError) {
           throw created.initialPromptError;
         }
         agentId = created.snapshot.id;
         workspaceId = created.snapshot.workspaceId ?? workspaceId;
+        branch = created.createdWorktree?.worktree.branchName ?? branch;
       }
 
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({

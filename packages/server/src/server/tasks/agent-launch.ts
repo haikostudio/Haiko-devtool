@@ -157,8 +157,8 @@ export function backfillTaskBilling(task: KanbanTask): KanbanTask {
 }
 
 // Turns free-form text into the branch-safe slug portion of a git ref: lowercase,
-// accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Kept
-// for folder-path derivation; task launches no longer cut a branch of their own.
+// accents stripped, non-alphanumerics collapsed to single dashes, trimmed. Used
+// for folder-path derivation and for the per-task `task/<id>-<slug>` branch.
 export function slugifyBranch(text: string): string {
   return text
     .toLowerCase()
@@ -207,28 +207,45 @@ export function resolveTaskLaunch(task: KanbanTask): ResolvedTaskLaunch {
 /**
  * How a task's agent should get its working tree.
  *
- * Every task runs IN PLACE, on the project's main branch. Cutting a branch
- * (and a worktree) per task produced exactly the problems it was meant to avoid:
- * conflicts between branches, painful merges, agents working from divergent
- * contexts, and a deploy step that had to reconcile all of it. One branch, one
- * context, one deploy — for every project, without exception.
+ * The default is the GitHub model: each card works in ITS OWN isolated worktree
+ * on a dedicated `task/<id>-<slug>` branch, exactly like parallel git branches.
+ * Several cards of the same folder then run at the same time without fighting
+ * over one checkout, and a finished-but-not-yet-deployed card no longer "holds
+ * the folder". At deploy time the batch deployer merges each card's branch and
+ * publishes the lot once (conflicts flagged per card, see ProjectDeployer).
  *
- * There is deliberately only one shape: a task never gets a branch or a separate
- * worktree. This is the single, permanent guarantee — no code path can opt back
- * into a per-task branch.
+ * Two deliberate exceptions stay IN PLACE, on the project's main branch:
+ *  - Plan-mode tasks: they only ever produce a plan (no edits, no commits), so a
+ *    branch would be dead weight.
+ *  - Paseo itself (`isSelf`): the daemon executes from the shared /root/paseo
+ *    checkout; forking the very tree the running daemon builds from is a class of
+ *    problem we keep out of scope. Paseo remains the one in-place project.
  */
-export interface TaskWorktreePlan {
-  kind: "in-place";
-  branch: null;
-}
+export type TaskWorktreePlan =
+  | { kind: "in-place"; branch: null }
+  | { kind: "isolated"; branch: string };
 
-export function resolveTaskWorktreePlan(_input: {
+export function resolveTaskWorktreePlan(input: {
   task: KanbanTask;
   folder: TaskFolder | undefined;
   planMode: boolean;
+  isSelf: boolean;
 }): TaskWorktreePlan {
-  // Always in place, on the project's main branch — see the note above.
-  return { kind: "in-place", branch: null };
+  if (input.planMode || input.isSelf) {
+    return { kind: "in-place", branch: null };
+  }
+  return { kind: "isolated", branch: buildTaskBranchName(input.task) };
+}
+
+/**
+ * Deterministic branch name for a task's isolated worktree: `task/<id>-<slug>`.
+ * The id prefix keeps it unique; the slug keeps it readable. worktree-core
+ * re-normalizes the name, so this only needs to be a sane, stable seed.
+ */
+export function buildTaskBranchName(task: KanbanTask): string {
+  const slug = slugifyBranch(task.title);
+  const shortId = task.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
+  return slug ? `task/${shortId}-${slug}` : `task/${shortId}`;
 }
 
 /**
@@ -289,11 +306,18 @@ export function buildTaskAnalysisPrompt(input: {
   planMode: boolean;
   branch: string | null;
 }): string {
-  const { task, planMode } = input;
+  const { task, planMode, branch } = input;
   const providerLabel = resolveTaskLaunch(task).provider;
-  const intro = planMode
-    ? "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera directement dans le workspace en cours du projet."
-    : "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans le checkout principal du projet, sur sa branche principale — comme toutes les autres tâches. Aucune branche dédiée n'est créée.";
+  let intro: string;
+  if (planMode) {
+    intro =
+      "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera directement dans le workspace en cours du projet.";
+  } else if (branch) {
+    intro = `Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans un espace de travail isolé, sur une branche dédiée à cette carte (${branch}) — comme une branche Git parallèle, pour tourner en même temps que les autres cartes sans conflit.`;
+  } else {
+    intro =
+      "Tu démarres une tâche du gestionnaire de tâches Paseo. L'exécution se fera dans le checkout principal du projet, sur sa branche principale — comme toutes les autres tâches. Aucune branche dédiée n'est créée.";
+  }
   return [
     intro,
     `Agent d'exécution : ${providerLabel}. Chiffre tokens/quota/temps POUR CE modèle.`,
@@ -344,10 +368,17 @@ export function buildTaskExecutionPrompt(input: {
   planMode: boolean;
   branch: string | null;
 }): string {
-  const { task, planMode } = input;
-  const intro = planMode
-    ? "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet."
-    : "Tu exécutes une tâche du gestionnaire de tâches Paseo dans le checkout principal du projet, sur sa branche principale. Toutes les tâches travaillent sur cette même branche : ne crée aucune branche, ne change pas de branche.";
+  const { task, planMode, branch } = input;
+  let intro: string;
+  if (planMode) {
+    intro =
+      "Tu exécutes une tâche du gestionnaire de tâches Paseo directement dans le workspace en cours du projet.";
+  } else if (branch) {
+    intro = `Tu exécutes une tâche du gestionnaire de tâches Paseo dans un espace de travail isolé, déjà positionné sur la branche dédiée à cette carte (${branch}). Reste sur cette branche : ne crée pas d'autre branche, ne change pas de branche. Tes commits y restent jusqu'à ce que la publication groupée les fusionne.`;
+  } else {
+    intro =
+      "Tu exécutes une tâche du gestionnaire de tâches Paseo dans le checkout principal du projet, sur sa branche principale. Toutes les tâches travaillent sur cette même branche : ne crée aucune branche, ne change pas de branche.";
+  }
   const instructions = planMode
     ? [
         "## Étape 2 — Plan d'implémentation",

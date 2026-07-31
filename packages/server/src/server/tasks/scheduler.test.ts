@@ -243,7 +243,7 @@ describe("TaskScheduler", () => {
     expect(estimator.requestEstimate).not.toHaveBeenCalled();
   });
 
-  test("launches an awaiting task in place on the main branch and flags it for review", async () => {
+  test("launches an awaiting task in its own isolated worktree and flags it for review", async () => {
     const task = await seedScheduledTask({ quotaPercent: 15 });
     const { scheduler, createAgent } = buildScheduler({ remainingPct: 80 });
 
@@ -257,19 +257,20 @@ describe("TaskScheduler", () => {
     const ran = board.tasks.find((entry) => entry.id === task.id);
     expect(ran?.links.primaryAgentId).toBe("task-agent-1");
     expect(ran?.links.workspaceId).toBe("ws-proj-1");
-    // No branch is cut per task any more: every task works on the project's main
-    // branch, in the project checkout.
-    expect(ran?.links.branch ?? null).toBeNull();
+    // Each ordinary card cuts its own `task/<id>-<slug>` branch so siblings run
+    // in parallel; the branch is recorded on the card for the deploy merge.
+    expect(ran?.links.branch).toMatch(/^task\//);
     expect(ran?.links.prUrl ?? null).toBeNull();
     expect(ran?.schedule ?? null).toBeNull();
     // A finished run does NOT complete the card — only the user's validation does.
     expect(ran?.column).toBe("in_progress");
     expect(ran?.completedAt ?? null).toBeNull();
     expect(createAgent).toHaveBeenCalledTimes(1);
-    // Runs in the project checkout itself, with no worktree.
+    // Runs in an isolated worktree branched off the project checkout.
     const createCall = createAgent.mock.calls[0]?.[0];
     expect(createCall).toHaveProperty("cwd", "/tmp/proj-1");
-    expect(createCall).not.toHaveProperty("worktree");
+    expect(createCall).toHaveProperty("worktree");
+    expect((createCall as { worktree?: { action?: string } }).worktree?.action).toBe("branch-off");
   });
 
   test("reuses the analysis agent for execution instead of creating a new one", async () => {
@@ -399,13 +400,19 @@ describe("TaskScheduler", () => {
     expect(board.tasks[0]?.schedule?.state).toBe("awaiting_slot");
   });
 
-  test("says so when a sibling task holds the shared worktree", async () => {
-    // Two cards, one folder, one worktree: the second waits. That wait used to be
-    // a bare `continue` — the card sat in "Planifié" promising "Démarrage
-    // imminent" while the scheduler knew exactly why it was not starting.
-    const folder = await service.createFolder("proj-1", "Auth");
-    const busy = await service.createTask("proj-1", { folderId: folder.id, title: "Première" });
-    const waiting = await service.createTask("proj-1", { folderId: folder.id, title: "Seconde" });
+  test("says so when a sibling in-place task holds the shared checkout", async () => {
+    // Isolated cards each own a worktree and launch in parallel, so the only cards
+    // that still serialize are the IN-PLACE ones (plan-mode here, or Paseo itself):
+    // they share the one checkout, so the second waits with a spoken reason rather
+    // than a bare `continue` that left it promising "Démarrage imminent".
+    const busy = await service.createTask("proj-1", {
+      title: "Première",
+      runConfig: { provider: "claude", mode: "plan" },
+    });
+    const waiting = await service.createTask("proj-1", {
+      title: "Seconde",
+      runConfig: { provider: "claude", mode: "plan" },
+    });
     await service.moveTask("proj-1", { taskId: busy.id, column: "in_progress", index: 0 });
     await service.moveTask("proj-1", { taskId: waiting.id, column: "scheduled", index: 0 });
     await service.patchTask("proj-1", waiting.id, (current) => ({
@@ -426,6 +433,20 @@ describe("TaskScheduler", () => {
 
     expect(createAgent).not.toHaveBeenCalled();
     expect((await findTask(waiting.id))?.schedule?.waitingBlocker).toBe("shared_worktree");
+  });
+
+  test("two isolated cards of the same project both launch in parallel", async () => {
+    // The core of the feature: two ordinary cards (no plan-mode, not Paseo) each
+    // get their own worktree, so neither holds the other back.
+    const first = await seedScheduledTask({ title: "Première", quotaPercent: 10 });
+    const second = await seedScheduledTask({ title: "Seconde", quotaPercent: 10 });
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.tick();
+    await vi.waitFor(() => expect(createAgent).toHaveBeenCalledTimes(2));
+
+    expect((await findTask(first.id))?.schedule?.waitingBlocker ?? null).toBeNull();
+    expect((await findTask(second.id))?.schedule?.waitingBlocker ?? null).toBeNull();
   });
 
   test("clears the hold once the card actually launches", async () => {

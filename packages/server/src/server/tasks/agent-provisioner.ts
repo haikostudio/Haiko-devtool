@@ -3,6 +3,7 @@ import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
+import { isPaseoDeployRoot } from "../../utils/paseo-deploy.js";
 import { resolveTaskLaunch, resolveTaskWorktreePlan, TASK_AGENT_LABEL } from "./agent-launch.js";
 
 export interface ProvisionedTaskAgent {
@@ -105,9 +106,17 @@ export class TaskAgentProvisioner {
     folder: TaskFolder | undefined,
   ): Promise<ProvisionedTaskAgent> {
     const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-    // Every task runs in place, on the project's main branch — no branch, no
-    // separate worktree, for any project. See resolveTaskWorktreePlan.
-    resolveTaskWorktreePlan({ task, folder, planMode });
+    // Each card gets its OWN isolated worktree + `task/<id>-<slug>` branch, so
+    // several cards of the same folder run in parallel without fighting over one
+    // checkout (Paseo itself and plan-mode stay in place — see
+    // resolveTaskWorktreePlan). The worktree is cut here, at creation, so the
+    // card's whole life (analysis, execution, deploy check) happens inside it.
+    const plan = resolveTaskWorktreePlan({
+      task,
+      folder,
+      planMode,
+      isSelf: isPaseoDeployRoot(projectRoot),
+    });
     const created = await this.createAgent({
       kind: "mcp",
       provider,
@@ -120,13 +129,20 @@ export class TaskAgentProvisioner {
       notifyOnFinish: false,
       ...(task.runConfig?.thinkingOptionId ? { thinking: task.runConfig.thinkingOptionId } : {}),
       mode: launchMode,
+      ...(plan.kind === "isolated"
+        ? { worktree: { branchName: plan.branch, action: "branch-off" as const } }
+        : {}),
     });
     if (created.initialPromptError) {
       throw created.initialPromptError;
     }
     const agentId = created.snapshot.id;
     const workspaceId = created.snapshot.workspaceId ?? null;
-    const branch = null;
+    // Prefer the branch git actually created (worktree-core re-normalizes the
+    // requested name); fall back to the planned name, then null for in-place.
+    const branch =
+      created.createdWorktree?.worktree.branchName ??
+      (plan.kind === "isolated" ? plan.branch : null);
 
     // Link immediately so the card's chat binds to this conversation from the
     // very first second, before any prompt is sent into it.
@@ -140,6 +156,7 @@ export class TaskAgentProvisioner {
           ? current.links.agentIds
           : [...current.links.agentIds, agentId],
         ...(workspaceId ? { workspaceId } : {}),
+        ...(branch ? { branch } : {}),
       },
     }));
 

@@ -372,28 +372,31 @@ live yet, in ONE run, and restarts the daemon at the end.
   `deployed` **or** `done` — that is not archived, not held (`deployHold`) and not
   live yet (`deployedAt` / `deployment.state === "deployed"` / `deployedUrl`).
 
-  "Terminé" counts because a publication builds the whole checkout: a finished
-  card the user never queued rides along physically no matter what the board says.
-  It used to ride along INVISIBLY — its work went online while its card stayed in
-  "Terminé", unstamped, unarchived, and eligible for a later publication with
-  nothing left to publish. `beginCycle` therefore sweeps those cards into the
-  queue (`promoteFinishedCards`) BEFORE the run starts, so the lot on screen is
-  the lot the build carries. `deployHold` remains the one way to keep a finished
-  card out. The client's count (`countTasksAwaitingDeploy`) mirrors this exactly —
-  the button must never promise fewer cards than the run publishes.
+  "Terminé" counts because the deploy MERGES each card's branch: a finished card
+  is only carried online if its `task/<id>-<slug>` branch is part of the lot the
+  run merges, so a finished card left out of the queue would stay offline while its
+  card looked done. `beginCycle` therefore sweeps those cards into the queue
+  (`promoteFinishedCards`) BEFORE the run starts, so the lot on screen is the lot
+  whose branches get merged and built. `deployHold` remains the one way to keep a
+  finished card out. The client's count (`countTasksAwaitingDeploy`) mirrors this
+  exactly — the button must never promise fewer cards than the run publishes.
 
   The off-peak watcher is the one caller that keeps the narrower view
   (`selectQueuedDeployTasks`): only a card the user placed in "À déployer" may
   ORDER an unattended publication. Once it starts, it publishes the full lot like
   any other run.
 
-- **Two shapes.** Paseo's own batch goes through `triggerPaseoDeploy` (which
-  merges the cards' branches and hands the build to its own supervising agent);
-  the daemon watches the run, narrates each phase into every card's conversation,
-  stamps the cards live (`markTaskDeployed`) and then restarts itself. Any other
-  project is deployed card by card by each card's own agent (the per-card path
-  below), and no daemon restart follows — that project's own service was
-  restarted by the agent that deployed it.
+- **Two shapes.** Paseo's own batch goes through `triggerPaseoDeploy` and builds
+  its main branch as it stands (Paseo is the one in-place project, so there is
+  nothing to merge); the daemon watches the run, narrates each phase into every
+  card's conversation, stamps the cards live (`markTaskDeployed`) and then restarts
+  itself. Any other project goes through the central `ProjectDeployer`: it MERGES
+  each card's `task/<id>-<slug>` branch into main (a branch that conflicts with a
+  sibling is `git merge --abort`ed and reported in `conflictedBranches`, so the lot
+  still ships and that card alone waits for a manual resolution), commits any
+  residual per card, restarts the project's own service once and verifies it live —
+  no daemon restart follows. Merged branches are deleted best-effort once the run
+  succeeds.
 - **It refuses to start** while a card is still in "En cours" (a build taken from
   a checkout other agents are writing into is the torn-bundle bug), while a batch
   is already running, and when there is nothing left to publish. Each refusal
@@ -490,12 +493,20 @@ wearing a green "Démarrage imminent" while the scheduler knew precisely why it 
 not starting. "On l'a lancée et elle reste dans Planifié" was that silence, not a
 crash.
 
-| Gate                              | Field                     | Card says                           |
-| --------------------------------- | ------------------------- | ----------------------------------- |
-| Outside the launch window         | `schedule.waitingReason`  | "Attente heures creuses"            |
-| Not enough quota left             | `schedule.waitingReason`  | "En attente de quota"               |
-| A sibling holds the shared branch | `schedule.waitingBlocker` | "Une autre tâche occupe le dossier" |
-| Every launch slot is taken        | `schedule.waitingBlocker` | "Tous les créneaux sont occupés"    |
+| Gate                                   | Field                     | Card says                           |
+| -------------------------------------- | ------------------------- | ----------------------------------- |
+| Outside the launch window              | `schedule.waitingReason`  | "Attente heures creuses"            |
+| Not enough quota left                  | `schedule.waitingReason`  | "En attente de quota"               |
+| An in-place sibling holds the checkout | `schedule.waitingBlocker` | "Une autre tâche occupe le dossier" |
+| Every launch slot is taken             | `schedule.waitingBlocker` | "Tous les créneaux sont occupés"    |
+
+The "in-place sibling" hold is now narrow: since each ordinary card launches in
+its OWN isolated worktree + `task/<id>-<slug>` branch
+(`resolveTaskWorktreePlan`), siblings run in parallel and a finished-but-undeployed
+card never holds the next one back. The hold only survives for the two deliberate
+IN-PLACE cases that still share the one checkout — Paseo itself (`isSelf`) and
+plan-mode cards — where the scheduler serialises them per project
+(`busyInPlaceProjects`).
 
 Two fields, one concept, on purpose: `waitingReason` is a wire `z.enum`, and a
 third literal on it would make an old client reject the whole board message. So

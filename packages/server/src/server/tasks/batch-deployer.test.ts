@@ -66,7 +66,7 @@ describe("TaskBatchDeployer", () => {
   let triggered: { projectId: string; mergeBranches: string[]; taskTitles?: string[] }[];
   let restarts: string[];
   let perCard: string[];
-  let projectDeploys: { rootPath: string; cards: { title: string }[] }[];
+  let projectDeploys: { rootPath: string; cards: { title: string; branch?: string }[] }[];
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "paseo-batch-deploy-"));
@@ -170,7 +170,7 @@ describe("TaskBatchDeployer", () => {
         ? {
             triggerProjectDeploy: async (deploy: {
               rootPath: string;
-              cards: { title: string }[];
+              cards: { title: string; branch?: string }[];
             }) => {
               runProjectDeploys.push(deploy);
               return { started: input.projectStarted ?? true, error: "pas d'instance" };
@@ -556,7 +556,13 @@ describe("TaskBatchDeployer", () => {
     // ONE central deploy for the lot — not one per card, not each card's agent.
     expect(perCard).toEqual([]);
     expect(projectDeploys).toEqual([
-      { rootPath: "/root/x", cards: [{ title: "Login" }, { title: "Signup" }] },
+      {
+        rootPath: "/root/x",
+        cards: [
+          { title: "Login", branch: "task/login" },
+          { title: "Signup", branch: "task/signup" },
+        ],
+      },
     ]);
     const board = await service.getBoard("proj-1");
     for (const id of [first.id, second.id]) {
@@ -570,6 +576,35 @@ describe("TaskBatchDeployer", () => {
     // The daemon is never restarted for an ordinary project: the actor already
     // restarted the PROJECT's own service.
     expect(restarts).toEqual([]);
+  });
+
+  test("a card whose branch conflicted is not stamped live; the rest of the lot ships", async () => {
+    const login = await seedQueued("Login", "task/login");
+    const signup = await seedQueued("Signup", "task/signup");
+    const deployer = buildDeployer({
+      isSelfHost: false,
+      url: "https://formations.haikostudio.cloud",
+      projectRuns: [
+        {
+          deploying: false,
+          phase: "done",
+          outcome: "success",
+          error: null,
+          conflictedBranches: ["task/signup"],
+        },
+      ],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    const board = await service.getBoard("proj-1");
+    // The clean card shipped.
+    expect(board.tasks.find((entry) => entry.id === login.id)?.deployedAt).toBeTruthy();
+    // The conflicting card did NOT — its work never reached the published build.
+    expect(board.tasks.find((entry) => entry.id === signup.id)?.deployedAt).toBeFalsy();
+    // And it was told why.
+    expect(notes.some((note) => note.includes("en conflit"))).toBe(true);
   });
 
   test("an ordinary project's failed central deploy is reported, nothing stamped", async () => {

@@ -115,6 +115,64 @@ describe("ProjectDeployer", () => {
     expect(exec.gitCalls.filter((a) => a[0] === "commit")).toHaveLength(0);
   });
 
+  test("merges each card's branch before building, then deletes the merged branch", async () => {
+    const exec = healthyExec().onGit((a) => a[0] === "diff", { exitCode: 1 });
+    const deployer = new ProjectDeployer({ exec, logger });
+
+    deployer.trigger({
+      rootPath,
+      slug: "formations",
+      url: null,
+      cards: [
+        { title: "Login", branch: "task/login" },
+        { title: "Signup", branch: "task/signup" },
+      ],
+    });
+    expect(await settle(deployer, rootPath)).toBe("success");
+
+    const merges = exec.gitCalls.filter((a) => a[0] === "merge" && a[1] !== "--abort");
+    expect(merges).toEqual([
+      ["merge", "--no-ff", "--no-edit", "task/login"],
+      ["merge", "--no-ff", "--no-edit", "task/signup"],
+    ]);
+    // No conflict, so nothing was aborted, and both branches are cleaned up.
+    expect(exec.gitCalls.filter((a) => a[0] === "merge" && a[1] === "--abort")).toHaveLength(0);
+    expect(exec.gitCalls.filter((a) => a[0] === "branch" && a[1] === "-d")).toEqual([
+      ["branch", "-d", "task/login"],
+      ["branch", "-d", "task/signup"],
+    ]);
+    expect(deployer.readRun(rootPath).conflictedBranches).toEqual([]);
+  });
+
+  test("a conflicting branch is aborted and flagged, the rest of the lot still ships", async () => {
+    const exec = healthyExec()
+      .onGit((a) => a[0] === "diff", { exitCode: 1 })
+      .onGit((a) => a[0] === "merge" && a[a.length - 1] === "task/signup", {
+        exitCode: 1,
+        stdout: "CONFLICT (content): Merge conflict in app.ts",
+      });
+    const deployer = new ProjectDeployer({ exec, logger });
+
+    deployer.trigger({
+      rootPath,
+      slug: "formations",
+      url: null,
+      cards: [
+        { title: "Login", branch: "task/login" },
+        { title: "Signup", branch: "task/signup" },
+      ],
+    });
+    // The lot as a whole succeeds — a sibling conflict must not break it.
+    expect(await settle(deployer, rootPath)).toBe("success");
+    // The conflicting merge was aborted (never left half-applied).
+    expect(exec.gitCalls.filter((a) => a[0] === "merge" && a[1] === "--abort")).toHaveLength(1);
+    // Only the conflicting branch is reported; the clean one shipped and was cleaned up.
+    expect(deployer.readRun(rootPath).conflictedBranches).toEqual(["task/signup"]);
+    expect(exec.gitCalls.filter((a) => a[0] === "branch" && a[1] === "-d")).toEqual([
+      ["branch", "-d", "task/login"],
+    ]);
+  });
+
   test("a failed restart fails the publication", async () => {
     const exec = healthyExec()
       .onGit((a) => a[0] === "diff", { exitCode: 1 })

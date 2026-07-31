@@ -20,9 +20,13 @@ export interface ProjectDeployExec {
   exec: (command: string, args: string[]) => Promise<CommandResult>;
 }
 
-/** One card of the lot: only its title matters here (it becomes a commit message). */
+/**
+ * One card of the lot. Its title becomes a commit message; its branch (when the
+ * card ran in an isolated worktree) is merged into main before the build.
+ */
 export interface ProjectDeployCard {
   title: string;
+  branch?: string;
 }
 
 export interface ProjectDeployInput {
@@ -44,6 +48,7 @@ interface ProjectRunState {
   phase: string | null;
   outcome: "success" | "failed" | null;
   error: string | null;
+  conflictedBranches: string[];
 }
 
 const IDLE_STATE: DeployRunSnapshot = {
@@ -51,6 +56,7 @@ const IDLE_STATE: DeployRunSnapshot = {
   phase: null,
   outcome: null,
   error: null,
+  conflictedBranches: [],
 };
 
 /**
@@ -89,6 +95,7 @@ export class ProjectDeployer {
       phase: state.phase,
       outcome: state.outcome,
       error: state.error,
+      conflictedBranches: [...state.conflictedBranches],
     };
   }
 
@@ -105,9 +112,10 @@ export class ProjectDeployer {
     }
     const state: ProjectRunState = {
       deploying: true,
-      phase: "prepare",
+      phase: "merge",
       outcome: null,
       error: null,
+      conflictedBranches: [],
     };
     this.runs.set(input.rootPath, state);
     void this.run(input, state);
@@ -118,11 +126,29 @@ export class ProjectDeployer {
     const { rootPath, slug, url, cards } = input;
     const service = `autoproject-${slug}`;
     try {
+      // 0. FUSION DES BRANCHES — each isolated card committed its work on its own
+      // `task/<id>-<slug>` branch; bring those into main before building. A merge
+      // that conflicts with a sibling card is ABORTED (never left half-applied)
+      // and its branch recorded: the lot still ships, that card is reported in
+      // conflict for a human to resolve. Cards with no branch (in-place) skip this.
+      state.phase = "merge";
+      const merged: string[] = [];
+      for (const card of cards) {
+        if (!card.branch) {
+          continue;
+        }
+        const ok = await this.mergeBranch(rootPath, card.branch);
+        if (ok) {
+          merged.push(card.branch);
+        } else {
+          state.conflictedBranches.push(card.branch);
+        }
+      }
       // 1. ENREGISTREMENT PAR CARTE — one commit per card, message = its title.
       // Never one global commit mixing the whole lot: the trace stays reversible
-      // card by card. Cards whose work agents already committed as they went
-      // simply add nothing here (empty → skipped); this step is the safety net
-      // that captures any residual uncommitted change under a named commit.
+      // card by card. Cards whose work agents already committed as they went (or
+      // whose branch was just merged) simply add nothing here (empty → skipped);
+      // this step is the safety net that captures any residual uncommitted change.
       state.phase = "prepare";
       for (const card of cards) {
         await this.commitCard(rootPath, card.title);
@@ -150,6 +176,20 @@ export class ProjectDeployer {
       // that left the service dead or the page unreachable is a failed
       // publication, not a success we quietly stamp.
       await this.verify({ service, url });
+      // 5. NETTOYAGE — the publication is live, so the merged card branches are
+      // now redundant. Delete them best-effort (`git branch -d` only removes a
+      // FULLY-merged branch, so a branch still checked out in a worktree or not
+      // truly merged is left untouched). Never fails the run — the disk guardrails
+      // and worktree lifecycle reclaim the rest.
+      for (const branch of merged) {
+        const removed = await this.exec.git(["branch", "-d", branch], rootPath);
+        if (removed.exitCode !== 0) {
+          this.logger.info(
+            { rootPath, branch, stderr: removed.stderr.trim() },
+            "Project deploy: merged branch not deleted (still checked out or not fully merged)",
+          );
+        }
+      }
       state.phase = "done";
       state.outcome = "success";
     } catch (error) {
@@ -160,6 +200,26 @@ export class ProjectDeployer {
     } finally {
       state.deploying = false;
     }
+  }
+
+  /**
+   * Merges one card's branch into the checkout's current branch. Returns true on
+   * a clean merge (including "already up to date"), false on conflict — in which
+   * case the merge is ABORTED so the working tree is never left half-merged and
+   * the rest of the lot can still proceed. `--no-ff` keeps a visible merge commit
+   * per card; `--no-edit` avoids the editor in this non-interactive process.
+   */
+  private async mergeBranch(rootPath: string, branch: string): Promise<boolean> {
+    const merge = await this.exec.git(["merge", "--no-ff", "--no-edit", branch], rootPath);
+    if (merge.exitCode === 0) {
+      return true;
+    }
+    this.logger.warn(
+      { rootPath, branch, stderr: merge.stderr.trim() || merge.stdout.trim() },
+      "Project deploy: branch merge conflicted, aborting it and flagging the card",
+    );
+    await this.exec.git(["merge", "--abort"], rootPath);
+    return false;
   }
 
   /**
