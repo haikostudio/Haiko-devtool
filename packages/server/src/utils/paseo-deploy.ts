@@ -660,6 +660,45 @@ async function readRunLog(run: DeployRun): Promise<string | null> {
 }
 
 /**
+ * The last publication's section of the on-disk log, for when no run is held in
+ * memory any more.
+ *
+ * The in-memory run is the ONLY thing the sheet used to read, and it is lost in
+ * two ordinary situations: a publication that installs a new engine restarts the
+ * daemon moments later (wiping the run that just succeeded), and a finished run
+ * is dropped after {@link DEPLOY_OUTCOME_RETENTION_MS}. Both left the sheet
+ * saying "aucune publication depuis le démarrage du moteur" while a perfectly
+ * complete account sat on disk — the exact opposite of what the log is for.
+ *
+ * Cut at the last `=== <date> — ... ===` header so the tail is one run's output,
+ * never the end of a previous one glued to the start of this one.
+ */
+async function readLastShipLogSection(): Promise<string | null> {
+  try {
+    const handle = await open(SHIP_LOG_FILE, "r");
+    try {
+      const { size } = await handle.stat();
+      const start = Math.max(0, size - DEPLOY_LOG_MAX_BYTES);
+      const length = size - start;
+      if (length <= 0) {
+        return null;
+      }
+      const buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, start);
+      const tail = buffer.toString("utf8");
+      const headerIndex = tail.lastIndexOf("\n=== ");
+      // No header in the window = the section is longer than the window we read;
+      // the plain tail is then already this run's output.
+      return headerIndex === -1 ? tail : tail.slice(headerIndex + 1);
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Why the last build refused to publish, in the script's own words. The build
  * script prints every fatal reason as `!! <raison>` before giving up, so the last
  * such line is the honest cause — infinitely more useful than "code 1", which
@@ -1229,7 +1268,9 @@ async function describeDeployRun(run: DeployRun | null): Promise<DeployRunFields
     deployStartedAt: run?.startedAt ?? null,
     deployFinishedAt: run?.finishedAt ?? null,
     deployOutcome: run?.outcome ?? null,
-    deployLog: run === null ? null : await readRunLog(run),
+    // No live run does NOT mean nothing was ever published: the log outlives both
+    // the daemon process and the run-retention window (see readLastShipLogSection).
+    deployLog: run === null ? await readLastShipLogSection() : await readRunLog(run),
   };
 }
 

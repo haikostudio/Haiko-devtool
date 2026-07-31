@@ -542,7 +542,8 @@ export const zhCN: TranslationResources = {
       batchQueued: "有一个发布在排队 — 当前发布结束后即开始",
       batchOpenLog: "查看发布日志",
       deployLogTitle: "发布日志",
-      deployLogEmpty: "引擎启动以来尚未执行任何发布。",
+      deployLogEmpty: "尚无发布记录。",
+      deployLogLast: "上次发布",
       deployLogFailed: "本次发布失败 — 没有任何内容上线。",
       batchPhase: {
         start: "开始部署",

@@ -558,7 +558,8 @@ export const fr: TranslationResources = {
       batchQueued: "Une publication en attente — elle partira dès la fin de celle-ci",
       batchOpenLog: "Voir le journal de publication",
       deployLogTitle: "Journal de publication",
-      deployLogEmpty: "Aucune publication depuis le démarrage du moteur.",
+      deployLogEmpty: "Aucune publication enregistrée.",
+      deployLogLast: "Dernière publication",
       deployLogFailed: "Cette publication a échoué — rien n'est parti en ligne.",
       batchPhase: {
         start: "Début du déploiement",

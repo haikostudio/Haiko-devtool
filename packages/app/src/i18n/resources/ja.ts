@@ -552,7 +552,8 @@ export const ja: TranslationResources = {
       batchQueued: "公開待ちが1件 — これが終わり次第に開始します",
       batchOpenLog: "公開ログを表示",
       deployLogTitle: "公開ログ",
-      deployLogEmpty: "エンジンの起動以降、公開は実行されていません。",
+      deployLogEmpty: "公開の記録はまだありません。",
+      deployLogLast: "前回の公開",
       deployLogFailed: "この公開は失敗しました — 何も公開されていません。",
       batchPhase: {
         start: "デプロイ開始",

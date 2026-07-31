@@ -546,7 +546,8 @@ export const ar: TranslationResources = {
       batchQueued: "نشرة واحدة في الانتظار — ستبدأ فور انتهاء هذه",
       batchOpenLog: "عرض سجل النشر",
       deployLogTitle: "سجل النشر",
-      deployLogEmpty: "لا توجد عملية نشر منذ تشغيل المحرك.",
+      deployLogEmpty: "لا يوجد سجل نشر بعد.",
+      deployLogLast: "آخر عملية نشر",
       deployLogFailed: "فشل هذا النشر — لم يُنشر أي شيء.",
       batchPhase: {
         start: "بدء النشر",

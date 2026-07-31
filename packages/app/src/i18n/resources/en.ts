@@ -548,7 +548,8 @@ export const en = {
       batchQueued: "One publication waiting — it starts as soon as this one ends",
       batchOpenLog: "View the publication log",
       deployLogTitle: "Publication log",
-      deployLogEmpty: "No publication has run since the engine started.",
+      deployLogEmpty: "No publication has been recorded yet.",
+      deployLogLast: "Last publication",
       deployLogFailed: "This publication failed — nothing went online.",
       batchPhase: {
         start: "Starting deployment",

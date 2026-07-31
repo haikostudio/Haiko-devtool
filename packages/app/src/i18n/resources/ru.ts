@@ -552,7 +552,8 @@ export const ru: TranslationResources = {
       batchQueued: "Одна публикация в очереди — начнётся, как только завершится текущая",
       batchOpenLog: "Открыть журнал публикации",
       deployLogTitle: "Журнал публикации",
-      deployLogEmpty: "С момента запуска движка публикаций не было.",
+      deployLogEmpty: "Публикаций пока не записано.",
+      deployLogLast: "Последняя публикация",
       deployLogFailed: "Эта публикация не удалась — ничего не опубликовано.",
       batchPhase: {
         start: "Начало развёртывания",

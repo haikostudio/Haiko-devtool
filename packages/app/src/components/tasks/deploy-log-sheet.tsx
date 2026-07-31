@@ -70,15 +70,20 @@ export function DeployLogSheet({
     };
   }, [visible, read]);
 
-  const header = useMemo(
-    () => ({
-      title: t("tasks.board.deployLogTitle"),
-      subtitle: phase
-        ? t(`tasks.board.batchPhase.${phase}`, { defaultValue: phase })
-        : t("tasks.board.deployLogEmpty"),
-    }),
-    [phase, t],
-  );
+  const header = useMemo(() => {
+    // A log with no phase is the last publication read back from disk (the run it
+    // belonged to is gone — the daemon restarted, or it aged out). Saying
+    // "nothing published" above a full log was the sheet's own contradiction.
+    let subtitle: string;
+    if (phase) {
+      subtitle = t(`tasks.board.batchPhase.${phase}`, { defaultValue: phase });
+    } else if (log) {
+      subtitle = t("tasks.board.deployLogLast");
+    } else {
+      subtitle = t("tasks.board.deployLogEmpty");
+    }
+    return { title: t("tasks.board.deployLogTitle"), subtitle };
+  }, [phase, log, t]);
 
   return (
     <AdaptiveModalSheet

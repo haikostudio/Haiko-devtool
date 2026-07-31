@@ -416,7 +416,14 @@ export class ConductorAgentService {
     const providerConfig = buildConductorConfig(projectId, provider, isSelf);
     const created = await this.createAgent({
       kind: "mcp",
-      provider,
+      // The creation path derives the model from this `provider/model` label and
+      // that derivation OVERRIDES `config.model` — so handing it the canonical
+      // label ("claude/claude-sonnet-5") silently started the Paseo conductor on
+      // the board-manager model, undoing the frontier pin `buildConductorConfig`
+      // had just computed. Hand it the label that matches the resolved config.
+      // The canonical provider still goes on the role label below, which is what
+      // `recordMatchesConductorProvider` reads.
+      provider: conductorCreateProviderSpec(provider, providerConfig.model),
       cwd,
       title: provider === CODEX_CONDUCTOR_PROVIDER ? "Chef d'orchestre Codex" : "Chef d'orchestre",
       background: true,
@@ -531,6 +538,22 @@ function resolveConductorProvider(value: string | undefined): ConductorProvider 
     return CODEX_CONDUCTOR_PROVIDER;
   }
   throw new Error(`Unsupported conductor provider: ${value}`);
+}
+
+/**
+ * The `provider/model` spec the creation path must receive so the agent actually
+ * starts on the model the conductor config asks for. Falls back to the canonical
+ * conductor provider when the config carries no model (nothing to override).
+ */
+function conductorCreateProviderSpec(
+  provider: ConductorProvider,
+  model: string | null | undefined,
+): string {
+  if (!model) {
+    return provider;
+  }
+  const providerId = provider.slice(0, provider.indexOf("/"));
+  return `${providerId}/${model}`;
 }
 
 function recordMatchesConductorProvider(

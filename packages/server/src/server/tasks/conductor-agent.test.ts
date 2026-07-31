@@ -306,6 +306,13 @@ describe("ConductorAgentService", () => {
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
     expect(input.config?.model).toBe("claude-opus-5");
     expect(input.config?.thinkingOptionId).toBe("high");
+    // The creation path takes the model from the provider spec and overrides
+    // `config.model` with it, so the spec has to carry the frontier model too —
+    // otherwise the conductor starts on Sonnet with an Opus config on record.
+    expect(input.provider).toBe("claude/claude-opus-5");
+    // The role label keeps the canonical provider: it is the key that finds this
+    // conductor again on the next open.
+    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("claude/claude-sonnet-5");
   });
 
   it("on Paseo itself, a fresh Codex conductor gets GPT-5.6-Sol on high effort", async () => {
@@ -319,6 +326,8 @@ describe("ConductorAgentService", () => {
     const input = captured as unknown as Extract<CreateAgentCommandInput, { kind: "mcp" }>;
     expect(input.config?.model).toBe("gpt-5.6-sol");
     expect(input.config?.thinkingOptionId).toBe("high");
+    expect(input.provider).toBe("codex/gpt-5.6-sol");
+    expect(input.labels?.[CONDUCTOR_PROVIDER_LABEL]).toBe("codex/gpt-5.6-luna");
   });
 
   it('accepts the bare "claude" provider the client sends over the wire', async () => {

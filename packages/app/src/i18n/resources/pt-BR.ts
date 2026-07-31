@@ -557,7 +557,8 @@ export const ptBR: TranslationResources = {
       batchQueued: "Uma publicação em espera — começará assim que esta terminar",
       batchOpenLog: "Ver o registro de publicação",
       deployLogTitle: "Registro de publicação",
-      deployLogEmpty: "Nenhuma publicação desde que o mecanismo iniciou.",
+      deployLogEmpty: "Nenhuma publicação registrada.",
+      deployLogLast: "Última publicação",
       deployLogFailed: "Esta publicação falhou — nada foi publicado.",
       batchPhase: {
         start: "Início da implantação",
