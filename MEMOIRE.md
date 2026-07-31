@@ -41,6 +41,13 @@ d'état du projet — d'où l'exigence de brièveté.
   Les faire diverger déclenche la bannière « nouvelle version » en boucle.
 - Paseo n'a pas d'instance de développement testable : la seule façon d'essayer
   une modification serveur est de la publier.
+- À la création d'un agent, l'étiquette « fournisseur/modèle » l'emporte sur le
+  modèle de la config : fixer `config.model` sans ajuster l'étiquette ne sert à
+  rien. C'est ce qui faisait démarrer le chef d'orchestre de Paseo sur Sonnet
+  alors que sa fiche disait Opus.
+- Une publication qui installe un nouveau moteur le redémarre dans la foulée :
+  tout état gardé seulement en mémoire (dont le journal de publication) meurt
+  avec l'ancien processus. Ce qui doit survivre se relit sur le disque.
 
 ## Préférences de l'utilisateur
 
