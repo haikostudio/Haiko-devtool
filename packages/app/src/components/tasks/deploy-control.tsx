@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   type GestureResponderEvent,
@@ -32,10 +32,10 @@ import { countTasksAwaitingDeploy } from "@/components/tasks/deploy-queue";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
 import { ICON_SIZE, type Theme } from "@/styles/theme";
 import {
-  batchProgressRatio,
   batchProgressStep,
   formatBatchProgressStep,
   isRecapWorthShowing,
+  stepKeyFor,
 } from "./deploy-batch-status";
 
 // Re-exported so existing importers (and tests) keep their entry points.
@@ -369,8 +369,23 @@ function RunningBody({
 }) {
   const { t } = useTranslation();
   const phase = batch?.phase ?? "start";
-  const ratio = batchProgressRatio({ state: "running", phase });
-  const step = batchProgressStep({ state: "running", phase });
+  // Monotonic floor: the counter must never rewind mid-run, even when a phase
+  // arrives out of order (the daemon writes "done" a beat before it flips the
+  // batch to "success") or is unrecognised. We remember the highest step this
+  // run has reached — keyed by its start stamp so a fresh publication resets —
+  // and never show less. The label is then read from that number, so "N/8" and
+  // its text always describe the same step.
+  const progress = useRef<{ startedAt: string | null; step: number }>({
+    startedAt: null,
+    step: 1,
+  });
+  const startedAt = batch?.startedAt ?? null;
+  if (progress.current.startedAt !== startedAt) {
+    progress.current = { startedAt, step: 1 };
+  }
+  const step = batchProgressStep({ state: "running", phase }, progress.current.step);
+  progress.current.step = step.current;
+  const ratio = step.current / step.total;
   const fillStyle = [styles.progressFill, { width: `${Math.round(ratio * 100)}%` as const }];
   return (
     <LogPressable style={styles.runningBody} onOpenLog={onOpenLog}>
@@ -378,12 +393,7 @@ function RunningBody({
         <View style={fillStyle} />
       </View>
       <Text style={styles.detail} testID="tasks-deploy-batch-step">
-        {formatBatchProgressStep(
-          step,
-          t(`tasks.board.batchPhase.${phase}`, {
-            defaultValue: t("tasks.board.batchPhase.start"),
-          }),
-        )}
+        {formatBatchProgressStep(step, t(`tasks.board.batchPhase.${stepKeyFor(step)}`))}
         {batch?.auto ? ` · ${t("tasks.board.batchAuto")}` : ""}
       </Text>
       {batch?.queued ? (
