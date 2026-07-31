@@ -27,6 +27,27 @@ describe("TaskBoardService", () => {
     expect(normalizeTaskTitle("1. Add tests!")).toBe("add tests");
   });
 
+  // Every column is sorted by last-modified, so restamping a card that did not
+  // actually change makes it jump to the top of its column under the user's
+  // eyes. Background writes that conclude "nothing to change" — the restart
+  // verdict, a re-read estimate — used to do exactly that on every pass.
+  test("a patch that changes nothing leaves the card, and its order, alone", async () => {
+    const folder = await service.createFolder("proj-1", "Auth");
+    const task = await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });
+    const before = (await service.getBoard("proj-1")).tasks[0];
+
+    await service.patchTask("proj-1", task.id, (current) => ({ ...current }));
+
+    const after = (await service.getBoard("proj-1")).tasks[0];
+    expect(after?.updatedAt).toBe(before?.updatedAt);
+
+    // A real change still stamps, of course.
+    await service.patchTask("proj-1", task.id, (current) => ({ ...current, title: "Add logout" }));
+    const changed = (await service.getBoard("proj-1")).tasks[0];
+    expect(changed?.title).toBe("Add logout");
+    expect(changed?.updatedAt).not.toBe(before?.updatedAt);
+  });
+
   test("creates folders and tasks, persists across store instances", async () => {
     const folder = await service.createFolder("proj-1", "Auth");
     await service.createTask("proj-1", { folderId: folder.id, title: "Add login" });

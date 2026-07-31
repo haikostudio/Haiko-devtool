@@ -1,4 +1,5 @@
 import type pino from "pino";
+import deepEqual from "fast-deep-equal";
 import type {
   KanbanTask,
   TaskApproval,
@@ -1497,6 +1498,16 @@ export class TaskBoardService {
     }
   }
 
+  /**
+   * Same card, ignoring the last-modified stamp — which is the one field the
+   * stamp itself must not be allowed to justify rewriting.
+   */
+  private static isSameTask(left: KanbanTask, right: KanbanTask): boolean {
+    const { updatedAt: _left, ...restLeft } = left;
+    const { updatedAt: _right, ...restRight } = right;
+    return deepEqual(restLeft, restRight);
+  }
+
   private async mutateTask(
     projectId: string,
     taskId: string,
@@ -1507,7 +1518,17 @@ export class TaskBoardService {
       if (!task) {
         throw new TaskBoardServiceError("task_not_found", `Task not found: ${taskId}`);
       }
-      const updated = { ...patch(task), id: task.id, updatedAt: new Date().toISOString() };
+      const patched = { ...patch(task), id: task.id };
+      // A patch that changes nothing must change nothing. Restamping `updatedAt`
+      // regardless is what made cards shuffle on their own: every column is
+      // sorted by last-modified, and background writes that decide "no change"
+      // (the restart-impact verdict, a re-read estimate) still bumped the stamp
+      // and pushed a fresh board, so a card the user was reading jumped to the
+      // top of its column for no reason at all.
+      if (TaskBoardService.isSameTask(task, patched)) {
+        return current;
+      }
+      const updated = { ...patched, updatedAt: new Date().toISOString() };
       return {
         ...current,
         tasks: current.tasks.map((entry) => (entry.id === taskId ? updated : entry)),

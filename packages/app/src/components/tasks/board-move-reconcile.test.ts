@@ -189,3 +189,86 @@ describe("reconcileBoardWithPendingMoves — a dropped card stays put", () => {
     expect(confirmed.satisfied).toEqual(["t1"]);
   });
 });
+
+// A server-side audit of every column-changing path found the same shape almost
+// everywhere: one user action, SEVERAL board writes, and the early ones leave
+// the card in its old column with a fresh timestamp. Approving, launching,
+// finishing, queueing for publication — each has its own preparatory write. The
+// card must survive every one of them, so each path gets a case here rather
+// than being rediscovered one furious report at a time.
+describe("no user move bounces, whichever path the daemon takes", () => {
+  const PATHS: { name: string; from: KanbanTask["column"]; to: KanbanTask["column"] }[] = [
+    { name: "valider une carte (À faire → Validé)", from: "backlog", to: "validated" },
+    { name: "lancer maintenant (Validé → En cours)", from: "validated", to: "in_progress" },
+    { name: "lancer depuis Planifié (Planifié → En cours)", from: "scheduled", to: "in_progress" },
+    { name: "terminer (En cours → Terminé)", from: "in_progress", to: "done" },
+    { name: "mettre en file (Terminé → À déployer)", from: "done", to: "deployed" },
+    { name: "archiver (À déployer → Archivé)", from: "deployed", to: "archived" },
+  ];
+
+  for (const path of PATHS) {
+    it(`${path.name} : une écriture préparatoire ne la ramène pas en arrière`, () => {
+      const pending = new Map<string, PendingMove>([["t1", pendingMove({ column: path.to })]]);
+
+      // Écriture préparatoire : le daemon a estampillé la carte, mais elle est
+      // encore dans sa colonne de départ.
+      const prepared = reconcileBoardWithPendingMoves(
+        makeBoard([
+          makeTask({ id: "t1", column: path.from, updatedAt: "2024-01-01T00:05:00.000Z" }),
+        ]),
+        pending,
+        NOW_MS,
+      );
+      expect(prepared.board.tasks[0].column).toBe(path.to);
+      expect(prepared.satisfied).toEqual([]);
+
+      // Instantané périmé arrivé en retard : même conclusion.
+      const stale = reconcileBoardWithPendingMoves(
+        makeBoard([makeTask({ id: "t1", column: path.from, updatedAt: KNOWN_UPDATED_AT })]),
+        pending,
+        NOW_MS,
+      );
+      expect(stale.board.tasks[0].column).toBe(path.to);
+
+      // Écriture finale : la carte arrive, la revendication se libère.
+      const landed = reconcileBoardWithPendingMoves(
+        makeBoard([makeTask({ id: "t1", column: path.to, updatedAt: "2024-01-01T00:05:01.000Z" })]),
+        pending,
+        NOW_MS,
+      );
+      expect(landed.board.tasks[0].column).toBe(path.to);
+      expect(landed.satisfied).toEqual(["t1"]);
+    });
+  }
+
+  // L'autre moitié de la règle : une carte que le serveur emmène PLUS LOIN que
+  // demandé ne doit jamais être retenue en arrière par notre propre demande.
+  const OVERSHOOTS: { name: string; claim: KanbanTask["column"]; server: KanbanTask["column"] }[] =
+    [
+      { name: "validée puis planifiée toute seule", claim: "validated", server: "scheduled" },
+      { name: "validée puis déjà en cours", claim: "validated", server: "in_progress" },
+      { name: "terminée puis mise en file automatiquement", claim: "done", server: "deployed" },
+      {
+        name: "mise en file puis archivée après publication",
+        claim: "deployed",
+        server: "archived",
+      },
+    ];
+
+  for (const path of OVERSHOOTS) {
+    it(`${path.name} : la carte continue sa route`, () => {
+      const pending = new Map<string, PendingMove>([["t1", pendingMove({ column: path.claim })]]);
+
+      const result = reconcileBoardWithPendingMoves(
+        makeBoard([
+          makeTask({ id: "t1", column: path.server, updatedAt: "2024-01-01T00:05:00.000Z" }),
+        ]),
+        pending,
+        NOW_MS,
+      );
+
+      expect(result.board.tasks[0].column).toBe(path.server);
+      expect(result.satisfied).toEqual(["t1"]);
+    });
+  }
+});
