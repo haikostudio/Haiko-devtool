@@ -373,6 +373,45 @@ export class TasksSession {
   }
 
   /**
+   * Approve or refuse a chat task proposal. Approving creates exactly one "À
+   * faire" (backlog) task from the payload; refusing writes nothing. Idempotent by
+   * proposalId (see TaskBoardService.resolveProposal).
+   */
+  async handleTaskProposalResolveRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.proposal.resolve.request" }>,
+  ): Promise<void> {
+    try {
+      const task = await this.taskBoardService.resolveProposal(request.projectId, {
+        proposalId: request.proposalId,
+        outcome: request.outcome,
+        ...(request.proposal
+          ? {
+              proposal: {
+                title: request.proposal.title,
+                ...(request.proposal.description !== undefined
+                  ? { description: request.proposal.description }
+                  : {}),
+                ...(request.proposal.tags !== undefined ? { tags: request.proposal.tags } : {}),
+                ...(request.proposal.folderName !== undefined
+                  ? { folderName: request.proposal.folderName }
+                  : {}),
+                ...(request.proposal.runConfig !== undefined
+                  ? { runConfig: request.proposal.runConfig }
+                  : {}),
+              },
+            }
+          : {}),
+      });
+      this.host.emit({
+        type: "tasks.proposal.resolve.response",
+        payload: { requestId: request.requestId, task, error: null },
+      });
+    } catch (error) {
+      this.emitRpcError(request, error);
+    }
+  }
+
+  /**
    * "Archiver": hide a finished (done/deployed) card from the board. Stamps
    * archivedAt; never moves or publishes the card (see docs/task-board-cycle.md).
    */

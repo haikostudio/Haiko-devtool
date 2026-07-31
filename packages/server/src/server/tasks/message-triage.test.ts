@@ -78,7 +78,7 @@ describe("MessageTriage", () => {
     return { triage, runAgent, createAgent, appendTimelineItem };
   }
 
-  test("proposes tasks awaiting approval and auto-creates the folder", async () => {
+  test("proposes tasks in chat WITHOUT writing anything to the board", async () => {
     const { triage, appendTimelineItem } = buildTriage({
       finalText: JSON.stringify({
         kind: "tasks",
@@ -91,38 +91,41 @@ describe("MessageTriage", () => {
 
     triage.triage({ agentId: "agent-1", text: "voilà le mail, ajoute ça aux tâches" });
 
-    await vi.waitFor(async () => {
-      const board = await service.getBoard("proj-1");
-      expect(board.tasks.length).toBe(2);
+    // The proposal only emits a chat pill — nothing is created until approval.
+    await vi.waitFor(() => {
+      expect(appendTimelineItem).toHaveBeenCalled();
     });
     const board = await service.getBoard("proj-1");
-    expect(board.folders.some((f) => f.name === "Features")).toBe(true);
-    for (const task of board.tasks) {
-      // Triage tasks are born in backlog like every other new task; the pending
-      // marker (not the column) is what flags them for the user's validation.
-      expect(task.column).toBe("backlog");
-      expect(task.approval?.state).toBe("pending");
-      expect(task.origin).toBe("agent_sync");
-    }
+    expect(board.tasks).toEqual([]);
+    expect(board.folders).toEqual([]);
+    expect(board.proposalResolutions ?? []).toEqual([]);
+
     const proposedCall = appendTimelineItem.mock.calls.at(-1)?.[1] as AgentTimelineItem;
     expect(proposedCall).toMatchObject({
       type: "task_triage",
       status: "proposed",
       proposedCount: 2,
     });
-    // Task snapshots ride along so the client can render live actionable cards.
-    const proposedTasks = proposedCall.tasks as { taskId: string; title: string }[];
+    // Full payloads ride along so approval can create the exact task later.
+    const proposedTasks = proposedCall.tasks as {
+      proposalId: string;
+      title: string;
+      folderName?: string;
+    }[];
     expect(proposedTasks.map((entry) => entry.title)).toEqual([
       "Ajouter le mode sombre",
       "Corriger le redirect login",
     ]);
+    expect(proposedTasks[0]?.folderName).toBe("Features");
     for (const entry of proposedTasks) {
-      expect(board.tasks.some((task) => task.id === entry.taskId)).toBe(true);
+      expect(entry.proposalId).toBeTruthy();
     }
+    // Distinct proposal ids so each approval stays independently idempotent.
+    expect(proposedTasks[0]?.proposalId).not.toBe(proposedTasks[1]?.proposalId);
   });
 
-  test("a proposed task inherits the chatting agent's provider, model and effort", async () => {
-    const { triage } = buildTriage({
+  test("a proposal inherits the chatting agent's provider, model and effort", async () => {
+    const { triage, appendTimelineItem } = buildTriage({
       finalText: JSON.stringify({
         kind: "tasks",
         tasks: [{ title: "Ajouter le mode sombre", tags: [] }],
@@ -135,12 +138,12 @@ describe("MessageTriage", () => {
 
     triage.triage({ agentId: "agent-1", text: "il faudrait ajouter ça aux tâches" });
 
-    await vi.waitFor(async () => {
-      const board = await service.getBoard("proj-1");
-      expect(board.tasks.length).toBe(1);
+    await vi.waitFor(() => {
+      expect(appendTimelineItem).toHaveBeenCalled();
     });
-    const board = await service.getBoard("proj-1");
-    expect(board.tasks[0]?.runConfig).toEqual({
+    const proposedCall = appendTimelineItem.mock.calls.at(-1)?.[1] as AgentTimelineItem;
+    const proposedTasks = proposedCall.tasks as { runConfig?: unknown }[];
+    expect(proposedTasks[0]?.runConfig).toEqual({
       provider: "codex",
       model: "gpt-5.4",
       thinkingOptionId: "high",

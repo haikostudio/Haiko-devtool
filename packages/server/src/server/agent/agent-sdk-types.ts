@@ -1,6 +1,7 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentProviderNotice } from "@getpaseo/protocol/agent-types";
 import type { AgentAttachment } from "@getpaseo/protocol/messages";
+import type { TaskRunConfig } from "@getpaseo/protocol/tasks/types";
 import type { PaseoToolCatalog } from "./tools/types.js";
 
 export type { AgentProviderNotice };
@@ -390,9 +391,18 @@ export interface TaskTriageTimelineItem {
   questions?: string[];
   proposedCount?: number;
   projectId?: string;
-  // Ids + title snapshots of the proposed tasks so clients can render live
-  // actionable cards against the board. Absent on pre-carousel items.
-  tasks?: Array<{ taskId: string; title: string }>;
+  // Full payloads of the proposed tasks so clients can render actionable cards
+  // WITHOUT touching the board — the task is created only on approval. Absent on
+  // pre-carousel items; legacy items carried only { taskId, title }.
+  tasks?: Array<{
+    proposalId?: string;
+    taskId?: string;
+    title: string;
+    description?: string;
+    tags?: string[];
+    folderName?: string;
+    runConfig?: TaskRunConfig;
+  }>;
 }
 
 /** Mirrors the protocol {@link TurnRecapTimelineItem}; see agent-types.ts. */

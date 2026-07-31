@@ -154,6 +154,7 @@ export default function CarouselDemoScreen() {
       estimateTask: noop,
       runTaskNow: noop,
       approveTask,
+      resolveProposal: noop,
       // The demo board never runs the real final check.
       retryTaskAnalysis: async () => {},
       validateTask: async () => ({ passed: false, task: null }),

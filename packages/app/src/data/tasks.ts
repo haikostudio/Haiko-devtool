@@ -64,6 +64,22 @@ export interface TaskBoardHandle {
   retryTaskAnalysis: (taskId: string) => Promise<void>;
   approveTask: (taskId: string) => Promise<void>;
   /**
+   * Approve or refuse a chat task proposal. Approving creates exactly one "À
+   * faire" (backlog) task from the payload; refusing writes nothing. Idempotent by
+   * proposalId — a re-approval never produces a duplicate.
+   */
+  resolveProposal: (input: {
+    proposalId: string;
+    outcome: "approve" | "refuse";
+    proposal?: {
+      title: string;
+      description?: string;
+      tags?: string[];
+      folderName?: string;
+      runConfig?: TaskRunConfig;
+    };
+  }) => Promise<void>;
+  /**
    * Finishes the task: moves it from "En cours" to "Terminé" and nothing else — no
    * check, no deployment (verification happens at publication time, see
    * docs/task-board-cycle.md). `queueOnComplete` is the "Terminer et mettre en
@@ -416,6 +432,27 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
     [requireContext, optimisticTransition, clearPending],
   );
 
+  const resolveProposal = useCallback(
+    async (input: {
+      proposalId: string;
+      outcome: "approve" | "refuse";
+      proposal?: {
+        title: string;
+        description?: string;
+        tags?: string[];
+        folderName?: string;
+        runConfig?: TaskRunConfig;
+      };
+    }) => {
+      const { client, projectId: project } = requireContext();
+      const payload = await client.tasksProposalResolve({ projectId: project, ...input });
+      if (payload.error) {
+        throw new Error(payload.error);
+      }
+    },
+    [requireContext],
+  );
+
   const validateTask = useCallback(
     async (taskId: string, options?: { queueOnComplete?: boolean }) => {
       const { client, projectId: project } = requireContext();
@@ -505,6 +542,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       runTaskNow,
       retryTaskAnalysis,
       approveTask,
+      resolveProposal,
       validateTask,
       deployTask,
       deployAllTasks,
@@ -523,6 +561,7 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
       runTaskNow,
       retryTaskAnalysis,
       approveTask,
+      resolveProposal,
       validateTask,
       deployTask,
       deployAllTasks,

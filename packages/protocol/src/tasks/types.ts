@@ -392,11 +392,44 @@ export const TaskDeployBatchSchema = z.object({
 });
 export type TaskDeployBatch = z.infer<typeof TaskDeployBatchSchema>;
 
+// A task proposed to the user in chat (by the inline triage layer or the
+// conductor's create_task). It carries the FULL payload so the task can be
+// created ONLY once the user approves — while a proposal is merely on screen,
+// nothing is written to the board. `proposalId` is the stable key that makes
+// approval idempotent: approving the same proposal twice (double-tap, reload,
+// two devices) yields exactly one task, never a duplicate.
+export const TaskChatProposalSchema = z.object({
+  proposalId: z.string().optional(),
+  // Legacy: pre-deferred-creation pills pointed at an already-created board task.
+  // New proposals never set it; kept so old in-flight pills still parse.
+  taskId: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  folderName: z.string().optional(),
+  runConfig: TaskRunConfigSchema.optional(),
+});
+export type TaskChatProposal = z.infer<typeof TaskChatProposalSchema>;
+
+// The board's record of what happened to a proposal, so the chat tray stays
+// honest across reloads and the resolve RPC stays idempotent. Approved carries
+// the created task's id; refused carries nothing but the fact of refusal.
+export const TaskProposalResolutionSchema = z.object({
+  proposalId: z.string(),
+  outcome: z.enum(["approved", "refused"]),
+  taskId: z.string().optional(),
+});
+export type TaskProposalResolution = z.infer<typeof TaskProposalResolutionSchema>;
+
 export const TaskBoardSchema = z.object({
   version: z.literal(1),
   projectId: z.string(),
   folders: z.array(TaskFolderSchema),
   tasks: z.array(KanbanTaskSchema),
+  // Proposals the user has already approved or refused. A proposal not listed
+  // here is still awaiting a decision. Additive + optional: old boards and old
+  // clients simply omit it. See TaskChatProposalSchema.
+  proposalResolutions: z.array(TaskProposalResolutionSchema).optional(),
   // Last/current batch publication. Additive + optional: old boards and old
   // clients simply omit it, and a board that never published carries nothing.
   deployBatch: TaskDeployBatchSchema.nullable().optional(),

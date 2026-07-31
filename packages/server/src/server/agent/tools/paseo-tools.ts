@@ -69,6 +69,7 @@ import type { ProjectRegistry, WorkspaceRegistry } from "../../workspace-registr
 import { resolveProjectDisplayName } from "../../workspace-registry.js";
 import type { DownloadArchiveStore } from "../../file-download/archive-store.js";
 import type { TaskBoardService } from "../../tasks/service.js";
+import { generateTaskEntityId } from "../../tasks/store.js";
 import { isDeploymentWindowOpen } from "../../tasks/deployer.js";
 import { WorktreeRequestError } from "../../worktree-errors.js";
 import {
@@ -3044,10 +3045,42 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
         schedulePreference?: z.infer<typeof schedulePreferenceToolSchema>;
         proposeRun?: boolean;
       }) => {
+        const runConfig = args.runConfig ?? inheritedTaskRunConfig();
+        // A PROPOSAL writes nothing to the board: it surfaces as a chat pill the
+        // user approves or refuses, and the task is created (in "À faire") ONLY on
+        // approval — the single creation path, so there is never a duplicate. It
+        // shows in the caller's own thread, so it needs a live caller agent; a
+        // top-level MCP caller with no thread falls back to a plain backlog card.
+        if (args.proposeRun && callerAgentId) {
+          const proposalId = generateTaskEntityId();
+          await agentManager.appendTimelineItem(callerAgentId, {
+            type: "task_triage",
+            status: "proposed",
+            proposedCount: 1,
+            projectId: args.projectId,
+            tasks: [
+              {
+                proposalId,
+                title: args.title,
+                ...(args.description !== undefined ? { description: args.description } : {}),
+                ...(args.tags !== undefined ? { tags: args.tags } : {}),
+                ...(args.folderName !== undefined ? { folderName: args.folderName } : {}),
+                ...(runConfig !== undefined ? { runConfig } : {}),
+              },
+            ],
+          });
+          return {
+            content: [],
+            structuredContent: ensureValidJson({
+              taskId: proposalId,
+              column: "proposed",
+              approvalState: "pending",
+            }),
+          };
+        }
         const folderId =
           args.folderId ??
           (await taskBoardService.ensureFolder(args.projectId, args.folderName ?? "Agent"));
-        const runConfig = args.runConfig ?? inheritedTaskRunConfig();
         const task = await taskBoardService.createTask(args.projectId, {
           folderId,
           title: args.title,
@@ -3056,19 +3089,6 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
           ...(runConfig !== undefined ? { runConfig } : {}),
           ...(args.schedulePreference !== undefined
             ? { schedulePreference: args.schedulePreference }
-            : {}),
-          // The proposing agent is recorded in approval.requestedBy, NOT in
-          // links: a linked agent would drag the card through agent-sync
-          // transitions while it is still awaiting user validation. The task
-          // stays in backlog (the service pins creation there); the pending
-          // marker is what tells the board it needs the user's validation.
-          ...(args.proposeRun
-            ? {
-                approval: {
-                  state: "pending" as const,
-                  ...(callerAgentId ? { requestedBy: callerAgentId } : {}),
-                },
-              }
             : {}),
         });
         return {

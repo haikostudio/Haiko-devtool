@@ -4,6 +4,7 @@ import {
   KanbanTaskSchema,
   TaskBillingSchema,
   TaskBoardSchema,
+  TaskChatProposalSchema,
   TaskColumnSchema,
   TaskFolderSchema,
   TaskRunConfigSchema,
@@ -213,6 +214,21 @@ export const TasksBoardDeployAllRequestSchema = z.object({
   reset: z.boolean().optional(),
 });
 
+// Resolve a chat task proposal. `approve` materialises exactly one backlog
+// ("À faire") task from the carried payload — the ONLY place a proposal becomes a
+// board card. `refuse` records the refusal and writes nothing. Idempotent by
+// proposalId: a second resolve of the same proposal returns the first outcome.
+export const TasksProposalResolveRequestSchema = z.object({
+  type: z.literal("tasks.proposal.resolve.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  proposalId: z.string(),
+  outcome: z.enum(["approve", "refuse"]),
+  // Full payload to create on approve (the user may have edited it in the tray).
+  // Omitted on refuse.
+  proposal: TaskChatProposalSchema.optional(),
+});
+
 export const TasksConductorEnsureRequestSchema = z.object({
   type: z.literal("tasks.conductor.ensure.request"),
   requestId: z.string(),
@@ -409,6 +425,16 @@ export const TasksTaskArchiveResponseSchema = z.object({
   type: z.literal("tasks.task.archive.response"),
   payload: z.object({
     requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksProposalResolveResponseSchema = z.object({
+  type: z.literal("tasks.proposal.resolve.response"),
+  payload: z.object({
+    requestId: z.string(),
+    // The created task on approve; null on refuse (or an already-refused replay).
     task: KanbanTaskSchema.nullable(),
     error: z.string().nullable(),
   }),

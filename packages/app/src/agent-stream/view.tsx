@@ -45,7 +45,7 @@ import {
 import { PlanCard } from "@/components/plan-card";
 import { TaskProposalTray } from "@/components/tasks/task-proposal-carousel";
 import { TurnRecapCard } from "@/components/turn-recap-card";
-import type { StreamItem } from "@/types/stream";
+import type { StreamItem, TaskTriageProposalRef } from "@/types/stream";
 import type { PendingPermission } from "@/types/shared";
 import type {
   AgentCapabilityFlags,
@@ -1011,7 +1011,7 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
     // filters to still-pending tasks against the live board and hides when done.
     const triageProposals = useMemo(() => {
       const seen = new Set<string>();
-      const proposals: { taskId: string; title: string }[] = [];
+      const proposals: TaskTriageProposalRef[] = [];
       let triageProjectId: string | undefined;
       for (const item of effectiveStreamItems) {
         if (item.kind !== "task_triage") {
@@ -1019,8 +1019,11 @@ const AgentStreamViewComponent = forwardRef<AgentStreamViewHandle, AgentStreamVi
         }
         triageProjectId = item.projectId ?? triageProjectId;
         for (const proposalRef of item.tasks) {
-          if (!seen.has(proposalRef.taskId)) {
-            seen.add(proposalRef.taskId);
+          // Key on proposalId (the stable proposal key); fall back to taskId for
+          // legacy pills that predate deferred creation.
+          const key = proposalRef.proposalId ?? proposalRef.taskId;
+          if (key && !seen.has(key)) {
+            seen.add(key);
             proposals.push(proposalRef);
           }
         }

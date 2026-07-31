@@ -5077,6 +5077,32 @@ export class DaemonClient {
     });
   }
 
+  // Approve or refuse a chat task proposal. `approve` materialises exactly one
+  // "À faire" (backlog) task from the payload — the only place a proposal becomes
+  // a board card; `refuse` records the refusal and writes nothing. Idempotent by
+  // proposalId, so a double-tap or a reload never produces a duplicate.
+  async tasksProposalResolve(
+    input: {
+      projectId: string;
+      proposalId: string;
+      outcome: "approve" | "refuse";
+      proposal?: {
+        proposalId?: string;
+        title: string;
+        description?: string;
+        tags?: string[];
+        folderName?: string;
+        runConfig?: TaskRunConfig;
+      };
+    },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.proposal.resolve.response">({
+      requestId,
+      message: { type: "tasks.proposal.resolve.request", ...input },
+    });
+  }
+
   // "Valider la tâche": runs the final check server-side. Resolves with
   // passed=false and the task's report when the check rejects the work.
   async tasksTaskValidate(

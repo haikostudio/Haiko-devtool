@@ -74,6 +74,7 @@ import {
   TasksTaskDeployRequestSchema,
   TasksBoardDeployAllRequestSchema,
   TasksTaskArchiveRequestSchema,
+  TasksProposalResolveRequestSchema,
   TasksConductorEnsureRequestSchema,
   TasksBoardGetResponseSchema,
   TasksBoardSubscribeResponseSchema,
@@ -94,9 +95,11 @@ import {
   TasksTaskDeployResponseSchema,
   TasksBoardDeployAllResponseSchema,
   TasksTaskArchiveResponseSchema,
+  TasksProposalResolveResponseSchema,
   TasksConductorEnsureResponseSchema,
   TasksBoardUpdateMessageSchema,
 } from "./tasks/rpc-schemas.js";
+import { TaskChatProposalSchema } from "./tasks/types.js";
 import {
   ActivityLogGetRequestSchema,
   ActivityLogSubscribeRequestSchema,
@@ -719,17 +722,11 @@ export const AgentTimelineItemPayloadSchema: z.ZodType<AgentTimelineItem, unknow
     questions: z.array(z.string()).optional(),
     proposedCount: z.number().optional(),
     projectId: z.string().optional(),
-    // Ids + title snapshots of the proposed tasks so clients can render live
-    // actionable cards (approve/refuse/edit) against the board. Additive: old
-    // items without it fall back to the count-only pill.
-    tasks: z
-      .array(
-        z.object({
-          taskId: z.string(),
-          title: z.string(),
-        }),
-      )
-      .optional(),
+    // Full payloads of the proposed tasks so clients can render live actionable
+    // cards (approve/refuse/edit) WITHOUT anything being written to the board:
+    // the task is created only on approval. Additive: old items without it fall
+    // back to the count-only pill; legacy items carried only { taskId, title }.
+    tasks: z.array(TaskChatProposalSchema).optional(),
   }),
   // COMPAT(turnRecap): added in v0.1.X, drop the gate when floor >= v0.1.X.
   z.object({
@@ -6149,6 +6146,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskDeployRequestSchema,
   TasksBoardDeployAllRequestSchema,
   TasksTaskArchiveRequestSchema,
+  TasksProposalResolveRequestSchema,
   TasksConductorEnsureRequestSchema,
   ActivityLogGetRequestSchema,
   ActivityLogSubscribeRequestSchema,
@@ -6363,6 +6361,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   TasksTaskDeployResponseSchema,
   TasksBoardDeployAllResponseSchema,
   TasksTaskArchiveResponseSchema,
+  TasksProposalResolveResponseSchema,
   TasksConductorEnsureResponseSchema,
   TasksBoardUpdateMessageSchema,
   ActivityLogGetResponseSchema,

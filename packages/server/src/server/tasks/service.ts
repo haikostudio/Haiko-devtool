@@ -769,6 +769,111 @@ export class TaskBoardService {
   }
 
   /**
+   * Resolve a chat task proposal — the ONLY path that turns a proposal into a
+   * board card. `approve` creates exactly one task in "À faire" (backlog) from the
+   * carried payload; never "Validé", because entering the pipeline stays the
+   * user's separate consent gesture. `refuse` records the refusal and writes
+   * nothing to the board.
+   *
+   * Idempotent by proposalId: a proposal already resolved returns its first
+   * outcome (the same task on approve, null on refuse). The proposal id is
+   * reserved in one serialized mutate BEFORE the task is created, so a double-tap,
+   * a reload, or a second device can never mint a duplicate. The resolution is
+   * persisted on the board so the chat tray stays honest across reloads.
+   */
+  async resolveProposal(
+    projectId: string,
+    input: {
+      proposalId: string;
+      outcome: "approve" | "refuse";
+      proposal?: {
+        title: string;
+        description?: string;
+        tags?: string[];
+        folderName?: string;
+        runConfig?: TaskRunConfig;
+      };
+    },
+  ): Promise<KanbanTask | null> {
+    const findExistingTask = (board: TaskBoard): KanbanTask | null => {
+      const prior = board.proposalResolutions?.find((r) => r.proposalId === input.proposalId);
+      if (prior?.outcome === "approved" && prior.taskId) {
+        return board.tasks.find((task) => task.id === prior.taskId) ?? null;
+      }
+      return null;
+    };
+
+    if (input.outcome === "refuse") {
+      const board = await this.store.mutate(projectId, (current) => {
+        if (current.proposalResolutions?.some((r) => r.proposalId === input.proposalId)) {
+          return current;
+        }
+        return {
+          ...current,
+          proposalResolutions: [
+            ...(current.proposalResolutions ?? []),
+            { proposalId: input.proposalId, outcome: "refused" as const },
+          ],
+        };
+      });
+      this.broadcast(board);
+      return findExistingTask(board);
+    }
+
+    const payload = input.proposal;
+    if (!payload) {
+      throw new TaskBoardServiceError(
+        "proposal_payload_missing",
+        "Approving a proposal requires its payload",
+      );
+    }
+
+    // Reserve the proposal id first, atomically, so a concurrent approve can't
+    // slip past and create a second card. If it's already resolved, hand back the
+    // first outcome instead of minting a duplicate.
+    let alreadyResolved = false;
+    const reserved = await this.store.mutate(projectId, (current) => {
+      if (current.proposalResolutions?.some((r) => r.proposalId === input.proposalId)) {
+        alreadyResolved = true;
+        return current;
+      }
+      return {
+        ...current,
+        proposalResolutions: [
+          ...(current.proposalResolutions ?? []),
+          { proposalId: input.proposalId, outcome: "approved" as const },
+        ],
+      };
+    });
+    if (alreadyResolved) {
+      return findExistingTask(reserved);
+    }
+
+    const folderId = payload.folderName?.trim()
+      ? await this.ensureFolder(projectId, payload.folderName.trim())
+      : await this.ensureDefaultFolder(projectId);
+    // No approval marker: an approved proposal is a plain "À faire" card. Sliding
+    // it into "Validé" stays the user's own, separate consent gesture.
+    const created = await this.createTask(projectId, {
+      folderId,
+      title: payload.title,
+      ...(payload.description ? { description: payload.description } : {}),
+      ...(payload.tags ? { tags: payload.tags } : {}),
+      origin: "agent_sync",
+      ...(payload.runConfig ? { runConfig: payload.runConfig } : {}),
+    });
+    // Backfill the reserved resolution with the created task's id.
+    const board = await this.store.mutate(projectId, (current) => ({
+      ...current,
+      proposalResolutions: (current.proposalResolutions ?? []).map((r) =>
+        r.proposalId === input.proposalId ? { ...r, taskId: created.id } : r,
+      ),
+    }));
+    this.broadcast(board);
+    return created;
+  }
+
+  /**
    * "Archiver": hide a finished card from the board. Stamps (or clears)
    * `archivedAt` and nothing else — it never changes the card's column, never
    * publishes it, and never touches the automatic done→deployed publication.

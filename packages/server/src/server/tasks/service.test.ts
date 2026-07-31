@@ -941,4 +941,71 @@ describe("TaskBoardService", () => {
     await service.settleRestartFlags("untouched-project");
     await expect(readdir(dir)).resolves.toEqual([]);
   });
+
+  const proposalFixture = {
+    title: "Ajouter le mode sombre",
+    description: "Basculer clair/sombre.",
+    tags: ["ui"],
+    folderName: "Features",
+  };
+
+  test("resolveProposal approve creates exactly one task in À faire (backlog), never Validé", async () => {
+    const task = await service.resolveProposal("proj-1", {
+      proposalId: "p1",
+      outcome: "approve",
+      proposal: proposalFixture,
+    });
+    expect(task).not.toBeNull();
+    expect(task?.column).toBe("backlog");
+    // An approved proposal is a plain backlog card — entering the pipeline stays
+    // the user's own, separate consent gesture.
+    expect(task?.approval).toBeUndefined();
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks).toHaveLength(1);
+    expect(board.tasks[0]?.title).toBe("Ajouter le mode sombre");
+    expect(board.folders.map((f) => f.name)).toContain("Features");
+    expect(board.proposalResolutions).toEqual([
+      { proposalId: "p1", outcome: "approved", taskId: task?.id },
+    ]);
+  });
+
+  test("resolveProposal approve is idempotent: the same proposal twice yields ONE task", async () => {
+    const first = await service.resolveProposal("proj-1", {
+      proposalId: "p1",
+      outcome: "approve",
+      proposal: proposalFixture,
+    });
+    const second = await service.resolveProposal("proj-1", {
+      proposalId: "p1",
+      outcome: "approve",
+      proposal: proposalFixture,
+    });
+    expect(second?.id).toBe(first?.id);
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks).toHaveLength(1);
+  });
+
+  test("resolveProposal refuse creates nothing on the board", async () => {
+    const task = await service.resolveProposal("proj-1", {
+      proposalId: "p1",
+      outcome: "refuse",
+    });
+    expect(task).toBeNull();
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks).toEqual([]);
+    expect(board.proposalResolutions).toEqual([{ proposalId: "p1", outcome: "refused" }]);
+  });
+
+  test("resolveProposal: a refused proposal can never be approved afterwards", async () => {
+    await service.resolveProposal("proj-1", { proposalId: "p1", outcome: "refuse" });
+    const task = await service.resolveProposal("proj-1", {
+      proposalId: "p1",
+      outcome: "approve",
+      proposal: proposalFixture,
+    });
+    expect(task).toBeNull();
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks).toEqual([]);
+  });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -9,22 +10,13 @@ import {
   View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { StyleSheet } from "react-native-unistyles";
 import { Check, ListChecks, X } from "lucide-react-native";
 import type { ProviderSnapshotEntry } from "@getpaseo/protocol/agent-types";
 import { SelectField, type SelectFieldOption } from "@/components/ui/select-field";
-import {
-  computeBillableCostChf,
-  type EffectiveExecution,
-  estimateTokenCostUsd,
-  formatChf,
-  formatUsd,
-  resolveEffectiveExecution,
-} from "@/components/tasks/task-cost";
+import { type EffectiveExecution, resolveEffectiveExecution } from "@/components/tasks/task-cost";
 import {
   useTaskBoard,
-  type KanbanTask,
   type TaskBoardHandle,
   type TaskRunConfig,
   type TaskSchedulePreference,
@@ -35,6 +27,64 @@ import type { TaskTriageProposalRef } from "@/types/stream";
 const CARD_WIDTH = 300;
 const CARD_GAP = 10;
 const DEFAULT_OPTION_ID = "__default__";
+
+// Stable identity for a proposal: its proposalId when present (the deferred-
+// creation key), else the legacy board task id, else the title as a last resort.
+function refKey(ref: TaskTriageProposalRef): string {
+  return ref.proposalId ?? ref.taskId ?? ref.title;
+}
+
+interface ProposalPayloadOverride {
+  title: string;
+  description?: string;
+  tags?: string[];
+  runConfig?: TaskRunConfig;
+}
+
+// Approve a proposal through the SINGLE creation path: new proposals resolve via
+// the idempotent RPC (creating exactly one "À faire" task); legacy pills that
+// still carry a pre-created board task id fall back to the old approve path.
+async function approveProposal(
+  board: TaskBoardHandle,
+  proposal: TaskTriageProposalRef,
+  override?: ProposalPayloadOverride,
+): Promise<void> {
+  if (proposal.proposalId) {
+    const payload: ProposalPayloadOverride = override ?? {
+      title: proposal.title,
+      ...(proposal.description ? { description: proposal.description } : {}),
+      ...(proposal.tags && proposal.tags.length > 0 ? { tags: proposal.tags } : {}),
+      ...(proposal.runConfig ? { runConfig: proposal.runConfig } : {}),
+    };
+    await board.resolveProposal({
+      proposalId: proposal.proposalId,
+      outcome: "approve",
+      proposal: {
+        ...payload,
+        ...(proposal.folderName ? { folderName: proposal.folderName } : {}),
+      },
+    });
+    return;
+  }
+  if (proposal.taskId) {
+    await board.approveTask(proposal.taskId);
+  }
+}
+
+// Refuse a proposal: new proposals record a refusal (nothing on the board);
+// legacy pills delete their pre-created board task.
+async function refuseProposal(
+  board: TaskBoardHandle,
+  proposal: TaskTriageProposalRef,
+): Promise<void> {
+  if (proposal.proposalId) {
+    await board.resolveProposal({ proposalId: proposal.proposalId, outcome: "refuse" });
+    return;
+  }
+  if (proposal.taskId) {
+    await board.deleteTask(proposal.taskId);
+  }
+}
 
 interface TaskProposalTrayProps {
   serverId: string;
@@ -54,11 +104,20 @@ export function TaskProposalTray({ serverId, projectId, proposals }: TaskProposa
   const snapshot = useProvidersSnapshot(serverId || null, { cwd: null });
 
   const pending = useMemo(() => {
-    if (!board.board) {
-      return [];
-    }
-    const byId = new Map(board.board.tasks.map((task) => [task.id, task]));
-    return proposals.filter((ref) => byId.get(ref.taskId)?.approval?.state === "pending");
+    // A proposal is created ONLY on approval, so a proposal is "still pending"
+    // until the board records a resolution (approved/refused) for its id. Legacy
+    // pills (no proposalId) still point at a pre-created board task, so they fall
+    // back to the old "task exists and is pending approval" test.
+    const resolved = new Set(
+      (board.board?.proposalResolutions ?? []).map((entry) => entry.proposalId),
+    );
+    const byId = new Map((board.board?.tasks ?? []).map((task) => [task.id, task]));
+    return proposals.filter((ref) => {
+      if (ref.proposalId) {
+        return !resolved.has(ref.proposalId);
+      }
+      return ref.taskId ? byId.get(ref.taskId)?.approval?.state === "pending" : false;
+    });
   }, [board.board, proposals]);
 
   if (pending.length === 0) {
@@ -84,15 +143,15 @@ export function TaskProposalCards({
   const [activeIndex, setActiveIndex] = useState(0);
   // Multi-select for bulk approval. A card's per-card Approve/Refuse buttons
   // still work independently; ticking cards here only feeds the "approve
-  // selected" bar. Card edits are saved on blur (updateTask), so a bulk approve
-  // simply approves the already-persisted proposals.
+  // selected" bar. Bulk approves each proposal AS PROPOSED (per-card edits live
+  // in each card's local state), creating one "À faire" task apiece.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
   // Drop selections whose proposal has left the pending set (approved or
   // refused elsewhere) so the count and the "approve selected" bar stay honest.
   useEffect(() => {
-    const live = new Set(proposals.map((proposal) => proposal.taskId));
+    const live = new Set(proposals.map(refKey));
     setSelected((prev) => {
       let changed = false;
       const next = new Set<string>();
@@ -128,22 +187,23 @@ export function TaskProposalCards({
   const allSelected = proposals.length > 0 && selected.size === proposals.length;
   const toggleAll = useCallback(() => {
     setSelected((prev) =>
-      prev.size === proposals.length ? new Set() : new Set(proposals.map((p) => p.taskId)),
+      prev.size === proposals.length ? new Set() : new Set(proposals.map(refKey)),
     );
   }, [proposals]);
 
   const approveSelected = useCallback(() => {
-    const ids = proposals.map((p) => p.taskId).filter((id) => selected.has(id));
-    if (ids.length === 0) {
+    const chosen = proposals.filter((proposal) => selected.has(refKey(proposal)));
+    if (chosen.length === 0) {
       return;
     }
     setBulkBusy(true);
     void (async () => {
       try {
         // Sequential so a mid-batch failure leaves the rest still pending in the
-        // tray rather than half-applying under a single rejected promise.
-        for (const id of ids) {
-          await board.approveTask(id);
+        // tray rather than half-applying under a single rejected promise. Bulk
+        // approves the proposal AS PROPOSED (per-card edits live in each card).
+        for (const proposal of chosen) {
+          await approveProposal(board, proposal);
         }
       } finally {
         setBulkBusy(false);
@@ -199,11 +259,11 @@ export function TaskProposalCards({
       >
         {proposals.map((proposal) => (
           <TaskProposalCard
-            key={proposal.taskId}
+            key={refKey(proposal)}
             proposal={proposal}
             board={board}
             entries={entries}
-            selected={selected.has(proposal.taskId)}
+            selected={selected.has(refKey(proposal))}
             onToggleSelect={toggleSelect}
           />
         ))}
@@ -212,7 +272,7 @@ export function TaskProposalCards({
         <View style={styles.dotsRow}>
           {proposals.map((proposal, index) => (
             <View
-              key={proposal.taskId}
+              key={refKey(proposal)}
               style={index === activeIndex ? styles.dotActive : styles.dot}
             />
           ))}
@@ -234,14 +294,12 @@ interface ExecState {
   schedulePreference: TaskSchedulePreference;
 }
 
-function execStateFromTask(task: KanbanTask | null): ExecState {
+function execStateFromRunConfig(runConfig: TaskRunConfig | undefined): ExecState {
   return {
-    modelSelection: task?.runConfig
-      ? { provider: task.runConfig.provider, model: task.runConfig.model }
-      : null,
-    thinkingOptionId: task?.runConfig?.thinkingOptionId ?? null,
-    mode: task?.runConfig?.mode ?? "direct",
-    schedulePreference: task?.schedulePreference ?? "auto",
+    modelSelection: runConfig ? { provider: runConfig.provider, model: runConfig.model } : null,
+    thinkingOptionId: runConfig?.thinkingOptionId ?? null,
+    mode: runConfig?.mode ?? "direct",
+    schedulePreference: "auto",
   };
 }
 
@@ -279,34 +337,15 @@ function preferenceLabelKey(preference: TaskSchedulePreference): string {
   return "tasks.detail.execution.prefAuto";
 }
 
-function buildEstimateValue(estimate: KanbanTask["estimate"], t: TFunction): string | null {
-  if (!estimate) {
-    return null;
-  }
-  return [
-    t("tasks.card.quotaEstimate", { percent: Math.round(estimate.quotaPercent) }),
-    estimate.estimatedMinutes !== undefined
-      ? t("tasks.card.duration", { minutes: estimate.estimatedMinutes })
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function buildCostValue(
-  estimate: KanbanTask["estimate"],
-  effective: EffectiveExecution,
-): string | null {
-  if (!estimate || estimate.estimatedMinutes === undefined) {
-    return null;
-  }
-  return [
-    formatChf(computeBillableCostChf(estimate.estimatedMinutes)),
-    effective.modelId ? formatUsd(estimateTokenCostUsd(effective.modelId, estimate.tokens)) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
+// idle → the two actions are live; approving/refusing → both disabled, a loader
+// on the pressed button; error → the operation failed, buttons live again so the
+// user can retry. On success the resolution lands on the board and the tray drops
+// this card, so there is no lingering "done" state to model here.
+type ProposalActionState =
+  | { kind: "idle" }
+  | { kind: "approving" }
+  | { kind: "refusing" }
+  | { kind: "error"; message: string };
 
 function TaskProposalCard({
   proposal,
@@ -319,17 +358,20 @@ function TaskProposalCard({
   board: TaskBoardHandle;
   entries: ProviderSnapshotEntry[] | undefined;
   selected: boolean;
-  onToggleSelect: (taskId: string) => void;
+  onToggleSelect: (key: string) => void;
 }) {
   const { t } = useTranslation();
-  const taskId = proposal.taskId;
-  const task = board.board?.tasks.find((entry) => entry.id === taskId) ?? null;
+  const key = refKey(proposal);
 
-  const [busy, setBusy] = useState(false);
-  const [title, setTitle] = useState(task?.title ?? proposal.title);
-  const [description, setDescription] = useState(task?.description ?? "");
-  const [tagsText, setTagsText] = useState((task?.tags ?? []).join(", "));
-  const [exec, setExec] = useState<ExecState>(() => execStateFromTask(task));
+  // A proposal is not on the board yet — everything the user edits lives here
+  // until they approve, and only then is a single "À faire" task created.
+  const [action, setAction] = useState<ProposalActionState>({ kind: "idle" });
+  const [title, setTitle] = useState(proposal.title);
+  const [description, setDescription] = useState(proposal.description ?? "");
+  const [tagsText, setTagsText] = useState((proposal.tags ?? []).join(", "));
+  const [exec, setExec] = useState<ExecState>(() => execStateFromRunConfig(proposal.runConfig));
+
+  const busy = action.kind === "approving" || action.kind === "refusing";
 
   const effective = useMemo(
     () =>
@@ -342,92 +384,89 @@ function TaskProposalCard({
     [entries, exec],
   );
 
-  const saveText = useCallback(() => {
-    if (!title.trim()) {
+  const handleApprove = useCallback(() => {
+    if (busy) {
       return;
     }
-    void board.updateTask({
-      taskId,
-      title: title.trim(),
-      description: description.trim() === "" ? null : description,
-      tags: tagsText
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-    });
-  }, [board, taskId, title, description, tagsText]);
-
-  const applyExec = useCallback(
-    (next: ExecState) => {
-      setExec(next);
-      void board.updateTask({
-        taskId,
-        runConfig: buildRunConfig(next),
-        schedulePreference: next.schedulePreference === "auto" ? null : next.schedulePreference,
-      });
-    },
-    [board, taskId],
-  );
-
-  const handleApprove = useCallback(() => {
-    setBusy(true);
+    setAction({ kind: "approving" });
     void (async () => {
       try {
-        saveText();
-        await board.approveTask(taskId);
-      } finally {
-        setBusy(false);
+        const tags = tagsText
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean);
+        const runConfig = buildRunConfig(exec);
+        await approveProposal(board, proposal, {
+          title: title.trim() || proposal.title,
+          ...(description.trim() ? { description } : {}),
+          ...(tags.length > 0 ? { tags } : {}),
+          ...(runConfig ? { runConfig } : {}),
+        });
+        // Success: the board records the resolution and the tray drops this card.
+      } catch (error) {
+        setAction({ kind: "error", message: (error as Error).message });
       }
     })();
-  }, [board, saveText, taskId]);
+  }, [board, busy, proposal, title, description, tagsText, exec]);
 
   const handleRefuse = useCallback(() => {
-    setBusy(true);
-    void board.deleteTask(taskId).finally(() => setBusy(false));
-  }, [board, taskId]);
+    if (busy) {
+      return;
+    }
+    setAction({ kind: "refusing" });
+    void (async () => {
+      try {
+        await refuseProposal(board, proposal);
+      } catch (error) {
+        setAction({ kind: "error", message: (error as Error).message });
+      }
+    })();
+  }, [board, busy, proposal]);
 
-  const handleToggleSelect = useCallback(() => onToggleSelect(taskId), [onToggleSelect, taskId]);
+  const handleToggleSelect = useCallback(() => onToggleSelect(key), [onToggleSelect, key]);
   const selectState = useMemo(() => ({ checked: selected }), [selected]);
 
   return (
-    <View style={styles.card} testID={`task-proposal-${taskId}`}>
+    <View style={styles.card} testID={`task-proposal-${key}`}>
       <LabeledInput
         label={t("tasks.detail.titleField")}
         value={title}
         onChangeText={setTitle}
-        onBlur={saveText}
-        testID={`task-proposal-title-${taskId}`}
+        testID={`task-proposal-title-${key}`}
       />
       <LabeledInput
         label={t("tasks.detail.descriptionField")}
         value={description}
         onChangeText={setDescription}
-        onBlur={saveText}
         placeholder={t("tasks.newTaskDescriptionPlaceholder")}
         multiline
-        testID={`task-proposal-description-${taskId}`}
+        testID={`task-proposal-description-${key}`}
       />
       <LabeledInput
         label={t("tasks.detail.tagsField")}
         value={tagsText}
         onChangeText={setTagsText}
-        onBlur={saveText}
         placeholder={t("tasks.detail.tagsPlaceholder")}
-        testID={`task-proposal-tags-${taskId}`}
+        testID={`task-proposal-tags-${key}`}
       />
 
-      <ExecSelects entries={entries} exec={exec} effective={effective} onChange={applyExec} />
+      <ExecSelects entries={entries} exec={exec} effective={effective} onChange={setExec} />
 
-      <CardInfo task={task} effective={effective} />
+      {action.kind === "error" ? (
+        <Text style={styles.errorText} testID={`task-proposal-error-${key}`}>
+          {action.message}
+        </Text>
+      ) : null}
 
       <View style={styles.actionsRow}>
         <Pressable
           style={selected ? styles.checkboxOn : styles.checkboxOff}
           onPress={handleToggleSelect}
+          disabled={busy}
           accessibilityRole="checkbox"
           accessibilityState={selectState}
           accessibilityLabel={t("tasks.triage.select")}
-          testID={`task-proposal-select-${taskId}`}
+          testID={`task-proposal-select-${key}`}
         >
           {selected ? <Check size={12} color="#ffffff" /> : null}
         </Pressable>
@@ -436,9 +475,17 @@ function TaskProposalCard({
           onPress={handleApprove}
           disabled={busy}
           accessibilityLabel={t("tasks.triage.approve")}
-          testID={`task-proposal-approve-${taskId}`}
+          testID={`task-proposal-approve-${key}`}
         >
-          <Check size={15} color="#ffffff" />
+          {action.kind === "approving" ? (
+            <ActivityIndicator
+              size="small"
+              color="#ffffff"
+              testID={`task-proposal-approving-${key}`}
+            />
+          ) : (
+            <Check size={15} color="#ffffff" />
+          )}
           <Text style={styles.actionText}>{t("tasks.triage.approve")}</Text>
         </Pressable>
         <Pressable
@@ -446,9 +493,17 @@ function TaskProposalCard({
           onPress={handleRefuse}
           disabled={busy}
           accessibilityLabel={t("tasks.triage.refuse")}
-          testID={`task-proposal-refuse-${taskId}`}
+          testID={`task-proposal-refuse-${key}`}
         >
-          <X size={15} color={styles.refuseText.color as string} />
+          {action.kind === "refusing" ? (
+            <ActivityIndicator
+              size="small"
+              color={styles.refuseText.color as string}
+              testID={`task-proposal-refusing-${key}`}
+            />
+          ) : (
+            <X size={15} color={styles.refuseText.color as string} />
+          )}
           <Text style={styles.refuseText}>{t("tasks.triage.refuse")}</Text>
         </Pressable>
       </View>
@@ -468,7 +523,7 @@ function LabeledInput({
   label: string;
   value: string;
   onChangeText: (value: string) => void;
-  onBlur: () => void;
+  onBlur?: () => void;
   placeholder?: string;
   multiline?: boolean;
   testID?: string;
@@ -654,24 +709,6 @@ function ExecSelects({
   );
 }
 
-function CardInfo({ task, effective }: { task: KanbanTask | null; effective: EffectiveExecution }) {
-  const { t } = useTranslation();
-  const estimateValue = buildEstimateValue(task?.estimate ?? null, t);
-  const costValue = buildCostValue(task?.estimate ?? null, effective);
-  return (
-    <View style={styles.infoBlock}>
-      <Text style={styles.infoText} numberOfLines={1}>
-        {t("tasks.triage.fieldEstimate")} : {estimateValue ?? t("tasks.triage.pendingEstimate")}
-      </Text>
-      {costValue ? (
-        <Text style={styles.infoText} numberOfLines={1}>
-          {t("tasks.triage.fieldCost")} : {costValue}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create((theme) => ({
   block: {
     gap: theme.spacing[2],
@@ -779,11 +816,8 @@ const styles = StyleSheet.create((theme) => ({
   selectStack: {
     gap: theme.spacing[2],
   },
-  infoBlock: {
-    gap: theme.spacing[1],
-  },
-  infoText: {
-    color: theme.colors.foregroundMuted,
+  errorText: {
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
   },
   actionsRow: {

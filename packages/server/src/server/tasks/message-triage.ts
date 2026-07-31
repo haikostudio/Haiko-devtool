@@ -7,8 +7,13 @@ import {
   getStructuredAgentResponse,
 } from "../agent/agent-response-loop.js";
 import type { AgentTimelineItem } from "../agent/agent-sdk-types.js";
-import { type TaskRunConfig, TaskRunConfigSchema } from "@getpaseo/protocol/tasks/types";
+import {
+  type TaskChatProposal,
+  type TaskRunConfig,
+  TaskRunConfigSchema,
+} from "@getpaseo/protocol/tasks/types";
 import type { TaskBoardService } from "./service.js";
+import { generateTaskEntityId } from "./store.js";
 
 const DEFAULT_TRIAGE_PROVIDER_MODEL = "claude/haiku";
 
@@ -178,37 +183,30 @@ export class MessageTriage {
       return;
     }
 
-    const proposed: { taskId: string; title: string }[] = [];
+    // A proposal writes NOTHING to the board: it is created only when the user
+    // approves it from the chat pill. Each carries a stable proposalId (the key
+    // the approval RPC uses to stay idempotent) and its full payload, so the
+    // approval can materialise the exact task without any pre-created card.
+    const proposed: TaskChatProposal[] = [];
     for (const task of result.tasks) {
-      try {
-        const folderId = await this.taskBoardService.ensureFolder(
-          projectId,
-          task.folderName?.trim() || DEFAULT_TRIAGE_FOLDER,
-        );
-        // Same rule as the conductor's create_task: a task born from a chat
-        // message runs on the engine the user was talking to, unless the triage
-        // layer proposed an explicit one.
-        const runConfig = sanitizeRunConfig(task.runConfig) ?? this.sourceAgentRunConfig(agentId);
-        const created = await this.taskBoardService.createTask(projectId, {
-          folderId,
-          title: task.title,
-          ...(task.description ? { description: task.description } : {}),
-          tags: task.tags,
-          // Triage tasks are born in backlog like every other new task; the
-          // pending-approval marker flags them as awaiting the user's validation
-          // (the service pins creation to backlog regardless of column).
-          // origin stays within the existing enum; PROPOSED state distinguishes triage tasks.
-          origin: "agent_sync",
-          ...(runConfig !== undefined ? { runConfig } : {}),
-          approval: { state: "pending" },
-        });
-        proposed.push({ taskId: created.id, title: created.title });
-      } catch (error) {
-        this.logger.debug(
-          { err: error, projectId, title: task.title },
-          "Triage task create failed",
-        );
+      // Same rule as the conductor's create_task: a task born from a chat message
+      // runs on the engine the user was talking to, unless triage proposed one.
+      const runConfig = sanitizeRunConfig(task.runConfig) ?? this.sourceAgentRunConfig(agentId);
+      const entry: TaskChatProposal = {
+        proposalId: generateTaskEntityId(),
+        title: task.title,
+        folderName: task.folderName?.trim() || DEFAULT_TRIAGE_FOLDER,
+      };
+      if (task.description) {
+        entry.description = task.description;
       }
+      if (task.tags.length > 0) {
+        entry.tags = task.tags;
+      }
+      if (runConfig !== undefined) {
+        entry.runConfig = runConfig;
+      }
+      proposed.push(entry);
     }
 
     if (proposed.length > 0) {
@@ -217,7 +215,8 @@ export class MessageTriage {
         status: "proposed",
         proposedCount: proposed.length,
         projectId,
-        // Task snapshots let the client render live approve/refuse/edit cards.
+        // Full payloads let the client render approve/refuse/edit cards and, on
+        // approval, create the task in "À faire" — nothing is on the board yet.
         tasks: proposed,
       });
     }

@@ -45,13 +45,21 @@ describe("paseo task board tools", () => {
   let dir: string;
   let service: TaskBoardService;
   let catalog: PaseoToolCatalog;
+  let appended: { agentId: string; item: Record<string, unknown> }[];
 
   function buildCatalog(callerAgent: FakeCallerAgent | null): PaseoToolCatalog {
     return createPaseoToolCatalog({
       // Task tools only touch taskBoardService/projectRegistry plus the caller
       // lookup used to inherit its run config; the remaining dependencies are
-      // inert stubs (their tools are never executed here).
-      agentManager: { listAgents: () => [], getAgent: () => callerAgent } as never,
+      // inert stubs (their tools are never executed here). appendTimelineItem
+      // captures the chat pills a proposal emits.
+      agentManager: {
+        listAgents: () => [],
+        getAgent: () => callerAgent,
+        appendTimelineItem: async (agentId: string, item: Record<string, unknown>) => {
+          appended.push({ agentId, item });
+        },
+      } as never,
       agentStorage: {} as never,
       providerSnapshotManager: {} as never,
       taskBoardService: service,
@@ -64,6 +72,7 @@ describe("paseo task board tools", () => {
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "paseo-task-tools-"));
     service = new TaskBoardService({ store: new TaskBoardStore(dir), logger });
+    appended = [];
     catalog = buildCatalog(null);
   });
 
@@ -100,7 +109,7 @@ describe("paseo task board tools", () => {
     ]);
   });
 
-  test("create_task with proposeRun lands in backlog awaiting validation, unlinked from the caller", async () => {
+  test("create_task with proposeRun writes NOTHING to the board, only a chat proposal pill", async () => {
     const result = structured(
       await catalog.executeTool("create_task", {
         projectId: "proj-1",
@@ -113,24 +122,54 @@ describe("paseo task board tools", () => {
       }),
     );
 
-    // Every new task is born in backlog — a proposal never enters the pipeline
-    // at creation. The pending marker is what flags it for the user's validation.
-    expect(result.column).toBe("backlog");
+    // A proposal is not created on the board — it becomes a card only on approval.
+    expect(result.column).toBe("proposed");
     expect(result.approvalState).toBe("pending");
-
     const board = await service.getBoard("proj-1");
-    const task = board.tasks.find((entry) => entry.id === result.taskId);
-    expect(task?.column).toBe("backlog");
-    expect(task?.approval?.state).toBe("pending");
-    expect(task?.approval?.requestedBy).toBe("agent-42");
-    expect(task?.runConfig?.mode).toBe("plan");
-    expect(task?.schedulePreference).toBe("off_peak");
-    // The proposer must NOT be linked: agent-sync would drag the card around.
-    expect(task?.links.agentIds).toEqual([]);
-    // Backlog tasks are inert: the schedule stays disarmed until the user
-    // validates the proposal (moves it into the pipeline).
-    expect(task?.schedule).toBeUndefined();
-    expect(board.folders.some((folder) => folder.name === "Mail client")).toBe(true);
+    expect(board.tasks).toEqual([]);
+    expect(board.folders).toEqual([]);
+
+    // It surfaces as a chat pill in the caller's own thread, with the full payload
+    // (and a proposalId, which the tool echoes back as its result id).
+    expect(appended).toHaveLength(1);
+    expect(appended[0]?.agentId).toBe("agent-42");
+    const pill = appended[0]?.item as {
+      type: string;
+      status: string;
+      tasks: { proposalId: string; title: string; folderName?: string; runConfig?: unknown }[];
+    };
+    expect(pill.type).toBe("task_triage");
+    expect(pill.status).toBe("proposed");
+    expect(pill.tasks).toHaveLength(1);
+    expect(pill.tasks[0]).toMatchObject({
+      proposalId: result.taskId,
+      title: "Répondre au client sur la facturation",
+      folderName: "Mail client",
+      runConfig: { provider: "claude", model: "claude-opus-4-8", mode: "plan" },
+    });
+  });
+
+  test("create_task with proposeRun but NO live caller falls back to a plain backlog card", async () => {
+    // A top-level MCP caller (no thread) can't show a chat pill, so the proposal
+    // degrades to a normal backlog task rather than being lost.
+    const bare = createPaseoToolCatalog({
+      agentManager: { listAgents: () => [], getAgent: () => null } as never,
+      agentStorage: {} as never,
+      providerSnapshotManager: {} as never,
+      taskBoardService: service,
+      projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
+      logger,
+    });
+    const result = structured(
+      await bare.executeTool("create_task", {
+        projectId: "proj-1",
+        title: "Nettoyer les logs",
+        proposeRun: true,
+      }),
+    );
+    expect(result.column).toBe("backlog");
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks).toHaveLength(1);
   });
 
   test("create_task without proposeRun lands in backlog without approval", async () => {

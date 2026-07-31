@@ -1,4 +1,5 @@
 import type { AgentAttachment } from "./messages.js";
+import type { TaskRunConfig } from "./tasks/types.js";
 
 export type AgentProvider = string;
 
@@ -376,9 +377,18 @@ export interface TaskTriageTimelineItem {
   questions?: string[];
   proposedCount?: number;
   projectId?: string;
-  // Ids + title snapshots of the proposed tasks so clients can render live
-  // actionable cards against the board. Absent on pre-carousel items.
-  tasks?: Array<{ taskId: string; title: string }>;
+  // Full payloads of the proposed tasks so clients can render live actionable
+  // cards WITHOUT touching the board — the task is created only on approval.
+  // Absent on pre-carousel items; legacy items carried only { taskId, title }.
+  tasks?: Array<{
+    proposalId?: string;
+    taskId?: string;
+    title: string;
+    description?: string;
+    tags?: string[];
+    folderName?: string;
+    runConfig?: TaskRunConfig;
+  }>;
 }
 
 /**

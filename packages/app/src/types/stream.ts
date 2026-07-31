@@ -1,4 +1,5 @@
 import type { AgentProvider, ToolCallDetail } from "@getpaseo/protocol/agent-types";
+import type { TaskRunConfig } from "@getpaseo/protocol/tasks/types";
 import type { AgentAttachment, AgentStreamEventPayload } from "@getpaseo/protocol/messages";
 import type { AttachmentMetadata } from "@/attachments/types";
 import { extractTaskEntriesFromToolCall } from "../utils/tool-call-parsers";
@@ -235,8 +236,16 @@ export interface BrainContextItem {
 }
 
 export interface TaskTriageProposalRef {
-  taskId: string;
+  // Stable key for the proposal; the approval RPC uses it to stay idempotent.
+  // Absent only on legacy pills that referenced an already-created board task.
+  proposalId?: string;
+  // Legacy: pre-deferred-creation pills pointed at an already-created task.
+  taskId?: string;
   title: string;
+  description?: string;
+  tags?: string[];
+  folderName?: string;
+  runConfig?: TaskRunConfig;
 }
 
 /** Inline task-intent triage result surfaced by the daemon in the chat thread. */

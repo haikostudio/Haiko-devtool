@@ -2072,6 +2072,8 @@ export class Session {
         return tasksSession.handleTaskRetryAnalysisRequest(msg);
       case "tasks.task.approve.request":
         return tasksSession.handleTaskApproveRequest(msg);
+      case "tasks.proposal.resolve.request":
+        return tasksSession.handleTaskProposalResolveRequest(msg);
       case "tasks.task.validate.request":
         return tasksSession.handleTaskValidateRequest(msg);
       case "tasks.task.deploy.request":
