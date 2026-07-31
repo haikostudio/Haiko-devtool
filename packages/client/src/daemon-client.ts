@@ -23,6 +23,7 @@ import type {
   CreateAgentRequestMessage,
   CreatePaseoWorktreeRequest,
   FileDownloadTokenResponse,
+  ArchiveDownloadTokenResponse,
   FileUploadResponse,
   FileExplorerResponse,
   FetchAgentTimelineResponseMessage,
@@ -440,6 +441,7 @@ export interface FileUploadInput {
 }
 export type FileUploadResult = FileUploadResponse["payload"];
 type FileDownloadTokenPayload = FileDownloadTokenResponse["payload"];
+type ArchiveDownloadTokenPayload = ArchiveDownloadTokenResponse["payload"];
 type ListProviderFeaturesPayload = ListProviderFeaturesResponseMessage["payload"];
 type ListProviderModelsPayload = ListProviderModelsResponseMessage["payload"];
 type ListProviderModesPayload = ListProviderModesResponseMessage["payload"];
@@ -4537,6 +4539,25 @@ export class DaemonClient {
         path,
       },
       responseType: "file_download_token_response",
+    });
+  }
+
+  /**
+   * Mints a fresh download token for a temporary archive built by the conductor's
+   * create_project_archive tool. Looked up by archive id (the zip lives under the
+   * daemon home, not a workspace) and served by the same download route.
+   */
+  async requestArchiveDownloadToken(
+    archiveId: string,
+    requestId?: string,
+  ): Promise<ArchiveDownloadTokenPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "archive_download_token_request",
+        archiveId,
+      },
+      responseType: "archive_download_token_response",
     });
   }
 

@@ -97,6 +97,8 @@ import {
 } from "./paseo-worktree-service.js";
 import { createPaseoWorktreeWorkflow } from "./worktree-session.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
+import { DownloadArchiveStore } from "./file-download/archive-store.js";
+import { DownloadArchiveCleaner } from "./download-archive-cleaner.js";
 import type { OpenAiSpeechProviderConfig } from "./speech/providers/openai/config.js";
 import type { LocalSpeechProviderConfig } from "./speech/providers/local/config.js";
 import type { RequestedSpeechProviders } from "./speech/speech-types.js";
@@ -622,6 +624,17 @@ export async function createPaseoDaemon(
 
   const downloadTokenStore = new DownloadTokenStore({
     ttlMs: downloadTokenTtlMs,
+  });
+
+  // Temporary zip archives built by the conductor's create_project_archive tool,
+  // served through the same /api/files/download route and swept after 24h.
+  const downloadArchiveStore = new DownloadArchiveStore({
+    paseoHome: config.paseoHome,
+    logger,
+  });
+  const downloadArchiveCleaner = new DownloadArchiveCleaner({
+    archiveStore: downloadArchiveStore,
+    logger,
   });
 
   // Capability token authenticating the daemon's own agents to the loopback
@@ -1260,6 +1273,7 @@ export async function createPaseoDaemon(
   logger.info({ elapsed: elapsed() }, "Schedule service initialized");
   const quotaResetWatcher = new QuotaResetWatcher({ agentManager, logger });
   quotaResetWatcher.start();
+  downloadArchiveCleaner.start();
   const providerUsageService = new ProviderUsageService({ logger });
   const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
   const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
@@ -1763,6 +1777,7 @@ export async function createPaseoDaemon(
     voiceOnly: runtime.voiceOnly,
     taskBoardService,
     projectRegistry,
+    downloadArchiveStore,
     resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
     resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
     logger,
@@ -2133,6 +2148,7 @@ export async function createPaseoDaemon(
     speechService.stop();
     await scheduleService.stop().catch(() => undefined);
     quotaResetWatcher.stop();
+    downloadArchiveCleaner.stop();
     taskScheduler.stop();
     autoDeployWatcher.stop();
     projectPromptSync.dispose();

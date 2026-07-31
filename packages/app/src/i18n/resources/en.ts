@@ -2014,6 +2014,7 @@ export const en = {
     failed: "Failed to download file.",
     shareFile: "Share file",
     shareFileNamed: "Share {{fileName}}",
+    archiveDownload: "Download {{fileName}}",
   },
   menu: {
     backdrop: "Menu backdrop",

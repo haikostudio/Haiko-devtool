@@ -2038,6 +2038,7 @@ export const ru: TranslationResources = {
     failed: "Не удалось загрузить файл.",
     shareFile: "Поделиться файлом",
     shareFileNamed: "Поделиться {{fileName}}",
+    archiveDownload: "Скачать {{fileName}}",
   },
   menu: {
     backdrop: "Фон меню",

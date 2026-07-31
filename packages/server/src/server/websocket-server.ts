@@ -12,6 +12,7 @@ import { SessionUiStateStore } from "./session-ui-state-store.js";
 import { DraftAttachmentStore } from "./draft-attachment-store.js";
 import { AttachmentLibraryStore } from "./attachment-library-store.js";
 import type { DownloadTokenStore } from "./file-download/token-store.js";
+import { DownloadArchiveStore } from "./file-download/archive-store.js";
 import type { TerminalManager } from "../terminal/terminal-manager.js";
 import type pino from "pino";
 import {
@@ -476,6 +477,7 @@ export class VoiceAssistantWebSocketServer {
   private readonly workspaceGitService: WorkspaceGitService;
   private readonly workspaceAutoName: WorkspaceAutoName;
   private readonly downloadTokenStore: DownloadTokenStore;
+  private readonly archiveStore: DownloadArchiveStore;
   private readonly paseoHome: string;
   private readonly sidebarOrderStore: SidebarOrderStore;
   private readonly sessionUiStateStore: SessionUiStateStore;
@@ -616,6 +618,7 @@ export class VoiceAssistantWebSocketServer {
     this.workspaceGitService = workspaceGitService ?? createFallbackWorkspaceGitService();
     this.workspaceAutoName = workspaceAutoName;
     this.downloadTokenStore = downloadTokenStore;
+    this.archiveStore = new DownloadArchiveStore({ paseoHome, logger });
     this.paseoHome = paseoHome;
     this.worktreesRoot = daemonRuntimeConfig?.worktreesRoot;
     this.daemonConfigStore = daemonConfigStore;
@@ -1150,6 +1153,7 @@ export class VoiceAssistantWebSocketServer {
       },
       logger: connectionLogger.child({ module: "session" }),
       downloadTokenStore: this.downloadTokenStore,
+      archiveStore: this.archiveStore,
       pushTokenStore: this.pushTokenStore,
       pushNotificationHistoryStore: this.pushNotificationHistoryStore,
       paseoHome: this.paseoHome,
@@ -1407,6 +1411,8 @@ export class VoiceAssistantWebSocketServer {
       features: {
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,
+        // COMPAT(conductorFileArchive): added in v0.2.1, drop the gate once floor >= v0.2.1.
+        conductorFileArchive: true,
         // COMPAT(checkoutGithubSetAutoMerge): added in v0.1.75, remove gate after 2026-11-13.
         checkoutGithubSetAutoMerge: true,
         githubCheckDetails: true,

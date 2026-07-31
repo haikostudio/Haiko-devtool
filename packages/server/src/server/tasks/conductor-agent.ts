@@ -101,6 +101,8 @@ export const CONDUCTOR_ALLOWED_PASEO_TOOLS: readonly string[] = [
   "update_task",
   "move_task",
   "delete_task",
+  // Bundle project files into a downloadable zip offered in the chat.
+  "create_project_archive",
 ];
 
 /**

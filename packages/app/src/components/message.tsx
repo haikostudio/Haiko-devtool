@@ -55,6 +55,7 @@ import {
   CircleDot,
   ListPlus,
   Plus,
+  Download,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { SPACING, type Theme } from "@/styles/theme";
@@ -83,6 +84,11 @@ import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import type { ToolCallDetail } from "@getpaseo/protocol/agent-types";
 import { buildToolCallPresentation } from "@/tool-calls/presentation";
 import { resolveToolCallIcon } from "@/utils/tool-call-icon";
+import {
+  parseProjectArchiveToolCall,
+  type ProjectArchiveDescriptor,
+} from "@/utils/project-archive";
+import { useArchiveDownload } from "@/hooks/use-archive-download";
 import {
   getMarkdownForcedOrderedMarker,
   getMarkdownListMarker,
@@ -1838,6 +1844,61 @@ function TaskOfferConfirm() {
         )}
         <Text style={labelStyle}>
           {status === "sent" ? t("tasks.panel.taskOfferSent") : t("tasks.panel.taskOfferConfirm")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const ThemedDownloadIcon = withUnistyles(Download);
+
+function formatArchiveSize(bytes: number): string {
+  if (!bytes || bytes <= 0) {
+    return "";
+  }
+  if (bytes < 1024) {
+    return `${bytes} o`;
+  }
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${Math.round(kb)} Ko`;
+  }
+  return `${(kb / 1024).toFixed(kb / 1024 < 10 ? 1 : 0)} Mo`;
+}
+
+/**
+ * Download button rendered under a `create_project_archive` tool call. Reuses the
+ * standard file-download pipeline (see `useArchiveDownload`), so a click works on
+ * web (anchor), desktop and mobile (download + share) — the same as the file
+ * explorer's download. Rendered only when the surrounding chat knows its host.
+ */
+export function ChatArchiveDownloadButton({
+  serverId,
+  archive,
+}: {
+  serverId: string;
+  archive: ProjectArchiveDescriptor;
+}) {
+  const download = useArchiveDownload({ serverId });
+  const { t } = useTranslation();
+  const sizeLabel = useMemo(() => formatArchiveSize(archive.size), [archive.size]);
+
+  const handlePress = useStableEvent(() => {
+    download({ archiveId: archive.archiveId, fileName: archive.fileName });
+  });
+
+  return (
+    <View style={taskOfferStyles.row}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityRole="button"
+        accessibilityLabel={t("downloads.archiveDownload", { fileName: archive.fileName })}
+        style={taskOfferStyles.button}
+        testID="chat-archive-download"
+      >
+        <ThemedDownloadIcon size={15} uniProps={foregroundMutedColorMapping} />
+        <Text style={taskOfferStyles.label}>
+          {sizeLabel ? `${archive.fileName} · ${sizeLabel}` : archive.fileName}
         </Text>
       </Pressable>
     </View>
@@ -4026,6 +4087,12 @@ interface ToolCallProps {
   defaultExpanded?: boolean;
   forceInline?: boolean;
   maxDetailHeight?: number;
+  /**
+   * When set, a `create_project_archive` tool call renders a download button
+   * (see ChatArchiveDownloadButton). Omitted where the chat has no host to
+   * download from (read-only transcripts, previews).
+   */
+  archiveDownloadServerId?: string;
 }
 
 export const ToolCall = memo(function ToolCall({
@@ -4045,6 +4112,7 @@ export const ToolCall = memo(function ToolCall({
   defaultExpanded,
   forceInline = false,
   maxDetailHeight = 400,
+  archiveDownloadServerId,
 }: ToolCallProps) {
   const { openToolCall } = useToolCallSheet();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded ?? false);
@@ -4079,6 +4147,12 @@ export const ToolCall = memo(function ToolCall({
       }),
     [toolName, status, error, effectiveDetail, metadata, cwd],
   );
+  const archiveDescriptor = useMemo<ProjectArchiveDescriptor | null>(() => {
+    if (!archiveDownloadServerId || status !== "completed") {
+      return null;
+    }
+    return parseProjectArchiveToolCall(toolName, effectiveDetail);
+  }, [archiveDownloadServerId, status, toolName, effectiveDetail]);
   const handleOpenFile = useMemo(() => {
     const openFilePath = presentation.openFilePath;
     if (!openFilePath || !onOpenFilePath) {
@@ -4167,7 +4241,7 @@ export const ToolCall = memo(function ToolCall({
     );
   }
 
-  return (
+  const badge = (
     <ExpandableBadge
       testID="tool-call-badge"
       label={presentation.displayName}
@@ -4184,6 +4258,17 @@ export const ToolCall = memo(function ToolCall({
       onDetailHoverChange={onInlineDetailsHoverChange}
     />
   );
+
+  if (archiveDescriptor && archiveDownloadServerId) {
+    return (
+      <View>
+        {badge}
+        <ChatArchiveDownloadButton serverId={archiveDownloadServerId} archive={archiveDescriptor} />
+      </View>
+    );
+  }
+
+  return badge;
 }, areToolCallPropsEqual);
 
 function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
@@ -4201,5 +4286,6 @@ function areToolCallPropsEqual(previous: ToolCallProps, next: ToolCallProps) {
   if (previous.defaultExpanded !== next.defaultExpanded) return false;
   if (previous.forceInline !== next.forceInline) return false;
   if (previous.maxDetailHeight !== next.maxDetailHeight) return false;
+  if (previous.archiveDownloadServerId !== next.archiveDownloadServerId) return false;
   return true;
 }

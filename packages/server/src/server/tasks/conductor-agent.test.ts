@@ -17,6 +17,7 @@ import type {
   CreateAgentCommandResult,
 } from "../agent/create-agent/create.js";
 import { createPaseoToolCatalog } from "../agent/tools/paseo-tools.js";
+import { DownloadArchiveStore } from "../file-download/archive-store.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardService } from "./service.js";
 import { TaskBoardStore } from "./store.js";
@@ -37,6 +38,7 @@ async function listAllPaseoToolNames(): Promise<string[]> {
       providerSnapshotManager: {} as never,
       taskBoardService: new TaskBoardService({ store: new TaskBoardStore(dir), logger }),
       projectRegistry: { list: async () => [], get: async () => null } as never,
+      downloadArchiveStore: new DownloadArchiveStore({ paseoHome: dir, logger }),
       callerAgentId: "agent-1",
       logger,
     });

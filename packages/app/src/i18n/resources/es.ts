@@ -2050,6 +2050,7 @@ export const es: TranslationResources = {
     failed: "No se pudo descargar el archivo.",
     shareFile: "compartir archivo",
     shareFileNamed: "Compartir{{fileName}}",
+    archiveDownload: "Descargar {{fileName}}",
   },
   menu: {
     backdrop: "Fondo del menú",

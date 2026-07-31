@@ -2744,6 +2744,15 @@ export const FileDownloadTokenRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// COMPAT(conductorFileArchive): added in v0.2.1, drop the feature gate once
+// daemon floor >= v0.2.1. Mints a fresh download token for a temporary archive
+// built by the conductor's create_project_archive tool.
+export const ArchiveDownloadTokenRequestSchema = z.object({
+  type: z.literal("archive_download_token_request"),
+  archiveId: z.string(),
+  requestId: z.string(),
+});
+
 export const FileUploadRequestSchema = z.object({
   type: z.literal("file.upload.request"),
   fileName: z.string().min(1),
@@ -3133,6 +3142,11 @@ export const ServerInfoStatusPayloadSchema = z
     features: z
       .object({
         providersSnapshot: z.boolean().optional(),
+        // COMPAT(conductorFileArchive): added in v0.2.1, drop the gate once
+        // daemon floor >= v0.2.1. Daemon can build a zip on demand and serve it
+        // via archive_download_token_request; the client gates the chat download
+        // button on it.
+        conductorFileArchive: z.boolean().optional(),
         // COMPAT(workspaceScriptManagement): added in v0.1.105, remove gate after 2027-01-10.
         workspaceScriptManagement: z.boolean().optional(),
         // COMPAT(hubRelationship): added in v0.1.X, drop the gate when floor >= v0.1.X.
@@ -5381,6 +5395,22 @@ export const FileDownloadTokenResponseSchema = z.object({
   }),
 });
 
+// COMPAT(conductorFileArchive): added in v0.2.1. Response to
+// ArchiveDownloadTokenRequestSchema — same token/fileName/mimeType/size shape as
+// the single-file download token, keyed by archiveId instead of a workspace path.
+export const ArchiveDownloadTokenResponseSchema = z.object({
+  type: z.literal("archive_download_token_response"),
+  payload: z.object({
+    archiveId: z.string(),
+    token: z.string().nullable(),
+    fileName: z.string().nullable(),
+    mimeType: z.string().nullable(),
+    size: z.number().nullable(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const FileUploadResponseSchema = z.object({
   type: z.literal("file.upload.response"),
   payload: z.object({
@@ -6058,6 +6088,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   FileExplorerRequestSchema,
   ProjectIconRequestSchema,
   FileDownloadTokenRequestSchema,
+  ArchiveDownloadTokenRequestSchema,
   FileUploadRequestSchema,
   ClearAgentAttentionMessageSchema,
   ClientHeartbeatMessageSchema,
@@ -6270,6 +6301,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   FileExplorerResponseSchema,
   ProjectIconResponseSchema,
   FileDownloadTokenResponseSchema,
+  ArchiveDownloadTokenResponseSchema,
   FileUploadResponseSchema,
   ListProviderModelsResponseMessageSchema,
   ListProviderModesResponseMessageSchema,
@@ -6721,6 +6753,8 @@ export type ProjectIconResponse = z.infer<typeof ProjectIconResponseSchema>;
 export type ProjectIcon = z.infer<typeof ProjectIconSchema>;
 export type FileDownloadTokenRequest = z.infer<typeof FileDownloadTokenRequestSchema>;
 export type FileDownloadTokenResponse = z.infer<typeof FileDownloadTokenResponseSchema>;
+export type ArchiveDownloadTokenRequest = z.infer<typeof ArchiveDownloadTokenRequestSchema>;
+export type ArchiveDownloadTokenResponse = z.infer<typeof ArchiveDownloadTokenResponseSchema>;
 export type FileUploadRequest = z.infer<typeof FileUploadRequestSchema>;
 export type FileUploadResponse = z.infer<typeof FileUploadResponseSchema>;
 export type RestartServerRequestMessage = z.infer<typeof RestartServerRequestMessageSchema>;

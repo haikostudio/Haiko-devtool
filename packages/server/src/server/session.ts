@@ -179,6 +179,7 @@ import type { ProjectPromptSyncService } from "./project-prompt-sync.js";
 import { DaemonSession, type DaemonRuntimeConfig } from "./session/daemon/daemon-session.js";
 import type { DaemonWebSocketRuntimeDiagnosticSnapshot } from "./session/daemon/diagnostics.js";
 import { DownloadTokenStore } from "./file-download/token-store.js";
+import type { DownloadArchiveStore } from "./file-download/archive-store.js";
 import { PushTokenStore } from "./push/token-store.js";
 import type { PushNotificationHistoryStore } from "./push/notification-history-store.js";
 import {
@@ -460,6 +461,7 @@ export interface SessionOptions {
   onLifecycleIntent?: (intent: SessionLifecycleIntent) => void;
   logger: pino.Logger;
   downloadTokenStore: DownloadTokenStore;
+  archiveStore: DownloadArchiveStore;
   pushTokenStore: PushTokenStore;
   pushNotificationHistoryStore?: PushNotificationHistoryStore;
   paseoHome: string;
@@ -713,6 +715,7 @@ export class Session {
       onLifecycleIntent,
       logger,
       downloadTokenStore,
+      archiveStore,
       pushTokenStore,
       pushNotificationHistoryStore,
       paseoHome,
@@ -795,6 +798,7 @@ export class Session {
         hasBinaryChannel: () => this.onBinaryMessage !== null,
       },
       downloadTokenStore,
+      archiveStore,
       paseoHome,
       logger: this.sessionLogger,
     });
@@ -1918,6 +1922,8 @@ export class Session {
         return this.workspaceFilesSession.handleProjectIconRequest(msg);
       case "file_download_token_request":
         return this.workspaceFilesSession.handleFileDownloadTokenRequest(msg);
+      case "archive_download_token_request":
+        return this.workspaceFilesSession.handleArchiveDownloadTokenRequest(msg);
       case "file.upload.request":
         this.workspaceFilesSession.handleFileUploadRequest(msg);
         return undefined;

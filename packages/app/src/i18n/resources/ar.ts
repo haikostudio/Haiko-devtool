@@ -2000,6 +2000,7 @@ export const ar: TranslationResources = {
     failed: "فشل تنزيل الملف.",
     shareFile: "مشاركة الملف",
     shareFileNamed: "مشاركة{{fileName}}",
+    archiveDownload: "تنزيل {{fileName}}",
   },
   menu: {
     backdrop: "خلفية القائمة",

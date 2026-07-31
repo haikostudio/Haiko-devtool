@@ -67,6 +67,7 @@ import type { GitHubService } from "../../../services/github-service.js";
 import type { WorkspaceGitService } from "../../workspace-git-service.js";
 import type { ProjectRegistry, WorkspaceRegistry } from "../../workspace-registry.js";
 import { resolveProjectDisplayName } from "../../workspace-registry.js";
+import type { DownloadArchiveStore } from "../../file-download/archive-store.js";
 import type { TaskBoardService } from "../../tasks/service.js";
 import { isDeploymentWindowOpen } from "../../tasks/deployer.js";
 import { WorktreeRequestError } from "../../worktree-errors.js";
@@ -139,6 +140,8 @@ export interface PaseoToolHostDependencies {
   // Task board tools are registered only when both are provided.
   taskBoardService?: TaskBoardService | null;
   projectRegistry?: Pick<ProjectRegistry, "list" | "get"> | null;
+  // Backs the conductor's create_project_archive tool. Registered only when present.
+  downloadArchiveStore?: DownloadArchiveStore | null;
   logger: Logger;
 }
 
@@ -2737,6 +2740,65 @@ export function createPaseoToolCatalog(options: PaseoToolHostDependencies): Pase
   // there is deliberately no approve tool — only the user can approve.
   const taskBoardService = options.taskBoardService ?? null;
   const projectRegistry = options.projectRegistry ?? null;
+
+  // ---- On-demand download archive ----
+  // Lets the conductor bundle project files into a zip and offer it to the user
+  // as a download button in the chat. The archive lives under the daemon home for
+  // 24h (swept afterwards) and is served through the shared file-download route;
+  // the client renders the button from this tool's structuredContent.
+  const downloadArchiveStore = options.downloadArchiveStore ?? null;
+  if (downloadArchiveStore && projectRegistry) {
+    registerTool(
+      "create_project_archive",
+      {
+        title: "Create project archive",
+        description:
+          "Bundle one or more of the project's files/folders into a downloadable .zip and offer it to the user as a download button in the chat. " +
+          "Pass paths RELATIVE to the project root; a folder is included recursively. Paths must stay inside the project. " +
+          "The archive is temporary (auto-deleted after 24h). Use this when the user asks to get files back as a zip.",
+        inputSchema: {
+          projectId: z.string().describe("Target project id (see list_task_boards)."),
+          paths: z
+            .array(z.string().min(1))
+            .min(1)
+            .describe("Project-relative file or folder paths to include in the archive."),
+          archiveName: z
+            .string()
+            .optional()
+            .describe('Optional readable base name, e.g. "etalonnage" (".zip" is added).'),
+        },
+        outputSchema: {
+          kind: z.literal("project_archive"),
+          archiveId: z.string(),
+          fileName: z.string(),
+          size: z.number(),
+          expiresAt: z.string(),
+        },
+      },
+      async (args: { projectId: string; paths: string[]; archiveName?: string }) => {
+        const project = await projectRegistry.get(args.projectId);
+        if (!project) {
+          throw new Error(`Unknown project: ${args.projectId}`);
+        }
+        const created = await downloadArchiveStore.createArchive({
+          projectRoot: project.rootPath,
+          paths: args.paths,
+          ...(args.archiveName ? { archiveName: args.archiveName } : {}),
+        });
+        return {
+          content: [],
+          structuredContent: ensureValidJson({
+            kind: "project_archive",
+            archiveId: created.archiveId,
+            fileName: created.fileName,
+            size: created.size,
+            expiresAt: new Date(created.expiresAt).toISOString(),
+          }),
+        };
+      },
+    );
+  }
+
   if (taskBoardService && projectRegistry) {
     const taskRunConfigToolSchema = z.object({
       provider: z

@@ -2054,6 +2054,7 @@ export const fr: TranslationResources = {
     failed: "Échec du téléchargement du fichier.",
     shareFile: "Partager un fichier",
     shareFileNamed: "Partager{{fileName}}",
+    archiveDownload: "Télécharger {{fileName}}",
   },
   menu: {
     backdrop: "Toile de fond du menu",

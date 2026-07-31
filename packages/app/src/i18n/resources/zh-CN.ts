@@ -1977,6 +1977,7 @@ export const zhCN: TranslationResources = {
     failed: "下载文件失败。",
     shareFile: "共享文件",
     shareFileNamed: "共享 {{fileName}}",
+    archiveDownload: "下载 {{fileName}}",
   },
   menu: {
     backdrop: "菜单背景",

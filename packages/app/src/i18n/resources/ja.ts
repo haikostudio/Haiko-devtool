@@ -2019,6 +2019,7 @@ export const ja: TranslationResources = {
     failed: "ファイルのダウンロードに失敗しました。",
     shareFile: "ファイルを共有",
     shareFileNamed: "{{fileName}}を共有",
+    archiveDownload: "{{fileName}}をダウンロード",
   },
   menu: {
     backdrop: "メニューの背景",

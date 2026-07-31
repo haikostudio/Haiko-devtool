@@ -2037,6 +2037,7 @@ export const ptBR: TranslationResources = {
     failed: "Falha ao baixar arquivo.",
     shareFile: "Compartilhar arquivo",
     shareFileNamed: "Compartilhar {{fileName}}",
+    archiveDownload: "Baixar {{fileName}}",
   },
   menu: {
     backdrop: "Fundo do menu",

@@ -6,6 +6,7 @@ import {
   type FileTransferFrame,
 } from "@getpaseo/protocol/binary-frames/index";
 import type {
+  ArchiveDownloadTokenRequest,
   FileDownloadTokenRequest,
   FileExplorerRequest,
   FileUploadRequest,
@@ -17,6 +18,7 @@ import type {
 } from "../../messages.js";
 import { FileUploadStore } from "../../file-upload/index.js";
 import type { DownloadTokenStore } from "../../file-download/token-store.js";
+import type { DownloadArchiveStore } from "../../file-download/archive-store.js";
 import {
   getDownloadableFileInfo,
   listDirectoryEntries,
@@ -42,6 +44,7 @@ export interface WorkspaceFilesSessionHost {
 export interface WorkspaceFilesSessionOptions {
   host: WorkspaceFilesSessionHost;
   downloadTokenStore: DownloadTokenStore;
+  archiveStore: DownloadArchiveStore;
   paseoHome: string;
   logger: pino.Logger;
   fileObserver?: FileObserver;
@@ -57,6 +60,7 @@ export interface WorkspaceFilesSessionOptions {
 export class WorkspaceFilesSession {
   private readonly host: WorkspaceFilesSessionHost;
   private readonly downloadTokenStore: DownloadTokenStore;
+  private readonly archiveStore: DownloadArchiveStore;
   private readonly logger: pino.Logger;
   private readonly fileUploads: FileUploadStore;
   private readonly fileObserver: FileObserver;
@@ -65,6 +69,7 @@ export class WorkspaceFilesSession {
   constructor(options: WorkspaceFilesSessionOptions) {
     this.host = options.host;
     this.downloadTokenStore = options.downloadTokenStore;
+    this.archiveStore = options.archiveStore;
     this.logger = options.logger;
     this.fileUploads = new FileUploadStore({ paseoHome: options.paseoHome });
     this.fileObserver = options.fileObserver ?? workspaceFileObserver;
@@ -349,6 +354,69 @@ export class WorkspaceFilesSession {
         payload: {
           cwd,
           path: requestedPath,
+          token: null,
+          fileName: null,
+          mimeType: null,
+          size: null,
+          error: getErrorMessage(error),
+          requestId,
+        },
+      });
+    }
+  }
+
+  /**
+   * Mints a fresh single-use download token for a temporary archive built by the
+   * conductor's `create_project_archive` tool. The archive lives under the daemon
+   * home (not the workspace), so it is looked up by id rather than a workspace
+   * path; the token is then consumed by the shared `/api/files/download` route.
+   */
+  async handleArchiveDownloadTokenRequest(request: ArchiveDownloadTokenRequest): Promise<void> {
+    const { archiveId, requestId } = request;
+    try {
+      const archive = await this.archiveStore.resolveArchive(archiveId);
+      if (!archive) {
+        this.host.emit({
+          type: "archive_download_token_response",
+          payload: {
+            archiveId,
+            token: null,
+            fileName: null,
+            mimeType: null,
+            size: null,
+            error: "Archive not found or expired",
+            requestId,
+          },
+        });
+        return;
+      }
+
+      const entry = this.downloadTokenStore.issueToken({
+        path: archive.fileName,
+        absolutePath: archive.absolutePath,
+        fileName: archive.fileName,
+        mimeType: archive.mimeType,
+        size: archive.size,
+      });
+
+      this.host.emit({
+        type: "archive_download_token_response",
+        payload: {
+          archiveId,
+          token: entry.token,
+          fileName: entry.fileName,
+          mimeType: entry.mimeType,
+          size: entry.size,
+          error: null,
+          requestId,
+        },
+      });
+    } catch (error) {
+      this.logger.error({ err: error, archiveId }, "Failed to issue archive download token");
+      this.host.emit({
+        type: "archive_download_token_response",
+        payload: {
+          archiveId,
           token: null,
           fileName: null,
           mimeType: null,
