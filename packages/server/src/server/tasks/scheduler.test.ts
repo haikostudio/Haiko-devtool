@@ -146,6 +146,8 @@ describe("TaskScheduler", () => {
     runAgent?: () => Promise<{ canceled: boolean; finalText: string; timeline: [] }>;
     quietHours?: QuietHours;
     nowMs?: number;
+    /** Agent ids the manager should report as genuinely busy (see holdsSharedCheckout). */
+    liveAgentIds?: string[];
   }) {
     const createAgent = vi.fn(async () => ({
       snapshot: { id: "task-agent-1", workspaceId: "ws-proj-1", cwd: "/tmp/wt/feat-auth" },
@@ -163,7 +165,11 @@ describe("TaskScheduler", () => {
       taskBoardService: service,
       taskEstimator: estimator,
       projectRegistry: fakeProjectRegistry([projectRecord("proj-1")]),
-      agentManager: { runAgent } as never,
+      agentManager: {
+        runAgent,
+        getAgent: (id: string) =>
+          options.liveAgentIds?.includes(id) ? { id, lifecycle: "running" } : null,
+      } as never,
       createAgent: createAgent as never,
       providerUsageService: usageWithRemaining(options.remainingPct),
       logger,
@@ -414,6 +420,12 @@ describe("TaskScheduler", () => {
       runConfig: { provider: "claude", mode: "plan" },
     });
     await service.moveTask("proj-1", { taskId: busy.id, column: "in_progress", index: 0 });
+    // The hold follows the AGENT, not the column: give the first card a genuinely
+    // busy agent, which is what actually occupies the shared checkout.
+    await service.patchTask("proj-1", busy.id, (current) => ({
+      ...current,
+      links: { ...current.links, agentIds: ["agent-busy"] },
+    }));
     await service.moveTask("proj-1", { taskId: waiting.id, column: "scheduled", index: 0 });
     await service.patchTask("proj-1", waiting.id, (current) => ({
       ...current,
@@ -427,12 +439,55 @@ describe("TaskScheduler", () => {
       },
       schedule: { state: "awaiting_slot" as const, attempts: 0 },
     }));
-    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+    const { scheduler, createAgent } = buildScheduler({
+      remainingPct: 90,
+      liveAgentIds: ["agent-busy"],
+    });
 
     await scheduler.tick();
 
     expect(createAgent).not.toHaveBeenCalled();
     expect((await findTask(waiting.id))?.schedule?.waitingBlocker).toBe("shared_worktree");
+  });
+
+  test("a finished card left in 'En cours' no longer holds the shared checkout", async () => {
+    // The user's report: one card whose work was over sat in "En cours" (columns
+    // move by hand, so it stays there until they drag it), and every other Paseo
+    // card wore "Une autre tâche occupe le dossier" forever — a drag into "En
+    // cours" bounced straight back. Its agent is idle: it holds nothing.
+    const finished = await service.createTask("proj-1", {
+      title: "Terminée mais pas déplacée",
+      runConfig: { provider: "claude", mode: "plan" },
+    });
+    await service.moveTask("proj-1", { taskId: finished.id, column: "in_progress", index: 0 });
+    await service.patchTask("proj-1", finished.id, (current) => ({
+      ...current,
+      links: { ...current.links, agentIds: ["agent-idle"] },
+    }));
+    const waiting = await service.createTask("proj-1", {
+      title: "Suivante",
+      runConfig: { provider: "claude", mode: "plan" },
+    });
+    await service.moveTask("proj-1", { taskId: waiting.id, column: "scheduled", index: 0 });
+    await service.patchTask("proj-1", waiting.id, (current) => ({
+      ...current,
+      estimate: {
+        tokens: 100_000,
+        quotaPercent: 10,
+        estimatedMinutes: 5,
+        confidence: "medium" as const,
+        model: "claude/haiku",
+        estimatedAt: "2026-07-16T00:00:00.000Z",
+      },
+      schedule: { state: "awaiting_slot" as const, attempts: 0, waitingBlocker: "shared_worktree" },
+    }));
+    // No live agent anywhere: the idle one is not reported as busy.
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
+
+    await scheduler.tick();
+    await vi.waitFor(() => expect(createAgent).toHaveBeenCalledTimes(1));
+
+    expect((await findTask(waiting.id))?.schedule?.waitingBlocker).toBeUndefined();
   });
 
   test("two isolated cards of the same project both launch in parallel", async () => {

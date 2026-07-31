@@ -198,10 +198,15 @@ function queuedBadge(task: KanbanTask): ScheduleBadgeDescriptor {
   // worktree, or every slot is taken. Read BEFORE "launchingSoon" — a held card
   // that keeps promising an imminent launch is the "elle reste dans Planifié et
   // rien ne se passe" report.
-  if (task.schedule?.waitingBlocker === "shared_worktree") {
+  // ...and only while the card is STILL queued. The blocker is a stamp the
+  // scheduler writes on the card and only the scheduler erases; a card that left
+  // "Planifié" is no longer looked at, so an old stamp would otherwise keep
+  // claiming the folder is busy long after the hold ended.
+  const queued = task.schedule?.state === "awaiting_slot";
+  if (queued && task.schedule?.waitingBlocker === "shared_worktree") {
     return { labelKey: "tasks.schedule.awaitingSibling", variant: "warning" };
   }
-  if (task.schedule?.waitingBlocker === "slots_busy") {
+  if (queued && task.schedule?.waitingBlocker === "slots_busy") {
     return { labelKey: "tasks.schedule.awaitingSlotFree", variant: "warning" };
   }
   // No blocking reason yet: a light task is about to launch (say so, rather than

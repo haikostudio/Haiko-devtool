@@ -43,7 +43,10 @@ interface TaskSchedulerOptions {
   taskBoardService: TaskBoardService;
   taskEstimator: TaskEstimator;
   projectRegistry: ProjectRegistry;
-  agentManager: Pick<AgentManager, "runAgent" | "appendTimelineItem" | "getLastAssistantMessage">;
+  agentManager: Pick<
+    AgentManager,
+    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage" | "getAgent"
+  >;
   createAgent: BoundCreateAgentCommand;
   providerUsageService: Pick<ProviderUsageService, "listUsage">;
   logger: pino.Logger;
@@ -132,7 +135,7 @@ export class TaskScheduler {
   private readonly projectRegistry: ProjectRegistry;
   private readonly agentManager: Pick<
     AgentManager,
-    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage"
+    "runAgent" | "appendTimelineItem" | "getLastAssistantMessage" | "getAgent"
   >;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly providerUsageService: Pick<ProviderUsageService, "listUsage">;
@@ -290,6 +293,11 @@ export class TaskScheduler {
           await this.setWaitingBlocker(candidate, "shared_worktree");
           continue;
         }
+        // Neither the checkout nor the slots hold this card any more. Drop the
+        // stamp HERE, before the window/quota gates: a card that goes on waiting
+        // for the off-peak window must not keep wearing "une autre tâche occupe
+        // le dossier" — that hold is over, and only the launch used to clear it.
+        await this.setWaitingBlocker(candidate, undefined);
         if (!candidate.runNow) {
           if (!this.isWithinLaunchWindow(candidate.task)) {
             await this.setWaitingReason(candidate, "quiet_hours");
@@ -301,10 +309,6 @@ export class TaskScheduler {
           }
           await this.setWaitingReason(candidate, undefined);
         }
-        // Nothing holds this card back any more: it launches below, so drop any
-        // hold it was still wearing rather than leaving a stale explanation on a
-        // card that is starting.
-        await this.setWaitingBlocker(candidate, undefined);
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
         if (candidate.inPlace) {
@@ -394,11 +398,37 @@ export class TaskScheduler {
     return this.sortForPacking(candidates);
   }
 
+  /**
+   * Does this card actually OCCUPY the shared checkout right now?
+   *
+   * Liveness, never position. Sitting in "En cours" used to be enough, which is
+   * how one finished card the user had not moved yet held the checkout hostage
+   * forever: every other Paseo card wore "Une autre tâche occupe le dossier",
+   * and dragging one into "En cours" bounced straight back. Columns are the
+   * user's hand — they say nothing about what is writing to the disk.
+   *
+   * What does: a launch this scheduler still has in flight, a schedule the
+   * launcher marked launching/running, or a linked agent that is genuinely busy.
+   * An idle agent has finished its turn and holds nothing.
+   */
+  private holdsSharedCheckout(task: KanbanTask): boolean {
+    if (this.inFlight.has(task.id)) {
+      return true;
+    }
+    if (task.schedule?.state === "launching" || task.schedule?.state === "running") {
+      return true;
+    }
+    return task.links.agentIds.some((agentId) => {
+      const lifecycle = this.agentManager.getAgent(agentId)?.lifecycle;
+      return lifecycle === "initializing" || lifecycle === "running";
+    });
+  }
+
   // In-place cards (Paseo itself, plan-mode) share the ONE checkout, so only one
-  // may run at a time. Records projects that already have an active
-  // (launching/running) in-place task so the tick loop holds their other in-place
-  // cards back. Isolated cards each own a worktree and are ignored here — they run
-  // in parallel, and a finished-but-undeployed card never counts as "busy".
+  // may run at a time. Records projects that already have an in-place task
+  // actively holding it (see holdsSharedCheckout) so the tick loop keeps their
+  // other in-place cards back. Isolated cards each own a worktree and are ignored
+  // here — they run in parallel, and a finished card never counts as "busy".
   private markBusyInPlaceProjects(
     projectId: string,
     tasks: KanbanTask[],
@@ -406,11 +436,7 @@ export class TaskScheduler {
     isSelf: boolean,
   ): void {
     for (const task of tasks) {
-      const active =
-        task.column === "in_progress" ||
-        task.schedule?.state === "launching" ||
-        task.schedule?.state === "running";
-      if (!active) {
+      if (!this.holdsSharedCheckout(task)) {
         continue;
       }
       const plan = resolveTaskWorktreePlan({
