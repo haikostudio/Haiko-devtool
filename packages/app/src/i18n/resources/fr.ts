@@ -537,6 +537,10 @@ export const fr: TranslationResources = {
         "{{count}} tâche(s) vont être publiées en une seule fois, puis le moteur redémarrera. Les agents en cours seront interrompus.",
       deployAllConfirm: "Tout déployer",
       deployAllStarted: "Publication groupée lancée",
+      deploySendFailedTitle: "La demande n'a pas atteint le moteur",
+      deploySendFailedBody:
+        "La connexion au moteur était en train de se fermer : rien n'a été envoyé. Réessayez.",
+      deploySendRetry: "Réessayer",
       deployResetAction: "Réinitialiser / Relancer",
       deployResetTitle: "Réinitialiser le déploiement",
       deployResetMessage:

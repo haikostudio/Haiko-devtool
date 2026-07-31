@@ -527,6 +527,10 @@ export const en = {
         "{{count}} task(s) will be published in a single run, then the engine restarts. Running agents will be interrupted.",
       deployAllConfirm: "Deploy all",
       deployAllStarted: "Batch publication started",
+      deploySendFailedTitle: "The request didn't reach the engine",
+      deploySendFailedBody:
+        "The connection to the engine was closing, so nothing was sent. Try again.",
+      deploySendRetry: "Retry",
       deployResetAction: "Reset / retry deploy",
       deployResetTitle: "Reset the deployment",
       deployResetMessage:

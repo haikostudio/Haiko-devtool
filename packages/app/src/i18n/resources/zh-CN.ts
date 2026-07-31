@@ -521,6 +521,9 @@ export const zhCN: TranslationResources = {
       deployAllMessage: "{{count}} 个任务将一次性发布，随后引擎会重启。正在运行的智能体将被中断。",
       deployAllConfirm: "全部部署",
       deployAllStarted: "已开始批量发布",
+      deploySendFailedTitle: "请求未送达引擎",
+      deploySendFailedBody: "与引擎的连接正在关闭，因此未发送任何内容。请重试。",
+      deploySendRetry: "重试",
       deployResetAction: "重置 / 重试发布",
       deployResetTitle: "重置发布",
       deployResetMessage:

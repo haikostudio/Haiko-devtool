@@ -41,6 +41,20 @@ import {
 // Re-exported so existing importers (and tests) keep their entry points.
 export { batchProgressRatio, isRecapWorthShowing } from "./deploy-batch-status";
 
+// A safety net for the optimistic spinner: if the daemon accepts the run but its
+// running record never lands (a stale board, a dropped reply), fall back to the
+// button rather than a spinner that turns forever. Set well past the RPC timeout
+// so a merely slow start still resolves through the normal path first.
+const OPTIMISTIC_START_TIMEOUT_MS = 90_000;
+
+// A send that never reached the daemon (socket closing/closed, or the wait for a
+// reconnection ran out) throws a low-level transport string. Anything matching
+// this shape is shown as one plain "the request didn't leave" reason; a daemon
+// that refused the run with its own message is shown verbatim instead.
+function isDisconnectMessage(message: string): boolean {
+  return /not open|not connected|connection lost|waiting for connection/i.test(message);
+}
+
 const accentForegroundMapping = (theme: Theme) => ({ color: theme.colors.accentForeground });
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
@@ -110,25 +124,42 @@ export const DeployControl = memo(function DeployControl({
   // "Arrêter": interrupt the running publication (kill the build, free the lock).
   onStop?: (() => void) | undefined;
 }) {
+  const { t } = useTranslation();
   const dismissedAt = useTasksBoardUiStore((state) => state.dismissedDeployBatchAt);
   const dismiss = useTasksBoardUiStore((state) => state.dismissDeployBatch);
   // Optimistic "the run is starting" flag, flipped on press so the surface morphs
   // at the instant of the tap instead of waiting for the daemon's record. Once the
   // real running batch lands, it takes over and this stops mattering.
   const [starting, setStarting] = useState(false);
+  // A failed *start* (the request never reached the engine, or it refused the
+  // run) shown right here on the control — not a toast far from where the finger
+  // is. Cleared on the next attempt and once a real run lands.
+  const [startError, setStartError] = useState<string | null>(null);
   const pending = useMemo(() => countTasksAwaitingDeploy(tasks), [tasks]);
   const realRunning = batch?.state === "running";
   useEffect(() => {
     if (realRunning) {
       setStarting(false);
+      setStartError(null);
     }
   }, [realRunning]);
+  // Never let the optimistic spinner latch: arm a generous fallback while it is
+  // up, so a run that is accepted but never surfaces a record still returns to a
+  // pressable button instead of spinning for good.
+  useEffect(() => {
+    if (!starting) {
+      return;
+    }
+    const handle = setTimeout(() => setStarting(false), OPTIMISTIC_START_TIMEOUT_MS);
+    return () => clearTimeout(handle);
+  }, [starting]);
   const running = realRunning || starting;
 
   const handleDeploy = useCallback(() => {
     if (!onDeployAll) {
       return;
     }
+    setStartError(null);
     setStarting(true);
     void (async () => {
       try {
@@ -141,11 +172,22 @@ export const DeployControl = memo(function DeployControl({
         if (started !== true) {
           setStarting(false);
         }
-      } catch {
+      } catch (caught) {
+        // The request never left: show why, on the control, with a retry. A
+        // disconnect (the common closing-socket race) becomes one plain reason;
+        // a daemon that refused with a real message keeps that message.
         setStarting(false);
+        const raw = caught instanceof Error ? caught.message : String(caught);
+        setStartError(
+          !raw || isDisconnectMessage(raw) ? t("tasks.board.deploySendFailedBody") : raw,
+        );
       }
     })();
-  }, [onDeployAll]);
+  }, [onDeployAll, t]);
+
+  const handleDismissError = useCallback(() => {
+    setStartError(null);
+  }, []);
 
   const handleDismiss = useCallback(
     (event?: GestureResponderEvent) => {
@@ -167,9 +209,13 @@ export const DeployControl = memo(function DeployControl({
     batch.state !== "running" &&
     dismissedAt !== batch.startedAt &&
     isRecapWorthShowing(batch, Date.now());
-  let mode: "button" | "running" | "recap";
+  let mode: "button" | "running" | "recap" | "error";
   if (running) {
     mode = "running";
+  } else if (startError) {
+    // A fresh failed start outranks an older recap: it is the thing the finger
+    // just did, and it carries the retry.
+    mode = "error";
   } else if (recapVisible) {
     mode = "recap";
   } else {
@@ -181,6 +227,41 @@ export const DeployControl = memo(function DeployControl({
     return null;
   }
 
+  let content: ReactNode;
+  if (mode === "button") {
+    content = (
+      <DeployButton
+        pending={pending}
+        onDeploy={handleDeploy}
+        offPeakEnabled={offPeakEnabled}
+        onToggleOffPeak={onToggleOffPeak}
+      />
+    );
+  } else if (mode === "error") {
+    content = (
+      <DeploySendError
+        message={startError ?? ""}
+        onRetry={handleDeploy}
+        onDismiss={handleDismissError}
+      />
+    );
+  } else {
+    content = (
+      <DeployStatusCard
+        mode={mode}
+        batch={batch ?? null}
+        realRunning={realRunning}
+        pending={pending}
+        offPeakEnabled={offPeakEnabled}
+        onToggleOffPeak={onToggleOffPeak}
+        onOpenLog={onOpenLog}
+        onReset={onReset}
+        onStop={onStop}
+        onDismiss={handleDismiss}
+      />
+    );
+  }
+
   // One persistent wrapper at the column head. The state inside it changes and
   // fades in — a transformation of a single element, never one block vanishing
   // while another appears elsewhere. `mode` as the key remounts (and thus
@@ -188,27 +269,7 @@ export const DeployControl = memo(function DeployControl({
   return (
     <View style={styles.header}>
       <Animated.View key={mode} entering={FadeIn.duration(140)}>
-        {mode === "button" ? (
-          <DeployButton
-            pending={pending}
-            onDeploy={handleDeploy}
-            offPeakEnabled={offPeakEnabled}
-            onToggleOffPeak={onToggleOffPeak}
-          />
-        ) : (
-          <DeployStatusCard
-            mode={mode}
-            batch={batch ?? null}
-            realRunning={realRunning}
-            pending={pending}
-            offPeakEnabled={offPeakEnabled}
-            onToggleOffPeak={onToggleOffPeak}
-            onOpenLog={onOpenLog}
-            onReset={onReset}
-            onStop={onStop}
-            onDismiss={handleDismiss}
-          />
-        )}
+        {content}
       </Animated.View>
     </View>
   );
@@ -270,6 +331,63 @@ function DeployButton({
           <OffPeakMenu enabled={offPeakEnabled} onToggle={onToggleOffPeak} tone="onAccent" />
         </>
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The failed-START state on the SAME surface: the request never reached the
+ * engine (the socket was closing at the instant of the tap, or the wait for a
+ * reconnection ran out). It says why, right here where the finger is, and offers
+ * a retry — instead of the old silent revert with the reason exiled to a toast.
+ */
+function DeploySendError({
+  message,
+  onRetry,
+  onDismiss,
+}: {
+  message: string;
+  onRetry: () => void;
+  onDismiss: () => void;
+}) {
+  const { t } = useTranslation();
+  const handleRetry = useCallback(
+    (event?: GestureResponderEvent) => {
+      event?.stopPropagation?.();
+      onRetry();
+    },
+    [onRetry],
+  );
+  return (
+    <View style={styles.card} testID="tasks-deploy-send-error">
+      <View style={styles.cardHeader}>
+        <ThemedWarning size={ICON_SIZE.sm} uniProps={dangerColorMapping} />
+        <Text style={styles.title} numberOfLines={1}>
+          {t("tasks.board.deploySendFailedTitle")}
+        </Text>
+        <Pressable
+          onPress={onDismiss}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.actions.close")}
+          testID="tasks-deploy-send-error-dismiss"
+        >
+          <ThemedClose size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+        </Pressable>
+      </View>
+      <Text style={styles.error} numberOfLines={3}>
+        {message}
+      </Text>
+      <Pressable
+        style={styles.resetButton}
+        onPress={handleRetry}
+        accessibilityRole="button"
+        accessibilityLabel={t("tasks.board.deploySendRetry")}
+        testID="tasks-deploy-send-retry"
+      >
+        <ThemedReset size={ICON_SIZE.sm} uniProps={accentColorMapping} />
+        <Text style={styles.resetLabel}>{t("tasks.board.deploySendRetry")}</Text>
+      </Pressable>
     </View>
   );
 }

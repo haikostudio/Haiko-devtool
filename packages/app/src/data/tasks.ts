@@ -14,6 +14,7 @@ import {
   type PendingMove,
   reconcileBoardWithPendingMoves,
 } from "@/components/tasks/board-move-reconcile";
+import type { DaemonClient } from "@getpaseo/client/internal/daemon-client";
 import { getHostRuntimeStore, useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useOptimisticTaskActionStore } from "@/stores/optimistic-task-action-store";
 
@@ -22,6 +23,52 @@ export type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
 
 function createSubscriptionId(): string {
   return `tasks-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+}
+
+// How long a lost-at-the-click deploy waits for the socket to come back before
+// giving up. The client reconnects on its own in well under a second on a live
+// network; a genuine outage runs out the clock and the caller surfaces it.
+const DEPLOY_RECONNECT_WAIT_MS = 6_000;
+
+// A send that never left the wire — the socket was closing/closed at the instant
+// of the request (its readyState flips to CLOSING a beat before our own
+// "connected" flag does), or a queued send was dropped when the connection went.
+// These are the only errors worth waiting-and-retrying for; a daemon that replied
+// with a real error message is not one of them.
+function isTransientSendError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /not open|not connected|connection lost|waiting for connection/i.test(message);
+}
+
+// Resolve once the client is connected again, or reject when the window closes
+// without a reconnection. Used to give a lost-at-the-click deploy one clean
+// second chance instead of dropping the gesture into a closing socket.
+function waitForClientConnected(client: DaemonClient, timeoutMs: number): Promise<void> {
+  if (client.isConnected) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let unsubscribe: () => void = () => {};
+    const finish = (run: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      run();
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error("Transport not connected"))),
+      timeoutMs,
+    );
+    unsubscribe = client.subscribeConnectionStatus((state) => {
+      if (state.status === "connected") {
+        finish(resolve);
+      }
+    });
+  });
 }
 
 export interface TaskBoardHandle {
@@ -520,10 +567,21 @@ export function useTaskBoard(serverId: string | null, projectId: string | null):
   const deployAllTasks = useCallback(
     async (options?: { reset?: boolean }) => {
       const { client, projectId: project } = requireContext();
-      const payload = await client.tasksBoardDeployAll({
-        projectId: project,
-        reset: options?.reset,
-      });
+      const fire = () => client.tasksBoardDeployAll({ projectId: project, reset: options?.reset });
+      let payload: Awaited<ReturnType<typeof fire>>;
+      try {
+        payload = await fire();
+      } catch (sendError) {
+        // The click can land on a socket that is already closing. Rather than
+        // lose the whole gesture, wait a short bounded moment for the client's
+        // own reconnection and fire exactly once more. A real outage (no
+        // reconnection in time) falls through and is surfaced to the caller.
+        if (!isTransientSendError(sendError)) {
+          throw sendError;
+        }
+        await waitForClientConnected(client, DEPLOY_RECONNECT_WAIT_MS);
+        payload = await fire();
+      }
       if (payload.error) {
         throw new Error(payload.error);
       }

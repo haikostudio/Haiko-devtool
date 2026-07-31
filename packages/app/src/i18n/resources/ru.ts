@@ -531,6 +531,10 @@ export const ru: TranslationResources = {
         "{{count}} задач(и) будут опубликованы одним запуском, затем движок перезапустится. Запущенные агенты будут прерваны.",
       deployAllConfirm: "Развернуть всё",
       deployAllStarted: "Групповая публикация запущена",
+      deploySendFailedTitle: "Запрос не дошёл до движка",
+      deploySendFailedBody:
+        "Соединение с движком закрывалось, поэтому ничего не отправлено. Повторите попытку.",
+      deploySendRetry: "Повторить",
       deployResetAction: "Сбросить / Повторить",
       deployResetTitle: "Сбросить развёртывание",
       deployResetMessage:

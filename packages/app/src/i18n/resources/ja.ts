@@ -531,6 +531,10 @@ export const ja: TranslationResources = {
         "{{count}} 件のタスクをまとめて公開し、その後エンジンを再起動します。実行中のエージェントは中断されます。",
       deployAllConfirm: "すべてデプロイ",
       deployAllStarted: "一括公開を開始しました",
+      deploySendFailedTitle: "リクエストがエンジンに届きませんでした",
+      deploySendFailedBody:
+        "エンジンへの接続が閉じかけていたため、何も送信されませんでした。もう一度お試しください。",
+      deploySendRetry: "再試行",
       deployResetAction: "リセット / 再試行",
       deployResetTitle: "デプロイをリセット",
       deployResetMessage:

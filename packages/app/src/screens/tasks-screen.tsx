@@ -1024,14 +1024,12 @@ function BoardContent({
     if (!confirmed) {
       return false;
     }
-    try {
-      const { started } = await boardHandle.deployAllTasks();
-      toast.show(t("tasks.board.deployAllStarted"));
-      return started;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error));
-      return false;
-    }
+    // A failed send is NOT swallowed into a far-away toast anymore: it throws so
+    // the deploy control can show why, in place, with a retry. Only a cancelled
+    // confirmation returns false (a silent, expected fall-back to the button).
+    const { started } = await boardHandle.deployAllTasks();
+    toast.show(t("tasks.board.deployAllStarted"));
+    return started;
   }, [boardHandle, projectTasks, toast, t]);
 
   // "Réinitialiser / Relancer le déploiement": the escape hatch on a failed

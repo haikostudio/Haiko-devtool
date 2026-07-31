@@ -525,6 +525,9 @@ export const ar: TranslationResources = {
         "سيتم نشر {{count}} مهمة دفعة واحدة، ثم يُعاد تشغيل المحرك. ستتوقف الوكلاء الجارية.",
       deployAllConfirm: "نشر الكل",
       deployAllStarted: "بدأ النشر الجماعي",
+      deploySendFailedTitle: "لم يصل الطلب إلى المحرك",
+      deploySendFailedBody: "كان الاتصال بالمحرك على وشك الإغلاق، لذلك لم يُرسَل أي شيء. حاول مرة أخرى.",
+      deploySendRetry: "إعادة المحاولة",
       deployResetAction: "إعادة التعيين / إعادة المحاولة",
       deployResetTitle: "إعادة تعيين النشر",
       deployResetMessage:

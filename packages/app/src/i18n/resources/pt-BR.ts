@@ -536,6 +536,10 @@ export const ptBR: TranslationResources = {
         "{{count}} tarefa(s) serão publicadas de uma só vez e depois o motor será reiniciado. Os agentes em execução serão interrompidos.",
       deployAllConfirm: "Implantar tudo",
       deployAllStarted: "Publicação em lote iniciada",
+      deploySendFailedTitle: "A solicitação não chegou ao motor",
+      deploySendFailedBody:
+        "A conexão com o motor estava fechando, então nada foi enviado. Tente novamente.",
+      deploySendRetry: "Tentar novamente",
       deployResetAction: "Reiniciar / Repetir",
       deployResetTitle: "Reiniciar a publicação",
       deployResetMessage:
