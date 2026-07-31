@@ -65,6 +65,11 @@ d'état du projet — d'où l'exigence de brièveté.
 - Une publication qui installe un nouveau moteur le redémarre dans la foulée :
   tout état gardé seulement en mémoire (dont le journal de publication) meurt
   avec l'ancien processus. Ce qui doit survivre se relit sur le disque.
+- Corollaire : le surveillant d'une publication meurt DANS le cas nominal, pas
+  dans le cas d'erreur. Un lot resté « en cours » au démarrage se juge donc en
+  comparant le repère servi par le site au commit visé — jamais en supposant
+  l'interruption. Cette supposition annonçait « rien n'a été mis en ligne » sur
+  un site à jour.
 
 ## Préférences de l'utilisateur
 
