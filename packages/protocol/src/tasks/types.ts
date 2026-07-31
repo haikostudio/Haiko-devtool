@@ -105,10 +105,13 @@ export const TaskScheduleStateSchema = z.object({
   // Why an awaiting_slot task is not launching yet (display-only refinement; a new
   // enum value in `state` would break old daemons parsing persisted boards).
   waitingReason: z.enum(["quota", "quiet_hours"]).optional(),
-  // The OTHER two reasons a queued card is held back: a sibling task holds the
-  // shared worktree, or every launch slot is taken. Carried in its own field
-  // rather than as two more `waitingReason` literals, because an old client's
-  // enum would reject the unknown value and fail the whole board message.
+  // Why a queued card is held back. Only `slots_busy` is emitted now (every
+  // launch slot is taken). `shared_worktree` (a sibling holding the one shared
+  // checkout) no longer exists — every card owns its own worktree — but the
+  // value STAYS in the wire enum: an old daemon may still send it, and dropping
+  // it would make a new client reject the whole board message. New clients map
+  // it to the same "slots busy" wording. Carried in its own field rather than as
+  // `waitingReason` literals so an old client's enum never rejects it.
   // COMPAT(scheduleWaitingBlocker): added in v0.2.3, fold into `waitingReason`
   // once the floor is past it (target 2027-01-31).
   waitingBlocker: z.enum(["shared_worktree", "slots_busy"]).optional(),

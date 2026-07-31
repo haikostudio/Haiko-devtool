@@ -186,19 +186,20 @@ function queuedBadge(task: KanbanTask): ScheduleBadgeDescriptor {
   if (task.schedule?.waitingReason === "quota") {
     return { labelKey: "tasks.schedule.awaitingQuota" };
   }
-  // A concrete hold recorded by the scheduler: a sibling owns the shared
-  // worktree, or every slot is taken. Read BEFORE "launchingSoon" — a held card
-  // that keeps promising an imminent launch is the "elle reste dans Planifié et
-  // rien ne se passe" report.
+  // A concrete hold recorded by the scheduler: every launch slot is taken. Read
+  // BEFORE "launchingSoon" — a held card that keeps promising an imminent launch
+  // is the "elle reste dans Planifié et rien ne se passe" report.
   // ...and only while the card is STILL queued. The blocker is a stamp the
   // scheduler writes on the card and only the scheduler erases; a card that left
-  // "Planifié" is no longer looked at, so an old stamp would otherwise keep
-  // claiming the folder is busy long after the hold ended.
+  // "Planifié" is no longer looked at, so an old stamp would otherwise linger.
+  // The former "shared_worktree" hold no longer exists — every card owns its own
+  // worktree — but an old daemon may still send it, so treat it as "slots busy".
   const queued = task.schedule?.state === "awaiting_slot";
-  if (queued && task.schedule?.waitingBlocker === "shared_worktree") {
-    return { labelKey: "tasks.schedule.awaitingSibling", variant: "warning" };
-  }
-  if (queued && task.schedule?.waitingBlocker === "slots_busy") {
+  if (
+    queued &&
+    (task.schedule?.waitingBlocker === "slots_busy" ||
+      task.schedule?.waitingBlocker === "shared_worktree")
+  ) {
     return { labelKey: "tasks.schedule.awaitingSlotFree", variant: "warning" };
   }
   // No blocking reason yet: a light task is about to launch (say so, rather than

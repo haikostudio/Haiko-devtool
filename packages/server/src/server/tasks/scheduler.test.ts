@@ -97,6 +97,11 @@ describe("TaskScheduler", () => {
     return board.tasks.find((entry) => entry.id === taskId);
   }
 
+  // Mirror of MAX_CONCURRENT_TASK_AGENTS in scheduler.ts: the machine-safety cap
+  // on parallel worktrees. Kept in sync by hand — it is the ONLY reason a card
+  // waits now that the shared-folder lock is gone.
+  const MAX_CONCURRENT_TASK_AGENTS_IN_TEST = 6;
+
   async function countQuotaWaiting(): Promise<number> {
     const board = await service.getBoard("proj-1");
     return board.tasks.filter((task) => task.schedule?.waitingReason === "quota").length;
@@ -406,48 +411,55 @@ describe("TaskScheduler", () => {
     expect(board.tasks[0]?.schedule?.state).toBe("awaiting_slot");
   });
 
-  test("says so when a sibling in-place task holds the shared checkout", async () => {
-    // Isolated cards each own a worktree and launch in parallel, so the only cards
-    // that still serialize are the IN-PLACE ones (plan-mode here, or Paseo itself):
-    // they share the one checkout, so the second waits with a spoken reason rather
-    // than a bare `continue` that left it promising "Démarrage imminent".
-    const busy = await service.createTask("proj-1", {
-      title: "Première",
+  test("plan-mode cards no longer serialize — each owns its worktree, none waits on a sibling", async () => {
+    // The folder lock is abolished at the root: even plan-mode cards — the last
+    // "in-place" case besides Paseo itself — now get their own worktree, so a
+    // second one never waits with "Une autre tâche occupe le dossier". Two
+    // plan-mode cards of one project launch together, both with no blocker.
+    const first = await seedScheduledTask({
+      title: "Plan A",
+      quotaPercent: 10,
       runConfig: { provider: "claude", mode: "plan" },
     });
-    const waiting = await service.createTask("proj-1", {
-      title: "Seconde",
+    const second = await seedScheduledTask({
+      title: "Plan B",
+      quotaPercent: 10,
       runConfig: { provider: "claude", mode: "plan" },
     });
-    await service.moveTask("proj-1", { taskId: busy.id, column: "in_progress", index: 0 });
-    // The hold follows the AGENT, not the column: give the first card a genuinely
-    // busy agent, which is what actually occupies the shared checkout.
-    await service.patchTask("proj-1", busy.id, (current) => ({
-      ...current,
-      links: { ...current.links, agentIds: ["agent-busy"] },
-    }));
-    await service.moveTask("proj-1", { taskId: waiting.id, column: "scheduled", index: 0 });
-    await service.patchTask("proj-1", waiting.id, (current) => ({
-      ...current,
-      estimate: {
-        tokens: 100_000,
-        quotaPercent: 10,
-        estimatedMinutes: 5,
-        confidence: "medium" as const,
-        model: "claude/haiku",
-        estimatedAt: "2026-07-16T00:00:00.000Z",
-      },
-      schedule: { state: "awaiting_slot" as const, attempts: 0 },
-    }));
-    const { scheduler, createAgent } = buildScheduler({
-      remainingPct: 90,
-      liveAgentIds: ["agent-busy"],
-    });
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90 });
 
     await scheduler.tick();
+    await vi.waitFor(() => expect(createAgent).toHaveBeenCalledTimes(2));
 
-    expect(createAgent).not.toHaveBeenCalled();
-    expect((await findTask(waiting.id))?.schedule?.waitingBlocker).toBe("shared_worktree");
+    expect((await findTask(first.id))?.schedule?.waitingBlocker ?? null).toBeNull();
+    expect((await findTask(second.id))?.schedule?.waitingBlocker ?? null).toBeNull();
+  });
+
+  test("ten cards fired at once on one project all start — none waits on a sibling's folder", async () => {
+    // The acceptance criterion, made a test: firing many tasks at once on the
+    // SAME project must never make one wait for another to free a folder. The
+    // folder lock no longer exists — every card owns its own worktree — so not a
+    // single card is ever stamped "shared_worktree". The only bound left is the
+    // machine slot ceiling (RAM/CPU/disk for parallel worktrees), which reads as
+    // "slots_busy": a resource cap, not a sibling holding the checkout.
+    for (let i = 0; i < 10; i += 1) {
+      await seedScheduledTask({ title: `Carte ${i}`, quotaPercent: 4, estimatedMinutes: 5 });
+    }
+    const { scheduler, createAgent } = buildScheduler({ remainingPct: 90, runAgent: hangingRun });
+
+    await scheduler.tick();
+    await vi.waitFor(() =>
+      expect(createAgent).toHaveBeenCalledTimes(MAX_CONCURRENT_TASK_AGENTS_IN_TEST),
+    );
+
+    const board = await service.getBoard("proj-1");
+    const blockers = board.tasks.map((task) => task.schedule?.waitingBlocker);
+    // Not one card is ever held by a sibling's folder.
+    expect(blockers).not.toContain("shared_worktree");
+    // The overflow past the machine ceiling waits only on a free slot.
+    expect(blockers.filter((blocker) => blocker === "slots_busy")).toHaveLength(
+      10 - MAX_CONCURRENT_TASK_AGENTS_IN_TEST,
+    );
   });
 
   test("a finished card left in 'En cours' no longer holds the shared checkout", async () => {
@@ -772,8 +784,9 @@ describe("TaskScheduler", () => {
         mode: "plan",
       }),
     );
-    // Plan runs make no changes, so they get no throwaway worktree.
-    expect(createAgent.mock.calls[0]?.[0]).not.toHaveProperty("worktree");
+    // Plan runs are isolated too now (no exception left): they cut their own
+    // worktree + branch like every other card, so none ever shares the checkout.
+    expect(createAgent.mock.calls[0]?.[0]).toHaveProperty("worktree");
     const board = await service.getBoard("proj-1");
     const planned = board.tasks.find((entry) => entry.id === task.id);
     // Plan runs finish without a PR: the card stays in progress for the user.

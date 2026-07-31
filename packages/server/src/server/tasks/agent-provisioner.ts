@@ -1,9 +1,8 @@
 import type pino from "pino";
-import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
-import { isPaseoDeployRoot } from "../../utils/paseo-deploy.js";
 import { resolveTaskLaunch, resolveTaskWorktreePlan, TASK_AGENT_LABEL } from "./agent-launch.js";
 
 export interface ProvisionedTaskAgent {
@@ -95,28 +94,22 @@ export class TaskAgentProvisioner {
       this.logger.warn({ projectId, taskId }, "Cannot attach a task agent: project not found");
       return null;
     }
-    const folder = board.folders.find((entry) => entry.id === task.folderId);
-    return await this.create(projectId, task, project.rootPath, folder);
+    return await this.create(projectId, task, project.rootPath);
   }
 
   private async create(
     projectId: string,
     task: KanbanTask,
     projectRoot: string,
-    folder: TaskFolder | undefined,
   ): Promise<ProvisionedTaskAgent> {
-    const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-    // Each card gets its OWN isolated worktree + `task/<id>-<slug>` branch, so
-    // several cards of the same folder run in parallel without fighting over one
-    // checkout (Paseo itself and plan-mode stay in place — see
-    // resolveTaskWorktreePlan). The worktree is cut here, at creation, so the
-    // card's whole life (analysis, execution, deploy check) happens inside it.
-    const plan = resolveTaskWorktreePlan({
-      task,
-      folder,
-      planMode,
-      isSelf: isPaseoDeployRoot(projectRoot),
-    });
+    const { provider, launchMode } = resolveTaskLaunch(task);
+    // EVERY card gets its OWN isolated worktree + `task/<id>-<slug>` branch — no
+    // exception, not even Paseo itself or plan-mode. Sixty cards of one project
+    // run in parallel without fighting over a checkout, so a card can never wait
+    // on "une autre tâche occupe le dossier". The worktree is cut here, at
+    // creation, so the card's whole life (analysis, execution, deploy check)
+    // happens inside it.
+    const plan = resolveTaskWorktreePlan({ task });
     const created = await this.createAgent({
       kind: "mcp",
       provider,
@@ -129,9 +122,7 @@ export class TaskAgentProvisioner {
       notifyOnFinish: false,
       ...(task.runConfig?.thinkingOptionId ? { thinking: task.runConfig.thinkingOptionId } : {}),
       mode: launchMode,
-      ...(plan.kind === "isolated"
-        ? { worktree: { branchName: plan.branch, action: "branch-off" as const } }
-        : {}),
+      worktree: { branchName: plan.branch, action: "branch-off" as const },
     });
     if (created.initialPromptError) {
       throw created.initialPromptError;
@@ -139,10 +130,8 @@ export class TaskAgentProvisioner {
     const agentId = created.snapshot.id;
     const workspaceId = created.snapshot.workspaceId ?? null;
     // Prefer the branch git actually created (worktree-core re-normalizes the
-    // requested name); fall back to the planned name, then null for in-place.
-    const branch =
-      created.createdWorktree?.worktree.branchName ??
-      (plan.kind === "isolated" ? plan.branch : null);
+    // requested name); fall back to the planned name.
+    const branch = created.createdWorktree?.worktree.branchName ?? plan.branch;
 
     // Link immediately so the card's chat binds to this conversation from the
     // very first second, before any prompt is sent into it.

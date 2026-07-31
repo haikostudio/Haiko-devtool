@@ -228,12 +228,13 @@ describe("TaskBatchDeployer", () => {
     expect(result).toEqual({ started: true, queued: false, taskIds: [first.id, second.id] });
     await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
 
-    // ONE publication for the whole batch. Tasks run in place on main, so there
-    // are no per-task branches to merge — the deploy just builds main.
+    // ONE publication for the whole batch. Paseo's own cards now ride isolated
+    // branches too, so the deploy is handed each card's branch to merge into the
+    // deploy checkout before it builds — no card's work stays stranded.
     expect(triggered).toEqual([
       {
         projectId: "proj-1",
-        mergeBranches: [],
+        mergeBranches: ["task/login", "task/signup"],
         taskTitles: ["Login", "Signup"],
         reset: undefined,
       },

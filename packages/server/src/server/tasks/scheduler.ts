@@ -17,7 +17,7 @@ import {
   TASK_AGENT_LABEL,
   withTaskAttachments,
 } from "./agent-launch.js";
-import { isPaseoDeployRoot, PASEO_DEPLOY_CONFLICT_TAG } from "../../utils/paseo-deploy.js";
+import { PASEO_DEPLOY_CONFLICT_TAG } from "../../utils/paseo-deploy.js";
 
 export { TASK_AGENT_LABEL } from "./agent-launch.js";
 
@@ -63,10 +63,6 @@ interface LaunchCandidate {
   folder: TaskFolder | undefined;
   folderOrder: number;
   runNow: boolean;
-  // Whether this card runs in place on the shared checkout (Paseo itself, or a
-  // plan-mode task) rather than in its own isolated worktree. In-place cards of
-  // one project must serialize; isolated cards never do.
-  inPlace: boolean;
 }
 
 // "Planifié" column task ready to launch: estimated, awaiting a slot, and not
@@ -148,10 +144,6 @@ export class TaskScheduler {
   // taskId -> reserved quota percent for launches still in flight.
   private readonly inFlight = new Map<string, number>();
   private readonly runNowQueue = new Set<string>();
-  // Project ids that already have an active IN-PLACE task, recomputed each tick.
-  // In-place cards (Paseo itself, plan-mode) share the one checkout, so only one
-  // may run at a time; isolated cards each own a worktree and never appear here.
-  private readonly busyInPlaceProjects = new Set<string>();
   // Open tasks already sent to the estimator this daemon lifetime — the sweep
   // estimates each task once (a failed run writes a fallback estimate anyway).
   private readonly estimateRequested = new Set<string>();
@@ -284,19 +276,12 @@ export class TaskScheduler {
         if (this.inFlight.has(candidate.task.id)) {
           continue;
         }
-        // Isolated cards each own a worktree, so they launch in parallel with no
-        // sibling hold — a finished-but-undeployed card never blocks the next one.
-        // Only in-place cards (Paseo itself, plan-mode) share the one checkout, so
-        // hold this one back while another in-place card of the SAME project is
-        // already active (or launched this tick).
-        if (candidate.inPlace && this.busyInPlaceProjects.has(candidate.projectId)) {
-          await this.setWaitingBlocker(candidate, "shared_worktree");
-          continue;
-        }
-        // Neither the checkout nor the slots hold this card any more. Drop the
-        // stamp HERE, before the window/quota gates: a card that goes on waiting
-        // for the off-peak window must not keep wearing "une autre tâche occupe
-        // le dossier" — that hold is over, and only the launch used to clear it.
+        // EVERY card owns its own isolated worktree + branch, so cards launch in
+        // parallel with no sibling hold whatsoever — sixty cards of one project
+        // all start at once, and a finished-but-undeployed card blocks nothing.
+        // There is no shared-checkout hold left to record ("Une autre tâche occupe
+        // le dossier" is gone); only the slot ceiling can make a card wait, and
+        // that is stamped below. Clear any stale blocker a pre-upgrade card kept.
         await this.setWaitingBlocker(candidate, undefined);
         if (!candidate.runNow) {
           if (!this.isWithinLaunchWindow(candidate.task)) {
@@ -311,9 +296,6 @@ export class TaskScheduler {
         }
         const reserved = candidate.task.estimate?.quotaPercent ?? QUOTA_SAFETY_MARGIN_PCT;
         this.inFlight.set(candidate.task.id, reserved);
-        if (candidate.inPlace) {
-          this.busyInPlaceProjects.add(candidate.projectId);
-        }
         void this.launch(candidate)
           .catch((error) => {
             this.logger.error(
@@ -333,7 +315,6 @@ export class TaskScheduler {
   private async collectCandidates(): Promise<LaunchCandidate[]> {
     const projects = await this.projectRegistry.list();
     const candidates: LaunchCandidate[] = [];
-    this.busyInPlaceProjects.clear();
     for (const project of projects) {
       if (project.archivedAt) {
         continue;
@@ -344,8 +325,6 @@ export class TaskScheduler {
       }
       const foldersById = new Map(board.folders.map((folder) => [folder.id, folder]));
       const folderOrders = new Map(board.folders.map((folder) => [folder.id, folder.order]));
-      const isSelf = isPaseoDeployRoot(project.rootPath);
-      this.markBusyInPlaceProjects(project.projectId, board.tasks, foldersById, isSelf);
       for (let task of board.tasks) {
         if (task.column === "done" || task.column === "deployed") {
           continue;
@@ -379,76 +358,16 @@ export class TaskScheduler {
           continue;
         }
         const folder = foldersById.get(task.folderId);
-        const plan = resolveTaskWorktreePlan({
-          task,
-          folder,
-          planMode: resolveTaskLaunch(task).planMode,
-          isSelf,
-        });
         candidates.push({
           projectId: project.projectId,
           task,
           folder,
           folderOrder: folderOrders.get(task.folderId) ?? 0,
           runNow: this.runNowQueue.has(`${project.projectId}:${task.id}`),
-          inPlace: plan.kind === "in-place",
         });
       }
     }
     return this.sortForPacking(candidates);
-  }
-
-  /**
-   * Does this card actually OCCUPY the shared checkout right now?
-   *
-   * Liveness, never position. Sitting in "En cours" used to be enough, which is
-   * how one finished card the user had not moved yet held the checkout hostage
-   * forever: every other Paseo card wore "Une autre tâche occupe le dossier",
-   * and dragging one into "En cours" bounced straight back. Columns are the
-   * user's hand — they say nothing about what is writing to the disk.
-   *
-   * What does: a launch this scheduler still has in flight, a schedule the
-   * launcher marked launching/running, or a linked agent that is genuinely busy.
-   * An idle agent has finished its turn and holds nothing.
-   */
-  private holdsSharedCheckout(task: KanbanTask): boolean {
-    if (this.inFlight.has(task.id)) {
-      return true;
-    }
-    if (task.schedule?.state === "launching" || task.schedule?.state === "running") {
-      return true;
-    }
-    return task.links.agentIds.some((agentId) => {
-      const lifecycle = this.agentManager.getAgent(agentId)?.lifecycle;
-      return lifecycle === "initializing" || lifecycle === "running";
-    });
-  }
-
-  // In-place cards (Paseo itself, plan-mode) share the ONE checkout, so only one
-  // may run at a time. Records projects that already have an in-place task
-  // actively holding it (see holdsSharedCheckout) so the tick loop keeps their
-  // other in-place cards back. Isolated cards each own a worktree and are ignored
-  // here — they run in parallel, and a finished card never counts as "busy".
-  private markBusyInPlaceProjects(
-    projectId: string,
-    tasks: KanbanTask[],
-    foldersById: Map<string, TaskFolder>,
-    isSelf: boolean,
-  ): void {
-    for (const task of tasks) {
-      if (!this.holdsSharedCheckout(task)) {
-        continue;
-      }
-      const plan = resolveTaskWorktreePlan({
-        task,
-        folder: foldersById.get(task.folderId),
-        planMode: resolveTaskLaunch(task).planMode,
-        isSelf,
-      });
-      if (plan.kind === "in-place") {
-        this.busyInPlaceProjects.add(projectId);
-      }
-    }
   }
 
   /**
@@ -678,18 +597,19 @@ export class TaskScheduler {
   }
 
   /**
-   * Records the OTHER two holds — a sibling task owning the shared worktree, and
-   * "every launch slot is taken".
+   * Records the one remaining hold — "every launch slot is taken" — or clears it
+   * (including a stale `shared_worktree` blocker a pre-upgrade card kept: that
+   * hold no longer exists, every card owns its own worktree now).
    *
-   * Both used to be a bare `continue`/`return` in the tick loop, which is how a
+   * It used to be a bare `continue`/`return` in the tick loop, which is how a
    * card sat in "Planifié" for hours wearing "Lancement imminent": the scheduler
    * knew exactly why it was not launching and told nobody. Run-now goes through
-   * the same gates, so this is also what makes a press that cannot start yet say
+   * the same gate, so this is also what makes a press that cannot start yet say
    * so instead of looking ignored.
    */
   private async setWaitingBlocker(
     candidate: LaunchCandidate,
-    blocker: "shared_worktree" | "slots_busy" | undefined,
+    blocker: "slots_busy" | undefined,
   ): Promise<void> {
     if (candidate.task.schedule?.waitingBlocker === blocker) {
       return;
@@ -817,21 +737,16 @@ export class TaskScheduler {
 
     try {
       const { provider, planMode, launchMode } = resolveTaskLaunch(task);
-      // Isolated worktree + `task/<id>-<slug>` branch by default; Paseo itself and
-      // plan-mode stay in place. See resolveTaskWorktreePlan.
-      const plan = resolveTaskWorktreePlan({
-        task,
-        folder: candidate.folder,
-        planMode,
-        isSelf: isPaseoDeployRoot(project.rootPath),
-      });
+      // Isolated worktree + `task/<id>-<slug>` branch, no exception. See
+      // resolveTaskWorktreePlan.
+      const plan = resolveTaskWorktreePlan({ task });
       // The analysis phase already spawned the task's visible agent (in its own
       // worktree) and ran the read-only analysis turn. Execution CONTINUES that
       // same conversation — reuse the agent instead of creating a new one, so the
       // analysis is the task's starting point. Only the legacy path (no analysis
       // agent, e.g. pre-upgrade tasks) creates the agent here.
       let agentId = task.links.taskAgentId ?? null;
-      let branch = task.links.branch ?? (plan.kind === "isolated" ? plan.branch : null);
+      let branch = task.links.branch ?? plan.branch;
       let workspaceId = task.links.workspaceId ?? null;
 
       if (!agentId) {
@@ -851,9 +766,7 @@ export class TaskScheduler {
             ? { thinking: task.runConfig.thinkingOptionId }
             : {}),
           mode: launchMode,
-          ...(plan.kind === "isolated"
-            ? { worktree: { branchName: plan.branch, action: "branch-off" as const } }
-            : {}),
+          worktree: { branchName: plan.branch, action: "branch-off" as const },
         });
         if (created.initialPromptError) {
           throw created.initialPromptError;

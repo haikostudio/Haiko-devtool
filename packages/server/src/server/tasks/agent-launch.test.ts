@@ -39,32 +39,23 @@ describe("task worktree plan", () => {
   test("an ordinary card gets an isolated worktree on a task/<id>-<slug> branch", () => {
     const plan = resolveTaskWorktreePlan({
       task: makeTask({ id: "abc123def", title: "Ajouter la connexion" }),
-      folder: undefined,
-      planMode: false,
-      isSelf: false,
     });
     expect(plan.kind).toBe("isolated");
     expect(plan.branch).toBe("task/abc123de-ajouter-la-connexion");
   });
 
-  test("plan-mode stays in place — a plan produces no commits, so no branch", () => {
-    const plan = resolveTaskWorktreePlan({
-      task: makeTask(),
-      folder: undefined,
-      planMode: true,
-      isSelf: false,
-    });
-    expect(plan).toEqual({ kind: "in-place", branch: null });
-  });
-
-  test("Paseo itself (isSelf) stays in place on its shared checkout", () => {
-    const plan = resolveTaskWorktreePlan({
-      task: makeTask(),
-      folder: undefined,
-      planMode: false,
-      isSelf: true,
-    });
-    expect(plan).toEqual({ kind: "in-place", branch: null });
+  test("EVERY card is isolated — there is no in-place path left to serialize on", () => {
+    // The old exceptions (plan-mode, Paseo itself) shared the one checkout, which
+    // was the ONLY thing that produced "Une autre tâche occupe le dossier". They
+    // now get their own worktree too, so no card ever waits on a sibling's folder.
+    for (const task of [
+      makeTask({ id: "planmode1", title: "Explorer le module" }),
+      makeTask({ id: "selfcard1", title: "Corriger Paseo" }),
+    ]) {
+      const plan = resolveTaskWorktreePlan({ task });
+      expect(plan.kind).toBe("isolated");
+      expect(plan.branch).toMatch(/^task\//);
+    }
   });
 
   test("branch name is a valid git ref: lowercased, accents stripped, dashed", () => {

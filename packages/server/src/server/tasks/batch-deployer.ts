@@ -472,12 +472,18 @@ export class TaskBatchDeployer {
       return;
     }
 
-    // Tasks run in place on main — there are no per-task branches to merge. The
-    // deploy just builds the project's main branch as it already stands. The
-    // titles ride along so the save commit says what this lot shipped.
+    // Paseo's own cards now each run in an isolated worktree + branch, exactly
+    // like every other project's. Hand the deploy the branches to merge into the
+    // deploy checkout before it builds, so each finished card's work becomes live
+    // instead of staying stranded on its branch. A card with no branch is an OLD
+    // in-place task (created before this change): it already committed on main, so
+    // it just carries no branch here. The titles ride along so the save commit
+    // says what this lot shipped; conflicts are flagged per card by the deploy.
     const result = await this.options.triggerDeploy({
       projectId,
-      mergeBranches: [],
+      mergeBranches: pending
+        .map((task) => task.links.branch)
+        .filter((branch): branch is string => Boolean(branch)),
       taskTitles: pending.map((task) => task.title),
       reset: options.reset,
     });
@@ -491,7 +497,7 @@ export class TaskBatchDeployer {
       pending,
       url,
       readRun: () => this.options.readDeployRun(),
-      onSuccess: (input) => this.succeed(input.projectId, input.pending, input.url),
+      onSuccess: (input) => this.succeed(input.projectId, input.pending, input.url, input.run),
     });
   }
 
@@ -676,11 +682,28 @@ export class TaskBatchDeployer {
     projectId: string,
     pending: KanbanTask[],
     url: string | null,
+    run: DeployRunSnapshot,
   ): Promise<void> {
+    // Paseo's own cards now ride isolated branches too, so one can conflict with a
+    // sibling and be left unmerged by the deploy. Such a card must NOT be stamped
+    // live — its work never reached the built engine (it was handed to a repair
+    // agent instead). A card with no branch is an OLD in-place task and always
+    // counts as live. Same split the ordinary-project path applies.
+    const conflicted = new Set(run.conflictedBranches ?? []);
+    const live = pending.filter((task) => !task.links.branch || !conflicted.has(task.links.branch));
+    const skipped = pending.filter(
+      (task) => task.links.branch && conflicted.has(task.links.branch),
+    );
+    for (const task of skipped) {
+      await this.say(
+        task,
+        "⚠️ **Publication groupée** — cette carte n'a pas pu être fusionnée : sa branche est en conflit avec une autre carte du lot. Le reste du lot part en ligne ; un agent de réparation reprend cette carte.",
+      );
+    }
     // Read once for the whole batch: every card of a run goes live in the same
     // build, and a per-card read would only invite them to disagree.
     const publishedSha = await this.readPublishedSha();
-    for (const task of pending) {
+    for (const task of live) {
       try {
         // Clear "Redémarrage requis" as we stamp: this batch restarts the daemon
         // itself as its last step, so the change is about to take effect — leaving
@@ -696,7 +719,7 @@ export class TaskBatchDeployer {
       }
     }
     await this.sayAll(
-      pending,
+      live,
       url
         ? `✅ **Publication groupée** — c'est en ligne : ${url}`
         : "✅ **Publication groupée** — c'est en ligne.",

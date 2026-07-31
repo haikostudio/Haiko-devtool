@@ -170,6 +170,13 @@ interface DeployRun {
    * showing them go green, which reads as "they vanished".
    */
   commits: PaseoDeployPendingCommit[];
+  /**
+   * Task branches this publication was asked to merge but could NOT (a conflict,
+   * or a branch already handed to a repair agent). Their cards must not be
+   * stamped "Déployé" — their work never reached the built engine. Empty on a
+   * clean run. Lives only in memory, like {@link DeployRun.commits}.
+   */
+  conflictedBranches: string[];
 }
 let currentRun: DeployRun | null = null;
 /** Error from the last finished deploy run, if it failed. */
@@ -1390,6 +1397,8 @@ export interface PaseoDeployRunSnapshot {
   phase: string | null;
   outcome: PaseoDeployOutcome | null;
   error: string | null;
+  /** Task branches that could not be merged into this publication (see DeployRun). */
+  conflictedBranches: string[];
 }
 
 /**
@@ -1423,6 +1432,7 @@ export async function getPaseoDeployRunSnapshot(): Promise<PaseoDeployRunSnapsho
     phase: run?.phase ?? null,
     outcome: run?.outcome ?? null,
     error: lastError,
+    conflictedBranches: run?.conflictedBranches ?? [],
   };
 }
 
@@ -1924,6 +1934,11 @@ export async function triggerPaseoDeploy(input: {
       pid: null,
       logOffset: await readShipLogSize(),
       commits: await getUnshippedCommits(deployedShaAtStart, headShaAtStart),
+      // Every requested branch that did NOT end up merged (conflict or handed to
+      // a repair agent) so the batch deployer can keep its card out of "Déployé".
+      conflictedBranches: (input.mergeBranches ?? []).filter(
+        (branch) => !mergedBranches.includes(branch),
+      ),
     };
     currentRun = run;
     // Keep the skip note visible after a partial merge; otherwise clear.

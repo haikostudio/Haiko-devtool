@@ -23,24 +23,25 @@ d'état du projet — d'où l'exigence de brièveté.
 - Le tableau se déplace à la main. Trois exceptions seulement, et « Validé »
   reste le geste par lequel l'utilisateur autorise la dépense de quota.
 - Chaque carte s'exécute dans SON worktree isolé + branche `task/<id>-<slug>`
-  (modèle GitHub) : les cartes d'un même projet tournent en parallèle, et une
-  carte terminée-non-déployée ne bloque plus rien. Deux exceptions restent « en
-  place » sur le checkout partagé : Paseo lui-même (isSelf) et le mode plan.
-  Le verrou « une autre tâche occupe le dossier » ne vaut donc plus que pour ces
-  cartes en place. La publication groupée fusionne la branche de chaque carte,
-  signale (sans casser le lot) une carte en conflit, et supprime les branches
-  fusionnées.
+  (modèle GitHub), SANS AUCUNE exception : plus de cartes « en place ». Paseo
+  lui-même et le mode plan sont isolés eux aussi — c'était les deux derniers
+  chemins à partager le checkout, et partager le checkout était la SEULE cause
+  de « Une autre tâche occupe le dossier ». Ce verrou n'existe plus (ni son
+  mécanisme `busyInPlaceProjects`) : lancer 60 cartes d'un projet les démarre
+  toutes, seule la limite machine (6 agents en parallèle → `slots_busy`) borne
+  encore. La publication groupée fusionne la branche de chaque carte, signale
+  (sans casser le lot) une carte en conflit ; pour Paseo, les branches passent
+  dans `mergeBranches` du déploiement local et un conflit part en réparation
+  auto (queueConflictTask) — la carte en conflit n'est alors pas tamponnée
+  « Déployé ».
 
 ## Pièges connus
 
 - Le démon exécute `packages/*/dist`, pas la source : un correctif serveur reste
   sans effet tant que le moteur n'a pas été reconstruit ET redémarré.
-- Le verrou du checkout partagé suit l'agent VIVANT, jamais la colonne : une
-  carte finie oubliée dans « En cours » bloquait sinon tout le projet avec
-  « Une autre tâche occupe le dossier », et un glissement vers « En cours »
-  rebondissait aussitôt.
-- `/root/paseo` est un checkout partagé : plusieurs agents y écrivent en même
-  temps. La publication travaille donc sur une copie figée du commit à publier.
+- `/root/paseo` est un checkout partagé pour le démon et les prompts interactifs,
+  mais PLUS pour les cartes du tableau : chacune a désormais son worktree isolé.
+  La publication travaille toujours sur une copie figée du commit à publier.
 - `version.json` porte la version DU BUNDLE, jamais celle de la publication.
   Les faire diverger déclenche la bannière « nouvelle version » en boucle.
 - Paseo n'a pas d'instance de développement testable : la seule façon d'essayer

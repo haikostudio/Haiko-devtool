@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { KanbanTask, TaskFolder } from "@getpaseo/protocol/tasks/types";
+import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
 import type { AgentPromptInput } from "../agent/agent-sdk-types.js";
 import { buildAgentPrompt } from "../agent/prompt-attachments.js";
 
@@ -205,35 +205,32 @@ export function resolveTaskLaunch(task: KanbanTask): ResolvedTaskLaunch {
 }
 
 /**
- * How a task's agent should get its working tree.
+ * How a task's agent gets its working tree.
  *
- * The default is the GitHub model: each card works in ITS OWN isolated worktree
- * on a dedicated `task/<id>-<slug>` branch, exactly like parallel git branches.
- * Several cards of the same folder then run at the same time without fighting
- * over one checkout, and a finished-but-not-yet-deployed card no longer "holds
- * the folder". At deploy time the batch deployer merges each card's branch and
- * publishes the lot once (conflicts flagged per card, see ProjectDeployer).
+ * The GitHub model, WITHOUT exception: EVERY card works in ITS OWN isolated
+ * worktree on a dedicated `task/<id>-<slug>` branch, exactly like parallel git
+ * branches. Sixty cards of one project run at the same time without fighting
+ * over a single checkout, and a finished-but-not-yet-deployed card holds nothing.
+ * At deploy time the deployer merges each card's branch and publishes the lot
+ * once (conflicts flagged per card, see ProjectDeployer / paseo-deploy).
  *
- * Two deliberate exceptions stay IN PLACE, on the project's main branch:
- *  - Plan-mode tasks: they only ever produce a plan (no edits, no commits), so a
- *    branch would be dead weight.
- *  - Paseo itself (`isSelf`): the daemon executes from the shared /root/paseo
- *    checkout; forking the very tree the running daemon builds from is a class of
- *    problem we keep out of scope. Paseo remains the one in-place project.
+ * There is deliberately NO in-place path left. The old exceptions — plan-mode
+ * and Paseo itself (`isSelf`) — both shared the one checkout, and sharing a
+ * checkout is the ONLY thing that ever produced "Une autre tâche occupe le
+ * dossier". Plan-mode cards get an isolated worktree too (a read-only turn in a
+ * private branch costs a worktree and nothing else); Paseo's own cards get one
+ * as well and their branches are merged into the deploy checkout at publish
+ * time, so the running daemon's tree is never written to by a sibling card.
+ *
+ * The `kind` tag stays only so the deployer can still recognize an OLD task that
+ * was created in-place (no branch) before this change; nothing produces one now.
  */
-export type TaskWorktreePlan =
-  | { kind: "in-place"; branch: null }
-  | { kind: "isolated"; branch: string };
+export interface TaskWorktreePlan {
+  kind: "isolated";
+  branch: string;
+}
 
-export function resolveTaskWorktreePlan(input: {
-  task: KanbanTask;
-  folder: TaskFolder | undefined;
-  planMode: boolean;
-  isSelf: boolean;
-}): TaskWorktreePlan {
-  if (input.planMode || input.isSelf) {
-    return { kind: "in-place", branch: null };
-  }
+export function resolveTaskWorktreePlan(input: { task: KanbanTask }): TaskWorktreePlan {
   return { kind: "isolated", branch: buildTaskBranchName(input.task) };
 }
 
