@@ -319,6 +319,9 @@ export interface KanbanBoardProps {
   // "Réinitialiser / Relancer": clears a failed publication's state (stuck run,
   // error, residual lock) and starts a fresh one. Shown on the failure banner.
   onResetDeploy?: (() => void) | undefined;
+  // "Arrêter": interrupt the RUNNING publication (kill the build, free the lock).
+  // Shown on the progress banner while it runs.
+  onStopDeploy?: (() => void) | undefined;
   // "Retirer du prochain lot" / "Remettre dans le lot" on a queued card: the
   // card stays on the board, the batch skips it.
   onToggleDeployHold?: ((taskId: string, hold: boolean) => void) | undefined;

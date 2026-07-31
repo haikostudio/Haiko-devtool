@@ -2437,6 +2437,14 @@ export const PaseoDeployCommitWorktreeRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// "Arrêter la publication" — interrupt the running build (signal its process
+// group), release the residual lock and let the cards settle to a coherent
+// state. Additive feature; older daemons simply never receive it.
+export const PaseoDeployStopRequestSchema = z.object({
+  type: z.literal("checkout.deploy.stop.request"),
+  requestId: z.string(),
+});
+
 // COMPAT(attachmentLibrary): added in v0.1.X, custom fork feature (attachment
 // library drawer). List every file/image that transited a workspace's chats.
 export const AttachmentLibraryListRequestSchema = z.object({
@@ -5237,6 +5245,16 @@ export const PaseoDeployCommitWorktreeResponseSchema = z.object({
   }),
 });
 
+export const PaseoDeployStopResponseSchema = z.object({
+  type: z.literal("checkout.deploy.stop.response"),
+  payload: z.object({
+    /** True when a running publication was actually signalled to stop. */
+    stopped: z.boolean(),
+    error: z.string().nullable(),
+    requestId: z.string(),
+  }),
+});
+
 export const BranchSuggestionsResponseSchema = z.object({
   type: z.literal("branch_suggestions_response"),
   payload: z.object({
@@ -6062,6 +6080,7 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   PaseoDeployStatusRequestSchema,
   PaseoDeployTriggerRequestSchema,
   PaseoDeployCommitWorktreeRequestSchema,
+  PaseoDeployStopRequestSchema,
   AttachmentLibraryListRequestSchema,
   AttachmentLibraryBlobRequestSchema,
   ValidateBranchRequestSchema,
@@ -6287,6 +6306,7 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   PaseoDeployStatusResponseSchema,
   PaseoDeployTriggerResponseSchema,
   PaseoDeployCommitWorktreeResponseSchema,
+  PaseoDeployStopResponseSchema,
   AttachmentLibraryListResponseSchema,
   AttachmentLibraryBlobResponseSchema,
   ValidateBranchResponseSchema,
@@ -6660,6 +6680,8 @@ export type PaseoDeployCommitWorktreeRequest = z.infer<
 export type PaseoDeployCommitWorktreeResponse = z.infer<
   typeof PaseoDeployCommitWorktreeResponseSchema
 >;
+export type PaseoDeployStopRequest = z.infer<typeof PaseoDeployStopRequestSchema>;
+export type PaseoDeployStopResponse = z.infer<typeof PaseoDeployStopResponseSchema>;
 export type PaseoDeployPendingFile = z.infer<typeof PaseoDeployPendingFileSchema>;
 export type PaseoDeployPendingCommit = z.infer<typeof PaseoDeployPendingCommitSchema>;
 export type PaseoDeployWorktree = z.infer<typeof PaseoDeployWorktreeSchema>;

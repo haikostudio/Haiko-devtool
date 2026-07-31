@@ -94,6 +94,7 @@ export function KanbanBoard({
   onDeployAll,
   onOpenDeployLog,
   onResetDeploy,
+  onStopDeploy,
   onToggleDeployHold,
   deployOffPeak,
   columnExtras,
@@ -234,6 +235,7 @@ export function KanbanBoard({
               onDeployAll={onDeployAll}
               onOpenDeployLog={onOpenDeployLog}
               onResetDeploy={onResetDeploy}
+              onStopDeploy={onStopDeploy}
               onToggleDeployHold={onToggleDeployHold}
               deployOffPeak={deployOffPeak}
             />
@@ -271,6 +273,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onDeployAll,
   onOpenDeployLog,
   onResetDeploy,
+  onStopDeploy,
   onToggleDeployHold,
   deployOffPeak,
 }: {
@@ -293,6 +296,7 @@ const DroppableColumn = memo(function DroppableColumn({
   onDeployAll: KanbanBoardProps["onDeployAll"];
   onOpenDeployLog: KanbanBoardProps["onOpenDeployLog"];
   onResetDeploy: KanbanBoardProps["onResetDeploy"];
+  onStopDeploy: KanbanBoardProps["onStopDeploy"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
   deployOffPeak: KanbanBoardProps["deployOffPeak"];
 }) {
@@ -407,6 +411,7 @@ const DroppableColumn = memo(function DroppableColumn({
           batch={board?.deployBatch ?? null}
           onOpenLog={onOpenDeployLog}
           onReset={onResetDeploy}
+          onStop={onStopDeploy}
         />
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>

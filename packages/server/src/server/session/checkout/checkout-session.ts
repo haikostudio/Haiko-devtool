@@ -12,6 +12,7 @@ import type {
   CheckoutStatusRequest,
   PaseoDeployCommitWorktreeRequest,
   PaseoDeployStatusRequest,
+  PaseoDeployStopRequest,
   PaseoDeployTriggerRequest,
   SessionInboundMessage,
   SessionOutboundMessage,
@@ -59,6 +60,7 @@ import { expandTilde } from "../../../utils/path.js";
 import {
   commitWorktreeChanges,
   getPaseoDeployStatus,
+  stopPaseoDeploy,
   triggerPaseoDeploy,
 } from "../../../utils/paseo-deploy.js";
 import type { GitMetadataGenerator } from "./git-metadata-generator.js";
@@ -488,6 +490,18 @@ export class CheckoutSession {
       type: "checkout.deploy.commit-worktree.response",
       payload: {
         committed,
+        error,
+        requestId: msg.requestId,
+      },
+    });
+  }
+
+  async handlePaseoDeployStopRequest(msg: PaseoDeployStopRequest): Promise<void> {
+    const { stopped, error } = await stopPaseoDeploy();
+    this.host.emit({
+      type: "checkout.deploy.stop.response",
+      payload: {
+        stopped,
         error,
         requestId: msg.requestId,
       },

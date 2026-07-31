@@ -39,6 +39,7 @@ import type {
   PaseoDeployStatusResponse,
   PaseoDeployTriggerResponse,
   PaseoDeployCommitWorktreeResponse,
+  PaseoDeployStopResponse,
   CheckoutPrCreateResponse,
   CheckoutPrMergeResponse,
   CheckoutPrMergeMethod,
@@ -392,6 +393,7 @@ type CheckoutRefreshPayload = CheckoutRefreshResponse["payload"];
 type PaseoDeployStatusPayload = PaseoDeployStatusResponse["payload"];
 type PaseoDeployTriggerPayload = PaseoDeployTriggerResponse["payload"];
 type PaseoDeployCommitWorktreePayload = PaseoDeployCommitWorktreeResponse["payload"];
+type PaseoDeployStopPayload = PaseoDeployStopResponse["payload"];
 type CheckoutPrCreatePayload = CheckoutPrCreateResponse["payload"];
 type CheckoutPrMergePayload = CheckoutPrMergeResponse["payload"];
 type CheckoutGithubSetAutoMergePayload = CheckoutGithubSetAutoMergeResponse["payload"];
@@ -3860,6 +3862,16 @@ export class DaemonClient {
         worktreePath: input.worktreePath,
       },
       responseType: "checkout.deploy.commit-worktree.response",
+    });
+  }
+
+  async paseoDeployStop(requestId?: string): Promise<PaseoDeployStopPayload> {
+    return this.sendCorrelatedSessionRequest({
+      requestId,
+      message: {
+        type: "checkout.deploy.stop.request",
+      },
+      responseType: "checkout.deploy.stop.response",
     });
   }
 

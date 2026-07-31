@@ -1818,6 +1818,8 @@ export class Session {
         return this.checkoutSession.handlePaseoDeployTriggerRequest(msg);
       case "checkout.deploy.commit-worktree.request":
         return this.checkoutSession.handlePaseoDeployCommitWorktreeRequest(msg);
+      case "checkout.deploy.stop.request":
+        return this.checkoutSession.handlePaseoDeployStopRequest(msg);
       case "attachments.library.list.request":
         return this.handleAttachmentLibraryListRequest(msg);
       case "attachments.library.blob.request":

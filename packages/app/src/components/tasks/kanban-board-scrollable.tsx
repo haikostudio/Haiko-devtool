@@ -53,6 +53,7 @@ export function ScrollableKanbanBoard({
   onDeployAll,
   onOpenDeployLog,
   onResetDeploy,
+  onStopDeploy,
   onToggleDeployHold,
   deployOffPeak,
   columnExtras,
@@ -99,6 +100,7 @@ export function ScrollableKanbanBoard({
             onDeployAll={onDeployAll}
             onOpenDeployLog={onOpenDeployLog}
             onResetDeploy={onResetDeploy}
+            onStopDeploy={onStopDeploy}
             onToggleDeployHold={onToggleDeployHold}
             deployOffPeak={deployOffPeak}
           />
@@ -127,6 +129,7 @@ const BoardColumn = memo(function BoardColumn({
   onDeployAll,
   onOpenDeployLog,
   onResetDeploy,
+  onStopDeploy,
   onToggleDeployHold,
   deployOffPeak,
 }: {
@@ -148,6 +151,7 @@ const BoardColumn = memo(function BoardColumn({
   onDeployAll: KanbanBoardProps["onDeployAll"];
   onOpenDeployLog: KanbanBoardProps["onOpenDeployLog"];
   onResetDeploy: KanbanBoardProps["onResetDeploy"];
+  onStopDeploy: KanbanBoardProps["onStopDeploy"];
   onToggleDeployHold: KanbanBoardProps["onToggleDeployHold"];
   deployOffPeak: KanbanBoardProps["deployOffPeak"];
 }) {
@@ -252,6 +256,7 @@ const BoardColumn = memo(function BoardColumn({
             batch={board?.deployBatch ?? null}
             onOpenLog={onOpenDeployLog}
             onReset={onResetDeploy}
+            onStop={onStopDeploy}
           />
           {extras}
           {rows.map((row) =>

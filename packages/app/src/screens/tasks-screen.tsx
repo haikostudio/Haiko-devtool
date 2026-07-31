@@ -53,6 +53,7 @@ import {
   AgentBucketProvider,
   type LiveProjectBoard,
   TaskStatusVoyant,
+  useProjectBoardTasks,
   useProjectToneMap,
 } from "@/components/tasks/task-status-voyant";
 import type { TaskTone } from "@/components/tasks/task-status-tone";
@@ -80,7 +81,7 @@ import type { AgentAttachment } from "@getpaseo/protocol/messages";
 import { useTaskBoard, type KanbanTask, type TaskBoard, type TaskColumn } from "@/data/tasks";
 import { useDaemonConfig } from "@/hooks/use-daemon-config";
 import { useHostFeature } from "@/runtime/host-features";
-import { getHostRuntimeStore, useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
+import { useHostRuntimeClient, useHosts } from "@/runtime/host-runtime";
 import { useSessionStore, type WorkspaceDescriptor } from "@/stores/session-store";
 import { useTaskBoardToastNavStore } from "@/stores/task-board-toast-nav-store";
 import { useTasksBoardUiStore } from "@/stores/tasks-board-ui-store";
@@ -267,52 +268,14 @@ interface ProjectCounts {
   tasks: number;
 }
 
-// One-shot per-project board fetch so the projects rail can show a
-// "X dossier(s) · Y tâche(s)" subtitle. Runs only when the *set* of projects
-// changes (the key is a value string, not the array identity, so per-tick
-// session churn doesn't refetch). Desktop-only — mounted by ProjectsRail.
-function useProjectTaskCounts(projects: ProjectEntry[]): Map<string, ProjectCounts> {
-  const [counts, setCounts] = useState<Map<string, ProjectCounts>>(() => new Map());
-  const projectsRef = useRef(projects);
-  projectsRef.current = projects;
-  const projectKey = useMemo(
-    () => projects.map((entry) => `${entry.serverId}:${entry.projectId}`).join("|"),
-    [projects],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const store = getHostRuntimeStore();
-      const next = new Map<string, ProjectCounts>();
-      await Promise.all(
-        projectsRef.current.map(async (entry) => {
-          const client = store.getClient(entry.serverId);
-          if (!client) {
-            return;
-          }
-          try {
-            const payload = await client.tasksBoardGet(entry.projectId);
-            if (payload.board) {
-              next.set(`${entry.serverId}:${entry.projectId}`, {
-                tasks: payload.board.tasks.length,
-              });
-            }
-          } catch {
-            // Host may not support tasks or be disconnected — skip silently.
-          }
-        }),
-      );
-      if (!cancelled) {
-        setCounts(next);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectKey]);
-
+// The "Y tâche(s)" subtitle, read off the boards the rail already subscribes to.
+// It used to re-fetch every project's board itself, doubling a sweep the voyant
+// hook was already doing.
+function projectTaskCounts(tasksByProject: Map<string, KanbanTask[]>): Map<string, ProjectCounts> {
+  const counts = new Map<string, ProjectCounts>();
+  for (const [key, tasks] of tasksByProject) {
+    counts.set(key, { tasks: tasks.length });
+  }
   return counts;
 }
 
@@ -611,9 +574,12 @@ function ProjectsRail({
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState<ProjectSortMode>("recent");
-  const counts = useProjectTaskCounts(projects);
-  // Feed the selected project's live board in so its dot animates the instant a
-  // child task starts, without waiting for the rail's periodic re-poll.
+  // One live subscription per project: every dot in the rail reacts the moment
+  // its project's board changes, and both the tone and the count read from it.
+  const tasksByProject = useProjectBoardTasks(projects);
+  const counts = useMemo(() => projectTaskCounts(tasksByProject), [tasksByProject]);
+  // The viewed project's board additionally carries the optimistic overlay of a
+  // move still in flight, which no push knows about yet.
   const liveBoard = useMemo<LiveProjectBoard | null>(
     () =>
       serverId && projectId && boardHandle.board
@@ -621,7 +587,7 @@ function ProjectsRail({
         : null,
     [serverId, projectId, boardHandle.board],
   );
-  const tones = useProjectToneMap(projects, liveBoard);
+  const tones = useProjectToneMap(tasksByProject, liveBoard);
 
   const displayed = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -1181,6 +1147,36 @@ function BoardContent({
     }
     return count;
   });
+  // "Arrêter la publication": interrupt the running build. The daemon signals
+  // the build script's process group, frees the residual lock and marks the run
+  // failed; the batch watcher's next poll settles the cards to "interrompue".
+  const handleStopDeploy = useCallback(() => {
+    if (!daemonClient) {
+      toast.error(t("tasks.board.deployStopFailed"));
+      return;
+    }
+    void (async () => {
+      const confirmed = await confirmDialog({
+        title: t("tasks.board.deployStopTitle"),
+        message: t("tasks.board.deployStopMessage"),
+        confirmLabel: t("tasks.board.deployStopConfirm"),
+        cancelLabel: t("common.actions.cancel"),
+        destructive: true,
+      });
+      if (!confirmed) {
+        return;
+      }
+      try {
+        const result = await daemonClient.paseoDeployStop();
+        toast.show(
+          t(result.stopped ? "tasks.board.deployStopStarted" : "tasks.board.deployStopIdle"),
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    })();
+  }, [daemonClient, toast, t]);
+
   const handleUpdateStaleEngine = useCallback(() => {
     if (!daemonClient || engineUpdateProgress !== null) {
       if (!daemonClient) toast.error(t("tasks.board.staleEngineFailed"));
@@ -1288,6 +1284,7 @@ function BoardContent({
           onDeployAll={handleDeployAll}
           onOpenDeployLog={handleOpenDeployLog}
           onResetDeploy={handleResetDeploy}
+          onStopDeploy={handleStopDeploy}
           onToggleDeployHold={handleToggleDeployHold}
           deployOffPeak={deployOffPeak}
           columnExtras={columnExtras}
@@ -2211,7 +2208,8 @@ function ProjectSettingsButton({ projectId }: { projectId: string }) {
 
 function CompactProjectPicker({ projects }: { projects: ProjectEntry[] }) {
   const { t } = useTranslation();
-  const tones = useProjectToneMap(projects);
+  const tasksByProject = useProjectBoardTasks(projects);
+  const tones = useProjectToneMap(tasksByProject);
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       <Text style={styles.sectionLabel}>{t("tasks.pickProject")}</Text>

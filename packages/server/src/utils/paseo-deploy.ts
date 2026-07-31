@@ -96,6 +96,17 @@ const DEPLOY_OUTCOME_RETENTION_MS = 15 * 60 * 1000;
  */
 const DEPLOY_MAX_RUNTIME_MS = 30 * 60 * 1000;
 /**
+ * A running publication that has printed NOTHING and advanced NO phase for this
+ * long is treated as blocked and declared failed, rather than left spinning
+ * green up to {@link DEPLOY_MAX_RUNTIME_MS}. "Activity" is read off the disk —
+ * the freshest mtime of the phase marker and the ship log — never off an
+ * in-memory tick, so a build that genuinely hangs (network stall, wedged
+ * subprocess) is caught while a slow-but-alive one (a long `expo export` that
+ * keeps appending) is not. The truth check still runs first: if the site is
+ * already live, a silent run is a success that lost its exit signal, not a stall.
+ */
+const DEPLOY_STALL_MS = 6 * 60 * 1000;
+/**
  * Bytes of the running publication's log sent to clients. Bounded because a
  * build prints tens of thousands of lines (every bundled asset) and the status
  * is polled every few seconds — the last screenfuls are what tells the story.
@@ -139,6 +150,13 @@ interface DeployRun {
   phase: string | null;
   /** `--no-build` runs save without publishing — no "live" claim to make. */
   noBuild: boolean;
+  /**
+   * PID of the detached build script, so a stop request can signal the whole
+   * process GROUP (the script spawns children: git, npm, expo). Spawned with
+   * `detached: true`, the child is a group leader, so `process.kill(-pid, …)`
+   * reaches every descendant. Null when the spawn never returned a pid.
+   */
+  pid: number | null;
   /**
    * Size of the ship log when this run started. The log is appended to forever,
    * so this is where THIS publication begins — what the client is shown, rather
@@ -739,9 +757,29 @@ async function describeShipFailure(run: DeployRun, exitCode: number | null): Pro
 }
 
 /**
- * Resolve the current run's live state for a status poll: apply the runtime
- * safety valve, refresh the phase, and drop a finished run once its outcome has
- * been on screen long enough.
+ * Epoch ms of the last observed sign of life from a running publication: the
+ * freshest mtime of the phase marker and the ship log. Both are written by the
+ * build script as it works (a phase on every step, the log on every printed
+ * line), so a value that stops advancing means the script itself has stopped —
+ * the disk fact the stall check needs, as opposed to "the daemon is still up".
+ * Falls back to the run's own start so a run that has not written anything yet
+ * is measured from when it began, not from epoch 0.
+ */
+async function readRunActivityMs(run: DeployRun): Promise<number> {
+  const mtimes = await Promise.all(
+    [PHASE_FILE, SHIP_LOG_FILE].map((path) =>
+      stat(path)
+        .then((info) => info.mtimeMs)
+        .catch(() => 0),
+    ),
+  );
+  return Math.max(run.startedAt, ...mtimes);
+}
+
+/**
+ * Resolve the current run's live state for a status poll: apply the stall and
+ * runtime safety valves, refresh the phase, and drop a finished run once its
+ * outcome has been on screen long enough.
  */
 async function resolveDeployRun(now: number): Promise<DeployRun | null> {
   const run = currentRun;
@@ -750,6 +788,26 @@ async function resolveDeployRun(now: number): Promise<DeployRun | null> {
   }
   if (run.finishedAt === null) {
     run.phase = await readDeployPhase(run);
+    // A publication that has gone quiet — no new log line, no new phase — for
+    // longer than the stall window is blocked, and must read as failed instead
+    // of a green spinner that outlives the work. Checked before the 30-min cap
+    // so a hang is caught in minutes, not half an hour. The disk is still the
+    // judge of success: a silent run over a live site just lost its exit signal.
+    if (now - (await readRunActivityMs(run)) > DEPLOY_STALL_MS) {
+      run.finishedAt = now;
+      if (await isPublicationLive()) {
+        run.outcome = "success";
+        run.phase = "done";
+        lastError = null;
+      } else {
+        run.outcome = "failed";
+        run.phase = "error";
+        lastError = `La publication est bloquée : aucune activité depuis ${Math.round(
+          DEPLOY_STALL_MS / 60_000,
+        )} minutes. Elle a été déclarée en échec.`;
+      }
+      return run;
+    }
     if (now - run.startedAt > DEPLOY_MAX_RUNTIME_MS) {
       // The runtime valve fired — but the run may well have finished its work
       // and only failed to report. The served marker is the truth: if HEAD is
@@ -815,6 +873,51 @@ export async function resetPaseoDeployState(): Promise<void> {
   currentRun = null;
   lastError = null;
   await Promise.all([resetDeployPhase(), clearResidualDeployLock()]);
+}
+
+export interface PaseoDeployStopResult {
+  stopped: boolean;
+  error: string | null;
+}
+
+/**
+ * "Arrêter la publication": interrupt the running build cleanly and leave the
+ * system in a coherent state the user can act on.
+ *
+ * Three effects, in order: signal the build script's whole process GROUP (it
+ * spawns git/npm/expo children, so `-pid` reaches all of them), record the run
+ * as failed with a plain reason so every poller — the sheet AND the batch
+ * watcher that stamps the cards — converges on "interrompue" instead of a
+ * spinner, and remove a now-orphaned lock so the next attempt is not refused.
+ *
+ * The disk stays the judge of truth: if the copy had already landed, the status
+ * read path still self-heals the outcome to success (`.deployed-sha` == HEAD).
+ * We do not fake a success here; we stop pretending it is still working.
+ */
+export async function stopPaseoDeploy(): Promise<PaseoDeployStopResult> {
+  const run = currentRun;
+  if (run === null || run.finishedAt !== null) {
+    // Nothing live to stop. Still clear a residual lock: the usual reason to
+    // press Stop on an idle-looking run is a ghost left by a crashed build.
+    await clearResidualDeployLock();
+    return { stopped: false, error: "Aucune publication en cours à arrêter." };
+  }
+  if (run.pid !== null) {
+    try {
+      // Negative pid = the whole process group. SIGTERM lets the script run its
+      // EXIT trap (it removes the frozen snapshot worktree) instead of leaking it.
+      process.kill(-run.pid, "SIGTERM");
+    } catch {
+      // Already gone, or not our group any more — the state update below still
+      // frees the UI, which is the point of pressing Stop.
+    }
+  }
+  run.finishedAt = Date.now();
+  run.outcome = "failed";
+  run.phase = "error";
+  lastError = "Publication interrompue à la demande.";
+  await Promise.all([resetDeployPhase(), clearResidualDeployLock()]);
+  return { stopped: true, error: null };
 }
 
 function parseUncommittedFiles(porcelain: string): PaseoDeployPendingFile[] {
@@ -1312,6 +1415,16 @@ export async function getPaseoDeployStatus(): Promise<PaseoDeployStatus> {
     const branch = branchResult.stdout.trim() || null;
     const run = await resolveDeployRun(Date.now());
 
+    // Automatic residual-lock cleanup: a lock left by a crashed build makes the
+    // NEXT publication refuse to start ("un déploiement est déjà en cours") long
+    // after the process behind it died. When nothing is actually running, probe
+    // the lock and drop it if no live process holds it — so the user never has
+    // to reach for "Réinitialiser" just to escape a ghost. Best effort; a
+    // genuinely-held lock (a real build) is left untouched by the flock probe.
+    if (!isDeployRunning()) {
+      await clearResidualDeployLock();
+    }
+
     // Source of truth = `.deployed-sha` vs HEAD, over any log or exit code. When
     // the served marker already matches HEAD the content IS online, so a failed
     // outcome left by a previous run (a build that reported non-zero after the
@@ -1783,6 +1896,7 @@ export async function triggerPaseoDeploy(input: {
       outcome: null,
       phase: null,
       noBuild: input.noBuild === true,
+      pid: null,
       logOffset: await readShipLogSize(),
       commits: await getUnshippedCommits(deployedShaAtStart, headShaAtStart),
     };
@@ -1810,6 +1924,9 @@ export async function triggerPaseoDeploy(input: {
         PASEO_DEPLOY_TASKS: (input.taskTitles ?? []).join("\n"),
       },
     });
+
+    // Remember the group leader so a stop request can signal the whole build.
+    run.pid = child.pid ?? null;
 
     child.on("exit", (code) => {
       void finishRun(run, { exitCode: code, mergedBranches });

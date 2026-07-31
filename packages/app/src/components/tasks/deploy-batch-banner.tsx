@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { CheckCircle2, RotateCcw, TriangleAlert, X } from "lucide-react-native";
+import { CheckCircle2, RotateCcw, Square, TriangleAlert, X } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { TaskColumn } from "@/data/tasks";
@@ -33,6 +33,7 @@ const ThemedCheck = withUnistyles(CheckCircle2);
 const ThemedWarning = withUnistyles(TriangleAlert);
 const ThemedClose = withUnistyles(X);
 const ThemedReset = withUnistyles(RotateCcw);
+const ThemedStop = withUnistyles(Square);
 
 /**
  * What the "À déployer" column shows above its cards:
@@ -51,6 +52,7 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
   batch,
   onOpenLog,
   onReset,
+  onStop,
 }: {
   column: TaskColumn;
   batch: TaskDeployBatch | null | undefined;
@@ -61,6 +63,10 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
   // "Réinitialiser / Relancer": clears the failed state + residual lock and
   // starts a clean publication. Only offered when the batch actually failed.
   onReset?: (() => void) | undefined;
+  // "Arrêter": interrupt the running publication (kill the build, free the lock).
+  // Only offered while it runs — the third question the banner must answer, next
+  // to "where is it" (the log) and "why did it fail" (the recap).
+  onStop?: (() => void) | undefined;
 }) {
   const { t } = useTranslation();
   const dismissedAt = useTasksBoardUiStore((state) => state.dismissedDeployBatchAt);
@@ -95,17 +101,7 @@ export const DeployBatchBanner = memo(function DeployBatchBanner({
       <View style={styles.header}>
         <BatchIcon state={batch.state} />
         <Text style={styles.title}>{batchTitle(t, batch.state, count)}</Text>
-        {running ? null : (
-          <Pressable
-            onPress={handleDismiss}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t("common.actions.close")}
-            testID="tasks-deploy-batch-dismiss"
-          >
-            <ThemedClose size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
-          </Pressable>
-        )}
+        <HeaderControl running={running} onStop={onStop} onDismiss={handleDismiss} />
       </View>
       {running ? (
         <>
@@ -249,6 +245,68 @@ function BatchTitleList({ titles }: { titles: string[] }) {
   );
 }
 
+/**
+ * The header's trailing control: "Arrêter" while the run is live (so a stuck
+ * build is never a dead end), the dismiss cross once it is over. One or the
+ * other, never both — kept out of the main banner so it stays flat rather than a
+ * nested ternary.
+ */
+function HeaderControl({
+  running,
+  onStop,
+  onDismiss,
+}: {
+  running: boolean;
+  onStop?: (() => void) | undefined;
+  onDismiss: (event?: GestureResponderEvent) => void;
+}) {
+  const { t } = useTranslation();
+  if (running) {
+    return onStop ? <StopButton onStop={onStop} /> : null;
+  }
+  return (
+    <Pressable
+      onPress={onDismiss}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t("common.actions.close")}
+      testID="tasks-deploy-batch-dismiss"
+    >
+      <ThemedClose size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
+    </Pressable>
+  );
+}
+
+/**
+ * "Arrêter" — the escape hatch for a running publication. Sits in the banner
+ * header while it runs, so a build that has gone quiet is never a dead end: one
+ * tap kills it and frees the lock. Its press is kept from bubbling to the card
+ * (which opens the log), same as the reset and dismiss controls.
+ */
+function StopButton({ onStop }: { onStop: () => void }) {
+  const { t } = useTranslation();
+  const handleStop = useCallback(
+    (event?: GestureResponderEvent) => {
+      event?.stopPropagation?.();
+      onStop();
+    },
+    [onStop],
+  );
+  return (
+    <Pressable
+      style={styles.stopButton}
+      onPress={handleStop}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t("tasks.board.deployStopAction")}
+      testID="tasks-deploy-batch-stop"
+    >
+      <ThemedStop size={ICON_SIZE.xs} uniProps={dangerColorMapping} />
+      <Text style={styles.stopLabel}>{t("tasks.board.deployStopAction")}</Text>
+    </Pressable>
+  );
+}
+
 /** Spinner while it runs, then the verdict: a check or a warning. */
 function BatchIcon({ state }: { state: TaskDeployBatch["state"] }) {
   if (state === "running") {
@@ -335,6 +393,21 @@ const styles = StyleSheet.create((theme) => ({
   },
   resetLabel: {
     color: theme.colors.accent,
+    fontSize: theme.fontSize.xs,
+    fontWeight: "500",
+  },
+  stopButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.statusDanger,
+  },
+  stopLabel: {
+    color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
     fontWeight: "500",
   },
