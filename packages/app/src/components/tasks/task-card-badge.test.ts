@@ -232,17 +232,11 @@ describe("getScheduleBadge", () => {
 });
 
 describe("getPublishNotice", () => {
-  it("tells a finished card it will ship with the next publication", () => {
-    // A publication builds the whole checkout, so a finished card rides it even
-    // if nobody queued it. Announcing the departure is what makes it a decision.
-    expect(getPublishNotice(makeTask({ column: "done" }))).toEqual({
-      labelKey: "tasks.card.ridesNextPublish",
-      variant: "success",
-    });
-    expect(getPublishNotice(makeTask({ column: "deployed" }))).toEqual({
-      labelKey: "tasks.card.ridesNextPublish",
-      variant: "success",
-    });
+  // Saying "will ship with the next publication" on every card of a column where
+  // that is true of every card is noise, not news.
+  it("says nothing about a finished card that will simply ship", () => {
+    expect(getPublishNotice(makeTask({ column: "done" }))).toBeNull();
+    expect(getPublishNotice(makeTask({ column: "deployed" }))).toBeNull();
   });
 
   it("says instead when the card was held out of the next batch", () => {

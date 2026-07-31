@@ -25,6 +25,14 @@ export interface DeployRunSnapshot {
 }
 
 /** How often the publication is polled while it runs. */
+// What a publication that ends with no message actually means. The engine
+// restarts itself when a publication installs a new one, and everything it knew
+// about the run in memory dies with it — including why it stopped.
+const RESTARTED_MID_RUN =
+  "Le moteur a redémarré pendant la publication : son compte rendu est perdu. " +
+  "Vérifiez la fenêtre « À déployer » — si le site sert déjà la dernière version, " +
+  "la publication a bien abouti.";
+
 const POLL_INTERVAL_MS = 5_000;
 /**
  * Breathing room between "everything is live" and the daemon restart, so the
@@ -594,7 +602,10 @@ export class TaskBatchDeployer {
         return;
       }
       if (run.outcome === "failed") {
-        await this.fail(input.projectId, input.pending, run.error ?? "raison inconnue");
+        // "raison inconnue" was a lie dressed as a diagnosis: the one way to
+        // reach a failed run with no message is for the engine to have been
+        // restarted mid-publication, taking the message with it. Say that.
+        await this.fail(input.projectId, input.pending, run.error ?? RESTARTED_MID_RUN);
         return;
       }
       if (run.deploying) {

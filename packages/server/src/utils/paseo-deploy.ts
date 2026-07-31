@@ -1393,6 +1393,24 @@ export interface PaseoDeployRunSnapshot {
  */
 export async function getPaseoDeployRunSnapshot(): Promise<PaseoDeployRunSnapshot> {
   const run = await resolveDeployRun(Date.now());
+  // Same disk-is-the-judge rule the "À déployer" window applies (see
+  // getPaseoDeployStatus): a failed outcome over a site that already serves HEAD
+  // is a lost exit signal, not a failed publication.
+  //
+  // This reader is the one the batch publication watches, and it used to skip the
+  // rule entirely — so the two readers could disagree about the very same run.
+  // The case that bit: a publication that installs a new engine restarts it, the
+  // restart wipes the in-memory run AND the message that went with it, and the
+  // watcher then stamped every card of the lot "publication échouée — raison
+  // inconnue" while the site was live. A conclusion drawn from memory the engine
+  // had just thrown away.
+  if (run !== null && run.finishedAt !== null && run.outcome === "failed") {
+    if (!isDeployRunning() && (await isPublicationLive())) {
+      run.outcome = "success";
+      run.phase = "done";
+      lastError = null;
+    }
+  }
   return {
     deploying: run !== null && run.finishedAt === null,
     phase: run?.phase ?? null,

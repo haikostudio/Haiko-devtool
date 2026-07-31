@@ -36,21 +36,13 @@ export function isTaskDeployed(task: KanbanTask): boolean {
  * What the NEXT publication will do with this card, announced before the user
  * publishes:
  *
- * - quiet green "Partira à la prochaine publication" — a finished card rides the
- *   next run whether or not anyone queued it, because a publication builds the
- *   whole checkout;
- * - amber "Retirée du prochain lot" — the user held it back (`deployHold`), which
- *   is the louder of the two and therefore wins.
+ * Only the exception is worth a badge: amber "Retirée du prochain lot", the card
+ * the user held back (`deployHold`).
  *
- * Either way the notice rides the card for the whole wait and goes away the moment
- * the work is live: the card then says "Déployé". Announcing the departure is what
- * turns a surprise into a decision — that a finished card ships invisibly was the
- * actual bug behind "je n'ai pas demandé à publier ça".
- *
- * It used to say "Redémarrage requis" / "Republication simple" instead. Both are
- * gone: a publication now restarts the engine every time, so telling the user
- * which half of the batch needed it only invited them to wonder what the other
- * half was waiting for.
+ * The green "Partira à la prochaine publication" is gone. It was true of EVERY
+ * card in the column — a publication builds the whole checkout — so it said
+ * nothing the column did not already say, on every card at once, and only added
+ * noise to the one place the user goes to read what is about to happen.
  */
 export function getPublishNotice(task: KanbanTask): ScheduleBadgeDescriptor | null {
   if (isTaskDeployed(task)) {
@@ -61,7 +53,7 @@ export function getPublishNotice(task: KanbanTask): ScheduleBadgeDescriptor | nu
   }
   return task.deployHold === true
     ? { labelKey: "tasks.card.publishHeld", variant: "warning" }
-    : { labelKey: "tasks.card.ridesNextPublish", variant: "success" };
+    : null;
 }
 
 /**

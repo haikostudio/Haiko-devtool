@@ -28,6 +28,8 @@ const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMut
 const successColorMapping = (theme: Theme) => ({ color: theme.colors.statusSuccess });
 const dangerColorMapping = (theme: Theme) => ({ color: theme.colors.statusDanger });
 const accentColorMapping = (theme: Theme) => ({ color: theme.colors.accent });
+// The glyph sitting ON the solid red square.
+const onDangerColorMapping = (theme: Theme) => ({ color: theme.colors.background });
 const ThemedActivityIndicator = withUnistyles(ActivityIndicator);
 const ThemedCheck = withUnistyles(CheckCircle2);
 const ThemedWarning = withUnistyles(TriangleAlert);
@@ -301,8 +303,7 @@ function StopButton({ onStop }: { onStop: () => void }) {
       accessibilityLabel={t("tasks.board.deployStopAction")}
       testID="tasks-deploy-batch-stop"
     >
-      <ThemedStop size={ICON_SIZE.xs} uniProps={dangerColorMapping} />
-      <Text style={styles.stopLabel}>{t("tasks.board.deployStopAction")}</Text>
+      <ThemedStop size={ICON_SIZE.xs} uniProps={onDangerColorMapping} />
     </Pressable>
   );
 }
@@ -396,20 +397,16 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
     fontWeight: "500",
   },
+  // A solid red square with a white glyph: the one destructive control on a
+  // banner already crowded with words. Its label lives in the accessibility
+  // name, not on screen — a stop icon needs no caption.
   stopButton: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing[1],
-    paddingVertical: theme.spacing[1],
-    paddingHorizontal: theme.spacing[2],
+    justifyContent: "center",
+    width: 28,
+    height: 28,
     borderRadius: theme.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.statusDanger,
-  },
-  stopLabel: {
-    color: theme.colors.statusDanger,
-    fontSize: theme.fontSize.xs,
-    fontWeight: "500",
+    backgroundColor: theme.colors.statusDanger,
   },
   link: {
     color: theme.colors.accent,
