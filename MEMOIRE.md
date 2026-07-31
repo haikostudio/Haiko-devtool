@@ -57,6 +57,11 @@ d'état du projet — d'où l'exigence de brièveté.
   revenir à un sondage périodique de tous les tableaux : à vingt projets, cela
   faisait cinq requêtes par seconde en permanence, étranglait le démon et
   retardait de plusieurs secondes les mises à jour qu'il était censé afficher.
+- Le relais ne transporte que la conversation, jamais un fichier : un
+  téléchargement passe par une adresse web du moteur. Sur l'interface
+  auto-hébergée, c'est le serveur du site qui doit laisser passer cette seule
+  adresse vers le moteur ; sans cela, tout téléchargement échoue par « hôte
+  indisponible ». Sur mobile via le relais, la fonction manque encore.
 - Une publication qui installe un nouveau moteur le redémarre dans la foulée :
   tout état gardé seulement en mémoire (dont le journal de publication) meurt
   avec l'ancien processus. Ce qui doit survivre se relit sur le disque.
