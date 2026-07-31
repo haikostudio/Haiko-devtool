@@ -942,6 +942,55 @@ describe("TaskBoardService", () => {
     await expect(readdir(dir)).resolves.toEqual([]);
   });
 
+  test("reconcileOrphanDeployBatch settles a run frozen on 'running' into a failure", async () => {
+    // A publication whose in-memory watcher died with the previous process: the
+    // record persists on "running" and nothing left alive would ever move it.
+    await service.setDeployBatch("proj-1", {
+      state: "running",
+      phase: "site",
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      taskIds: ["t1"],
+      titles: ["Une carte"],
+      url: null,
+      error: null,
+      queued: true,
+    });
+
+    await service.reconcileOrphanDeployBatch("proj-1");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.deployBatch?.state).toBe("failed");
+    expect(board.deployBatch?.finishedAt).toBeTruthy();
+    expect(board.deployBatch?.queued).toBe(false);
+    expect(board.deployBatch?.error).toContain("interrompue");
+  });
+
+  test("reconcileOrphanDeployBatch leaves a concluded run untouched", async () => {
+    const finishedAt = new Date().toISOString();
+    await service.setDeployBatch("proj-1", {
+      state: "success",
+      phase: "done",
+      startedAt: finishedAt,
+      finishedAt,
+      taskIds: ["t1"],
+      titles: ["Une carte"],
+      url: "https://app.example.com",
+      error: null,
+      queued: false,
+    });
+
+    await service.reconcileOrphanDeployBatch("proj-1");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.deployBatch?.state).toBe("success");
+  });
+
+  test("reconcileOrphanDeployBatch never creates a board for a project that has none", async () => {
+    await service.reconcileOrphanDeployBatch("untouched-project");
+    await expect(readdir(dir)).resolves.toEqual([]);
+  });
+
   const proposalFixture = {
     title: "Ajouter le mode sombre",
     description: "Basculer clair/sombre.",

@@ -1324,6 +1324,10 @@ export async function createPaseoDaemon(
         // genuinely waiting to go out.
         await taskBoardService.backfillLegacyDeployedCards(project.projectId);
         await taskBoardService.settleRestartFlags(project.projectId);
+        // A publication frozen on "running" whose in-memory watcher died with the
+        // previous process would otherwise spin forever: settle it to a failure so
+        // the "Réinitialiser / Relancer" escape hatch appears.
+        await taskBoardService.reconcileOrphanDeployBatch(project.projectId);
         // Catch-up for the tabs that piled up before archiving closed anything.
         // Isolated: tidying tabs is cosmetic, and letting it throw here would
         // skip the restart-debt backfill of every project after this one.

@@ -1384,6 +1384,52 @@ export class TaskBoardService {
    * from being offered forever (and hiding the "Archiver" bar it shares a slot
    * with). Best-effort and idempotent — an untouched board is never rewritten.
    */
+  /**
+   * At boot, close any batch publication left frozen on "running".
+   *
+   * The run's progress is advanced by an IN-MEMORY watcher (TaskBatchDeployer),
+   * and the stall/timeout safety nets live inside that same loop. When the engine
+   * restarts mid-publication — a crash, a manual restart, or the deploy's own
+   * final restart firing while a sibling run is still open — the watcher dies with
+   * the process, but the board record persists. Nothing left alive would ever move
+   * it off "running": the banner then spins forever, with no elapsed time, no log
+   * verdict, and (because "Réinitialiser / Relancer" only shows on a failure) no
+   * way out. This turns that orphan into an honest, actionable failure so the
+   * escape hatch appears.
+   *
+   * A genuinely successful run stamps its record "success" BEFORE requesting the
+   * restart, so a record still on "running" at boot is always an interrupted one.
+   * No card was stamped live, so nothing is lost: a re-run republishes, or drops
+   * cleanly if the work already reached production.
+   */
+  async reconcileOrphanDeployBatch(projectId: string): Promise<void> {
+    try {
+      const current = await this.store.getBoard(projectId);
+      if (current.deployBatch?.state !== "running") {
+        return;
+      }
+      const board = await this.store.mutate(projectId, (latest) =>
+        latest.deployBatch?.state === "running"
+          ? {
+              ...latest,
+              deployBatch: {
+                ...latest.deployBatch,
+                state: "failed" as const,
+                finishedAt: new Date().toISOString(),
+                queued: false,
+                error:
+                  "La publication a été interrompue par un redémarrage du moteur. Rien n'a été mis en ligne — relancez « Tout déployer » si besoin.",
+              },
+            }
+          : latest,
+      );
+      this.broadcast(board);
+      this.logger.info({ projectId }, "Orphan running deploy batch settled to failed at boot");
+    } catch (error) {
+      this.logger.warn({ err: error, projectId }, "Failed to reconcile an orphan deploy batch");
+    }
+  }
+
   async settleRestartFlags(projectId: string): Promise<void> {
     try {
       // Read before writing. `store.mutate` persists unconditionally, so going
