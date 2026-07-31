@@ -149,11 +149,86 @@ function projectRefKey(ref: ProjectRef): string {
   return `${ref.serverId}:${ref.projectId}`;
 }
 
-// The project rail has no live board subscription, so it can't see a task move
-// into "in progress" the moment it starts. Re-poll every few seconds so a
-// project's dot lights up when a descendant starts working — and, just as
-// importantly, goes quiet again once nothing is left running.
-const PROJECT_TONE_POLL_MS = 4000;
+function railSubscriptionId(key: string): string {
+  return `rail-${key}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Live tasks of EVERY project in the rail, keyed by "serverId:projectId".
+ *
+ * One board subscription per project, so a card starting, finishing or asking
+ * the user something lights its project's dot the instant it happens — the rail
+ * is the one place in the app that must speak for projects the user is not
+ * looking at.
+ *
+ * This used to be a poll: every project's full board re-fetched every four
+ * seconds, forever, whether or not anything had changed. On a host with twenty
+ * projects that alone was five requests a second against the daemon, enough to
+ * push board pushes seconds late and make the very indicators it fed lag. A
+ * subscription costs one snapshot at mount and then nothing until a board
+ * actually changes.
+ */
+export function useProjectBoardTasks(projects: ProjectRef[]): Map<string, KanbanTask[]> {
+  const [tasksByProject, setTasksByProject] = useState<Map<string, KanbanTask[]>>(() => new Map());
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+  const projectKey = useMemo(() => projects.map(projectRefKey).join("|"), [projects]);
+
+  useEffect(() => {
+    const store = getHostRuntimeStore();
+    const refs = projectsRef.current;
+    const live = new Set(refs.map(projectRefKey));
+    // A project that left the rail must not keep lighting a dot from its last
+    // known board.
+    setTasksByProject((prev) => {
+      const next = new Map<string, KanbanTask[]>();
+      for (const [key, tasks] of prev) {
+        if (live.has(key)) {
+          next.set(key, tasks);
+        }
+      }
+      return next.size === prev.size ? prev : next;
+    });
+
+    const disposers: Array<() => void> = [];
+    for (const ref of refs) {
+      const client = store.getClient(ref.serverId);
+      if (!client) {
+        continue;
+      }
+      const key = projectRefKey(ref);
+      const subscriptionId = railSubscriptionId(key);
+      // Registered before subscribing: the daemon answers a subscription with an
+      // immediate snapshot on this very channel, which is our initial load.
+      disposers.push(
+        client.on("tasks.board.update", (message) => {
+          if (message.payload.subscriptionId !== subscriptionId) {
+            return;
+          }
+          const tasks = message.payload.board.tasks;
+          setTasksByProject((prev) => {
+            const next = new Map(prev);
+            next.set(key, tasks);
+            return next;
+          });
+        }),
+      );
+      // Host may not support tasks or be disconnected — a rail dot is never worth
+      // an error.
+      void client.tasksBoardSubscribe(ref.projectId, subscriptionId).catch(() => {});
+      disposers.push(() => {
+        void client.tasksBoardUnsubscribe(subscriptionId).catch(() => {});
+      });
+    }
+    return () => {
+      for (const dispose of disposers) {
+        dispose();
+      }
+    };
+  }, [projectKey]);
+
+  return tasksByProject;
+}
 
 // The board of the project the user is currently viewing (already live-subscribed
 // elsewhere). Overlaid onto the polled snapshot so the selected project's dot
@@ -164,71 +239,35 @@ export interface LiveProjectBoard {
 }
 
 /**
- * Aggregate tone per project, keyed by "serverId:projectId". Fetches each
- * project's board (the project rail has no live subscription) whenever the set of
- * projects changes, then keeps polling on an interval so state that lives on the
- * board (a task entering the in-progress column, a schedule launching) surfaces
- * on the parent project — not just the live agent signals. `liveBoard`, when
- * given, overrides the polled snapshot for the currently-viewed project so its
- * dot animates the instant a child starts.
+ * Aggregate tone per project, keyed by "serverId:projectId", rolled up from the
+ * live boards of every project in the rail and the live state of their agents.
+ *
+ * `liveBoard`, when given, overrides the subscribed copy for the project the
+ * user is actually viewing: that board carries the optimistic overlay of a move
+ * still in flight, which no push knows about yet.
  */
 export function useProjectToneMap(
-  projects: ProjectRef[],
+  tasksByProject: Map<string, KanbanTask[]>,
   liveBoard?: LiveProjectBoard | null,
 ): Map<string, TaskTone | null> {
   const bucketMap = useAgentBucketMap();
-  const [tasksByProject, setTasksByProject] = useState<Map<string, KanbanTask[]>>(() => new Map());
-  const projectsRef = useRef(projects);
-  projectsRef.current = projects;
-  const projectKey = useMemo(() => projects.map(projectRefKey).join("|"), [projects]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const store = getHostRuntimeStore();
-      const next = new Map<string, KanbanTask[]>();
-      await Promise.all(
-        projectsRef.current.map(async (ref) => {
-          const client = store.getClient(ref.serverId);
-          if (!client) {
-            return;
-          }
-          try {
-            const payload = await client.tasksBoardGet(ref.projectId);
-            if (payload.board) {
-              next.set(projectRefKey(ref), payload.board.tasks);
-            }
-          } catch {
-            // Host may not support tasks or be disconnected — skip silently.
-          }
-        }),
-      );
-      if (!cancelled) {
-        setTasksByProject(next);
-      }
-    };
-    void load();
-    const timer = setInterval(load, PROJECT_TONE_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [projectKey]);
+  // An action the user just fired lights the parent project too, instead of
+  // leaving the rail dark until the server answers.
+  const pendingIds = useOptimisticTaskActionStore((state) => state.pendingIds);
 
   return useMemo(() => {
     const result = new Map<string, TaskTone | null>();
     for (const [key, tasks] of tasksByProject) {
-      result.set(key, aggregateTaskTones(tasks.map((task) => toneOf(task, bucketMap))));
+      result.set(key, aggregateTaskTones(tasks.map((task) => toneOf(task, bucketMap, pendingIds))));
     }
-    // The viewed project's live board wins over its (possibly stale) polled copy.
     if (liveBoard) {
       result.set(
         liveBoard.key,
-        aggregateTaskTones(liveBoard.tasks.map((task) => toneOf(task, bucketMap))),
+        aggregateTaskTones(liveBoard.tasks.map((task) => toneOf(task, bucketMap, pendingIds))),
       );
     }
     return result;
-  }, [tasksByProject, bucketMap, liveBoard]);
+  }, [tasksByProject, bucketMap, pendingIds, liveBoard]);
 }
 
 // Vertical hop (px) of the attention bounce, and how often it repeats — kept in

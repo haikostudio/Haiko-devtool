@@ -49,6 +49,10 @@ d'état du projet — d'où l'exigence de brièveté.
   bloque : toute temporisation calculée sur cette valeur devient nulle et on
   s'auto-bloque en boucle. Un délai annoncé par un fournisseur est un plancher,
   jamais une autorisation de réessayer tout de suite.
+- La liste de projets tient une souscription vivante par projet. Ne jamais
+  revenir à un sondage périodique de tous les tableaux : à vingt projets, cela
+  faisait cinq requêtes par seconde en permanence, étranglait le démon et
+  retardait de plusieurs secondes les mises à jour qu'il était censé afficher.
 - Une publication qui installe un nouveau moteur le redémarre dans la foulée :
   tout état gardé seulement en mémoire (dont le journal de publication) meurt
   avec l'ancien processus. Ce qui doit survivre se relit sur le disque.
