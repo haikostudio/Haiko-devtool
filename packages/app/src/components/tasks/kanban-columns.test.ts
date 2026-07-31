@@ -59,6 +59,48 @@ function notesColumnSortedBy(tasks: KanbanTask[], sort: ColumnSortMode): KanbanT
   return model?.tasks ?? [];
 }
 
+// A minimal backlog-shaped task, optionally awaiting the user's validation.
+function makeBacklog(id: string, opts: { pending?: boolean } = {}): KanbanTask {
+  return {
+    id,
+    folderId: "f1",
+    title: id,
+    tags: [],
+    column: "backlog",
+    order: 0,
+    origin: "manual",
+    normalizedTitle: id,
+    links: { agentIds: [] },
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    ...(opts.pending ? { approval: { state: "pending" as const } } : {}),
+  };
+}
+
+function backlogColumn(tasks: KanbanTask[]): KanbanTask[] {
+  const board: TaskBoard = { version: 1, projectId: "p1", folders: [], tasks };
+  const model = buildColumnModels(board).find((entry) => entry.column === "backlog");
+  return model?.tasks ?? [];
+}
+
+describe("Backlog column", () => {
+  it("shows a pending 'à valider' card alongside normal cards", () => {
+    const rendered = backlogColumn([
+      makeBacklog("normal"),
+      makeBacklog("pending", { pending: true }),
+    ]);
+    expect(rendered.map((task) => task.id)).toContain("pending");
+    expect(rendered.map((task) => task.id)).toContain("normal");
+  });
+
+  it("keeps a pending proposal hidden outside the backlog column", () => {
+    const proposal: KanbanTask = { ...makeBacklog("stray", { pending: true }), column: "notes" };
+    const board: TaskBoard = { version: 1, projectId: "p1", folders: [], tasks: [proposal] };
+    const notes = buildColumnModels(board).find((entry) => entry.column === "notes");
+    expect(notes?.tasks.map((task) => task.id)).not.toContain("stray");
+  });
+});
+
 describe("Notes column", () => {
   it("is the first column, before backlog", () => {
     expect(KANBAN_COLUMNS[0]).toBe("notes");

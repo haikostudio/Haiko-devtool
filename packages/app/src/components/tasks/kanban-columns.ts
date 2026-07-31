@@ -247,12 +247,12 @@ export function buildColumnModels(
             // still hold several folder records), but nothing narrows by it — every
             // task of the project shows up here, whichever folder it was filed under.
             task.column === column &&
-            // Agent-proposed tasks awaiting the user's validation NEVER surface
-            // in a column — they live only in the chat approval tray until the
-            // user approves them (which clears the pending state) or refuses
-            // them (which deletes them). This is the impérative rule: a proposal
-            // must never auto-land in "À faire".
-            task.approval?.state !== "pending" &&
+            // Cards awaiting the user's validation surface in "À faire" (backlog)
+            // exactly like any other card, carrying their "en attente de validation"
+            // badge — this is where the user sees them and approves them. In every
+            // OTHER column a pending proposal stays hidden (it lives only in the
+            // chat approval tray): it must never auto-land somewhere else.
+            (column === "backlog" || task.approval?.state !== "pending") &&
             (needle === "" || matchesQuery(task, needle)),
         )
         .sort(compare),
