@@ -95,6 +95,34 @@ describe("reconcileBoardWithPendingMoves — a dropped card stays put", () => {
     expect(result.dropped).toEqual(["t1"]);
   });
 
+  // Terminer une carte : le daemon écrit DEUX fois — d'abord un marquage qui la
+  // laisse en « En cours », puis le passage en « Terminé ». Croire la première
+  // écriture est exactement ce qui renvoyait la carte en arrière quelques
+  // secondes avant qu'elle ne revienne. Le serveur en retard n'est pas un refus.
+  it("holds through a mid-flight write that leaves the card in its old column", () => {
+    const pending = new Map<string, PendingMove>([["t1", pendingMove({ column: "done" })]]);
+
+    // Écriture 1 : la carte est estampillée, toujours « En cours ».
+    const midFlight = reconcileBoardWithPendingMoves(
+      makeBoard([
+        makeTask({ id: "t1", column: "in_progress", updatedAt: "2024-01-01T00:05:00.000Z" }),
+      ]),
+      pending,
+      NOW_MS,
+    );
+    expect(midFlight.board.tasks[0].column).toBe("done");
+    expect(midFlight.satisfied).toEqual([]);
+
+    // Écriture 2 : elle arrive enfin en « Terminé ».
+    const landed = reconcileBoardWithPendingMoves(
+      makeBoard([makeTask({ id: "t1", column: "done", updatedAt: "2024-01-01T00:05:01.000Z" })]),
+      pending,
+      NOW_MS,
+    );
+    expect(landed.board.tasks[0].column).toBe("done");
+    expect(landed.satisfied).toEqual(["t1"]);
+  });
+
   // The button transitions (approve, run, finish) hand the card to a server that
   // routinely carries it FURTHER than the column the user aimed at: "Validé" is
   // followed by "Planifié" and then "En cours" on its own. A claim that only ever
