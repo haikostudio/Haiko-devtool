@@ -864,12 +864,17 @@ export class TaskBoardService {
       ...(payload.runConfig ? { runConfig: payload.runConfig } : {}),
     });
     // Backfill the reserved resolution with the created task's id.
-    const board = await this.store.mutate(projectId, (current) => ({
-      ...current,
-      proposalResolutions: (current.proposalResolutions ?? []).map((r) =>
-        r.proposalId === input.proposalId ? { ...r, taskId: created.id } : r,
-      ),
-    }));
+    const board = await this.store.mutate(projectId, (current) => {
+      const resolutions = [...(current.proposalResolutions ?? [])];
+      const index = resolutions.findIndex(
+        (resolution) => resolution.proposalId === input.proposalId,
+      );
+      const entry = resolutions[index];
+      if (entry) {
+        resolutions[index] = { ...entry, taskId: created.id };
+      }
+      return { ...current, proposalResolutions: resolutions };
+    });
     this.broadcast(board);
     return created;
   }
