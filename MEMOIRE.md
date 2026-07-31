@@ -45,6 +45,10 @@ d'état du projet — d'où l'exigence de brièveté.
   modèle de la config : fixer `config.model` sans ajuster l'étiquette ne sert à
   rien. C'est ce qui faisait démarrer le chef d'orchestre de Paseo sur Sonnet
   alors que sa fiche disait Opus.
+- Le service d'usage de Claude répond « réessaye dans 0 seconde » tant qu'il nous
+  bloque : toute temporisation calculée sur cette valeur devient nulle et on
+  s'auto-bloque en boucle. Un délai annoncé par un fournisseur est un plancher,
+  jamais une autorisation de réessayer tout de suite.
 - Une publication qui installe un nouveau moteur le redémarre dans la foulée :
   tout état gardé seulement en mémoire (dont le journal de publication) meurt
   avec l'ancien processus. Ce qui doit survivre se relit sur le disque.
