@@ -244,10 +244,31 @@ interface DownloadTarget {
   authCredentials: { username: string; password: string } | null;
 }
 
+/**
+ * Where the browser itself is served from, when that can stand in for the daemon.
+ *
+ * A file is fetched over plain HTTP from the daemon, so a host reachable ONLY
+ * through the relay — an encrypted WebSocket tunnel, with no HTTP endpoint of
+ * its own — had no address to download from at all, and every attempt died on
+ * "the download host is unavailable". A self-hosted web UI is the case where
+ * that is fixable for free: the page is served by a reverse proxy sitting in
+ * front of the very daemon it talks to, so its own origin reaches the download
+ * route. The link stays capability-gated either way — the URL carries a
+ * single-use token issued over the authenticated socket, and nothing else opens
+ * that route.
+ */
+function sameOriginDownloadBase(): string | null {
+  if (!isWeb || typeof window === "undefined") {
+    return null;
+  }
+  const origin = window.location?.origin;
+  return origin && origin !== "null" ? origin : null;
+}
+
 function resolveDaemonDownloadTarget(daemon?: HostProfile): DownloadTarget {
   const connection = daemon?.connections.find((conn) => conn.type === "directTcp") ?? null;
   if (!connection) {
-    return { baseUrl: null, authHeader: null, authCredentials: null };
+    return { baseUrl: sameOriginDownloadBase(), authHeader: null, authCredentials: null };
   }
 
   let parsed: URL;
