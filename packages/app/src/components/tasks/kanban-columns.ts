@@ -310,8 +310,10 @@ export interface KanbanBoardProps {
   onReanalyzeTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   // "Tout déployer": publishes every not-yet-live card of the "À déployer"
-  // column in one run. Rendered at the bottom of that column only.
-  onDeployAll?: (() => void) | undefined;
+  // column in one run. Rendered at the head of that column only. May resolve to
+  // `false` when the run never starts (confirmation cancelled, daemon refused),
+  // so the button's optimistic "starting" morph can fall back to the button.
+  onDeployAll?: (() => Promise<boolean> | boolean | void) | undefined;
   // Opens the publication's own log from the progress banner — the live view
   // onto the running (or last) build/publish, which is a script and therefore
   // has output rather than a conversation.

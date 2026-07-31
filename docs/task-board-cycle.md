@@ -363,10 +363,11 @@ so the card continues into "À déployer" in a single gesture.
 
 ## Publishing — the "Tout déployer" button
 
-The **only** gesture that puts work online is the button at the FOOT of the
-"À déployer" column (`deploy-all-button.tsx` → `tasks.board.deploy_all` →
+The **only** gesture that puts work online is the button at the HEAD of the
+"À déployer" column (`deploy-control.tsx` → `tasks.board.deploy_all` →
 `TaskBatchDeployer`). It publishes every card of that column whose work is not
-live yet, in ONE run, and restarts the daemon at the end.
+live yet, in ONE run, and restarts the daemon at the end. That same control is
+also where the run then reports itself — see "What the column shows" below.
 
 - **What it takes.** `selectPendingDeployTasks`: every FINISHED card — column
   `deployed` **or** `done` — that is not archived, not held (`deployHold`) and not
@@ -423,10 +424,18 @@ The run is recorded on the BOARD, not on a card (`TaskBoard.deployBatch`, writte
 by `setDeployBatch`/`patchDeployBatch`): it is one build covering several cards,
 so it gets one bar, not N spinners.
 
-- **During**: `DeployBatchBanner` sits above the cards with a single progress bar
-  fed by the build script's own phases (sauvegarde → construction → mise en
-  ligne). It is server truth, not a local animation guessing at the daemon.
-- **After**: the same banner becomes the "voici ce qui vient d'être mis en ligne"
+The button and the run's report are ONE element (`DeployControl`), not two
+stacked blocks. It morphs in place: the "Tout déployer (N)" button at rest → the
+run's progress on the same surface → its recap → back to the button. The morph is
+flipped optimistically the instant it is pressed (a local `starting` flag), so it
+never waits on the daemon's first record; the real batch then takes over. The
+menu chevron ("heures creuses") stays reachable in every state.
+
+- **During**: the control shows a single progress bar fed by the build script's
+  own phases (sauvegarde → construction → mise en ligne), a spinner, the current
+  step and a stop button. It is server truth, not a local animation guessing at
+  the daemon.
+- **After**: the same control becomes the "voici ce qui vient d'être mis en ligne"
   recap — the card titles it took out (snapshotted at start, so a rename or an
   archive afterwards cannot rewrite history), the address, or the failure reason.
   One tap dismisses it (remembered per run, `dismissedDeployBatchAt`), and a recap
@@ -446,8 +455,8 @@ that a held card is still on the board asking to be published one day.
 
 ### Publishing on its own — "Publier automatiquement en heures creuses"
 
-Opt-in, off by default, one switch under the button (`tasks.autoDeployOffPeak` in
-the daemon config). When it is on, `AutoDeployWatcher` checks every few minutes
+Opt-in, off by default, one switch behind the control's menu chevron
+(`tasks.autoDeployOffPeak` in the daemon config). When it is on, `AutoDeployWatcher` checks every few minutes
 whether the clock is inside the tasks quiet-hours window and, if cards are
 waiting, starts exactly the same batch the button would — closing restart
 included. That is the whole point of off-peak: the restart lands when nobody is

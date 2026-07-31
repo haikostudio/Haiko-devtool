@@ -11,8 +11,7 @@ import { TaskCardMenu } from "./task-card-menu";
 import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task-card-stack";
 import { groupTasksIntoBoardRows } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
-import { DeployAllButton } from "./deploy-all-button";
-import { DeployBatchBanner } from "./deploy-batch-banner";
+import { DeployControl } from "./deploy-control";
 import { ArchiveSelectionControls } from "./archive-selection-controls";
 import { useDeployArchiveSelection, type ArchiveSelectionColumnProps } from "./archive-selection";
 import {
@@ -240,24 +239,22 @@ const BoardColumn = memo(function BoardColumn({
         ) : null}
       </View>
       <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
-      <DeployAllButton
+      {/* One control at the column head that morphs in place: the "Tout déployer"
+          button at rest, the run's progress bar while it publishes, then its
+          recap — never two stacked blocks about the same publication. */}
+      <DeployControl
         column={column}
         tasks={tasks}
+        batch={board?.deployBatch ?? null}
         onDeployAll={onDeployAll}
         offPeakEnabled={deployOffPeak?.enabled}
         onToggleOffPeak={deployOffPeak?.onToggle}
+        onOpenLog={onOpenDeployLog}
+        onReset={onResetDeploy}
+        onStop={onStopDeploy}
       />
       <ScrollView style={styles.columnScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.columnContent}>
-          {/* One progress bar for the whole run, then the "voici ce qui vient
-              d'être mis en ligne" recap — above the cards it is about. */}
-          <DeployBatchBanner
-            column={column}
-            batch={board?.deployBatch ?? null}
-            onOpenLog={onOpenDeployLog}
-            onReset={onResetDeploy}
-            onStop={onStopDeploy}
-          />
           {extras}
           {rows.map((row) =>
             row.kind === "task" ? (

@@ -29,8 +29,7 @@ import { TaskCardStack, useBatchExpansion, type RenderCardOptions } from "./task
 import { createPressSlopTracker } from "./card-press-slop";
 import { groupTasksIntoBoardRows, visibleTaskIds } from "./task-batch-grouping";
 import { BoardColumnToolbar } from "./kanban-column-toolbar";
-import { DeployAllButton } from "./deploy-all-button";
-import { DeployBatchBanner } from "./deploy-batch-banner";
+import { DeployControl } from "./deploy-control";
 import { ArchiveSelectionControls } from "./archive-selection-controls";
 import { useDeployArchiveSelection, type ArchiveSelectionColumnProps } from "./archive-selection";
 import { logRefusedMove } from "./board-move-log";
@@ -396,23 +395,21 @@ const DroppableColumn = memo(function DroppableColumn({
         ) : null}
       </View>
       <BoardColumnToolbar column={column} controls={controls} onChange={handleControlsChange} />
-      <DeployAllButton
+      {/* One control at the column head that morphs in place: the "Tout déployer"
+          button at rest, the run's progress bar while it publishes, then its
+          recap — never two stacked blocks about the same publication. */}
+      <DeployControl
         column={column}
         tasks={tasks}
+        batch={board?.deployBatch ?? null}
         onDeployAll={onDeployAll}
         offPeakEnabled={deployOffPeak?.enabled}
         onToggleOffPeak={deployOffPeak?.onToggle}
+        onOpenLog={onOpenDeployLog}
+        onReset={onResetDeploy}
+        onStop={onStopDeploy}
       />
       <div ref={setNodeRef} style={webColumnBodyStyle}>
-        {/* One progress bar for the whole run, then the "voici ce qui vient
-            d'être mis en ligne" recap — above the cards it is about. */}
-        <DeployBatchBanner
-          column={column}
-          batch={board?.deployBatch ?? null}
-          onOpenLog={onOpenDeployLog}
-          onReset={onResetDeploy}
-          onStop={onStopDeploy}
-        />
         {extras}
         <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
           {rows.map((row) =>

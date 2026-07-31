@@ -1010,26 +1010,28 @@ function BoardContent({
 
   // "Tout déployer": the single publishing gesture. It always confirms first,
   // because the run ends by restarting the engine — every running agent stops
-  // with it, so this is never something that happens on a stray tap.
-  const handleDeployAll = useCallback(() => {
+  // with it, so this is never something that happens on a stray tap. Returns
+  // whether the run actually started, so the button's optimistic morph can fall
+  // back to the button on a cancelled confirmation or a refused run.
+  const handleDeployAll = useCallback(async (): Promise<boolean> => {
     const pending = countPendingPublish(projectTasks).pending;
-    void (async () => {
-      const confirmed = await confirmDialog({
-        title: t("tasks.board.deployAllTitle"),
-        message: t("tasks.board.deployAllMessage", { count: pending }),
-        confirmLabel: t("tasks.board.deployAllConfirm"),
-        cancelLabel: t("common.actions.cancel"),
-      });
-      if (!confirmed) {
-        return;
-      }
-      try {
-        await boardHandle.deployAllTasks();
-        toast.show(t("tasks.board.deployAllStarted"));
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : String(error));
-      }
-    })();
+    const confirmed = await confirmDialog({
+      title: t("tasks.board.deployAllTitle"),
+      message: t("tasks.board.deployAllMessage", { count: pending }),
+      confirmLabel: t("tasks.board.deployAllConfirm"),
+      cancelLabel: t("common.actions.cancel"),
+    });
+    if (!confirmed) {
+      return false;
+    }
+    try {
+      const { started } = await boardHandle.deployAllTasks();
+      toast.show(t("tasks.board.deployAllStarted"));
+      return started;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+      return false;
+    }
   }, [boardHandle, projectTasks, toast, t]);
 
   // "Réinitialiser / Relancer le déploiement": the escape hatch on a failed
