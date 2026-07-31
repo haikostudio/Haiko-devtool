@@ -66,6 +66,7 @@ describe("TaskBatchDeployer", () => {
   let triggered: { projectId: string; mergeBranches: string[]; taskTitles?: string[] }[];
   let restarts: string[];
   let perCard: string[];
+  let projectDeploys: { rootPath: string; cards: { title: string }[] }[];
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "paseo-batch-deploy-"));
@@ -74,6 +75,7 @@ describe("TaskBatchDeployer", () => {
     triggered = [];
     restarts = [];
     perCard = [];
+    projectDeploys = [];
   });
 
   afterEach(async () => {
@@ -125,8 +127,14 @@ describe("TaskBatchDeployer", () => {
     runningEngineSha?: string | null;
     /** Undefined = pas de sonde installée (le doute redémarre, comme en prod). */
     daemonRestartPending?: boolean;
+    /** Wire the central ORDINARY-project actor with these phase snapshots. */
+    projectRuns?: DeployRunSnapshot[];
+    /** Whether the central project actor reports it started (default true). */
+    projectStarted?: boolean;
   }) {
     const runs = [...(input.runs ?? [])];
+    const projectRuns = [...(input.projectRuns ?? [])];
+    const runProjectDeploys = projectDeploys;
     // Bind the collectors NOW, so a run still finishing when its test ends keeps
     // writing into that test's arrays instead of the next test's fresh ones. A
     // publication ends with a restart request, and a leaked one used to surface
@@ -158,6 +166,24 @@ describe("TaskBatchDeployer", () => {
         runPerCard.push(taskId);
       },
       requestDaemonRestart: (reason) => runRestarts.push(reason),
+      ...(input.projectRuns
+        ? {
+            triggerProjectDeploy: async (deploy: {
+              rootPath: string;
+              cards: { title: string }[];
+            }) => {
+              runProjectDeploys.push(deploy);
+              return { started: input.projectStarted ?? true, error: "pas d'instance" };
+            },
+            readProjectDeployRun: async () =>
+              projectRuns.shift() ?? {
+                deploying: false,
+                phase: null,
+                outcome: null,
+                error: null,
+              },
+          }
+        : {}),
       readPublishedSha: async () => input.publishedSha ?? null,
       readRunningEngineSha: () => input.runningEngineSha ?? null,
       ...(input.daemonRestartPending === undefined
@@ -509,6 +535,56 @@ describe("TaskBatchDeployer", () => {
     expect((await service.getBoard("proj-1")).deployBatch ?? null).toBeNull();
     // No daemon restart on a client project: its own service is restarted by the
     // agent that deployed it.
+    expect(restarts).toEqual([]);
+  });
+
+  test("an ordinary project publishes centrally: one deploy, cards stamped, no daemon restart", async () => {
+    const first = await seedQueued("Login", "task/login");
+    const second = await seedQueued("Signup", "task/signup");
+    const deployer = buildDeployer({
+      isSelfHost: false,
+      url: "https://formations.haikostudio.cloud",
+      projectRuns: [
+        { deploying: true, phase: "restart", outcome: null, error: null },
+        { deploying: false, phase: "done", outcome: "success", error: null },
+      ],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "success");
+
+    // ONE central deploy for the lot — not one per card, not each card's agent.
+    expect(perCard).toEqual([]);
+    expect(projectDeploys).toEqual([
+      { rootPath: "/root/x", cards: [{ title: "Login" }, { title: "Signup" }] },
+    ]);
+    const board = await service.getBoard("proj-1");
+    for (const id of [first.id, second.id]) {
+      const card = board.tasks.find((entry) => entry.id === id);
+      expect(card?.deployedAt).toBeTruthy();
+      expect(card?.deployedUrl).toBe("https://formations.haikostudio.cloud");
+    }
+    // The board carries the batch run so the column shows one progress bar.
+    expect(board.deployBatch?.state).toBe("success");
+    expect(board.deployBatch?.url).toBe("https://formations.haikostudio.cloud");
+    // The daemon is never restarted for an ordinary project: the actor already
+    // restarted the PROJECT's own service.
+    expect(restarts).toEqual([]);
+  });
+
+  test("an ordinary project's failed central deploy is reported, nothing stamped", async () => {
+    const card = await seedQueued("Login", "task/login");
+    const deployer = buildDeployer({
+      isSelfHost: false,
+      projectRuns: [{ deploying: false, phase: null, outcome: "failed", error: "service KO" }],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "failed");
+
+    const board = await service.getBoard("proj-1");
+    expect(board.tasks.find((entry) => entry.id === card.id)?.deployedAt).toBeFalsy();
+    expect(board.deployBatch?.error).toContain("service KO");
     expect(restarts).toEqual([]);
   });
 

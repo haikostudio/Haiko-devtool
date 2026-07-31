@@ -80,38 +80,66 @@ export function parseVhostHost(contents: string): string | null {
   return null;
 }
 
-/**
- * `https://…` address serving this project's checkout, or null when the project
- * has no dev instance on this host. A worktree path resolves to its project's
- * instance too, since the dev server serves the main checkout.
- */
-export async function resolveProjectDevInstanceUrl(
-  rootPath: string | null,
-): Promise<string | null> {
-  if (!rootPath) {
-    return null;
-  }
+/** A project's dev instance on this host: its systemd slug and public address. */
+export interface ProjectDevInstanceTarget {
+  /** The `autoproject-<slug>` systemd unit and Caddy vhost key. */
+  slug: string;
+  /** `https://…` address the vhost serves, or null when unreadable. */
+  url: string | null;
+}
+
+/** The slug whose launcher `cd`s into this checkout (or contains it). */
+async function matchSlug(rootPath: string): Promise<string | null> {
   const slugDirs = await readSlugDirs();
   let matchedSlug: string | null = null;
   for (const [slug, dir] of slugDirs) {
     // Exact match first; otherwise the deepest containing directory wins, so
     // `/root/eloya-saas/web` doesn't get claimed by a shorter unrelated prefix.
     if (dir === rootPath) {
-      matchedSlug = slug;
-      break;
+      return slug;
     }
     if (dir.startsWith(`${rootPath}/`)) {
       matchedSlug = slug;
     }
   }
-  if (!matchedSlug) {
+  return matchedSlug;
+}
+
+/**
+ * The project's dev instance — its `autoproject-<slug>` unit and served URL — or
+ * null when the project has no instance on this host. This is what the central
+ * publisher needs: the service to restart and the address to probe. A worktree
+ * path resolves to its project's instance too, since the dev server serves the
+ * main checkout.
+ */
+export async function resolveProjectDevInstanceTarget(
+  rootPath: string | null,
+): Promise<ProjectDevInstanceTarget | null> {
+  if (!rootPath) {
     return null;
   }
+  const slug = await matchSlug(rootPath);
+  if (!slug) {
+    return null;
+  }
+  let url: string | null = null;
   try {
-    const contents = await readFile(join(VHOST_DIR, `${matchedSlug}.caddy`), "utf8");
+    const contents = await readFile(join(VHOST_DIR, `${slug}.caddy`), "utf8");
     const host = parseVhostHost(contents);
-    return host ? `https://${host}` : null;
+    url = host ? `https://${host}` : null;
   } catch {
-    return null;
+    url = null;
   }
+  return { slug, url };
+}
+
+/**
+ * `https://…` address serving this project's checkout, or null when the project
+ * has no dev instance on this host.
+ */
+export async function resolveProjectDevInstanceUrl(
+  rootPath: string | null,
+): Promise<string | null> {
+  const target = await resolveProjectDevInstanceTarget(rootPath);
+  return target?.url ?? null;
 }

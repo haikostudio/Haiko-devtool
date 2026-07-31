@@ -76,6 +76,19 @@ export interface TaskBatchDeployerOptions {
   readPublishedSha?: () => Promise<string | null>;
   /** Hands a deploy-then-confirm prompt to one card's own agent. */
   deployTask: (projectId: string, taskId: string) => Promise<unknown>;
+  /**
+   * Central publication for an ORDINARY project's dev instance: commits the lot
+   * card by card, pushes, restarts the project's service once, verifies it live —
+   * a plain process, like Paseo's script, not the cards' own agents. When wired,
+   * it replaces the fragile per-card path. Absent (or with no checkout to publish)
+   * the batch falls back to {@link deployTask} per card.
+   */
+  triggerProjectDeploy?: (input: {
+    rootPath: string;
+    cards: { title: string }[];
+  }) => Promise<DeployTriggerResult>;
+  /** The phase snapshot of a running ordinary-project publication. */
+  readProjectDeployRun?: (rootPath: string) => Promise<DeployRunSnapshot>;
   /** Restarts the daemon — the last step of a successful self-host batch. */
   requestDaemonRestart: (reason: string) => void;
   /**
@@ -422,7 +435,16 @@ export class TaskBatchDeployer {
     await this.sayAll(pending, `🚀 **Publication groupée** — ${pending.length} tâche(s) en file.`);
 
     if (!this.options.isSelfHostRoot(rootPath)) {
-      await this.runPerCard(projectId, pending);
+      // An ordinary project publishes through the SAME central, deterministic
+      // shape as Paseo: one actor commits the lot card by card, restarts the
+      // project's service once, and narrates each phase — instead of every card's
+      // own agent racing the others. The per-card path stays only as a fallback
+      // when that actor isn't wired or there is no checkout to publish.
+      if (this.options.triggerProjectDeploy && this.options.readProjectDeployRun && rootPath) {
+        await this.runCentralProject(projectId, pending, rootPath);
+      } else {
+        await this.runPerCard(projectId, pending);
+      }
       return;
     }
 
@@ -440,7 +462,43 @@ export class TaskBatchDeployer {
       return;
     }
     const url = await this.options.resolveProjectUrl(rootPath);
-    await this.watch({ projectId, pending, url });
+    await this.watch({
+      projectId,
+      pending,
+      url,
+      readRun: () => this.options.readDeployRun(),
+      onSuccess: (input) => this.succeed(input.projectId, input.pending, input.url),
+    });
+  }
+
+  /**
+   * An ordinary project, published centrally: the actor commits card by card,
+   * pushes, restarts the project's own service once, and verifies it is live.
+   * We watch its phases exactly like Paseo's and, on success, stamp the cards —
+   * with NO daemon restart (the project's service, not the daemon, was restarted,
+   * and by the actor itself).
+   */
+  private async runCentralProject(
+    projectId: string,
+    pending: KanbanTask[],
+    rootPath: string,
+  ): Promise<void> {
+    const result = await this.options.triggerProjectDeploy!({
+      rootPath,
+      cards: pending.map((task) => ({ title: task.title })),
+    });
+    if (!result.started) {
+      await this.fail(projectId, pending, result.error ?? "raison inconnue");
+      return;
+    }
+    const url = await this.options.resolveProjectUrl(rootPath);
+    await this.watch({
+      projectId,
+      pending,
+      url,
+      readRun: () => this.options.readProjectDeployRun!(rootPath),
+      onSuccess: (input) => this.succeedProject(input.projectId, input.pending, input.url),
+    });
   }
 
   /**
@@ -473,18 +531,29 @@ export class TaskBatchDeployer {
     await this.options.taskBoardService.setDeployBatch(projectId, null);
   }
 
-  /** Follows the running publication, narrating each phase change once. */
+  /**
+   * Follows the running publication, narrating each phase change once. The source
+   * of truth (`readRun`) and the success finalizer (`onSuccess`) are injected so
+   * the SAME loop serves both shapes: Paseo (daemon build script, restarts the
+   * daemon) and an ordinary project (central actor, restarts the project service).
+   */
   private async watch(input: {
     projectId: string;
     pending: KanbanTask[];
     url: string | null;
+    readRun: () => Promise<DeployRunSnapshot>;
+    onSuccess: (input: {
+      projectId: string;
+      pending: KanbanTask[];
+      url: string | null;
+    }) => Promise<void>;
   }): Promise<void> {
     let lastPhase: string | null = null;
     while (true) {
       await this.sleep(POLL_INTERVAL_MS);
       let run: DeployRunSnapshot;
       try {
-        run = await this.options.readDeployRun();
+        run = await input.readRun();
       } catch (error) {
         this.logger.debug({ err: error }, "Publication status read failed");
         continue;
@@ -503,7 +572,11 @@ export class TaskBatchDeployer {
       // even if the agent has just gone to rest, so the stall check never fires
       // on a publication that actually finished.
       if (run.outcome === "success") {
-        await this.succeed(input.projectId, input.pending, input.url);
+        await input.onSuccess({
+          projectId: input.projectId,
+          pending: input.pending,
+          url: input.url,
+        });
         return;
       }
       if (run.outcome === "failed") {
@@ -665,6 +738,37 @@ export class TaskBatchDeployer {
         "⚠️ **Publication groupée** — le site est en ligne, mais le redémarrage final n'a pas pu être lancé.",
       );
     }
+  }
+
+  /**
+   * An ordinary project is live: stamp the cards and close the run. No daemon
+   * restart here — the central actor already restarted the PROJECT's own service
+   * as a step of its run, and the daemon is unrelated to it. `needsDaemonRestart`
+   * is false for the same reason: the change is already in effect.
+   */
+  private async succeedProject(
+    projectId: string,
+    pending: KanbanTask[],
+    url: string | null,
+  ): Promise<void> {
+    for (const task of pending) {
+      try {
+        await this.options.taskBoardService.markTaskDeployed(projectId, task.id, {
+          url,
+          needsDaemonRestart: false,
+          sha: null,
+        });
+      } catch (error) {
+        this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
+      }
+    }
+    await this.sayAll(
+      pending,
+      url
+        ? `✅ **Publication groupée** — c'est en ligne : ${url}`
+        : "✅ **Publication groupée** — c'est en ligne.",
+    );
+    await this.finishSuccessfully(projectId, url);
   }
 
   private async finishSuccessfully(projectId: string, url: string | null): Promise<void> {

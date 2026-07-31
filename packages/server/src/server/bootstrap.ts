@@ -203,7 +203,14 @@ import {
   setPaseoDeploySuccessListener,
   triggerPaseoDeploy,
 } from "../utils/paseo-deploy.js";
-import { getPaseoAppUrl, resolveProjectDevInstanceUrl } from "../utils/project-dev-instance.js";
+import {
+  getPaseoAppUrl,
+  resolveProjectDevInstanceTarget,
+  resolveProjectDevInstanceUrl,
+} from "../utils/project-dev-instance.js";
+import { runGitCommand } from "../utils/run-git-command.js";
+import { execCommand } from "../utils/spawn.js";
+import { ProjectDeployer, type ProjectDeployExec } from "./tasks/project-deployer.js";
 import { sendPromptToAgent } from "./agent/agent-prompt.js";
 import type { AgentClient, AgentProvider } from "./agent/agent-sdk-types.js";
 import type { FirstAgentContext, TerminalProfile } from "@getpaseo/protocol/messages";
@@ -1492,10 +1499,45 @@ export async function createPaseoDaemon(
       }));
     },
   });
-  // "Tout déployer": one publication for the whole queue, then the daemon
+  // Central publisher for an ORDINARY project's dev instance. A plain process
+  // that commits the lot card by card, restarts the project's service once and
+  // verifies it live — never throwing on a non-zero exit, so the runner can
+  // branch on it (a "nothing to commit" is a skip, not a crash).
+  const projectDeployExec: ProjectDeployExec = {
+    git: async (args, cwd) => {
+      try {
+        // Accept exit 1 without throwing: `git diff --cached --quiet` uses it to
+        // report "there ARE staged changes", which the runner reads as data.
+        const result = await runGitCommand(args, { cwd, acceptExitCodes: [0, 1] });
+        return { exitCode: result.exitCode ?? 0, stdout: result.stdout, stderr: result.stderr };
+      } catch (error) {
+        return {
+          exitCode: 1,
+          stdout: "",
+          stderr: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+    exec: async (command, cmdArgs) => {
+      try {
+        const { stdout, stderr } = await execCommand(command, cmdArgs, { timeout: 60_000 });
+        return { exitCode: 0, stdout, stderr };
+      } catch (error) {
+        const err = error as { code?: number; stdout?: string; stderr?: string; message?: string };
+        return {
+          exitCode: typeof err.code === "number" ? err.code : 1,
+          stdout: err.stdout ?? "",
+          stderr: err.stderr ?? err.message ?? "",
+        };
+      }
+    },
+  };
+  const projectDeployer = new ProjectDeployer({ exec: projectDeployExec, logger });
+  // "Tout déployer": one publication for the whole queue, then the service
   // restart. Paseo's own batch goes through the local build script
-  // (triggerDeploy — a plain process, no model, no quota); any other project is
-  // deployed card by card by each card's own agent.
+  // (triggerDeploy — a plain process, no model, no quota); any other project now
+  // goes through the SAME kind of central actor (projectDeployer), instead of
+  // each card's own agent.
   const taskBatchDeployer = new TaskBatchDeployer({
     taskBoardService,
     projectRegistry,
@@ -1514,6 +1556,20 @@ export async function createPaseoDaemon(
     // recharger — inutile de couper les sessions de tout le monde.
     readDaemonRestartPending: () => isDaemonRestartPending(),
     deployTask: (projectId, taskId) => taskDeployer.deploy(projectId, taskId),
+    // Ordinary projects publish centrally too: resolve the dev instance, then let
+    // the single actor commit-per-card, restart the service once and verify it.
+    triggerProjectDeploy: async ({ rootPath, cards }) => {
+      const target = await resolveProjectDevInstanceTarget(rootPath);
+      if (!target) {
+        return {
+          started: false,
+          error:
+            "Ce projet n'a pas d'instance de développement sur le serveur : rien à publier automatiquement.",
+        };
+      }
+      return projectDeployer.trigger({ rootPath, slug: target.slug, url: target.url, cards });
+    },
+    readProjectDeployRun: async (rootPath) => projectDeployer.readRun(rootPath),
     // The user's press IS the authorization: the batch ends by restarting the
     // engine so the code that was just published is the code that runs.
     requestDaemonRestart: (reason) => {
