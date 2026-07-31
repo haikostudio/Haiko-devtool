@@ -433,6 +433,37 @@ describe("ProviderUsageService under rate limiting", () => {
     expect(fetcher.calls).toBe(3);
   });
 
+  // A provider that answers "retry after 0 seconds" while it is blocking us used to buy a
+  // zero-length cooldown, so the quiet time never happened and every later caller earned
+  // another refusal. The daemon picks its own quiet time when the hint is worthless.
+  it("still takes its full quiet time when the provider asks for no wait at all", async () => {
+    let now = Date.parse("2026-07-28T10:00:00.000Z");
+    const fetcher = scriptedFetcher(async () => {
+      throw new ProviderRateLimitError(0);
+    });
+    const service = new ProviderUsageService({
+      logger: createLogger(),
+      now: () => now,
+      cacheTtlMs: 1_000,
+      minRefreshIntervalMs: 0,
+      rateLimitCooldownMs: 300_000,
+      fetchers: [fetcher],
+    });
+
+    await service.listUsage();
+    now += 10_000;
+    await service.listUsage();
+    expect(fetcher.calls).toBe(2);
+
+    now += 60_000;
+    await service.listUsage();
+    expect(fetcher.calls).toBe(2);
+
+    now += 300_000;
+    await service.listUsage();
+    expect(fetcher.calls).toBe(3);
+  });
+
   it("falls back to plain language once the last reading is too old to trust", async () => {
     let now = Date.parse("2026-07-28T10:00:00.000Z");
     const fetcher = scriptedFetcher(async () => {

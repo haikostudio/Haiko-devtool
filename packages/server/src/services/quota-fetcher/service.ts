@@ -155,10 +155,14 @@ export class ProviderUsageService {
       return usage;
     } catch (error) {
       if (error instanceof ProviderRateLimitError) {
-        this.cooldownUntilMs.set(
-          fetcher.providerId,
-          nowMs + (error.retryAfterMs ?? this.rateLimitCooldownMs),
-        );
+        // A `Retry-After` of 0 — which is what Anthropic's usage endpoint sends while it is
+        // blocking us — must not translate into a zero-length cooldown, or the quiet time
+        // this map exists to enforce never happens and the next caller earns another 429.
+        const askedMs =
+          error.retryAfterMs !== null && error.retryAfterMs > 0
+            ? error.retryAfterMs
+            : this.rateLimitCooldownMs;
+        this.cooldownUntilMs.set(fetcher.providerId, nowMs + askedMs);
       }
       this.logger.debug(
         { err: error, providerId: fetcher.providerId },

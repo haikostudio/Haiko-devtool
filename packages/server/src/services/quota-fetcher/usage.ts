@@ -93,7 +93,11 @@ export async function fetchProviderApi(
     if (res.status !== 429) return res;
 
     const retryAfterMs = retryAfterMsFrom(res.headers);
-    const backoffMs = retryAfterMs ?? baseDelayMs * 2 ** attempt;
+    // `Retry-After` is a floor the provider asks for, never a licence to retry instantly:
+    // Anthropic's usage endpoint answers a sustained block with `retry-after: 0`, and
+    // obeying that literally turned every poll into three back-to-back 429s, which is what
+    // kept the block alive. Back off by our own schedule when the hint is shorter.
+    const backoffMs = Math.max(retryAfterMs ?? 0, baseDelayMs * 2 ** attempt);
     if (attempt >= attempts || backoffMs > maxInlineDelayMs) {
       throw new ProviderRateLimitError(retryAfterMs);
     }

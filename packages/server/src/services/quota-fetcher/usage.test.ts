@@ -78,6 +78,18 @@ describe("fetchProviderApi rate limiting", () => {
     expect(sleep).toHaveBeenCalledWith(2000);
   });
 
+  // Anthropic's usage endpoint answers a sustained block with `retry-after: 0`. Taken
+  // literally that means "retry now", which turned one refusal into three back-to-back
+  // ones and kept the block alive. Retry-After is a floor, never a licence to hammer.
+  it("still backs off on its own schedule when Retry-After asks for no wait at all", async () => {
+    const fetchApi = respondWith([429, 429, 200], { "retry-after": "0" });
+    const sleep = vi.fn(async () => {});
+
+    await fetchProviderApi(fetchApi, "https://example.test/usage", {}, { sleep });
+
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([500, 1000]);
+  });
+
   // Ten providers refresh in one batch with a client waiting on all of them: a long
   // Retry-After is honoured by backing off entirely, not by holding the request open.
   it("gives up immediately when Retry-After is longer than the inline budget", async () => {

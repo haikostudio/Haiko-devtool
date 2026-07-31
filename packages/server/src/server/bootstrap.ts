@@ -1271,10 +1271,13 @@ export async function createPaseoDaemon(
     }
   });
   logger.info({ elapsed: elapsed() }, "Schedule service initialized");
-  const quotaResetWatcher = new QuotaResetWatcher({ agentManager, logger });
+  const providerUsageService = new ProviderUsageService({ logger });
+  // The watcher polls every minute and shares this one service on purpose: a private
+  // instance had its own cache *and* its own rate-limit cooldown, so a provider that had
+  // just told the daemon to back off kept being called anyway, once a minute, forever.
+  const quotaResetWatcher = new QuotaResetWatcher({ agentManager, logger, providerUsageService });
   quotaResetWatcher.start();
   downloadArchiveCleaner.start();
-  const providerUsageService = new ProviderUsageService({ logger });
   const taskBoardStore = new TaskBoardStore(path.join(config.paseoHome, "tasks"));
   const taskBoardService = new TaskBoardService({ store: taskBoardStore, logger });
   // A card that reaches "Terminée" tells the user, before they publish, whether
