@@ -125,7 +125,11 @@ function AgentTasksToastDrawer({
             <Pressable
               onPress={clearFinished}
               disabled={!hasFinished}
-              style={hasFinished ? drawerDismissFinishedStyle : drawerDismissFinishedDisabledStyle}
+              style={
+                hasFinished
+                  ? drawerDismissFinishedStyle
+                  : [styles.drawerDismissAll, styles.drawerDismissAllDisabled]
+              }
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={
@@ -265,9 +269,3 @@ function fabPressableStyle({ pressed }: { pressed: boolean }) {
 function drawerDismissFinishedStyle({ pressed }: { pressed: boolean }) {
   return [styles.drawerDismissAll, pressed && styles.drawerDismissAllPressed];
 }
-
-// Dimmed and inert while nothing in the drawer has finished.
-const drawerDismissFinishedDisabledStyle = [
-  styles.drawerDismissAll,
-  styles.drawerDismissAllDisabled,
-];

@@ -109,7 +109,7 @@ function TaskToastIcon({
   }
 
   const Icon = getProviderIcon(provider);
-  const dotStyle = DOT_STYLE_BY_BUCKET[bucket];
+  const dotStyle = dotStyleForBucket(bucket);
 
   return (
     <View style={styles.iconWrapper}>
@@ -241,7 +241,7 @@ export function TaskToast({
 }): ReactElement {
   const { t } = useTranslation();
   const title = task.agent.title || t("agentList.fallbackTitle");
-  const pipColorStyle = PIP_STYLE_BY_BUCKET[task.bucket];
+  const pipColorStyle = pipStyleForBucket(task.bucket);
   const isRunning = task.bucket === "running";
 
   // Re-render once a second while running so the live "running for" counter advances.
@@ -431,7 +431,7 @@ function DismissFinishedButton({
         <Pressable
           onPress={onPress}
           disabled={disabled}
-          style={disabled ? disabledDismissFinishedButtonStyle : dismissFinishedButtonStyle}
+          style={disabled ? disabledDismissFinishedButtonStyle() : dismissFinishedButtonStyle}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel={label}
@@ -461,7 +461,7 @@ function DragHandle({ gesture }: { gesture: DraggableToast["gesture"] }): ReactE
   return (
     <GestureDetector gesture={gesture}>
       <View
-        style={dragHandleStyle}
+        style={dragHandleStyle()}
         accessibilityLabel={t("agentTasksToast.drag")}
         testID="agent-tasks-toast-drag"
       >
@@ -915,8 +915,18 @@ function closeButtonStyle({ hovered = false, pressed }: { hovered?: boolean; pre
   ];
 }
 
+// Plain (non-Unistyles) cursor objects: safe to hold at module scope. The style
+// arrays that reference `styles.*` are all built at render time (functions below)
+// so the Unistyles proxies are read against the live theme, never materialized
+// once at module load.
+const WEB_GRAB_CURSOR = isWeb ? ({ cursor: "grab" } as object) : undefined;
+const WEB_POINTER_CURSOR = isWeb ? ({ cursor: "pointer" } as object) : undefined;
+const WEB_DEFAULT_CURSOR = isWeb ? ({ cursor: "default" } as object) : undefined;
+
 // Grab cursor on web signals the handle is draggable; native ignores the cast.
-const dragHandleStyle = [styles.iconControl, isWeb && ({ cursor: "grab" } as object)];
+function dragHandleStyle() {
+  return [styles.iconControl, WEB_GRAB_CURSOR];
+}
 
 function dismissFinishedButtonStyle({
   hovered = false,
@@ -927,18 +937,16 @@ function dismissFinishedButtonStyle({
 }) {
   return [
     styles.iconControl,
-    isWeb && ({ cursor: "pointer" } as object),
+    WEB_POINTER_CURSOR,
     (hovered || pressed) && styles.collapseToggleHovered,
   ];
 }
 
 // Nothing finished to clear: the button stays in place but reads as unavailable —
 // dimmed, default cursor, no hover response.
-const disabledDismissFinishedButtonStyle = [
-  styles.iconControl,
-  styles.iconControlDisabled,
-  isWeb && ({ cursor: "default" } as object),
-];
+function disabledDismissFinishedButtonStyle() {
+  return [styles.iconControl, styles.iconControlDisabled, WEB_DEFAULT_CURSOR];
+}
 
 // Frozen objects so the prop identity is stable across renders.
 const ACCESSIBILITY_STATE_DISABLED = { disabled: true } as const;
@@ -947,25 +955,36 @@ function disabledAccessibilityState(disabled: boolean) {
   return disabled ? ACCESSIBILITY_STATE_DISABLED : ACCESSIBILITY_STATE_ENABLED;
 }
 
-// Declared after `styles` so the referenced style identities exist. `done` maps to
-// no dot (finished tasks show only the provider icon).
-const DOT_STYLE_BY_BUCKET: Record<WorkspaceStateBucket, StyleProp<ViewStyle>> = {
-  needs_input: [styles.statusDot, styles.statusDotNeedsInput],
-  failed: [styles.statusDot, styles.statusDotFailed],
-  attention: [styles.statusDot, styles.statusDotAttention],
-  running: null,
-  done: null,
-};
+// Built at render time so the `styles.*` proxies resolve against the live theme.
+// `done`/`running` map to no dot (finished tasks show only the provider icon).
+function dotStyleForBucket(bucket: WorkspaceStateBucket): StyleProp<ViewStyle> {
+  switch (bucket) {
+    case "needs_input":
+      return [styles.statusDot, styles.statusDotNeedsInput];
+    case "failed":
+      return [styles.statusDot, styles.statusDotFailed];
+    case "attention":
+      return [styles.statusDot, styles.statusDotAttention];
+    default:
+      return null;
+  }
+}
 
 // A solid colored dot tells states apart at a glance: amber while an agent waits for
 // the user, blue while it runs, green once it has finished, red on failure.
-const PIP_STYLE_BY_BUCKET: Record<WorkspaceStateBucket, StyleProp<ViewStyle>> = {
-  needs_input: [styles.statusPip, styles.statusPipNeedsInput],
-  attention: [styles.statusPip, styles.statusPipDone],
-  done: [styles.statusPip, styles.statusPipDone],
-  running: [styles.statusPip, styles.statusPipRunning],
-  failed: [styles.statusPip, styles.statusPipFailed],
-};
+function pipStyleForBucket(bucket: WorkspaceStateBucket): StyleProp<ViewStyle> {
+  switch (bucket) {
+    case "needs_input":
+      return [styles.statusPip, styles.statusPipNeedsInput];
+    case "running":
+      return [styles.statusPip, styles.statusPipRunning];
+    case "failed":
+      return [styles.statusPip, styles.statusPipFailed];
+    default:
+      // attention + done share the "done" (green) pip.
+      return [styles.statusPip, styles.statusPipDone];
+  }
+}
 
 function taskToastPressableStyle({
   hovered = false,

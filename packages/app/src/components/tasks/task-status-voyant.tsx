@@ -352,7 +352,7 @@ function usePendingPulse() {
 // pending light is actually on screen (the parent bails out early otherwise).
 function PendingLight({ variant, label }: { variant: "dot" | "pip"; label: string }): ReactElement {
   const pulseStyle = usePendingPulse();
-  const style = useMemo(() => [VOYANT_STYLE[variant].pending, pulseStyle], [variant, pulseStyle]);
+  const style = useMemo(() => [voyantStyle(variant, "pending"), pulseStyle], [variant, pulseStyle]);
   return <Animated.View style={style} accessibilityLabel={label} />;
 }
 
@@ -371,7 +371,7 @@ function AttentionLight({
   // across renders (react-perf/jsx-no-new-array-as-prop). `bounceStyle` from
   // useAnimatedStyle is itself stable, so this only rebuilds when the variant flips.
   const style = useMemo(
-    () => [VOYANT_STYLE[variant].attention, bounceStyle],
+    () => [voyantStyle(variant, "attention"), bounceStyle],
     [variant, bounceStyle],
   );
   return <Animated.View style={style} accessibilityLabel={label} />;
@@ -401,7 +401,7 @@ export function TaskStatusVoyant({
   // "en cours" light animates identically everywhere it appears.
   if (tone === "running") {
     return (
-      <View style={LOADER_WRAP_STYLE[variant]} accessibilityLabel={label}>
+      <View style={loaderWrapStyle(variant)} accessibilityLabel={label}>
         <SyncedLoader size={LOADER_SIZE[variant]} color={styles.loaderColor.color} />
       </View>
     );
@@ -414,7 +414,7 @@ export function TaskStatusVoyant({
   if (tone === "attention") {
     return <AttentionLight variant={variant} label={label} />;
   }
-  return <View style={VOYANT_STYLE[variant][tone]} accessibilityLabel={label} />;
+  return <View style={voyantStyle(variant, tone)} accessibilityLabel={label} />;
 }
 
 const styles = StyleSheet.create((theme) => ({
@@ -479,34 +479,30 @@ const LOADER_SIZE: Record<"dot" | "pip", number> = {
   pip: 12,
 };
 
-const LOADER_WRAP_STYLE: Record<"dot" | "pip", object> = {
-  dot: styles.loaderDot,
-  pip: styles.loaderPip,
-};
+// Built at render time (not materialized at module load) so the `styles.*`
+// Unistyles proxies resolve against the live theme and repaint on light/dark
+// toggle without a reload.
+function loaderWrapStyle(variant: "dot" | "pip"): object {
+  return variant === "pip" ? styles.loaderPip : styles.loaderDot;
+}
 
 // Static tones only — `running` is drawn by the SyncedLoader, not a colored dot.
 type StaticTone = Exclude<TaskTone, "running">;
 
-const TONE_STYLE: Record<StaticTone, object> = {
-  attention: styles.toneAttention,
-  pending: styles.tonePending,
-  scheduled: styles.toneScheduled,
-  done: styles.toneDone,
-};
+function toneStyle(tone: StaticTone): object {
+  switch (tone) {
+    case "attention":
+      return styles.toneAttention;
+    case "pending":
+      return styles.tonePending;
+    case "scheduled":
+      return styles.toneScheduled;
+    default:
+      return styles.toneDone;
+  }
+}
 
-// Precomputed [shape, tone] style tuples so the render passes a stable array
-// reference instead of building a new one each time (react-perf lint rule).
-const VOYANT_STYLE: Record<"dot" | "pip", Record<StaticTone, object[]>> = {
-  dot: {
-    attention: [styles.dot, TONE_STYLE.attention],
-    pending: [styles.dot, TONE_STYLE.pending],
-    scheduled: [styles.dot, TONE_STYLE.scheduled],
-    done: [styles.dot, TONE_STYLE.done],
-  },
-  pip: {
-    attention: [styles.pip, TONE_STYLE.attention],
-    pending: [styles.pip, TONE_STYLE.pending],
-    scheduled: [styles.pip, TONE_STYLE.scheduled],
-    done: [styles.pip, TONE_STYLE.done],
-  },
-};
+// [shape, tone] style tuple resolved per render.
+function voyantStyle(variant: "dot" | "pip", tone: StaticTone): object[] {
+  return [variant === "pip" ? styles.pip : styles.dot, toneStyle(tone)];
+}

@@ -254,7 +254,7 @@ function DesktopSlideOver({
                 <ThemedSearch size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
                 <AdaptiveTextInput
                   // @ts-expect-error - outlineStyle is web-only
-                  style={SEARCH_INPUT_STYLE}
+                  style={[styles.searchInput, SEARCH_INPUT_WEB_RESET]}
                   placeholder={header.search.placeholder}
                   resetKey={header.search.resetKey}
                   onChangeText={header.search.onChange}
@@ -337,4 +337,6 @@ const styles = StyleSheet.create((theme) => ({
   },
 }));
 
-const SEARCH_INPUT_STYLE = [styles.searchInput, isWeb && { outlineStyle: "none" }];
+// Plain (non-Unistyles) object, safe at module scope. The style array is built at
+// render time so `styles.searchInput` is read against the live theme.
+const SEARCH_INPUT_WEB_RESET = isWeb ? ({ outlineStyle: "none" } as const) : undefined;
