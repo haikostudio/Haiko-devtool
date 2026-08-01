@@ -657,6 +657,25 @@ export const ja: TranslationResources = {
       folder: "フォルダー: {{name}}",
       loading: "タスクボードを読み込み中…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "ブランチ",
+        commit: "コミット",
+        push: "GitHub への送信",
+        merge: "マージ",
+        publish: "公開",
+      },
+      states: {
+        pending: "待機中",
+        running: "進行中",
+        success: "完了",
+        failed: "エラー",
+        none: "対象外",
+      },
+      noRepo:
+        "このプロジェクトには GitHub リンクがありません。各ステップは表示されますが、開くリンクはありません。",
+    },
     detail: {
       title: "タスク",
       titleField: "タイトル",

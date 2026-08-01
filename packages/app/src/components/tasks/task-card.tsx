@@ -23,6 +23,7 @@ import {
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { formatTokenCount, hasTaskUsage, totalTaskTokens } from "@/components/tasks/task-usage";
+import { buildTaskGitJourney, type TaskGitStepId } from "@/components/tasks/task-git-journey";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import { type TaskTone, shouldShowVoyant } from "@/components/tasks/task-status-tone";
 import {
@@ -471,10 +472,16 @@ const CardMetaRow = memo(function CardMetaRow({
 
   const hasUsage = hasTaskUsage(task.usage);
 
+  // A step that failed on THIS card (a merge conflict, a publication that broke).
+  // Surfaced on the card front because it is the one thing the column cannot
+  // show: four siblings shipping and one stuck look identical from the outside.
+  const failedStep = findFailedGitStep(task);
+
   const hasMetaRow = Boolean(
     deadline ||
     duration ||
     hasUsage ||
+    failedStep ||
     task.links.primaryAgentId ||
     task.links.prUrl ||
     task.deployedUrl ||
@@ -493,6 +500,7 @@ const CardMetaRow = memo(function CardMetaRow({
       {task.links.primaryAgentId ? (
         <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       ) : null}
+      {failedStep ? <GitFailureChip step={failedStep} /> : null}
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
       {task.deployedUrl ? <LiveChip url={task.deployedUrl} /> : null}
       {/* The build this card's work actually went online in. "Déployé" alone
@@ -703,6 +711,25 @@ const VersionChip = memo(function VersionChip({ sha }: { sha: string }) {
   );
 });
 
+/**
+ * The card's own bad news, in one word: "Fusion" or "Publication" in red. The
+ * detail panel carries the reason; the card only has to stop the failure from
+ * hiding behind a batch that otherwise went fine.
+ */
+const GitFailureChip = memo(function GitFailureChip({ step }: { step: TaskGitStepId }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.gitFailureChip}>
+      <Text style={styles.gitFailureText}>{t(`tasks.git.steps.${step}`)}</Text>
+    </View>
+  );
+});
+
+/** The first step this card failed at, in journey order, or null when all is well. */
+function findFailedGitStep(task: KanbanTask): TaskGitStepId | null {
+  return buildTaskGitJourney(task).find((step) => step.state === "failed")?.id ?? null;
+}
+
 function extractPrNumber(prUrl: string): string {
   const match = prUrl.match(/\/pull\/(\d+)/);
   return match?.[1] ?? "?";
@@ -899,6 +926,19 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: theme.fontSize.xs,
   },
   errorText: {
+    color: theme.colors.statusDanger,
+    fontSize: theme.fontSize.xs,
+  },
+  gitFailureChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: `${theme.colors.statusDanger}1A`,
+    borderWidth: 1,
+    borderColor: `${theme.colors.statusDanger}66`,
+    paddingHorizontal: theme.spacing[2],
+  },
+  gitFailureText: {
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
   },

@@ -663,6 +663,24 @@ export const fr: TranslationResources = {
       folder: "Branche : {{name}}",
       loading: "Chargement du board de tâches…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "Branche",
+        commit: "Commit",
+        push: "Envoi sur GitHub",
+        merge: "Fusion",
+        publish: "Publication",
+      },
+      states: {
+        pending: "En attente",
+        running: "En cours",
+        success: "Réussi",
+        failed: "Erreur",
+        none: "Sans objet",
+      },
+      noRepo: "Ce projet n'a pas de lien GitHub : les étapes restent visibles, sans lien à ouvrir.",
+    },
     detail: {
       title: "Tâche",
       titleField: "Titre",

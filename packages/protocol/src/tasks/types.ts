@@ -204,6 +204,68 @@ export const TaskUsageSchema = z.object({
 });
 export type TaskUsage = z.infer<typeof TaskUsageSchema>;
 
+/**
+ * One step of a card's git journey. Four states and a date, nothing else: the
+ * point is that a card can always say where its work stands without anyone
+ * having to read a log. `detail` is the plain-language reason a step failed (a
+ * merge conflict, a rejected push), shown as-is next to the step.
+ */
+export const TaskGitStepSchema = z.object({
+  state: z.enum(["pending", "running", "success", "failed"]),
+  /** When the step last changed state. Absent while still untouched. */
+  at: z.string().optional(),
+  detail: z.string().optional(),
+});
+export type TaskGitStep = z.infer<typeof TaskGitStepSchema>;
+
+/**
+ * The GitHub (or other forge) repository the card's branch belongs to, resolved
+ * once from the checkout's remote. Absent when the project has no forge remote —
+ * the card then shows the same steps as plain text, with nothing to open.
+ */
+export const TaskGitRepoSchema = z.object({
+  /** Forge id from the forge manifest, e.g. "github". */
+  forge: z.string(),
+  owner: z.string(),
+  name: z.string(),
+  /** Repository home page, e.g. "https://github.com/owner/repo". */
+  webUrl: z.string(),
+});
+export type TaskGitRepo = z.infer<typeof TaskGitRepoSchema>;
+
+/**
+ * A card's git journey, from its dedicated branch to the moment its work is
+ * online: branch → commit → push → merge → publish.
+ *
+ * It lives on the CARD, not on the batch. A publication covers several cards at
+ * once, and a batch-level verdict cannot say that one card's branch conflicted
+ * while the four others shipped — which is exactly the question asked when a
+ * card looks finished but its change is nowhere. Each step is stamped by
+ * whoever actually performed it (the scheduler for the branch, the git reader
+ * for commit/push, the deployer for merge/publish), so what the card shows is a
+ * record of what happened, not a guess from the column it sits in.
+ *
+ * Additive + optional on the task: old boards/clients simply omit it, and cards
+ * that ran before this existed show what their legacy fields still know.
+ */
+export const TaskGitSchema = z.object({
+  /** Dedicated branch, recorded the moment the isolated worktree is cut. */
+  branch: z.string().optional(),
+  branchAt: z.string().optional(),
+  /** Tip commit of the branch: full sha, short sha, author date, subject. */
+  commitSha: z.string().optional(),
+  commitShortSha: z.string().optional(),
+  commitAt: z.string().optional(),
+  commitSubject: z.string().optional(),
+  repo: TaskGitRepoSchema.optional(),
+  push: TaskGitStepSchema.optional(),
+  merge: TaskGitStepSchema.optional(),
+  publish: TaskGitStepSchema.optional(),
+  /** Last time any of the above was refreshed. */
+  updatedAt: z.string().optional(),
+});
+export type TaskGit = z.infer<typeof TaskGitSchema>;
+
 export const KanbanTaskSchema = z.object({
   id: z.string(),
   folderId: z.string(),
@@ -325,6 +387,9 @@ export const KanbanTaskSchema = z.object({
   // vraiment ? » n'a pas de réponse chiffrée — seulement une impression.
   // Additif + optionnel : les anciens tableaux/clients l'omettent simplement.
   usage: TaskUsageSchema.nullable().optional(),
+  // Le parcours git de la carte : branche, commit, envoi, fusion, publication.
+  // Additif + optionnel — voir TaskGitSchema.
+  git: TaskGitSchema.nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

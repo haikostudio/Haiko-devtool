@@ -18,6 +18,7 @@ import {
   withTaskAttachments,
 } from "./agent-launch.js";
 import { PASEO_DEPLOY_CONFLICT_TAG } from "../../utils/paseo-deploy.js";
+import { withTaskGitBranch } from "./task-git.js";
 
 export { TASK_AGENT_LABEL } from "./agent-launch.js";
 
@@ -51,6 +52,11 @@ interface TaskSchedulerOptions {
   providerUsageService: Pick<ProviderUsageService, "listUsage">;
   logger: pino.Logger;
   tickIntervalMs?: number;
+  /**
+   * Re-reads the card's branch (its commit, whether it was pushed) once a run
+   * ends. Optional so tests and older wirings simply record nothing.
+   */
+  refreshTaskGit?: (projectId: string, task: KanbanTask) => Promise<void>;
   /** Off-peak window for heavy tasks. Defaults to 01:00–07:00 Europe/Paris. */
   getQuietHours?: () => QuietHours;
   /** Injected for tests. */
@@ -135,6 +141,7 @@ export class TaskScheduler {
   >;
   private readonly createAgent: BoundCreateAgentCommand;
   private readonly providerUsageService: Pick<ProviderUsageService, "listUsage">;
+  private readonly refreshTaskGit: ((projectId: string, task: KanbanTask) => Promise<void>) | null;
   private readonly logger: pino.Logger;
   private readonly tickIntervalMs: number;
   private readonly getQuietHours: () => QuietHours;
@@ -155,6 +162,7 @@ export class TaskScheduler {
     this.agentManager = options.agentManager;
     this.createAgent = options.createAgent;
     this.providerUsageService = options.providerUsageService;
+    this.refreshTaskGit = options.refreshTaskGit ?? null;
     this.logger = options.logger.child({ module: "task-scheduler" });
     this.tickIntervalMs = options.tickIntervalMs ?? TICK_INTERVAL_MS;
     this.getQuietHours = options.getQuietHours ?? (() => DEFAULT_TASKS_QUIET_HOURS);
@@ -776,9 +784,12 @@ export class TaskScheduler {
         branch = created.createdWorktree?.worktree.branchName ?? branch;
       }
 
+      const launchedAt = new Date().toISOString();
       await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
         ...current,
         column: "in_progress",
+        // The dedicated branch is part of the card's story from its first second.
+        ...(branch ? { git: withTaskGitBranch(current.git, branch, launchedAt) } : {}),
         schedule: {
           state: "running",
           attempts: (current.schedule?.attempts ?? 0) + 1,
@@ -859,6 +870,10 @@ export class TaskScheduler {
         schedule: null,
         progress: "ready_for_review" as const,
       }));
+      // The run left commits on the card's branch: read them now, so the card
+      // can name its commit while the work is still fresh in the user's mind
+      // rather than only once a publication gets around to looking.
+      await this.refreshTaskGit?.(projectId, { ...task, links: { ...task.links, branch } });
       this.logger.info(
         { taskId: task.id, agentId, branch },
         "Task run finished, awaiting user validation",

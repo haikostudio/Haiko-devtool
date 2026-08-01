@@ -444,6 +444,36 @@ menu chevron ("heures creuses") stays reachable in every state.
   card has been handed to its own agent: there is no single run left to follow, and
   each card carries its own "Publication en cours" badge.
 
+### What each card records for itself — the GitHub encart
+
+The batch record answers "did the lot ship?". It cannot answer "did MY work
+ship?", and that is the question asked when a card looks finished but its change
+is nowhere. So every card also carries its own journey (`KanbanTask.git`,
+`TaskGitSchema`): branch → commit → envoi → fusion → publication, each a state
+(`pending` / `running` / `success` / `failed`), a date, and on a failure the
+reason.
+
+Each step is written by whoever actually performed it, never inferred from the
+column:
+
+| Step          | Written by                                                            |
+| ------------- | --------------------------------------------------------------------- |
+| branch        | `TaskAgentProvisioner` when it cuts the worktree, and the scheduler   |
+| commit, envoi | `TaskGitTracker.refresh` (reads `git log` / `git branch -r`)          |
+| fusion        | the batch deployer, per branch, from `conflictedBranches`             |
+| publication   | `markTaskDeployed` (the one door every publication path goes through) |
+
+A card whose branch conflicted gets `merge: failed` and `publish: failed` on
+ITSELF while its siblings are stamped live — the split the batch-level status
+could never express. A failed run marks every card's publication step, and leaves
+the merge alone: the deployer never reached a verdict on it.
+
+The app renders it from `buildTaskGitJourney`, which falls back to the older
+fields (`links.branch`, `deployedSha`, `deployedAt`) so a card finished before the
+record existed still tells what is knowable. GitHub links come from the checkout's
+remote (`repo.webUrl`); a project with no forge remote shows the same five steps
+with nothing to open.
+
 ### Holding one card back — "Retirer du prochain lot"
 
 A queued card can be taken out of the next batch from its ⋮ menu, without

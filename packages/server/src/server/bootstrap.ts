@@ -157,6 +157,7 @@ import type {
 } from "./hub/relationship-controller.js";
 import { ConductorAgentService } from "./tasks/conductor-agent.js";
 import { TaskScheduler } from "./tasks/scheduler.js";
+import { TaskGitTracker } from "./tasks/task-git-tracker.js";
 import { TaskPublisher } from "./tasks/publish-on-complete.js";
 import { watchAgentIdle } from "./tasks/task-agent-link.js";
 import { TaskValidator } from "./tasks/validator.js";
@@ -1487,6 +1488,29 @@ export async function createPaseoDaemon(
     watchAgentIdle: (agentId, onIdle) => watchAgentIdle(agentManager, agentId, onIdle),
     logger,
   });
+  // The card's git journey (branch → commit → envoi → fusion → publication).
+  // One tracker, shared by everything that knows a step: the scheduler when a
+  // run ends, the batch publication for merge and mise en ligne.
+  const taskGitTracker = new TaskGitTracker({
+    taskBoardService,
+    exec: {
+      git: async (args, cwd) => {
+        try {
+          // Exit 1 is data here (an unknown ref, an empty result), never a crash.
+          const result = await runGitCommand(args, { cwd, acceptExitCodes: [0, 1] });
+          return { exitCode: result.exitCode ?? 0, stdout: result.stdout, stderr: result.stderr };
+        } catch (error) {
+          return {
+            exitCode: 1,
+            stdout: "",
+            stderr: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    },
+    resolveRootPath: async (projectId) => (await projectRegistry.get(projectId))?.rootPath ?? null,
+    logger,
+  });
   const taskScheduler = new TaskScheduler({
     taskBoardService,
     taskEstimator,
@@ -1494,6 +1518,7 @@ export async function createPaseoDaemon(
     agentManager,
     createAgent,
     providerUsageService,
+    refreshTaskGit: (projectId, task) => taskGitTracker.refresh(projectId, task),
     logger,
     getQuietHours: () => daemonConfigStore.get().tasks?.quietHours ?? DEFAULT_TASKS_QUIET_HOURS,
   });
@@ -1581,6 +1606,7 @@ export async function createPaseoDaemon(
     // recharger — inutile de couper les sessions de tout le monde.
     readDaemonRestartPending: () => isDaemonRestartPending(),
     deployTask: (projectId, taskId) => taskDeployer.deploy(projectId, taskId),
+    refreshTaskGit: (projectId, task) => taskGitTracker.refresh(projectId, task),
     // Ordinary projects publish centrally too: resolve the dev instance, then let
     // the single actor commit-per-card, restart the service once and verify it.
     triggerProjectDeploy: async ({ rootPath, cards }) => {

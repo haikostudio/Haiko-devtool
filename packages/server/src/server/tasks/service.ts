@@ -13,6 +13,7 @@ import type {
   TaskUsage,
 } from "@getpaseo/protocol/tasks/types";
 import { backfillTaskBilling, slugifyBranch } from "./agent-launch.js";
+import { withTaskGitStep } from "./task-git.js";
 import { settleDeployedRestartFlags } from "./restart-impact.js";
 import { TaskBoardStore, generateTaskEntityId } from "./store.js";
 
@@ -1172,6 +1173,10 @@ export class TaskBoardService {
         ? { needsDaemonRestart: input.needsDaemonRestart }
         : {}),
       deployment: { state: "deployed" as const, startedAt: current.deployment?.startedAt },
+      // This is the single door every publication path walks through (batch,
+      // per-card agent, project instance), so the card's publication step is
+      // stamped here rather than in each of them.
+      git: withTaskGitStep(current.git, "publish", { state: "success", at: now }, now),
     }));
     // Its work is live: file it in the terminal "archived" column so it no longer
     // clutters the publication queue. Idempotent — a card already archived stays put.

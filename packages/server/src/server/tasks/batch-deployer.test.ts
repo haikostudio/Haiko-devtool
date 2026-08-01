@@ -606,6 +606,35 @@ describe("TaskBatchDeployer", () => {
     expect(board.tasks.find((entry) => entry.id === signup.id)?.deployedAt).toBeFalsy();
     // And it was told why.
     expect(notes.some((note) => note.includes("en conflit"))).toBe(true);
+
+    // Each card carries its OWN verdict: the failure is recorded on the card
+    // that conflicted, and the one that shipped says so — a batch-level status
+    // would have made both look the same.
+    const shipped = board.tasks.find((entry) => entry.id === login.id);
+    expect(shipped?.git?.merge?.state).toBe("success");
+    expect(shipped?.git?.publish?.state).toBe("success");
+    const conflicted = board.tasks.find((entry) => entry.id === signup.id);
+    expect(conflicted?.git?.merge?.state).toBe("failed");
+    expect(conflicted?.git?.merge?.detail).toContain("Conflit");
+    expect(conflicted?.git?.publish?.state).toBe("failed");
+  });
+
+  test("a failed publication marks every card's publication step, not just the batch", async () => {
+    const card = await seedQueued("Login", "task/login");
+    const deployer = buildDeployer({
+      isSelfHost: false,
+      projectRuns: [{ deploying: false, phase: null, outcome: "failed", error: "service KO" }],
+    });
+
+    await deployer.deployAll("proj-1");
+    await settle(async () => (await service.getBoard("proj-1")).deployBatch?.state === "failed");
+
+    const board = await service.getBoard("proj-1");
+    const stored = board.tasks.find((entry) => entry.id === card.id);
+    expect(stored?.git?.publish).toMatchObject({ state: "failed", detail: "service KO" });
+    // The merge was never reported either way, so it stays a wait rather than a
+    // verdict the deployer never actually reached.
+    expect(stored?.git?.merge).toBeUndefined();
   });
 
   test("an ordinary project's failed central deploy is reported, nothing stamped", async () => {

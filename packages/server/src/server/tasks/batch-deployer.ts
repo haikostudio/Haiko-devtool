@@ -1,9 +1,10 @@
 import type pino from "pino";
-import type { KanbanTask } from "@getpaseo/protocol/tasks/types";
+import type { KanbanTask, TaskGitStep } from "@getpaseo/protocol/tasks/types";
 import type { AgentManager } from "../agent/agent-manager.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import { TaskBoardServiceError, type TaskBoardService } from "./service.js";
 import { resolveTaskAgentId } from "./task-agent-link.js";
+import { withTaskGitStep } from "./task-git.js";
 
 export interface DeployTriggerResult {
   started: boolean;
@@ -126,6 +127,11 @@ export interface TaskBatchDeployerOptions {
   readDaemonRestartPending?: () => Promise<boolean>;
   /** Injected so tests don't wait on real time. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Re-reads a card's branch (commit, push) before the lot goes out, so the
+   * encart names the commit that is actually about to be merged.
+   */
+  refreshTaskGit?: (projectId: string, task: KanbanTask) => Promise<void>;
   logger: pino.Logger;
 }
 
@@ -457,6 +463,14 @@ export class TaskBatchDeployer {
     const project = await this.options.projectRegistry.get(projectId);
     const rootPath = project?.rootPath ?? null;
     await this.sayAll(pending, `🚀 **Publication groupée** — ${pending.length} tâche(s) en file.`);
+    // Each card's own record opens here: its commit is re-read (the agent may
+    // have committed long after the run ended) and its publication step goes
+    // "en cours". The batch record says the LOT is publishing; only the card can
+    // say what happened to this card.
+    for (const task of pending) {
+      await this.refreshGit(projectId, task);
+      await this.markGit(projectId, task.id, "publish", "running");
+    }
 
     if (!this.options.isSelfHostRoot(rootPath)) {
       // An ordinary project publishes through the SAME central, deterministic
@@ -549,12 +563,12 @@ export class TaskBatchDeployer {
           { err: error, projectId, taskId: task.id },
           "Per-card deploy dispatch failed",
         );
+        const reason = error instanceof Error ? error.message : String(error);
         await this.say(
           task,
-          `⚠️ **Publication groupée** — cette carte n'a pas pu être déployée : ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `⚠️ **Publication groupée** — cette carte n'a pas pu être déployée : ${reason}`,
         );
+        await this.markGit(projectId, task.id, "publish", "failed", reason);
         await this.closeWindow(projectId, task.id);
       }
     }
@@ -695,6 +709,7 @@ export class TaskBatchDeployer {
       (task) => task.links.branch && conflicted.has(task.links.branch),
     );
     for (const task of skipped) {
+      await this.markConflicted(projectId, task.id);
       await this.say(
         task,
         "⚠️ **Publication groupée** — cette carte n'a pas pu être fusionnée : sa branche est en conflit avec une autre carte du lot. Le reste du lot part en ligne ; un agent de réparation reprend cette carte.",
@@ -704,6 +719,7 @@ export class TaskBatchDeployer {
     // build, and a per-card read would only invite them to disagree.
     const publishedSha = await this.readPublishedSha();
     for (const task of live) {
+      await this.markMerged(projectId, task);
       try {
         // Clear "Redémarrage requis" as we stamp: this batch restarts the daemon
         // itself as its last step, so the change is about to take effect — leaving
@@ -717,6 +733,10 @@ export class TaskBatchDeployer {
       } catch (error) {
         this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
       }
+      // The publication pushed the lot: read the branch once more so the card's
+      // "envoyé sur GitHub" step reflects that, instead of staying on what was
+      // true before the run.
+      await this.refreshGit(projectId, task);
     }
     await this.sayAll(
       live,
@@ -817,6 +837,7 @@ export class TaskBatchDeployer {
       (task) => task.links.branch && conflicted.has(task.links.branch),
     );
     for (const task of live) {
+      await this.markMerged(projectId, task);
       try {
         await this.options.taskBoardService.markTaskDeployed(projectId, task.id, {
           url,
@@ -826,6 +847,7 @@ export class TaskBatchDeployer {
       } catch (error) {
         this.logger.warn({ err: error, projectId, taskId: task.id }, "Failed to stamp a live card");
       }
+      await this.refreshGit(projectId, task);
     }
     await this.sayAll(
       live,
@@ -836,6 +858,7 @@ export class TaskBatchDeployer {
     // Conflicted cards stay out of "Déployé": their branch clashed with another
     // card's changes, so a human must resolve the overlap before they can ship.
     for (const task of skipped) {
+      await this.markConflicted(projectId, task.id);
       await this.say(
         task,
         "⚠️ **Publication groupée** — cette carte n'a pas pu être fusionnée : sa branche est en conflit avec une autre carte du lot. Le reste du lot est en ligne ; cette carte attend une résolution manuelle du conflit.",
@@ -855,19 +878,79 @@ export class TaskBatchDeployer {
   }
 
   private async fail(projectId: string, pending: KanbanTask[], reason: string): Promise<void> {
-    await this.options.taskBoardService.patchDeployBatch(projectId, {
-      state: "failed",
-      finishedAt: new Date().toISOString(),
-      error: reason,
-    });
+    // Cards first, batch record last. The batch verdict is what every watcher
+    // waits on, so writing it before the cards would publish a conclusion while
+    // the cards it describes were still being updated.
+    for (const task of pending) {
+      await this.markFailed(projectId, task.id);
+      await this.markGit(projectId, task.id, "publish", "failed", reason);
+    }
     // Say plainly what broke AND that nothing shipped: no card was marked live or
     // archived, so the queue is intact and the user can fix the cause and retry.
     await this.sayAll(
       pending,
       `❌ **Publication groupée** — échec : ${reason}\n\nRien n'a été mis en ligne et aucune carte n'a été archivée. Corrigez la cause ci-dessus, puis relancez « Tout déployer ».`,
     );
-    for (const task of pending) {
-      await this.markFailed(projectId, task.id);
+    await this.options.taskBoardService.patchDeployBatch(projectId, {
+      state: "failed",
+      finishedAt: new Date().toISOString(),
+      error: reason,
+    });
+  }
+
+  /**
+   * The card's branch made it into the published build. Only stamped for cards
+   * that actually have a branch — an old in-place card never had one to merge,
+   * and inventing a green step for it would be a lie in the shape of reassurance.
+   */
+  private async markMerged(projectId: string, task: KanbanTask): Promise<void> {
+    if (!task.links.branch) {
+      return;
+    }
+    await this.markGit(projectId, task.id, "merge", "success");
+  }
+
+  /**
+   * This card, and this card only, could not be merged. Its publication step
+   * fails with it: the lot went online without its work, which is precisely the
+   * thing a batch-level status cannot say.
+   */
+  private async markConflicted(projectId: string, taskId: string): Promise<void> {
+    const reason = "Conflit avec une autre carte du lot : la fusion a été annulée.";
+    await this.markGit(projectId, taskId, "merge", "failed", reason);
+    await this.markGit(projectId, taskId, "publish", "failed", reason);
+  }
+
+  /** Reads the card's branch again; never blocks or breaks the publication. */
+  private async refreshGit(projectId: string, task: KanbanTask): Promise<void> {
+    try {
+      await this.options.refreshTaskGit?.(projectId, task);
+    } catch (error) {
+      this.logger.debug({ err: error, projectId, taskId: task.id }, "Git facts refresh failed");
+    }
+  }
+
+  /** Records one step of a card's git journey; never throws. */
+  private async markGit(
+    projectId: string,
+    taskId: string,
+    step: "push" | "merge" | "publish",
+    state: TaskGitStep["state"],
+    detail?: string,
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    try {
+      await this.options.taskBoardService.patchTask(projectId, taskId, (current) => ({
+        ...current,
+        git: withTaskGitStep(
+          current.git,
+          step,
+          { state, at: now, ...(detail ? { detail } : {}) },
+          now,
+        ),
+      }));
+    } catch (error) {
+      this.logger.debug({ err: error, projectId, taskId, step }, "Git journey step not recorded");
     }
   }
 

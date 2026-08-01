@@ -653,6 +653,24 @@ export const en = {
       folder: "Folder: {{name}}",
       loading: "Loading the task board…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "Branch",
+        commit: "Commit",
+        push: "Sent to GitHub",
+        merge: "Merge",
+        publish: "Publication",
+      },
+      states: {
+        pending: "Waiting",
+        running: "In progress",
+        success: "Done",
+        failed: "Error",
+        none: "Not applicable",
+      },
+      noRepo: "This project has no GitHub link: the steps still show, with nothing to open.",
+    },
     detail: {
       title: "Task",
       titleField: "Title",

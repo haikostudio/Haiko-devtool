@@ -4,6 +4,7 @@ import type { BoundCreateAgentCommand } from "../agent/create-agent/create.js";
 import type { ProjectRegistry } from "../workspace-registry.js";
 import type { TaskBoardService } from "./service.js";
 import { resolveTaskLaunch, resolveTaskWorktreePlan, TASK_AGENT_LABEL } from "./agent-launch.js";
+import { withTaskGitBranch } from "./task-git.js";
 
 export interface ProvisionedTaskAgent {
   agentId: string;
@@ -134,9 +135,13 @@ export class TaskAgentProvisioner {
     const branch = created.createdWorktree?.worktree.branchName ?? plan.branch;
 
     // Link immediately so the card's chat binds to this conversation from the
-    // very first second, before any prompt is sent into it.
+    // very first second, before any prompt is sent into it. The branch is also
+    // stamped on the card's git journey right here — its first step exists from
+    // the moment the worktree is cut, not once something has been committed.
+    const now = new Date().toISOString();
     await this.taskBoardService.patchTask(projectId, task.id, (current) => ({
       ...current,
+      ...(branch ? { git: withTaskGitBranch(current.git, branch, now) } : {}),
       links: {
         ...current.links,
         taskAgentId: agentId,

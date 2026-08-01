@@ -646,6 +646,24 @@ export const zhCN: TranslationResources = {
       folder: "文件夹：{{name}}",
       loading: "正在加载任务看板…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "分支",
+        commit: "提交",
+        push: "已推送到 GitHub",
+        merge: "合并",
+        publish: "发布",
+      },
+      states: {
+        pending: "等待中",
+        running: "进行中",
+        success: "已完成",
+        failed: "错误",
+        none: "不适用",
+      },
+      noRepo: "该项目没有 GitHub 链接：各步骤依然显示，但没有可打开的链接。",
+    },
     detail: {
       title: "任务",
       titleField: "标题",

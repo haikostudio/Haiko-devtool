@@ -661,6 +661,25 @@ export const es: TranslationResources = {
       folder: "Carpeta: {{name}}",
       loading: "Cargando el tablero de tareas…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "Rama",
+        commit: "Commit",
+        push: "Enviado a GitHub",
+        merge: "Fusión",
+        publish: "Publicación",
+      },
+      states: {
+        pending: "En espera",
+        running: "En curso",
+        success: "Hecho",
+        failed: "Error",
+        none: "No aplicable",
+      },
+      noRepo:
+        "Este proyecto no tiene enlace de GitHub: los pasos siguen visibles, sin nada que abrir.",
+    },
     detail: {
       title: "Tarea",
       titleField: "Título",

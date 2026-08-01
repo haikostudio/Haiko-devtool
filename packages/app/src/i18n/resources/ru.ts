@@ -657,6 +657,24 @@ export const ru: TranslationResources = {
       folder: "Папка: {{name}}",
       loading: "Загрузка доски задач…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "Ветка",
+        commit: "Коммит",
+        push: "Отправлено в GitHub",
+        merge: "Слияние",
+        publish: "Публикация",
+      },
+      states: {
+        pending: "Ожидание",
+        running: "Выполняется",
+        success: "Готово",
+        failed: "Ошибка",
+        none: "Не применимо",
+      },
+      noRepo: "У этого проекта нет ссылки на GitHub: шаги показываются, но открывать нечего.",
+    },
     detail: {
       title: "Задача",
       titleField: "Название",

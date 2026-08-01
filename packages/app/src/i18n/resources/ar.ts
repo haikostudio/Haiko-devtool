@@ -650,6 +650,24 @@ export const ar: TranslationResources = {
       folder: "المجلد: {{name}}",
       loading: "جارٍ تحميل لوحة المهام…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "الفرع",
+        commit: "الالتزام",
+        push: "الإرسال إلى GitHub",
+        merge: "الدمج",
+        publish: "النشر",
+      },
+      states: {
+        pending: "في الانتظار",
+        running: "قيد التنفيذ",
+        success: "تم",
+        failed: "خطأ",
+        none: "غير منطبق",
+      },
+      noRepo: "لا يملك هذا المشروع رابط GitHub: تبقى الخطوات ظاهرة، دون رابط لفتحه.",
+    },
     detail: {
       title: "المهمة",
       titleField: "العنوان",

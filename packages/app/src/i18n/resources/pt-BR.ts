@@ -662,6 +662,25 @@ export const ptBR: TranslationResources = {
       folder: "Pasta: {{name}}",
       loading: "Carregando o quadro de tarefas…",
     },
+    git: {
+      title: "GitHub",
+      steps: {
+        branch: "Branch",
+        commit: "Commit",
+        push: "Enviado ao GitHub",
+        merge: "Merge",
+        publish: "Publicação",
+      },
+      states: {
+        pending: "Aguardando",
+        running: "Em andamento",
+        success: "Concluído",
+        failed: "Erro",
+        none: "Não se aplica",
+      },
+      noRepo:
+        "Este projeto não tem link do GitHub: as etapas continuam visíveis, sem nada para abrir.",
+    },
     detail: {
       title: "Tarefa",
       titleField: "Título",

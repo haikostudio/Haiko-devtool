@@ -24,6 +24,7 @@ import {
   resolveEffectiveExecution,
 } from "@/components/tasks/task-cost";
 import { formatTokenCount, hasTaskUsage, totalTaskTokens } from "@/components/tasks/task-usage";
+import { TaskGitHubPanel } from "@/components/tasks/task-github-panel";
 import {
   deadlineTagFor,
   type ParsedPriority,
@@ -494,6 +495,9 @@ function TaskDetailSheetForm({
       ) : null}
 
       <TaskMetaSection task={task} effective={effective} />
+
+      {/* Le parcours de la carte : branche, commit, envoi, fusion, publication. */}
+      <TaskGitHubPanel task={task} />
 
       <TaskActionsRow
         actions={actions}
