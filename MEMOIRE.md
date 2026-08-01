@@ -42,6 +42,10 @@ d'état du projet — d'où l'exigence de brièveté.
 - `/root/paseo` est un checkout partagé pour le démon et les prompts interactifs,
   mais PLUS pour les cartes du tableau : chacune a désormais son worktree isolé.
   La publication travaille toujours sur une copie figée du commit à publier.
+- Une branche de carte peut être créée depuis le tronc AMONT (`origin/main`) au
+  lieu du tronc du fork (`main`) : la fonctionnalité à modifier semble alors
+  absente du dépôt. Vérifier avec `git log --all` et repartir de `main` avant de
+  coder — fusionner l'amont à ce moment-là n'apporte que des conflits.
 - `version.json` porte la version DU BUNDLE, jamais celle de la publication.
   Les faire diverger déclenche la bannière « nouvelle version » en boucle.
 - Paseo n'a pas d'instance de développement testable : la seule façon d'essayer
