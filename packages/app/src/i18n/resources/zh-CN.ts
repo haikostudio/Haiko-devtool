@@ -309,6 +309,7 @@ export const zhCN: TranslationResources = {
     panel: {
       evolutionCreateTask: "根据此想法创建任务",
       evolutionInsertPrompt: "将此想法添加到消息",
+      evolutionRemovePrompt: "从消息中移除此想法",
       evolutionTaskCreated: "任务已添加到看板",
       taskOfferConfirm: "好的，创建任务",
       taskOfferConfirmMessage: "好的，把它创建为任务。",

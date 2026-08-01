@@ -1,12 +1,28 @@
 import * as React from "react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import type { ReactNode } from "react";
-import { appendTextToDraft } from "./insert-draft-text";
+import { draftHasBullet, toggleBulletInDraft } from "./insert-draft-text";
 import type { ComposerFocusInputOptions } from "./types";
 
 interface ComposerInsertContextValue {
-  /** Appends `text` to the current draft and focuses the message input. */
-  insertText: (text: string) => void;
+  /**
+   * Adds `text` to the current draft as its own bullet, or removes that bullet
+   * when it is already there, then focuses the message input. Everything else
+   * in the draft is left untouched.
+   */
+  toggleBullet: (text: string) => void;
+  /** Subscribes to draft changes; returns the unsubscribe function. */
+  subscribeToDraft: (listener: () => void) => () => void;
+  /** Reads the draft as it is right now (paired with `subscribeToDraft`). */
+  getDraft: () => string;
   /** Lets the composer publish its focus function to this provider. */
   registerFocusInput: (focus: (options?: ComposerFocusInputOptions) => void) => void;
   /**
@@ -26,9 +42,9 @@ interface ComposerInsertContextValue {
 const ComposerInsertContext = createContext<ComposerInsertContextValue | null>(null);
 
 /**
- * Lets a deeply nested chat affordance (today: the "+" button on an
- * "Évolutions possibles" bullet) drop text into the message composer without
- * threading the draft through the generic workspace pane in between.
+ * Lets a deeply nested chat affordance (today: an "Évolutions possibles"
+ * mini-card) drop text into the message composer without threading the draft
+ * through the generic workspace pane in between.
  *
  * Mounted once around the stream and the composer, so both the conductor chat
  * and the task-agent chat get it for free. Null outside that tree — the "+"
@@ -45,22 +61,42 @@ export function ComposerInsertProvider({
 }) {
   // The draft text changes on every keystroke; reading it from a ref keeps the
   // context value stable so the whole transcript doesn't re-render while typing.
+  // Cards that need to follow the draft subscribe instead (see
+  // `useIsBulletInDraft`), and only re-render when their own line appears or
+  // disappears.
   const textRef = useRef(text);
+  const listenersRef = useRef(new Set<() => void>());
   useEffect(() => {
     textRef.current = text;
+    for (const listener of listenersRef.current) {
+      listener();
+    }
   }, [text]);
+
+  const subscribeToDraft = useCallback((listener: () => void) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
+  const getDraft = useCallback(() => textRef.current, []);
 
   const focusInputRef = useRef<((options?: ComposerFocusInputOptions) => void) | null>(null);
   const registerFocusInput = useCallback((focus: (options?: ComposerFocusInputOptions) => void) => {
     focusInputRef.current = focus;
   }, []);
 
-  const insertText = useCallback(
-    (insertion: string) => {
-      const nextText = appendTextToDraft({ currentText: textRef.current, insertion });
+  const toggleBullet = useCallback(
+    (bulletText: string) => {
+      const nextText = toggleBulletInDraft({ currentText: textRef.current, text: bulletText });
       if (nextText !== textRef.current) {
         textRef.current = nextText;
         setText(nextText);
+        // The parent re-render lands a tick later; notify now so the card that
+        // was just tapped flips immediately.
+        for (const listener of listenersRef.current) {
+          listener();
+        }
       }
       // Focus only — the message is never sent automatically. On phones the
       // keyboard should come up, since the user is about to keep typing.
@@ -78,8 +114,15 @@ export function ComposerInsertProvider({
   }, []);
 
   const value = useMemo<ComposerInsertContextValue>(
-    () => ({ insertText, registerFocusInput, sendText: send, registerSendText }),
-    [insertText, registerFocusInput, registerSendText, send],
+    () => ({
+      toggleBullet,
+      subscribeToDraft,
+      getDraft,
+      registerFocusInput,
+      sendText: send,
+      registerSendText,
+    }),
+    [getDraft, registerFocusInput, registerSendText, send, subscribeToDraft, toggleBullet],
   );
 
   return <ComposerInsertContext.Provider value={value}>{children}</ComposerInsertContext.Provider>;
@@ -87,4 +130,25 @@ export function ComposerInsertProvider({
 
 export function useComposerInsert(): ComposerInsertContextValue | null {
   return useContext(ComposerInsertContext);
+}
+
+const NO_SUBSCRIPTION = () => () => {};
+
+/**
+ * Whether `text` currently sits in the draft as its own bullet.
+ *
+ * The card draws itself from this rather than from a local "I was tapped"
+ * flag, so editing or deleting the line by hand unselects the card too.
+ */
+export function useIsBulletInDraft(text: string): boolean {
+  const composerInsert = useComposerInsert();
+  const subscribe = composerInsert?.subscribeToDraft ?? NO_SUBSCRIPTION;
+  const getSnapshot = useCallback(() => {
+    if (!composerInsert) {
+      return false;
+    }
+    return draftHasBullet({ currentText: composerInsert.getDraft(), text });
+  }, [composerInsert, text]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

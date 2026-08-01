@@ -314,6 +314,7 @@ export const fr: TranslationResources = {
     panel: {
       evolutionCreateTask: "Créer une tâche à partir de cette idée",
       evolutionInsertPrompt: "Ajouter cette idée au message",
+      evolutionRemovePrompt: "Retirer cette idée du message",
       evolutionTaskCreated: "Tâche ajoutée au tableau",
       taskOfferConfirm: "Oui, fais-en une tâche",
       taskOfferConfirmMessage: "Oui, fais-en une tâche.",

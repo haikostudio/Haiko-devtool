@@ -70,11 +70,12 @@ exercised and fixed.
 Adding a section title? Add its keyword to `section-icons.ts`, or it renders
 without an icon (`section-icons.test.ts` covers every template's headings).
 
-## The "+" button on evolutions
+## The evolution mini-cards
 
-In the `progress` template, each line of "Évolutions possibles" carries a `+`
-button that drops that line into the composer (and a second button that turns it
-into a backlog card). The chain, in the app:
+In the `progress` template, each line of "Évolutions possibles" is drawn as its
+own mini-card. Pressing the card adds that line to the composer as a `- ` bullet,
+pressing it again removes that bullet; a second button turns the proposal into a
+backlog card. The chain, in the app:
 
 1. `splitMarkdownBlocks` cuts the answer on blank lines;
 2. `splitBlocksAtHeadings` re-cuts so a heading **always** opens a block — this
@@ -83,16 +84,26 @@ into a backlog card). The chain, in the app:
 4. `normalizeEvolutionBlock` rewrites every plain line of those blocks as a list
    item — bullets, numbered items, bold lines and bare sentences all end up
    actionable, and the renderer keeps a single rule;
-5. the renderer's `list_item` rule renders `EvolutionListItem`, which carries the
-   buttons.
+5. the renderer's `list_item` rule renders `EvolutionListItem`, the mini-card.
 
 Left untouched by step 4: headings, code fences, table rows, quotes/callouts and
 indented continuations.
 
-Pressing `+` marks the line as taken: it is struck through and faded to 50%, so
-a long list of proposals shows at a glance which ones already went to the
-composer. The struck line is redrawn as a single plain `Text` — `line-through`
-does not travel down to sibling `Text` nodes inside a `View` on native.
+A selected card is struck through and faded, so a long list shows at a glance
+which proposals already went to the composer. Two constraints shape how that
+state is stored:
+
+- **It is read from the draft, never remembered.** `useIsBulletInDraft` matches
+  the proposal against the draft's lines, ignoring the list marker, so a bullet
+  the user deletes or rewords by hand unselects its card. A local "I was tapped"
+  flag would drift the moment the user edits the field.
+- **The draft is not in the context value.** It changes on every keystroke;
+  cards subscribe through `subscribeToDraft`/`getDraft` and only re-render when
+  their own line appears or disappears. Putting the text in the context value
+  would re-render the whole transcript while typing.
+
+The struck line is redrawn as a single plain `Text` — `line-through` does not
+travel down to sibling `Text` nodes inside a `View` on native.
 
 The prompt side helps the render side: the `progress` template asks for **one
 self-contained proposal per line**, no sub-lists, no free paragraphs — a line
@@ -100,7 +111,8 @@ inserted into the composer has to read as a standalone instruction.
 
 Coverage: `packages/app/src/utils/evolution-section.test.ts` walks every
 formatting variant through the chain and asserts each proposal comes out
-actionable.
+actionable; `insert-draft-text.test.ts` and `insert-text-context.test.tsx` cover
+the select/deselect rules on the draft.
 
 ## Token budget — why the directives are short
 

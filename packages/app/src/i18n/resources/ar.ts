@@ -309,6 +309,7 @@ export const ar: TranslationResources = {
     panel: {
       evolutionCreateTask: "إنشاء مهمة من هذه الفكرة",
       evolutionInsertPrompt: "إضافة هذه الفكرة إلى الرسالة",
+      evolutionRemovePrompt: "إزالة هذه الفكرة من الرسالة",
       evolutionTaskCreated: "تمت إضافة المهمة إلى اللوحة",
       taskOfferConfirm: "نعم، حوّلها إلى مهمة",
       taskOfferConfirmMessage: "نعم، حوّلها إلى مهمة.",

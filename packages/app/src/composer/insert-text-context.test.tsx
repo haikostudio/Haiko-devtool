@@ -4,7 +4,11 @@
 import React, { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ComposerInsertProvider, useComposerInsert } from "./insert-text-context";
+import {
+  ComposerInsertProvider,
+  useComposerInsert,
+  useIsBulletInDraft,
+} from "./insert-text-context";
 import type { ComposerFocusInputOptions } from "./types";
 
 let container: HTMLDivElement;
@@ -64,13 +68,14 @@ function FakeQuickReplyButton({ text }: { text: string }) {
 /** Stable no-op focus, so the harness never rebuilds a prop function inline. */
 const noopFocus = () => {};
 
-/** Stands in for a "+" button on an "Évolutions possibles" bullet. */
-function FakeInsertButton({ text }: { text: string }) {
+/** Stands in for an "Évolutions possibles" mini-card. */
+function FakeEvolutionCard({ text }: { text: string }) {
   const insert = useComposerInsert();
-  const handleClick = React.useCallback(() => insert?.insertText(text), [insert, text]);
+  const isSelected = useIsBulletInDraft(text);
+  const handleClick = React.useCallback(() => insert?.toggleBullet(text), [insert, text]);
   return (
-    <button type="button" onClick={handleClick}>
-      insert
+    <button type="button" data-selected={isSelected ? "yes" : "no"} onClick={handleClick}>
+      {text}
     </button>
   );
 }
@@ -83,11 +88,16 @@ function Harness({
   focus: (options?: ComposerFocusInputOptions) => void;
 }) {
   const [text, setText] = useState(initialText);
+  const handleHandEdit = React.useCallback(() => setText("Réécrit à la main"), []);
   return (
     <ComposerInsertProvider text={text} setText={setText}>
-      <FakeInsertButton text="Piste numéro un" />
-      <FakeInsertButton text="Piste numéro deux" />
+      <FakeEvolutionCard text="Piste numéro un" />
+      <FakeEvolutionCard text="Piste numéro deux" />
       <FakeComposer focus={focus} />
+      {/* Stands in for the user editing the message field by hand. */}
+      <button type="button" data-testid="hand-edit" onClick={handleHandEdit}>
+        edit
+      </button>
       <output data-testid="draft">{text}</output>
     </ComposerInsertProvider>
   );
@@ -98,34 +108,70 @@ function renderHarness(initialText: string) {
   act(() => {
     root.render(<Harness initialText={initialText} focus={focus} />);
   });
-  const buttons = Array.from(container.querySelectorAll("button"));
+  const cards = Array.from(container.querySelectorAll("button[data-selected]"));
   const click = (index: number) => {
     act(() => {
-      buttons[index].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      cards[index].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  };
+  const editByHand = () => {
+    act(() => {
+      container
+        .querySelector('[data-testid="hand-edit"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
   };
   const draft = () => container.querySelector("output")?.textContent ?? "";
-  return { focus, click, draft };
+  const isSelected = (index: number) => cards[index].getAttribute("data-selected") === "yes";
+  return { focus, click, draft, isSelected, editByHand };
 }
 
 describe("ComposerInsertProvider", () => {
   it("fills an empty draft without a leading newline", () => {
     const { click, draft } = renderHarness("");
     click(0);
-    expect(draft()).toBe("Piste numéro un");
+    expect(draft()).toBe("- Piste numéro un");
   });
 
   it("appends after an existing draft instead of overwriting it", () => {
     const { click, draft } = renderHarness("Ce que j'écrivais");
     click(0);
-    expect(draft()).toBe("Ce que j'écrivais\nPiste numéro un");
+    expect(draft()).toBe("Ce que j'écrivais\n- Piste numéro un");
   });
 
-  it("stacks several insertions one per line", () => {
-    const { click, draft } = renderHarness("");
+  it("stacks several selections one bullet per line", () => {
+    const { click, draft, isSelected } = renderHarness("");
     click(0);
     click(1);
-    expect(draft()).toBe("Piste numéro un\nPiste numéro deux");
+    expect(draft()).toBe("- Piste numéro un\n- Piste numéro deux");
+    expect(isSelected(0)).toBe(true);
+    expect(isSelected(1)).toBe(true);
+  });
+
+  it("takes back only the deselected bullet", () => {
+    const { click, draft, isSelected } = renderHarness("Ce que j'écrivais");
+    click(0);
+    click(1);
+    click(0);
+    expect(draft()).toBe("Ce que j'écrivais\n- Piste numéro deux");
+    expect(isSelected(0)).toBe(false);
+    expect(isSelected(1)).toBe(true);
+  });
+
+  it("never adds the same proposal twice", () => {
+    const { click, draft } = renderHarness("");
+    click(0);
+    click(0);
+    click(0);
+    expect(draft()).toBe("- Piste numéro un");
+  });
+
+  it("unselects a card whose bullet the user deleted by hand", () => {
+    const { click, isSelected, editByHand } = renderHarness("");
+    click(0);
+    expect(isSelected(0)).toBe(true);
+    editByHand();
+    expect(isSelected(0)).toBe(false);
   });
 
   it("focuses the input and asks for the keyboard on native", () => {

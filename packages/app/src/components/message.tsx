@@ -54,7 +54,6 @@ import {
   ClipboardList,
   CircleDot,
   ListPlus,
-  Plus,
   Download,
 } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
@@ -138,7 +137,7 @@ import {
 } from "@/assistant-file-links";
 import { useToast } from "@/contexts/toast-context";
 import { useEvolutionTaskCreator } from "@/contexts/evolution-task-context";
-import { useComposerInsert } from "@/composer/insert-text-context";
+import { useComposerInsert, useIsBulletInDraft } from "@/composer/insert-text-context";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
@@ -208,7 +207,6 @@ const MARKDOWN_TOP_LEVEL_MAX_EXCEEDED_ITEM = <Text key="dotdotdot">...</Text>;
 
 const ThemedMicVocal = withUnistyles(MicVocal);
 const ThemedListPlusIcon = withUnistyles(ListPlus);
-const ThemedPlusIcon = withUnistyles(Plus);
 const ThemedTodoCheckIcon = withUnistyles(Check);
 const ThemedFileSymlinkIcon = withUnistyles(FileSymlink);
 const ThemedTriangleAlertIcon = withUnistyles(TriangleAlertIcon);
@@ -1906,14 +1904,38 @@ export function ChatArchiveDownloadButton({
 }
 
 const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
-  row: {
-    // Hover target only (docs/hover.md): a plain View wrapping the row, with
-    // the pressables living inside it.
-    position: "relative",
+  // Hover target only (docs/hover.md): a plain View wrapping the card, with
+  // the pressables living inside it.
+  card: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: theme.spacing[2],
+    paddingVertical: theme.spacing[2],
+    paddingHorizontal: theme.spacing[3],
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.surface1,
+  },
+  cardHovered: {
+    borderColor: theme.colors.borderAccent,
+    backgroundColor: theme.colors.surface2,
+  },
+  // A proposal already dropped into the composer recedes so the remaining ones
+  // stand out — the same "ticked off" reading as its struck-through text.
+  cardSelected: {
+    backgroundColor: theme.colors.surface0,
+    opacity: 0.6,
+  },
+  // The whole card body toggles the bullet: one press target that works with a
+  // mouse and with a thumb, with the number kept inside it.
+  toggle: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   button: {
     marginLeft: theme.spacing[2],
-    marginTop: theme.spacing[1],
     padding: theme.spacing[1],
     borderRadius: theme.borderRadius.md,
     alignItems: "center",
@@ -1922,20 +1944,15 @@ const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
   buttonBusy: {
     opacity: 0.5,
   },
-  // Hidden buttons keep their slot so revealing one never shifts the row's
+  // Hidden buttons keep their slot so revealing one never shifts the card's
   // geometry out from under the cursor (docs/hover.md, failure mode 2).
   buttonHidden: {
     opacity: 0,
   },
-  // A proposal already dropped into the composer recedes: half opacity on the
-  // whole row (marker + buttons included) so the remaining ones stand out.
-  rowInserted: {
-    opacity: 0.5,
-  },
-  // The struck-through text replaces the rendered markdown once inserted:
+  // The struck-through text replaces the rendered markdown once selected:
   // line-through does not travel down to sibling <Text> nodes inside a <View>
   // on native, so the line is redrawn as one plain Text instead.
-  insertedText: {
+  selectedText: {
     color: theme.colors.foregroundMuted,
     fontSize: theme.fontSize.base,
     lineHeight: theme.fontSize.base * 1.5,
@@ -1944,7 +1961,6 @@ const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
 }));
 
 interface EvolutionListItemProps {
-  listItemStyle: ViewStyle;
   markerStyle: TextStyle;
   contentStyle: ViewStyle;
   marker: string;
@@ -1953,16 +1969,20 @@ interface EvolutionListItemProps {
 }
 
 /**
- * A bullet inside the "Évolutions possibles" section.
+ * A proposal inside the "Évolutions possibles" section, drawn as its own
+ * mini-card.
  *
- * It carries a "+" button that appends the proposal to the message composer
- * (the draft is kept, the message is never sent), and — when the chat is
- * embedded somewhere that knows the project board — a second button that turns
- * the proposal into a backlog task. Buttons reveal on hover on web and stay
- * visible on native/compact, where there is no hover.
+ * Pressing the card adds the proposal to the message composer as a bullet, and
+ * pressing it again takes that bullet back out (the rest of the draft is never
+ * touched, the message is never sent). A selected card is struck through, and
+ * that state is read back from the draft — deleting the bullet by hand
+ * unselects the card.
+ *
+ * When the chat is embedded somewhere that knows the project board, a second
+ * button turns the proposal into a backlog task. It reveals on hover on web and
+ * stays visible on native/compact, where there is no hover.
  */
 function EvolutionListItem({
-  listItemStyle,
   markerStyle,
   contentStyle,
   marker,
@@ -1976,20 +1996,19 @@ function EvolutionListItem({
   const isCompact = useIsCompactFormFactor();
   const [isHovered, setIsHovered] = useState(false);
   const [status, setStatus] = useState<"idle" | "creating" | "done">("idle");
-  // Set once the proposal has been dropped into the composer, so the line reads
-  // as "already taken": struck through and faded, like a ticked-off todo.
-  const [isInserted, setIsInserted] = useState(false);
+  // Mirrors the draft instead of remembering the taps, so the card and the
+  // message field can never disagree.
+  const isSelected = useIsBulletInDraft(title);
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
   const actionsVisible = isHovered || isNative || isCompact;
 
-  const handleInsert = useStableEvent(() => {
+  const handleToggle = useStableEvent(() => {
     if (!composerInsert || title.length === 0) {
       return;
     }
-    composerInsert.insertText(title);
-    setIsInserted(true);
+    composerInsert.toggleBullet(title);
   });
 
   const handleCreate = useStableEvent(async () => {
@@ -2007,14 +2026,6 @@ function EvolutionListItem({
     }
   });
 
-  const insertButtonStyle = useMemo(
-    () => [
-      evolutionTaskButtonStyles.button,
-      actionsVisible ? null : evolutionTaskButtonStyles.buttonHidden,
-    ],
-    [actionsVisible],
-  );
-
   const createButtonStyle = useMemo(
     () => [
       evolutionTaskButtonStyles.button,
@@ -2025,58 +2036,62 @@ function EvolutionListItem({
   );
 
   const hasActionableTitle = title.length > 0;
+  const canToggle = Boolean(composerInsert) && hasActionableTitle;
 
-  const rowStyle = useMemo(
+  const cardStyle = useMemo(
     () => [
-      evolutionTaskButtonStyles.row,
-      isInserted ? evolutionTaskButtonStyles.rowInserted : null,
+      evolutionTaskButtonStyles.card,
+      isHovered && !isSelected ? evolutionTaskButtonStyles.cardHovered : null,
+      isSelected ? evolutionTaskButtonStyles.cardSelected : null,
     ],
-    [isInserted],
+    [isHovered, isSelected],
   );
 
+  const toggleAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
+
   return (
-    <View style={rowStyle} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
-      <View style={listItemStyle}>
+    <View style={cardStyle} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
+      <Pressable
+        onPress={handleToggle}
+        disabled={!canToggle}
+        accessibilityRole="button"
+        accessibilityState={toggleAccessibilityState}
+        accessibilityLabel={
+          isSelected
+            ? t("tasks.panel.evolutionRemovePrompt")
+            : t("tasks.panel.evolutionInsertPrompt")
+        }
+        style={evolutionTaskButtonStyles.toggle}
+        testID="evolution-toggle-prompt"
+      >
         <Text style={markerStyle}>{marker}</Text>
         <MarkdownListItemContent contentStyle={contentStyle}>
-          {isInserted ? (
-            <Text style={evolutionTaskButtonStyles.insertedText} testID="evolution-inserted">
+          {isSelected ? (
+            <Text style={evolutionTaskButtonStyles.selectedText} testID="evolution-inserted">
               {title}
             </Text>
           ) : (
             children
           )}
         </MarkdownListItemContent>
-        {composerInsert && hasActionableTitle ? (
-          <Pressable
-            onPress={handleInsert}
-            accessibilityRole="button"
-            accessibilityLabel={t("tasks.panel.evolutionInsertPrompt")}
-            hitSlop={8}
-            style={insertButtonStyle}
-            testID="evolution-insert-prompt"
-          >
-            <ThemedPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
-          </Pressable>
-        ) : null}
-        {creator && hasActionableTitle ? (
-          <Pressable
-            onPress={handleCreate}
-            disabled={status !== "idle"}
-            accessibilityRole="button"
-            accessibilityLabel={t("tasks.panel.evolutionCreateTask")}
-            hitSlop={8}
-            style={createButtonStyle}
-            testID="evolution-create-task"
-          >
-            {status === "done" ? (
-              <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
-            ) : (
-              <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
-            )}
-          </Pressable>
-        ) : null}
-      </View>
+      </Pressable>
+      {creator && hasActionableTitle ? (
+        <Pressable
+          onPress={handleCreate}
+          disabled={status !== "idle"}
+          accessibilityRole="button"
+          accessibilityLabel={t("tasks.panel.evolutionCreateTask")}
+          hitSlop={8}
+          style={createButtonStyle}
+          testID="evolution-create-task"
+        >
+          {status === "done" ? (
+            <ThemedTodoCheckIcon size={15} uniProps={successColorMapping} />
+          ) : (
+            <ThemedListPlusIcon size={15} uniProps={foregroundMutedColorMapping} />
+          )}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -2443,7 +2458,8 @@ export const AssistantMessage = memo(function AssistantMessage({
   }, [client, fileLinkActions, markdownParser, serverId, workspaceRoot]);
 
   // Variant used only for the "Évolutions possibles" section: same rules, but
-  // top-level bullets are numbered and each one gets trailing action buttons.
+  // each top-level bullet becomes a numbered mini-card that toggles itself into
+  // the composer.
   const evolutionMarkdownRules = useMemo<RenderRules>(
     () => ({
       ...markdownRules,
@@ -2459,7 +2475,6 @@ export const AssistantMessage = memo(function AssistantMessage({
         return (
           <EvolutionListItem
             key={node.key}
-            listItemStyle={styles.list_item}
             markerStyle={iconStyle}
             contentStyle={contentStyle}
             marker={marker}
