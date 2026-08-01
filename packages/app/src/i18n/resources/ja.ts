@@ -658,6 +658,12 @@ export const ja: TranslationResources = {
       loading: "タスクボードを読み込み中…",
     },
     git: {
+      refresh: "更新",
+      refreshing: "読み込み中…",
+      resumeConflict: "コンフリクトを再開",
+      resumingConflict: "引き継ぎ中…",
+      size: "コミット {{commits}} 件、変更ファイル {{files}} 件",
+      stripFailed: "エラーのステップ: {{step}}",
       title: "GitHub",
       steps: {
         branch: "ブランチ",

@@ -47,6 +47,30 @@ vi.mock("@/components/ui/status-badge", () => ({
   StatusBadge: ({ label }: { label: string }) => React.createElement("span", {}, label),
 }));
 
+vi.mock("@/components/ui/button", () => ({
+  Button: ({
+    children,
+    onPress,
+    testID,
+  }: {
+    children?: React.ReactNode;
+    onPress?: () => void;
+    testID?: string;
+  }) =>
+    React.createElement(
+      "button",
+      { "data-testid": testID, type: "button", onClick: onPress },
+      children,
+    ),
+}));
+
+const client = vi.hoisted(() => ({
+  tasksTaskGitRefresh: vi.fn(async () => ({ task: null, error: null })),
+  tasksTaskGitResumeConflict: vi.fn(async () => ({ task: null, error: null })),
+}));
+
+vi.mock("@/runtime/host-runtime", () => ({ useHostRuntimeClient: () => client }));
+
 function makeTask(overrides: Partial<KanbanTask> = {}): KanbanTask {
   return {
     id: "task-1",
@@ -64,7 +88,19 @@ let container: HTMLElement | null = null;
 
 function render(task: KanbanTask): void {
   act(() => {
-    root?.render(React.createElement(TaskGitHubPanel, { task }));
+    root?.render(
+      React.createElement(TaskGitHubPanel, { task, serverId: "srv", projectId: "proj" }),
+    );
+  });
+}
+
+function press(testID: string): void {
+  const node = container?.querySelector<HTMLButtonElement>(`[data-testid="${testID}"]`);
+  if (!node) {
+    throw new Error(`Missing button: ${testID}`);
+  }
+  act(() => {
+    node.click();
   });
 }
 
@@ -161,5 +197,46 @@ describe("TaskGitHubPanel", () => {
 
     expect(stepText("merge")).toContain("tasks.git.states.failed");
     expect(stepText("merge")).toContain("Conflit avec une autre carte du lot");
+  });
+
+  it("asks the daemon to re-read the branch when refreshed", () => {
+    render(makeTask({ git: { branch: "task/aa73-encart" } }));
+
+    press("task-github-refresh");
+
+    expect(client.tasksTaskGitRefresh).toHaveBeenCalledWith({
+      projectId: "proj",
+      taskId: "task-1",
+    });
+  });
+
+  it("offers to resume the conflict only when the merge actually failed", () => {
+    render(makeTask({ git: { branch: "task/aa73-encart" } }));
+    expect(container?.querySelector('[data-testid="task-github-resume-conflict"]')).toBeNull();
+
+    render(
+      makeTask({
+        git: {
+          branch: "task/aa73-encart",
+          merge: { state: "failed", at: "2026-07-28T12:00:00.000Z" },
+        },
+      }),
+    );
+    press("task-github-resume-conflict");
+
+    expect(client.tasksTaskGitResumeConflict).toHaveBeenCalledWith({
+      projectId: "proj",
+      taskId: "task-1",
+    });
+  });
+
+  it("shows how much the branch carries, once it has been measured", () => {
+    render(makeTask({ git: { branch: "task/aa73-encart", commitCount: 3, changedFiles: 12 } }));
+    expect(container?.querySelector('[data-testid="task-github-size"]')?.textContent).toContain(
+      "tasks.git.size",
+    );
+
+    render(makeTask({ git: { branch: "task/aa73-encart" } }));
+    expect(container?.querySelector('[data-testid="task-github-size"]')).toBeNull();
   });
 });

@@ -654,6 +654,12 @@ export const en = {
       loading: "Loading the task board…",
     },
     git: {
+      refresh: "Refresh",
+      refreshing: "Reading…",
+      resumeConflict: "Resume the conflict",
+      resumingConflict: "Handing it over…",
+      size: "{{commits}} commit(s), {{files}} file(s) changed",
+      stripFailed: "Step in error: {{step}}",
       title: "GitHub",
       steps: {
         branch: "Branch",

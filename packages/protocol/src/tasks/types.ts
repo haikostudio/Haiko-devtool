@@ -257,6 +257,14 @@ export const TaskGitSchema = z.object({
   commitShortSha: z.string().optional(),
   commitAt: z.string().optional(),
   commitSubject: z.string().optional(),
+  /**
+   * Size of the work carried by the branch, measured against the point it was
+   * cut from: how many commits it adds, and how many files it touches. "Un
+   * commit" and "quarante fichiers" are very different pieces of news on an
+   * otherwise identical row.
+   */
+  commitCount: z.number().int().nonnegative().optional(),
+  changedFiles: z.number().int().nonnegative().optional(),
   repo: TaskGitRepoSchema.optional(),
   push: TaskGitStepSchema.optional(),
   merge: TaskGitStepSchema.optional(),

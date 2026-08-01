@@ -7,6 +7,7 @@ import type { ConductorAgentService } from "../../tasks/conductor-agent.js";
 import type { TaskValidator } from "../../tasks/validator.js";
 import type { TaskDeployer } from "../../tasks/deployer.js";
 import type { TaskBatchDeployer } from "../../tasks/batch-deployer.js";
+import type { TaskGitTracker } from "../../tasks/task-git-tracker.js";
 
 export interface TasksSessionHost {
   emit(msg: SessionOutboundMessage): void;
@@ -21,6 +22,8 @@ export interface TasksSessionOptions {
   taskValidator: TaskValidator | null;
   taskDeployer: TaskDeployer | null;
   taskBatchDeployer: TaskBatchDeployer | null;
+  /** Reads and repairs a card's git journey on demand (« Rafraîchir », « Reprendre le conflit »). */
+  taskGitTracker: TaskGitTracker | null;
   logger: pino.Logger;
 }
 
@@ -37,6 +40,7 @@ export class TasksSession {
   private readonly taskValidator: TaskValidator | null;
   private readonly taskDeployer: TaskDeployer | null;
   private readonly taskBatchDeployer: TaskBatchDeployer | null;
+  private readonly taskGitTracker: TaskGitTracker | null;
   private readonly logger: pino.Logger;
   private readonly subscriptions = new Map<string, () => void>();
 
@@ -49,6 +53,7 @@ export class TasksSession {
     this.taskValidator = options.taskValidator;
     this.taskDeployer = options.taskDeployer;
     this.taskBatchDeployer = options.taskBatchDeployer;
+    this.taskGitTracker = options.taskGitTracker;
     this.logger = options.logger;
   }
 
@@ -497,6 +502,58 @@ export class TasksSession {
       this.host.emit({
         type: "tasks.task.deploy.response",
         payload: { requestId: request.requestId, task: null, error: message },
+      });
+    }
+  }
+
+  /**
+   * "Rafraîchir": re-read the card's branch in the checkout and hand back the
+   * updated card. A pure read — it never merges, pushes or publishes.
+   */
+  async handleTaskGitRefreshRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.git_refresh.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.taskGitTracker) {
+        throw new TaskBoardServiceError("git_tracker_unavailable", "Git tracking is not available");
+      }
+      const task = await this.taskGitTracker.refreshById(request.projectId, request.taskId);
+      this.host.emit({
+        type: "tasks.task.git_refresh.response",
+        payload: { requestId: request.requestId, task, error: null },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: error, taskId: request.taskId }, "Git refresh request failed");
+      this.host.emit({
+        type: "tasks.task.git_refresh.response",
+        payload: { requestId: request.requestId, task: null, error: message },
+      });
+    }
+  }
+
+  /**
+   * "Reprendre le conflit": hand the card's own agent the job of resolving the
+   * merge conflict on its branch. The work plays out in the card's conversation.
+   */
+  async handleTaskGitResumeConflictRequest(
+    request: Extract<SessionInboundMessage, { type: "tasks.task.git_resume_conflict.request" }>,
+  ): Promise<void> {
+    try {
+      if (!this.taskGitTracker) {
+        throw new TaskBoardServiceError("git_tracker_unavailable", "Git tracking is not available");
+      }
+      const task = await this.taskGitTracker.resumeConflict(request.projectId, request.taskId);
+      this.host.emit({
+        type: "tasks.task.git_resume_conflict.response",
+        payload: { requestId: request.requestId, task, dispatched: true, error: null },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error({ err: error, taskId: request.taskId }, "Git conflict resume failed");
+      this.host.emit({
+        type: "tasks.task.git_resume_conflict.response",
+        payload: { requestId: request.requestId, task: null, dispatched: false, error: message },
       });
     }
   }

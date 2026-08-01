@@ -407,6 +407,7 @@ export function useConductorController({
             ) : (
               <TaskDetailInlineForm
                 serverId={serverId}
+                projectId={projectId}
                 task={task}
                 visible
                 onClose={handleTaskFormClose}

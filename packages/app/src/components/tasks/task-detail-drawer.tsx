@@ -128,6 +128,7 @@ function TaskDetailDrawerInner({
           ) : (
             <TaskDetailInlineForm
               serverId={serverId}
+              projectId={projectId}
               task={task}
               visible
               onClose={onClose}

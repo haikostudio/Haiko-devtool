@@ -658,6 +658,12 @@ export const ru: TranslationResources = {
       loading: "Загрузка доски задач…",
     },
     git: {
+      refresh: "Обновить",
+      refreshing: "Чтение…",
+      resumeConflict: "Вернуться к конфликту",
+      resumingConflict: "Передача…",
+      size: "Коммитов: {{commits}}, изменено файлов: {{files}}",
+      stripFailed: "Шаг с ошибкой: {{step}}",
       title: "GitHub",
       steps: {
         branch: "Ветка",

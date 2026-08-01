@@ -663,6 +663,12 @@ export const ptBR: TranslationResources = {
       loading: "Carregando o quadro de tarefas…",
     },
     git: {
+      refresh: "Atualizar",
+      refreshing: "Lendo…",
+      resumeConflict: "Retomar o conflito",
+      resumingConflict: "Enviando…",
+      size: "{{commits}} commit(s), {{files}} arquivo(s) alterado(s)",
+      stripFailed: "Etapa com erro: {{step}}",
       title: "GitHub",
       steps: {
         branch: "Branch",

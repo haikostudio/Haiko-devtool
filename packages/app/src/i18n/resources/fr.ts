@@ -664,6 +664,12 @@ export const fr: TranslationResources = {
       loading: "Chargement du board de tâches…",
     },
     git: {
+      refresh: "Rafraîchir",
+      refreshing: "Lecture…",
+      resumeConflict: "Reprendre le conflit",
+      resumingConflict: "Transmission…",
+      size: "{{commits}} commit(s), {{files}} fichier(s) modifié(s)",
+      stripFailed: "Étape en erreur : {{step}}",
       title: "GitHub",
       steps: {
         branch: "Branche",

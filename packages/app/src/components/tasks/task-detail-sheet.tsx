@@ -173,6 +173,9 @@ export interface TaskDetailSaveInput {
 
 interface TaskDetailSheetProps {
   serverId: string | null;
+  // Needed by the GitHub encart's own actions (« Rafraîchir », « Reprendre le
+  // conflit »); absent simply renders the encart read-only.
+  projectId?: string | null;
   task: KanbanTask | null;
   visible: boolean;
   onClose: () => void;
@@ -268,6 +271,7 @@ function preferenceLabelKey(preference: TaskSchedulePreference): string {
 
 function TaskDetailSheetForm({
   serverId,
+  projectId,
   task,
   visible,
   onClose,
@@ -497,7 +501,7 @@ function TaskDetailSheetForm({
       <TaskMetaSection task={task} effective={effective} />
 
       {/* Le parcours de la carte : branche, commit, envoi, fusion, publication. */}
-      <TaskGitHubPanel task={task} />
+      <TaskGitHubPanel task={task} serverId={serverId} projectId={projectId} />
 
       <TaskActionsRow
         actions={actions}

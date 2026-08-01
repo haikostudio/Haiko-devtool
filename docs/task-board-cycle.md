@@ -472,7 +472,21 @@ The app renders it from `buildTaskGitJourney`, which falls back to the older
 fields (`links.branch`, `deployedSha`, `deployedAt`) so a card finished before the
 record existed still tells what is knowable. GitHub links come from the checkout's
 remote (`repo.webUrl`); a project with no forge remote shows the same five steps
-with nothing to open.
+with nothing to open. The card FRONT carries the same journey as five dots
+(`GitJourneyStrip`), red on the step that failed — a conflict must be visible
+without opening the card.
+
+Two actions live on the encart, both plain RPCs on the card:
+
+- **Rafraîchir** (`tasks.task.git_refresh`) re-reads the branch: its tip commit,
+  how many commits and files it carries, and whether it left the machine. Pure
+  read — it never merges, pushes or publishes. The size is measured from the
+  merge-base with the checkout's HEAD, not from a branch called "main": a wrong
+  base would report the entire history as this card's work.
+- **Reprendre le conflit** (`tasks.task.git_resume_conflict`) hands the card's OWN
+  agent the repair, in the worktree already sitting on that branch, and puts the
+  merge step back to "en cours". The prompt stops at "commit": it never publishes,
+  because going online stays the user's press.
 
 ### Holding one card back — "Retirer du prochain lot"
 

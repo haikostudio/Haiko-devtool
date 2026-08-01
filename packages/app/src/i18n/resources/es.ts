@@ -662,6 +662,12 @@ export const es: TranslationResources = {
       loading: "Cargando el tablero de tareas…",
     },
     git: {
+      refresh: "Actualizar",
+      refreshing: "Leyendo…",
+      resumeConflict: "Retomar el conflicto",
+      resumingConflict: "Enviando…",
+      size: "{{commits}} commit(s), {{files}} archivo(s) modificado(s)",
+      stripFailed: "Paso con error: {{step}}",
       title: "GitHub",
       steps: {
         branch: "Rama",

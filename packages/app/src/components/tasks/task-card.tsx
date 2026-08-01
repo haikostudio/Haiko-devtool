@@ -23,7 +23,11 @@ import {
 } from "@/components/tasks/task-tags";
 import { useTaskQuietHours } from "@/components/tasks/task-schedule-context";
 import { formatTokenCount, hasTaskUsage, totalTaskTokens } from "@/components/tasks/task-usage";
-import { buildTaskGitJourney, type TaskGitStepId } from "@/components/tasks/task-git-journey";
+import {
+  buildTaskGitJourney,
+  type TaskGitJourneyStep,
+  type TaskGitStepState,
+} from "@/components/tasks/task-git-journey";
 import { TaskStatusVoyant, useTaskTone } from "@/components/tasks/task-status-voyant";
 import { type TaskTone, shouldShowVoyant } from "@/components/tasks/task-status-tone";
 import {
@@ -472,16 +476,17 @@ const CardMetaRow = memo(function CardMetaRow({
 
   const hasUsage = hasTaskUsage(task.usage);
 
-  // A step that failed on THIS card (a merge conflict, a publication that broke).
-  // Surfaced on the card front because it is the one thing the column cannot
-  // show: four siblings shipping and one stuck look identical from the outside.
-  const failedStep = findFailedGitStep(task);
+  // The card's git journey, five dots wide. It rides on the front because the
+  // column cannot show it: four siblings shipping and one stuck on a conflict
+  // look exactly the same from the outside.
+  const journey = buildTaskGitJourney(task);
+  const hasJourney = journey.some((step) => step.state !== "pending" && step.state !== "none");
 
   const hasMetaRow = Boolean(
     deadline ||
     duration ||
     hasUsage ||
-    failedStep ||
+    hasJourney ||
     task.links.primaryAgentId ||
     task.links.prUrl ||
     task.deployedUrl ||
@@ -500,7 +505,7 @@ const CardMetaRow = memo(function CardMetaRow({
       {task.links.primaryAgentId ? (
         <ThemedBot size={ICON_SIZE.sm} uniProps={mutedColorMapping} />
       ) : null}
-      {failedStep ? <GitFailureChip step={failedStep} /> : null}
+      {hasJourney ? <GitJourneyStrip steps={journey} /> : null}
       {task.links.prUrl ? <PrChip prUrl={task.links.prUrl} /> : null}
       {task.deployedUrl ? <LiveChip url={task.deployedUrl} /> : null}
       {/* The build this card's work actually went online in. "Déployé" alone
@@ -712,23 +717,47 @@ const VersionChip = memo(function VersionChip({ sha }: { sha: string }) {
 });
 
 /**
- * The card's own bad news, in one word: "Fusion" or "Publication" in red. The
- * detail panel carries the reason; the card only has to stop the failure from
- * hiding behind a batch that otherwise went fine.
+ * The five steps as a strip of dots — branche, commit, envoi, fusion,
+ * publication, left to right. Green for done, amber for in progress, red for a
+ * step that failed on THIS card, hollow for what has not happened yet. It is a
+ * glance, not a report: the reason lives in the card's detail panel.
  */
-const GitFailureChip = memo(function GitFailureChip({ step }: { step: TaskGitStepId }) {
+const GitJourneyStrip = memo(function GitJourneyStrip({ steps }: { steps: TaskGitJourneyStep[] }) {
   const { t } = useTranslation();
+  const failed = steps.find((step) => step.state === "failed");
   return (
-    <View style={styles.gitFailureChip}>
-      <Text style={styles.gitFailureText}>{t(`tasks.git.steps.${step}`)}</Text>
+    <View
+      style={styles.gitStrip}
+      accessibilityLabel={
+        failed
+          ? t("tasks.git.stripFailed", { step: t(`tasks.git.steps.${failed.id}`) })
+          : t("tasks.git.title")
+      }
+      testID="task-card-git-strip"
+    >
+      {steps.map((step) => (
+        <GitJourneyDot key={step.id} state={step.state} />
+      ))}
+      {failed ? (
+        <Text style={styles.gitFailureText}>{t(`tasks.git.steps.${failed.id}`)}</Text>
+      ) : null}
     </View>
   );
 });
 
-/** The first step this card failed at, in journey order, or null when all is well. */
-function findFailedGitStep(task: KanbanTask): TaskGitStepId | null {
-  return buildTaskGitJourney(task).find((step) => step.state === "failed")?.id ?? null;
-}
+const GitJourneyDot = memo(function GitJourneyDot({ state }: { state: TaskGitStepState }) {
+  const dotStyle = useMemo(
+    () => [
+      styles.gitDot,
+      state === "success" && styles.gitDotSuccess,
+      state === "running" && styles.gitDotRunning,
+      state === "failed" && styles.gitDotFailed,
+      state === "none" && styles.gitDotNone,
+    ],
+    [state],
+  );
+  return <View style={dotStyle} />;
+});
 
 function extractPrNumber(prUrl: string): string {
   const match = prUrl.match(/\/pull\/(\d+)/);
@@ -929,14 +958,37 @@ const styles = StyleSheet.create((theme) => ({
     color: theme.colors.statusDanger,
     fontSize: theme.fontSize.xs,
   },
-  gitFailureChip: {
+  gitStrip: {
     flexDirection: "row",
     alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  // Hollow by default (rien ne s'est encore passé), filled once a step has an
+  // outcome. Same 6px geometry as the priority dot so the card keeps one
+  // vocabulary of small round signals.
+  gitDot: {
+    width: 6,
+    height: 6,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: `${theme.colors.statusDanger}1A`,
     borderWidth: 1,
-    borderColor: `${theme.colors.statusDanger}66`,
-    paddingHorizontal: theme.spacing[2],
+    borderColor: theme.colors.border,
+  },
+  gitDotSuccess: {
+    backgroundColor: theme.colors.statusSuccess,
+    borderColor: theme.colors.statusSuccess,
+  },
+  gitDotRunning: {
+    backgroundColor: theme.colors.statusWarning,
+    borderColor: theme.colors.statusWarning,
+  },
+  gitDotFailed: {
+    backgroundColor: theme.colors.statusDanger,
+    borderColor: theme.colors.statusDanger,
+  },
+  // "Sans objet" (a card with no branch to merge): a flat dash of a dot, so it
+  // never reads as something still owed.
+  gitDotNone: {
+    opacity: 0.35,
   },
   gitFailureText: {
     color: theme.colors.statusDanger,

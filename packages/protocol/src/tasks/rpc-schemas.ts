@@ -201,6 +201,27 @@ export const TasksTaskDeployRequestSchema = z.object({
   taskId: z.string(),
 });
 
+// "Rafraîchir": re-read the card's branch in the checkout (its commit, how many
+// commits and files it carries, whether it left the machine) and answer with the
+// updated card. Pure read — it never merges, pushes or publishes anything.
+export const TasksTaskGitRefreshRequestSchema = z.object({
+  type: z.literal("tasks.task.git_refresh.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
+// "Reprendre le conflit": hand the card's OWN agent the job of resolving the
+// merge conflict on its own branch. The agent works in the card's worktree and
+// reports in the card's conversation; the merge step goes back to "en cours"
+// until a later publication decides.
+export const TasksTaskGitResumeConflictRequestSchema = z.object({
+  type: z.literal("tasks.task.git_resume_conflict.request"),
+  requestId: z.string(),
+  projectId: z.string(),
+  taskId: z.string(),
+});
+
 // "Tout déployer": publish EVERY card sitting in the last column ("À déployer")
 // whose work is not live yet, in one run, then restart the daemon. The batch is
 // what a finished card now waits in — see docs/task-board-cycle.md.
@@ -400,6 +421,27 @@ export const TasksTaskDeployResponseSchema = z.object({
     // re-deploy of a card already flagged). The authoritative value lands on the
     // task once the agent finishes. Additive + optional.
     needsDaemonRestart: z.boolean().optional(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskGitRefreshResponseSchema = z.object({
+  type: z.literal("tasks.task.git_refresh.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
+    error: z.string().nullable(),
+  }),
+});
+
+export const TasksTaskGitResumeConflictResponseSchema = z.object({
+  type: z.literal("tasks.task.git_resume_conflict.response"),
+  payload: z.object({
+    requestId: z.string(),
+    task: KanbanTaskSchema.nullable(),
+    // True when the repair prompt reached the card's agent — the resolution then
+    // plays out in the conversation, not in this response.
+    dispatched: z.boolean().optional(),
     error: z.string().nullable(),
   }),
 });

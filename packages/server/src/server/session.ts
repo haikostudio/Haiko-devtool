@@ -171,6 +171,7 @@ import type { ConductorAgentService } from "./tasks/conductor-agent.js";
 import type { TaskValidator } from "./tasks/validator.js";
 import type { TaskDeployer } from "./tasks/deployer.js";
 import type { TaskBatchDeployer } from "./tasks/batch-deployer.js";
+import type { TaskGitTracker } from "./tasks/task-git-tracker.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
 import { WorkspaceFilesSession } from "./session/files/workspace-files-session.js";
 import { AgentConfigSession } from "./session/agent-config/agent-config-session.js";
@@ -489,6 +490,7 @@ export interface SessionOptions {
   taskValidator?: TaskValidator | null;
   taskDeployer?: TaskDeployer | null;
   taskBatchDeployer?: TaskBatchDeployer | null;
+  taskGitTracker?: TaskGitTracker | null;
   activityLogService?: ActivityLogService;
   messageTriage?: MessageTriage | null;
   checkoutDiffManager: CheckoutDiffManager;
@@ -743,6 +745,7 @@ export class Session {
       taskValidator,
       taskDeployer,
       taskBatchDeployer,
+      taskGitTracker,
       activityLogService,
       messageTriage,
       checkoutDiffManager,
@@ -908,6 +911,7 @@ export class Session {
           taskValidator: taskValidator ?? null,
           taskDeployer: taskDeployer ?? null,
           taskBatchDeployer: taskBatchDeployer ?? null,
+          taskGitTracker: taskGitTracker ?? null,
           logger: this.sessionLogger,
         })
       : null;
@@ -2080,6 +2084,10 @@ export class Session {
         return tasksSession.handleTaskValidateRequest(msg);
       case "tasks.task.deploy.request":
         return tasksSession.handleTaskDeployRequest(msg);
+      case "tasks.task.git_refresh.request":
+        return tasksSession.handleTaskGitRefreshRequest(msg);
+      case "tasks.task.git_resume_conflict.request":
+        return tasksSession.handleTaskGitResumeConflictRequest(msg);
       case "tasks.board.deploy_all.request":
         return tasksSession.handleBoardDeployAllRequest(msg);
       case "tasks.task.archive.request":

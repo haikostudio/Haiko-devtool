@@ -647,6 +647,12 @@ export const zhCN: TranslationResources = {
       loading: "正在加载任务看板…",
     },
     git: {
+      refresh: "刷新",
+      refreshing: "读取中…",
+      resumeConflict: "继续处理冲突",
+      resumingConflict: "正在交接…",
+      size: "{{commits}} 个提交，{{files}} 个文件改动",
+      stripFailed: "出错的步骤：{{step}}",
       title: "GitHub",
       steps: {
         branch: "分支",

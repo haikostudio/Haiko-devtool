@@ -28,6 +28,10 @@ export interface TaskGitFacts {
   commitShortSha?: string;
   commitAt?: string;
   commitSubject?: string;
+  /** Commits the branch adds on top of the point it was cut from. */
+  commitCount?: number;
+  /** Files those commits touch, counted once each. */
+  changedFiles?: number;
   repo?: TaskGitRepo;
   /**
    * True when the branch tip is reachable from at least one remote branch —
@@ -82,9 +86,47 @@ export async function readTaskGitFacts(input: {
     if (remote.exitCode === 0) {
       facts.pushed = remote.stdout.trim().length > 0;
     }
+    await readBranchSize({ exec, cwd, branch, facts });
   }
 
   return facts;
+}
+
+/**
+ * How much work the branch carries: commits added and files touched since it was
+ * cut. Measured from the merge-base with the checkout's own HEAD rather than
+ * from a branch name — "main", "master" and "trunk" are not universal, and a
+ * wrong base would report the whole history as this card's work.
+ */
+async function readBranchSize(input: {
+  exec: TaskGitExec;
+  cwd: string;
+  branch: string;
+  facts: TaskGitFacts;
+}): Promise<void> {
+  const { exec, cwd, branch, facts } = input;
+  const base = await exec.git(["merge-base", "HEAD", branch], cwd);
+  const baseSha = base.exitCode === 0 ? base.stdout.trim() : "";
+  if (!baseSha) {
+    return;
+  }
+  const range = `${baseSha}..${branch}`;
+  const commits = await exec.git(["rev-list", "--count", range], cwd);
+  if (commits.exitCode === 0) {
+    const count = Number.parseInt(commits.stdout.trim(), 10);
+    if (Number.isFinite(count)) {
+      facts.commitCount = count;
+    }
+  }
+  const files = await exec.git(["diff", "--name-only", range], cwd);
+  if (files.exitCode === 0) {
+    facts.changedFiles = new Set(
+      files.stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ).size;
+  }
 }
 
 /**
@@ -152,6 +194,12 @@ export function withTaskGitFacts(
     if (facts.commitShortSha) base.commitShortSha = facts.commitShortSha;
     if (facts.commitAt) base.commitAt = facts.commitAt;
     if (facts.commitSubject) base.commitSubject = facts.commitSubject;
+  }
+  if (facts.commitCount !== undefined) {
+    base.commitCount = facts.commitCount;
+  }
+  if (facts.changedFiles !== undefined) {
+    base.changedFiles = facts.changedFiles;
   }
   if (facts.repo) {
     base.repo = facts.repo;

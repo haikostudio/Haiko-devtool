@@ -651,6 +651,12 @@ export const ar: TranslationResources = {
       loading: "جارٍ تحميل لوحة المهام…",
     },
     git: {
+      refresh: "تحديث",
+      refreshing: "جارٍ القراءة…",
+      resumeConflict: "استئناف التعارض",
+      resumingConflict: "جارٍ الإرسال…",
+      size: "{{commits}} التزام، {{files}} ملف معدّل",
+      stripFailed: "خطوة بها خطأ: {{step}}",
       title: "GitHub",
       steps: {
         branch: "الفرع",

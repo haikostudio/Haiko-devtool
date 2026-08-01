@@ -5149,6 +5149,27 @@ export class DaemonClient {
     });
   }
 
+  // "Rafraîchir" on the card's GitHub encart: re-read its branch in the checkout
+  // (commit, size, whether it left the machine). A pure read.
+  async tasksTaskGitRefresh(input: { projectId: string; taskId: string }, requestId?: string) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.git_refresh.response">({
+      requestId,
+      message: { type: "tasks.task.git_refresh.request", ...input },
+    });
+  }
+
+  // "Reprendre le conflit": hands the card's own agent the job of resolving the
+  // merge conflict on its branch, in the card's conversation.
+  async tasksTaskGitResumeConflict(
+    input: { projectId: string; taskId: string },
+    requestId?: string,
+  ) {
+    return this.sendNamespacedCorrelatedSessionRequest<"tasks.task.git_resume_conflict.response">({
+      requestId,
+      message: { type: "tasks.task.git_resume_conflict.request", ...input },
+    });
+  }
+
   /** "Tout déployer": publish every not-yet-live card of the "À déployer" column. */
   async tasksBoardDeployAll(input: { projectId: string; reset?: boolean }, requestId?: string) {
     return this.sendNamespacedCorrelatedSessionRequest<"tasks.board.deploy_all.response">({

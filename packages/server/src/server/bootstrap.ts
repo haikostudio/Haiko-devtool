@@ -1509,6 +1509,11 @@ export async function createPaseoDaemon(
       },
     },
     resolveRootPath: async (projectId) => (await projectRegistry.get(projectId))?.rootPath ?? null,
+    // "Reprendre le conflit": the card's own agent, in the card's own worktree —
+    // the same conversation that did the work in the first place.
+    sendPrompt: async ({ agentId, prompt }) => {
+      await sendPromptToAgent({ agentManager, agentStorage, agentId, prompt, logger });
+    },
     logger,
   });
   const taskScheduler = new TaskScheduler({
@@ -2091,6 +2096,7 @@ export async function createPaseoDaemon(
               taskValidator,
               taskDeployer,
               taskBatchDeployer,
+              taskGitTracker,
               messageTriage,
             });
             wsServer.setActivityLogService(activityLogService);
