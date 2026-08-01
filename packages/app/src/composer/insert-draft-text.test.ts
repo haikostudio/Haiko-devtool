@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  addBulletsToDraft,
   appendTextToDraft,
   draftHasBullet,
+  findMovedBulletIndices,
+  listDraftBullets,
   removeBulletFromDraft,
+  removeBulletsFromDraft,
+  reorderDraftBullets,
   toggleBulletInDraft,
 } from "./insert-draft-text";
 
@@ -112,5 +117,77 @@ describe("removeBulletFromDraft", () => {
 
   it("leaves the draft untouched when the bullet is absent", () => {
     expect(removeBulletFromDraft({ currentText: "Bonjour", text: "Idée" })).toBe("Bonjour");
+  });
+});
+
+describe("addBulletsToDraft / removeBulletsFromDraft", () => {
+  it("adds every proposal in order, in one pass", () => {
+    expect(addBulletsToDraft({ currentText: "Bonjour", texts: ["Une", "Deux", "Trois"] })).toBe(
+      "Bonjour\n- Une\n- Deux\n- Trois",
+    );
+  });
+
+  it("skips the proposals already in the draft", () => {
+    expect(addBulletsToDraft({ currentText: "- Deux", texts: ["Une", "Deux"] })).toBe(
+      "- Deux\n- Une",
+    );
+  });
+
+  it("takes them all back out without touching the rest", () => {
+    expect(
+      removeBulletsFromDraft({ currentText: "Bonjour\n- Une\n- Deux", texts: ["Une", "Deux"] }),
+    ).toBe("Bonjour");
+  });
+});
+
+describe("listDraftBullets", () => {
+  it("lists the list items in order, markers stripped", () => {
+    expect(listDraftBullets("Bonjour\n- Une\n* Deux\n1. Trois\nUne phrase")).toEqual([
+      "Une",
+      "Deux",
+      "Trois",
+    ]);
+  });
+
+  it("is empty when nothing was chosen", () => {
+    expect(listDraftBullets("Juste une phrase")).toEqual([]);
+  });
+});
+
+describe("reorderDraftBullets", () => {
+  it("moves a bullet without disturbing the surrounding text", () => {
+    expect(
+      reorderDraftBullets({ currentText: "Bonjour\n- Une\n- Deux\n- Trois", from: 2, to: 0 }),
+    ).toBe("Bonjour\n- Trois\n- Une\n- Deux");
+  });
+
+  it("keeps a line typed between two bullets in place", () => {
+    expect(reorderDraftBullets({ currentText: "- Une\nau fait\n- Deux", from: 0, to: 1 })).toBe(
+      "- Deux\nau fait\n- Une",
+    );
+  });
+
+  it("leaves the draft untouched for an out-of-range move", () => {
+    expect(reorderDraftBullets({ currentText: "- Une\n- Deux", from: 0, to: 5 })).toBe(
+      "- Une\n- Deux",
+    );
+  });
+});
+
+describe("findMovedBulletIndices", () => {
+  it("reads a drag downwards", () => {
+    expect(findMovedBulletIndices(["a", "b", "c"], ["b", "c", "a"])).toEqual({ from: 0, to: 2 });
+  });
+
+  it("reads a drag upwards", () => {
+    expect(findMovedBulletIndices(["a", "b", "c"], ["c", "a", "b"])).toEqual({ from: 2, to: 0 });
+  });
+
+  it("returns null when nothing moved", () => {
+    expect(findMovedBulletIndices(["a", "b"], ["a", "b"])).toBeNull();
+  });
+
+  it("returns null when the lists don't hold the same items", () => {
+    expect(findMovedBulletIndices(["a", "b"], ["a", "c"])).toBeNull();
   });
 });

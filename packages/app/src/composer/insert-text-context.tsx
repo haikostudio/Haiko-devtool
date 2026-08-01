@@ -9,7 +9,15 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { ReactNode } from "react";
-import { draftHasBullet, toggleBulletInDraft } from "./insert-draft-text";
+import {
+  addBulletsToDraft,
+  draftHasBullet,
+  listDraftBullets,
+  normalizeBulletText,
+  removeBulletsFromDraft,
+  reorderDraftBullets,
+  toggleBulletInDraft,
+} from "./insert-draft-text";
 import type { ComposerFocusInputOptions } from "./types";
 
 interface ComposerInsertContextValue {
@@ -19,6 +27,19 @@ interface ComposerInsertContextValue {
    * in the draft is left untouched.
    */
   toggleBullet: (text: string) => void;
+  /** Adds every missing proposal at once, or takes them all back out. */
+  toggleAllBullets: (texts: string[], select: boolean) => void;
+  /** Moves one bullet to another rank among the draft's bullets. */
+  reorderBullets: (from: number, to: number) => void;
+  /**
+   * Records the lines of a message that just left for the agent, so a card can
+   * keep showing "already asked" once the draft is emptied by the send.
+   */
+  markBulletsSent: (message: string) => void;
+  /** Subscribes to sent-message changes; returns the unsubscribe function. */
+  subscribeToSent: (listener: () => void) => () => void;
+  /** Whether that exact proposal was part of a message already sent. */
+  wasSent: (text: string) => boolean;
   /** Subscribes to draft changes; returns the unsubscribe function. */
   subscribeToDraft: (listener: () => void) => () => void;
   /** Reads the draft as it is right now (paired with `subscribeToDraft`). */
@@ -86,24 +107,78 @@ export function ComposerInsertProvider({
     focusInputRef.current = focus;
   }, []);
 
+  // The parent re-render lands a tick later; notifying here is what flips the
+  // card that was just tapped straight away.
+  const applyDraft = useCallback(
+    (nextText: string) => {
+      if (nextText === textRef.current) {
+        return;
+      }
+      textRef.current = nextText;
+      setText(nextText);
+      for (const listener of listenersRef.current) {
+        listener();
+      }
+    },
+    [setText],
+  );
+
   const toggleBullet = useCallback(
     (bulletText: string) => {
-      const nextText = toggleBulletInDraft({ currentText: textRef.current, text: bulletText });
-      if (nextText !== textRef.current) {
-        textRef.current = nextText;
-        setText(nextText);
-        // The parent re-render lands a tick later; notify now so the card that
-        // was just tapped flips immediately.
-        for (const listener of listenersRef.current) {
-          listener();
-        }
-      }
+      applyDraft(toggleBulletInDraft({ currentText: textRef.current, text: bulletText }));
       // Focus only — the message is never sent automatically. On phones the
       // keyboard should come up, since the user is about to keep typing.
       focusInputRef.current?.({ raiseKeyboardOnNative: true });
     },
-    [setText],
+    [applyDraft],
   );
+
+  const toggleAllBullets = useCallback(
+    (texts: string[], select: boolean) => {
+      applyDraft(
+        select
+          ? addBulletsToDraft({ currentText: textRef.current, texts })
+          : removeBulletsFromDraft({ currentText: textRef.current, texts }),
+      );
+      focusInputRef.current?.({ raiseKeyboardOnNative: false });
+    },
+    [applyDraft],
+  );
+
+  const reorderBullets = useCallback(
+    (from: number, to: number) => {
+      applyDraft(reorderDraftBullets({ currentText: textRef.current, from, to }));
+    },
+    [applyDraft],
+  );
+
+  // What already left for the agent, so a proposal stays visibly "asked" once
+  // the send has emptied the draft. In memory on purpose: it describes this
+  // conversation as it is being held, not something worth persisting.
+  const sentRef = useRef(new Set<string>());
+  const sentListenersRef = useRef(new Set<() => void>());
+  const subscribeToSent = useCallback((listener: () => void) => {
+    sentListenersRef.current.add(listener);
+    return () => {
+      sentListenersRef.current.delete(listener);
+    };
+  }, []);
+  const wasSent = useCallback((bulletText: string) => {
+    const normalized = normalizeBulletText(bulletText);
+    return normalized.length > 0 && sentRef.current.has(normalized);
+  }, []);
+  const markBulletsSent = useCallback((message: string) => {
+    const bullets = listDraftBullets(message);
+    if (bullets.length === 0) {
+      return;
+    }
+    for (const bullet of bullets) {
+      sentRef.current.add(bullet);
+    }
+    for (const listener of sentListenersRef.current) {
+      listener();
+    }
+  }, []);
 
   // The composer publishes its send function here. Kept in state (not a ref) so
   // a button that depends on it appears as soon as the composer mounts.
@@ -116,13 +191,30 @@ export function ComposerInsertProvider({
   const value = useMemo<ComposerInsertContextValue>(
     () => ({
       toggleBullet,
+      toggleAllBullets,
+      reorderBullets,
+      markBulletsSent,
+      subscribeToSent,
+      wasSent,
       subscribeToDraft,
       getDraft,
       registerFocusInput,
       sendText: send,
       registerSendText,
     }),
-    [getDraft, registerFocusInput, registerSendText, send, subscribeToDraft, toggleBullet],
+    [
+      getDraft,
+      markBulletsSent,
+      registerFocusInput,
+      registerSendText,
+      reorderBullets,
+      send,
+      subscribeToDraft,
+      subscribeToSent,
+      toggleAllBullets,
+      toggleBullet,
+      wasSent,
+    ],
   );
 
   return <ComposerInsertContext.Provider value={value}>{children}</ComposerInsertContext.Provider>;
@@ -149,6 +241,57 @@ export function useIsBulletInDraft(text: string): boolean {
     }
     return draftHasBullet({ currentText: composerInsert.getDraft(), text });
   }, [composerInsert, text]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Whether `text` went out with a message already sent in this conversation. */
+export function useWasBulletSent(text: string): boolean {
+  const composerInsert = useComposerInsert();
+  const subscribe = composerInsert?.subscribeToSent ?? NO_SUBSCRIPTION;
+  const getSnapshot = useCallback(
+    () => composerInsert?.wasSent(text) ?? false,
+    [composerInsert, text],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+const NO_BULLETS: string[] = [];
+
+/**
+ * The draft's bullets, in order — what the reorder strip draws.
+ *
+ * The snapshot is cached against the raw draft so `useSyncExternalStore` keeps
+ * getting the same array identity between keystrokes that change nothing here.
+ */
+export function useDraftBullets(): string[] {
+  const composerInsert = useComposerInsert();
+  const cacheRef = useRef<{ source: string; bullets: string[] } | null>(null);
+  const subscribe = composerInsert?.subscribeToDraft ?? NO_SUBSCRIPTION;
+  const getSnapshot = useCallback(() => {
+    if (!composerInsert) {
+      return NO_BULLETS;
+    }
+    const source = composerInsert.getDraft();
+    const cached = cacheRef.current;
+    if (cached && cached.source === source) {
+      return cached.bullets;
+    }
+    const bullets = listDraftBullets(source);
+    // Same list of bullets after an unrelated edit: keep the previous array so
+    // subscribers don't re-render on every keystroke.
+    if (
+      cached &&
+      cached.bullets.length === bullets.length &&
+      cached.bullets.every((bullet, index) => bullet === bullets[index])
+    ) {
+      cacheRef.current = { source, bullets: cached.bullets };
+      return cached.bullets;
+    }
+    cacheRef.current = { source, bullets };
+    return bullets;
+  }, [composerInsert]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

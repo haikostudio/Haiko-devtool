@@ -137,7 +137,17 @@ import {
 } from "@/assistant-file-links";
 import { useToast } from "@/contexts/toast-context";
 import { useEvolutionTaskCreator } from "@/contexts/evolution-task-context";
-import { useComposerInsert, useIsBulletInDraft } from "@/composer/insert-text-context";
+import {
+  useComposerInsert,
+  useDraftBullets,
+  useIsBulletInDraft,
+  useWasBulletSent,
+} from "@/composer/insert-text-context";
+import { normalizeBulletText } from "@/composer/insert-draft-text";
+import {
+  EvolutionBlockProvider,
+  useEvolutionBlock,
+} from "@/components/markdown/evolution-block-context";
 import { getCompactionMarkerLabel } from "./message-compaction-label";
 import { useAttachmentPreviewUrl } from "@/attachments/use-attachment-preview-url";
 import { persistAttachmentFromBytes, persistAttachmentFromDataUrl } from "@/attachments/service";
@@ -1958,12 +1968,100 @@ const evolutionTaskButtonStyles = StyleSheet.create((theme) => ({
     lineHeight: theme.fontSize.base * 1.5,
     textDecorationLine: "line-through",
   },
+  // Pressing gives a little under-the-finger travel, so a tap on a wide card
+  // still reads as a press on touch screens where there is no hover to rely on.
+  cardPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.99 }],
+  },
+  // A proposal that already left with a message: no longer in the draft, but
+  // still worth showing as asked, with a check in front of the number.
+  cardSent: {
+    borderStyle: "dashed",
+    backgroundColor: theme.colors.surface0,
+  },
+  sentMark: {
+    marginRight: theme.spacing[1],
+    marginTop: theme.spacing[1],
+  },
+  bulkRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: theme.spacing[1],
+  },
+  bulkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+  },
+  bulkButtonPressed: {
+    backgroundColor: theme.colors.surface2,
+  },
+  bulkLabel: {
+    color: theme.colors.foregroundMuted,
+    fontFamily: theme.fontFamily.ui,
+    fontSize: theme.fontSize.sm,
+  },
 }));
+
+/**
+ * "Tout ajouter" / "Tout retirer" for one "Évolutions possibles" block.
+ *
+ * Renders nothing until at least two proposals have registered — with a single
+ * card the button would only duplicate the card itself.
+ */
+function EvolutionBulkToggle() {
+  const block = useEvolutionBlock();
+  const composerInsert = useComposerInsert();
+  const { t } = useTranslation();
+  const titles = block?.titles ?? EMPTY_TITLES;
+  const draftBullets = useDraftBullets();
+  const allSelected =
+    titles.length > 0 && titles.every((title) => draftBullets.includes(normalizeBulletText(title)));
+
+  const handlePress = useStableEvent(() => {
+    composerInsert?.toggleAllBullets(titles, !allSelected);
+  });
+
+  const buttonStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      evolutionTaskButtonStyles.bulkButton,
+      pressed ? evolutionTaskButtonStyles.bulkButtonPressed : null,
+    ],
+    [],
+  );
+
+  if (!composerInsert || titles.length < 2) {
+    return null;
+  }
+
+  return (
+    <View style={evolutionTaskButtonStyles.bulkRow}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityRole="button"
+        style={buttonStyle}
+        testID="evolution-bulk-toggle"
+      >
+        <ThemedListPlusIcon size={14} uniProps={foregroundMutedColorMapping} />
+        <Text style={evolutionTaskButtonStyles.bulkLabel}>
+          {allSelected ? t("tasks.panel.evolutionRemoveAll") : t("tasks.panel.evolutionAddAll")}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const EMPTY_TITLES: string[] = [];
 
 interface EvolutionListItemProps {
   markerStyle: TextStyle;
   contentStyle: ViewStyle;
   marker: string;
+  order: number;
   title: string;
   children: ReactNode;
 }
@@ -1986,11 +2084,13 @@ function EvolutionListItem({
   markerStyle,
   contentStyle,
   marker,
+  order,
   title,
   children,
 }: EvolutionListItemProps) {
   const creator = useEvolutionTaskCreator();
   const composerInsert = useComposerInsert();
+  const block = useEvolutionBlock();
   const toast = useToast();
   const { t } = useTranslation();
   const isCompact = useIsCompactFormFactor();
@@ -1999,6 +2099,16 @@ function EvolutionListItem({
   // Mirrors the draft instead of remembering the taps, so the card and the
   // message field can never disagree.
   const isSelected = useIsBulletInDraft(title);
+  const wasSent = useWasBulletSent(title);
+
+  // The block's "tout ajouter" button adds exactly the titles registered here.
+  const registerInBlock = block?.register;
+  useEffect(() => {
+    if (!registerInBlock || title.length === 0) {
+      return;
+    }
+    return registerInBlock({ title, order });
+  }, [order, registerInBlock, title]);
 
   const handlePointerEnter = useCallback(() => setIsHovered(true), []);
   const handlePointerLeave = useCallback(() => setIsHovered(false), []);
@@ -2042,12 +2152,24 @@ function EvolutionListItem({
     () => [
       evolutionTaskButtonStyles.card,
       isHovered && !isSelected ? evolutionTaskButtonStyles.cardHovered : null,
+      wasSent && !isSelected ? evolutionTaskButtonStyles.cardSent : null,
       isSelected ? evolutionTaskButtonStyles.cardSelected : null,
     ],
-    [isHovered, isSelected],
+    [isHovered, isSelected, wasSent],
+  );
+
+  const toggleStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      evolutionTaskButtonStyles.toggle,
+      pressed ? evolutionTaskButtonStyles.cardPressed : null,
+    ],
+    [],
   );
 
   const toggleAccessibilityState = useMemo(() => ({ selected: isSelected }), [isSelected]);
+  // Struck through both while the bullet sits in the draft and once it has left
+  // with a message — in both cases the proposal is spoken for.
+  const showsStruckTitle = isSelected || wasSent;
 
   return (
     <View style={cardStyle} onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
@@ -2061,12 +2183,17 @@ function EvolutionListItem({
             ? t("tasks.panel.evolutionRemovePrompt")
             : t("tasks.panel.evolutionInsertPrompt")
         }
-        style={evolutionTaskButtonStyles.toggle}
+        style={toggleStyle}
         testID="evolution-toggle-prompt"
       >
+        {wasSent && !isSelected ? (
+          <View style={evolutionTaskButtonStyles.sentMark}>
+            <ThemedTodoCheckIcon size={13} uniProps={foregroundMutedColorMapping} />
+          </View>
+        ) : null}
         <Text style={markerStyle}>{marker}</Text>
         <MarkdownListItemContent contentStyle={contentStyle}>
-          {isSelected ? (
+          {showsStruckTitle ? (
             <Text style={evolutionTaskButtonStyles.selectedText} testID="evolution-inserted">
               {title}
             </Text>
@@ -2475,6 +2602,9 @@ export const AssistantMessage = memo(function AssistantMessage({
         return (
           <EvolutionListItem
             key={node.key}
+            // The forced marker is the proposal's rank ("3." → 3): the block's
+            // "tout ajouter" button adds the cards in the order they are read.
+            order={Number.parseInt(marker, 10) || 0}
             markerStyle={iconStyle}
             contentStyle={contentStyle}
             marker={marker}
@@ -2524,30 +2654,53 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <View testID="assistant-message" style={assistantContainerStyle}>
-      {keyedBlocks.map(({ key, block, callout, evolutions, taskOffer }, index) => (
-        <AssistantMessageBlockContainer
-          key={key}
-          block={block}
-          marginBottom={index < keyedBlocks.length - 1 ? SPACING[3] : 0}
-        >
-          {callout ? (
+      {keyedBlocks.map(({ key, block, callout, evolutions, taskOffer }, index) => {
+        let body: ReactNode;
+        if (callout) {
+          body = (
             <MarkdownCallout
               callout={callout}
               rules={markdownRules}
               parser={markdownParser}
               onLinkPress={handleMarkdownLinkPress}
             />
-          ) : (
+          );
+        } else if (evolutions) {
+          // One registry per block: the "tout ajouter" button only ever adds
+          // the proposals of the block it sits under.
+          body = (
+            <EvolutionBlockProvider>
+              <EvolutionBulkToggle />
+              <MemoizedMarkdownBlock
+                text={block}
+                rules={evolutionMarkdownRules}
+                parser={markdownParser}
+                onLinkPress={handleMarkdownLinkPress}
+              />
+            </EvolutionBlockProvider>
+          );
+        } else {
+          body = (
             <MemoizedMarkdownBlock
               text={block}
-              rules={evolutions ? evolutionMarkdownRules : markdownRules}
+              rules={markdownRules}
               parser={markdownParser}
               onLinkPress={handleMarkdownLinkPress}
             />
-          )}
-          {taskOffer ? <TaskOfferConfirm /> : null}
-        </AssistantMessageBlockContainer>
-      ))}
+          );
+        }
+
+        return (
+          <AssistantMessageBlockContainer
+            key={key}
+            block={block}
+            marginBottom={index < keyedBlocks.length - 1 ? SPACING[3] : 0}
+          >
+            {body}
+            {taskOffer ? <TaskOfferConfirm /> : null}
+          </AssistantMessageBlockContainer>
+        );
+      })}
     </View>
   );
 });

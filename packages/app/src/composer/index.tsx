@@ -84,6 +84,8 @@ import { useKeyboardActionHandler } from "@/hooks/use-keyboard-action-handler";
 import type { KeyboardActionDefinition } from "@/keyboard/keyboard-action-dispatcher";
 import type { MessageInputKeyboardActionKind } from "@/keyboard/actions";
 import { submitAgentInput } from "@/composer/submit";
+import { BulletReorderStrip } from "@/composer/bullet-reorder-strip";
+import { useComposerInsert } from "@/composer/insert-text-context";
 import { usePendingSendStore } from "@/stores/pending-send-store";
 import { ComposerKeyboardScopeProvider } from "@/composer/keyboard-scope";
 import { useAppSettings } from "@/hooks/use-settings";
@@ -1226,6 +1228,9 @@ export function Composer({
     [agentId, clearPendingSend, serverId, setPendingSend],
   );
 
+  // Null outside an agent panel (the task-board dock mounts a bare composer).
+  const markBulletsSent = useComposerInsert()?.markBulletsSent;
+
   const sendMessageWithContent = useCallback(
     async (
       outgoingMessage: string,
@@ -1261,6 +1266,11 @@ export function Composer({
         },
         failedToSendMessage: t("composer.errors.failedToSend"),
       });
+      if (result === "submitted" || result === "queued") {
+        // The draft is empty from here on; the proposals it carried keep
+        // showing as asked on their mini-cards.
+        markBulletsSent?.(outgoingMessage);
+      }
       completeSubmit({
         result,
         outgoingAttachments,
@@ -1269,6 +1279,7 @@ export function Composer({
     [
       allowEmptySubmit,
       clearDraft,
+      markBulletsSent,
       completeSubmit,
       hasExternalContent,
       isAgentRunning,
@@ -1803,6 +1814,18 @@ export function Composer({
     [handleOpenAttachment, handleRemoveAttachment, isComposerLocked, selectedAttachments, t],
   );
 
+  // Above the text field, in the same slot as the attachment pills: the chosen
+  // proposals, draggable into the order they should be asked for.
+  const composerSlot = useMemo(
+    () => (
+      <>
+        <BulletReorderStrip />
+        {attachmentTray}
+      </>
+    ),
+    [attachmentTray],
+  );
+
   const queueList = useMemo(
     () =>
       renderQueueTrack({
@@ -1902,7 +1925,7 @@ export function Composer({
                 onPendingSendChange={handlePendingSendChange}
                 onHeightChange={onComposerHeightChange}
                 inputWrapperStyle={inputWrapperStyle}
-                attachmentSlot={attachmentTray}
+                attachmentSlot={composerSlot}
               />
               <Combobox
                 options={githubSearchOptions}

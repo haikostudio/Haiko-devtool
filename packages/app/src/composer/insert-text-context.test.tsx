@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ComposerInsertProvider,
   useComposerInsert,
+  useDraftBullets,
   useIsBulletInDraft,
+  useWasBulletSent,
 } from "./insert-text-context";
 import type { ComposerFocusInputOptions } from "./types";
 
@@ -72,10 +74,34 @@ const noopFocus = () => {};
 function FakeEvolutionCard({ text }: { text: string }) {
   const insert = useComposerInsert();
   const isSelected = useIsBulletInDraft(text);
+  const wasSent = useWasBulletSent(text);
   const handleClick = React.useCallback(() => insert?.toggleBullet(text), [insert, text]);
   return (
-    <button type="button" data-selected={isSelected ? "yes" : "no"} onClick={handleClick}>
+    <button
+      type="button"
+      data-selected={isSelected ? "yes" : "no"}
+      data-sent={wasSent ? "yes" : "no"}
+      onClick={handleClick}
+    >
       {text}
+    </button>
+  );
+}
+
+const ALL_TITLES = ["Piste numéro un", "Piste numéro deux"];
+
+/** Stands in for the block's "tout ajouter" / "tout retirer" button. */
+function FakeBulkButton() {
+  const insert = useComposerInsert();
+  const bullets = useDraftBullets();
+  const allSelected = ALL_TITLES.every((title) => bullets.includes(title));
+  const handleClick = React.useCallback(
+    () => insert?.toggleAllBullets(ALL_TITLES, !allSelected),
+    [allSelected, insert],
+  );
+  return (
+    <button type="button" data-testid="bulk" onClick={handleClick}>
+      {allSelected ? "remove all" : "add all"}
     </button>
   );
 }
@@ -93,6 +119,9 @@ function Harness({
     <ComposerInsertProvider text={text} setText={setText}>
       <FakeEvolutionCard text="Piste numéro un" />
       <FakeEvolutionCard text="Piste numéro deux" />
+      <FakeBulkButton />
+      <FakeSendButton />
+      <FakeReorderButton />
       <FakeComposer focus={focus} />
       {/* Stands in for the user editing the message field by hand. */}
       <button type="button" data-testid="hand-edit" onClick={handleHandEdit}>
@@ -100,6 +129,38 @@ function Harness({
       </button>
       <output data-testid="draft">{text}</output>
     </ComposerInsertProvider>
+  );
+}
+
+/** Stands in for the composer sending the draft: records it, then empties it. */
+function FakeSendButton() {
+  const insert = useComposerInsert();
+  const handleClick = React.useCallback(() => {
+    if (!insert) {
+      return;
+    }
+    insert.markBulletsSent(insert.getDraft());
+    insert.toggleAllBullets(insert.getDraft().split("\n"), false);
+  }, [insert]);
+  return (
+    <button type="button" data-testid="send" onClick={handleClick}>
+      send
+    </button>
+  );
+}
+
+/** Stands in for dragging the first chosen point to the last rank. */
+function FakeReorderButton() {
+  const insert = useComposerInsert();
+  const bullets = useDraftBullets();
+  const handleClick = React.useCallback(
+    () => insert?.reorderBullets(0, bullets.length - 1),
+    [bullets.length, insert],
+  );
+  return (
+    <button type="button" data-testid="reorder" onClick={handleClick}>
+      reorder
+    </button>
   );
 }
 
@@ -121,9 +182,17 @@ function renderHarness(initialText: string) {
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
   };
+  const clickTestId = (testId: string) => {
+    act(() => {
+      container
+        .querySelector(`[data-testid="${testId}"]`)
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+  };
   const draft = () => container.querySelector("output")?.textContent ?? "";
   const isSelected = (index: number) => cards[index].getAttribute("data-selected") === "yes";
-  return { focus, click, draft, isSelected, editByHand };
+  const wasSent = (index: number) => cards[index].getAttribute("data-sent") === "yes";
+  return { focus, click, draft, isSelected, wasSent, editByHand, clickTestId };
 }
 
 describe("ComposerInsertProvider", () => {
@@ -178,6 +247,49 @@ describe("ComposerInsertProvider", () => {
     const { click, focus } = renderHarness("");
     click(0);
     expect(focus).toHaveBeenCalledWith({ raiseKeyboardOnNative: true });
+  });
+});
+
+describe("ComposerInsertProvider — select all", () => {
+  it("adds every proposal at once, then takes them all back", () => {
+    const { clickTestId, draft, isSelected } = renderHarness("Ce que j'écrivais");
+    clickTestId("bulk");
+    expect(draft()).toBe("Ce que j'écrivais\n- Piste numéro un\n- Piste numéro deux");
+    expect(isSelected(0)).toBe(true);
+    expect(isSelected(1)).toBe(true);
+
+    clickTestId("bulk");
+    expect(draft()).toBe("Ce que j'écrivais");
+    expect(isSelected(0)).toBe(false);
+  });
+
+  it("does not duplicate a proposal already chosen", () => {
+    const { click, clickTestId, draft } = renderHarness("");
+    click(0);
+    clickTestId("bulk");
+    expect(draft()).toBe("- Piste numéro un\n- Piste numéro deux");
+  });
+});
+
+describe("ComposerInsertProvider — already asked", () => {
+  it("keeps the sent proposals visible once the draft is emptied", () => {
+    const { click, clickTestId, draft, isSelected, wasSent } = renderHarness("");
+    click(0);
+    clickTestId("send");
+    expect(draft()).toBe("");
+    expect(isSelected(0)).toBe(false);
+    expect(wasSent(0)).toBe(true);
+    expect(wasSent(1)).toBe(false);
+  });
+});
+
+describe("ComposerInsertProvider — reordering", () => {
+  it("moves a chosen point without touching the typed text", () => {
+    const { click, clickTestId, draft } = renderHarness("Ce que j'écrivais");
+    click(0);
+    click(1);
+    clickTestId("reorder");
+    expect(draft()).toBe("Ce que j'écrivais\n- Piste numéro deux\n- Piste numéro un");
   });
 });
 

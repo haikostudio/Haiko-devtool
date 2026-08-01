@@ -15,6 +15,8 @@ export function SortableInlineList<T>({
   externalDndContext?: boolean;
   activeId?: string | null;
   getItemData?: (item: T, index: number) => Record<string, unknown>;
+  /** Web-only: dragging inline rows is not wired on native (see below). */
+  axis?: "horizontal" | "vertical";
 }): ReactElement {
   return (
     <>

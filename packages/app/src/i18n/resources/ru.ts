@@ -311,6 +311,9 @@ export const ru: TranslationResources = {
     panel: {
       evolutionCreateTask: "Создать задачу из этой идеи",
       evolutionInsertPrompt: "Добавить эту идею в сообщение",
+      evolutionAddAll: "Добавить все",
+      evolutionRemoveAll: "Убрать все",
+      evolutionReorder: "Изменить порядок выбранных пунктов",
       evolutionRemovePrompt: "Убрать эту идею из сообщения",
       evolutionTaskCreated: "Задача добавлена на доску",
       taskOfferConfirm: "Да, создай задачу",

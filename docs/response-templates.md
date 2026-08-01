@@ -89,6 +89,19 @@ backlog card. The chain, in the app:
 Left untouched by step 4: headings, code fences, table rows, quotes/callouts and
 indented continuations.
 
+Around the cards:
+
+- a **"tout ajouter" / "tout retirer"** button sits at the top of each block
+  holding two proposals or more. The cards register their own titles with
+  `EvolutionBlockProvider` and the button adds exactly those — a second parse of
+  the markdown would drift from the titles the cards match against;
+- the chosen points are listed again **above the message field**
+  (`BulletReorderStrip`) and can be dragged into another order. Dragging is
+  web-only (`SortableInlineList` has no native drag); native still lists them;
+- a proposal that left with a message keeps a **struck, dashed** card, so the
+  conversation shows what was already asked once the draft is empty. That memory
+  lives in the provider for the session only.
+
 A selected card is struck through and faded, so a long list shows at a glance
 which proposals already went to the composer. Two constraints shape how that
 state is stored:

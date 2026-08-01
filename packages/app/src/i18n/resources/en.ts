@@ -308,6 +308,9 @@ export const en = {
     panel: {
       evolutionCreateTask: "Create a task from this idea",
       evolutionInsertPrompt: "Add this idea to the message",
+      evolutionAddAll: "Add them all",
+      evolutionRemoveAll: "Remove them all",
+      evolutionReorder: "Reorder the chosen points",
       evolutionRemovePrompt: "Remove this idea from the message",
       evolutionTaskCreated: "Task added to the board",
       taskOfferConfirm: "Yes, make it a task",

@@ -313,6 +313,9 @@ export const es: TranslationResources = {
     panel: {
       evolutionCreateTask: "Crear una tarea a partir de esta idea",
       evolutionInsertPrompt: "Añadir esta idea al mensaje",
+      evolutionAddAll: "Añadirlas todas",
+      evolutionRemoveAll: "Quitarlas todas",
+      evolutionReorder: "Reordenar los puntos elegidos",
       evolutionRemovePrompt: "Quitar esta idea del mensaje",
       evolutionTaskCreated: "Tarea añadida al tablero",
       taskOfferConfirm: "Sí, conviértelo en tarea",
